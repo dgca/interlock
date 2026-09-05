@@ -68,9 +68,17 @@ The bridge connects to the running engine at `http://127.0.0.1:4310`. Set the br
 
 Restart or reconnect your harness after changing configuration. Enable Interlock's tools in its approval settings. Interlock does not modify harness configuration for you.
 
+## Development configuration
+
+A server started with `pnpm dev` or `pnpm start` generates absolute paths to the current Node installation, TypeScript loader, and checkout. These paths are computed locally and are not personal paths embedded in the npm package. Regenerate the configuration if you move the checkout or change Node installations.
+
+A server started with the installed `interlock` command generates the portable command shown above. Its optional absolute-path fallback points to that installation. Use the configuration from the server you intend to connect to.
+
 ## Complete a run
 
-Give the harness a workflow ID and input, then ask it to complete the run through Interlock:
+Ask the harness to find a workflow by name or description with `list_workflows`, inspect it with `get_workflow`, and use its ID and input contract. If several workflows match, identify the intended one before starting a run.
+
+With the workflow selected, ask it to complete the run through Interlock:
 
 ```text
 Start Interlock workflow WORKFLOW_ID with the supplied input.
@@ -98,10 +106,12 @@ interlock workflows
 
 If both succeed but the harness cannot execute Interlock tools, inspect its MCP startup and approval settings. The MCP adapter prints protocol messages to stdout and diagnostics to stderr. Do not wrap its command in a script that prints startup banners to stdout.
 
-The automated MCP transport test runs without a model:
+From a source checkout, the automated MCP transport test runs without a model:
 
 ```sh
 pnpm test
 ```
 
-The optional `scripts/codex-smoke.ts` check invokes the installed Codex CLI with a local text task. The initial host rejected `start_run` because tool approval was required while approval policy was `never`. That result does not establish an Interlock execution failure, and it does not verify a full Codex run.
+The package check, `pnpm build && pnpm test:package`, also exercises a packed global install and its MCP bridge.
+
+The optional `scripts/codex-smoke.ts` check invokes the installed Codex CLI with a real account and a local text task. It creates a workflow in the running engine and consumes model usage. Its result depends on the client's authentication and tool approval settings; it is separate from the automated transport tests.

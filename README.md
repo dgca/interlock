@@ -137,6 +137,7 @@ The build includes TypeScript checks. Tests cover workflow contracts, runtime be
 - [Architecture and execution semantics](docs/architecture.md)
 - [Scope and limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
+- [Release process](docs/releases.md)
 
 ## License
 

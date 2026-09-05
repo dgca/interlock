@@ -16,7 +16,7 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Node execution**: One invocation of a node within a run.
 
-**Tool**: A capability that a node can invoke.
+**Tool requirement**: A named capability an agent assignment requires its executor to provide.
 
 **Context policy**: Rules governing the information and capabilities an agent execution receives.
 
@@ -24,6 +24,8 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Claim**: A time-limited reservation of a work request by an executor.
 
-**Workflow revision**: A proposed change to a workflow's procedure.
+**Draft revision**: A revision number identifying an edit of a workflow draft. It distinguishes the draft a caller read from a newer edit.
 
-**Evaluation**: Evidence about the quality of a workflow or proposed revision.
+**Executor**: An agent or person that claims a work request and supplies its result.
+
+**Input or output contract**: The structure and constraints a workflow or node requires of the data it receives or returns.

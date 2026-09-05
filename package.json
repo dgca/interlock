@@ -17,7 +17,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepack": "pnpm build",
-    "test:package": "node scripts/test-package.mjs"
+    "test:package": "node scripts/test-package.mjs",
+    "release:status": "changeset status",
+    "release:version": "changeset version && pnpm install --lockfile-only",
+    "release": "pnpm test && pnpm build && pnpm test:package && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
@@ -46,6 +49,7 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
     "CONTEXT.md",
     "docs"
   ],

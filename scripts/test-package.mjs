@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
@@ -8,6 +8,10 @@ import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+
+const { version } = JSON.parse(
+  await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+);
 
 const temp = await mkdtemp(join(tmpdir(), 'interlock-package-'));
 let server;
@@ -65,7 +69,7 @@ try {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     }).trim(),
-    '0.0.1',
+    version,
   );
   const listener = createServer().listen(0, '127.0.0.1');
   await once(listener, 'listening');
@@ -120,7 +124,7 @@ try {
       stderr: 'pipe',
     }),
   );
-  assert.equal(client.getServerVersion().version, '0.0.1');
+  assert.equal(client.getServerVersion().version, version);
   const call = async (name, args = {}) => {
     const response = await client.callTool({ name, arguments: args });
     assert(!response.isError, JSON.stringify(response));
