@@ -1,3 +1,4 @@
+import { TextInput, NativeSelect } from '@mantine/core';
 import type { Json } from '@interlock/core';
 import { JsonEditor } from '../JsonEditor/JsonEditor';
 /** Common object contracts get fields; complex values remain editable JSON. */
@@ -21,38 +22,38 @@ export function SchemaInput({
         const update = (next: Json) => onChange({ ...value, [key]: next });
         if (property.type === 'string')
           return (
-            <label className="field" key={key}>
-              <span>{label}</span>
-              <input
-                value={typeof value[key] === 'string' ? value[key] : ''}
-                onChange={(e) => update(e.target.value)}
-              />
-            </label>
+            <TextInput
+              mb="md"
+              key={key}
+              label={label}
+              value={typeof value[key] === 'string' ? value[key] : ''}
+              onChange={(e) => update(e.target.value)}
+            />
           );
         if (property.type === 'number' || property.type === 'integer')
           return (
-            <label className="field" key={key}>
-              <span>{label}</span>
-              <input
-                type="number"
-                step={property.type === 'integer' ? 1 : 'any'}
-                value={typeof value[key] === 'number' ? value[key] : 0}
-                onChange={(e) => update(Number(e.target.value))}
-              />
-            </label>
+            <TextInput
+              mb="md"
+              key={key}
+              label={label}
+              type="number"
+              step={property.type === 'integer' ? 1 : 'any'}
+              value={typeof value[key] === 'number' ? value[key] : 0}
+              onChange={(e) => update(Number(e.target.value))}
+            />
           );
         if (property.type === 'boolean')
           return (
-            <label className="field" key={key}>
-              <span>{label}</span>
-              <select
-                value={String(value[key] ?? false)}
-                onChange={(e) => update(e.target.value === 'true')}
-              >
-                <option value="true">True</option>
-                <option value="false">False</option>
-              </select>
-            </label>
+            <NativeSelect
+              mb="md"
+              key={key}
+              label={label}
+              value={String(value[key] ?? false)}
+              onChange={(e) => update(e.target.value === 'true')}
+            >
+              <option value="true">True</option>
+              <option value="false">False</option>
+            </NativeSelect>
           );
         return (
           <JsonEditor

@@ -245,24 +245,58 @@ describe('durable harness execution', () => {
     expect(engine.start(id, { ok: true }).run.status).toBe('completed');
     expect(engine.start(id, { ok: false }).run.error).toContain('step limit');
   });
-  it('executes scripts with JSON stdin and validates stdout', async () => {
-    const engine = setup(),
-      d = blankDefinition();
-    d.nodes[1] = {
-      id: 'agent',
-      label: 'Double',
-      kind: 'script',
-      inputSchema: {},
-      outputSchema: { type: 'number' },
-      position: { x: 0, y: 0 },
-      command:
-        'node -e \'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>console.log(JSON.parse(s)*2))\'',
-      timeoutMs: 5000,
-    };
-    const run = engine.start(publish(engine, d), 21).run;
-    await vi.waitFor(() => expect(engine.run(run.id).status).toBe('completed'));
-    expect(engine.run(run.id).output).toBe(42);
-  });
+  it.each([undefined, 'bash', 'javascript'] as const)(
+    'executes %s scripts and validates output',
+    async (language) => {
+      const engine = setup(),
+        d = blankDefinition();
+      d.nodes[1] = {
+        id: 'agent',
+        label: 'Double',
+        kind: 'script',
+        language,
+        inputSchema: {},
+        outputSchema: { type: 'number' },
+        position: { x: 0, y: 0 },
+        command:
+          language === 'javascript'
+            ? 'console.log("doubling"); return await Promise.resolve(input * 2);'
+            : 'node -e \'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>console.log(JSON.parse(s)*2))\'',
+        timeoutMs: 5000,
+      };
+      const run = engine.start(publish(engine, d), 21).run;
+      await vi.waitFor(() =>
+        expect(engine.run(run.id).status).toBe('completed'),
+      );
+      expect(engine.run(run.id).output).toBe(42);
+    },
+  );
+  it.each([
+    ['throw new Error("broken");', {}, 'broken'],
+    ['return;', {}, 'must return a JSON value'],
+    ['return "wrong";', { type: 'number' }, ''],
+    ['while (true) {}', {}, 'exceeded'],
+  ] as const)(
+    'fails JavaScript script %s',
+    async (command, outputSchema, error) => {
+      const engine = setup(),
+        d = blankDefinition();
+      d.nodes[1] = {
+        id: 'agent',
+        label: 'Script',
+        kind: 'script',
+        language: 'javascript',
+        inputSchema: {},
+        outputSchema,
+        position: { x: 0, y: 0 },
+        command,
+        timeoutMs: 100,
+      };
+      const run = engine.start(publish(engine, d), null).run;
+      await vi.waitFor(() => expect(engine.run(run.id).status).toBe('failed'));
+      expect(engine.run(run.id).error).toContain(error);
+    },
+  );
   it('retries failed map children while preserving successful research', () => {
     const engine = setup(),
       d = blankDefinition();
@@ -289,31 +323,38 @@ describe('durable harness execution', () => {
     const restarted = new Engine(engine.store, process.cwd());
     expect(restarted.run(run.id).error).toContain('interrupted');
   });
-  it('kills a running script when its run is cancelled', async () => {
-    const engine = setup(),
-      dir = mkdtempSync(join(tmpdir(), 'interlock-cancel-'));
-    const ready = join(dir, 'ready'),
-      late = join(dir, 'late');
-    const code = `const fs=require("node:fs");fs.writeFileSync(${JSON.stringify(ready)},"ready");setTimeout(()=>{fs.writeFileSync(${JSON.stringify(late)},"late");console.log("null")},400);`;
-    const d = blankDefinition();
-    d.nodes[1] = {
-      id: 'agent',
-      label: 'Delayed script',
-      kind: 'script',
-      inputSchema: {},
-      outputSchema: {},
-      position: { x: 0, y: 0 },
-      command: `node -e '${code}'`,
-      timeoutMs: 5000,
-    };
-    const run = engine.start(publish(engine, d), null).run;
-    await vi.waitFor(() => expect(existsSync(ready)).toBe(true));
-    engine.cancel(run.id);
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(existsSync(late)).toBe(false);
-    expect(engine.run(run.id).status).toBe('cancelled');
-    rmSync(dir, { recursive: true });
-  });
+  it.each(['bash', 'javascript'] as const)(
+    'kills a running %s script when its run is cancelled',
+    async (language) => {
+      const engine = setup(),
+        dir = mkdtempSync(join(tmpdir(), 'interlock-cancel-'));
+      const ready = join(dir, 'ready'),
+        late = join(dir, 'late');
+      const code = `const fs=require("node:fs");fs.writeFileSync(${JSON.stringify(ready)},"ready");setTimeout(()=>{fs.writeFileSync(${JSON.stringify(late)},"late");console.log("null")},400);`;
+      const d = blankDefinition();
+      d.nodes[1] = {
+        id: 'agent',
+        label: 'Delayed script',
+        kind: 'script',
+        language,
+        inputSchema: {},
+        outputSchema: {},
+        position: { x: 0, y: 0 },
+        command:
+          language === 'javascript'
+            ? `${code}\nawait new Promise(resolve => setTimeout(resolve, 1000)); return null;`
+            : `node -e '${code}'`,
+        timeoutMs: 5000,
+      };
+      const run = engine.start(publish(engine, d), null).run;
+      await vi.waitFor(() => expect(existsSync(ready)).toBe(true));
+      engine.cancel(run.id);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(existsSync(late)).toBe(false);
+      expect(engine.run(run.id).status).toBe('cancelled');
+      rmSync(dir, { recursive: true });
+    },
+  );
   it('rejects malformed graph routes before publishing', () => {
     const d = blankDefinition();
     d.edges.push({

@@ -1,3 +1,4 @@
+import { Textarea } from '@mantine/core';
 import { useState, useEffect } from 'react';
 import { Bot, Copy } from 'lucide-react';
 import { Button } from '../../components/Button/Button';
@@ -111,15 +112,15 @@ export function WorkPanel({
         )}
       {claim && work.status === 'claimed' && (
         <>
-          <label className="field">
-            <span>Result JSON</span>
-            <textarea
-              className="code"
-              rows={8}
-              value={output}
-              onChange={(e) => setOutput(e.target.value)}
-            />
-          </label>
+          <Textarea
+            mb="md"
+            label="Result JSON"
+            styles={{ input: { fontFamily: 'var(--mono)' } }}
+            rows={8}
+            value={output}
+            onChange={(e) => setOutput(e.target.value)}
+          />
+
           <div className="actions">
             <Button
               disabled={busy}

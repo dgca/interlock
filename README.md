@@ -1,62 +1,143 @@
 # Interlock
 
-Interlock runs versioned workflows that hand bounded assignments to agent harnesses. The local engine owns sequencing, validates results, and persists progress between tool calls. A dark web UI provides a node editor and run inspector.
+Interlock is a local workflow editor and engine for AI agents. Define a procedure once, combine agent assignments with JavaScript or Bash steps, and inspect each run in your browser.
 
-## Run locally
+Build workflows visually or edit their JSON definitions. Interlock validates inputs and results, runs scripts, and stores progress in SQLite. Your connected agent handles assignments through the Model Context Protocol (MCP).
 
-Use Node 24.13 or later and pnpm 11.7 on macOS or Linux. Script nodes require Bash.
+## Install and run
+
+Requires **Node.js 24.13 or later** on **macOS or Linux**. Bash script nodes also require `/bin/bash`.
+
+```sh
+npm install -g @type_of/interlock
+interlock
+```
+
+Open [http://127.0.0.1:4310](http://127.0.0.1:4310) in your browser. The package includes the engine, UI, CLI, and MCP bridge. No separate build is required.
+
+Keep the terminal running while you use Interlock. Closing the browser does not stop the engine. Press Ctrl+C in the terminal to stop it.
+
+## Run your first workflow
+
+The initial library includes **Research a protocol**, an editable example with an input, an agent assignment, and an output.
+
+1. Select **Connect with MCP** in the sidebar.
+2. Follow the instructions for Codex, Claude, OpenCode, or another MCP client.
+3. Restart or reconnect your client so it can discover the Interlock tools.
+4. Ask your agent:
+
+   ```text
+   Find the Interlock workflow "Research a protocol" and run it with
+   {"name":"Aave"}. Complete its assignments, then return the result.
+   ```
+
+5. Open **Run history** in Interlock to inspect the run, node results, and any errors.
+
+Your agent needs access to the tools required by the assignment, such as web research for this example. Its tool approval settings still apply.
+
+The connection uses `interlock mcp`, a stdio bridge to the running engine. Keep the engine running separately. The modal includes absolute-path configuration if your client cannot find the global `interlock` command. See [Connect a harness](docs/connect-harness.md) for configuration and the assignment loop.
+
+## Create a workflow
+
+Select **New workflow** to create a draft. Use **Add node** to choose each step's type, then connect the nodes in execution order.
+
+Available nodes include entry and exit, agent assignments, scripts, conditions, child workflows, and maps. Maps run a child workflow for each item in a list and collect its results.
+
+Configure input and output contracts in the node settings. Use **Visual / Raw** to switch between the graph and its JSON definition. The raw editor checks JSON syntax and structure before saving. Publishing also checks the workflow's graph.
+
+Select **Publish version** when the draft is ready, then **Run v1** to supply input and start a run. Each run uses a fixed published version. Editing a draft does not change an existing run.
+
+### Script nodes
+
+New script nodes default to JavaScript. Read the incoming JSON value as `input` and return a JSON value for the next node. Top-level `await` is supported:
+
+```js
+const doubled = await Promise.resolve(input.number * 2);
+return { number: doubled };
+```
+
+For input `{"number":21}`, this returns `{"number":42}`. Configure the node's contracts to accept these fields.
+
+Bash scripts read JSON from stdin and must write one JSON value to stdout. Write diagnostic messages to stderr. JavaScript `console.log` messages go to stderr automatically.
+
+A thrown error, nonzero exit, timeout, or invalid output fails the script step. Scripts are not retried automatically.
+
+Scripts execute with your user account's filesystem, environment, and network access. They are not sandboxed, so review scripts before running imported workflows.
+
+## Storage and configuration
+
+Interlock listens on `127.0.0.1:4310` and stores workflows and runs in `~/.interlock/interlock.db`. Restarting the server retains saved data. Scripts use the directory where you started Interlock as their working directory.
+
+To change the port, script working directory, or database path:
+
+```sh
+interlock --port 4400 --workdir /path/to/project --db /path/to/interlock.db
+```
+
+`INTERLOCK_WORKDIR` and `INTERLOCK_DB` provide defaults for the corresponding flags. Flags take precedence.
+
+When using another port, set `INTERLOCK_URL` for CLI commands and the MCP bridge. The connection modal generates the correct environment configuration for the running server.
+
+```sh
+INTERLOCK_URL=http://127.0.0.1:4400 interlock workflows
+```
+
+The engine's HTTP address is not an HTTP MCP endpoint. MCP clients connect through the stdio bridge.
+
+## Use the CLI
+
+With the engine running, open another terminal:
+
+```sh
+interlock workflows
+interlock workflow WORKFLOW_ID
+interlock start WORKFLOW_ID '{"name":"Aave"}'
+interlock run RUN_ID
+```
+
+Replace `WORKFLOW_ID` with an ID from `interlock workflows` and `RUN_ID` with the run ID returned by `interlock start`. Match the input to your workflow's contract. Starting a run with agent assignments makes those assignments available for a connected agent to claim and complete.
+
+JSON arguments also accept `@filename`, such as `interlock start WORKFLOW_ID @input.json`. Run `interlock commands` for the full command list or `interlock --help` for server options.
+
+## Current scope
+
+Interlock is a local, single-user application. It does not call model APIs or launch agent sessions itself. Agent steps need a connected executor or manual submission; script steps run in the engine.
+
+A connected executor supplies the tools, skills, and context isolation requested by a workflow. Interlock checks the executor's declared capabilities but does not install or provide them.
+
+See [Scope and limits](docs/v1.md) for execution limits and unsupported features.
+
+## Develop locally
+
+From a source checkout, use Node.js 24.13 or later and pnpm 11.7:
 
 ```sh
 pnpm install
 pnpm dev
 ```
 
-Open [the development UI](http://127.0.0.1:5173). The engine listens on `127.0.0.1:4310` and stores state in `.interlock/interlock.db`. Closing the browser does not stop the engine.
+The development UI runs on [port 5173](http://127.0.0.1:5173), with the engine on port 4310. Stop any installed Interlock server using port 4310 before starting development.
 
-For the built UI:
+Development stores data in `.interlock/interlock.db` inside the checkout. Installed copies use a separate database unless you pass `--db` explicitly. Run `pnpm build` followed by `pnpm start` to serve the built UI on port 4310 with the development database.
 
-```sh
-pnpm build
-pnpm start
-```
-
-Open [Interlock](http://127.0.0.1:4310).
-
-The initial library contains **Research a protocol** and **DeFi opportunity brief**. These are editable examples. They accept a supplied protocol list and request agent research. They do not fetch live rankings or access internal engagement data.
-
-## Connect a harness
-
-Choose **Connect with MCP** in the sidebar to copy configuration with absolute paths for this checkout. Keep the engine running separately. The MCP adapter uses stdio and connects to the engine over local HTTP.
-
-See [Connect a harness](docs/connect-harness.md) for the request loop and Codex configuration. Harness approval policy must allow the Interlock tools. Fresh context and required tool availability are executor declarations, not capabilities that MCP automatically grants.
-
-You can also inspect and complete work through the CLI:
+Validate changes with:
 
 ```sh
-pnpm cli workflows
-pnpm cli start WORKFLOW_ID '{"protocols":[{"name":"Aave"}]}'
-pnpm cli work RUN_ID
-pnpm cli claim WORK_ID my-worker
-pnpm cli submit WORK_ID CLAIM_TOKEN @result.json
-pnpm cli run RUN_ID
-```
-
-## Validate changes
-
-```sh
-pnpm typecheck
 pnpm test
 pnpm build
 pnpm format:check
+pnpm test:package
 ```
 
-The tests cover runtime behavior and a real MCP stdio client connected to the HTTP service. `pnpm exec tsx scripts/codex-smoke.ts` additionally attempts a text-only Codex run using the installed CLI and its account. It consumes model usage and needs a harness policy that permits Interlock tool calls. The initial attempt reached the MCP tool but the host blocked `start_run` because approval was required under a `never` approval policy. It is not counted as a passing integration test.
+The build includes TypeScript checks. Tests cover workflow contracts, runtime behavior, and MCP over stdio. The package test installs a local tarball into a temporary prefix and checks the CLI, UI, MCP bridge, JavaScript execution, and persistence after a restart. It does not publish anything.
 
 ## Project documentation
 
 - [Domain language](CONTEXT.md)
 - [Architecture and execution semantics](docs/architecture.md)
-- [V1 scope and limits](docs/v1.md)
+- [Scope and limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
 
-Packages are private during v1 development. Changesets is configured, but npm publication requires compiled package entrypoints and release preparation. No packages have been published.
+## License
+
+[MIT](LICENSE)

@@ -1,5 +1,28 @@
 import { spawn } from 'node:child_process';
-import { jsonSchema, type Json } from '@interlock/core';
+import { jsonSchema, type Json, type WorkflowNode } from '@interlock/core';
+
+type ScriptLanguage = Extract<WorkflowNode, { kind: 'script' }>['language'];
+
+function javascriptRunner(command: string) {
+  const source = `(async function(input, require) {\n${command}\n})`;
+  return `
+const input = JSON.parse(require('node:fs').readFileSync(0, 'utf8'));
+console.log = console.info = console.debug = console.error;
+const { Script, constants } = require('node:vm');
+const execute = new Script(${JSON.stringify(source)}, {
+  filename: 'script.js',
+  lineOffset: -1,
+  importModuleDynamically: constants.USE_MAIN_CONTEXT_DEFAULT_LOADER,
+}).runInThisContext();
+execute(input, require)
+  .then(output => {
+    const json = JSON.stringify(output);
+    if (json === undefined) throw new Error('JavaScript must return a JSON value');
+    process.stdout.write(json);
+  })
+  .catch(error => { console.error(error); process.exitCode = 1; });
+`;
+}
 
 /** Scripts read JSON on stdin and return JSON on stdout. They are never retried automatically. */
 export function executeScript(
@@ -8,13 +31,20 @@ export function executeScript(
   timeoutMs: number,
   cwd: string,
   signal?: AbortSignal,
+  language: ScriptLanguage = 'bash',
 ): Promise<Json> {
   return new Promise((resolve, reject) => {
-    const child = spawn('/bin/bash', ['-c', command], {
-      cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      detached: true,
-    });
+    const child = spawn(
+      language === 'javascript' ? process.execPath : '/bin/bash',
+      language === 'javascript'
+        ? ['--input-type=commonjs', '-e', javascriptRunner(command)]
+        : ['-c', command],
+      {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        detached: true,
+      },
+    );
     let stdout = '',
       stderr = '',
       failure: string | undefined;

@@ -9,25 +9,14 @@ import {
   type Edge,
   type Connection,
 } from '@xyflow/react';
-import {
-  ArrowLeft,
-  Play,
-  Save,
-  Plus,
-  Upload,
-  Settings2,
-  Download,
-} from 'lucide-react';
-import {
-  nodeSchema,
-  type Workflow,
-  type WorkflowDefinition,
-} from '@interlock/core';
+import { ArrowLeft, Play, Save, Plus, Upload, Settings2 } from 'lucide-react';
+import { type Workflow, type WorkflowNode } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
-import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
-import { NodeInspector } from './NodeInspector';
+import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
+import { parseRawDefinition } from './rawDefinition';
+import { SettingsDialog } from './SettingsDialog';
 import { FlowNode, type CanvasNode } from './FlowNode';
-import { api, download } from '../../lib/api';
+import { api } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
 const nodeTypes = { workflow: FlowNode };
 export function WorkflowEditor({
@@ -55,8 +44,29 @@ export function WorkflowEditor({
     [name, setName] = useState(workflow.name),
     [description, setDescription] = useState(workflow.description),
     [revision, setRevision] = useState(workflow.draftRevision),
-    [selected, setSelected] = useState<string>(),
-    [kind, setKind] = useState('agent');
+    [selected, setSelected] = useState<string>();
+  const [editing, setEditing] = useState<{
+    node?: WorkflowNode;
+    creating?: boolean;
+  }>();
+  const [view, setView] = useState<'visual' | 'raw'>('visual');
+  const [raw, setRaw] = useState('');
+  const rawResult = useMemo(
+    () => (view === 'raw' ? parseRawDefinition(raw) : undefined),
+    [view, raw],
+  );
+  const rawInvalid = Boolean(rawResult?.error);
+  const effectiveDraft = rawResult?.definition ?? draft;
+  const switchView = (next: 'visual' | 'raw') => {
+    if (next === view) return;
+    if (next === 'raw') setRaw(JSON.stringify(draft, null, 2));
+    else {
+      if (!rawResult?.definition) return;
+      setDraft(rawResult.definition);
+      setMeasurements({});
+    }
+    setView(next);
+  };
   const [saved, setSaved] = useState(
     JSON.stringify({
       draft: workflow.draft,
@@ -64,7 +74,9 @@ export function WorkflowEditor({
       description: workflow.description,
     }),
   );
-  const dirty = JSON.stringify({ draft, name, description }) !== saved;
+  const dirty =
+    rawInvalid ||
+    JSON.stringify({ draft: effectiveDraft, name, description }) !== saved;
   useEffect(() => {
     onDirty(dirty);
     return () => onDirty(false);
@@ -88,7 +100,7 @@ export function WorkflowEditor({
         height: 116,
         position: n.position,
         measured: measurements[n.id],
-        data: { node: n },
+        data: { node: n, onEdit: () => setEditing({ node: n }) },
         selected: n.id === selected,
       })),
     [draft.nodes, selected, measurements],
@@ -103,6 +115,7 @@ export function WorkflowEditor({
     [draft.edges],
   );
   const save = async () => {
+    if (rawInvalid) throw new Error('Fix the raw JSON before saving.');
     const invalid =
       editorRef.current?.querySelector<HTMLInputElement>(':invalid');
     if (invalid) {
@@ -113,10 +126,16 @@ export function WorkflowEditor({
       id: workflow.id,
       name,
       description,
-      draft,
+      draft: effectiveDraft,
       draftRevision: revision,
     });
     setRevision(w.draftRevision);
+    if (view === 'raw') {
+      setDraft(w.draft);
+      setRaw((current) =>
+        current === raw ? JSON.stringify(w.draft, null, 2) : current,
+      );
+    }
     setSaved(
       JSON.stringify({
         draft: w.draft,
@@ -145,25 +164,6 @@ export function WorkflowEditor({
         },
       ],
     }));
-  const add = () => {
-    const id = crypto.randomUUID();
-    const reference = workflows.find((w) => w.latestVersion);
-    const node = nodeSchema.parse({
-      id,
-      kind,
-      label: `New ${kind}`,
-      position: { x: 150 + draft.nodes.length * 90, y: 360 },
-      prompt: 'Describe the assignment.',
-      command: 'cat',
-      path: '',
-      equals: true,
-      workflowId: reference?.id ?? 'choose-workflow',
-      version: reference?.latestVersion ?? 1,
-    });
-    setDraft((d) => ({ ...d, nodes: [...d.nodes, node] }));
-    setSelected(id);
-  };
-  const node = draft.nodes.find((n) => n.id === selected);
   return (
     <div ref={editorRef} className={styles.editor}>
       <header className={styles.header}>
@@ -186,11 +186,15 @@ export function WorkflowEditor({
             : `Draft saved · ${workflow.latestVersion ? `v${workflow.latestVersion} published` : 'unpublished'}`}
         </span>
         <div className="actions">
-          <Button onClick={() => void act(save)} disabled={!dirty}>
+          <Button
+            onClick={() => void act(save)}
+            disabled={!dirty || rawInvalid}
+          >
             <Save />
             Save draft
           </Button>
           <Button
+            disabled={rawInvalid || Boolean(rawResult?.publishError)}
             onClick={() =>
               void act(async () => {
                 await save();
@@ -216,181 +220,199 @@ export function WorkflowEditor({
       <div className={styles.body}>
         <div className={styles.canvasWrap}>
           <div className={styles.canvasToolbar}>
-            <select
-              aria-label="Node type"
-              value={kind}
-              onChange={(e) => setKind(e.target.value)}
+            <div
+              className={styles.viewToggle}
+              role="group"
+              aria-label="Workflow view"
             >
-              {['agent', 'script', 'condition', 'workflow', 'map'].map((k) => (
-                <option key={k}>{k}</option>
-              ))}
-            </select>
-            <Button onClick={add}>
-              <Plus />
-              Add node
-            </Button>
-            <Button variant="ghost" onClick={() => setSelected(undefined)}>
-              <Settings2 />
-              Workflow settings
-            </Button>
-          </div>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            onNodesChange={(changes) => {
-              const next = applyNodeChanges(changes, nodes);
-              if (changes.some((c) => c.type === 'dimensions'))
-                setMeasurements(
-                  Object.fromEntries(next.map((n) => [n.id, n.measured ?? {}])),
-                );
-              if (
-                !changes.some(
-                  (c) => c.type === 'position' || c.type === 'remove',
-                )
-              )
-                return;
-              setDraft((d) => ({
-                ...d,
-                nodes: next.map((n) => ({
-                  ...n.data.node,
-                  position: n.position,
-                })),
-                edges: d.edges.filter(
-                  (e) =>
-                    next.some((n) => n.id === e.source) &&
-                    next.some((n) => n.id === e.target),
-                ),
-              }));
-            }}
-            onEdgesChange={(changes) => {
-              const next = applyEdgeChanges(changes, edges);
-              setDraft((d) => ({
-                ...d,
-                edges: next.map((e) => ({
-                  id: e.id,
-                  source: e.source,
-                  target: e.target,
-                  port: (e.sourceHandle ?? 'default') as 'default',
-                })),
-              }));
-            }}
-            onConnect={connect}
-            onNodeClick={(_, n) => setSelected(n.id)}
-            onPaneClick={() => setSelected(undefined)}
-            fitView
-            fitViewOptions={{ padding: 0.22 }}
-            minZoom={0.25}
-            maxZoom={1.5}
-            colorMode="dark"
-            deleteKeyCode={['Backspace', 'Delete']}
-          >
-            <Background color="#333c32" gap={22} size={1} />
-            <Controls showInteractive={false} />
-            <MiniMap nodeColor="#465d3c" maskColor="#101611bb" />
-          </ReactFlow>
-          <div className={styles.canvasFooter}>
-            <span>
-              {draft.nodes.length} nodes <b>·</b> {draft.edges.length}{' '}
-              connections
-            </span>
-            <span>Drag to arrange · Connect handles to route data</span>
-          </div>
-        </div>
-        <aside className={styles.inspector}>
-          {node ? (
-            <NodeInspector
-              key={node.id}
-              node={node}
-              workflows={workflows}
-              onChange={(next) =>
-                setDraft((d) => ({
-                  ...d,
-                  nodes: d.nodes.map((n) => (n.id === next.id ? next : n)),
-                }))
-              }
-              onDelete={() => {
-                setDraft((d) => ({
-                  ...d,
-                  nodes: d.nodes.filter((n) => n.id !== node.id),
-                  edges: d.edges.filter(
-                    (e) => e.source !== node.id && e.target !== node.id,
-                  ),
-                }));
-                setSelected(undefined);
-              }}
-            />
-          ) : (
-            <>
-              <div className="inspector-heading">
-                <span className="eyebrow">WORKFLOW SETTINGS</span>
-                <h2>The procedure</h2>
-                <p className="hint">
-                  Select a node to edit its assignment and contracts.
-                </p>
-              </div>
-              <div className="inspector-fields">
-                <label className="field">
-                  <span>Name</span>
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </label>
-                <label className="field">
-                  <span>Description</span>
-                  <textarea
-                    rows={3}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                </label>
-                <JsonEditor
-                  label="Workflow input schema"
-                  value={draft.inputSchema}
-                  onChange={(inputSchema) =>
-                    setDraft((d) => ({ ...d, inputSchema }))
-                  }
-                />
-                <JsonEditor
-                  label="Workflow output schema"
-                  value={draft.outputSchema}
-                  onChange={(outputSchema) =>
-                    setDraft((d) => ({ ...d, outputSchema }))
-                  }
-                />
-                <label className="field">
-                  <span>Maximum steps per run</span>
-                  <input
-                    type="number"
-                    min={2}
-                    max={1000}
-                    value={draft.maxSteps}
-                    onChange={(e) =>
-                      setDraft((d) => ({
-                        ...d,
-                        maxSteps: Number(e.target.value),
-                      }))
-                    }
-                  />
-                </label>
+              <Button
+                aria-pressed={view === 'visual'}
+                variant={view === 'visual' ? 'primary' : 'ghost'}
+                disabled={rawInvalid}
+                onClick={() => switchView('visual')}
+              >
+                Visual
+              </Button>
+              <Button
+                aria-pressed={view === 'raw'}
+                variant={view === 'raw' ? 'primary' : 'ghost'}
+                onClick={() => switchView('raw')}
+              >
+                Raw
+              </Button>
+            </div>
+            {view === 'visual' ? (
+              <>
+                <Button onClick={() => setEditing({ creating: true })}>
+                  <Plus />
+                  Add node
+                </Button>
+                <Button variant="ghost" onClick={() => setEditing({})}>
+                  <Settings2 />
+                  Workflow settings
+                </Button>
+              </>
+            ) : (
+              <>
                 <Button
+                  disabled={rawInvalid}
                   onClick={() =>
-                    download(`${name}.json`, {
-                      name,
-                      description,
-                      definition: draft,
-                    })
+                    setRaw(JSON.stringify(rawResult!.definition, null, 2))
                   }
                 >
-                  <Download />
-                  Export workflow
+                  Format JSON
                 </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setRaw(JSON.stringify(draft, null, 2))}
+                >
+                  Discard raw changes
+                </Button>
+              </>
+            )}
+          </div>
+          {view === 'raw' ? (
+            <div className={styles.rawView}>
+              <p className="hint">
+                Edit the workflow definition. Unfinished graphs can be saved as
+                drafts; publishing requires a valid workflow.
+              </p>
+              {rawResult?.error && (
+                <div role="alert" className={styles.rawError}>
+                  Fix these errors before saving or returning to Visual:
+                  <pre>{rawResult.error}</pre>
+                </div>
+              )}
+              {rawResult?.publishError && (
+                <div role="status" className={styles.rawWarning}>
+                  Draft can be saved. Before publishing:{' '}
+                  {rawResult.publishError}
+                </div>
+              )}
+              <CodeEditor
+                label="Workflow JSON"
+                language="json"
+                value={raw}
+                onChange={setRaw}
+                fullHeight
+              />
+            </div>
+          ) : (
+            <>
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                onNodesChange={(changes) => {
+                  const next = applyNodeChanges(changes, nodes);
+                  if (changes.some((c) => c.type === 'dimensions'))
+                    setMeasurements(
+                      Object.fromEntries(
+                        next.map((n) => [n.id, n.measured ?? {}]),
+                      ),
+                    );
+                  if (
+                    !changes.some(
+                      (c) => c.type === 'position' || c.type === 'remove',
+                    )
+                  )
+                    return;
+                  setDraft((d) => ({
+                    ...d,
+                    nodes: next.map((n) => ({
+                      ...n.data.node,
+                      position: n.position,
+                    })),
+                    edges: d.edges.filter(
+                      (e) =>
+                        next.some((n) => n.id === e.source) &&
+                        next.some((n) => n.id === e.target),
+                    ),
+                  }));
+                }}
+                onEdgesChange={(changes) => {
+                  const next = applyEdgeChanges(changes, edges);
+                  setDraft((d) => ({
+                    ...d,
+                    edges: next.map((e) => ({
+                      id: e.id,
+                      source: e.source,
+                      target: e.target,
+                      port: (e.sourceHandle ?? 'default') as 'default',
+                    })),
+                  }));
+                }}
+                onConnect={connect}
+                onNodeClick={(_, n) => setSelected(n.id)}
+                onNodeDoubleClick={(_, n) => {
+                  setSelected(n.id);
+                  setEditing({ node: n.data.node });
+                }}
+                zoomOnDoubleClick={false}
+                onPaneClick={() => setSelected(undefined)}
+                fitView
+                fitViewOptions={{ padding: 0.22 }}
+                minZoom={0.25}
+                maxZoom={1.5}
+                colorMode="dark"
+                deleteKeyCode={editing ? null : ['Backspace', 'Delete']}
+              >
+                <Background color="var(--canvas-dot)" gap={22} size={1} />
+                <Controls showInteractive={false} />
+                <MiniMap
+                  style={{ width: 125, height: 85 }}
+                  nodeColor="var(--accent)"
+                  maskColor="#141418bb"
+                />
+              </ReactFlow>
+              <div className={styles.canvasFooter}>
+                <span>
+                  {draft.nodes.length} nodes <b>·</b> {draft.edges.length}{' '}
+                  connections
+                </span>
+                <span>
+                  Double-click to edit · Drag to arrange · Connect handles to
+                  route data
+                </span>
               </div>
             </>
           )}
-        </aside>
+        </div>
       </div>
+      {editing && (
+        <SettingsDialog
+          node={editing.node}
+          creating={editing.creating}
+          name={name}
+          description={description}
+          definition={draft}
+          workflows={workflows}
+          onClose={() => setEditing(undefined)}
+          onApply={(next) => {
+            setName(next.name);
+            setDescription(next.description);
+            setDraft(next.definition);
+            if (editing.creating) setSelected(next.definition.nodes.at(-1)?.id);
+            setEditing(undefined);
+          }}
+          onDelete={
+            editing.node
+              ? () => {
+                  const id = editing.node!.id;
+                  setDraft((d) => ({
+                    ...d,
+                    nodes: d.nodes.filter((n) => n.id !== id),
+                    edges: d.edges.filter(
+                      (e) => e.source !== id && e.target !== id,
+                    ),
+                  }));
+                  setSelected(undefined);
+                  setEditing(undefined);
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }

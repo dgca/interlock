@@ -1,7 +1,7 @@
 .sidebar {
   width: 216px;
   flex-shrink: 0;
-  background: #151717;
+  background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -23,7 +23,7 @@
 }
 .version {
   font: 9px var(--mono);
-  color: #7b8380;
+  color: var(--muted);
   border: 1px solid var(--border);
   padding: 3px;
   border-radius: 4px;
@@ -43,12 +43,12 @@
 .avatar {
   width: 27px;
   height: 27px;
-  border: 1px solid #5b6155;
-  background: #33382d;
+  border: 1px solid var(--pink-border);
+  background: var(--pink-soft);
   display: grid;
   place-items: center;
   border-radius: 5px;
-  color: #d6debf;
+  color: var(--pink);
 }
 .workspace small,
 footer small {
@@ -60,7 +60,7 @@ footer small {
 .group {
   font-size: 9px;
   letter-spacing: 1.5px;
-  color: #6c7570;
+  color: var(--text-dim);
   padding: 0 12px;
   margin-bottom: 10px;
 }
@@ -78,14 +78,14 @@ nav button {
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 11px 12px;
-  color: #909a94;
+  color: var(--muted);
   font-size: 12px;
   cursor: pointer;
 }
 nav button.active {
-  background: #252d26;
-  color: #c3e5bc;
-  border-color: #354036;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  border-color: var(--border);
 }
 .note {
   margin-top: auto;
@@ -93,12 +93,12 @@ nav button.active {
 }
 .note span {
   font-size: 11px;
-  color: #c7cec8;
+  color: var(--text-secondary);
 }
 .note p {
   font-size: 11px;
   line-height: 1.8;
-  color: #737d76;
+  color: var(--text-dim);
 }
 .note .connect {
   background: none;
@@ -109,7 +109,7 @@ nav button.active {
   align-items: center;
   gap: 5px;
   font-size: 10px;
-  color: #a4b89f;
+  color: var(--accent);
   text-decoration: none;
 }
 footer {
@@ -119,14 +119,14 @@ footer {
   gap: 9px;
   align-items: center;
   font-size: 10px;
-  color: #b7c0b9;
+  color: var(--text-secondary);
 }
 .online,
 .offline {
   height: 6px;
   width: 6px;
   border-radius: 50%;
-  background: #9ccc93;
+  background: var(--accent);
 }
 .offline {
   background: #c5a15a;

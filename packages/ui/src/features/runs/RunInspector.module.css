@@ -10,7 +10,7 @@
   min-height: 82px;
   padding: 14px 23px;
   border-bottom: 1px solid var(--border);
-  background: #191d1a;
+  background: var(--surface);
 }
 .header h2 {
   font-size: 14px;
@@ -32,7 +32,7 @@
 }
 .graph {
   height: 270px;
-  background: #121713;
+  background: var(--canvas);
   border-bottom: 1px solid var(--border);
 }
 .log {
@@ -45,7 +45,7 @@
   padding: 14px 12px;
   gap: 13px;
   border: 1px solid var(--border);
-  background: #1b201b;
+  background: var(--surface);
   color: var(--text);
   border-radius: 6px;
   margin: 9px 0;
@@ -53,8 +53,8 @@
   cursor: pointer;
 }
 .step.selected {
-  border-color: #617b51;
-  background: #232c20;
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
 }
 .step > div {
   flex: 1;
@@ -67,13 +67,13 @@
 .step small {
   display: block;
   font-size: 9px;
-  color: #8fa083;
+  color: var(--muted);
   margin-top: 5px;
 }
 .index {
   font: 10px var(--mono);
-  color: #7c8c73;
-  border: 1px solid #3d4b35;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
   border-radius: 5px;
   padding: 6px;
 }
@@ -81,7 +81,7 @@
   width: 340px;
   flex-shrink: 0;
   border-left: 1px solid var(--border);
-  background: #191d1a;
+  background: var(--surface);
   overflow: auto;
 }
 .childTitle {
@@ -122,7 +122,7 @@
   padding: 6px 0;
 }
 .events time {
-  color: #769267;
+  color: var(--accent-text);
   white-space: nowrap;
 }
 @media (max-width: 1100px) {

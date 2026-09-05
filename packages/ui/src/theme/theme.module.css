@@ -1,0 +1,21 @@
+.buttonLabel {
+  gap: 7px;
+}
+.buttonLabel svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.input {
+  background: var(--canvas);
+}
+.label {
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+}
+.modal {
+  border: 1px solid var(--border-strong);
+}
+.title {
+  font-weight: 600;
+}

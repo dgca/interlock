@@ -5,18 +5,37 @@
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  color: #e0e6df;
-  background: #111513;
+  color: var(--text);
+  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   color-scheme: dark;
   --font: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --mono: 'SFMono-Regular', Consolas, monospace;
-  --text: #e0e6df;
-  --muted: #8a978d;
-  --border: #2e3730;
-  --accent: #b4dca0;
+  --bg: var(--mantine-color-dark-8);
+  --surface: var(--mantine-color-dark-7);
+  --surface-raised: var(--mantine-color-dark-6);
+  --surface-hover: #303039;
+  --canvas: var(--mantine-color-dark-9);
+  --toolbar: #202027ee;
+  --border: var(--mantine-color-dark-5);
+  --border-strong: var(--mantine-color-dark-4);
+  --text: var(--mantine-color-dark-0);
+  --text-secondary: var(--mantine-color-dark-1);
+  --muted: var(--mantine-color-dark-2);
+  --text-dim: var(--mantine-color-dark-3);
+  --accent: var(--mantine-color-blue-4);
+  --accent-hover: var(--mantine-color-blue-3);
+  --accent-text: var(--mantine-color-blue-2);
+  --accent-soft: #232e42;
+  --accent-border: #425e85;
+  --pink: var(--mantine-color-pink-3);
+  --pink-soft: #352638;
+  --pink-border: #78536e;
+  --edge: #7189ae;
+  --focus-ring: #82b4ff22;
+  --canvas-dot: #35353f;
 }
 * {
   box-sizing: border-box;
@@ -25,39 +44,6 @@ body {
   margin: 0;
 }
 button,
-input,
-textarea,
-select {
-  font-family: inherit;
-}
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible,
-summary:focus-visible {
-  outline: 2px solid #bbdb9f;
-  outline-offset: 3px;
-}
-input,
-textarea,
-select {
-  background: #121813;
-  color: var(--text);
-  border: 1px solid #3b4936;
-  border-radius: 5px;
-  padding: 10px;
-  font-size: 12px;
-  width: 100%;
-  outline-offset: 2px;
-}
-textarea {
-  resize: vertical;
-  line-height: 1.65;
-}
-input::placeholder {
-  color: #65765f;
-}
 h1 {
   font-size: 30px;
   letter-spacing: -0.8px;
@@ -86,7 +72,7 @@ pre {
   overflow-wrap: anywhere;
   max-height: 480px;
   overflow: auto;
-  background: #101611;
+  background: var(--canvas);
   padding: 12px;
   border-radius: 5px;
 }
@@ -100,7 +86,7 @@ pre {
   height: 100vh;
   overflow: auto;
   position: relative;
-  background: #141916;
+  background: var(--bg);
 }
 .actions {
   display: flex;
@@ -110,7 +96,7 @@ pre {
 .eyebrow {
   font-size: 9px;
   letter-spacing: 1.6px;
-  color: #98aa8e;
+  color: var(--muted);
 }
 .field {
   display: block;
@@ -119,7 +105,7 @@ pre {
 .field > span {
   display: block;
   font-size: 11px;
-  color: #bac8b1;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 .field small {
@@ -128,7 +114,7 @@ pre {
 }
 .hint {
   font-size: 11px;
-  color: #8a9c7f;
+  color: var(--muted);
   line-height: 1.75;
 }
 .muted {
@@ -137,7 +123,7 @@ pre {
 }
 .inspector-heading {
   padding: 24px 21px 18px;
-  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
 }
 .inspector-heading h2 {
   font-size: 15px;
@@ -145,7 +131,7 @@ pre {
 }
 .inspector-heading code {
   font-size: 8px;
-  color: #7f9473;
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
 .inspector-fields {
@@ -167,31 +153,6 @@ pre {
 .section-heading code {
   margin-left: auto;
   color: var(--muted);
-}
-.modal {
-  padding: 26px;
-  border: 1px solid #4b5c42;
-  border-radius: 11px;
-  background: #20281f;
-  color: var(--text);
-  width: 550px;
-  max-width: 90vw;
-  max-height: 90vh;
-  box-shadow: 0 30px 100px #0009;
-}
-.modal::backdrop {
-  background: #090d09bb;
-  backdrop-filter: blur(5px);
-}
-.modal header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
-  margin-bottom: 10px;
-}
-.modal header h2 {
-  margin: 0;
 }
 .modal-actions {
   display: flex;
@@ -232,7 +193,7 @@ pre {
 }
 summary {
   font-size: 11px;
-  color: #a9ba9d;
+  color: var(--muted);
   cursor: pointer;
   padding: 10px 0;
 }
@@ -255,7 +216,7 @@ summary {
   grid-template-columns: 2fr 1fr 1.4fr 0.4fr 20px;
   gap: 14px;
   align-items: center;
-  background: #1a211a;
+  background: var(--surface);
   width: 100%;
   padding: 18px 20px;
   border: 0;
@@ -266,7 +227,7 @@ summary {
   cursor: pointer;
 }
 .run-row:hover {
-  background: #232d21;
+  background: var(--surface-hover);
 }
 .run-row:last-child {
   border: 0;
@@ -283,10 +244,10 @@ summary {
   display: block;
   font: 9px var(--mono);
   margin-top: 6px;
-  color: #819477;
+  color: var(--muted);
 }
 .run-row.table-heading {
-  background: #202a1f;
+  background: var(--surface-raised);
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -297,10 +258,10 @@ summary {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 1px dashed #3b4a33;
+  border: 1px dashed var(--border-strong);
   border-radius: 9px;
   min-height: 330px;
-  color: #9fb08f;
+  color: var(--muted);
 }
 .empty h2 {
   font-size: 15px;
@@ -318,47 +279,47 @@ summary {
   white-space: pre-wrap;
   font-size: 12px;
   line-height: 1.8;
-  color: #bdceb1;
+  color: var(--text-secondary);
 }
 .work-panel .actions {
   flex-wrap: wrap;
 }
 .react-flow {
-  --xy-background-color: #121713;
-  --xy-edge-stroke: #60704f;
+  --xy-background-color: var(--canvas);
+  --xy-edge-stroke: var(--edge);
   --xy-edge-stroke-width: 1.5;
-  --xy-handle-background-color: #9db77d;
-  --xy-handle-border-color: #36432d;
-  --xy-controls-button-background-color: #25301f;
-  --xy-controls-button-color: #c4d9b2;
-  --xy-controls-button-border-color: #415136;
-  --xy-minimap-background-color: #1c2518;
+  --xy-handle-background-color: var(--accent);
+  --xy-handle-border-color: var(--border-strong);
+  --xy-controls-button-background-color: var(--accent-soft);
+  --xy-controls-button-color: var(--accent-text);
+  --xy-controls-button-border-color: var(--border-strong);
+  --xy-minimap-background-color: var(--canvas);
 }
 .react-flow__controls {
   bottom: 39px !important;
   box-shadow: none !important;
-  border: 1px solid #3d4b32;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   overflow: hidden;
 }
 .react-flow__minimap {
   bottom: 36px !important;
-  width: 125px;
-  height: 85px;
-  border: 1px solid #3c4b32;
+  /* MiniMap's style prop sizes its SVG; keep borders outside that area. */
+  box-sizing: content-box;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
 }
 .react-flow__edge-text {
-  fill: #bfd3ae !important;
+  fill: var(--accent-text) !important;
   font-size: 9px;
 }
 .react-flow__edge-textbg {
-  fill: #263320 !important;
+  fill: var(--accent-soft) !important;
 }
 .react-flow__attribution {
   bottom: 35px !important;
-  background: #182016 !important;
+  background: var(--canvas) !important;
 }
 .react-flow__attribution a {
-  color: #6a815c !important;
+  color: var(--text-dim) !important;
 }

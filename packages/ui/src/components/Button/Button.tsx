@@ -1,15 +1,25 @@
 import type { ButtonHTMLAttributes } from 'react';
-import styles from './Button.module.css';
+import { Button as MantineButton } from '@mantine/core';
+
+/** Workflow actions share semantic variants across the canvas and dialogs. */
 export function Button({
   variant = 'secondary',
-  className = '',
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
 }) {
   return (
-    <button
-      className={`${styles.button} ${styles[variant]} ${className}`}
+    <MantineButton
+      variant={
+        variant === 'primary'
+          ? 'filled'
+          : variant === 'ghost'
+            ? 'subtle'
+            : variant === 'danger'
+              ? 'light'
+              : 'default'
+      }
+      color={variant === 'danger' ? 'red' : undefined}
       {...props}
     />
   );

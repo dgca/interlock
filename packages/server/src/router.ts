@@ -1,10 +1,12 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
-import { fileURLToPath } from 'node:url';
+import { developmentConnection, type ConnectionConfig } from './connection.js';
 import { definitionSchema, jsonSchema, InterlockError } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 
-const t = initTRPC.context<{ engine: Engine }>().create();
+const t = initTRPC
+  .context<{ engine: Engine; connection?: ConnectionConfig }>()
+  .create();
 const p = t.procedure.use(async ({ next }) => {
   try {
     return await next();
@@ -17,16 +19,7 @@ const p = t.procedure.use(async ({ next }) => {
 const id = z.object({ id: z.string() });
 const claim = z.object({ workId: z.string(), token: z.string() });
 export const appRouter = t.router({
-  connection: p.query(() => ({
-    command: process.execPath,
-    args: [
-      '--import',
-      fileURLToPath(
-        new URL('../../../node_modules/tsx/dist/loader.mjs', import.meta.url),
-      ),
-      fileURLToPath(new URL('../../mcp/src/index.ts', import.meta.url)),
-    ],
-  })),
+  connection: p.query(({ ctx }) => ctx.connection ?? developmentConnection()),
   workflows: t.router({
     list: p.query(({ ctx }) => ctx.engine.store.workflows()),
     get: p.input(id).query(({ ctx, input }) => ctx.engine.workflow(input.id)),

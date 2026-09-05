@@ -4,8 +4,9 @@ import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { bodyLimit } from 'hono/body-limit';
 import type { Engine } from '@interlock/runtime';
 import { appRouter } from './router.js';
+import type { ConnectionConfig } from './connection.js';
 
-export function createApp(engine: Engine) {
+export function createApp(engine: Engine, connection?: ConnectionConfig) {
   const app = new Hono();
   app.use('*', bodyLimit({ maxSize: 2 * 1024 * 1024 }));
   app.use('*', async (c, next) => {
@@ -16,6 +17,7 @@ export function createApp(engine: Engine) {
     if (
       origin &&
       ![
+        connection?.engineUrl,
         'http://127.0.0.1:4310',
         'http://localhost:4310',
         'http://127.0.0.1:5173',
@@ -31,7 +33,7 @@ export function createApp(engine: Engine) {
       endpoint: '/trpc',
       req: c.req.raw,
       router: appRouter,
-      createContext: () => ({ engine }),
+      createContext: () => ({ engine, connection }),
     }),
   );
   app.get('/events', (c) =>

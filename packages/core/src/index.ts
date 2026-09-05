@@ -40,6 +40,8 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('script'),
+    // Older saved nodes omit language and must continue to run as Bash.
+    language: z.enum(['javascript', 'bash']).optional(),
     command: z.string().min(1),
     timeoutMs: z.number().int().min(100).max(120000).default(30000),
   }),
@@ -160,14 +162,62 @@ export interface RunEvent {
 }
 export class InterlockError extends Error {}
 const ajv = new Ajv({ allErrors: true, strict: false });
+export function validateContractSchema(schema: Record<string, unknown>) {
+  contractSchema.parse(schema);
+  ajv.compile(schema);
+}
 export function assertContract(
   schema: Record<string, unknown>,
   value: Json,
   label: string,
 ) {
   const validate = ajv.compile(schema);
-  if (!validate(value))
-    throw new InterlockError(`${label}: ${ajv.errorsText(validate.errors)}`);
+  if (!validate(value)) {
+    const errors = (validate.errors ?? []).slice(0, 3).map((error) => {
+      const segments = error.instancePath
+        .split('/')
+        .slice(1)
+        .map((p) => p.replaceAll('~1', '/').replaceAll('~0', '~'));
+      const path = segments.length ? segments.join('.') : 'value';
+      let actual: unknown = value;
+      for (const part of segments)
+        actual =
+          actual !== null && typeof actual === 'object'
+            ? (actual as Record<string, unknown>)[part]
+            : undefined;
+      const received =
+        actual === null
+          ? 'null'
+          : Array.isArray(actual)
+            ? 'a list'
+            : typeof actual === 'string'
+              ? 'text'
+              : typeof actual === 'object'
+                ? 'an object'
+                : typeof actual;
+      const excerpt = JSON.stringify(actual)?.slice(0, 100) ?? 'missing';
+      if (error.keyword === 'required')
+        return `Missing required field "${[...segments, error.params.missingProperty].join('.')}".`;
+      if (error.keyword === 'type') {
+        const types: Record<string, string> = {
+          array: 'a list',
+          object: 'an object',
+          string: 'text',
+          boolean: 'yes/no',
+          integer: 'a whole number',
+          number: 'a number',
+          null: 'null',
+        };
+        return `"${path}" expects ${types[error.params.type] ?? error.params.type}; received ${received}: ${excerpt}.`;
+      }
+      if (error.keyword === 'enum')
+        return `"${path}" must be one of ${JSON.stringify(error.params.allowedValues)}; received ${excerpt}.`;
+      if (error.keyword === 'additionalProperties')
+        return `Unexpected field "${[...segments, error.params.additionalProperty].join('.')}". Remove it or add it to the contract.`;
+      return `"${path}" ${error.message}; received ${excerpt}.`;
+    });
+    throw new InterlockError(`${label}: ${errors.join(' ')}`);
+  }
 }
 export function readPath(value: Json, path: string): Json {
   if (!path || path === '$') return value;
@@ -266,3 +316,17 @@ export function blankDefinition(): WorkflowDefinition {
     ],
   });
 }
+
+export {
+  fieldTypes,
+  fieldType,
+  newContract,
+  propertiesOf,
+  requiredOf,
+  visualIssues,
+  renameField,
+  inferContract,
+  contractExample,
+  type Contract,
+  type FieldType,
+} from './contracts.js';

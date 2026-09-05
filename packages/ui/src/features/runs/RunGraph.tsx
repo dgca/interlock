@@ -50,7 +50,7 @@ export function RunGraph({
       minZoom={0.2}
       colorMode="dark"
     >
-      <Background color="#333c32" gap={22} />
+      <Background color="var(--canvas-dot)" gap={22} />
       <Controls showInteractive={false} />
     </ReactFlow>
   );

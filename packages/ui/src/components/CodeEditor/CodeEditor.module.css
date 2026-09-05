@@ -1,0 +1,127 @@
+.field {
+  margin-bottom: var(--mantine-spacing-md);
+}
+
+.fullHeight {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+.fullHeight .frame {
+  flex: 1;
+  max-height: none;
+}
+
+.fullHeight .row {
+  min-height: 100%;
+}
+
+.label {
+  display: inline-block;
+  margin-bottom: 4px;
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 500;
+}
+
+.frame {
+  max-height: 400px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--mantine-radius-default);
+  background: var(--canvas);
+}
+
+.row {
+  display: flex;
+  align-items: stretch;
+  min-width: 100%;
+  width: max-content;
+}
+
+.frame:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.editor {
+  flex: 1;
+  min-width: max-content;
+  min-height: 180px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.gutter {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex-shrink: 0;
+  min-width: 3.5em;
+  padding: 12px 10px;
+  border-right: 1px solid var(--border);
+  background: var(--canvas);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.7;
+  text-align: right;
+  user-select: none;
+}
+
+.gutter span {
+  display: block;
+}
+
+.editor pre,
+.editor textarea {
+  /* Keep source lines aligned with both the gutter and stack traces. */
+  white-space: pre !important;
+  overflow-wrap: normal !important;
+}
+
+.editor .highlight {
+  max-height: none;
+  overflow: visible;
+  background: transparent;
+  border-radius: 0;
+  overflow-wrap: break-word;
+}
+
+.editor textarea {
+  outline: none;
+}
+
+.editor :global(.token.comment),
+.editor :global(.token.prolog) {
+  color: #9ca7b8;
+}
+
+.editor :global(.token.keyword),
+.editor :global(.token.operator) {
+  color: #c4a7ff;
+}
+
+.editor :global(.token.string),
+.editor :global(.token.char) {
+  color: #a3d9a5;
+}
+
+.editor :global(.token.number),
+.editor :global(.token.boolean),
+.editor :global(.token.constant) {
+  color: #f2bd83;
+}
+
+.editor :global(.token.function),
+.editor :global(.token.builtin) {
+  color: #89caff;
+}
+
+.editor :global(.token.variable),
+.editor :global(.token.parameter) {
+  color: #f3c97a;
+}

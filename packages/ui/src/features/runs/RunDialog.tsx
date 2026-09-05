@@ -1,3 +1,4 @@
+import { NativeSelect, Textarea } from '@mantine/core';
 import { useEffect, useState, useRef } from 'react';
 import { Play } from 'lucide-react';
 import type { Json, Workflow, WorkflowVersion } from '@interlock/core';
@@ -67,32 +68,33 @@ export function RunDialog({
         The local engine handles the procedure. Connect an agent harness to
         complete agent assignments.
       </p>
-      <label className="field">
-        <span>Published version</span>
-        <select
-          value={version}
-          onChange={(e) => {
-            const next = Number(e.target.value);
-            setVersion(next);
-            setInput(
-              JSON.stringify(
-                sample(
-                  versions.find((v) => v.version === next)!.definition
-                    .inputSchema,
-                ),
-                null,
-                2,
+
+      <NativeSelect
+        mb="md"
+        label="Published version"
+        value={version}
+        onChange={(e) => {
+          const next = Number(e.target.value);
+          setVersion(next);
+          setInput(
+            JSON.stringify(
+              sample(
+                versions.find((v) => v.version === next)!.definition
+                  .inputSchema,
               ),
-            );
-          }}
-        >
-          {versions.map((v) => (
-            <option key={v.version} value={v.version}>
-              Version {v.version}
-            </option>
-          ))}
-        </select>
-      </label>
+              null,
+              2,
+            ),
+          );
+        }}
+      >
+        {versions.map((v) => (
+          <option key={v.version} value={v.version}>
+            Version {v.version}
+          </option>
+        ))}
+      </NativeSelect>
+
       {canForm && (
         <div className="actions" style={{ marginBottom: 16 }}>
           <Button variant="ghost" onClick={() => setRaw(!raw)}>
@@ -108,16 +110,15 @@ export function RunDialog({
             onChange={(next) => setInput(JSON.stringify(next, null, 2))}
           />
         ) : (
-          <label className="field">
-            <span>Workflow input</span>
-            <textarea
-              aria-label="Workflow input"
-              className="code"
-              rows={12}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-            />
-          </label>
+          <Textarea
+            mb="md"
+            label="Workflow input"
+            aria-label="Workflow input"
+            styles={{ input: { fontFamily: 'var(--mono)' } }}
+            rows={12}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+          />
         )}
       </div>
       <details>

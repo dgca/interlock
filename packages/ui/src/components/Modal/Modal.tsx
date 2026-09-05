@@ -1,28 +1,31 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { X } from 'lucide-react';
-import { Button } from '../Button/Button';
+import type { ReactNode } from 'react';
+import { Modal as MantineModal } from '@mantine/core';
+
+/** Dialogs stay mounted only while open; contract pages can handle Close as Back. */
 export function Modal({
   title,
   onClose,
   children,
+  className = '',
+  size = 550,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  className?: string;
+  size?: number;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    ref.current?.showModal();
-  }, []);
   return (
-    <dialog ref={ref} onCancel={onClose} className="modal">
-      <header>
-        <h2>{title}</h2>
-        <Button variant="ghost" aria-label="Close dialog" onClick={onClose}>
-          <X />
-        </Button>
-      </header>
+    <MantineModal
+      opened
+      title={title}
+      onClose={onClose}
+      size={size}
+      classNames={{ content: className }}
+      closeButtonProps={{ 'aria-label': 'Close dialog' }}
+      closeOnClickOutside={false}
+    >
       {children}
-    </dialog>
+    </MantineModal>
   );
 }

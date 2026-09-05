@@ -1,16 +1,72 @@
 # Connect a harness
 
-## Configure Codex
+## Start Interlock
 
-1. Start the Interlock engine with `pnpm dev` or `pnpm start` after a build.
-2. Open the UI and select **Connect with MCP**.
-3. Copy the generated Codex configuration into the configuration scope you use for local MCP servers.
-4. Enable the Interlock tools through your harness's normal approval controls.
-5. Start a fresh harness session if needed to discover the new tools.
+```sh
+npm install -g @type_of/interlock
+interlock
+```
 
-The generated configuration uses absolute paths to Node, the local TypeScript loader, and the MCP entrypoint. Moving the checkout or changing the Node installation requires regenerating it. Interlock does not modify your global harness configuration.
+Keep this process running and open [Interlock](http://127.0.0.1:4310). **Connect with MCP** provides configuration for the running installation, including absolute paths if your harness cannot find the globally installed command.
 
-Codex documents stdio MCP configuration in its [MCP integration guide](https://learn.chatgpt.com/docs/extend/mcp?surface=cli). The UI also provides a generic `mcpServers` JSON object. Other harnesses may require a different configuration wrapper around the same command and arguments.
+## Codex
+
+Add this to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.interlock]
+command = "interlock"
+args = ["mcp"]
+```
+
+See the [Codex MCP guide](https://developers.openai.com/codex/mcp).
+
+## Claude
+
+For Claude Code, run:
+
+```sh
+claude mcp add --transport stdio --scope user interlock -- interlock mcp
+```
+
+For Claude Desktop, merge this into its MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "interlock": { "command": "interlock", "args": ["mcp"] }
+  }
+}
+```
+
+See the [Claude Code MCP guide](https://code.claude.com/docs/en/mcp). The connection modal also supplies absolute paths for desktop applications whose PATH does not include global npm commands.
+
+## OpenCode
+
+Merge this into `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "interlock": {
+      "type": "local",
+      "command": ["interlock", "mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+See the [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/).
+
+## Other clients
+
+Use a local **stdio** MCP server. Set the command to `interlock` and its argument list to `["mcp"]`. No additional arguments are required. The harness launches this bridge and communicates over stdin/stdout.
+
+The bridge connects to the running engine at `http://127.0.0.1:4310`. Set the bridge environment variable `INTERLOCK_URL` when using another port. This engine URL is an internal HTTP API, not an HTTP MCP endpoint.
+
+Restart or reconnect your harness after changing configuration. Enable Interlock's tools in its approval settings. Interlock does not modify harness configuration for you.
 
 ## Complete a run
 
@@ -37,7 +93,7 @@ Check the service first:
 
 ```sh
 curl http://127.0.0.1:4310/health
-pnpm cli workflows
+interlock workflows
 ```
 
 If both succeed but the harness cannot execute Interlock tools, inspect its MCP startup and approval settings. The MCP adapter prints protocol messages to stdout and diagnostics to stderr. Do not wrap its command in a script that prints startup banners to stdout.

@@ -3,6 +3,7 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   Bot,
+  Pencil,
   Terminal,
   Split,
   Layers,
@@ -10,7 +11,11 @@ import {
 } from 'lucide-react';
 import type { WorkflowNode } from '@interlock/core';
 import styles from './WorkflowEditor.module.css';
-export type CanvasNode = Node<{ node: WorkflowNode; status?: string }>;
+export type CanvasNode = Node<{
+  node: WorkflowNode;
+  status?: string;
+  onEdit?: () => void;
+}>;
 const icons = {
   entry: ArrowUpFromLine,
   exit: ArrowDownToLine,
@@ -36,6 +41,21 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
           <i title={data.status} className={styles[data.status]} />
         )}
       </div>
+      {selected && data.onEdit && (
+        <button
+          type="button"
+          className={`${styles.editNode} nodrag nopan`}
+          aria-label={`Edit ${n.label}`}
+          title="Edit node"
+          onDoubleClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onEdit?.();
+          }}
+        >
+          <Pencil size={13} />
+        </button>
+      )}
       <strong>{n.label}</strong>
       <small>
         {n.kind === 'agent'

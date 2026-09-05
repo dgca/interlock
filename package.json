@@ -1,6 +1,5 @@
 {
-  "name": "interlock",
-  "private": true,
+  "name": "@type_of/interlock",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
@@ -8,7 +7,7 @@
   },
   "scripts": {
     "dev": "concurrently -k -n server,ui \"pnpm --filter @interlock/server dev\" \"pnpm --filter @interlock/ui dev\"",
-    "build": "pnpm typecheck && pnpm --filter @interlock/ui build",
+    "build": "pnpm typecheck && pnpm --filter @interlock/ui build && node scripts/build-package.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "start": "pnpm --filter @interlock/server start",
@@ -16,7 +15,9 @@
     "mcp": "pnpm --filter @interlock/mcp start",
     "changeset": "changeset",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "prepack": "pnpm build",
+    "test:package": "node scripts/test-package.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
@@ -30,9 +31,29 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "concurrently": "^9.2.1",
+    "esbuild": "^0.28.2",
     "prettier": "^3.6.2",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
-  }
+  },
+  "version": "0.0.1",
+  "license": "MIT",
+  "description": "Local workflow engine and visual editor for agent harnesses",
+  "bin": {
+    "interlock": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CONTEXT.md",
+    "docs"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ]
 }

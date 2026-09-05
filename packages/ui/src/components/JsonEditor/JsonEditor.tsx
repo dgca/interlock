@@ -1,3 +1,4 @@
+import { Textarea } from '@mantine/core';
 import { useEffect, useState, useRef } from 'react';
 export function JsonEditor({
   value,
@@ -20,30 +21,29 @@ export function JsonEditor({
     ref.current?.setCustomValidity('');
   }, [serialized]);
   return (
-    <label className="field">
-      <span>{label}</span>
-      <textarea
-        ref={ref}
-        className="code"
-        aria-label={label}
-        rows={rows}
-        value={text}
-        readOnly={!onChange}
-        spellCheck={false}
-        onChange={(e) => {
-          setText(e.target.value);
-          try {
-            const parsed = JSON.parse(e.target.value);
-            setError('');
-            e.target.setCustomValidity('');
-            onChange?.(parsed);
-          } catch {
-            setError('Enter valid JSON.');
-            e.target.setCustomValidity('Enter valid JSON.');
-          }
-        }}
-      />
-      {error && <small className="error-text">{error}</small>}
-    </label>
+    <Textarea
+      mb="md"
+      error={error || undefined}
+      label={label}
+      ref={ref}
+      styles={{ input: { fontFamily: 'var(--mono)' } }}
+      aria-label={label}
+      rows={rows}
+      value={text}
+      readOnly={!onChange}
+      spellCheck={false}
+      onChange={(e) => {
+        setText(e.target.value);
+        try {
+          const parsed = JSON.parse(e.target.value);
+          setError('');
+          e.target.setCustomValidity('');
+          onChange?.(parsed);
+        } catch {
+          setError('Enter valid JSON.');
+          e.target.setCustomValidity('Enter valid JSON.');
+        }
+      }}
+    />
   );
 }

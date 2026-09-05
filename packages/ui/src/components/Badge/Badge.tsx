@@ -1,9 +1,25 @@
-import styles from './Badge.module.css';
+import { Badge as MantineBadge } from '@mantine/core';
+
+const statusColors: Record<string, string> = {
+  completed: 'blue',
+  published: 'blue',
+  running: 'blue',
+  claimed: 'blue',
+  waiting: 'yellow',
+  available: 'yellow',
+  failed: 'red',
+  cancelled: 'gray',
+};
 export function Badge({ status }: { status: string }) {
   return (
-    <span className={`${styles.badge} ${styles[status] ?? ''}`}>
-      <i />
+    <MantineBadge
+      color={statusColors[status] ?? 'gray'}
+      variant="light"
+      size="sm"
+      tt="none"
+      fw={500}
+    >
       {status.replaceAll('_', ' ')}
-    </span>
+    </MantineBadge>
   );
 }

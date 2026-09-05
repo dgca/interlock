@@ -450,6 +450,7 @@ export class Engine {
         node.timeoutMs,
         this.cwd,
         controller.signal,
+        node.language,
       )
         .then((output) => {
           if (this.stopped) return;
