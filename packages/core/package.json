@@ -1,0 +1,13 @@
+{
+  "name": "@interlock/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "zod": "^3.25.76",
+    "ajv": "^8.17.1"
+  }
+}

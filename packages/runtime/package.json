@@ -1,0 +1,13 @@
+{
+  "name": "@interlock/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@interlock/core": "workspace:*",
+    "@interlock/storage": "workspace:*"
+  }
+}

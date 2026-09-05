@@ -1,0 +1,45 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  border: 1px solid var(--border);
+  background: #212525;
+  padding: 4px 7px;
+  border-radius: 5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.badge i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.completed,
+.published {
+  color: #acd6a5;
+  background: #203024;
+  border-color: #354b38;
+}
+.waiting,
+.available {
+  color: #e8c78e;
+  background: #322d22;
+  border-color: #4e422d;
+}
+.running,
+.claimed {
+  color: #a5bfee;
+  background: #242b39;
+  border-color: #364768;
+}
+.failed {
+  color: #efa69a;
+  background: #382724;
+  border-color: #59332e;
+}
+.cancelled {
+  color: #b2ada8;
+}
