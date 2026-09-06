@@ -246,3 +246,14 @@
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+
+.conflict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-strong);
+  font-size: 12px;
+}

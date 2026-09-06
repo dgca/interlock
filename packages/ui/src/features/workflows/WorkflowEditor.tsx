@@ -1,3 +1,4 @@
+import type { Action } from '../../lib/useActionFeedback';
 import { useMemo, useState, useRef, useEffect } from 'react';
 import {
   ReactFlow,
@@ -33,9 +34,11 @@ export function WorkflowEditor({
   onBack: () => void;
   onRun: (workflow: Workflow) => void;
   onSaved: (w: Workflow) => void;
-  act: (fn: () => Promise<unknown>) => Promise<void>;
+  act: Action;
   onDirty: (dirty: boolean) => void;
 }) {
+  const [pending, setPending] = useState<'save' | 'publish'>();
+  const actionInFlight = useRef(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const [measurements, setMeasurements] = useState<
     Record<string, { width?: number; height?: number }>
@@ -77,6 +80,41 @@ export function WorkflowEditor({
   const dirty =
     rawInvalid ||
     JSON.stringify({ draft: effectiveDraft, name, description }) !== saved;
+  const remoteSnapshot = JSON.stringify({
+    draft: workflow.draft,
+    name: workflow.name,
+    description: workflow.description,
+  });
+  const remoteChanged =
+    workflow.draftRevision > revision ||
+    (workflow.draftRevision === revision && remoteSnapshot !== saved);
+  const loadLatest = () => {
+    setDraft(workflow.draft);
+    setRaw(JSON.stringify(workflow.draft, null, 2));
+    setName(workflow.name);
+    setDescription(workflow.description);
+    setRevision(workflow.draftRevision);
+    setSaved(remoteSnapshot);
+    setMeasurements({});
+    setEditing(undefined);
+    setSelected(undefined);
+  };
+  useEffect(() => {
+    if (remoteChanged && !dirty && !editing && !pending) loadLatest();
+  }, [remoteChanged, dirty, editing, pending, workflow, remoteSnapshot]);
+  const perform = (action: 'save' | 'publish', fn: () => Promise<Workflow>) => {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setPending(action);
+    void act(fn, (w) =>
+      action === 'publish'
+        ? `Published “${w.name}” as v${w.latestVersion}.`
+        : 'Workflow draft saved.',
+    ).finally(() => {
+      actionInFlight.current = false;
+      setPending(undefined);
+    });
+  };
   useEffect(() => {
     onDirty(dirty);
     return () => onDirty(false);
@@ -116,6 +154,9 @@ export function WorkflowEditor({
   );
   const save = async () => {
     if (rawInvalid) throw new Error('Fix the raw JSON before saving.');
+    if (!dirty) return workflow;
+    if (remoteChanged)
+      throw new Error('Load the latest draft before saving your changes.');
     const invalid =
       editorRef.current?.querySelector<HTMLInputElement>(':invalid');
     if (invalid) {
@@ -187,29 +228,38 @@ export function WorkflowEditor({
         </span>
         <div className="actions">
           <Button
-            onClick={() => void act(save)}
-            disabled={!dirty || rawInvalid}
+            onClick={() => perform('save', save)}
+            disabled={!dirty || rawInvalid || remoteChanged || Boolean(pending)}
           >
             <Save />
-            Save draft
+            {pending === 'save' ? 'Saving…' : 'Save draft'}
           </Button>
           <Button
-            disabled={rawInvalid || Boolean(rawResult?.publishError)}
+            disabled={
+              rawInvalid ||
+              Boolean(rawResult?.publishError) ||
+              remoteChanged ||
+              Boolean(pending)
+            }
             onClick={() =>
-              void act(async () => {
+              perform('publish', async () => {
                 await save();
-                onSaved(
-                  await api.workflows.publish.mutate({ id: workflow.id }),
-                );
+                const published = await api.workflows.publish.mutate({
+                  id: workflow.id,
+                });
+                onSaved(published);
+                return published;
               })
             }
           >
             <Upload />
-            Publish version
+            {pending === 'publish' ? 'Publishing…' : 'Publish version'}
           </Button>
           <Button
             variant="primary"
-            disabled={!workflow.latestVersion || workflow.archived}
+            disabled={
+              !workflow.latestVersion || workflow.archived || Boolean(pending)
+            }
             onClick={() => onRun(workflow)}
           >
             <Play />
@@ -217,6 +267,26 @@ export function WorkflowEditor({
           </Button>
         </div>
       </header>
+      {remoteChanged && (dirty || editing) && !pending && (
+        <div role="alert" className={styles.conflict}>
+          <span>
+            This workflow changed elsewhere. Your edits are still here. Load the
+            latest draft before saving or publishing.
+          </span>
+          <Button
+            onClick={() => {
+              if (
+                window.confirm(
+                  'Discard your local edits and load the latest draft?',
+                )
+              )
+                loadLatest();
+            }}
+          >
+            Load latest draft
+          </Button>
+        </div>
+      )}
       <div className={styles.body}>
         <div className={styles.canvasWrap}>
           <div className={styles.canvasToolbar}>
