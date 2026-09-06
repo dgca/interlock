@@ -173,23 +173,13 @@ pre {
   color: #edb99c;
   overflow-wrap: anywhere;
 }
-.toast {
+.action-toast {
   position: fixed;
-  z-index: 100;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 750px;
-  background: #3c2c22;
-  color: #f0c9ac;
-  border: 1px solid #8e6345;
-  border-radius: 8px;
-  padding: 12px 14px;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  box-shadow: 0 8px 40px #0008;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1100;
+  width: min(380px, calc(100vw - 40px));
+  box-shadow: 0 8px 28px #0005;
 }
 summary {
   font-size: 11px;

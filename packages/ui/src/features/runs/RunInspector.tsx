@@ -1,3 +1,4 @@
+import type { Action } from '../../lib/useActionFeedback';
 import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
@@ -27,7 +28,7 @@ export function RunInspector({
   tick: number;
   onBack: () => void;
   onOpen: (id: string) => void;
-  act: (fn: () => Promise<unknown>) => Promise<void>;
+  act: Action;
 }) {
   const [data, setData] = useState<Detail>(),
     [error, setError] = useState(''),
@@ -82,7 +83,7 @@ export function RunInspector({
                 void act(async () => {
                   await api.runs.retry.mutate({ id });
                   refresh();
-                })
+                }, 'Run retry started.')
               }
             >
               <RotateCcw />
@@ -95,7 +96,7 @@ export function RunInspector({
                 void act(async () => {
                   await api.runs.cancel.mutate({ id });
                   refresh();
-                })
+                }, 'Run cancelled.')
               }
             >
               <Square />

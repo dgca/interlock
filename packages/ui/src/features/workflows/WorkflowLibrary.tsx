@@ -1,3 +1,4 @@
+import type { Action } from '../../lib/useActionFeedback';
 import { ActionIcon, Menu, Tabs, TextInput } from '@mantine/core';
 import { useRef, useState } from 'react';
 import {
@@ -23,7 +24,7 @@ export function WorkflowLibrary({
 }: {
   workflows: Workflow[];
   onOpen: (id: string) => void;
-  act: (fn: () => Promise<unknown>) => Promise<void>;
+  act: Action;
 }) {
   const [query, setQuery] = useState(''),
     [archived, setArchived] = useState(false);
@@ -54,7 +55,7 @@ export function WorkflowLibrary({
                   name: 'Untitled workflow',
                 });
                 onOpen(w.id);
-              })
+              }, 'Workflow created.')
             }
           >
             <Plus />
@@ -74,7 +75,7 @@ export function WorkflowLibrary({
               const data = JSON.parse(await selected.text());
               const w = await api.workflows.create.mutate(data);
               onOpen(w.id);
-            });
+            }, 'Workflow imported.');
           e.target.value = '';
         }}
       />
@@ -125,7 +126,7 @@ export function WorkflowLibrary({
                               id: w.id,
                             });
                             onOpen(copy.id);
-                          })
+                          }, 'Workflow cloned.')
                         }
                       >
                         Clone
@@ -145,11 +146,15 @@ export function WorkflowLibrary({
                       <Menu.Item
                         leftSection={<Archive size={14} />}
                         onClick={() =>
-                          void act(() =>
-                            api.workflows.update.mutate({
-                              id: w.id,
-                              archived: !w.archived,
-                            }),
+                          void act(
+                            () =>
+                              api.workflows.update.mutate({
+                                id: w.id,
+                                archived: !w.archived,
+                              }),
+                            w.archived
+                              ? 'Workflow restored.'
+                              : 'Workflow archived.',
                           )
                         }
                       >
@@ -190,7 +195,7 @@ export function WorkflowLibrary({
                     name: 'Untitled workflow',
                   });
                   onOpen(w.id);
-                })
+                }, 'Workflow created.')
               }
             >
               <span>

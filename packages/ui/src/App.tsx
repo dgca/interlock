@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { Check, AlertCircle } from 'lucide-react';
+import { Notification } from '@mantine/core';
+import { useActionFeedback } from './lib/useActionFeedback';
 import type { Run, Workflow } from '@interlock/core';
 import { Sidebar } from './components/Sidebar/Sidebar';
-import { Button } from './components/Button/Button';
 import { WorkflowLibrary } from './features/workflows/WorkflowLibrary';
 import { WorkflowEditor } from './features/workflows/WorkflowEditor';
 import { RunHistory } from './features/runs/RunHistory';
 import { RunInspector } from './features/runs/RunInspector';
 import { RunDialog } from './features/runs/RunDialog';
 import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
-import { api, errorMessage } from './lib/api';
+import { api } from './lib/api';
 export function App() {
   const [editorDirty, setEditorDirty] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
@@ -18,7 +19,6 @@ export function App() {
     [runId, setRunId] = useState<string>();
   const [workflows, setWorkflows] = useState<Workflow[]>([]),
     [runs, setRuns] = useState<Run[]>([]),
-    [error, setError] = useState(''),
     [connected, setConnected] = useState(false),
     [tick, setTick] = useState(0),
     [runDialog, setRunDialog] = useState<Workflow>();
@@ -62,16 +62,10 @@ export function App() {
       clearTimeout(pending);
     };
   }, [refresh]);
-  const act = async (fn: () => Promise<unknown>) => {
-    setError('');
-    try {
-      await fn();
-      await refresh();
-      setTick((t) => t + 1);
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  };
+  const { act, feedback, dismiss, success } = useActionFeedback(async () => {
+    await refresh();
+    setTick((t) => t + 1);
+  });
   const openRun = (id: string) => {
     setRunId(id);
     setPage('runs');
@@ -94,17 +88,27 @@ export function App() {
         }}
       />
       <main className="main">
-        {error && (
-          <div role="alert" className="toast">
-            {error}
-            <Button
-              variant="ghost"
-              aria-label="Dismiss error"
-              onClick={() => setError('')}
-            >
-              <X />
-            </Button>
-          </div>
+        {feedback && (
+          <Notification
+            key={feedback.id}
+            className="action-toast"
+            role={feedback.kind === 'error' ? 'alert' : 'status'}
+            color={feedback.kind === 'success' ? 'green' : 'red'}
+            icon={
+              feedback.kind === 'success' ? (
+                <Check size={18} />
+              ) : (
+                <AlertCircle size={18} />
+              )
+            }
+            title={
+              feedback.kind === 'success' ? 'Success' : 'Something went wrong'
+            }
+            onClose={dismiss}
+            closeButtonProps={{ 'aria-label': 'Dismiss notification' }}
+          >
+            {feedback.message}
+          </Notification>
         )}
         {page === 'workflows' ? (
           selected ? (
@@ -149,7 +153,10 @@ export function App() {
         <RunDialog
           workflow={runDialog}
           onClose={() => setRunDialog(undefined)}
-          onStarted={openRun}
+          onStarted={(id) => {
+            success('Workflow run started.');
+            openRun(id);
+          }}
         />
       )}
     </div>
