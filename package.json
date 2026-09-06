@@ -63,5 +63,9 @@
   "os": [
     "darwin",
     "linux"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dgca/interlock.git"
+  }
 }
