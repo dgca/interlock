@@ -124,6 +124,7 @@ it('creates a List from the ordinary add dialog without a nested definition or w
     '',
     'agent',
     'script',
+    'fetch',
     'condition',
     'workflow',
     'list',

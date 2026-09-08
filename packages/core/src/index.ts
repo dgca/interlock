@@ -1,5 +1,14 @@
 import { z } from 'zod';
 import Ajv from 'ajv';
+import { validateFetch, type FetchRequest } from './fetch.js';
+export {
+  resolveFetch,
+  validateFetch,
+  type FetchNode,
+  type FetchBinding,
+  type FetchField,
+  type FetchRequest,
+} from './fetch.js';
 import { validateListScopes } from './listScopes.js';
 export { validateListScopes } from './listScopes.js';
 
@@ -21,6 +30,14 @@ export const contextPolicySchema = z.object({
   instructions: z.string().default(''),
   tools: z.array(z.string()).default([]),
   skills: z.array(z.string()).default([]),
+});
+const fetchBindingSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('fixed'), value: jsonSchema }),
+  z.object({ kind: z.literal('input'), path: z.string() }),
+]);
+const fetchFieldSchema = z.object({
+  name: z.string(),
+  value: fetchBindingSchema,
 });
 const nodeBase = {
   id: z.string().min(1),
@@ -47,6 +64,38 @@ export const nodeSchema = z.discriminatedUnion('kind', [
     language: z.enum(['javascript', 'bash']).optional(),
     command: z.string().min(1),
     timeoutMs: z.number().int().min(100).max(120000).default(30000),
+  }),
+  z.object({
+    ...nodeBase,
+    kind: z.literal('fetch'),
+    outputSchema: contractSchema.default({
+      type: 'object',
+      required: ['status', 'headers', 'body'],
+      properties: {
+        status: { type: 'integer' },
+        headers: { type: 'object', additionalProperties: { type: 'string' } },
+        body: {},
+      },
+    }),
+    url: z.string(),
+    method: z
+      .enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])
+      .default('GET'),
+    query: z.array(fetchFieldSchema).default([]),
+    headers: z.array(fetchFieldSchema).default([]),
+    body: z
+      .discriminatedUnion('kind', [
+        z.object({ kind: z.literal('none') }),
+        z.object({ kind: z.literal('input') }),
+        z.object({ kind: z.literal('fixed'), value: jsonSchema }),
+        z.object({
+          kind: z.literal('fields'),
+          fields: z.array(fetchFieldSchema),
+        }),
+      ])
+      .default({ kind: 'none' }),
+    timeoutMs: z.number().int().min(100).max(120000).default(30000),
+    failOnHttpError: z.boolean().default(true),
   }),
   z.object({
     ...nodeBase,
@@ -131,6 +180,7 @@ export interface NodeExecution {
   childRunIds: string[];
   nextItem: number;
   retryChildRunIds?: string[];
+  request?: FetchRequest;
 }
 export interface Run {
   id: string;
@@ -278,6 +328,7 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       throw new InterlockError('Edges cannot target the entry');
   }
   for (const node of d.nodes) {
+    if (node.kind === 'fetch') validateFetch(node);
     if (
       node.kind === 'list' &&
       !node.itemsPath &&

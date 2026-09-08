@@ -7,6 +7,7 @@ import {
   definitionSchema,
   InterlockError,
   readPath,
+  resolveFetch,
   validateDefinition,
   type Json,
   type NodeExecution,
@@ -16,6 +17,7 @@ import {
   type WorkflowNode,
   type WorkRequest,
 } from '@interlock/core';
+import { executeFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 
 const now = () => new Date().toISOString();
@@ -31,25 +33,25 @@ export interface Worker {
 }
 
 export class Engine {
-  private scriptJobs = new Map<string, AbortController>();
+  private localJobs = new Map<string, AbortController>();
   private stopped = false;
   private listeners = new Set<() => void>();
   constructor(
     readonly store: Store,
     private cwd: string,
   ) {
-    // A process interruption gives no evidence that a script's side effects completed.
+    // A process interruption gives no evidence that local work or remote side effects completed.
     for (const run of store.runs()) {
       const execution = run.executions.at(-1);
       if (
         run.status === 'running' &&
-        execution?.kind === 'script' &&
+        (execution?.kind === 'script' || execution?.kind === 'fetch') &&
         execution.status === 'running'
       ) {
         this.fail(
           run,
           execution,
-          'Service interrupted during script execution. Inspect side effects before retrying.',
+          `Service interrupted during ${execution.kind} execution. Inspect side effects before retrying.`,
         );
       }
     }
@@ -353,7 +355,9 @@ export class Engine {
         this.event(run, 'work.available', `Awaiting agent: ${node.label}`);
         return true;
       }
-      if (node.kind === 'script') {
+      if (node.kind === 'script' || node.kind === 'fetch') {
+        if (node.kind === 'fetch' && !execution.request)
+          execution.request = resolveFetch(node, execution.input);
         this.save(run);
         return false;
       }
@@ -467,7 +471,7 @@ export class Engine {
   }
   stop() {
     this.stopped = true;
-    for (const controller of this.scriptJobs.values()) controller.abort();
+    for (const controller of this.localJobs.values()) controller.abort();
   }
   pump() {
     if (this.stopped) return;
@@ -492,25 +496,29 @@ export class Engine {
       const execution = run.executions.at(-1);
       if (
         run.status !== 'running' ||
-        execution?.kind !== 'script' ||
+        (execution?.kind !== 'script' && execution?.kind !== 'fetch') ||
         execution.status !== 'running' ||
-        this.scriptJobs.has(execution.id)
+        this.localJobs.has(execution.id)
       )
         continue;
       const node = this.definition(run).nodes.find(
         (n) => n.id === execution.nodeId,
       )!;
-      if (node.kind !== 'script') continue;
+      if (node.kind !== 'script' && node.kind !== 'fetch') continue;
       const controller = new AbortController();
-      this.scriptJobs.set(execution.id, controller);
-      void executeScript(
-        node.command,
-        execution.input,
-        node.timeoutMs,
-        this.cwd,
-        controller.signal,
-        node.language,
-      )
+      this.localJobs.set(execution.id, controller);
+      const job =
+        node.kind === 'fetch'
+          ? executeFetch(execution.request!, node.timeoutMs, controller.signal)
+          : executeScript(
+              node.command,
+              execution.input,
+              node.timeoutMs,
+              this.cwd,
+              controller.signal,
+              node.language,
+            );
+      void job
         .then((output) => {
           if (this.stopped) return;
           this.store.transaction(() => {
@@ -521,6 +529,14 @@ export class Engine {
             )
               return;
             const current = latest.executions.at(-1)!;
+            if (node.kind === 'fetch') {
+              current.output = output;
+              const status = (output as { status: number }).status;
+              if (node.failOnHttpError && (status < 200 || status >= 300)) {
+                this.fail(latest, current, `Fetch returned HTTP ${status}`);
+                return;
+              }
+            }
             this.finish(latest, current, node, output);
           });
         })
@@ -536,7 +552,7 @@ export class Engine {
           });
         })
         .finally(() => {
-          this.scriptJobs.delete(execution.id);
+          this.localJobs.delete(execution.id);
           this.pump();
         });
     }
@@ -666,7 +682,7 @@ export class Engine {
       this.cancelTree(child.id);
     run.status = 'cancelled';
     const execution = run.executions.at(-1);
-    if (execution) this.scriptJobs.get(execution.id)?.abort();
+    if (execution) this.localJobs.get(execution.id)?.abort();
     if (execution && !terminal(execution.status))
       execution.status = 'cancelled';
     for (const work of this.store

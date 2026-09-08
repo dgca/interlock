@@ -65,9 +65,9 @@ export function RunDialog({
   return (
     <Modal title={`Run ${workflow.name}`} onClose={onClose}>
       <p className="hint">
-        Scripts run automatically. Agent steps wait for a connected agent to
-        pick up their assignments. Starting a run does not launch an agent; ask
-        your agent to continue the run when it is waiting.
+        Script and Fetch steps run automatically. Agent steps wait for a
+        connected agent to pick up their assignments. Starting a run does not
+        launch an agent; ask your agent to continue the run when it is waiting.
       </p>
 
       <NativeSelect

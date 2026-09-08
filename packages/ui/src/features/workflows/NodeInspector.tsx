@@ -5,6 +5,7 @@ import {
   type Workflow,
   type WorkflowNode,
 } from '@interlock/core';
+import { FetchEditor } from './FetchEditor';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
@@ -67,6 +68,9 @@ export function NodeInspector({
                 </option>
               ))}
           </NativeSelect>
+        )}
+        {node.kind === 'fetch' && (
+          <FetchEditor node={node} onChange={onChange} />
         )}
         {node.kind === 'agent' && (
           <>

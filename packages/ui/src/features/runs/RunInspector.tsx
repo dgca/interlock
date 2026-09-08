@@ -203,6 +203,19 @@ export function RunInspector({
             {execution?.error && (
               <p className="error-banner">{execution.error}</p>
             )}
+            {execution?.request && (
+              <>
+                <JsonEditor label="HTTP request" value={execution.request} />
+                {execution.completedAt && (
+                  <p className="hint">
+                    Duration:{' '}
+                    {Date.parse(execution.completedAt) -
+                      Date.parse(execution.startedAt)}{' '}
+                    ms
+                  </p>
+                )}
+              </>
+            )}
             <JsonEditor label="Input" value={execution?.input ?? run.input} />
             {execution?.output !== undefined && (
               <JsonEditor label="Output" value={execution.output} />

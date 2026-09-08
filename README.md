@@ -41,7 +41,7 @@ The connection uses `interlock mcp`, a stdio bridge to the running engine. Keep 
 
 Select **New workflow** to create a draft. Use **Add node** to choose each step's type, then connect the nodes in execution order.
 
-Available nodes include entry and exit, Agent, Script, Condition, Workflow, and List. A Workflow node invokes a pinned published workflow once. A List repeats a visible path for each item and collects the results in input order.
+Available nodes include entry and exit, Agent, Script, Fetch, Condition, Workflow, and List. A Workflow node invokes a pinned published workflow once. A List repeats a visible path for each item and collects the results in input order.
 
 Add a **List** and configure its items path and concurrency. Use **Add step** inside the group to create an Agent, Script, or other ordinary node. The first step connects to **Start** automatically. Connect additional steps within the group; connect the last step on every branch to **End**. Connect **Out** to the next step or Exit. The output route receives the ordered results after all items finish. Group members remain visible on the main canvas. Collapse hides them temporarily; moving the group moves its members.
 
@@ -58,6 +58,10 @@ A blank items path selects the complete input. Lists accept up to 200 items and 
 Configure input and output contracts in the node settings. Entry and Exit display the shared workflow input and output contracts. With a blank items path, List input must be an array; with a named path, the selected value must be an array. Use **Visual / Raw** to switch between the graph and its JSON definition. The raw editor checks JSON syntax and structure before saving. Publishing also checks the workflow's graph.
 
 Select **Publish version** when the draft is ready, then **Run v1** to supply input and start a run. Each run uses a fixed published version. Editing a draft does not change an existing run.
+
+### Fetch nodes
+
+Use **Fetch** to call an HTTP API through a form. Bind input fields into the URL, query parameters, headers, or JSON body, and preview the resolved request with sample input. The output contains `status`, `headers`, and `body`. See [Fetch requests](docs/fetch.md) for binding rules, response handling, and retries.
 
 ### Script nodes
 

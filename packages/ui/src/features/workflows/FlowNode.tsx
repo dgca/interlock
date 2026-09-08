@@ -7,6 +7,7 @@ import {
   Terminal,
   Split,
   Layers,
+  Globe,
   Workflow,
 } from 'lucide-react';
 import { nodeKindLabel, type WorkflowNode } from '@interlock/core';
@@ -24,6 +25,7 @@ const icons = {
   exit: ArrowDownToLine,
   agent: Bot,
   script: Terminal,
+  fetch: Globe,
   condition: Split,
   map: Layers,
   list: Layers,
@@ -160,13 +162,15 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
             ? `Up to ${n.concurrency} workers · v${n.version}`
             : n.kind === 'workflow'
               ? `Nested workflow · v${n.version}`
-              : n.kind === 'script'
-                ? 'JSON in → JSON out'
-                : n.kind === 'condition'
-                  ? `${n.path} equals ${JSON.stringify(n.equals)}`
-                  : n.kind === 'entry'
-                    ? 'Workflow input'
-                    : 'Return workflow result'}
+              : n.kind === 'fetch'
+                ? `${n.method} · HTTP request`
+                : n.kind === 'script'
+                  ? 'JSON in → JSON out'
+                  : n.kind === 'condition'
+                    ? `${n.path} equals ${JSON.stringify(n.equals)}`
+                    : n.kind === 'entry'
+                      ? 'Workflow input'
+                      : 'Return workflow result'}
       </small>
       {n.kind !== 'entry' && <Port type="target" id="default" label="In" />}
       {n.kind !== 'exit' &&

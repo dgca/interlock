@@ -76,6 +76,7 @@ export function SettingsDialog({
               }
             : { x: 150 + definition.nodes.length * 90, y: 360 },
           prompt: 'Describe the assignment.',
+          url: '',
           language: 'javascript',
           command: 'return input;',
           path: '',
@@ -180,6 +181,7 @@ export function SettingsDialog({
                 </option>
                 <option value="agent">Agent</option>
                 <option value="script">Script</option>
+                <option value="fetch">Fetch</option>
                 <option value="condition">Condition</option>
                 <option value="workflow">Workflow</option>
                 <option value="list">List</option>
