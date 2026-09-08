@@ -1,5 +1,11 @@
 # @type_of/interlock
 
+## 0.1.0
+
+### Minor Changes
+
+- 9f800af: Serve MCP over HTTP from the running Interlock server. Connect agents using a stable local URL that survives upgrades with global or npx startup. Keep stdio available as a fallback.
+
 ## 0.0.3
 
 ### Patch Changes
