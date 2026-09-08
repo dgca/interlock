@@ -29,9 +29,34 @@ One entry begins a run. Each node receives the previous node's output as its who
 
 A condition compares a path in its input to a JSON value using structural equality. It passes the input through unchanged. Paths are dot-separated object keys or array indices. Empty paths select the entire input. They are not general JSONPath expressions.
 
-Child workflow nodes pin an existing published version. A map reads an array and starts one child run per item, with bounded active children. Results retain input order. The `all` failure policy fails the parent and cancels remaining children. The `collect` policy returns records containing child status, output, and error. Empty arrays produce an empty result.
+A Workflow node invokes an existing published workflow version once. A Batch selects an array from `itemsPath` and repeats a visible item path for each value. A blank path selects the complete input. Each value becomes the complete input of an isolated item run. The Batch collects item results in input order, even when items finish out of order. Empty arrays produce an empty result.
 
-Explicitly retrying a failed map preserves successful children and resumes failed or cancelled children. Published definitions remain unchanged. To fix the procedure itself, publish another version and start a new run.
+### Batch handles and graph scopes
+
+A `batch` node owns `itemsPath`, `concurrency`, and `failurePolicy`. Its ordinary input receives the incoming value, and four handles control the flow:
+
+| Stored handle | UI label | Direction       | Behavior                                                |
+| ------------- | -------- | --------------- | ------------------------------------------------------- |
+| `default`     | In       | Input           | Receives the incoming value before selecting items      |
+| `item`        | Start    | Internal output | Starts the item path once per selected value            |
+| `end`         | End      | Internal input  | Finishes one item with the connected step's output      |
+| `complete`    | Out      | Output          | Emits the ordered collection after all item runs finish |
+
+The workflow stores all nodes and edges in one flat definition. A member node's `batchId` identifies its direct owning Batch; absence means the main workflow. Positions are relative to that owner. An edge's `port` selects its source handle; optional `targetHandle: "default"` selects the ordinary input, as does omission. `targetHandle: "end"` returns a member step's output to its owning Batch. Every item branch must connect to End; a disconnected step is an incomplete draft.
+
+Item paths can contain Agent, Script, Fetch, Condition, Workflow, and nested Batch nodes. Each Batch has exactly one `item` route into its direct members. Ordinary routes must remain within the same group. A Batch's `complete` route continues in its enclosing scope; a nested Batch can connect its Out handle to the enclosing Batch's End. Conditions require both branches, each leading to End. Membership is explicit graph data, independent of node positions or overlap. Validation rejects missing owners, circular membership, unreachable members, cross-group edges, Entry or Exit members, and cycles within item paths. Ordinary workflow loops outside item paths remain bounded by the workflow step limit.
+
+Drafts may have missing routes or incomplete paths. Visual and Raw views report graph errors, and publication validates all routes, contracts, scopes, and referenced versions.
+
+### Persisted item runs
+
+Item runs use the existing scheduler, script runner, assignments, events, and cancellation. Their `workflowId` and `version` identify the same immutable published graph as their parent Batch execution. A `batchNodeId` identifies the owning Batch. An item run starts at the destination of `item` and completes when a step follows an edge into that Batch's `end` handle. Returning an item never advances the parent's output route. No generated workflows or copied definitions are stored. Inspection and restart resolve the published graph with its original handles.
+
+A Batch allows 1 through 50 concurrent item runs and at most 200 items. Each item run has the published workflow's step budget. Batches and referenced workflows share the limit of ten nested child-run levels. A referenced Workflow node starts a child run at the referenced version's entry with its own workflow contracts. Batch input and output contracts apply to the aggregate input and collected output; ordinary item-path nodes validate their individual inputs and outputs.
+
+The `all` policy fails the Batch and cancels unfinished items when an item fails or is cancelled. The `collect` policy emits one record per item with `runId`, `status`, `output`, and `error`; missing output and error values are `null`. Node contract failures belong to their item runs. Explicit retry of a failed Batch preserves completed items and resumes failed or cancelled items within the concurrency limit. Individual item retries also wait for a free slot. A completed `collect` Batch is a successful step and is not eligible for failed-step retry. Cancellation stops unfinished descendants and invalidates their work claims. Root-run work discovery includes assignments in every nested item path.
+
+Permanent deletion removes a workflow, its versions, and its run trees, including descendant assignments and events, in one transaction. Active runs and references from other workflow drafts or published versions block deletion. Both active and archived workflows can be deleted after confirmation in the UI.
 
 ## Agent work
 
@@ -74,3 +99,17 @@ Use Mantine components directly for standard controls. Keep shared components fo
 The workflow editor holds a draft shared by Visual and Raw views. Raw JSON must parse, match the definition structure, and contain no unknown definition fields before saving or returning to Visual. Graph validation errors can remain in a saved draft but block publication. The server performs the final publication validation, including referenced child workflow versions.
 
 The Add node dialog includes the node type choice and adds a node only on confirmation. Script and raw-definition editors share syntax highlighting and aligned line numbers. The minimap receives its dimensions through the React Flow component's inline style so its SVG calculations match its displayed size.
+
+Batch nodes use [React Flow Sub Flows](https://reactflow.dev/learn/layouting/sub-flows) to keep member nodes visible inside a group on the main canvas. Stored `batchId` becomes React Flow `parentId`; parents render before children and child positions are relative. Dragging the group header moves its members. Add step creates a member and connects the first step to Start. Add step is the visual editor’s way to create Batch children. Node settings do not change membership; connecting nodes or dragging across a border never changes execution scope. The internal Start and End handles mark each item path. External handles are labeled In and Out across node types. Settings use the full Input and Output labels. Edges omit redundant labels, except for Condition branches. Collapse hides descendants and their edges without changing the definition. All steps use the ordinary node forms and contract editors. [Source and target handle IDs](https://reactflow.dev/learn/customization/handles) survive movement, edge changes, and Visual/Raw round trips. Invalid scopes block publication while incomplete drafts remain saveable. Run inspection uses the same grouped published graph and the item run's own execution timeline.
+
+Entry and Exit settings display a shared Input / Output contract backed by the workflow input or output schema. Editing it updates Workflow settings too. Existing additional node constraints remain visible and enforced. Batch settings show an array input when Items path is blank and no narrower contract is set. A named Items path allows an enclosing object; the selected value must still be an array at execution.
+
+## Live run inspection
+
+The run inspector shows a live summary above the published graph. Unclaimed Agent assignments show Waiting for an agent; claimed assignments show Agent working. A claimed assignment indicates ownership, not reported internal progress. Running, waiting, completed, failed, and unstarted steps have distinct canvas indicators.
+
+Run inspection includes descendant runs and assignments without claim tokens. Batch groups show finished, running, waiting, failed, and queued item counts. Member steps aggregate their item executions; selecting an item displays only that item's input, output, error, and assignment. Referenced Workflow runs remain separate graphs. The latest execution of each step supplies its canvas state, while the timeline retains previous attempts. Live updates preserve explicit step/item selections and the canvas viewport. Completed runs link to their final output.
+
+## Fetch execution
+
+Core defines Fetch configuration, validates bindings at publication, and resolves requests through the same pure function used by the UI preview. Runtime sends requests outside storage transactions with an abort controller shared with run cancellation. Resolved requests persist on node executions. HTTP errors retain their response output; explicit retries create a new execution. Pending requests fail on restart because remote side effects are uncertain. See [Fetch requests](fetch.md) for the configuration and response contract.

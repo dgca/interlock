@@ -1,53 +1,42 @@
-import { useEffect, useMemo } from 'react';
-import { Background, Controls, ReactFlow, useNodesState } from '@xyflow/react';
-import type { NodeExecution, WorkflowDefinition } from '@interlock/core';
-import { FlowNode, type CanvasNode } from '../workflows/FlowNode';
+import { useMemo } from 'react';
+import { Background, Controls, ReactFlow } from '@xyflow/react';
+import type { WorkflowDefinition } from '@interlock/core';
+import { FlowNode } from '../workflows/FlowNode';
+import { canvasGraph } from '../workflows/canvasGraph';
+import type { NodeProgress } from './runProgress';
 const nodeTypes = { workflow: FlowNode };
 export function RunGraph({
   definition,
-  executions,
+  progress,
+  selected,
   onSelect,
 }: {
   definition: WorkflowDefinition;
-  executions: NodeExecution[];
-  onSelect: (id: string | undefined) => void;
+  progress: Record<string, NodeProgress>;
+  selected?: string;
+  onSelect: (nodeId: string) => void;
 }) {
-  const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
-  useEffect(
-    () =>
-      setNodes((current) =>
-        definition.nodes.map((node) => ({
-          ...current.find((n) => n.id === node.id),
-          id: node.id,
-          type: 'workflow',
-          position: node.position,
-          data: {
-            node,
-            status: executions.filter((e) => e.nodeId === node.id).at(-1)
-              ?.status,
-          },
-        })),
-      ),
-    [definition, executions, setNodes],
-  );
-  const edges = useMemo(
-    () =>
-      definition.edges.map((edge) => ({ ...edge, sourceHandle: edge.port })),
-    [definition.edges],
-  );
+  const graph = useMemo(() => {
+    const graph = canvasGraph(definition, { selected });
+    return {
+      ...graph,
+      nodes: graph.nodes.map((node) => ({
+        ...node,
+        data: { ...node.data, progress: progress[node.id] },
+      })),
+    };
+  }, [definition, progress, selected]);
   return (
     <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
+      nodes={graph.nodes}
+      edges={graph.edges}
       nodeTypes={nodeTypes}
       nodesDraggable={false}
       nodesConnectable={false}
-      onNodeClick={(_, node) =>
-        onSelect(executions.filter((e) => e.nodeId === node.id).at(-1)?.id)
-      }
+      elementsSelectable={false}
+      onNodeClick={(_, node) => onSelect(node.id)}
       fitView
-      minZoom={0.2}
+      minZoom={0.1}
       colorMode="dark"
     >
       <Background color="var(--canvas-dot)" gap={22} />

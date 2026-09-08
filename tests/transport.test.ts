@@ -1,3 +1,5 @@
+import { batchDefinition } from './fixtures/batch';
+import { runCommand } from '../packages/cli/src/commands';
 import { it, expect } from 'vitest';
 import { serve } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -69,6 +71,81 @@ it('completes a workflow through real MCP stdio, HTTP, and SQLite interfaces', a
     expect(
       (await rpc.runs.get.query({ id: started.run.id })).run.output,
     ).toEqual({ number: 42 });
+    const definition = batchDefinition();
+    const workflow = await call('create_workflow', {
+      name: 'Batch transport',
+      definition,
+    });
+    await call('publish_workflow', { id: workflow.id });
+    const root = await call('start_run', {
+      workflowId: workflow.id,
+      input: [3, 4],
+    });
+    const items = await call('list_work', { runId: root.run.id });
+    expect(items.map((item: any) => item.input)).toEqual([3, 4]);
+    const previousUrl = process.env.INTERLOCK_URL;
+    process.env.INTERLOCK_URL = url;
+    try {
+      expect(await runCommand(['work', root.run.id])).toMatchObject(items);
+      const detail = await runCommand(['run', items[0].runId]);
+      expect(detail).toMatchObject({
+        definition,
+        run: { batchNodeId: 'batch' },
+      });
+    } finally {
+      if (previousUrl === undefined) delete process.env.INTERLOCK_URL;
+      else process.env.INTERLOCK_URL = previousUrl;
+    }
+    for (const item of items.reverse()) {
+      const claimed = await call('claim_work', {
+        workId: item.id,
+        workerId: 'batch-mcp',
+      });
+      await call('submit_result', {
+        workId: item.id,
+        token: claimed.token,
+        output: item.input * 2,
+      });
+    }
+    expect((await call('get_run', { id: root.run.id })).run.output).toEqual([
+      6, 8,
+    ]);
+    const failed = await call('start_run', {
+      workflowId: workflow.id,
+      input: [5],
+    });
+    const [assignment] = await call('list_work', { runId: failed.run.id });
+    const failedClaim = await call('claim_work', {
+      workId: assignment.id,
+      workerId: 'retry-test',
+    });
+    await call('fail_work', {
+      workId: assignment.id,
+      token: failedClaim.token,
+      error: 'Temporary executor failure',
+    });
+    expect((await call('get_run', { id: failed.run.id })).run.status).toBe(
+      'failed',
+    );
+    await call('retry_run', { id: failed.run.id });
+    const [retried] = await call('list_work', { runId: failed.run.id });
+    const retriedClaim = await call('claim_work', {
+      workId: retried.id,
+      workerId: 'retry-test',
+    });
+    await call('submit_result', {
+      workId: retried.id,
+      token: retriedClaim.token,
+      output: 10,
+    });
+    expect((await call('get_run', { id: failed.run.id })).run.output).toEqual([
+      10,
+    ]);
+    const invalidRetry = await client.callTool({
+      name: 'retry_run',
+      arguments: { id: failed.run.id },
+    });
+    expect(invalidRetry.isError).toBe(true);
     expect(
       (
         await fetch(`${url}/health`, {

@@ -53,7 +53,7 @@ export function FieldEditor({
 
       {type === 'any' && (
         <p className="hint">
-          Accepts any JSON value. Choose Object to define named fields.
+          Accepts any value. Choose Object to define named fields.
         </p>
       )}
       {type === 'null' && (

@@ -1,5 +1,11 @@
 import { TextInput, Textarea, NativeSelect } from '@mantine/core';
-import type { Workflow, WorkflowNode } from '@interlock/core';
+import {
+  nodeKindLabel,
+  type WorkflowDefinition,
+  type Workflow,
+  type WorkflowNode,
+} from '@interlock/core';
+import { FetchEditor } from './FetchEditor';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
@@ -9,18 +15,24 @@ export function NodeInspector({
   workflows,
   onChange,
   onDelete,
+  definition,
+  onBoundaryChange,
 }: {
   node: WorkflowNode;
   workflows: Workflow[];
   onChange: (node: WorkflowNode) => void;
   onDelete?: () => void;
+  definition?: WorkflowDefinition;
+  onBoundaryChange?: (schema: WorkflowDefinition['inputSchema']) => void;
 }) {
   const patch = (value: Record<string, unknown>) =>
     onChange({ ...node, ...value } as WorkflowNode);
   return (
     <>
       <div className="inspector-heading">
-        <span className="eyebrow">{node.kind.toUpperCase()} NODE</span>
+        <span className="eyebrow">
+          {nodeKindLabel(node.kind).toUpperCase()} NODE
+        </span>
         <code> ID: {node.id}</code>
       </div>
       <div className="inspector-fields">
@@ -31,6 +43,9 @@ export function NodeInspector({
           onChange={(e) => patch({ label: e.target.value })}
         />
 
+        {node.kind === 'fetch' && (
+          <FetchEditor node={node} onChange={onChange} />
+        )}
         {node.kind === 'agent' && (
           <>
             <Textarea
@@ -169,7 +184,7 @@ export function NodeInspector({
             />
           </>
         )}
-        {(node.kind === 'workflow' || node.kind === 'map') && (
+        {node.kind === 'workflow' && (
           <>
             <NativeSelect
               mb="md"
@@ -204,13 +219,21 @@ export function NodeInspector({
             />
           </>
         )}
-        {node.kind === 'map' && (
+        {node.kind === 'batch' && (
+          <p className="hint">
+            Connect Start to the first step and every branch to End. Output
+            receives the ordered collection after all items finish. Input and
+            output contracts apply to the whole Batch; use step contracts for
+            individual items.
+          </p>
+        )}
+        {node.kind === 'batch' && (
           <>
             <TextInput
               mb="md"
-              label="Array path"
+              label="Items path"
               value={node.itemsPath}
-              placeholder="protocols, or empty for the input itself"
+              placeholder="guests, or empty for the input itself"
               onChange={(e) => patch({ itemsPath: e.target.value })}
             />
 
@@ -252,16 +275,71 @@ export function NodeInspector({
             />
           </>
         )}
-        <ContractEditor
-          label="Input"
-          value={node.inputSchema}
-          onChange={(inputSchema) => patch({ inputSchema })}
-        />
-        <ContractEditor
-          label="Output"
-          value={node.outputSchema}
-          onChange={(outputSchema) => patch({ outputSchema })}
-        />
+        {(node.kind === 'entry' || node.kind === 'exit') &&
+        definition &&
+        onBoundaryChange ? (
+          <>
+            <p className="hint">
+              {node.kind === 'entry'
+                ? 'Entry passes the workflow input through unchanged. This contract is shared with Workflow settings.'
+                : 'Exit returns the workflow output unchanged. This contract is shared with Workflow settings.'}
+            </p>
+            <ContractEditor
+              label="Input / Output"
+              value={
+                node.kind === 'entry'
+                  ? definition.inputSchema
+                  : definition.outputSchema
+              }
+              onChange={onBoundaryChange}
+            />
+            {Object.keys(node.inputSchema).length > 0 && (
+              <ContractEditor
+                label="Additional node input constraint"
+                value={node.inputSchema}
+                onChange={(inputSchema) => patch({ inputSchema })}
+              />
+            )}
+            {Object.keys(node.outputSchema).length > 0 && (
+              <ContractEditor
+                label="Additional node output constraint"
+                value={node.outputSchema}
+                onChange={(outputSchema) => patch({ outputSchema })}
+              />
+            )}
+          </>
+        ) : (
+          <>
+            {node.kind === 'batch' && (
+              <p className="hint">
+                {node.itemsPath
+                  ? `The value at "${node.itemsPath}" must be an array. Input describes the enclosing value.`
+                  : 'Input must be an array because Items path is blank.'}
+              </p>
+            )}
+            <ContractEditor
+              label="Input"
+              value={
+                node.kind === 'batch' &&
+                !node.itemsPath &&
+                Object.keys(node.inputSchema).length === 0
+                  ? { type: 'array' }
+                  : node.inputSchema
+              }
+              onChange={(inputSchema) => patch({ inputSchema })}
+            />
+            <ContractEditor
+              label="Output"
+              value={
+                node.kind === 'batch' &&
+                Object.keys(node.outputSchema).length === 0
+                  ? { type: 'array' }
+                  : node.outputSchema
+              }
+              onChange={(outputSchema) => patch({ outputSchema })}
+            />
+          </>
+        )}
         {onDelete && node.kind !== 'entry' && node.kind !== 'exit' && (
           <Button variant="danger" onClick={onDelete}>
             Delete node

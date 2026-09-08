@@ -1,5 +1,16 @@
 import { z } from 'zod';
 import Ajv from 'ajv';
+import { validateFetch, type FetchRequest } from './fetch.js';
+export {
+  resolveFetch,
+  validateFetch,
+  type FetchNode,
+  type FetchBinding,
+  type FetchField,
+  type FetchRequest,
+} from './fetch.js';
+import { validateBatchScopes } from './batchScopes.js';
+export { validateBatchScopes } from './batchScopes.js';
 
 export type Json =
   null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -20,9 +31,18 @@ export const contextPolicySchema = z.object({
   tools: z.array(z.string()).default([]),
   skills: z.array(z.string()).default([]),
 });
+const fetchBindingSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('fixed'), value: jsonSchema }),
+  z.object({ kind: z.literal('input'), path: z.string() }),
+]);
+const fetchFieldSchema = z.object({
+  name: z.string(),
+  value: fetchBindingSchema,
+});
 const nodeBase = {
   id: z.string().min(1),
   label: z.string().min(1),
+  batchId: z.string().min(1).optional(),
   position: z.object({ x: z.number(), y: z.number() }).default({ x: 0, y: 0 }),
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
@@ -47,6 +67,38 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     ...nodeBase,
+    kind: z.literal('fetch'),
+    outputSchema: contractSchema.default({
+      type: 'object',
+      required: ['status', 'headers', 'body'],
+      properties: {
+        status: { type: 'integer' },
+        headers: { type: 'object', additionalProperties: { type: 'string' } },
+        body: {},
+      },
+    }),
+    url: z.string(),
+    method: z
+      .enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])
+      .default('GET'),
+    query: z.array(fetchFieldSchema).default([]),
+    headers: z.array(fetchFieldSchema).default([]),
+    body: z
+      .discriminatedUnion('kind', [
+        z.object({ kind: z.literal('none') }),
+        z.object({ kind: z.literal('input') }),
+        z.object({ kind: z.literal('fixed'), value: jsonSchema }),
+        z.object({
+          kind: z.literal('fields'),
+          fields: z.array(fetchFieldSchema),
+        }),
+      ])
+      .default({ kind: 'none' }),
+    timeoutMs: z.number().int().min(100).max(120000).default(30000),
+    failOnHttpError: z.boolean().default(true),
+  }),
+  z.object({
+    ...nodeBase,
     kind: z.literal('condition'),
     path: z.string(),
     equals: jsonSchema,
@@ -59,14 +111,13 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     ...nodeBase,
-    kind: z.literal('map'),
-    workflowId: z.string().min(1),
-    version: z.number().int().positive(),
+    kind: z.literal('batch'),
     itemsPath: z.string().default(''),
     concurrency: z.number().int().min(1).max(50).default(5),
     failurePolicy: z.enum(['all', 'collect']).default('all'),
   }),
 ]);
+export type WorkflowNode = z.infer<typeof nodeSchema>;
 export const definitionSchema = z.object({
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
@@ -76,13 +127,16 @@ export const definitionSchema = z.object({
       id: z.string(),
       source: z.string(),
       target: z.string(),
-      port: z.enum(['default', 'true', 'false']).default('default'),
+      port: z
+        .enum(['default', 'true', 'false', 'item', 'complete'])
+        .default('default'),
+      targetHandle: z.enum(['default', 'end']).optional(),
     }),
   ),
   maxSteps: z.number().int().min(2).max(1000).default(100),
 });
 export type WorkflowDefinition = z.infer<typeof definitionSchema>;
-export type WorkflowNode = z.infer<typeof nodeSchema>;
+export type WorkflowEdge = WorkflowDefinition['edges'][number];
 export type ContextPolicy = z.infer<typeof contextPolicySchema>;
 export interface Workflow {
   id: string;
@@ -116,6 +170,8 @@ export interface NodeExecution {
   error?: string;
   childRunIds: string[];
   nextItem: number;
+  retryChildRunIds?: string[];
+  request?: FetchRequest;
 }
 export interface Run {
   id: string;
@@ -123,6 +179,8 @@ export interface Run {
   workflowName: string;
   version: number;
   parentRunId?: string;
+  // Item runs execute members of this Batch in the same published graph.
+  batchNodeId?: string;
   status: RunStatus;
   input: Json;
   output?: Json;
@@ -140,6 +198,7 @@ export interface WorkRequest {
   nodeId: string;
   label: string;
   prompt: string;
+  executionInstructions?: string;
   input: Json;
   context: ContextPolicy;
   outputSchema: Record<string, unknown>;
@@ -261,13 +320,27 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       throw new InterlockError('Edges cannot target the entry');
   }
   for (const node of d.nodes) {
+    if (node.kind === 'fetch') validateFetch(node);
+    if (
+      node.kind === 'batch' &&
+      !node.itemsPath &&
+      node.inputSchema.type &&
+      !(Array.isArray(node.inputSchema.type)
+        ? node.inputSchema.type.includes('array')
+        : node.inputSchema.type === 'array')
+    )
+      throw new InterlockError(
+        `${node.label}: blank Items path requires an array input contract`,
+      );
     const outgoing = d.edges.filter((e) => e.source === node.id);
     const expected =
       node.kind === 'exit'
         ? []
         : node.kind === 'condition'
           ? ['true', 'false']
-          : ['default'];
+          : node.kind === 'batch'
+            ? ['item', 'complete']
+            : ['default'];
     if (
       outgoing.length !== expected.length ||
       expected.some((p) => outgoing.filter((e) => e.port === p).length !== 1)
@@ -276,6 +349,7 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
         `${node.label}: expected outgoing routes ${expected.join(', ') || 'none'}`,
       );
   }
+  validateBatchScopes(d);
   const reachable = new Set<string>();
   const visit = (id: string) => {
     if (reachable.has(id)) return;
@@ -330,3 +404,7 @@ export {
   type Contract,
   type FieldType,
 } from './contracts.js';
+
+export function nodeKindLabel(kind: WorkflowNode['kind']): string {
+  return kind === 'batch' ? 'Batch' : kind;
+}

@@ -9,6 +9,7 @@ import {
   GitBranch,
   Copy,
   Archive,
+  Trash2,
   Download,
   MoreHorizontal,
 } from 'lucide-react';
@@ -16,6 +17,8 @@ import type { Workflow } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { Badge } from '../../components/Badge/Badge';
 import { api, download } from '../../lib/api';
+import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
+import layout from '../../components/PageLayout/PageLayout.module.css';
 import styles from './WorkflowLibrary.module.css';
 export function WorkflowLibrary({
   workflows,
@@ -28,6 +31,7 @@ export function WorkflowLibrary({
 }) {
   const [query, setQuery] = useState(''),
     [archived, setArchived] = useState(false);
+  const [deleting, setDeleting] = useState<Workflow>();
   const file = useRef<HTMLInputElement>(null);
   const visible = workflows.filter(
     (w) =>
@@ -35,12 +39,11 @@ export function WorkflowLibrary({
       `${w.name} ${w.description}`.toLowerCase().includes(query.toLowerCase()),
   );
   return (
-    <div className={styles.page}>
-      <header className={styles.header}>
+    <div className={layout.page}>
+      <header className={layout.header}>
         <div>
-          <div className="eyebrow">YOUR AUTOMATION WORKSPACE</div>
           <h1>Workflows</h1>
-          <p>Repeatable procedures. Room for judgment.</p>
+          <p>Create, organize, and run your workflows.</p>
         </div>
         <div className="actions">
           <Button onClick={() => file.current?.click()}>
@@ -160,6 +163,14 @@ export function WorkflowLibrary({
                       >
                         {w.archived ? 'Restore' : 'Archive'}
                       </Menu.Item>
+                      <Menu.Divider />
+                      <Menu.Item
+                        color="red"
+                        leftSection={<Trash2 size={14} />}
+                        onClick={() => setDeleting(w)}
+                      >
+                        Delete
+                      </Menu.Item>
                     </Menu.Dropdown>
                   </Menu>
                 </div>
@@ -206,6 +217,14 @@ export function WorkflowLibrary({
           </div>
         </Tabs.Panel>
       </Tabs>
+      {deleting && (
+        <DeleteWorkflowDialog
+          workflow={deleting}
+          act={act}
+          onClose={() => setDeleting(undefined)}
+          onDeleted={() => setDeleting(undefined)}
+        />
+      )}
       <div className={styles.caption}>
         Workflows run on your local engine. Connect a harness to pick up agent
         assignments.

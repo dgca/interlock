@@ -1,4 +1,4 @@
-import { Boxes, GitBranch, Activity, ArrowUpRight } from 'lucide-react';
+import { GitBranch, Activity, ArrowUpRight } from 'lucide-react';
 import { VERSION } from '../../../../core/src/version';
 import styles from './Sidebar.module.css';
 export function Sidebar({
@@ -15,23 +15,14 @@ export function Sidebar({
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}>
-        <span className={styles.logo}>
-          <Boxes size={21} />
-        </span>
-        interlock<span className={styles.version}>v{VERSION}</span>
-      </div>
-      <div className={styles.workspace}>
-        <span className={styles.avatar}>L</span>
-        <div>
-          Local workspace<small>Personal</small>
-        </div>
+        Interlock<span className={styles.version}>v{VERSION}</span>
       </div>
       <div className={styles.group}>WORKSPACE</div>
       <nav>
         {(
           [
             { id: 'workflows', label: 'Workflows', Icon: GitBranch },
-            { id: 'runs', label: 'Run history', Icon: Activity },
+            { id: 'runs', label: 'Activity', Icon: Activity },
           ] as const
         ).map(({ id, label, Icon }) => (
           <button
@@ -45,12 +36,6 @@ export function Sidebar({
         ))}
       </nav>
       <div className={styles.note}>
-        <span>Built for your agents.</span>
-        <p>
-          Define the procedure.
-          <br />
-          Give judgment a place.
-        </p>
         <button className={styles.connect} onClick={onConnect}>
           Connect with MCP <ArrowUpRight size={12} />
         </button>

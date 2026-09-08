@@ -17,10 +17,6 @@
   letter-spacing: -0.8px;
   padding: 0 10px;
 }
-.logo {
-  display: flex;
-  color: var(--accent);
-}
 .version {
   font: 9px var(--mono);
   color: var(--muted);
@@ -30,27 +26,6 @@
   letter-spacing: 0;
   margin-left: auto;
 }
-.workspace {
-  margin: 33px 0 30px;
-  padding: 12px 9px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-}
-.avatar {
-  width: 27px;
-  height: 27px;
-  border: 1px solid var(--pink-border);
-  background: var(--pink-soft);
-  display: grid;
-  place-items: center;
-  border-radius: 5px;
-  color: var(--pink);
-}
-.workspace small,
 footer small {
   display: block;
   color: var(--muted);
@@ -62,7 +37,7 @@ footer small {
   letter-spacing: 1.5px;
   color: var(--text-dim);
   padding: 0 12px;
-  margin-bottom: 10px;
+  margin: 30px 0 10px;
 }
 nav {
   display: flex;
@@ -90,15 +65,6 @@ nav button.active {
 .note {
   margin-top: auto;
   padding: 20px 12px 30px;
-}
-.note span {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-.note p {
-  font-size: 11px;
-  line-height: 1.8;
-  color: var(--text-dim);
 }
 .note .connect {
   background: none;

@@ -41,6 +41,11 @@ export class Store {
       )
       .run(collection, value.id, JSON.stringify(value));
   }
+  remove(collection: string, id: string) {
+    this.db
+      .prepare('DELETE FROM documents WHERE collection = ? AND id = ?')
+      .run(collection, id);
+  }
   version(value: WorkflowVersion) {
     this.put('versions', {
       ...value,

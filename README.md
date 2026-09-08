@@ -1,6 +1,6 @@
 # Interlock
 
-Interlock is a local workflow editor and engine for AI agents. Define a procedure once, combine agent assignments with JavaScript or Bash steps, and inspect each run in your browser.
+Interlock is a local workflow editor and engine for AI agents. Define a procedure once, combine agent assignments with HTTP requests and JavaScript or Bash steps, and inspect each run in your browser.
 
 Build workflows visually or edit their JSON definitions. Interlock validates inputs and results, runs scripts, and stores progress in SQLite. Your connected agent handles assignments through the Model Context Protocol (MCP).
 
@@ -31,7 +31,7 @@ The initial library includes **Research a protocol**, an editable example with a
    {"name":"Aave"}. Complete its assignments, then return the result.
    ```
 
-5. Open **Run history** in Interlock to inspect the run, node results, and any errors.
+5. Open **Activity → Active** and select the execution to follow its steps. Completed, failed, and cancelled executions appear in **History**.
 
 Your agent needs access to the tools required by the assignment, such as web research for this example. Its tool approval settings still apply.
 
@@ -41,11 +41,39 @@ The connection uses `interlock mcp`, a stdio bridge to the running engine. Keep 
 
 Select **New workflow** to create a draft. Use **Add node** to choose each step's type, then connect the nodes in execution order.
 
-Available nodes include entry and exit, agent assignments, scripts, conditions, child workflows, and maps. Maps run a child workflow for each item in a list and collect its results.
+Available nodes include entry and exit, Agent, Script, Fetch, Condition, Workflow, and Batch. A Workflow node invokes a pinned published workflow once. A Batch repeats a visible path for each item and collects the results in input order.
 
-Configure input and output contracts in the node settings. Use **Visual / Raw** to switch between the graph and its JSON definition. The raw editor checks JSON syntax and structure before saving. Publishing also checks the workflow's graph.
+Add a **Batch** and configure its items path and concurrency. Use **Add step** inside the group to create an Agent, Script, or other ordinary node. The first step connects to **Start** automatically. Connect additional steps within the group; connect the last step on every branch to **End**. Connect **Out** to the next step or Exit. The output route receives the ordered results after all items finish. Group members remain visible on the main canvas. Collapse hides them temporarily; moving the group moves its members.
+
+```text
+Entry → Batch
+        ├─ [Start → Research item → End]
+        └─ Out → Synthesis → Exit
+```
+
+For input `[3, 4, 5]`, a Script on the item path containing `return input * 2;` produces `[6, 8, 10]` on Out. An Agent can research each item directly on the canvas. The seeded opportunity brief demonstrates a Batch with a reusable Workflow node on its item path.
+
+A blank items path selects the complete input. Batches accept up to 200 items and 1 through 50 concurrent item runs. Choose `all` to fail and cancel unfinished items on an error, or `collect` to receive each item's status, output, and error. Item paths can contain nested Batches and Workflow nodes, subject to ten nested levels.
+
+Configure input and output contracts in the node settings. Entry and Exit display the shared workflow input and output contracts. With a blank items path, Batch input must be an array; with a named path, the selected value must be an array. Use **Visual / Raw** to switch between the graph and its JSON definition. The raw editor checks JSON syntax and structure before saving. Publishing also checks the workflow's graph.
 
 Select **Publish version** when the draft is ready, then **Run v1** to supply input and start a run. Each run uses a fixed published version. Editing a draft does not change an existing run.
+
+### Follow an execution
+
+Open **Activity** to find active executions and past results. The live view shows step states and Batch item counts. Select a Batch child step, then an item, to inspect that item's input, output, and errors.
+
+Starting a workflow in the UI does not launch an agent. When an assignment is ready, select **Copy instructions for agent** and paste the instructions into a connected agent conversation. The instructions resume the existing execution. **Waiting for an agent** means work is available; **Agent working** means an executor has claimed it.
+
+Failed executions can be retried from the inspector. Retrying a failed Batch preserves successful items. Retrying Script or Fetch steps can repeat external side effects.
+
+### Manage workflows
+
+Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from the workflow menu and editor for active and archived workflows. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows block deletion.
+
+### Fetch nodes
+
+Use **Fetch** to call an HTTP API through a form. Bind input fields into the URL, query parameters, headers, or JSON body, and preview the resolved request with sample input. The output contains `status`, `headers`, and `body`. See [Fetch requests](docs/fetch.md) for binding rules, response handling, and retries.
 
 ### Script nodes
 
@@ -137,6 +165,7 @@ The build includes TypeScript checks. Tests cover workflow contracts, runtime be
 - [Architecture and execution semantics](docs/architecture.md)
 - [Scope and limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
+- [Fetch requests](docs/fetch.md)
 - [Release process](docs/releases.md)
 
 ## License

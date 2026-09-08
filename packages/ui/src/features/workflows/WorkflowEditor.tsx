@@ -7,16 +7,30 @@ import {
   MiniMap,
   applyNodeChanges,
   applyEdgeChanges,
-  type Edge,
   type Connection,
 } from '@xyflow/react';
-import { ArrowLeft, Play, Save, Plus, Upload, Settings2 } from 'lucide-react';
-import { type Workflow, type WorkflowNode } from '@interlock/core';
+import {
+  ArrowLeft,
+  Play,
+  Save,
+  Plus,
+  Upload,
+  Settings2,
+  Trash2,
+} from 'lucide-react';
+import {
+  validateDefinition,
+  type Workflow,
+  type WorkflowNode,
+  type WorkflowEdge,
+} from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 import { parseRawDefinition } from './rawDefinition';
+import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { SettingsDialog } from './SettingsDialog';
-import { FlowNode, type CanvasNode } from './FlowNode';
+import { FlowNode } from './FlowNode';
+import { canvasGraph, withoutNodes } from './canvasGraph';
 import { api } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
 const nodeTypes = { workflow: FlowNode };
@@ -37,12 +51,12 @@ export function WorkflowEditor({
   act: Action;
   onDirty: (dirty: boolean) => void;
 }) {
+  const [deleting, setDeleting] = useState(false);
   const [pending, setPending] = useState<'save' | 'publish'>();
   const actionInFlight = useRef(false);
   const editorRef = useRef<HTMLDivElement>(null);
-  const [measurements, setMeasurements] = useState<
-    Record<string, { width?: number; height?: number }>
-  >({});
+  const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState(workflow.draft),
     [name, setName] = useState(workflow.name),
     [description, setDescription] = useState(workflow.description),
@@ -51,7 +65,16 @@ export function WorkflowEditor({
   const [editing, setEditing] = useState<{
     node?: WorkflowNode;
     creating?: boolean;
+    batchId?: string;
   }>();
+  const graphError = useMemo(() => {
+    try {
+      validateDefinition(draft);
+      return undefined;
+    } catch (error) {
+      return (error as Error).message;
+    }
+  }, [draft]);
   const [view, setView] = useState<'visual' | 'raw'>('visual');
   const [raw, setRaw] = useState('');
   const rawResult = useMemo(
@@ -66,7 +89,6 @@ export function WorkflowEditor({
     else {
       if (!rawResult?.definition) return;
       setDraft(rawResult.definition);
-      setMeasurements({});
     }
     setView(next);
   };
@@ -95,7 +117,6 @@ export function WorkflowEditor({
     setDescription(workflow.description);
     setRevision(workflow.draftRevision);
     setSaved(remoteSnapshot);
-    setMeasurements({});
     setEditing(undefined);
     setSelected(undefined);
   };
@@ -129,28 +150,23 @@ export function WorkflowEditor({
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
-  const nodes: CanvasNode[] = useMemo(
+  const { nodes, edges } = useMemo(
     () =>
-      draft.nodes.map((n) => ({
-        id: n.id,
-        type: 'workflow',
-        width: 220,
-        height: 116,
-        position: n.position,
-        measured: measurements[n.id],
-        data: { node: n, onEdit: () => setEditing({ node: n }) },
-        selected: n.id === selected,
-      })),
-    [draft.nodes, selected, measurements],
-  );
-  const edges: Edge[] = useMemo(
-    () =>
-      draft.edges.map((e) => ({
-        ...e,
-        sourceHandle: e.port,
-        label: e.port === 'default' ? undefined : e.port,
-      })),
-    [draft.edges],
+      canvasGraph(draft, {
+        collapsed,
+        selected,
+        selectedEdges,
+        onEdit: (node) => setEditing({ node }),
+        onAdd: (batchId) => setEditing({ creating: true, batchId }),
+        onToggle: (id) =>
+          setCollapsed((current) => {
+            const next = new Set(current);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          }),
+      }),
+    [draft, selected, selectedEdges, collapsed],
   );
   const save = async () => {
     if (rawInvalid) throw new Error('Fix the raw JSON before saving.');
@@ -201,7 +217,9 @@ export function WorkflowEditor({
           id: crypto.randomUUID(),
           source: c.source,
           target: c.target,
-          port: (c.sourceHandle ?? 'default') as 'default',
+          port: (c.sourceHandle ?? 'default') as WorkflowEdge['port'],
+          targetHandle: (c.targetHandle ??
+            'default') as WorkflowEdge['targetHandle'],
         },
       ],
     }));
@@ -228,6 +246,15 @@ export function WorkflowEditor({
         </span>
         <div className="actions">
           <Button
+            variant="danger"
+            disabled={Boolean(pending)}
+            onClick={() => setDeleting(true)}
+            aria-label="Delete workflow"
+            title="Delete workflow"
+          >
+            <Trash2 />
+          </Button>
+          <Button
             onClick={() => perform('save', save)}
             disabled={!dirty || rawInvalid || remoteChanged || Boolean(pending)}
           >
@@ -238,6 +265,7 @@ export function WorkflowEditor({
             disabled={
               rawInvalid ||
               Boolean(rawResult?.publishError) ||
+              (view === 'visual' && Boolean(graphError)) ||
               remoteChanged ||
               Boolean(pending)
             }
@@ -375,44 +403,68 @@ export function WorkflowEditor({
                 nodeTypes={nodeTypes}
                 onNodesChange={(changes) => {
                   const next = applyNodeChanges(changes, nodes);
-                  if (changes.some((c) => c.type === 'dimensions'))
-                    setMeasurements(
-                      Object.fromEntries(
-                        next.map((n) => [n.id, n.measured ?? {}]),
-                      ),
-                    );
                   if (
                     !changes.some(
                       (c) => c.type === 'position' || c.type === 'remove',
                     )
                   )
                     return;
-                  setDraft((d) => ({
-                    ...d,
-                    nodes: next.map((n) => ({
-                      ...n.data.node,
-                      position: n.position,
-                    })),
-                    edges: d.edges.filter(
-                      (e) =>
-                        next.some((n) => n.id === e.source) &&
-                        next.some((n) => n.id === e.target),
-                    ),
-                  }));
+                  setDraft((d) => {
+                    const retained = withoutNodes(
+                      d,
+                      new Set(
+                        changes
+                          .filter((c) => c.type === 'remove')
+                          .map((c) => c.id),
+                      ),
+                    );
+                    return {
+                      ...retained,
+                      nodes: next
+                        .filter((n) =>
+                          retained.nodes.some((k) => k.id === n.id),
+                        )
+                        .map((n) => ({
+                          ...n.data.node,
+                          position: n.position,
+                        })),
+                    };
+                  });
                 }}
                 onEdgesChange={(changes) => {
                   const next = applyEdgeChanges(changes, edges);
+                  setSelectedEdges(
+                    new Set(next.filter((e) => e.selected).map((e) => e.id)),
+                  );
+                  if (changes.every((c) => c.type === 'select')) return;
                   setDraft((d) => ({
                     ...d,
                     edges: next.map((e) => ({
                       id: e.id,
                       source: e.source,
                       target: e.target,
-                      port: (e.sourceHandle ?? 'default') as 'default',
+                      port: (e.sourceHandle ??
+                        'default') as WorkflowEdge['port'],
+                      targetHandle: (e.targetHandle ??
+                        'default') as WorkflowEdge['targetHandle'],
                     })),
                   }));
                 }}
                 onConnect={connect}
+                isValidConnection={(c) => {
+                  const source = draft.nodes.find((n) => n.id === c.source);
+                  const target = draft.nodes.find((n) => n.id === c.target);
+                  return Boolean(
+                    source &&
+                    source.kind !== 'exit' &&
+                    target &&
+                    target.kind !== 'entry' &&
+                    !(c.sourceHandle === 'item' && c.targetHandle === 'end') &&
+                    (c.targetHandle !== 'end' || target.kind === 'batch') &&
+                    (c.sourceHandle === 'item' ? source.id : source.batchId) ===
+                      (c.targetHandle === 'end' ? target.id : target.batchId),
+                  );
+                }}
                 onNodeClick={(_, n) => setSelected(n.id)}
                 onNodeDoubleClick={(_, n) => {
                   setSelected(n.id);
@@ -440,19 +492,35 @@ export function WorkflowEditor({
                   {draft.nodes.length} nodes <b>·</b> {draft.edges.length}{' '}
                   connections
                 </span>
-                <span>
-                  Double-click to edit · Drag to arrange · Connect handles to
-                  route data
+                <span
+                  role={graphError ? 'status' : undefined}
+                  title={graphError}
+                >
+                  {graphError
+                    ? `Before publishing: ${graphError}`
+                    : 'Double-click to edit · Drag to arrange · Connect handles to route data'}
                 </span>
               </div>
             </>
           )}
         </div>
       </div>
+      {deleting && (
+        <DeleteWorkflowDialog
+          workflow={{ id: workflow.id, name }}
+          act={act}
+          onClose={() => setDeleting(false)}
+          onDeleted={() => {
+            onDirty(false);
+            onBack();
+          }}
+        />
+      )}
       {editing && (
         <SettingsDialog
           node={editing.node}
           creating={editing.creating}
+          parentBatchId={editing.batchId}
           name={name}
           description={description}
           definition={draft}
@@ -466,16 +534,10 @@ export function WorkflowEditor({
             setEditing(undefined);
           }}
           onDelete={
-            editing.node
+            editing.node && !['entry', 'exit'].includes(editing.node.kind)
               ? () => {
                   const id = editing.node!.id;
-                  setDraft((d) => ({
-                    ...d,
-                    nodes: d.nodes.filter((n) => n.id !== id),
-                    edges: d.edges.filter(
-                      (e) => e.source !== id && e.target !== id,
-                    ),
-                  }));
+                  setDraft((d) => withoutNodes(d, new Set([id])));
                   setSelected(undefined);
                   setEditing(undefined);
                 }

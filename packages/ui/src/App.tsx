@@ -6,12 +6,15 @@ import type { Run, Workflow } from '@interlock/core';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { WorkflowLibrary } from './features/workflows/WorkflowLibrary';
 import { WorkflowEditor } from './features/workflows/WorkflowEditor';
-import { RunHistory } from './features/runs/RunHistory';
+import { WorkflowActivity } from './features/runs/WorkflowActivity';
 import { RunInspector } from './features/runs/RunInspector';
 import { RunDialog } from './features/runs/RunDialog';
 import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
 import { api } from './lib/api';
 export function App() {
+  const [activityTab, setActivityTab] = useState<'active' | 'history'>(
+    'active',
+  );
   const [editorDirty, setEditorDirty] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
   const [page, setPage] = useState<'workflows' | 'runs'>('workflows'),
@@ -138,12 +141,18 @@ export function App() {
             key={runId}
             id={runId}
             tick={tick}
+            onConnect={() => setConnectDialog(true)}
             onOpen={openRun}
             onBack={() => setRunId(undefined)}
             act={act}
           />
         ) : (
-          <RunHistory runs={runs} onOpen={openRun} />
+          <WorkflowActivity
+            runs={runs}
+            onOpen={openRun}
+            tab={activityTab}
+            onTabChange={setActivityTab}
+          />
         )}
       </main>
       {connectDialog && (

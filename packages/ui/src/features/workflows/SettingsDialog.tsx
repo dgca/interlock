@@ -27,6 +27,7 @@ type Settings = {
 export function SettingsDialog({
   node,
   creating = false,
+  parentBatchId,
   name,
   description,
   definition,
@@ -37,6 +38,7 @@ export function SettingsDialog({
 }: Settings & {
   node?: WorkflowNode;
   creating?: boolean;
+  parentBatchId?: string;
   workflows: Workflow[];
   onClose: () => void;
   onApply: (settings: Settings) => void;
@@ -61,9 +63,20 @@ export function SettingsDialog({
         nodeSchema.parse({
           id: newNodeId,
           kind,
-          label: `New ${kind}`,
-          position: { x: 150 + definition.nodes.length * 90, y: 360 },
+          batchId: parentBatchId,
+          label: kind === 'batch' ? 'Batch' : `New ${kind}`,
+          position: parentBatchId
+            ? {
+                x:
+                  130 +
+                  definition.nodes.filter((n) => n.batchId === parentBatchId)
+                    .length *
+                    290,
+                y: 160,
+              }
+            : { x: 150 + definition.nodes.length * 90, y: 360 },
           prompt: 'Describe the assignment.',
+          url: '',
           language: 'javascript',
           command: 'return input;',
           path: '',
@@ -92,6 +105,22 @@ export function SettingsDialog({
           ...settings,
           definition: {
             ...settings.definition,
+            edges:
+              creating &&
+              parsed.batchId &&
+              !settings.definition.edges.some(
+                (e) => e.source === parsed.batchId && e.port === 'item',
+              )
+                ? [
+                    ...settings.definition.edges,
+                    {
+                      id: crypto.randomUUID(),
+                      source: parsed.batchId,
+                      port: 'item',
+                      target: parsed.id,
+                    },
+                  ]
+                : settings.definition.edges,
             nodes: creating
               ? [...settings.definition.nodes, parsed]
               : settings.definition.nodes.map((n) =>
@@ -152,15 +181,24 @@ export function SettingsDialog({
                 </option>
                 <option value="agent">Agent</option>
                 <option value="script">Script</option>
+                <option value="fetch">Fetch</option>
                 <option value="condition">Condition</option>
                 <option value="workflow">Workflow</option>
-                <option value="map">Map</option>
+                <option value="batch">Batch</option>
               </NativeSelect>
             )}
             {nodeDraft ? (
               <NodeInspector
                 node={nodeDraft}
                 workflows={workflows}
+                definition={settings.definition}
+                onBoundaryChange={(schema) =>
+                  patchDefinition(
+                    nodeDraft.kind === 'entry'
+                      ? { inputSchema: schema }
+                      : { outputSchema: schema },
+                  )
+                }
                 onChange={setNodeDraft}
                 onDelete={onDelete}
               />

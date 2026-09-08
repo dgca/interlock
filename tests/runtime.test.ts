@@ -3,10 +3,12 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Engine } from '@interlock/runtime';
+import { batchDefinition } from './fixtures/batch';
 import { Store } from '@interlock/storage';
 import {
   blankDefinition,
   definitionSchema,
+  nodeSchema,
   validateDefinition,
   type WorkflowDefinition,
 } from '@interlock/core';
@@ -34,9 +36,20 @@ function complete(engine: Engine, root: string, output: any) {
 }
 function composed(
   child: string,
-  kind: 'workflow' | 'map' = 'map',
+  kind: 'workflow' | 'batch' = 'batch',
   failurePolicy = 'all',
 ): WorkflowDefinition {
+  if (kind === 'batch')
+    return batchDefinition(
+      nodeSchema.parse({
+        id: 'child',
+        label: 'Child workflow',
+        kind: 'workflow',
+        workflowId: child,
+        version: 1,
+      }),
+      { failurePolicy },
+    );
   return definitionSchema.parse({
     nodes: [
       { id: 'in', label: 'Input', kind: 'entry' },
@@ -66,6 +79,66 @@ afterEach(() => {
   });
 });
 describe('durable harness execution', () => {
+  it('provides fresh-context handoffs for nested work with the root run and assignment IDs', () => {
+    const engine = setup(),
+      definition = blankDefinition();
+    const agent = definition.nodes[1];
+    if (agent.kind !== 'agent') throw new Error('Expected agent');
+    agent.context.mode = 'fresh';
+    const originalPrompt = agent.prompt;
+    const child = publish(engine, definition);
+    const run = engine.start(publish(engine, composed(child)), ['item']).run;
+    const work = engine.available(run.id)[0];
+    expect(work.runId).not.toBe(run.id);
+    expect(work.prompt).toBe(originalPrompt);
+    expect(work.executionInstructions).toContain(
+      'isolated subagent without inherited conversation history',
+    );
+    expect(work.executionInstructions).toContain(
+      `Continue existing Interlock run ${run.id}. Do not start a new run.`,
+    );
+    expect(work.executionInstructions).toContain(
+      `Inspect assignment ${work.id} through list_work`,
+    );
+    expect(work.executionInstructions).toContain(
+      'leave the assignment unclaimed',
+    );
+    expect(work.executionInstructions).toContain('ready-to-paste prompt');
+    expect(work.executionInstructions).toContain('freshContext: true');
+    expect(engine.inspect(work.runId).work[0].executionInstructions).toBe(
+      work.executionInstructions,
+    );
+    expect(() => engine.claim(work.id, worker)).toThrow(
+      'requires fresh context',
+    );
+    expect(engine.available(run.id)[0].status).toBe('available');
+    const claim = engine.claim(work.id, { ...worker, freshContext: true });
+    expect(claim.executionInstructions).toBe(work.executionInstructions);
+    expect(engine.inspect(work.runId).work[0]).not.toHaveProperty('token');
+    engine.submit(work.id, claim.token!, 'done');
+    expect(engine.run(run.id).output).toEqual(['done']);
+  });
+  it('leaves current-context assignments without isolation instructions', () => {
+    const engine = setup();
+    const run = engine.start(publish(engine), {}).run;
+    expect(engine.available(run.id)[0].executionInstructions).toBeUndefined();
+  });
+
+  it.each(['map', 'list'])(
+    'fails removed %s nodes in stored versions instead of passing input through',
+    (kind) => {
+      const engine = setup();
+      const id = publish(engine);
+      const version = engine.store.getVersion(id, 1)!;
+      (version.definition.nodes[1] as any).kind = kind;
+      engine.store.version(version);
+      const run = engine.start(id, ['value']).run;
+      expect(run.status).toBe('failed');
+      expect(run.error).toBe('Unsupported node type in published workflow');
+      expect(run.output).toBeUndefined();
+    },
+  );
+
   it('validates submissions and makes identical retries idempotent', () => {
     const engine = setup(),
       d = blankDefinition();
@@ -188,17 +261,21 @@ describe('durable harness execution', () => {
       d = blankDefinition();
     if (d.nodes[1].kind === 'agent') d.nodes[1].maxAttempts = 1;
     const child = publish(engine, d),
-      parent = publish(engine, composed(child, 'map', 'collect'));
+      parent = publish(engine, composed(child, 'batch', 'collect'));
     const run = engine.start(parent, ['a', 'b']).run;
     const a = engine.claim(engine.available(run.id)[0].id, worker);
     engine.reportFailure(a.id, a.token!, 'Source unavailable');
     complete(engine, run.id, 'B');
     expect(engine.run(run.id).output).toMatchObject([
-      { status: 'failed', output: null, error: 'Source unavailable' },
+      {
+        status: 'failed',
+        output: null,
+        error: `Child run ${a.runId}: Source unavailable`,
+      },
       { status: 'completed', output: 'B' },
     ]);
   });
-  it('fails strict maps and cancels sibling work', () => {
+  it('fails strict Batches and cancels sibling work', () => {
     const engine = setup(),
       d = blankDefinition();
     if (d.nodes[1].kind === 'agent') d.nodes[1].maxAttempts = 1;
@@ -297,7 +374,7 @@ describe('durable harness execution', () => {
       expect(engine.run(run.id).error).toContain(error);
     },
   );
-  it('retries failed map children while preserving successful research', () => {
+  it('retries failed Batch children while preserving successful research', () => {
     const engine = setup(),
       d = blankDefinition();
     if (d.nodes[1].kind === 'agent') d.nodes[1].maxAttempts = 1;
