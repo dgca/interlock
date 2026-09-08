@@ -36,12 +36,6 @@ export function Sidebar({
         ))}
       </nav>
       <div className={styles.note}>
-        <span>Built for your agents.</span>
-        <p>
-          Define the procedure.
-          <br />
-          Give judgment a place.
-        </p>
         <button className={styles.connect} onClick={onConnect}>
           Connect with MCP <ArrowUpRight size={12} />
         </button>
