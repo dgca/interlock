@@ -13,8 +13,8 @@ function sample(schema: Record<string, any>): Json {
     return Object.fromEntries(
       Object.entries(schema.properties ?? {}).map(([key, value]) => [
         key,
-        key === 'protocols'
-          ? [{ name: 'Aave' }, { name: 'Uniswap' }, { name: 'Morpho' }]
+        key === 'candidates'
+          ? [{ name: 'pikachu' }, { name: 'gengar' }, { name: 'togepi' }]
           : sample(value as Record<string, any>),
       ]),
     );

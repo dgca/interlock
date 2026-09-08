@@ -559,7 +559,7 @@ it('seeds a Batch with a published Workflow on its visible item path', () => {
   seed(engine);
   const d = engine.store
     .workflows()
-    .find((w) => w.name === 'DeFi opportunity brief')!.draft;
+    .find((w) => w.name === 'Build a team roster')!.draft;
   const batch = d.nodes.find((n) => n.kind === 'batch')!;
   const item = d.nodes.find(
     (n) =>
@@ -573,6 +573,28 @@ it('seeds a Batch with a published Workflow on its visible item path', () => {
     targetHandle: 'end',
   });
   expect(() => validateDefinition(d)).not.toThrow();
+});
+it('seeds once per store and never revives deleted example workflows', () => {
+  const engine = setup();
+  seed(engine);
+  expect(engine.store.workflows()).toHaveLength(2);
+  seed(engine);
+  expect(engine.store.workflows()).toHaveLength(2);
+  for (const name of ['Build a team roster', 'Size up a Pokémon'])
+    engine.deleteWorkflow(
+      engine.store.workflows().find((w) => w.name === name)!.id,
+    );
+  seed(engine);
+  expect(engine.store.workflows()).toHaveLength(0);
+});
+it('treats a store with preexisting workflows as already seeded', () => {
+  const engine = setup();
+  const own = engine.create('Mine', '', blankDefinition());
+  seed(engine);
+  expect(engine.store.workflows().map((w) => w.id)).toEqual([own.id]);
+  engine.deleteWorkflow(own.id);
+  seed(engine);
+  expect(engine.store.workflows()).toHaveLength(0);
 });
 
 it('retries nested Batches while preserving successful outer and inner item executions', () => {

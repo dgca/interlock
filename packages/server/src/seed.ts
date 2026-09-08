@@ -2,10 +2,19 @@ import { definitionSchema, type Json } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 
 export function seed(engine: Engine) {
-  if (engine.store.workflows().length) return;
-  const research = engine.create(
-    'Research a protocol',
-    'A focused agent assignment with an evidence contract.',
+  // Seed exactly once per database. The marker distinguishes "fresh
+  // install" from "the user deleted every workflow", which is permanent.
+  if (engine.store.get('meta', 'seed')) return;
+  const mark = () =>
+    engine.store.put('meta', {
+      id: 'seed',
+      seededAt: new Date().toISOString(),
+    });
+  // Stores created before the marker existed are already seeded.
+  if (engine.store.workflows().length) return mark();
+  const scout = engine.create(
+    'Size up a Pokémon',
+    'Look a Pokémon up on PokéAPI, compute its stat sheet, then branch: small and adorable ones get an agent-written mascot pitch, the rest keep their raw stats.',
     definitionSchema.parse({
       inputSchema: {
         type: 'object',
@@ -16,55 +25,105 @@ export function seed(engine: Engine) {
         {
           id: 'entry',
           kind: 'entry',
-          label: 'Protocol',
-          position: { x: 40, y: 160 },
+          label: 'Pokémon name',
+          position: { x: 40, y: 200 },
         },
         {
-          id: 'research',
+          id: 'lookup',
+          kind: 'fetch',
+          label: 'Ask PokéAPI',
+          position: { x: 300, y: 200 },
+          url: 'https://pokeapi.co/api/v2/pokemon/{{input.name}}',
+          method: 'GET',
+        },
+        {
+          id: 'stats',
+          kind: 'script',
+          label: 'Pull the fun stats',
+          language: 'javascript',
+          position: { x: 580, y: 200 },
+          command: `const body = input.body;
+if (!body || typeof body.name !== 'string')
+  throw new Error('PokéAPI did not recognize that name');
+const stats = {};
+for (const stat of body.stats ?? []) stats[stat.stat.name] = stat.base_stat;
+return {
+  name: body.name,
+  types: (body.types ?? []).map((entry) => entry.type.name),
+  heightM: (body.height ?? 0) / 10,
+  weightKg: (body.weight ?? 0) / 10,
+  smallAndAdorable: (body.height ?? 999) <= 6,
+  stats,
+};`,
+        },
+        {
+          id: 'cute-check',
+          kind: 'condition',
+          label: 'Small and adorable?',
+          position: { x: 860, y: 200 },
+          path: 'smallAndAdorable',
+          equals: true,
+        },
+        {
+          id: 'mascot-pitch',
           kind: 'agent',
-          label: 'Research protocol',
-          position: { x: 350, y: 160 },
+          label: 'Write the mascot pitch',
+          position: { x: 1140, y: 90 },
           prompt:
-            'Research the protocol in the input for opportunities to grow DeFi usage on Base. Include sources and distinguish verified facts from unknowns. Do not invent engagement status. Return an object with protocol, findings, sources, and unknowns. This workflow ships with example inputs, not live rankings.',
+            'Write a delightfully overcommitted mascot pitch for the Pokémon in the input, a scouting sheet with name, types, height, weight, and base stats. One short paragraph that leans into how small and adorable it is while citing one real stat as evidence. Do not invent abilities or moves. Return an object with name, pitch, and reasoning.',
           context: {
             mode: 'current',
             instructions:
-              'Keep the research scoped to the supplied protocol. Cite sources for factual claims.',
+              'Stay playful but keep every factual claim grounded in the input scouting sheet.',
           },
           outputSchema: {
             type: 'object',
-            required: ['protocol', 'findings', 'sources', 'unknowns'],
+            required: ['name', 'pitch', 'reasoning'],
             properties: {
-              protocol: { type: 'string' },
-              findings: { type: 'string' },
-              sources: { type: 'array', items: { type: 'string' } },
-              unknowns: { type: 'array', items: { type: 'string' } },
+              name: { type: 'string' },
+              pitch: { type: 'string' },
+              reasoning: { type: 'string' },
             },
           },
         },
         {
-          id: 'exit',
+          id: 'exit-pitch',
           kind: 'exit',
-          label: 'Evidence & findings',
-          position: { x: 660, y: 160 },
+          label: 'Mascot pitch',
+          position: { x: 1460, y: 90 },
+        },
+        {
+          id: 'exit-stats',
+          kind: 'exit',
+          label: 'Stat sheet',
+          position: { x: 1140, y: 310 },
         },
       ],
       edges: [
-        { id: 'e1', source: 'entry', target: 'research' },
-        { id: 'e2', source: 'research', target: 'exit' },
+        { id: 'e1', source: 'entry', target: 'lookup' },
+        { id: 'e2', source: 'lookup', target: 'stats' },
+        { id: 'e3', source: 'stats', target: 'cute-check' },
+        {
+          id: 'e4',
+          source: 'cute-check',
+          port: 'true',
+          target: 'mascot-pitch',
+        },
+        { id: 'e5', source: 'mascot-pitch', target: 'exit-pitch' },
+        { id: 'e6', source: 'cute-check', port: 'false', target: 'exit-stats' },
       ],
     }),
   );
-  engine.publish(research.id);
-  const weekly = engine.create(
-    'DeFi opportunity brief',
-    'Research a protocol list in parallel, then turn the evidence into a Base opportunity brief.',
+  engine.publish(scout.id);
+  const roster = engine.create(
+    'Build a team roster',
+    'Scout a list of candidate Pokémon in parallel with the Size up a Pokémon workflow, then turn the scouting sheets into a picked team.',
     definitionSchema.parse({
       inputSchema: {
         type: 'object',
-        required: ['protocols'],
+        required: ['candidates'],
         properties: {
-          protocols: {
+          candidates: {
             type: 'array',
             items: {
               type: 'object',
@@ -78,34 +137,34 @@ export function seed(engine: Engine) {
         {
           id: 'entry',
           kind: 'entry',
-          label: 'Protocol list',
+          label: 'Candidate list',
           position: { x: 30, y: 180 },
         },
         {
-          id: 'research',
+          id: 'scouting',
           kind: 'batch',
-          label: 'Research each protocol',
-          itemsPath: 'protocols',
+          label: 'Size up each candidate',
+          itemsPath: 'candidates',
           concurrency: 5,
           failurePolicy: 'collect',
           position: { x: 330, y: 180 },
         },
         {
-          id: 'protocol-workflow',
-          batchId: 'research',
+          id: 'scout-workflow',
+          batchId: 'scouting',
           kind: 'workflow',
-          label: 'Research a protocol',
-          workflowId: research.id,
+          label: 'Size up a Pokémon',
+          workflowId: scout.id,
           version: 1,
           position: { x: 130, y: 160 },
         },
         {
-          id: 'synthesis',
+          id: 'selection',
           kind: 'agent',
-          label: 'Compare opportunities',
+          label: 'Pick the final six',
           position: { x: 990, y: 180 },
           prompt:
-            'Compare the collected protocol research for opportunities to increase DeFi usage on Base. Report research failures and unknowns. Return {"title": string, "markdown": string} with a prioritized recommendation document and supporting sources.',
+            'You are staffing a team roster. The input holds one record per candidate with a run status and either a scouting sheet, a mascot pitch, or an error. Pick up to six candidates, give each a one-line team role grounded in its types and stats, and call out any candidates whose scouting failed. Return {"title": string, "markdown": string} with the roster as a markdown document.',
           outputSchema: {
             type: 'object',
             required: ['title', 'markdown'],
@@ -118,32 +177,33 @@ export function seed(engine: Engine) {
         {
           id: 'exit',
           kind: 'exit',
-          label: 'Opportunity brief',
+          label: 'Team roster',
           position: { x: 1300, y: 180 },
         },
       ],
       edges: [
-        { id: 'e1', source: 'entry', target: 'research' },
+        { id: 'e1', source: 'entry', target: 'scouting' },
         {
           id: 'item',
-          source: 'research',
+          source: 'scouting',
           port: 'item',
-          target: 'protocol-workflow',
+          target: 'scout-workflow',
         },
         {
           id: 'item-end',
-          source: 'protocol-workflow',
+          source: 'scout-workflow',
           port: 'default',
-          target: 'research',
+          target: 'scouting',
           targetHandle: 'end',
         },
-        { id: 'e2', source: 'research', port: 'complete', target: 'synthesis' },
-        { id: 'e3', source: 'synthesis', target: 'exit' },
+        { id: 'e2', source: 'scouting', port: 'complete', target: 'selection' },
+        { id: 'e3', source: 'selection', target: 'exit' },
       ],
     }),
   );
-  engine.publish(weekly.id);
+  engine.publish(roster.id);
+  mark();
 }
 export const exampleInput: Json = {
-  protocols: [{ name: 'Aave' }, { name: 'Uniswap' }, { name: 'Morpho' }],
+  candidates: [{ name: 'pikachu' }, { name: 'gengar' }, { name: 'togepi' }],
 };
