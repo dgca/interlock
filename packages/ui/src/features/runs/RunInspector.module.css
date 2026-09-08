@@ -31,7 +31,8 @@
   overflow: auto;
 }
 .graph {
-  height: 270px;
+  height: 460px;
+  min-height: 320px;
   background: var(--canvas);
   border-bottom: 1px solid var(--border);
 }
@@ -78,7 +79,7 @@
   padding: 6px;
 }
 .detail {
-  width: 340px;
+  width: 360px;
   flex-shrink: 0;
   border-left: 1px solid var(--border);
   background: var(--surface);
@@ -147,4 +148,46 @@
 }
 .handoff p {
   margin: 0 0 12px;
+}
+
+.liveSummary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 16px 23px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.liveSummary strong {
+  font-size: 15px;
+}
+.liveSummary span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.liveSummary a {
+  margin-left: auto;
+  color: var(--accent-text);
+  font-size: 12px;
+}
+.progressLabel {
+  color: var(--accent-text);
+}
+.child.selected {
+  background: var(--accent-soft);
+}
+.result pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  line-height: 1.6;
+}
+
+.detail :global(.inspector-heading) {
+  margin-bottom: 0;
+  padding-bottom: 8px;
+}
+.detail :global(.inspector-fields) {
+  padding-top: 8px;
 }

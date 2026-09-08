@@ -344,3 +344,65 @@
   white-space: nowrap;
   margin-left: 16px;
 }
+
+.run_running {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.run_waiting {
+  border-color: #e3c47f;
+}
+.run_failed {
+  border-color: #e89481;
+}
+.run_cancelled {
+  opacity: 0.65;
+}
+.run_pending {
+  opacity: 0.5;
+}
+.runProgress {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--muted);
+  min-width: 0;
+}
+.runProgress > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.runProgress svg {
+  flex-shrink: 0;
+}
+.run_running .runProgress,
+.run_completed .runProgress {
+  color: var(--accent-text);
+}
+.run_waiting .runProgress {
+  color: #e3c47f;
+}
+.run_failed .runProgress {
+  color: #e89481;
+}
+.runNodeStatus {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 5px);
+  max-width: 100%;
+}
+.spinning {
+  animation: run-spin 1.5s linear infinite;
+}
+@keyframes run-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinning {
+    animation: none;
+  }
+}

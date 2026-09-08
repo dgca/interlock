@@ -9,12 +9,22 @@ import {
   Layers,
   Globe,
   Workflow,
+  CheckCircle2,
+  LoaderCircle,
+  CircleAlert,
+  Clock,
+  CircleMinus,
 } from 'lucide-react';
 import { nodeKindLabel, type WorkflowNode } from '@interlock/core';
 import styles from './WorkflowEditor.module.css';
 export type CanvasNode = Node<{
   node: WorkflowNode;
   status?: string;
+  progress?: {
+    state:
+      'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+    label: string;
+  };
   boundarySchema?: WorkflowNode['inputSchema'];
   onEdit?: () => void;
   onAdd?: () => void;
@@ -113,10 +123,38 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
               : n.kind === 'exit'
                 ? 'Return workflow result'
                 : undefined;
+  const progressClass = data.progress
+    ? styles[`run_${data.progress.state}`]
+    : '';
+  const StatusIcon =
+    data.progress?.state === 'completed'
+      ? CheckCircle2
+      : data.progress?.state === 'running'
+        ? LoaderCircle
+        : data.progress?.state === 'failed'
+          ? CircleAlert
+          : data.progress?.state === 'cancelled'
+            ? CircleMinus
+            : Clock;
+  const progress = data.progress && (
+    <span
+      className={styles.runProgress}
+      title={data.progress.label}
+      aria-label={data.progress.label}
+    >
+      <StatusIcon
+        size={12}
+        className={
+          data.progress.state === 'running' ? styles.spinning : undefined
+        }
+      />
+      <span>{data.progress.label}</span>
+    </span>
+  );
   if (n.kind === 'batch')
     return (
       <div
-        className={`${styles.batchGroup} ${selected ? styles.nodeSelected : ''}`}
+        className={`${styles.batchGroup} ${progressClass} ${selected ? styles.nodeSelected : ''}`}
       >
         <div className={`${styles.batchHeader} batch-drag`}>
           <Layers size={17} />
@@ -135,6 +173,7 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
         </div>
         <div className={styles.batchSummary}>
           <div className={styles.nodeMetadata}>
+            {progress}
             <small>
               Each item runs independently · Up to {n.concurrency} at once
             </small>
@@ -177,7 +216,12 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
       </div>
     );
   return (
-    <div className={`${styles.node} ${selected ? styles.nodeSelected : ''}`}>
+    <div
+      className={`${styles.node} ${progressClass} ${selected ? styles.nodeSelected : ''}`}
+    >
+      {data.progress && (
+        <span className={styles.runNodeStatus}>{progress}</span>
+      )}
       <div className={styles.nodeHeading}>
         <span className={`${styles.nodeIcon} ${styles[n.kind]}`}>
           <Icon size={16} />

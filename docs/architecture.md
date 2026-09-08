@@ -104,6 +104,12 @@ Batch nodes use [React Flow Sub Flows](https://reactflow.dev/learn/layouting/sub
 
 Entry and Exit settings display a shared Input / Output contract backed by the workflow input or output schema. Editing it updates Workflow settings too. Existing additional node constraints remain visible and enforced. Batch settings show an array input when Items path is blank and no narrower contract is set. A named Items path allows an enclosing object; the selected value must still be an array at execution.
 
+## Live run inspection
+
+The run inspector shows a live summary above the published graph. Unclaimed Agent assignments show Waiting for an agent; claimed assignments show Agent working. A claimed assignment indicates ownership, not reported internal progress. Running, waiting, completed, failed, and unstarted steps have distinct canvas indicators.
+
+Run inspection includes descendant runs and assignments without claim tokens. Batch groups show finished, running, waiting, failed, and queued item counts. Member steps aggregate their item executions; selecting an item displays only that item's input, output, error, and assignment. Referenced Workflow runs remain separate graphs. The latest execution of each step supplies its canvas state, while the timeline retains previous attempts. Live updates preserve explicit step/item selections and the canvas viewport. Completed runs link to their final output.
+
 ## Fetch execution
 
 Core defines Fetch configuration, validates bindings at publication, and resolves requests through the same pure function used by the UI preview. Runtime sends requests outside storage transactions with an abort controller shared with run cancellation. Resolved requests persist on node executions. HTTP errors retain their response output; explicit retries create a new execution. Pending requests fail on restart because remote side effects are uncertain. See [Fetch requests](fetch.md) for the configuration and response contract.

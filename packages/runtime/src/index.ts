@@ -291,8 +291,33 @@ export class Engine {
   }
   inspect(id: string) {
     const run = this.run(id);
+    const allRuns = this.store.runs();
+    const ids = new Set([id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const child of allRuns)
+        if (
+          child.parentRunId &&
+          ids.has(child.parentRunId) &&
+          !ids.has(child.id)
+        ) {
+          ids.add(child.id);
+          changed = true;
+        }
+    }
     return {
       run,
+      descendants: allRuns.filter(
+        (child) => child.id !== id && ids.has(child.id),
+      ),
+      descendantWork: this.store
+        .work()
+        .filter((work) => ids.has(work.runId))
+        .map((work) => {
+          const { token, ...visible } = this.describeWork(work);
+          return visible;
+        }),
       definition: this.definition(run),
       work: this.store
         .work()

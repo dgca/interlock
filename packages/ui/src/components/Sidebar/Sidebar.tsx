@@ -31,7 +31,7 @@ export function Sidebar({
         {(
           [
             { id: 'workflows', label: 'Workflows', Icon: GitBranch },
-            { id: 'runs', label: 'Run history', Icon: Activity },
+            { id: 'runs', label: 'Activity', Icon: Activity },
           ] as const
         ).map(({ id, label, Icon }) => (
           <button

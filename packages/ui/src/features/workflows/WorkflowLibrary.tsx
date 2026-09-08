@@ -18,6 +18,7 @@ import { Button } from '../../components/Button/Button';
 import { Badge } from '../../components/Badge/Badge';
 import { api, download } from '../../lib/api';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
+import layout from '../../components/PageLayout/PageLayout.module.css';
 import styles from './WorkflowLibrary.module.css';
 export function WorkflowLibrary({
   workflows,
@@ -38,12 +39,11 @@ export function WorkflowLibrary({
       `${w.name} ${w.description}`.toLowerCase().includes(query.toLowerCase()),
   );
   return (
-    <div className={styles.page}>
-      <header className={styles.header}>
+    <div className={layout.page}>
+      <header className={layout.header}>
         <div>
-          <div className="eyebrow">YOUR AUTOMATION WORKSPACE</div>
           <h1>Workflows</h1>
-          <p>Repeatable procedures. Room for judgment.</p>
+          <p>Create, organize, and run your workflows.</p>
         </div>
         <div className="actions">
           <Button onClick={() => file.current?.click()}>

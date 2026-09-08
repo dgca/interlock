@@ -3,8 +3,12 @@ import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { Engine } from '@interlock/runtime';
+import { Store } from '@interlock/storage';
+import { batchDefinition } from './fixtures/batch';
 import { blankDefinition } from '@interlock/core';
 import { RunInspector } from '../packages/ui/src/features/runs/RunInspector';
+const graph = vi.hoisted(() => ({ props: undefined as any }));
 const rpc = vi.hoisted(() => ({ get: vi.fn(), work: vi.fn() }));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
@@ -15,13 +19,17 @@ vi.mock('../packages/ui/src/lib/api', () => ({
   download: vi.fn(),
 }));
 vi.mock('../packages/ui/src/features/runs/RunGraph', () => ({
-  RunGraph: () => null,
+  RunGraph: (props: any) => {
+    graph.props = props;
+    return null;
+  },
 }));
 vi.mock('../packages/ui/src/features/runs/WorkPanel', () => ({
   WorkPanel: () => null,
 }));
 vi.mock('../packages/ui/src/components/JsonEditor/JsonEditor', () => ({
-  JsonEditor: () => null,
+  JsonEditor: ({ label, value }: any) =>
+    h('pre', { 'data-json-label': label }, JSON.stringify(value)),
 }));
 let container: HTMLDivElement, root: Root, detail: any;
 const onConnect = vi.fn(),
@@ -129,4 +137,47 @@ it('does not mistake a waiting script or child workflow for an available agent a
   await render();
   expect(container.textContent).not.toContain('Waiting for an agent');
   expect(container.textContent).not.toContain('Copy instructions for agent');
+});
+
+it('keeps a chosen Batch item selected across live updates without substituting other item output', async () => {
+  const store = new Store(':memory:');
+  try {
+    const engine = new Engine(store, process.cwd());
+    const w = engine.create('Batch', '', batchDefinition());
+    engine.publish(w.id);
+    const run = engine.start(w.id, ['first', 'second']).run;
+    detail = engine.inspect(run.id);
+    // The component's requested ID stays stable in this test harness.
+    detail.run = { ...detail.run, id: 'root-run' };
+    rpc.work.mockResolvedValue([]);
+    await render();
+    await act(async () => graph.props.onSelect('work'));
+    expect(container.querySelector('[data-json-label="Input"]')).toBeNull();
+    await act(async () =>
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent?.startsWith('Item 1'))!
+        .click(),
+    );
+    expect(
+      container.querySelector('[data-json-label="Input"]')?.textContent,
+    ).toBe('"first"');
+    const work = engine.available(run.id)[1];
+    const claim = engine.claim(work.id, {
+      workerId: 'test',
+      freshContext: false,
+      tools: [],
+      skills: [],
+    });
+    engine.submit(work.id, claim.token!, 'second result');
+    detail = engine.inspect(run.id);
+    detail.run = { ...detail.run, id: 'root-run' };
+    await render(1);
+    expect(graph.props.selected).toBe('work');
+    expect(
+      container.querySelector('[data-json-label="Input"]')?.textContent,
+    ).toBe('"first"');
+    expect(container.querySelector('[data-json-label="Output"]')).toBeNull();
+  } finally {
+    store.close();
+  }
 });
