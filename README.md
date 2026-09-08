@@ -21,7 +21,7 @@ Keep the terminal running while you use Interlock. Closing the browser does not 
 
 ## Run your first workflow
 
-The initial library includes **Research a protocol**, an editable example with an input, an agent assignment, and an output.
+The initial library includes **Size up a Pokémon** and **Build a team roster**, editable examples that together showcase every node type: a Fetch of the public PokéAPI, a JavaScript Script, a Condition branch, an Agent assignment, and a Batch that runs a workflow once per candidate.
 
 1. Select **Connect with MCP** in the sidebar.
 2. Follow the instructions for Codex, Claude, OpenCode, or another MCP client.
@@ -29,13 +29,13 @@ The initial library includes **Research a protocol**, an editable example with a
 4. Ask your agent:
 
    ```text
-   Find the Interlock workflow "Research a protocol" and run it with
-   {"name":"Aave"}. Complete its assignments, then return the result.
+   Find the Interlock workflow "Size up a Pokémon" and run it with
+   {"name":"pikachu"}. Complete its assignments, then return the result.
    ```
 
 5. Open **Activity → Active** and select the execution to follow its steps. Completed, failed, and cancelled executions appear in **History**.
 
-Your agent needs access to the tools required by the assignment, such as web research for this example. Its tool approval settings still apply.
+Your agent needs access to the tools required by the assignment; this example's assignment is a self-contained writing task, so no extra tools are needed. Its tool approval settings still apply.
 
 The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by the same process as the UI and engine. Keep that process running. Upgrading and restarting at the same address preserves your agent configuration. The dialog also provides a stdio fallback for clients that need it. See [Connect a harness](docs/connect-harness.md) for configuration and the assignment loop.
 
@@ -121,7 +121,7 @@ With the engine running, open another terminal:
 ```sh
 interlock workflows
 interlock workflow WORKFLOW_ID
-interlock start WORKFLOW_ID '{"name":"Aave"}'
+interlock start WORKFLOW_ID '{"name":"pikachu"}'
 interlock run RUN_ID
 ```
 

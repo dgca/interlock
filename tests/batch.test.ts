@@ -559,7 +559,7 @@ it('seeds a Batch with a published Workflow on its visible item path', () => {
   seed(engine);
   const d = engine.store
     .workflows()
-    .find((w) => w.name === 'DeFi opportunity brief')!.draft;
+    .find((w) => w.name === 'Build a team roster')!.draft;
   const batch = d.nodes.find((n) => n.kind === 'batch')!;
   const item = d.nodes.find(
     (n) =>
