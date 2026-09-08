@@ -17,12 +17,6 @@ export function Sidebar({
       <div className={styles.brand}>
         Interlock<span className={styles.version}>v{VERSION}</span>
       </div>
-      <div className={styles.workspace}>
-        <span className={styles.avatar}>L</span>
-        <div>
-          Local workspace<small>Personal</small>
-        </div>
-      </div>
       <div className={styles.group}>WORKSPACE</div>
       <nav>
         {(
