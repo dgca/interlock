@@ -2,7 +2,16 @@ import { definitionSchema, type Json } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 
 export function seed(engine: Engine) {
-  if (engine.store.workflows().length) return;
+  // Seed exactly once per database. The marker distinguishes "fresh
+  // install" from "the user deleted every workflow", which is permanent.
+  if (engine.store.get('meta', 'seed')) return;
+  const mark = () =>
+    engine.store.put('meta', {
+      id: 'seed',
+      seededAt: new Date().toISOString(),
+    });
+  // Stores created before the marker existed are already seeded.
+  if (engine.store.workflows().length) return mark();
   const scout = engine.create(
     'Size up a Pokémon',
     'Look a Pokémon up on PokéAPI, compute its stat sheet, then branch: small and adorable ones get an agent-written mascot pitch, the rest keep their raw stats.',
@@ -193,6 +202,7 @@ return {
     }),
   );
   engine.publish(roster.id);
+  mark();
 }
 export const exampleInput: Json = {
   candidates: [{ name: 'pikachu' }, { name: 'gengar' }, { name: 'togepi' }],
