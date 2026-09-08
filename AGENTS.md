@@ -20,6 +20,8 @@ Raw editing operates on the workflow definition, not the full stored workflow re
 
 Use the root package version through `packages/core/src/version.ts` for CLI, UI, and MCP version displays. Add changesets for `@type_of/interlock` even when the code changes in a private workspace package. Keep changesets pending in feature PRs. The GitHub release workflow applies versioning in a release PR and publishes after that PR merges.
 
+While Interlock is on `0.x`, use `patch` changesets for all non-breaking changes, including new features. A minor or major bump requires an explicit user request. Flag breaking changes before choosing a release bump.
+
 ## Before opening or updating a PR
 
 Check README.md, related docs, CLI help, and MCP tool descriptions against the PR's final behavior. Update affected instructions, examples, UI labels, supported operations, and limits in the same PR. Verify documented commands against their implementations. Keep changeset summaries focused on user-visible changes since the latest published release, omitting intermediate designs that never shipped.

@@ -33,7 +33,7 @@ pnpm changeset
 
 Select `@type_of/interlock`, choose the version bump, and write a summary for users. Include the generated `.changeset/*.md` file in the feature PR. Leave the package version and changelog for the release PR.
 
-Use a patch for compatible fixes, a minor for compatible additions, and a major for breaking changes. Review breaking changes explicitly while the package is on `0.x` rather than relying on the suggested bump.
+While the package is on `0.x`, follow the [versioning policy in AGENTS.md](../AGENTS.md#preserve-these-boundaries): use patch bumps for non-breaking fixes and additions. Minor or major bumps require an explicit user request. Flag breaking changes before choosing a release bump.
 
 Internal development changes that do not affect the published package do not need a changeset.
 
