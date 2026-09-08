@@ -1,3 +1,4 @@
+import { nodeKindLabel } from '@interlock/core';
 import type { Action } from '../../lib/useActionFeedback';
 import { useEffect, useState } from 'react';
 import {
@@ -53,7 +54,7 @@ export function RunInspector({
       active = false;
     };
   }, [id, tick]);
-  if (!data)
+  if (!data || data.run.id !== id)
     return <div className="content-page">{error || 'Loading run…'}</div>;
   const { run, definition, events, children, work } = data;
   const execution =
@@ -113,6 +114,7 @@ export function RunInspector({
         <section className={styles.overview}>
           <div className={styles.graph}>
             <RunGraph
+              key={run.id}
               definition={definition}
               executions={run.executions}
               onSelect={setSelected}
@@ -136,7 +138,8 @@ export function RunInspector({
                 <div>
                   <strong>{e.label}</strong>
                   <small>
-                    {e.kind} · {new Date(e.startedAt).toLocaleTimeString()}
+                    {nodeKindLabel(e.kind)} ·{' '}
+                    {new Date(e.startedAt).toLocaleTimeString()}
                   </small>
                 </div>
                 <Badge status={e.status} />

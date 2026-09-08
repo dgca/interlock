@@ -29,9 +29,19 @@ One entry begins a run. Each node receives the previous node's output as its who
 
 A condition compares a path in its input to a JSON value using structural equality. It passes the input through unchanged. Paths are dot-separated object keys or array indices. Empty paths select the entire input. They are not general JSONPath expressions.
 
-Child workflow nodes pin an existing published version. A map reads an array and starts one child run per item, with bounded active children. Results retain input order. The `all` failure policy fails the parent and cancels remaining children. The `collect` policy returns records containing child status, output, and error. Empty arrays produce an empty result.
+A Workflow node invokes an existing published workflow version once. A Workflow Batch runs its own inline workflow once per list item. No separately published wrapper workflow is required. Each item becomes the complete input of an isolated child run. The Batch emits one ordered list through its single external output after all item runs finish. Results retain input order even when items finish out of order. The `all` failure policy fails the parent and cancels remaining children. The `collect` policy returns records containing child status, output, and error. Empty arrays produce an empty result.
 
-Explicitly retrying a failed map preserves successful children and resumes failed or cancelled children. Published definitions remain unchanged. To fix the procedure itself, publish another version and start a new run.
+Explicitly retrying a failed Workflow Batch preserves successful children and resumes failed or cancelled children. Published definitions remain unchanged. To fix the procedure itself, publish another version and start a new run.
+
+### Inline definitions and item runs
+
+The `batch` node owns `itemsPath`, `concurrency`, `failurePolicy`, and a `body` containing a full workflow definition. A blank `itemsPath` selects the whole input. Concurrency is 1 through 50, and a Batch accepts at most 200 items. The body has exactly one entry and one exit, shown as "Each item" and "Item result". It can contain Agent, Script, Condition, Workflow, and nested Workflow Batch nodes. Node IDs and edges belong to one definition scope; edges cannot cross between scopes. Publication recursively checks graph rules, contracts, and referenced versions.
+
+Item runs use the existing scheduler, script runner, assignments, events, and cancellation. Their `workflowId` and `version` identify the immutable published snapshot. An optional `definitionPath` lists Batch node IDs to traverse from that snapshot to the inline body. A referenced Workflow starts a new reference at its own published version. SQLite persists these references with run documents, so inspection and restart resolve the same definition without hidden workflows or copied drafts. Both inline and referenced child runs count toward the limit of ten nested levels.
+
+The `collect` result includes `runId`, `status`, `output`, and `error` for every item. Missing output and error values are `null`. Input-contract failures belong to their item runs. Explicit retry of a failed Batch preserves completed items and resumes failed or cancelled items within the concurrency limit. A completed `collect` Batch is a successful step and is not eligible for failed-step retry. Cancellation stops unfinished descendants and invalidates their work claims. Root-run work discovery includes assignments at every nesting level.
+
+Legacy `kind: "map"` definitions retain their pinned `workflowId` and `version` and use the same child scheduler. They remain loadable, executable, inspectable, retryable, and exportable. The UI names them "Workflow Batch" and retains their referenced-workflow settings. There is no draft migration, and published definitions are never rewritten.
 
 ## Agent work
 
@@ -74,3 +84,7 @@ Use Mantine components directly for standard controls. Keep shared components fo
 The workflow editor holds a draft shared by Visual and Raw views. Raw JSON must parse, match the definition structure, and contain no unknown definition fields before saving or returning to Visual. Graph validation errors can remain in a saved draft but block publication. The server performs the final publication validation, including referenced child workflow versions.
 
 The Add node dialog includes the node type choice and adds a node only on confirmation. Script and raw-definition editors share syntax highlighting and aligned line numbers. The minimap receives its dimensions through the React Flow component's inline style so its SVG calculations match its displayed size.
+
+Workflow Batches appear as collapsed containers with one input and one output on the canvas. **Open inline workflow** opens a focused canvas with a scope breadcrumb and **Back to parent**. Node settings, creation forms, contract editors, and routing work within that scope. Each body's positions are local to that Batch; moving the outer container does not rewrite its body positions. Fixed entry and exit nodes cannot be deleted in the visual editor. Raw view edits the complete root definition, including every nested body, and retains separate draft and publication checks. Run inspection shows item runs as children; opening an item loads its inline graph.
+
+The editor uses separate canvases for scopes rather than expanded React Flow groups. [React Flow Sub Flows](https://reactflow.dev/learn/layouting/sub-flows) provide relative positioning through `parentId` but allow edges across groups. Focused canvases avoid cross-scope connections and keep large nested graphs readable. Canvas grouping is not part of the stored definition.

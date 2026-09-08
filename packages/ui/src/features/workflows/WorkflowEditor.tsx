@@ -11,7 +11,11 @@ import {
   type Connection,
 } from '@xyflow/react';
 import { ArrowLeft, Play, Save, Plus, Upload, Settings2 } from 'lucide-react';
-import { type Workflow, type WorkflowNode } from '@interlock/core';
+import {
+  type Workflow,
+  type WorkflowNode,
+  type WorkflowDefinition,
+} from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 import { parseRawDefinition } from './rawDefinition';
@@ -43,7 +47,7 @@ export function WorkflowEditor({
   const [measurements, setMeasurements] = useState<
     Record<string, { width?: number; height?: number }>
   >({});
-  const [draft, setDraft] = useState(workflow.draft),
+  const [rootDraft, setRootDraft] = useState(workflow.draft),
     [name, setName] = useState(workflow.name),
     [description, setDescription] = useState(workflow.description),
     [revision, setRevision] = useState(workflow.draftRevision),
@@ -52,6 +56,45 @@ export function WorkflowEditor({
     node?: WorkflowNode;
     creating?: boolean;
   }>();
+  const [scope, setScope] = useState<string[]>([]);
+  const scopes = [rootDraft];
+  const scopeLabels: string[] = [];
+  for (const id of scope) {
+    const node = scopes.at(-1)!.nodes.find((n) => n.id === id);
+    if (node?.kind !== 'batch') break;
+    scopes.push(node.body);
+    scopeLabels.push(node.label);
+  }
+  const draft = scopes.at(-1)!;
+  const setDraft = (
+    update:
+      WorkflowDefinition | ((d: WorkflowDefinition) => WorkflowDefinition),
+  ) => {
+    setRootDraft((root) => {
+      const replace = (
+        d: WorkflowDefinition,
+        depth: number,
+      ): WorkflowDefinition => {
+        if (depth === scope.length)
+          return typeof update === 'function' ? update(d) : update;
+        return {
+          ...d,
+          nodes: d.nodes.map((n) =>
+            n.id === scope[depth] && n.kind === 'batch'
+              ? { ...n, body: replace(n.body, depth + 1) }
+              : n,
+          ),
+        };
+      };
+      return replace(root, 0);
+    });
+  };
+  const navigateScope = (path: string[]) => {
+    setScope(path);
+    setSelected(undefined);
+    setEditing(undefined);
+    setMeasurements({});
+  };
   const [view, setView] = useState<'visual' | 'raw'>('visual');
   const [raw, setRaw] = useState('');
   const rawResult = useMemo(
@@ -59,13 +102,14 @@ export function WorkflowEditor({
     [view, raw],
   );
   const rawInvalid = Boolean(rawResult?.error);
-  const effectiveDraft = rawResult?.definition ?? draft;
+  const effectiveDraft = rawResult?.definition ?? rootDraft;
   const switchView = (next: 'visual' | 'raw') => {
     if (next === view) return;
-    if (next === 'raw') setRaw(JSON.stringify(draft, null, 2));
+    if (next === 'raw') setRaw(JSON.stringify(rootDraft, null, 2));
     else {
       if (!rawResult?.definition) return;
-      setDraft(rawResult.definition);
+      setRootDraft(rawResult.definition);
+      navigateScope([]);
       setMeasurements({});
     }
     setView(next);
@@ -89,7 +133,8 @@ export function WorkflowEditor({
     workflow.draftRevision > revision ||
     (workflow.draftRevision === revision && remoteSnapshot !== saved);
   const loadLatest = () => {
-    setDraft(workflow.draft);
+    setRootDraft(workflow.draft);
+    navigateScope([]);
     setRaw(JSON.stringify(workflow.draft, null, 2));
     setName(workflow.name);
     setDescription(workflow.description);
@@ -135,13 +180,21 @@ export function WorkflowEditor({
         id: n.id,
         type: 'workflow',
         width: 220,
-        height: 116,
+        height: n.kind === 'batch' ? 150 : 116,
+        deletable: n.kind !== 'entry' && n.kind !== 'exit',
         position: n.position,
         measured: measurements[n.id],
-        data: { node: n, onEdit: () => setEditing({ node: n }) },
+        data: {
+          node: n,
+          onEdit: () => setEditing({ node: n }),
+          onOpen:
+            n.kind === 'batch'
+              ? () => navigateScope([...scope, n.id])
+              : undefined,
+        },
         selected: n.id === selected,
       })),
-    [draft.nodes, selected, measurements],
+    [draft.nodes, selected, measurements, scope],
   );
   const edges: Edge[] = useMemo(
     () =>
@@ -172,7 +225,7 @@ export function WorkflowEditor({
     });
     setRevision(w.draftRevision);
     if (view === 'raw') {
-      setDraft(w.draft);
+      setRootDraft(w.draft);
       setRaw((current) =>
         current === raw ? JSON.stringify(w.draft, null, 2) : current,
       );
@@ -290,6 +343,16 @@ export function WorkflowEditor({
       <div className={styles.body}>
         <div className={styles.canvasWrap}>
           <div className={styles.canvasToolbar}>
+            {view === 'visual' && scope.length > 0 && (
+              <>
+                <Button onClick={() => navigateScope(scope.slice(0, -1))}>
+                  Back to parent
+                </Button>
+                <span aria-label="Inline workflow scope">
+                  {name} / {scopeLabels.join(' / ')} · Each item → Item result
+                </span>
+              </>
+            )}
             <div
               className={styles.viewToggle}
               role="group"
@@ -334,7 +397,7 @@ export function WorkflowEditor({
                 </Button>
                 <Button
                   variant="ghost"
-                  onClick={() => setRaw(JSON.stringify(draft, null, 2))}
+                  onClick={() => setRaw(JSON.stringify(rootDraft, null, 2))}
                 >
                   Discard raw changes
                 </Button>
@@ -370,6 +433,7 @@ export function WorkflowEditor({
           ) : (
             <>
               <ReactFlow
+                key={JSON.stringify(scope)}
                 nodes={nodes}
                 edges={edges}
                 nodeTypes={nodeTypes}
@@ -453,20 +517,23 @@ export function WorkflowEditor({
         <SettingsDialog
           node={editing.node}
           creating={editing.creating}
-          name={name}
-          description={description}
+          inline={scope.length > 0}
+          name={scopeLabels.at(-1) ?? name}
+          description={scope.length ? '' : description}
           definition={draft}
           workflows={workflows}
           onClose={() => setEditing(undefined)}
           onApply={(next) => {
-            setName(next.name);
-            setDescription(next.description);
+            if (!scope.length) {
+              setName(next.name);
+              setDescription(next.description);
+            }
             setDraft(next.definition);
             if (editing.creating) setSelected(next.definition.nodes.at(-1)?.id);
             setEditing(undefined);
           }}
           onDelete={
-            editing.node
+            editing.node && !['entry', 'exit'].includes(editing.node.kind)
               ? () => {
                   const id = editing.node!.id;
                   setDraft((d) => ({

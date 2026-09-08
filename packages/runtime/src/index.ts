@@ -140,13 +140,16 @@ export class Engine {
     return this.store.transaction(() => {
       const w = this.workflow(id);
       const definition = validateDefinition(w.draft);
-      for (const n of definition.nodes)
-        if (n.kind === 'workflow' || n.kind === 'map') {
-          if (!this.store.getVersion(n.workflowId, n.version))
-            throw new InterlockError(
-              `${n.label}: referenced workflow version does not exist`,
-            );
-        }
+      const checkReferences = (body: WorkflowDefinition) => {
+        for (const n of body.nodes)
+          if (n.kind === 'workflow' || n.kind === 'map') {
+            if (!this.store.getVersion(n.workflowId, n.version))
+              throw new InterlockError(
+                `${n.label}: referenced workflow version does not exist`,
+              );
+          } else if (n.kind === 'batch') checkReferences(n.body);
+      };
+      checkReferences(definition);
       w.latestVersion++;
       w.updatedAt = now();
       this.store.version({
@@ -164,12 +167,16 @@ export class Engine {
     version: number,
     input: Json,
     parentRunId?: string,
+    definitionPath?: string[],
   ): Run {
     const w = this.workflow(workflowId);
-    const snapshot = this.store.getVersion(workflowId, version);
-    if (!snapshot)
-      throw new InterlockError('Published workflow version not found');
-    assertContract(snapshot.definition.inputSchema, input, 'Workflow input');
+    const definition = this.resolveDefinition(
+      workflowId,
+      version,
+      definitionPath,
+    );
+    if (!parentRunId)
+      assertContract(definition.inputSchema, input, 'Workflow input');
     let depth = 0,
       parent = parentRunId;
     while (parent) {
@@ -184,9 +191,10 @@ export class Engine {
       workflowName: w.name,
       version,
       parentRunId,
+      definitionPath,
       status: 'running',
       input,
-      cursor: snapshot.definition.nodes.find((n) => n.kind === 'entry')!.id,
+      cursor: definition.nodes.find((n) => n.kind === 'entry')!.id,
       value: input,
       executions: [],
       createdAt: time,
@@ -210,8 +218,7 @@ export class Engine {
     const run = this.run(id);
     return {
       run,
-      definition: this.store.getVersion(run.workflowId, run.version)!
-        .definition,
+      definition: this.definition(run),
       work: this.store
         .work()
         .filter((w) => w.runId === id)
@@ -221,7 +228,30 @@ export class Engine {
     };
   }
   private definition(run: Run) {
-    return this.store.getVersion(run.workflowId, run.version)!.definition;
+    return this.resolveDefinition(
+      run.workflowId,
+      run.version,
+      run.definitionPath,
+    );
+  }
+  private resolveDefinition(
+    workflowId: string,
+    version: number,
+    path: string[] = [],
+  ): WorkflowDefinition {
+    const snapshot = this.store.getVersion(workflowId, version);
+    if (!snapshot)
+      throw new InterlockError('Published workflow version not found');
+    let definition: WorkflowDefinition = snapshot.definition;
+    for (const id of path) {
+      const node: WorkflowNode | undefined = definition.nodes.find(
+        (n) => n.id === id,
+      );
+      if (node?.kind !== 'batch')
+        throw new InterlockError('Inline workflow definition not found');
+      definition = node.body;
+    }
+    return definition;
   }
   private fail(run: Run, execution: NodeExecution, error: string) {
     for (const id of execution.childRunIds)
@@ -287,6 +317,8 @@ export class Engine {
       try {
         if (run.executions.length > definition.maxSteps)
           throw new InterlockError('Workflow step limit exceeded');
+        if (node.kind === 'entry')
+          assertContract(definition.inputSchema, run.input, 'Workflow input');
         assertContract(
           node.inputSchema,
           execution.input,
@@ -326,19 +358,27 @@ export class Engine {
         this.save(run);
         return false;
       }
-      if (node.kind === 'workflow' || node.kind === 'map') {
+      if (
+        node.kind === 'workflow' ||
+        node.kind === 'map' ||
+        node.kind === 'batch'
+      ) {
         const value =
-          node.kind === 'map'
+          node.kind !== 'workflow'
             ? readPath(execution.input, node.itemsPath)
             : [execution.input];
         if (!Array.isArray(value))
-          throw new InterlockError('Map input must resolve to an array');
+          throw new InterlockError(
+            'Workflow Batch input must resolve to an array',
+          );
         if (value.length > 200)
-          throw new InterlockError('Map input exceeds 200 items');
+          throw new InterlockError('Workflow Batch input exceeds 200 items');
         let children = execution.childRunIds.map((id) => this.run(id));
         if (node.kind === 'workflow' || node.failurePolicy === 'all') {
           const failed = children.find(
-            (c) => c.status === 'failed' || c.status === 'cancelled',
+            (c) =>
+              (c.status === 'failed' || c.status === 'cancelled') &&
+              !execution!.retryChildRunIds?.includes(c.id),
           );
           if (failed) {
             for (const child of children)
@@ -349,15 +389,31 @@ export class Engine {
           }
         }
         let changed = false;
-        const concurrency = node.kind === 'map' ? node.concurrency : 1;
+        const concurrency = node.kind !== 'workflow' ? node.concurrency : 1;
         let active = children.filter((c) => !terminal(c.status)).length;
-        while (execution.nextItem < value.length && active < concurrency) {
+        while (execution.retryChildRunIds?.length && active < concurrency) {
+          this.resumeStep(this.run(execution.retryChildRunIds.shift()!));
+          active++;
+          changed = true;
+        }
+        while (
+          execution.nextItem < value.length &&
+          active < concurrency &&
+          !execution.retryChildRunIds?.length
+        ) {
           const child = this.newRun(
-            node.workflowId,
-            node.version,
+            node.kind === 'batch' ? run.workflowId : node.workflowId,
+            node.kind === 'batch' ? run.version : node.version,
             value[execution.nextItem],
             run.id,
+            node.kind === 'batch'
+              ? [...(run.definitionPath ?? []), node.id]
+              : undefined,
           );
+          if (node.kind === 'batch') {
+            child.workflowName = `${node.label} · item ${execution.nextItem + 1}`;
+            this.save(child);
+          }
           execution.childRunIds.push(child.id);
           execution.nextItem++;
           active++;
@@ -365,6 +421,7 @@ export class Engine {
         }
         children = execution.childRunIds.map((id) => this.run(id));
         if (
+          !execution.retryChildRunIds?.length &&
           execution.nextItem === value.length &&
           children.every((c) => terminal(c.status))
         ) {
@@ -425,8 +482,9 @@ export class Engine {
         rounds = 0;
       while (changed && rounds++ < 2000) {
         changed = false;
-        for (const run of this.store.runs())
-          if (this.advance(run)) changed = true;
+        // Earlier advances can cancel or resume descendants in this same pass.
+        for (const { id } of this.store.runs())
+          if (this.advance(this.run(id))) changed = true;
       }
     });
     for (const run of this.store.runs()) {
@@ -456,7 +514,11 @@ export class Engine {
           if (this.stopped) return;
           this.store.transaction(() => {
             const latest = this.run(run.id);
-            if (latest.status === 'cancelled') return;
+            if (
+              latest.status !== 'running' ||
+              latest.executions.at(-1)?.id !== execution.id
+            )
+              return;
             const current = latest.executions.at(-1)!;
             this.finish(latest, current, node, output);
           });
@@ -465,7 +527,10 @@ export class Engine {
           if (this.stopped) return;
           this.store.transaction(() => {
             const latest = this.run(run.id);
-            if (latest.status !== 'cancelled')
+            if (
+              latest.status === 'running' &&
+              latest.executions.at(-1)?.id === execution.id
+            )
               this.fail(latest, latest.executions.at(-1)!, message(error));
           });
         })
@@ -629,15 +694,18 @@ export class Engine {
       return;
     }
     run.value = execution.input;
-    if (execution.kind === 'map' || execution.kind === 'workflow') {
+    if (
+      execution.kind === 'map' ||
+      execution.kind === 'batch' ||
+      execution.kind === 'workflow'
+    ) {
       execution.status = 'waiting';
       execution.error = undefined;
       execution.completedAt = undefined;
-      for (const id of execution.childRunIds) {
+      execution.retryChildRunIds = execution.childRunIds.filter((id) => {
         const child = this.run(id);
-        if (child.status === 'failed' || child.status === 'cancelled')
-          this.resumeStep(child);
-      }
+        return child.status === 'failed' || child.status === 'cancelled';
+      });
     }
     this.save(run);
     this.event(run, 'run.retried', 'Explicit retry requested');
@@ -649,6 +717,25 @@ export class Engine {
         throw new InterlockError('Only failed runs can be retried');
       if (run.parentRunId && terminal(this.run(run.parentRunId).status))
         throw new InterlockError('Retry the failed parent run instead');
+      if (run.parentRunId) {
+        const parent = this.run(run.parentRunId);
+        const execution = parent.executions.at(-1);
+        if (
+          (execution?.kind === 'batch' || execution?.kind === 'map') &&
+          execution.childRunIds.includes(id)
+        ) {
+          execution.retryChildRunIds ??= [];
+          if (!execution.retryChildRunIds.includes(id))
+            execution.retryChildRunIds.push(id);
+          this.save(parent);
+          this.event(
+            run,
+            'run.retry-queued',
+            'Explicit retry queued within parent concurrency limit',
+          );
+          return;
+        }
+      }
       this.resumeStep(run);
     });
     this.pump();

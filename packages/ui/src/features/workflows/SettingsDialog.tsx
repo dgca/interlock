@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { ArrowLeft, Download } from 'lucide-react';
 import {
   nodeSchema,
+  blankBatchBody,
   type Workflow,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -27,6 +28,7 @@ type Settings = {
 export function SettingsDialog({
   node,
   creating = false,
+  inline = false,
   name,
   description,
   definition,
@@ -37,6 +39,7 @@ export function SettingsDialog({
 }: Settings & {
   node?: WorkflowNode;
   creating?: boolean;
+  inline?: boolean;
   workflows: Workflow[];
   onClose: () => void;
   onApply: (settings: Settings) => void;
@@ -61,7 +64,8 @@ export function SettingsDialog({
         nodeSchema.parse({
           id: newNodeId,
           kind,
-          label: `New ${kind}`,
+          label: kind === 'batch' ? 'Workflow Batch' : `New ${kind}`,
+          body: blankBatchBody(),
           position: { x: 150 + definition.nodes.length * 90, y: 360 },
           prompt: 'Describe the assignment.',
           language: 'javascript',
@@ -154,12 +158,16 @@ export function SettingsDialog({
                 <option value="script">Script</option>
                 <option value="condition">Condition</option>
                 <option value="workflow">Workflow</option>
-                <option value="map">Map</option>
+                <option value="batch">Workflow Batch</option>
               </NativeSelect>
             )}
             {nodeDraft ? (
               <NodeInspector
                 node={nodeDraft}
+                fixedLabel={
+                  inline &&
+                  (nodeDraft.kind === 'entry' || nodeDraft.kind === 'exit')
+                }
                 workflows={workflows}
                 onChange={setNodeDraft}
                 onDelete={onDelete}
@@ -174,36 +182,39 @@ export function SettingsDialog({
                   Configure the workflow's inputs, outputs, and execution limit.
                 </p>
 
-                <TextInput
-                  mb="md"
-                  label="Name"
-                  required
-                  value={settings.name}
-                  onChange={(e) =>
-                    setSettings((s) => ({ ...s, name: e.target.value }))
-                  }
-                />
+                {!inline && (
+                  <>
+                    <TextInput
+                      mb="md"
+                      label="Name"
+                      required
+                      value={settings.name}
+                      onChange={(e) =>
+                        setSettings((s) => ({ ...s, name: e.target.value }))
+                      }
+                    />
 
-                <Textarea
-                  mb="md"
-                  label="Description"
-                  rows={4}
-                  value={settings.description}
-                  onChange={(e) =>
-                    setSettings((s) => ({
-                      ...s,
-                      description: e.target.value,
-                    }))
-                  }
-                />
-
+                    <Textarea
+                      mb="md"
+                      label="Description"
+                      rows={4}
+                      value={settings.description}
+                      onChange={(e) =>
+                        setSettings((s) => ({
+                          ...s,
+                          description: e.target.value,
+                        }))
+                      }
+                    />
+                  </>
+                )}
                 <ContractEditor
-                  label="Workflow input"
+                  label={inline ? 'Each item' : 'Workflow input'}
                   value={settings.definition.inputSchema}
                   onChange={(inputSchema) => patchDefinition({ inputSchema })}
                 />
                 <ContractEditor
-                  label="Workflow output"
+                  label={inline ? 'Item result' : 'Workflow output'}
                   value={settings.definition.outputSchema}
                   onChange={(outputSchema) => patchDefinition({ outputSchema })}
                 />

@@ -1,5 +1,9 @@
 import { TextInput, Textarea, NativeSelect } from '@mantine/core';
-import type { Workflow, WorkflowNode } from '@interlock/core';
+import {
+  nodeKindLabel,
+  type Workflow,
+  type WorkflowNode,
+} from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
@@ -9,8 +13,10 @@ export function NodeInspector({
   workflows,
   onChange,
   onDelete,
+  fixedLabel = false,
 }: {
   node: WorkflowNode;
+  fixedLabel?: boolean;
   workflows: Workflow[];
   onChange: (node: WorkflowNode) => void;
   onDelete?: () => void;
@@ -20,13 +26,16 @@ export function NodeInspector({
   return (
     <>
       <div className="inspector-heading">
-        <span className="eyebrow">{node.kind.toUpperCase()} NODE</span>
+        <span className="eyebrow">
+          {nodeKindLabel(node.kind).toUpperCase()} NODE
+        </span>
         <code> ID: {node.id}</code>
       </div>
       <div className="inspector-fields">
         <TextInput
           mb="md"
           label="Label"
+          readOnly={fixedLabel}
           value={node.label}
           onChange={(e) => patch({ label: e.target.value })}
         />
@@ -204,11 +213,11 @@ export function NodeInspector({
             />
           </>
         )}
-        {node.kind === 'map' && (
+        {(node.kind === 'map' || node.kind === 'batch') && (
           <>
             <TextInput
               mb="md"
-              label="Array path"
+              label="Items path"
               value={node.itemsPath}
               placeholder="protocols, or empty for the input itself"
               onChange={(e) => patch({ itemsPath: e.target.value })}

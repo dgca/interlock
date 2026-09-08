@@ -1,3 +1,4 @@
+import { runCommand } from '../packages/cli/src/commands';
 import { it, expect } from 'vitest';
 import { serve } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -6,7 +7,7 @@ import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import { createClient } from '@interlock/client';
 import { createApp } from '../packages/server/src/app';
-import { blankDefinition } from '@interlock/core';
+import { blankDefinition, nodeSchema } from '@interlock/core';
 
 it('completes a workflow through real MCP stdio, HTTP, and SQLite interfaces', async () => {
   const store = new Store(':memory:'),
@@ -69,6 +70,51 @@ it('completes a workflow through real MCP stdio, HTTP, and SQLite interfaces', a
     expect(
       (await rpc.runs.get.query({ id: started.run.id })).run.output,
     ).toEqual({ number: 42 });
+    const batchDefinition = blankDefinition();
+    batchDefinition.nodes[1] = nodeSchema.parse({
+      id: 'agent',
+      label: 'Workflow Batch',
+      kind: 'batch',
+      body: blankDefinition(),
+    });
+    const batch = await call('create_workflow', {
+      name: 'Inline transport',
+      definition: batchDefinition,
+    });
+    await call('publish_workflow', { id: batch.id });
+    const root = await call('start_run', {
+      workflowId: batch.id,
+      input: [3, 4],
+    });
+    const items = await call('list_work', { runId: root.run.id });
+    expect(items.map((item: any) => item.input)).toEqual([3, 4]);
+    const previousUrl = process.env.INTERLOCK_URL;
+    process.env.INTERLOCK_URL = url;
+    try {
+      expect(await runCommand(['work', root.run.id])).toMatchObject(items);
+      const detail = await runCommand(['run', items[0].runId]);
+      expect(detail).toMatchObject({
+        definition: blankDefinition(),
+        run: { definitionPath: ['agent'] },
+      });
+    } finally {
+      if (previousUrl === undefined) delete process.env.INTERLOCK_URL;
+      else process.env.INTERLOCK_URL = previousUrl;
+    }
+    for (const item of items.reverse()) {
+      const claimed = await call('claim_work', {
+        workId: item.id,
+        workerId: 'batch-mcp',
+      });
+      await call('submit_result', {
+        workId: item.id,
+        token: claimed.token,
+        output: item.input * 2,
+      });
+    }
+    expect((await call('get_run', { id: root.run.id })).run.output).toEqual([
+      6, 8,
+    ]);
     expect(
       (
         await fetch(`${url}/health`, {

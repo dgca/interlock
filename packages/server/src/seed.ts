@@ -83,10 +83,20 @@ export function seed(engine: Engine) {
         },
         {
           id: 'research',
-          kind: 'map',
+          kind: 'batch',
           label: 'Research each protocol',
-          workflowId: research.id,
-          version: 1,
+          body: {
+            ...research.draft,
+            nodes: research.draft.nodes.map((node) => ({
+              ...node,
+              label:
+                node.kind === 'entry'
+                  ? 'Each item'
+                  : node.kind === 'exit'
+                    ? 'Item result'
+                    : node.label,
+            })),
+          },
           itemsPath: 'protocols',
           concurrency: 5,
           failurePolicy: 'collect',

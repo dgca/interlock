@@ -27,7 +27,7 @@ const nodeBase = {
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
 };
-export const nodeSchema = z.discriminatedUnion('kind', [
+const ordinaryNodeSchema = z.discriminatedUnion('kind', [
   z.object({ ...nodeBase, kind: z.literal('entry') }),
   z.object({ ...nodeBase, kind: z.literal('exit') }),
   z.object({
@@ -67,6 +67,35 @@ export const nodeSchema = z.discriminatedUnion('kind', [
     failurePolicy: z.enum(['all', 'collect']).default('all'),
   }),
 ]);
+const batchFields = z.object({
+  ...nodeBase,
+  kind: z.literal('batch'),
+  itemsPath: z.string().default(''),
+  concurrency: z.number().int().min(1).max(50).default(5),
+  failurePolicy: z.enum(['all', 'collect']).default('all'),
+});
+export type WorkflowNode =
+  | z.infer<typeof ordinaryNodeSchema>
+  | (z.infer<typeof batchFields> & { body: WorkflowDefinition });
+export const nodeSchema: z.ZodType<WorkflowNode, z.ZodTypeDef, unknown> =
+  z.lazy(() =>
+    z.discriminatedUnion('kind', [
+      ...ordinaryNodeSchema.options,
+      batchFields.extend({ body: definitionSchema }),
+    ]),
+  );
+export interface WorkflowDefinition {
+  inputSchema: Record<string, unknown>;
+  outputSchema: Record<string, unknown>;
+  nodes: WorkflowNode[];
+  edges: {
+    id: string;
+    source: string;
+    target: string;
+    port: 'default' | 'true' | 'false';
+  }[];
+  maxSteps: number;
+}
 export const definitionSchema = z.object({
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
@@ -81,8 +110,6 @@ export const definitionSchema = z.object({
   ),
   maxSteps: z.number().int().min(2).max(1000).default(100),
 });
-export type WorkflowDefinition = z.infer<typeof definitionSchema>;
-export type WorkflowNode = z.infer<typeof nodeSchema>;
 export type ContextPolicy = z.infer<typeof contextPolicySchema>;
 export interface Workflow {
   id: string;
@@ -116,6 +143,7 @@ export interface NodeExecution {
   error?: string;
   childRunIds: string[];
   nextItem: number;
+  retryChildRunIds?: string[];
 }
 export interface Run {
   id: string;
@@ -123,6 +151,8 @@ export interface Run {
   workflowName: string;
   version: number;
   parentRunId?: string;
+  // Batch node IDs traversed within workflowId/version, never a mutable copy.
+  definitionPath?: string[];
   status: RunStatus;
   input: Json;
   output?: Json;
@@ -236,7 +266,11 @@ export function readPath(value: Json, path: string): Json {
     throw new InterlockError(`Input has no path "${path}"`);
   return result;
 }
-export function validateDefinition(input: unknown): WorkflowDefinition {
+export function validateDefinition(
+  input: unknown,
+  depth = 0,
+): WorkflowDefinition {
+  if (depth > 10) throw new InterlockError('Nested workflow depth exceeded 10');
   const d = definitionSchema.parse(input);
   const ids = new Set(d.nodes.map((n) => n.id));
   if (ids.size !== d.nodes.length)
@@ -261,6 +295,13 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       throw new InterlockError('Edges cannot target the entry');
   }
   for (const node of d.nodes) {
+    if (node.kind === 'batch') {
+      if (node.body.nodes.filter((n) => n.kind === 'exit').length !== 1)
+        throw new InterlockError(
+          `${node.label}: inline workflow needs exactly one exit`,
+        );
+      validateDefinition(node.body, depth + 1);
+    }
     const outgoing = d.edges.filter((e) => e.source === node.id);
     const expected =
       node.kind === 'exit'
@@ -330,3 +371,14 @@ export {
   type Contract,
   type FieldType,
 } from './contracts.js';
+
+export function blankBatchBody(): WorkflowDefinition {
+  const body = blankDefinition();
+  body.nodes[0].label = 'Each item';
+  body.nodes[2].label = 'Item result';
+  return body;
+}
+
+export function nodeKindLabel(kind: WorkflowNode['kind']): string {
+  return kind === 'map' || kind === 'batch' ? 'Workflow Batch' : kind;
+}

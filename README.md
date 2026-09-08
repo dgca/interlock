@@ -41,7 +41,11 @@ The connection uses `interlock mcp`, a stdio bridge to the running engine. Keep 
 
 Select **New workflow** to create a draft. Use **Add node** to choose each step's type, then connect the nodes in execution order.
 
-Available nodes include entry and exit, agent assignments, scripts, conditions, child workflows, and maps. Maps run a child workflow for each item in a list and collect its results.
+Available nodes include entry and exit, Agent, Script, Condition, Workflow, and Workflow Batch. A Workflow node invokes a pinned published workflow once. A Workflow Batch runs an inline workflow once for each item in a list and collects the item results in input order.
+
+Add a **Workflow Batch**, configure its items path and concurrency, then choose **Open inline workflow**. Build the per-item path between **Each item** and **Item result** using the ordinary node forms. Use **Back to parent** to connect the Batch to the next step. For example, input `[3, 4, 5]` and an inline JavaScript Script containing `return input * 2;` produce `[6, 8, 10]`. An inline Agent can research each handle before a following Agent synthesizes the collected results, without publishing a wrapper workflow.
+
+A blank items path selects the complete input. Batches accept up to 200 items and 1 through 50 concurrent item runs. Choose `all` to fail and cancel unfinished items on an error, or `collect` to receive each item's status, output, and error. Inline workflows can contain nested Batches and Workflow nodes, subject to ten nested levels. Existing referenced-workflow batches retain their settings and execution behavior.
 
 Configure input and output contracts in the node settings. Use **Visual / Raw** to switch between the graph and its JSON definition. The raw editor checks JSON syntax and structure before saving. Publishing also checks the workflow's graph.
 

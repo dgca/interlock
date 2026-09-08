@@ -2,7 +2,12 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { blankDefinition, type Workflow } from '@interlock/core';
+import {
+  blankDefinition,
+  blankBatchBody,
+  nodeSchema,
+  type Workflow,
+} from '@interlock/core';
 import { WorkflowEditor } from '../packages/ui/src/features/workflows/WorkflowEditor';
 
 const rpc = vi.hoisted(() => ({ update: vi.fn(), publish: vi.fn() }));
@@ -14,12 +19,44 @@ vi.mock('../packages/ui/src/lib/api', () => ({
     },
   },
 }));
-vi.mock('../packages/ui/node_modules/@xyflow/react', () => ({
-  ReactFlow: ({ children }: any) => h('div', {}, children),
-  Background: () => null,
-  Controls: () => null,
-  MiniMap: () => null,
-}));
+vi.mock(
+  '../packages/ui/node_modules/@xyflow/react',
+  async (importOriginal) => ({
+    ...(await importOriginal<any>()),
+    ReactFlow: ({ children, nodes, onNodesChange }: any) =>
+      h(
+        'div',
+        {},
+        children,
+        ...nodes.map((n: any) =>
+          h(
+            'div',
+            { key: n.id, 'data-node': n.id },
+            h('span', {}, n.data.node.label),
+            n.data.onOpen &&
+              h('button', { onClick: n.data.onOpen }, `Open ${n.id}`),
+            h(
+              'button',
+              {
+                onClick: () =>
+                  onNodesChange([
+                    {
+                      id: n.id,
+                      type: 'position',
+                      position: { x: 200, y: 250 },
+                    },
+                  ]),
+              },
+              `Move ${n.id}`,
+            ),
+          ),
+        ),
+      ),
+    Background: () => null,
+    Controls: () => null,
+    MiniMap: () => null,
+  }),
+);
 vi.mock('../packages/ui/src/features/workflows/FlowNode', () => ({
   FlowNode: () => null,
 }));
@@ -188,4 +225,67 @@ it('saves local changes before publishing and restores actions after a failure',
     }),
   );
   expect(rpc.publish).toHaveBeenCalledTimes(1);
+});
+
+it('edits and moves nodes within a Batch scope and saves the complete root definition', async () => {
+  workflow.draft.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    kind: 'batch',
+    label: 'Research handles',
+    body: blankBatchBody(),
+  });
+  await render();
+  await click('Open agent');
+  expect(container.textContent).toContain('Each item');
+  expect(container.textContent).toContain('Item result');
+  expect(
+    container.querySelector('[aria-label="Inline workflow scope"]')
+      ?.textContent,
+  ).toContain('Research handles');
+  await click('Move agent');
+  await click('Workflow settings');
+  await click('Apply local edit');
+  await click('Back to parent');
+  expect(container.textContent).toContain('Research handles');
+  await click('Move agent');
+  await click('Save draft');
+  const draft = rpc.update.mock.calls[0][0].draft;
+  expect(draft.maxSteps).toBe(100);
+  expect(draft.nodes[1].position).toEqual({ x: 200, y: 250 });
+  expect(draft.nodes[1].body.maxSteps).toBe(60);
+  expect(draft.nodes[1].body.nodes[1].position).toEqual({ x: 200, y: 250 });
+  expect(draft.nodes[1].body.nodes[0].position).toEqual(
+    blankBatchBody().nodes[0].position,
+  );
+});
+
+it('opens nested Batches and keeps Raw view rooted at the complete workflow', async () => {
+  const body = blankBatchBody();
+  body.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    kind: 'batch',
+    label: 'Inner',
+    body: blankBatchBody(),
+  });
+  workflow.draft.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    kind: 'batch',
+    label: 'Outer',
+    body,
+  });
+  await render();
+  await click('Open agent');
+  await click('Open agent');
+  expect(
+    container.querySelector('[aria-label="Inline workflow scope"]')
+      ?.textContent,
+  ).toContain('Outer / Inner');
+  await click('Raw');
+  const raw = JSON.parse(container.querySelector('[data-raw]')!.textContent!);
+  expect(raw).toEqual(workflow.draft);
+  await click('Visual');
+  expect(
+    container.querySelector('[aria-label="Inline workflow scope"]'),
+  ).toBeNull();
+  expect(container.textContent).toContain('Outer');
 });
