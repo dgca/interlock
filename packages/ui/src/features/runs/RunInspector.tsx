@@ -14,9 +14,19 @@ import { Button } from '../../components/Button/Button';
 import { Badge } from '../../components/Badge/Badge';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 import { RunGraph } from './RunGraph';
+import { AgentHandoff } from './AgentHandoff';
 import { WorkPanel } from './WorkPanel';
 import styles from './RunInspector.module.css';
-type Detail = Awaited<ReturnType<typeof api.runs.get.query>>;
+type Detail = Awaited<ReturnType<typeof api.runs.get.query>> & {
+  availableWork: Awaited<ReturnType<typeof api.work.list.query>>;
+};
+async function inspectRun(id: string): Promise<Detail> {
+  const [detail, availableWork] = await Promise.all([
+    api.runs.get.query({ id }),
+    api.work.list.query({ runId: id }),
+  ]);
+  return { ...detail, availableWork };
+}
 
 export function RunInspector({
   id,
@@ -24,26 +34,26 @@ export function RunInspector({
   onBack,
   onOpen,
   act,
+  onConnect,
 }: {
   id: string;
   tick: number;
   onBack: () => void;
   onOpen: (id: string) => void;
   act: Action;
+  onConnect: () => void;
 }) {
   const [data, setData] = useState<Detail>(),
     [error, setError] = useState(''),
     [selected, setSelected] = useState<string>();
   const refresh = () => {
-    void api.runs.get
-      .query({ id })
+    void inspectRun(id)
       .then(setData)
       .catch((e) => setError(errorMessage(e)));
   };
   useEffect(() => {
     let active = true;
-    api.runs.get
-      .query({ id })
+    inspectRun(id)
       .then((d) => {
         if (active) setData(d);
       })
@@ -110,6 +120,12 @@ export function RunInspector({
           </Button>
         </div>
       </header>
+      {['running', 'waiting'].includes(run.status) &&
+        data.availableWork.length > 0 && (
+          <div className={styles.handoff}>
+            <AgentHandoff key={run.id} runId={run.id} onConnect={onConnect} />
+          </div>
+        )}
       <div className={styles.body}>
         <section className={styles.overview}>
           <div className={styles.graph}>

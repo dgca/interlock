@@ -140,3 +140,11 @@
     padding: 20px;
   }
 }
+
+.handoff {
+  padding: 16px 23px;
+  border-bottom: 1px solid var(--border);
+}
+.handoff p {
+  margin: 0 0 12px;
+}

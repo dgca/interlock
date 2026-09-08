@@ -15,7 +15,9 @@ export type CanvasNode = Node<{
   node: WorkflowNode;
   status?: string;
   onEdit?: () => void;
-  onOpen?: () => void;
+  onAdd?: () => void;
+  onToggle?: () => void;
+  collapsed?: boolean;
 }>;
 const icons = {
   entry: ArrowUpFromLine,
@@ -24,16 +26,104 @@ const icons = {
   script: Terminal,
   condition: Split,
   map: Layers,
-  batch: Layers,
+  list: Layers,
   workflow: Workflow,
 };
+function Port({
+  id,
+  type,
+  label,
+  top = '50%',
+}: {
+  id: string;
+  type: 'source' | 'target';
+  label: string;
+  top?: number | string;
+}) {
+  return (
+    <>
+      <Handle
+        type={type}
+        position={type === 'target' ? Position.Left : Position.Right}
+        id={id}
+        aria-label={label}
+        style={{ top }}
+      />
+      <span
+        className={type === 'target' ? styles.portInput : styles.portOutput}
+        style={{ top }}
+      >
+        {label}
+      </span>
+    </>
+  );
+}
+
 export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
   const n = data.node,
     Icon = icons[n.kind];
+  if (n.kind === 'list')
+    return (
+      <div
+        className={`${styles.listGroup} ${selected ? styles.nodeSelected : ''}`}
+      >
+        <div className={`${styles.listHeader} list-drag`}>
+          <Layers size={17} />
+          <strong>{n.label}</strong>
+          {data.status && <span>{data.status}</span>}
+          {data.onEdit && (
+            <button className="nodrag nopan" onClick={data.onEdit}>
+              Settings
+            </button>
+          )}
+          {data.onToggle && (
+            <button className="nodrag nopan" onClick={data.onToggle}>
+              {data.collapsed ? 'Expand' : 'Collapse'}
+            </button>
+          )}
+        </div>
+        <div className={styles.listSummary}>
+          <span>
+            Each item runs independently · Up to {n.concurrency} at once
+          </span>
+          {data.onAdd && !data.collapsed && (
+            <button className="nodrag nopan" onClick={data.onAdd}>
+              Add step
+            </button>
+          )}
+        </div>
+        {!data.collapsed && <span className={styles.listStart}>Start</span>}
+        <Port type="target" id="default" label="In" top={32} />
+        <Port type="source" id="complete" label="Out" top={32} />
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="item"
+          style={{
+            left: 32,
+            right: 'auto',
+            top: 218,
+            visibility: data.collapsed ? 'hidden' : 'visible',
+          }}
+          aria-label="Start"
+        />
+        {!data.collapsed && <span className={styles.listEnd}>End</span>}
+        <Handle
+          type="target"
+          position={Position.Left}
+          id="end"
+          aria-label="End"
+          style={{
+            left: 'auto',
+            right: 32,
+            top: 218,
+            visibility: data.collapsed ? 'hidden' : 'visible',
+          }}
+        />
+      </div>
+    );
   return (
-    <div
-      className={`${styles.node} ${n.kind === 'batch' ? styles.batchNode : ''} ${selected ? styles.nodeSelected : ''}`}
-    >
+    <div className={`${styles.node} ${selected ? styles.nodeSelected : ''}`}>
       <div className={styles.nodeHeading}>
         <span className={`${styles.nodeIcon} ${styles[n.kind]}`}>
           <Icon size={16} />
@@ -66,54 +156,27 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
       <small>
         {n.kind === 'agent'
           ? `${n.context.mode === 'fresh' ? 'Fresh' : 'Current'} context · ${n.maxAttempts} attempts`
-          : n.kind === 'batch'
-            ? `${n.body.nodes.length} inline steps · ${n.concurrency} workers`
-            : n.kind === 'map'
-              ? `Up to ${n.concurrency} workers · v${n.version}`
-              : n.kind === 'workflow'
-                ? `Nested workflow · v${n.version}`
-                : n.kind === 'script'
-                  ? 'JSON in → JSON out'
-                  : n.kind === 'condition'
-                    ? `${n.path} equals ${JSON.stringify(n.equals)}`
-                    : n.kind === 'entry'
-                      ? 'Workflow input'
-                      : 'Return workflow result'}
+          : n.kind === 'map'
+            ? `Up to ${n.concurrency} workers · v${n.version}`
+            : n.kind === 'workflow'
+              ? `Nested workflow · v${n.version}`
+              : n.kind === 'script'
+                ? 'JSON in → JSON out'
+                : n.kind === 'condition'
+                  ? `${n.path} equals ${JSON.stringify(n.equals)}`
+                  : n.kind === 'entry'
+                    ? 'Workflow input'
+                    : 'Return workflow result'}
       </small>
-      {n.kind === 'batch' && data.onOpen && (
-        <button
-          className={`${styles.openBatch} nodrag nopan`}
-          type="button"
-          onDoubleClick={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            data.onOpen?.();
-          }}
-        >
-          Open inline workflow
-        </button>
-      )}
-      {n.kind !== 'entry' && <Handle type="target" position={Position.Left} />}{' '}
+      {n.kind !== 'entry' && <Port type="target" id="default" label="In" />}
       {n.kind !== 'exit' &&
         (n.kind === 'condition' ? (
           <>
-            <Handle
-              type="source"
-              position={Position.Right}
-              id="true"
-              style={{ top: '35%' }}
-            />
-            <Handle
-              type="source"
-              position={Position.Right}
-              id="false"
-              style={{ top: '75%' }}
-            />
-            <span className={styles.routeTrue}>T</span>
-            <span className={styles.routeFalse}>F</span>
+            <Port type="source" id="true" label="True" top="35%" />
+            <Port type="source" id="false" label="False" top="75%" />
           </>
         ) : (
-          <Handle type="source" position={Position.Right} id="default" />
+          <Port type="source" id="default" label="Out" />
         ))}
     </div>
   );

@@ -10,14 +10,13 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Draft**: An editable workflow definition that has not been published as a version.
 
-**Run**: One execution of a published workflow or its inline workflow with its own inputs and progress.
+**Run**: One execution of a published workflow or a List item path with its own inputs and progress.
 
 **Node**: A step in a workflow. A node can invoke another workflow.
 
-**Workflow Batch**: A step that runs an inline workflow once for each item in a list and collects the item results in input order.
-_Avoid_: Map
+**List**: A step that repeats an item path for each value in a list and sends the ordered results to its continuation after all items finish.
 
-**Inline workflow**: A workflow owned by a Workflow Batch. Each item enters at "Each item" and returns through "Item result".
+**Item path**: The connected work inside a List group, from Start to End. Each item follows this path independently and supplies its output through End.
 
 **Node execution**: One invocation of a node within a run.
 

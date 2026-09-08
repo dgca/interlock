@@ -1,6 +1,7 @@
 import { TextInput, Textarea, NativeSelect } from '@mantine/core';
 import {
   nodeKindLabel,
+  type WorkflowDefinition,
   type Workflow,
   type WorkflowNode,
 } from '@interlock/core';
@@ -11,15 +12,19 @@ import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 export function NodeInspector({
   node,
   workflows,
+  nodes = [],
   onChange,
   onDelete,
-  fixedLabel = false,
+  definition,
+  onBoundaryChange,
 }: {
   node: WorkflowNode;
-  fixedLabel?: boolean;
   workflows: Workflow[];
+  nodes?: WorkflowNode[];
   onChange: (node: WorkflowNode) => void;
   onDelete?: () => void;
+  definition?: WorkflowDefinition;
+  onBoundaryChange?: (schema: WorkflowDefinition['inputSchema']) => void;
 }) {
   const patch = (value: Record<string, unknown>) =>
     onChange({ ...node, ...value } as WorkflowNode);
@@ -35,11 +40,34 @@ export function NodeInspector({
         <TextInput
           mb="md"
           label="Label"
-          readOnly={fixedLabel}
           value={node.label}
           onChange={(e) => patch({ label: e.target.value })}
         />
 
+        {node.kind !== 'entry' && node.kind !== 'exit' && (
+          <NativeSelect
+            mb="md"
+            label="List group"
+            value={node.listId ?? ''}
+            onChange={(e) =>
+              patch({
+                listId: e.target.value || undefined,
+                position: e.target.value
+                  ? { x: 130, y: 160 }
+                  : { x: 150, y: 360 },
+              })
+            }
+          >
+            <option value="">Main workflow</option>
+            {nodes
+              .filter((n) => n.kind === 'list' && n.id !== node.id)
+              .map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.label}
+                </option>
+              ))}
+          </NativeSelect>
+        )}
         {node.kind === 'agent' && (
           <>
             <Textarea
@@ -213,13 +241,27 @@ export function NodeInspector({
             />
           </>
         )}
-        {(node.kind === 'map' || node.kind === 'batch') && (
+        {node.kind === 'list' && (
+          <p className="hint">
+            Connect Start to the first step and every branch to End. Output
+            receives the ordered collection after all items finish. Input and
+            output contracts apply to the whole List; use step contracts for
+            individual items.
+          </p>
+        )}
+        {node.kind === 'map' && (
+          <p className="hint">
+            Legacy Map runs a pinned workflow for each item. New repeated paths
+            use List nodes.
+          </p>
+        )}
+        {(node.kind === 'map' || node.kind === 'list') && (
           <>
             <TextInput
               mb="md"
               label="Items path"
               value={node.itemsPath}
-              placeholder="protocols, or empty for the input itself"
+              placeholder="guests, or empty for the input itself"
               onChange={(e) => patch({ itemsPath: e.target.value })}
             />
 
@@ -261,16 +303,71 @@ export function NodeInspector({
             />
           </>
         )}
-        <ContractEditor
-          label="Input"
-          value={node.inputSchema}
-          onChange={(inputSchema) => patch({ inputSchema })}
-        />
-        <ContractEditor
-          label="Output"
-          value={node.outputSchema}
-          onChange={(outputSchema) => patch({ outputSchema })}
-        />
+        {(node.kind === 'entry' || node.kind === 'exit') &&
+        definition &&
+        onBoundaryChange ? (
+          <>
+            <p className="hint">
+              {node.kind === 'entry'
+                ? 'Entry passes the workflow input through unchanged. This contract is shared with Workflow settings.'
+                : 'Exit returns the workflow output unchanged. This contract is shared with Workflow settings.'}
+            </p>
+            <ContractEditor
+              label="Input / Output"
+              value={
+                node.kind === 'entry'
+                  ? definition.inputSchema
+                  : definition.outputSchema
+              }
+              onChange={onBoundaryChange}
+            />
+            {Object.keys(node.inputSchema).length > 0 && (
+              <ContractEditor
+                label="Additional node input constraint"
+                value={node.inputSchema}
+                onChange={(inputSchema) => patch({ inputSchema })}
+              />
+            )}
+            {Object.keys(node.outputSchema).length > 0 && (
+              <ContractEditor
+                label="Additional node output constraint"
+                value={node.outputSchema}
+                onChange={(outputSchema) => patch({ outputSchema })}
+              />
+            )}
+          </>
+        ) : (
+          <>
+            {node.kind === 'list' && (
+              <p className="hint">
+                {node.itemsPath
+                  ? `The value at "${node.itemsPath}" must be an array. Input describes the enclosing value.`
+                  : 'Input must be an array because Items path is blank.'}
+              </p>
+            )}
+            <ContractEditor
+              label="Input"
+              value={
+                node.kind === 'list' &&
+                !node.itemsPath &&
+                Object.keys(node.inputSchema).length === 0
+                  ? { type: 'array' }
+                  : node.inputSchema
+              }
+              onChange={(inputSchema) => patch({ inputSchema })}
+            />
+            <ContractEditor
+              label="Output"
+              value={
+                node.kind === 'list' &&
+                Object.keys(node.outputSchema).length === 0
+                  ? { type: 'array' }
+                  : node.outputSchema
+              }
+              onChange={(outputSchema) => patch({ outputSchema })}
+            />
+          </>
+        )}
         {onDelete && node.kind !== 'entry' && node.kind !== 'exit' && (
           <Button variant="danger" onClick={onDelete}>
             Delete node

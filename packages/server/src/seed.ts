@@ -83,30 +83,27 @@ export function seed(engine: Engine) {
         },
         {
           id: 'research',
-          kind: 'batch',
+          kind: 'list',
           label: 'Research each protocol',
-          body: {
-            ...research.draft,
-            nodes: research.draft.nodes.map((node) => ({
-              ...node,
-              label:
-                node.kind === 'entry'
-                  ? 'Each item'
-                  : node.kind === 'exit'
-                    ? 'Item result'
-                    : node.label,
-            })),
-          },
           itemsPath: 'protocols',
           concurrency: 5,
           failurePolicy: 'collect',
           position: { x: 330, y: 180 },
         },
         {
+          id: 'protocol-workflow',
+          listId: 'research',
+          kind: 'workflow',
+          label: 'Research a protocol',
+          workflowId: research.id,
+          version: 1,
+          position: { x: 130, y: 160 },
+        },
+        {
           id: 'synthesis',
           kind: 'agent',
           label: 'Compare opportunities',
-          position: { x: 630, y: 180 },
+          position: { x: 990, y: 180 },
           prompt:
             'Compare the collected protocol research for opportunities to increase DeFi usage on Base. Report research failures and unknowns. Return {"title": string, "markdown": string} with a prioritized recommendation document and supporting sources.',
           outputSchema: {
@@ -122,12 +119,25 @@ export function seed(engine: Engine) {
           id: 'exit',
           kind: 'exit',
           label: 'Opportunity brief',
-          position: { x: 930, y: 180 },
+          position: { x: 1300, y: 180 },
         },
       ],
       edges: [
         { id: 'e1', source: 'entry', target: 'research' },
-        { id: 'e2', source: 'research', target: 'synthesis' },
+        {
+          id: 'item',
+          source: 'research',
+          port: 'item',
+          target: 'protocol-workflow',
+        },
+        {
+          id: 'item-end',
+          source: 'protocol-workflow',
+          port: 'default',
+          target: 'research',
+          targetHandle: 'end',
+        },
+        { id: 'e2', source: 'research', port: 'complete', target: 'synthesis' },
         { id: 'e3', source: 'synthesis', target: 'exit' },
       ],
     }),

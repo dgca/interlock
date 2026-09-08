@@ -138,6 +138,7 @@ export function App() {
             key={runId}
             id={runId}
             tick={tick}
+            onConnect={() => setConnectDialog(true)}
             onOpen={openRun}
             onBack={() => setRunId(undefined)}
             act={act}

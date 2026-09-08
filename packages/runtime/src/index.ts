@@ -140,16 +140,15 @@ export class Engine {
     return this.store.transaction(() => {
       const w = this.workflow(id);
       const definition = validateDefinition(w.draft);
-      const checkReferences = (body: WorkflowDefinition) => {
-        for (const n of body.nodes)
-          if (n.kind === 'workflow' || n.kind === 'map') {
-            if (!this.store.getVersion(n.workflowId, n.version))
-              throw new InterlockError(
-                `${n.label}: referenced workflow version does not exist`,
-              );
-          } else if (n.kind === 'batch') checkReferences(n.body);
-      };
-      checkReferences(definition);
+      for (const n of definition.nodes) {
+        if (
+          (n.kind === 'workflow' || n.kind === 'map') &&
+          !this.store.getVersion(n.workflowId, n.version)
+        )
+          throw new InterlockError(
+            `${n.label}: referenced workflow version does not exist`,
+          );
+      }
       w.latestVersion++;
       w.updatedAt = now();
       this.store.version({
@@ -167,14 +166,17 @@ export class Engine {
     version: number,
     input: Json,
     parentRunId?: string,
-    definitionPath?: string[],
+    listNodeId?: string,
   ): Run {
     const w = this.workflow(workflowId);
-    const definition = this.resolveDefinition(
-      workflowId,
-      version,
-      definitionPath,
-    );
+    const definition = this.definition({ workflowId, version });
+    const itemRoute = listNodeId
+      ? definition.edges.find(
+          (e) => e.source === listNodeId && e.port === 'item',
+        )
+      : undefined;
+    if (listNodeId && !itemRoute)
+      throw new InterlockError('List item route not found');
     if (!parentRunId)
       assertContract(definition.inputSchema, input, 'Workflow input');
     let depth = 0,
@@ -191,10 +193,12 @@ export class Engine {
       workflowName: w.name,
       version,
       parentRunId,
-      definitionPath,
+      listNodeId,
       status: 'running',
       input,
-      cursor: definition.nodes.find((n) => n.kind === 'entry')!.id,
+      cursor:
+        itemRoute?.target ??
+        definition.nodes.find((n) => n.kind === 'entry')!.id,
       value: input,
       executions: [],
       createdAt: time,
@@ -227,31 +231,13 @@ export class Engine {
       children: this.store.runs().filter((r) => r.parentRunId === id),
     };
   }
-  private definition(run: Run) {
-    return this.resolveDefinition(
-      run.workflowId,
-      run.version,
-      run.definitionPath,
-    );
-  }
-  private resolveDefinition(
-    workflowId: string,
-    version: number,
-    path: string[] = [],
+  private definition(
+    run: Pick<Run, 'workflowId' | 'version'>,
   ): WorkflowDefinition {
-    const snapshot = this.store.getVersion(workflowId, version);
+    const snapshot = this.store.getVersion(run.workflowId, run.version);
     if (!snapshot)
       throw new InterlockError('Published workflow version not found');
-    let definition: WorkflowDefinition = snapshot.definition;
-    for (const id of path) {
-      const node: WorkflowNode | undefined = definition.nodes.find(
-        (n) => n.id === id,
-      );
-      if (node?.kind !== 'batch')
-        throw new InterlockError('Inline workflow definition not found');
-      definition = node.body;
-    }
-    return definition;
+    return snapshot.definition;
   }
   private fail(run: Run, execution: NodeExecution, error: string) {
     for (const id of execution.childRunIds)
@@ -271,6 +257,15 @@ export class Engine {
     output: Json,
     port = 'default',
   ) {
+    const edge = this.definition(run).edges.find(
+      (e) => e.source === node.id && e.port === port,
+    );
+    if (!edge && node.kind !== 'exit')
+      throw new InterlockError(
+        'Missing outgoing route; connect item paths to End',
+      );
+    if (edge?.targetHandle === 'end' && edge.target !== run.listNodeId)
+      throw new InterlockError('End must belong to the current List group');
     assertContract(node.outputSchema, output, `${node.label} output`);
     if (node.kind === 'exit')
       assertContract(
@@ -282,14 +277,16 @@ export class Engine {
     execution.status = 'completed';
     execution.completedAt = now();
     run.value = output;
-    if (node.kind === 'exit') {
+    if (node.kind === 'exit' || edge?.targetHandle === 'end') {
       run.status = 'completed';
       run.output = output;
-      this.event(run, 'run.completed', 'Workflow completed');
+      this.event(
+        run,
+        'run.completed',
+        run.listNodeId ? 'Item result returned' : 'Workflow completed',
+      );
     } else {
-      run.cursor = this.definition(run).edges.find(
-        (e) => e.source === node.id && e.port === port,
-      )!.target;
+      run.cursor = edge!.target;
       run.status = 'running';
     }
     this.save(run);
@@ -315,6 +312,8 @@ export class Engine {
       run.executions.push(execution);
       this.event(run, 'node.started', node.label);
       try {
+        if (node.listId !== run.listNodeId)
+          throw new InterlockError('Execution cannot cross List groups');
         if (run.executions.length > definition.maxSteps)
           throw new InterlockError('Workflow step limit exceeded');
         if (node.kind === 'entry')
@@ -361,18 +360,16 @@ export class Engine {
       if (
         node.kind === 'workflow' ||
         node.kind === 'map' ||
-        node.kind === 'batch'
+        node.kind === 'list'
       ) {
         const value =
           node.kind !== 'workflow'
             ? readPath(execution.input, node.itemsPath)
             : [execution.input];
         if (!Array.isArray(value))
-          throw new InterlockError(
-            'Workflow Batch input must resolve to an array',
-          );
+          throw new InterlockError('List input must resolve to an array');
         if (value.length > 200)
-          throw new InterlockError('Workflow Batch input exceeds 200 items');
+          throw new InterlockError('List input exceeds 200 items');
         let children = execution.childRunIds.map((id) => this.run(id));
         if (node.kind === 'workflow' || node.failurePolicy === 'all') {
           const failed = children.find(
@@ -402,15 +399,13 @@ export class Engine {
           !execution.retryChildRunIds?.length
         ) {
           const child = this.newRun(
-            node.kind === 'batch' ? run.workflowId : node.workflowId,
-            node.kind === 'batch' ? run.version : node.version,
+            node.kind === 'list' ? run.workflowId : node.workflowId,
+            node.kind === 'list' ? run.version : node.version,
             value[execution.nextItem],
             run.id,
-            node.kind === 'batch'
-              ? [...(run.definitionPath ?? []), node.id]
-              : undefined,
+            node.kind === 'list' ? node.id : undefined,
           );
-          if (node.kind === 'batch') {
+          if (node.kind === 'list') {
             child.workflowName = `${node.label} · item ${execution.nextItem + 1}`;
             this.save(child);
           }
@@ -436,7 +431,13 @@ export class Engine {
                     error: c.error ?? null,
                   }))
                 : children.map((c) => c.output!);
-          this.finish(run, execution, node, output);
+          this.finish(
+            run,
+            execution,
+            node,
+            output,
+            node.kind === 'list' ? 'complete' : 'default',
+          );
           return true;
         }
         execution.status = 'waiting';
@@ -696,7 +697,7 @@ export class Engine {
     run.value = execution.input;
     if (
       execution.kind === 'map' ||
-      execution.kind === 'batch' ||
+      execution.kind === 'list' ||
       execution.kind === 'workflow'
     ) {
       execution.status = 'waiting';
@@ -721,7 +722,7 @@ export class Engine {
         const parent = this.run(run.parentRunId);
         const execution = parent.executions.at(-1);
         if (
-          (execution?.kind === 'batch' || execution?.kind === 'map') &&
+          (execution?.kind === 'list' || execution?.kind === 'map') &&
           execution.childRunIds.includes(id)
         ) {
           execution.retryChildRunIds ??= [];

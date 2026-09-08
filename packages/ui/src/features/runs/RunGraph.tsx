@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { Background, Controls, ReactFlow, useNodesState } from '@xyflow/react';
 import type { NodeExecution, WorkflowDefinition } from '@interlock/core';
 import { FlowNode, type CanvasNode } from '../workflows/FlowNode';
+import { canvasGraph } from '../workflows/canvasGraph';
 const nodeTypes = { workflow: FlowNode };
 export function RunGraph({
   definition,
@@ -13,28 +14,16 @@ export function RunGraph({
   onSelect: (id: string | undefined) => void;
 }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
-  useEffect(
+  const graph = useMemo(
     () =>
-      setNodes((current) =>
-        definition.nodes.map((node) => ({
-          ...current.find((n) => n.id === node.id),
-          id: node.id,
-          type: 'workflow',
-          position: node.position,
-          data: {
-            node,
-            status: executions.filter((e) => e.nodeId === node.id).at(-1)
-              ?.status,
-          },
-        })),
-      ),
-    [definition, executions, setNodes],
+      canvasGraph(definition, {
+        status: (id) =>
+          executions.filter((e) => e.nodeId === id).at(-1)?.status,
+      }),
+    [definition, executions],
   );
-  const edges = useMemo(
-    () =>
-      definition.edges.map((edge) => ({ ...edge, sourceHandle: edge.port })),
-    [definition.edges],
-  );
+  useEffect(() => setNodes(graph.nodes), [graph, setNodes]);
+  const edges = graph.edges;
   return (
     <ReactFlow
       nodes={nodes}

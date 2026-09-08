@@ -7,20 +7,21 @@ import {
   MiniMap,
   applyNodeChanges,
   applyEdgeChanges,
-  type Edge,
   type Connection,
 } from '@xyflow/react';
 import { ArrowLeft, Play, Save, Plus, Upload, Settings2 } from 'lucide-react';
 import {
+  validateDefinition,
   type Workflow,
   type WorkflowNode,
-  type WorkflowDefinition,
+  type WorkflowEdge,
 } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 import { parseRawDefinition } from './rawDefinition';
 import { SettingsDialog } from './SettingsDialog';
-import { FlowNode, type CanvasNode } from './FlowNode';
+import { FlowNode } from './FlowNode';
+import { canvasGraph, withoutNodes } from './canvasGraph';
 import { api } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
 const nodeTypes = { workflow: FlowNode };
@@ -44,10 +45,9 @@ export function WorkflowEditor({
   const [pending, setPending] = useState<'save' | 'publish'>();
   const actionInFlight = useRef(false);
   const editorRef = useRef<HTMLDivElement>(null);
-  const [measurements, setMeasurements] = useState<
-    Record<string, { width?: number; height?: number }>
-  >({});
-  const [rootDraft, setRootDraft] = useState(workflow.draft),
+  const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [draft, setDraft] = useState(workflow.draft),
     [name, setName] = useState(workflow.name),
     [description, setDescription] = useState(workflow.description),
     [revision, setRevision] = useState(workflow.draftRevision),
@@ -55,46 +55,16 @@ export function WorkflowEditor({
   const [editing, setEditing] = useState<{
     node?: WorkflowNode;
     creating?: boolean;
+    listId?: string;
   }>();
-  const [scope, setScope] = useState<string[]>([]);
-  const scopes = [rootDraft];
-  const scopeLabels: string[] = [];
-  for (const id of scope) {
-    const node = scopes.at(-1)!.nodes.find((n) => n.id === id);
-    if (node?.kind !== 'batch') break;
-    scopes.push(node.body);
-    scopeLabels.push(node.label);
-  }
-  const draft = scopes.at(-1)!;
-  const setDraft = (
-    update:
-      WorkflowDefinition | ((d: WorkflowDefinition) => WorkflowDefinition),
-  ) => {
-    setRootDraft((root) => {
-      const replace = (
-        d: WorkflowDefinition,
-        depth: number,
-      ): WorkflowDefinition => {
-        if (depth === scope.length)
-          return typeof update === 'function' ? update(d) : update;
-        return {
-          ...d,
-          nodes: d.nodes.map((n) =>
-            n.id === scope[depth] && n.kind === 'batch'
-              ? { ...n, body: replace(n.body, depth + 1) }
-              : n,
-          ),
-        };
-      };
-      return replace(root, 0);
-    });
-  };
-  const navigateScope = (path: string[]) => {
-    setScope(path);
-    setSelected(undefined);
-    setEditing(undefined);
-    setMeasurements({});
-  };
+  const graphError = useMemo(() => {
+    try {
+      validateDefinition(draft);
+      return undefined;
+    } catch (error) {
+      return (error as Error).message;
+    }
+  }, [draft]);
   const [view, setView] = useState<'visual' | 'raw'>('visual');
   const [raw, setRaw] = useState('');
   const rawResult = useMemo(
@@ -102,15 +72,13 @@ export function WorkflowEditor({
     [view, raw],
   );
   const rawInvalid = Boolean(rawResult?.error);
-  const effectiveDraft = rawResult?.definition ?? rootDraft;
+  const effectiveDraft = rawResult?.definition ?? draft;
   const switchView = (next: 'visual' | 'raw') => {
     if (next === view) return;
-    if (next === 'raw') setRaw(JSON.stringify(rootDraft, null, 2));
+    if (next === 'raw') setRaw(JSON.stringify(draft, null, 2));
     else {
       if (!rawResult?.definition) return;
-      setRootDraft(rawResult.definition);
-      navigateScope([]);
-      setMeasurements({});
+      setDraft(rawResult.definition);
     }
     setView(next);
   };
@@ -133,14 +101,12 @@ export function WorkflowEditor({
     workflow.draftRevision > revision ||
     (workflow.draftRevision === revision && remoteSnapshot !== saved);
   const loadLatest = () => {
-    setRootDraft(workflow.draft);
-    navigateScope([]);
+    setDraft(workflow.draft);
     setRaw(JSON.stringify(workflow.draft, null, 2));
     setName(workflow.name);
     setDescription(workflow.description);
     setRevision(workflow.draftRevision);
     setSaved(remoteSnapshot);
-    setMeasurements({});
     setEditing(undefined);
     setSelected(undefined);
   };
@@ -174,36 +140,23 @@ export function WorkflowEditor({
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
-  const nodes: CanvasNode[] = useMemo(
+  const { nodes, edges } = useMemo(
     () =>
-      draft.nodes.map((n) => ({
-        id: n.id,
-        type: 'workflow',
-        width: 220,
-        height: n.kind === 'batch' ? 150 : 116,
-        deletable: n.kind !== 'entry' && n.kind !== 'exit',
-        position: n.position,
-        measured: measurements[n.id],
-        data: {
-          node: n,
-          onEdit: () => setEditing({ node: n }),
-          onOpen:
-            n.kind === 'batch'
-              ? () => navigateScope([...scope, n.id])
-              : undefined,
-        },
-        selected: n.id === selected,
-      })),
-    [draft.nodes, selected, measurements, scope],
-  );
-  const edges: Edge[] = useMemo(
-    () =>
-      draft.edges.map((e) => ({
-        ...e,
-        sourceHandle: e.port,
-        label: e.port === 'default' ? undefined : e.port,
-      })),
-    [draft.edges],
+      canvasGraph(draft, {
+        collapsed,
+        selected,
+        selectedEdges,
+        onEdit: (node) => setEditing({ node }),
+        onAdd: (listId) => setEditing({ creating: true, listId }),
+        onToggle: (id) =>
+          setCollapsed((current) => {
+            const next = new Set(current);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          }),
+      }),
+    [draft, selected, selectedEdges, collapsed],
   );
   const save = async () => {
     if (rawInvalid) throw new Error('Fix the raw JSON before saving.');
@@ -225,7 +178,7 @@ export function WorkflowEditor({
     });
     setRevision(w.draftRevision);
     if (view === 'raw') {
-      setRootDraft(w.draft);
+      setDraft(w.draft);
       setRaw((current) =>
         current === raw ? JSON.stringify(w.draft, null, 2) : current,
       );
@@ -254,7 +207,9 @@ export function WorkflowEditor({
           id: crypto.randomUUID(),
           source: c.source,
           target: c.target,
-          port: (c.sourceHandle ?? 'default') as 'default',
+          port: (c.sourceHandle ?? 'default') as WorkflowEdge['port'],
+          targetHandle: (c.targetHandle ??
+            'default') as WorkflowEdge['targetHandle'],
         },
       ],
     }));
@@ -291,6 +246,7 @@ export function WorkflowEditor({
             disabled={
               rawInvalid ||
               Boolean(rawResult?.publishError) ||
+              (view === 'visual' && Boolean(graphError)) ||
               remoteChanged ||
               Boolean(pending)
             }
@@ -343,16 +299,6 @@ export function WorkflowEditor({
       <div className={styles.body}>
         <div className={styles.canvasWrap}>
           <div className={styles.canvasToolbar}>
-            {view === 'visual' && scope.length > 0 && (
-              <>
-                <Button onClick={() => navigateScope(scope.slice(0, -1))}>
-                  Back to parent
-                </Button>
-                <span aria-label="Inline workflow scope">
-                  {name} / {scopeLabels.join(' / ')} · Each item → Item result
-                </span>
-              </>
-            )}
             <div
               className={styles.viewToggle}
               role="group"
@@ -397,7 +343,7 @@ export function WorkflowEditor({
                 </Button>
                 <Button
                   variant="ghost"
-                  onClick={() => setRaw(JSON.stringify(rootDraft, null, 2))}
+                  onClick={() => setRaw(JSON.stringify(draft, null, 2))}
                 >
                   Discard raw changes
                 </Button>
@@ -433,50 +379,73 @@ export function WorkflowEditor({
           ) : (
             <>
               <ReactFlow
-                key={JSON.stringify(scope)}
                 nodes={nodes}
                 edges={edges}
                 nodeTypes={nodeTypes}
                 onNodesChange={(changes) => {
                   const next = applyNodeChanges(changes, nodes);
-                  if (changes.some((c) => c.type === 'dimensions'))
-                    setMeasurements(
-                      Object.fromEntries(
-                        next.map((n) => [n.id, n.measured ?? {}]),
-                      ),
-                    );
                   if (
                     !changes.some(
                       (c) => c.type === 'position' || c.type === 'remove',
                     )
                   )
                     return;
-                  setDraft((d) => ({
-                    ...d,
-                    nodes: next.map((n) => ({
-                      ...n.data.node,
-                      position: n.position,
-                    })),
-                    edges: d.edges.filter(
-                      (e) =>
-                        next.some((n) => n.id === e.source) &&
-                        next.some((n) => n.id === e.target),
-                    ),
-                  }));
+                  setDraft((d) => {
+                    const retained = withoutNodes(
+                      d,
+                      new Set(
+                        changes
+                          .filter((c) => c.type === 'remove')
+                          .map((c) => c.id),
+                      ),
+                    );
+                    return {
+                      ...retained,
+                      nodes: next
+                        .filter((n) =>
+                          retained.nodes.some((k) => k.id === n.id),
+                        )
+                        .map((n) => ({
+                          ...n.data.node,
+                          position: n.position,
+                        })),
+                    };
+                  });
                 }}
                 onEdgesChange={(changes) => {
                   const next = applyEdgeChanges(changes, edges);
+                  setSelectedEdges(
+                    new Set(next.filter((e) => e.selected).map((e) => e.id)),
+                  );
+                  if (changes.every((c) => c.type === 'select')) return;
                   setDraft((d) => ({
                     ...d,
                     edges: next.map((e) => ({
                       id: e.id,
                       source: e.source,
                       target: e.target,
-                      port: (e.sourceHandle ?? 'default') as 'default',
+                      port: (e.sourceHandle ??
+                        'default') as WorkflowEdge['port'],
+                      targetHandle: (e.targetHandle ??
+                        'default') as WorkflowEdge['targetHandle'],
                     })),
                   }));
                 }}
                 onConnect={connect}
+                isValidConnection={(c) => {
+                  const source = draft.nodes.find((n) => n.id === c.source);
+                  const target = draft.nodes.find((n) => n.id === c.target);
+                  return Boolean(
+                    source &&
+                    source.kind !== 'exit' &&
+                    target &&
+                    target.kind !== 'entry' &&
+                    !(c.sourceHandle === 'item' && c.targetHandle === 'end') &&
+                    (c.targetHandle !== 'end' || target.kind === 'list') &&
+                    (c.sourceHandle === 'item' ? source.id : source.listId) ===
+                      (c.targetHandle === 'end' ? target.id : target.listId),
+                  );
+                }}
                 onNodeClick={(_, n) => setSelected(n.id)}
                 onNodeDoubleClick={(_, n) => {
                   setSelected(n.id);
@@ -504,9 +473,13 @@ export function WorkflowEditor({
                   {draft.nodes.length} nodes <b>·</b> {draft.edges.length}{' '}
                   connections
                 </span>
-                <span>
-                  Double-click to edit · Drag to arrange · Connect handles to
-                  route data
+                <span
+                  role={graphError ? 'status' : undefined}
+                  title={graphError}
+                >
+                  {graphError
+                    ? `Before publishing: ${graphError}`
+                    : 'Double-click to edit · Drag to arrange · Connect handles to route data'}
                 </span>
               </div>
             </>
@@ -517,17 +490,15 @@ export function WorkflowEditor({
         <SettingsDialog
           node={editing.node}
           creating={editing.creating}
-          inline={scope.length > 0}
-          name={scopeLabels.at(-1) ?? name}
-          description={scope.length ? '' : description}
+          parentListId={editing.listId}
+          name={name}
+          description={description}
           definition={draft}
           workflows={workflows}
           onClose={() => setEditing(undefined)}
           onApply={(next) => {
-            if (!scope.length) {
-              setName(next.name);
-              setDescription(next.description);
-            }
+            setName(next.name);
+            setDescription(next.description);
             setDraft(next.definition);
             if (editing.creating) setSelected(next.definition.nodes.at(-1)?.id);
             setEditing(undefined);
@@ -536,13 +507,7 @@ export function WorkflowEditor({
             editing.node && !['entry', 'exit'].includes(editing.node.kind)
               ? () => {
                   const id = editing.node!.id;
-                  setDraft((d) => ({
-                    ...d,
-                    nodes: d.nodes.filter((n) => n.id !== id),
-                    edges: d.edges.filter(
-                      (e) => e.source !== id && e.target !== id,
-                    ),
-                  }));
+                  setDraft((d) => withoutNodes(d, new Set([id])));
                   setSelected(undefined);
                   setEditing(undefined);
                 }

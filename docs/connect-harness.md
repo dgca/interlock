@@ -89,7 +89,9 @@ Submit JSON matching its output schema.
 Continue until the root run completes or fails.
 ```
 
-`start_run` returns a persisted run. `list_work` includes descendants of the requested run, including Agent assignments inside inline Workflow Batches and nested Batches. Item run inspection resolves the inline definition from the published snapshot. A claim returns its token and expiry. Keep the token for `submit_result`, `renew_claim`, or `fail_work`. Inspect `get_run` to distinguish a completed run from one waiting on claimed work or scripts.
+Starting a run in the UI does not launch an agent. When assignments are available, the run inspector shows **Waiting for an agent**, including work inside Lists and nested workflows. Use **Copy instructions for agent** and paste the instructions into your connected agent conversation. The instructions include the existing run ID. **Connect an agent** opens the connection configuration; connecting alone does not pick up assignments.
+
+`start_run` returns a persisted run. `list_work` includes descendants of the requested run, including Agent assignments in List item paths and nested Lists. Item run inspection resolves the published graph and identifies the owning List through `listNodeId`. A claim returns its token and expiry. Keep the token for `submit_result`, `renew_claim`, or `fail_work`. Inspect `get_run` to distinguish a completed run from one waiting on claimed work or scripts.
 
 If execution will exceed the lease, call `renew_claim` before it expires. If a submission loses its response, submit the identical result again using the same token. If a claim has expired, discover and claim available work again. Do not submit through another worker's claim.
 

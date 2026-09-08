@@ -1,3 +1,4 @@
+import { listDefinition } from './fixtures/list';
 import { runCommand } from '../packages/cli/src/commands';
 import { it, expect } from 'vitest';
 import { serve } from '@hono/node-server';
@@ -7,7 +8,7 @@ import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import { createClient } from '@interlock/client';
 import { createApp } from '../packages/server/src/app';
-import { blankDefinition, nodeSchema } from '@interlock/core';
+import { blankDefinition } from '@interlock/core';
 
 it('completes a workflow through real MCP stdio, HTTP, and SQLite interfaces', async () => {
   const store = new Store(':memory:'),
@@ -70,20 +71,14 @@ it('completes a workflow through real MCP stdio, HTTP, and SQLite interfaces', a
     expect(
       (await rpc.runs.get.query({ id: started.run.id })).run.output,
     ).toEqual({ number: 42 });
-    const batchDefinition = blankDefinition();
-    batchDefinition.nodes[1] = nodeSchema.parse({
-      id: 'agent',
-      label: 'Workflow Batch',
-      kind: 'batch',
-      body: blankDefinition(),
+    const definition = listDefinition();
+    const workflow = await call('create_workflow', {
+      name: 'List transport',
+      definition,
     });
-    const batch = await call('create_workflow', {
-      name: 'Inline transport',
-      definition: batchDefinition,
-    });
-    await call('publish_workflow', { id: batch.id });
+    await call('publish_workflow', { id: workflow.id });
     const root = await call('start_run', {
-      workflowId: batch.id,
+      workflowId: workflow.id,
       input: [3, 4],
     });
     const items = await call('list_work', { runId: root.run.id });
@@ -94,8 +89,8 @@ it('completes a workflow through real MCP stdio, HTTP, and SQLite interfaces', a
       expect(await runCommand(['work', root.run.id])).toMatchObject(items);
       const detail = await runCommand(['run', items[0].runId]);
       expect(detail).toMatchObject({
-        definition: blankDefinition(),
-        run: { definitionPath: ['agent'] },
+        definition,
+        run: { listNodeId: 'list' },
       });
     } finally {
       if (previousUrl === undefined) delete process.env.INTERLOCK_URL;
@@ -104,7 +99,7 @@ it('completes a workflow through real MCP stdio, HTTP, and SQLite interfaces', a
     for (const item of items.reverse()) {
       const claimed = await call('claim_work', {
         workId: item.id,
-        workerId: 'batch-mcp',
+        workerId: 'list-mcp',
       });
       await call('submit_result', {
         workId: item.id,
