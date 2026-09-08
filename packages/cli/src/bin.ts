@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createMcpClient } from '../../mcp/src/client.js';
 import { parseArgs } from 'node:util';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
@@ -22,7 +23,8 @@ Usage: interlock [--port 4310] [--workdir PATH] [--db PATH]
        interlock mcp
        interlock <command> [arguments]
 
-With no command, starts the local engine and UI. Keep this terminal open.
+With no command, starts the local engine, UI, and HTTP MCP endpoint at /mcp.
+Default MCP URL: http://127.0.0.1:4310/mcp. Keep this terminal open.
 Default database: ~/.interlock/interlock.db
 Default script working directory: current directory
 
@@ -41,7 +43,7 @@ Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL`);
       throw new Error(
         'Usage: interlock mcp. Set INTERLOCK_URL to choose the engine.',
       );
-    await createMcpServer(process.env.INTERLOCK_URL).connect(
+    await createMcpServer(createMcpClient(process.env.INTERLOCK_URL)).connect(
       new StdioServerTransport(),
     );
     return;

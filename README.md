@@ -13,7 +13,9 @@ npm install -g @type_of/interlock
 interlock
 ```
 
-Open [http://127.0.0.1:4310](http://127.0.0.1:4310) in your browser. The package includes the engine, UI, CLI, and MCP bridge. No separate build is required.
+Open [http://127.0.0.1:4310](http://127.0.0.1:4310) in your browser. The package includes the engine, UI, CLI, and MCP tools. No separate build is required.
+
+You can also start Interlock with `npx -y @type_of/interlock@latest` without a global installation. Both startup methods use the same HTTP MCP connection flow.
 
 Keep the terminal running while you use Interlock. Closing the browser does not stop the engine. Press Ctrl+C in the terminal to stop it.
 
@@ -35,7 +37,7 @@ The initial library includes **Research a protocol**, an editable example with a
 
 Your agent needs access to the tools required by the assignment, such as web research for this example. Its tool approval settings still apply.
 
-The connection uses `interlock mcp`, a stdio bridge to the running engine. Keep the engine running separately. The modal includes absolute-path configuration if your client cannot find the global `interlock` command. See [Connect a harness](docs/connect-harness.md) for configuration and the assignment loop.
+The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by the same process as the UI and engine. Keep that process running. Upgrading and restarting at the same address preserves your agent configuration. The dialog also provides a stdio fallback for clients that need it. See [Connect a harness](docs/connect-harness.md) for configuration and the assignment loop.
 
 ## Create a workflow
 
@@ -104,13 +106,13 @@ interlock --port 4400 --workdir /path/to/project --db /path/to/interlock.db
 
 `INTERLOCK_WORKDIR` and `INTERLOCK_DB` provide defaults for the corresponding flags. Flags take precedence.
 
-When using another port, set `INTERLOCK_URL` for CLI commands and the MCP bridge. The connection modal generates the correct environment configuration for the running server.
+When using another port, copy the HTTP MCP URL from the connection dialog. Set `INTERLOCK_URL` for CLI commands and the legacy stdio bridge.
 
 ```sh
 INTERLOCK_URL=http://127.0.0.1:4400 interlock workflows
 ```
 
-The engine's HTTP address is not an HTTP MCP endpoint. MCP clients connect through the stdio bridge.
+HTTP MCP clients use the engine address with `/mcp` appended, such as `http://127.0.0.1:4400/mcp`.
 
 ## Use the CLI
 
@@ -157,7 +159,7 @@ pnpm format:check
 pnpm test:package
 ```
 
-The build includes TypeScript checks. Tests cover workflow contracts, runtime behavior, and MCP over stdio. The package test installs a local tarball into a temporary prefix and checks the CLI, UI, MCP bridge, JavaScript execution, and persistence after a restart. It does not publish anything.
+The build includes TypeScript checks. Tests cover workflow contracts, runtime behavior, and MCP over HTTP and stdio. The package test installs a local tarball into a temporary prefix and checks global and npx startup, the CLI, UI, both MCP transports, JavaScript execution, and claims across a restart. It does not publish anything.
 
 ## Project documentation
 

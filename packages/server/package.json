@@ -13,7 +13,8 @@
     "hono": "^4.10.0",
     "@hono/node-server": "^1.19.0",
     "@trpc/server": "^11.7.0",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "scripts": {
     "start": "tsx src/index.ts",

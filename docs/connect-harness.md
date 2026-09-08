@@ -7,7 +7,17 @@ npm install -g @type_of/interlock
 interlock
 ```
 
-Keep this process running and open [Interlock](http://127.0.0.1:4310). **Connect with MCP** provides configuration for the running installation, including absolute paths if your harness cannot find the globally installed command.
+Or run without a global installation:
+
+```sh
+npx -y @type_of/interlock@latest
+```
+
+Keep this process running and open [Interlock](http://127.0.0.1:4310). **Connect with MCP**, also available through **Connect an agent** in a run, provides the endpoint URL and client configuration.
+
+Use Streamable HTTP at `http://127.0.0.1:4310/mcp`. The UI, engine, and MCP tools run in the same process and package version. After upgrading, restart Interlock at the same address and reconnect your client if needed. Keep the existing URL configuration; no separate bridge installation is needed.
+
+For a custom port, copy the URL from the connection dialog. These instructions apply to clients running on the same computer as Interlock. The service listens on loopback without authentication and must not be exposed through a public tunnel.
 
 ## Codex
 
@@ -15,19 +25,52 @@ Add this to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.interlock]
-command = "interlock"
-args = ["mcp"]
+url = "http://127.0.0.1:4310/mcp"
 ```
 
-See the [Codex MCP guide](https://developers.openai.com/codex/mcp).
+If replacing a stdio entry, remove its `command`, `args`, and bridge environment settings. See the [Codex MCP guide](https://developers.openai.com/codex/mcp).
 
-## Claude
+## Claude Code
 
-For Claude Code, run:
+Run:
 
 ```sh
-claude mcp add --transport stdio --scope user interlock -- interlock mcp
+claude mcp add --transport http --scope user interlock http://127.0.0.1:4310/mcp
 ```
+
+If an `interlock` entry already exists, remove it with `claude mcp remove --scope user interlock` before adding the HTTP entry. See the [Claude Code MCP guide](https://code.claude.com/docs/en/mcp).
+
+For Claude Desktop, use the [stdio fallback](#stdio-fallback).
+
+## OpenCode
+
+Merge this into `opencode.json`, replacing any existing local Interlock entry:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "interlock": {
+      "type": "remote",
+      "url": "http://127.0.0.1:4310/mcp",
+      "enabled": true,
+      "oauth": false
+    }
+  }
+}
+```
+
+See the [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/).
+
+## Other clients
+
+Choose **Streamable HTTP** and enter `http://127.0.0.1:4310/mcp`. No command, arguments, or authentication are required. The endpoint returns JSON responses; it does not provide a standalone SSE notification stream or retain transport sessions.
+
+Restart or reconnect your harness after changing configuration. Enable Interlock's tools in its approval settings. Interlock does not modify harness configuration for you.
+
+## Stdio fallback
+
+Existing stdio configurations remain supported. Select **Use legacy stdio transport** in the connection dialog for client-specific snippets. For globally installed copies, the command is `interlock` with arguments `["mcp"]`. The harness launches this bridge, which connects to the running engine.
 
 For Claude Desktop, merge this into its MCP configuration:
 
@@ -39,40 +82,15 @@ For Claude Desktop, merge this into its MCP configuration:
 }
 ```
 
-See the [Claude Code MCP guide](https://code.claude.com/docs/en/mcp). The connection modal also supplies absolute paths for desktop applications whose PATH does not include global npm commands.
+If your client cannot find the global command, select **Use absolute paths** in the dialog. For a server launched through npx, this fallback points to its cached installation. Regenerate stdio configuration when those paths change. Prefer HTTP for clients that support it.
 
-## OpenCode
-
-Merge this into `opencode.json`:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "interlock": {
-      "type": "local",
-      "command": ["interlock", "mcp"],
-      "enabled": true
-    }
-  }
-}
-```
-
-See the [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/).
-
-## Other clients
-
-Use a local **stdio** MCP server. Set the command to `interlock` and its argument list to `["mcp"]`. No additional arguments are required. The harness launches this bridge and communicates over stdin/stdout.
-
-The bridge connects to the running engine at `http://127.0.0.1:4310`. Set the bridge environment variable `INTERLOCK_URL` when using another port. This engine URL is an internal HTTP API, not an HTTP MCP endpoint.
-
-Restart or reconnect your harness after changing configuration. Enable Interlock's tools in its approval settings. Interlock does not modify harness configuration for you.
+Set the bridge environment variable `INTERLOCK_URL` when using another port. This value is the engine address, such as `http://127.0.0.1:4400`, without `/mcp`. The connection dialog includes the correct environment settings.
 
 ## Development configuration
 
-A server started with `pnpm dev` or `pnpm start` generates absolute paths to the current Node installation, TypeScript loader, and checkout. These paths are computed locally and are not personal paths embedded in the npm package. Regenerate the configuration if you move the checkout or change Node installations.
+A server started with `pnpm dev` or `pnpm start` exposes the same `/mcp` endpoint. Use its engine port, normally 4310, rather than the Vite UI port 5173. HTTP configuration has no checkout or Node paths.
 
-A server started with the installed `interlock` command generates the portable command shown above. Its optional absolute-path fallback points to that installation. Use the configuration from the server you intend to connect to.
+The development stdio fallback uses absolute paths to the current Node installation, TypeScript loader, and checkout. Regenerate that fallback if you move the checkout or change Node installations.
 
 ## Complete a run
 
@@ -129,7 +147,9 @@ curl http://127.0.0.1:4310/health
 interlock workflows
 ```
 
-If both succeed but the harness cannot execute Interlock tools, inspect its MCP startup and approval settings. The MCP adapter prints protocol messages to stdout and diagnostics to stderr. Do not wrap its command in a script that prints startup banners to stdout.
+If both succeed but the harness cannot execute Interlock tools, check its endpoint URL, transport, and tool approval settings. HTTP clients must use `/mcp` with Streamable HTTP. Opening that URL in a browser sends GET and returns 405; use an MCP client to initialize and call tools.
+
+For stdio, inspect the bridge startup settings. The adapter prints protocol messages to stdout and diagnostics to stderr. Do not wrap its command in a script that prints startup banners to stdout.
 
 From a source checkout, the automated MCP transport test runs without a model:
 
@@ -137,6 +157,6 @@ From a source checkout, the automated MCP transport test runs without a model:
 pnpm test
 ```
 
-The package check, `pnpm build && pnpm test:package`, also exercises a packed global install and its MCP bridge.
+Transport tests cover HTTP and stdio initialization, tool discovery, work discovery, claims, results, and Batch retries. HTTP checks also cover malformed requests, protocol headers, concurrent clients, and local-access restrictions. The package check, `pnpm build && pnpm test:package`, exercises global and npx startup from a local tarball, then submits a persisted claim after a restart using the same HTTP endpoint.
 
 The optional `scripts/codex-smoke.ts` check invokes the installed Codex CLI with a real account and a local text task. It creates a workflow in the running engine and consumes model usage. Its result depends on the client's authentication and tool approval settings; it is separate from the automated transport tests.
