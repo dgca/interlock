@@ -17,10 +17,6 @@
   letter-spacing: -0.8px;
   padding: 0 10px;
 }
-.logo {
-  display: flex;
-  color: var(--accent);
-}
 .version {
   font: 9px var(--mono);
   color: var(--muted);
