@@ -7,6 +7,7 @@ import { createServer } from 'node:net';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 const { version } = JSON.parse(
@@ -20,7 +21,7 @@ let logs = '';
 async function stop() {
   if (server && server.exitCode === null) {
     const exited = once(server, 'exit');
-    server.kill('SIGTERM');
+    process.kill(-server.pid, 'SIGTERM');
     await exited;
   }
 }
@@ -76,11 +77,28 @@ try {
   const port = listener.address().port;
   await new Promise((resolve) => listener.close(resolve));
   const url = `http://127.0.0.1:${port}`;
-  const start = async () => {
+  const start = async (launch = 'global') => {
+    const args = [
+      '--port',
+      String(port),
+      '--db',
+      join(temp, 'data/interlock.db'),
+    ];
     server = spawn(
-      bin,
-      ['--port', String(port), '--db', join(temp, 'data/interlock.db')],
-      { cwd: workdir, env, stdio: ['ignore', 'pipe', 'pipe'] },
+      launch === 'global' ? bin : 'npx',
+      launch === 'global'
+        ? args
+        : [
+            '--yes',
+            '--cache',
+            join(temp, 'npm-cache'),
+            '--package',
+            join(temp, packed.filename),
+            '--',
+            'interlock',
+            ...args,
+          ],
+      { cwd: workdir, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     server.stdout.on('data', (chunk) => {
       logs += chunk;
@@ -110,6 +128,7 @@ try {
   const connection = (
     await fetch(`${url}/trpc/connection`).then((r) => r.json())
   ).result.data;
+  assert.equal(connection.mcpUrl, `${url}/mcp`);
   assert.equal(connection.command, 'interlock');
   assert.deepEqual(connection.args, ['mcp']);
   assert.equal(connection.env.INTERLOCK_URL, url);
@@ -123,6 +142,21 @@ try {
       env: { ...env, INTERLOCK_URL: url },
       stderr: 'pipe',
     }),
+  );
+  assert.equal(client.getServerVersion().version, version);
+  assert(
+    (await client.listTools()).tools.some((tool) => tool.name === 'claim_work'),
+  );
+  const stdioWorkflows = await client.callTool({
+    name: 'list_workflows',
+    arguments: {},
+  });
+  assert(!stdioWorkflows.isError, JSON.stringify(stdioWorkflows));
+  assert(Array.isArray(JSON.parse(stdioWorkflows.content[0].text)));
+  await client.close();
+  client = new Client({ name: 'package-http-smoke', version: '1.0.0' });
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL(connection.mcpUrl)),
   );
   assert.equal(client.getServerVersion().version, version);
   const call = async (name, args = {}) => {
@@ -179,14 +213,54 @@ try {
   // macOS resolves /var to /private/var for the working directory.
   const { realpath } = await import('node:fs/promises');
   assert.equal(result.run.output.cwd, await realpath(workdir));
+  const agentWorkflow = await call('create_workflow', {
+    name: 'HTTP restart assignment',
+  });
+  await call('publish_workflow', { id: agentWorkflow.id });
+  const agentRun = await call('start_run', {
+    workflowId: agentWorkflow.id,
+    input: 21,
+  });
+  const [work] = await call('list_work', { runId: agentRun.run.id });
+  const claim = await call('claim_work', {
+    workId: work.id,
+    workerId: 'package-http-smoke',
+  });
   await stop();
-  await start();
+  await start('npx');
+  const restartedConnection = (
+    await fetch(`${url}/trpc/connection`).then((r) => r.json())
+  ).result.data;
+  assert.equal(restartedConnection.mcpUrl, connection.mcpUrl);
+  assert(
+    restartedConnection.fallback.args[0].startsWith(
+      join(await realpath(temp), 'npm-cache', '_npx'),
+    ),
+    `Expected npx cached installation, got ${restartedConnection.fallback.args[0]}`,
+  );
+  // The existing HTTP client and persisted claim still work after restart.
+  const submitted = await call('submit_result', {
+    workId: work.id,
+    token: claim.token,
+    output: 42,
+  });
+  assert.equal(submitted.run.status, 'completed');
+  assert.equal(submitted.run.output, 42);
+  await client.close();
+  client = new Client({ name: 'package-http-reconnect', version: '1.0.0' });
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL(connection.mcpUrl)),
+  );
+  assert.equal(client.getServerVersion().version, version);
+  assert(
+    (await call('list_workflows')).some((item) => item.id === agentWorkflow.id),
+  );
   assert.equal(
     (await call('get_run', { id: started.run.id })).run.output.number,
     42,
   );
   console.log(
-    'Packed global install passed: CLI, UI assets, connection config, MCP, JavaScript execution, and persistence.',
+    'Packed global and npx installs passed: CLI, UI assets, HTTP and stdio MCP, assignments across restart, JavaScript execution, and persistence.',
   );
 } catch (error) {
   console.error(logs);

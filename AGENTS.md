@@ -28,7 +28,7 @@ Check README.md, related docs, CLI help, and MCP tool descriptions against the P
 
 See [README.md](README.md) and the root `package.json` scripts for setup and commands. Development and installed copies use different databases. Preserve the user's `.interlock` data and use temporary databases for automated checks.
 
-The development server generates MCP configuration with paths to the checkout. The installed CLI generates `interlock mcp` configuration, with an optional absolute-path fallback. Check which server is running before changing connection instructions.
+Connection configuration defaults to the running server's `/mcp` HTTP endpoint. The stdio fallback uses checkout paths in development and `interlock mcp` for installed copies, with optional absolute paths. Check which server is running before changing connection instructions.
 
 Run tests relevant to changed behavior and `pnpm build` for TypeScript and UI build checks. For packaging, CLI startup, or version changes, also run `pnpm test:package`. Check formatting with `pnpm format:check`.
 

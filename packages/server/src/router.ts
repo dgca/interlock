@@ -19,7 +19,10 @@ const p = t.procedure.use(async ({ next }) => {
 const id = z.object({ id: z.string() });
 const claim = z.object({ workId: z.string(), token: z.string() });
 export const appRouter = t.router({
-  connection: p.query(({ ctx }) => ctx.connection ?? developmentConnection()),
+  connection: p.query(({ ctx }) => {
+    const config = ctx.connection ?? developmentConnection();
+    return { ...config, mcpUrl: new URL('/mcp', config.engineUrl).href };
+  }),
   workflows: t.router({
     list: p.query(({ ctx }) => ctx.engine.store.workflows()),
     get: p.input(id).query(({ ctx, input }) => ctx.engine.workflow(input.id)),

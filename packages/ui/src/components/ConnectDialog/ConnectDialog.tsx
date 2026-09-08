@@ -14,6 +14,7 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<string | null>('Codex');
   const [absolute, setAbsolute] = useState(false);
+  const [stdio, setStdio] = useState(false);
   useEffect(() => {
     api.connection
       .query()
@@ -75,7 +76,30 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
         2,
       )
     : '';
-  const snippet =
+  const httpSnippet = config
+    ? tab === 'Codex'
+      ? `[mcp_servers.interlock]\nurl = ${JSON.stringify(config.mcpUrl)}`
+      : tab === 'Claude'
+        ? `claude mcp add --transport http --scope user interlock ${quote(config.mcpUrl)}`
+        : tab === 'OpenCode'
+          ? JSON.stringify(
+              {
+                $schema: 'https://opencode.ai/config.json',
+                mcp: {
+                  interlock: {
+                    type: 'remote',
+                    url: config.mcpUrl,
+                    enabled: true,
+                    oauth: false,
+                  },
+                },
+              },
+              null,
+              2,
+            )
+          : config.mcpUrl
+    : '';
+  const stdioSnippet =
     tab === 'Codex'
       ? toml
       : tab === 'Claude'
@@ -83,13 +107,28 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
         : tab === 'OpenCode'
           ? opencode
           : other;
+  const snippet = stdio ? stdioSnippet : httpSnippet;
   return (
     <Modal title="Connect with MCP" onClose={onClose} size={680}>
       <p className="hint">
         Keep Interlock running while your harness uses its tools. After adding
         the configuration, restart or reconnect your harness.
       </p>
-      {config?.development && (
+      {!stdio && config && (
+        <p className="hint">
+          MCP endpoint: <code>{config.mcpUrl}</code>. This URL stays the same
+          when you upgrade and restart Interlock at the same address.
+        </p>
+      )}
+      <Checkbox
+        label="Use legacy stdio transport"
+        checked={stdio}
+        onChange={(event) => {
+          setStdio(event.currentTarget.checked);
+          setCopied(false);
+        }}
+      />
+      {stdio && config?.development && (
         <p className="hint">
           This development server uses paths to this checkout. Installed copies
           use <code>interlock mcp</code>.
@@ -149,14 +188,12 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
       )}
       {tab === 'Other' && (
         <p>
-          Add a local MCP server using <strong>stdio</strong> transport and the
-          command, arguments, and environment below. The harness starts the
-          bridge process. The engine URL is{' '}
-          <code>{config?.engineUrl ?? '…'}</code>; this is an internal HTTP API,
-          not an HTTP MCP endpoint.
+          {stdio
+            ? 'Add a local MCP server using stdio transport and the command, arguments, and environment below. Your harness starts the bridge process.'
+            : 'Choose Streamable HTTP transport and use the endpoint URL below. No bridge command or authentication is required.'}
         </p>
       )}
-      {config?.fallback && (
+      {stdio && config?.fallback && (
         <Checkbox
           label="Use absolute paths if your harness cannot find interlock"
           checked={absolute}
@@ -181,12 +218,19 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
           ? 'Copied'
           : tab === 'Claude'
             ? 'Copy command'
-            : 'Copy configuration'}
+            : tab === 'Other' && !stdio
+              ? 'Copy endpoint URL'
+              : 'Copy configuration'}
       </Button>
       {tab === 'Claude' && config && (
         <details>
           <summary>Claude Desktop configuration</summary>
-          <p>Merge this into your Claude Desktop MCP configuration.</p>
+          <p>
+            For Claude Desktop, use the stdio bridge below. It requires an
+            installed Interlock command or the absolute paths from this server.
+            Select Use legacy stdio transport to choose absolute paths, then
+            merge this into your Claude Desktop MCP configuration.
+          </p>
           <pre>
             {JSON.stringify(
               { mcpServers: { interlock: JSON.parse(other) } },

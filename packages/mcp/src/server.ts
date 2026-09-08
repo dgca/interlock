@@ -1,10 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { VERSION } from '../../core/src/version.js';
-import { createClient } from '@interlock/client';
+import type { createMcpClient } from './client.js';
 
-export function createMcpServer(url?: string) {
-  const client = createClient(url);
+export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   const server = new McpServer(
     { name: 'interlock', version: VERSION },
     {
@@ -47,7 +46,7 @@ export function createMcpServer(url?: string) {
     'list_workflows',
     'List workflows, draft definitions, and published version numbers.',
     {},
-    () => client.workflows.list.query(),
+    () => client.workflows.list(),
   );
   tool(
     'create_workflow',
@@ -58,7 +57,7 @@ export function createMcpServer(url?: string) {
       definition: z.any(),
     },
     (input) =>
-      client.workflows.create.mutate({
+      client.workflows.create({
         ...input,
         definition: input.definition,
       }),
@@ -73,19 +72,19 @@ export function createMcpServer(url?: string) {
       draft: z.any().optional(),
       draftRevision: z.number().int().optional(),
     },
-    (input) => client.workflows.update.mutate(input),
+    (input) => client.workflows.update(input),
   );
   tool(
     'publish_workflow',
     'Validate the draft and publish an immutable version. No execution is started.',
     { id: z.string() },
-    (input) => client.workflows.publish.mutate(input),
+    (input) => client.workflows.publish(input),
   );
   tool(
     'get_workflow',
     'Inspect one workflow and its input contract.',
     { id: z.string() },
-    (input) => client.workflows.get.query(input),
+    (input) => client.workflows.get(input),
   );
   tool(
     'start_run',
@@ -95,25 +94,25 @@ export function createMcpServer(url?: string) {
       version: z.number().int().positive().optional(),
       input: z.any(),
     },
-    (input) => client.runs.start.mutate({ ...input, input: input.input }),
+    (input) => client.runs.start({ ...input, input: input.input }),
   );
   tool(
     'get_run',
     'Inspect the published definition, status, node results, immediate children, all descendants, events, and assignments without claim tokens. Claimed work is visible here even when list_work is empty. Fetch executions include resolved requests and response output.',
     { id: z.string() },
-    (input) => client.runs.get.query(input),
+    (input) => client.runs.get(input),
   );
   tool(
     'retry_run',
     'Explicitly retry a failed run from its failed step. Inspect the error first: Script and Fetch retries can repeat external side effects. Failed Batch retries preserve completed items. If a child has a terminal parent, retry the failed parent instead. Completed and cancelled runs cannot be retried.',
     { id: z.string() },
-    (input) => client.runs.retry.mutate(input),
+    (input) => client.runs.retry(input),
   );
   tool(
     'list_work',
     'List available work for a run and all descendants. Omit runId to list all available work.',
     { runId: z.string().optional() },
-    (input) => client.work.list.query(input),
+    (input) => client.work.list(input),
   );
   tool(
     'claim_work',
@@ -126,13 +125,13 @@ export function createMcpServer(url?: string) {
       skills: z.array(z.string()).default([]),
       leaseSeconds: z.number().int().min(10).max(3600).default(300),
     },
-    (input) => client.work.claim.mutate(input),
+    (input) => client.work.claim(input),
   );
   tool(
     'submit_result',
     'Submit JSON matching the claimed output schema. Repeat identical submissions safely after connection failures.',
     { workId: z.string(), token: z.string(), output: z.any() },
-    (input) => client.work.submit.mutate({ ...input, output: input.output }),
+    (input) => client.work.submit({ ...input, output: input.output }),
   );
   tool(
     'renew_claim',
@@ -142,19 +141,19 @@ export function createMcpServer(url?: string) {
       token: z.string(),
       leaseSeconds: z.number().int().min(10).max(3600).default(300),
     },
-    (input) => client.work.renew.mutate(input),
+    (input) => client.work.renew(input),
   );
   tool(
     'fail_work',
     'Report a failed assignment. Interlock applies its bounded retry policy.',
     { workId: z.string(), token: z.string(), error: z.string() },
-    (input) => client.work.fail.mutate(input),
+    (input) => client.work.fail(input),
   );
   tool(
     'cancel_run',
     'Cancel a run and its active descendants.',
     { id: z.string() },
-    (input) => client.runs.cancel.mutate(input),
+    (input) => client.runs.cancel(input),
   );
   return server;
 }

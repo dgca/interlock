@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import { createMcpServer } from '../../mcp/src/server.js';
 import { streamSSE } from 'hono/streaming';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { bodyLimit } from 'hono/body-limit';
@@ -26,6 +28,32 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
     )
       return c.json({ error: 'Untrusted origin' }, 403);
     await next();
+  });
+  app.all('/mcp', async (c) => {
+    // There are no server-initiated messages or transport sessions to retain.
+    if (c.req.method !== 'POST') {
+      c.header('Allow', 'POST');
+      return c.json(
+        {
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Method not allowed' },
+          id: null,
+        },
+        405,
+      );
+    }
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+    });
+    const mcp = createMcpServer(appRouter.createCaller({ engine, connection }));
+    try {
+      await mcp.connect(transport);
+      return await transport.handleRequest(c.req.raw);
+    } finally {
+      // JSON mode completes the response before handleRequest resolves.
+      await mcp.close();
+    }
   });
   app.get('/health', (c) => c.json({ ok: true }));
   app.all('/trpc/*', (c) =>
