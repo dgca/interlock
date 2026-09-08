@@ -1,5 +1,12 @@
 # @type_of/interlock
 
+## 0.1.1
+
+### Patch Changes
+
+- 15eff04: Replace the seeded crypto example workflows with two lighthearted ones that showcase every node type: **Size up a Pokémon** fetches live data from PokéAPI, computes a stat sheet with a JavaScript script, and branches on a condition into an agent-written mascot pitch; **Build a team roster** batches that workflow across candidate Pokémon and synthesizes a picked team.
+- 24f10e9: Seed the example workflows only once per database. Previously the examples were re-seeded on every start whenever the library was empty, so permanently deleting them brought them back on the next start.
+
 ## 0.1.0
 
 ### Minor Changes
