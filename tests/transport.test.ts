@@ -110,6 +110,42 @@ it('completes a workflow through real MCP stdio, HTTP, and SQLite interfaces', a
     expect((await call('get_run', { id: root.run.id })).run.output).toEqual([
       6, 8,
     ]);
+    const failed = await call('start_run', {
+      workflowId: workflow.id,
+      input: [5],
+    });
+    const [assignment] = await call('list_work', { runId: failed.run.id });
+    const failedClaim = await call('claim_work', {
+      workId: assignment.id,
+      workerId: 'retry-test',
+    });
+    await call('fail_work', {
+      workId: assignment.id,
+      token: failedClaim.token,
+      error: 'Temporary executor failure',
+    });
+    expect((await call('get_run', { id: failed.run.id })).run.status).toBe(
+      'failed',
+    );
+    await call('retry_run', { id: failed.run.id });
+    const [retried] = await call('list_work', { runId: failed.run.id });
+    const retriedClaim = await call('claim_work', {
+      workId: retried.id,
+      workerId: 'retry-test',
+    });
+    await call('submit_result', {
+      workId: retried.id,
+      token: retriedClaim.token,
+      output: 10,
+    });
+    expect((await call('get_run', { id: failed.run.id })).run.output).toEqual([
+      10,
+    ]);
+    const invalidRetry = await client.callTool({
+      name: 'retry_run',
+      arguments: { id: failed.run.id },
+    });
+    expect(invalidRetry.isError).toBe(true);
     expect(
       (
         await fetch(`${url}/health`, {
