@@ -45,6 +45,9 @@ export const appRouter = t.router({
         }),
       )
       .mutation(({ ctx, input }) => ctx.engine.update(input.id, input)),
+    delete: p
+      .input(id)
+      .mutation(({ ctx, input }) => ctx.engine.deleteWorkflow(input.id)),
     clone: p.input(id).mutation(({ ctx, input }) => ctx.engine.clone(input.id)),
     publish: p
       .input(id)

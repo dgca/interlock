@@ -13,7 +13,7 @@ import {
 } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
-import { listDefinition } from './fixtures/list';
+import { batchDefinition } from './fixtures/batch';
 import { parseRawDefinition } from '../packages/ui/src/features/workflows/rawDefinition';
 let server: Server,
   base: string,
@@ -281,8 +281,8 @@ it('aborts cancellation and ignores late completion', async () => {
   expect(engine.run(run.id).status).toBe('cancelled');
   expect(engine.run(run.id).output).toBeUndefined();
 });
-it('runs Fetch inside List with bounded concurrency and ordered outputs', async () => {
-  const d = listDefinition(
+it('runs Fetch inside Batch with bounded concurrency and ordered outputs', async () => {
+  const d = batchDefinition(
     node({ id: 'work', url: base + '/item/{{input.id}}' }),
     { concurrency: 2 },
   );

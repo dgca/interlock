@@ -72,6 +72,9 @@ export function WorkPanel({
       </div>
       <details open>
         <summary>Prompt and context</summary>
+        {work.executionInstructions && (
+          <p className="assignment-prompt">{work.executionInstructions}</p>
+        )}
         <p className="assignment-prompt">{work.prompt}</p>
         <JsonEditor label="Context policy" value={work.context} rows={6} />
         <JsonEditor label="Assignment input" value={work.input} rows={6} />

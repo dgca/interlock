@@ -3,7 +3,7 @@ import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { blankDefinition, type Workflow } from '@interlock/core';
-import { listDefinition, nestedLists } from './fixtures/list';
+import { batchDefinition, nestedBatches } from './fixtures/batch';
 import { WorkflowEditor } from '../packages/ui/src/features/workflows/WorkflowEditor';
 
 const canvas = vi.hoisted(() => ({ props: undefined as any }));
@@ -229,22 +229,22 @@ it('saves local changes before publishing and restores actions after a failure',
   expect(rpc.publish).toHaveBeenCalledTimes(1);
 });
 
-it('keeps nested List item nodes on the main canvas and preserves positions independently', async () => {
-  workflow.draft = nestedLists(2);
+it('keeps nested Batch item nodes on the main canvas and preserves positions independently', async () => {
+  workflow.draft = nestedBatches(2);
   await render();
   expect(canvas.props.nodes.map((n: any) => n.id)).toEqual([
     'entry',
-    'list',
-    'list1',
+    'batch',
+    'batch1',
     'work',
     'exit',
   ]);
   expect(container.textContent).not.toContain('Open inline');
   expect(container.textContent).not.toContain('Back to parent');
-  await click('Move list');
+  await click('Move batch');
   await click('Save draft');
   const draft = rpc.update.mock.calls[0][0].draft;
-  expect(draft.nodes.find((n: any) => n.id === 'list').position).toEqual({
+  expect(draft.nodes.find((n: any) => n.id === 'batch').position).toEqual({
     x: 200,
     y: 250,
   });
@@ -255,7 +255,7 @@ it('keeps nested List item nodes on the main canvas and preserves positions inde
 });
 
 it('stores source and target handles through connect, move, edge updates, and raw round-trip', async () => {
-  workflow.draft = listDefinition();
+  workflow.draft = batchDefinition();
   workflow.draft.edges = workflow.draft.edges.filter((e) => e.id !== 'end');
   await render();
   expect(container.textContent).toContain('Before publishing:');
@@ -263,7 +263,7 @@ it('stores source and target handles through connect, move, edge updates, and ra
     canvas.props.onConnect({
       source: 'work',
       sourceHandle: 'default',
-      target: 'list',
+      target: 'batch',
       targetHandle: 'end',
     }),
   );
@@ -288,8 +288,8 @@ it('stores source and target handles through connect, move, edge updates, and ra
   expect(rpc.update.mock.calls[0][0].draft).toEqual(draft);
 });
 
-it('reports invalid List scope routes in Visual and Raw and blocks publication', async () => {
-  workflow.draft = listDefinition();
+it('reports invalid Batch scope routes in Visual and Raw and blocks publication', async () => {
+  workflow.draft = batchDefinition();
   await render();
   expect(
     canvas.props.isValidConnection({
@@ -306,7 +306,7 @@ it('reports invalid List scope routes in Visual and Raw and blocks publication',
       targetHandle: 'default',
     }),
   );
-  expect(container.textContent).toContain('cannot cross List groups');
+  expect(container.textContent).toContain('cannot cross Batch groups');
   expect(button('Publish version').disabled).toBe(true);
   await click('Raw');
   expect(container.textContent).toContain('Draft can be saved');
@@ -319,7 +319,7 @@ it('reports invalid List scope routes in Visual and Raw and blocks publication',
 });
 
 it('selects and deletes an End connection without persisting selection state', async () => {
-  workflow.draft = listDefinition();
+  workflow.draft = batchDefinition();
   await render();
   await act(async () =>
     canvas.props.onEdgesChange([{ type: 'select', id: 'end', selected: true }]),

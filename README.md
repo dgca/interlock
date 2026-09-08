@@ -41,21 +41,21 @@ The connection uses `interlock mcp`, a stdio bridge to the running engine. Keep 
 
 Select **New workflow** to create a draft. Use **Add node** to choose each step's type, then connect the nodes in execution order.
 
-Available nodes include entry and exit, Agent, Script, Fetch, Condition, Workflow, and List. A Workflow node invokes a pinned published workflow once. A List repeats a visible path for each item and collects the results in input order.
+Available nodes include entry and exit, Agent, Script, Fetch, Condition, Workflow, and Batch. A Workflow node invokes a pinned published workflow once. A Batch repeats a visible path for each item and collects the results in input order.
 
-Add a **List** and configure its items path and concurrency. Use **Add step** inside the group to create an Agent, Script, or other ordinary node. The first step connects to **Start** automatically. Connect additional steps within the group; connect the last step on every branch to **End**. Connect **Out** to the next step or Exit. The output route receives the ordered results after all items finish. Group members remain visible on the main canvas. Collapse hides them temporarily; moving the group moves its members.
+Add a **Batch** and configure its items path and concurrency. Use **Add step** inside the group to create an Agent, Script, or other ordinary node. The first step connects to **Start** automatically. Connect additional steps within the group; connect the last step on every branch to **End**. Connect **Out** to the next step or Exit. The output route receives the ordered results after all items finish. Group members remain visible on the main canvas. Collapse hides them temporarily; moving the group moves its members.
 
 ```text
-Entry → List
+Entry → Batch
         ├─ [Start → Research item → End]
         └─ Out → Synthesis → Exit
 ```
 
-For input `[3, 4, 5]`, a Script on the item path containing `return input * 2;` produces `[6, 8, 10]` on Out. An Agent can research each item directly on the canvas. The seeded opportunity brief demonstrates a List with a reusable Workflow node on its item path.
+For input `[3, 4, 5]`, a Script on the item path containing `return input * 2;` produces `[6, 8, 10]` on Out. An Agent can research each item directly on the canvas. The seeded opportunity brief demonstrates a Batch with a reusable Workflow node on its item path.
 
-A blank items path selects the complete input. Lists accept up to 200 items and 1 through 50 concurrent item runs. Choose `all` to fail and cancel unfinished items on an error, or `collect` to receive each item's status, output, and error. Item paths can contain nested Lists and Workflow nodes, subject to ten nested levels. Existing Map definitions remain supported as legacy nodes.
+A blank items path selects the complete input. Batches accept up to 200 items and 1 through 50 concurrent item runs. Choose `all` to fail and cancel unfinished items on an error, or `collect` to receive each item's status, output, and error. Item paths can contain nested Batches and Workflow nodes, subject to ten nested levels.
 
-Configure input and output contracts in the node settings. Entry and Exit display the shared workflow input and output contracts. With a blank items path, List input must be an array; with a named path, the selected value must be an array. Use **Visual / Raw** to switch between the graph and its JSON definition. The raw editor checks JSON syntax and structure before saving. Publishing also checks the workflow's graph.
+Configure input and output contracts in the node settings. Entry and Exit display the shared workflow input and output contracts. With a blank items path, Batch input must be an array; with a named path, the selected value must be an array. Use **Visual / Raw** to switch between the graph and its JSON definition. The raw editor checks JSON syntax and structure before saving. Publishing also checks the workflow's graph.
 
 Select **Publish version** when the draft is ready, then **Run v1** to supply input and start a run. Each run uses a fixed published version. Editing a draft does not change an existing run.
 

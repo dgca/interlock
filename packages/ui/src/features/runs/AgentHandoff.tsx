@@ -21,7 +21,7 @@ export function AgentHandoff({
         `Continue existing Interlock run ${runId}. Do not start a new run.\n` +
           `Inspect it with get_run and use list_work with runId "${runId}" to find available assignments, including child runs. ` +
           "Claim assignments using your actual capabilities. Follow each assignment's prompt, input, context policy, and output schema, then submit JSON with its claim token. " +
-          'Do not claim fresh context in an existing conversation. Renew claims before they expire. ' +
+          'Follow executionInstructions when present, including isolation and user handoff guidance for fresh-context assignments. Do not claim fresh context in an existing conversation. Renew claims before they expire. ' +
           'Continue until this run completes, fails, or is cancelled. If another worker has claimed an assignment, do not take over its claim. Report any blocker.',
       );
       setCopied(true);

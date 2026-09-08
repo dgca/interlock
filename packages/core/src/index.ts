@@ -9,8 +9,8 @@ export {
   type FetchField,
   type FetchRequest,
 } from './fetch.js';
-import { validateListScopes } from './listScopes.js';
-export { validateListScopes } from './listScopes.js';
+import { validateBatchScopes } from './batchScopes.js';
+export { validateBatchScopes } from './batchScopes.js';
 
 export type Json =
   null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -42,7 +42,7 @@ const fetchFieldSchema = z.object({
 const nodeBase = {
   id: z.string().min(1),
   label: z.string().min(1),
-  listId: z.string().min(1).optional(),
+  batchId: z.string().min(1).optional(),
   position: z.object({ x: z.number(), y: z.number() }).default({ x: 0, y: 0 }),
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
@@ -111,16 +111,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     ...nodeBase,
-    kind: z.literal('map'),
-    workflowId: z.string().min(1),
-    version: z.number().int().positive(),
-    itemsPath: z.string().default(''),
-    concurrency: z.number().int().min(1).max(50).default(5),
-    failurePolicy: z.enum(['all', 'collect']).default('all'),
-  }),
-  z.object({
-    ...nodeBase,
-    kind: z.literal('list'),
+    kind: z.literal('batch'),
     itemsPath: z.string().default(''),
     concurrency: z.number().int().min(1).max(50).default(5),
     failurePolicy: z.enum(['all', 'collect']).default('all'),
@@ -188,8 +179,8 @@ export interface Run {
   workflowName: string;
   version: number;
   parentRunId?: string;
-  // Item runs execute members of this List in the same published graph.
-  listNodeId?: string;
+  // Item runs execute members of this Batch in the same published graph.
+  batchNodeId?: string;
   status: RunStatus;
   input: Json;
   output?: Json;
@@ -207,6 +198,7 @@ export interface WorkRequest {
   nodeId: string;
   label: string;
   prompt: string;
+  executionInstructions?: string;
   input: Json;
   context: ContextPolicy;
   outputSchema: Record<string, unknown>;
@@ -330,7 +322,7 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
   for (const node of d.nodes) {
     if (node.kind === 'fetch') validateFetch(node);
     if (
-      node.kind === 'list' &&
+      node.kind === 'batch' &&
       !node.itemsPath &&
       node.inputSchema.type &&
       !(Array.isArray(node.inputSchema.type)
@@ -346,7 +338,7 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
         ? []
         : node.kind === 'condition'
           ? ['true', 'false']
-          : node.kind === 'list'
+          : node.kind === 'batch'
             ? ['item', 'complete']
             : ['default'];
     if (
@@ -357,7 +349,7 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
         `${node.label}: expected outgoing routes ${expected.join(', ') || 'none'}`,
       );
   }
-  validateListScopes(d);
+  validateBatchScopes(d);
   const reachable = new Set<string>();
   const visit = (id: string) => {
     if (reachable.has(id)) return;
@@ -414,5 +406,5 @@ export {
 } from './contracts.js';
 
 export function nodeKindLabel(kind: WorkflowNode['kind']): string {
-  return kind === 'map' ? 'Map (legacy)' : kind === 'list' ? 'List' : kind;
+  return kind === 'batch' ? 'Batch' : kind;
 }

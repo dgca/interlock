@@ -117,7 +117,7 @@
 .node {
   width: 220px;
   height: 116px;
-  padding: 16px 18px;
+  padding: 12px 18px;
   background: var(--surface-raised);
   border: 1px solid var(--border-strong);
   border-radius: 9px;
@@ -137,7 +137,7 @@
   font-size: 8px;
   letter-spacing: 1px;
   color: var(--muted);
-  margin-bottom: 13px;
+  margin-bottom: 8px;
 }
 .nodeIcon {
   width: 27px;
@@ -154,7 +154,7 @@
   background: var(--pink-soft);
   border-color: var(--pink-border);
 }
-.nodeIcon.map {
+.nodeIcon.batch {
   color: var(--accent-text);
   background: var(--accent-soft);
   border-color: var(--accent-border);
@@ -173,11 +173,21 @@
   font-weight: 550;
   color: var(--text);
 }
-.node small {
+.nodeMetadata {
+  min-width: 0;
+  margin-top: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.nodeMetadata small {
   display: block;
   font-size: 9px;
   color: var(--muted);
-  margin-top: 9px;
+  line-height: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .nodeHeading i {
   width: 7px;
@@ -247,7 +257,7 @@
   font-size: 12px;
 }
 
-.listGroup {
+.batchGroup {
   width: 100%;
   height: 100%;
   border: 1px solid var(--accent-border);
@@ -255,7 +265,7 @@
   background: var(--canvas);
   box-shadow: inset 0 0 0 4px var(--accent-soft);
 }
-.listHeader {
+.batchHeader {
   height: 62px;
   display: flex;
   align-items: center;
@@ -267,14 +277,14 @@
   border-radius: 12px 12px 0 0;
   cursor: grab;
 }
-.listHeader strong {
+.batchHeader strong {
   font-size: 13px;
   flex: 1;
 }
-.listHeader span {
+.batchHeader span {
   font-size: 10px;
 }
-.listGroup button {
+.batchGroup button {
   font: inherit;
   font-size: 10px;
   background: var(--accent-soft);
@@ -284,16 +294,19 @@
   border-radius: 5px;
   cursor: pointer;
 }
-.listSummary {
+.batchSummary {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin: 16px 22px;
+  margin: 12px 22px;
   color: var(--muted);
   font-size: 10px;
 }
-.listStart {
+.batchSummary .nodeMetadata {
+  margin-top: 0;
+}
+.batchStart {
   position: absolute;
   left: 22px;
   top: 180px;
@@ -318,7 +331,7 @@
 .portOutput {
   left: calc(100% + 6px);
 }
-.listEnd {
+.batchEnd {
   position: absolute;
   right: 22px;
   top: 180px;

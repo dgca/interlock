@@ -58,12 +58,16 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
 });
-it('renders four labeled List handles with internal Start and End and retains two legacy Map handles', async () => {
+it('renders four labeled Batch handles with internal Start and End', async () => {
   await act(async () =>
     root.render(
       h(FlowNode, {
         data: {
-          node: nodeSchema.parse({ id: 'list', label: 'List', kind: 'list' }),
+          node: nodeSchema.parse({
+            id: 'batch',
+            label: 'Batch',
+            kind: 'batch',
+          }),
         },
       } as any),
     ),
@@ -82,25 +86,8 @@ it('renders four labeled List handles with internal Start and End and retains tw
   expect(container.textContent).toContain('Start');
   expect(container.textContent).not.toContain('Item result');
   expect(container.textContent).toContain('Out');
-  await act(async () =>
-    root.render(
-      h(FlowNode, {
-        data: {
-          node: nodeSchema.parse({
-            id: 'map',
-            label: 'Old research',
-            kind: 'map',
-            workflowId: 'child',
-            version: 1,
-          }),
-        },
-      } as any),
-    ),
-  );
-  expect(container.textContent).toContain('MAP (LEGACY)');
-  expect(container.querySelectorAll('[data-handle]')).toHaveLength(2);
 });
-it('creates a List from the ordinary add dialog without a nested definition or workflow reference', async () => {
+it('creates a Batch from the ordinary add dialog without a nested definition or workflow reference', async () => {
   const onApply = vi.fn();
   await act(async () =>
     root.render(
@@ -127,10 +114,10 @@ it('creates a List from the ordinary add dialog without a nested definition or w
     'fetch',
     'condition',
     'workflow',
-    'list',
+    'batch',
   ]);
   await act(async () => {
-    select.value = 'list';
+    select.value = 'batch';
     select.dispatchEvent(new Event('change', { bubbles: true }));
   });
   expect(container.textContent).toContain('Items path');
@@ -141,7 +128,7 @@ it('creates a List from the ordinary add dialog without a nested definition or w
   await act(async () => add.click());
   const node = onApply.mock.calls[0][0].definition.nodes.at(-1);
   expect(node).toMatchObject({
-    kind: 'list',
+    kind: 'batch',
     itemsPath: '',
     concurrency: 5,
     failurePolicy: 'all',
@@ -152,7 +139,7 @@ it('creates a List from the ordinary add dialog without a nested definition or w
       'kind',
       'label',
       'position',
-      'listId',
+      'batchId',
       'inputSchema',
       'outputSchema',
       'itemsPath',
@@ -162,11 +149,11 @@ it('creates a List from the ordinary add dialog without a nested definition or w
   );
 });
 
-it('adds an Agent directly inside a List and connects its first item route', async () => {
+it('adds an Agent directly inside a Batch and connects its first item route', async () => {
   const onApply = vi.fn();
   const definition = blankDefinition();
   definition.nodes.push(
-    nodeSchema.parse({ id: 'list', kind: 'list', label: 'List' }),
+    nodeSchema.parse({ id: 'batch', kind: 'batch', label: 'Batch' }),
   );
   await act(async () =>
     root.render(
@@ -179,7 +166,7 @@ it('adds an Agent directly inside a List and connects its first item route', asy
           definition,
           workflows: [],
           creating: true,
-          parentListId: 'list',
+          parentBatchId: 'batch',
           onClose: vi.fn(),
           onApply,
         }),
@@ -199,11 +186,11 @@ it('adds an Agent directly inside a List and connects its first item route', asy
   const member = updated.nodes.at(-1);
   expect(member).toMatchObject({
     kind: 'agent',
-    listId: 'list',
+    batchId: 'batch',
     position: { x: 130, y: 160 },
   });
   expect(updated.edges.at(-1)).toMatchObject({
-    source: 'list',
+    source: 'batch',
     port: 'item',
     target: member.id,
   });
@@ -268,9 +255,9 @@ it.each(['entry', 'exit'] as const)(
     });
   },
 );
-it('shows intrinsic List array contracts and explains selection by Items path', async () => {
+it('shows intrinsic Batch array contracts and explains selection by Items path', async () => {
   const definition = blankDefinition(),
-    node = nodeSchema.parse({ id: 'list', label: 'List', kind: 'list' });
+    node = nodeSchema.parse({ id: 'batch', label: 'Batch', kind: 'batch' });
   await act(async () =>
     root.render(
       h(
@@ -295,4 +282,34 @@ it('shows intrinsic List array contracts and explains selection by Items path', 
     container.querySelector('[data-contract="Output"]')!.textContent,
   ).toContain('{"type":"array"}');
   expect(container.textContent).toContain('Input must be an array');
+});
+
+it.each([
+  'entry',
+  'exit',
+  'agent',
+  'script',
+  'fetch',
+  'condition',
+  'workflow',
+  'batch',
+])('keeps the contract summary last in %s metadata', async (kind) => {
+  const node = nodeSchema.parse({
+    id: 'node',
+    label: 'Example',
+    kind,
+    inputSchema: { type: 'object' },
+    outputSchema: { type: 'string' },
+    prompt: 'Write a greeting',
+    command: 'return "hello";',
+    url: 'https://example.com',
+    path: 'ready',
+    equals: true,
+    workflowId: 'child',
+    version: 1,
+  });
+  await act(async () => root.render(h(FlowNode, { data: { node } } as any)));
+  const lines = Array.from(container.querySelectorAll('small'));
+  expect(lines.at(-1)?.textContent).toBe('Object → Text');
+  if (kind === 'fetch') expect(lines[0].textContent).toBe('Method: GET');
 });

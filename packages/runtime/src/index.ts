@@ -17,6 +17,7 @@ import {
   type WorkflowNode,
   type WorkRequest,
 } from '@interlock/core';
+import { freshContextInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 
@@ -134,6 +135,74 @@ export class Engine {
       return w;
     });
   }
+  deleteWorkflow(id: string) {
+    const result = this.store.transaction(() => {
+      this.workflow(id);
+      const references = (definition: WorkflowDefinition) =>
+        definition.nodes.some(
+          (node) => node.kind === 'workflow' && node.workflowId === id,
+        );
+      for (const workflow of this.store.workflows()) {
+        if (workflow.id === id) continue;
+        const versions = this.store
+          .list<import('@interlock/core').WorkflowVersion>('versions')
+          .filter((version) => version.workflowId === workflow.id);
+        if (
+          references(workflow.draft) ||
+          versions.some((version) => references(version.definition))
+        )
+          throw new InterlockError(
+            `Cannot delete: "${workflow.name}" references this workflow. Delete the referencing workflow first, or archive this one.`,
+          );
+      }
+      const runs = this.store.runs();
+      const removed = new Set(
+        runs.filter((run) => run.workflowId === id).map((run) => run.id),
+      );
+      for (const run of runs)
+        if (
+          removed.has(run.id) &&
+          run.parentRunId &&
+          !removed.has(run.parentRunId)
+        )
+          throw new InterlockError(
+            'Cannot delete a workflow with runs belonging to another workflow.',
+          );
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const run of runs)
+          if (
+            run.parentRunId &&
+            removed.has(run.parentRunId) &&
+            !removed.has(run.id)
+          ) {
+            removed.add(run.id);
+            changed = true;
+          }
+      }
+      if (runs.some((run) => removed.has(run.id) && !terminal(run.status)))
+        throw new InterlockError(
+          'Cancel or finish active runs before deleting this workflow.',
+        );
+      for (const work of this.store.work())
+        if (removed.has(work.runId)) this.store.remove('work', work.id);
+      for (const event of this.store.list<import('@interlock/core').RunEvent>(
+        'events',
+      ))
+        if (removed.has(event.runId)) this.store.remove('events', event.id);
+      for (const runId of removed) this.store.remove('runs', runId);
+      for (const version of this.store.list<
+        import('@interlock/core').WorkflowVersion & { id: string }
+      >('versions'))
+        if (version.workflowId === id)
+          this.store.remove('versions', version.id);
+      this.store.remove('workflows', id);
+      return { id };
+    });
+    queueMicrotask(() => this.listeners.forEach((listener) => listener()));
+    return result;
+  }
   clone(id: string) {
     const w = this.workflow(id);
     return this.create(`${w.name} copy`, w.description, w.draft);
@@ -144,7 +213,7 @@ export class Engine {
       const definition = validateDefinition(w.draft);
       for (const n of definition.nodes) {
         if (
-          (n.kind === 'workflow' || n.kind === 'map') &&
+          n.kind === 'workflow' &&
           !this.store.getVersion(n.workflowId, n.version)
         )
           throw new InterlockError(
@@ -168,17 +237,17 @@ export class Engine {
     version: number,
     input: Json,
     parentRunId?: string,
-    listNodeId?: string,
+    batchNodeId?: string,
   ): Run {
     const w = this.workflow(workflowId);
     const definition = this.definition({ workflowId, version });
-    const itemRoute = listNodeId
+    const itemRoute = batchNodeId
       ? definition.edges.find(
-          (e) => e.source === listNodeId && e.port === 'item',
+          (e) => e.source === batchNodeId && e.port === 'item',
         )
       : undefined;
-    if (listNodeId && !itemRoute)
-      throw new InterlockError('List item route not found');
+    if (batchNodeId && !itemRoute)
+      throw new InterlockError('Batch item route not found');
     if (!parentRunId)
       assertContract(definition.inputSchema, input, 'Workflow input');
     let depth = 0,
@@ -195,7 +264,7 @@ export class Engine {
       workflowName: w.name,
       version,
       parentRunId,
-      listNodeId,
+      batchNodeId,
       status: 'running',
       input,
       cursor:
@@ -228,7 +297,10 @@ export class Engine {
       work: this.store
         .work()
         .filter((w) => w.runId === id)
-        .map(({ token, ...w }) => w),
+        .map((work) => {
+          const { token, ...visible } = this.describeWork(work);
+          return visible;
+        }),
       events: this.store.events(id),
       children: this.store.runs().filter((r) => r.parentRunId === id),
     };
@@ -266,8 +338,8 @@ export class Engine {
       throw new InterlockError(
         'Missing outgoing route; connect item paths to End',
       );
-    if (edge?.targetHandle === 'end' && edge.target !== run.listNodeId)
-      throw new InterlockError('End must belong to the current List group');
+    if (edge?.targetHandle === 'end' && edge.target !== run.batchNodeId)
+      throw new InterlockError('End must belong to the current Batch group');
     assertContract(node.outputSchema, output, `${node.label} output`);
     if (node.kind === 'exit')
       assertContract(
@@ -285,7 +357,7 @@ export class Engine {
       this.event(
         run,
         'run.completed',
-        run.listNodeId ? 'Item result returned' : 'Workflow completed',
+        run.batchNodeId ? 'Item result returned' : 'Workflow completed',
       );
     } else {
       run.cursor = edge!.target;
@@ -314,8 +386,8 @@ export class Engine {
       run.executions.push(execution);
       this.event(run, 'node.started', node.label);
       try {
-        if (node.listId !== run.listNodeId)
-          throw new InterlockError('Execution cannot cross List groups');
+        if (node.batchId !== run.batchNodeId)
+          throw new InterlockError('Execution cannot cross Batch groups');
         if (run.executions.length > definition.maxSteps)
           throw new InterlockError('Workflow step limit exceeded');
         if (node.kind === 'entry')
@@ -361,19 +433,15 @@ export class Engine {
         this.save(run);
         return false;
       }
-      if (
-        node.kind === 'workflow' ||
-        node.kind === 'map' ||
-        node.kind === 'list'
-      ) {
+      if (node.kind === 'workflow' || node.kind === 'batch') {
         const value =
           node.kind !== 'workflow'
             ? readPath(execution.input, node.itemsPath)
             : [execution.input];
         if (!Array.isArray(value))
-          throw new InterlockError('List input must resolve to an array');
+          throw new InterlockError('Batch input must resolve to an array');
         if (value.length > 200)
-          throw new InterlockError('List input exceeds 200 items');
+          throw new InterlockError('Batch input exceeds 200 items');
         let children = execution.childRunIds.map((id) => this.run(id));
         if (node.kind === 'workflow' || node.failurePolicy === 'all') {
           const failed = children.find(
@@ -403,13 +471,13 @@ export class Engine {
           !execution.retryChildRunIds?.length
         ) {
           const child = this.newRun(
-            node.kind === 'list' ? run.workflowId : node.workflowId,
-            node.kind === 'list' ? run.version : node.version,
+            node.kind === 'batch' ? run.workflowId : node.workflowId,
+            node.kind === 'batch' ? run.version : node.version,
             value[execution.nextItem],
             run.id,
-            node.kind === 'list' ? node.id : undefined,
+            node.kind === 'batch' ? node.id : undefined,
           );
-          if (node.kind === 'list') {
+          if (node.kind === 'batch') {
             child.workflowName = `${node.label} · item ${execution.nextItem + 1}`;
             this.save(child);
           }
@@ -440,7 +508,7 @@ export class Engine {
             execution,
             node,
             output,
-            node.kind === 'list' ? 'complete' : 'default',
+            node.kind === 'batch' ? 'complete' : 'default',
           );
           return true;
         }
@@ -449,6 +517,12 @@ export class Engine {
         this.save(run);
         return changed;
       }
+      if (
+        node.kind !== 'entry' &&
+        node.kind !== 'exit' &&
+        node.kind !== 'condition'
+      )
+        throw new InterlockError('Unsupported node type in published workflow');
       this.finish(
         run,
         execution,
@@ -557,6 +631,15 @@ export class Engine {
         });
     }
   }
+  private describeWork(work: WorkRequest): WorkRequest {
+    if (work.context.mode !== 'fresh') return work;
+    let root = this.run(work.runId);
+    while (root.parentRunId) root = this.run(root.parentRunId);
+    return {
+      ...work,
+      executionInstructions: freshContextInstructions(root.id, work.id),
+    };
+  }
   available(runId?: string) {
     this.pump();
     const within = (id: string): boolean => {
@@ -566,7 +649,8 @@ export class Engine {
     };
     return this.store
       .work()
-      .filter((w) => w.status === 'available' && within(w.runId));
+      .filter((w) => w.status === 'available' && within(w.runId))
+      .map((work) => this.describeWork(work));
   }
   claim(workId: string, worker: Worker, leaseSeconds = 300) {
     this.pump();
@@ -599,7 +683,7 @@ export class Engine {
         'work.claimed',
         `${work.label} claimed by ${worker.workerId}`,
       );
-      return work;
+      return this.describeWork(work);
     });
   }
   private owned(id: string, token: string) {
@@ -711,11 +795,7 @@ export class Engine {
       return;
     }
     run.value = execution.input;
-    if (
-      execution.kind === 'map' ||
-      execution.kind === 'list' ||
-      execution.kind === 'workflow'
-    ) {
+    if (execution.kind === 'batch' || execution.kind === 'workflow') {
       execution.status = 'waiting';
       execution.error = undefined;
       execution.completedAt = undefined;
@@ -737,10 +817,7 @@ export class Engine {
       if (run.parentRunId) {
         const parent = this.run(run.parentRunId);
         const execution = parent.executions.at(-1);
-        if (
-          (execution?.kind === 'list' || execution?.kind === 'map') &&
-          execution.childRunIds.includes(id)
-        ) {
+        if (execution?.kind === 'batch' && execution.childRunIds.includes(id)) {
           execution.retryChildRunIds ??= [];
           if (!execution.retryChildRunIds.includes(id))
             execution.retryChildRunIds.push(id);

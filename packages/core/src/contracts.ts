@@ -11,11 +11,11 @@ export type FieldType =
   | 'array'
   | 'null';
 export const fieldTypes: Record<FieldType, string> = {
-  any: 'Any JSON value',
+  any: 'Any',
   string: 'Text',
   number: 'Number',
   integer: 'Whole number',
-  boolean: 'Yes / no',
+  boolean: 'Boolean',
   choice: 'Choice',
   object: 'Object',
   array: 'List',

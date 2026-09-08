@@ -9,18 +9,18 @@ import {
   definitionSchema,
   nodeSchema,
   validateDefinition,
-  validateListScopes,
+  validateBatchScopes,
   type WorkflowDefinition,
   type Json,
 } from '@interlock/core';
 import { parseRawDefinition } from '../packages/ui/src/features/workflows/rawDefinition';
 import { seed } from '../packages/server/src/seed';
 import {
-  listDefinition,
-  nestedLists,
+  batchDefinition,
+  nestedBatches,
   itemAgent,
   itemScript,
-} from './fixtures/list';
+} from './fixtures/batch';
 
 const engines: Engine[] = [],
   dirs: string[] = [];
@@ -37,12 +37,12 @@ function setup(path = ':memory:') {
   return engine;
 }
 function publish(engine: Engine, definition: WorkflowDefinition) {
-  const workflow = engine.create('List test', '', definition);
+  const workflow = engine.create('Batch test', '', definition);
   engine.publish(workflow.id);
   return workflow.id;
 }
 const worker = {
-  workerId: 'list-test',
+  workerId: 'batch-test',
   freshContext: false,
   tools: [],
   skills: [],
@@ -54,16 +54,16 @@ function complete(engine: Engine, root: string, output: Json, index = 0) {
   const work = claim(engine, root, index);
   engine.submit(work.id, work.token!, output);
 }
-it('parses and round-trips a flat List graph including explicit List membership', () => {
-  const definition = nestedLists(2, itemScript());
+it('parses and round-trips a flat Batch graph including explicit Batch membership', () => {
+  const definition = nestedBatches(2, itemScript());
   expect(validateDefinition(definition)).toEqual(definition);
   expect(parseRawDefinition(JSON.stringify(definition))).toEqual({
     definition,
   });
-  expect(validateListScopes(definition)).toEqual(
+  expect(validateBatchScopes(definition)).toEqual(
     new Map([
-      ['list1', 'list'],
-      ['work', 'list1'],
+      ['batch1', 'batch'],
+      ['work', 'batch1'],
     ]),
   );
   const invalid = JSON.parse(JSON.stringify(definition));
@@ -75,7 +75,7 @@ it('parses and round-trips a flat List graph including explicit List membership'
 it.each(['item', 'complete'])(
   'requires exactly one %s route but permits incomplete saved drafts',
   (port) => {
-    const d = listDefinition();
+    const d = batchDefinition();
     const edge = d.edges.find((e) => e.port === port)!;
     d.edges = d.edges.filter((e) => e !== edge);
     const raw = parseRawDefinition(JSON.stringify(d));
@@ -86,7 +86,7 @@ it.each(['item', 'complete'])(
   },
 );
 it('rejects unknown handles, invalid owners, and circular membership', () => {
-  const d = listDefinition();
+  const d = batchDefinition();
   expect(() =>
     definitionSchema.parse({
       ...d,
@@ -95,17 +95,17 @@ it('rejects unknown handles, invalid owners, and circular membership', () => {
         {
           id: 'return',
           source: 'work',
-          target: 'list',
+          target: 'batch',
           port: 'default',
           targetHandle: 'result',
         },
       ],
     }),
   ).toThrow();
-  d.nodes.find((n) => n.id === 'work')!.listId = 'missing';
-  expect(() => validateDefinition(d)).toThrow('List group does not exist');
-  const circular = nestedLists(2);
-  circular.nodes.find((n) => n.id === 'list')!.listId = 'list1';
+  d.nodes.find((n) => n.id === 'work')!.batchId = 'missing';
+  expect(() => validateDefinition(d)).toThrow('Batch group does not exist');
+  const circular = nestedBatches(2);
+  circular.nodes.find((n) => n.id === 'batch')!.batchId = 'batch1';
   expect(() => validateDefinition(circular)).toThrow('circular');
 });
 it('rejects item leaks, outer entry into groups, and Complete entering item work', () => {
@@ -129,28 +129,28 @@ it('rejects item leaks, outer entry into groups, and Complete entering item work
       d.edges[1].target = 'exit';
     },
   ]) {
-    const d = listDefinition();
+    const d = batchDefinition();
     mutate(d);
-    expect(() => validateDefinition(d)).toThrow('cannot cross List groups');
+    expect(() => validateDefinition(d)).toThrow('cannot cross Batch groups');
   }
 });
-it('rejects entering the wrong List and unreachable group members', () => {
-  const wrong = nestedLists(2);
+it('rejects entering the wrong Batch and unreachable group members', () => {
+  const wrong = nestedBatches(2);
   wrong.edges[1].target = 'work';
-  expect(() => validateDefinition(wrong)).toThrow('cannot cross List groups');
-  const orphan = listDefinition();
-  orphan.nodes.push({ ...itemAgent(), id: 'orphan', listId: 'list' });
+  expect(() => validateDefinition(wrong)).toThrow('cannot cross Batch groups');
+  const orphan = batchDefinition();
+  orphan.nodes.push({ ...itemAgent(), id: 'orphan', batchId: 'batch' });
   orphan.edges.push({
     id: 'orphan-end',
     source: 'orphan',
     port: 'default',
-    target: 'list',
+    target: 'batch',
     targetHandle: 'end',
   });
   expect(() => validateDefinition(orphan)).toThrow(/reachable/);
 });
 it('requires both Condition branches and rejects item cycles', () => {
-  const d = listDefinition(
+  const d = batchDefinition(
     nodeSchema.parse({
       id: 'work',
       label: 'Check',
@@ -162,8 +162,8 @@ it('requires both Condition branches and rejects item cycles', () => {
   expect(() => validateDefinition(d)).toThrow('outgoing routes');
   d.edges = d.edges.filter((e) => e.id !== 'end');
   d.nodes.push(
-    { ...itemAgent(), id: 'yes', listId: 'list' },
-    { ...itemAgent(), id: 'no', listId: 'list' },
+    { ...itemAgent(), id: 'yes', batchId: 'batch' },
+    { ...itemAgent(), id: 'no', batchId: 'batch' },
   );
   d.edges.push(
     { id: 'yes', source: 'work', port: 'true', target: 'yes' },
@@ -174,14 +174,14 @@ it('requires both Condition branches and rejects item cycles', () => {
       id: 'yes-end',
       source: 'yes',
       port: 'default',
-      target: 'list',
+      target: 'batch',
       targetHandle: 'end',
     },
     {
       id: 'no-end',
       source: 'no',
       port: 'default',
-      target: 'list',
+      target: 'batch',
       targetHandle: 'end',
     },
   );
@@ -191,29 +191,29 @@ it('requires both Condition branches and rejects item cycles', () => {
   expect(() => validateDefinition(d)).toThrow('cycles');
 });
 it.each([0, 51])('rejects concurrency %s', (concurrency) => {
-  expect(() => listDefinition(undefined, { concurrency })).toThrow();
+  expect(() => batchDefinition(undefined, { concurrency })).toThrow();
 });
 it('doubles [3, 4, 5] and inspects persisted item paths in the published graph', async () => {
   const engine = setup(),
-    definition = listDefinition(itemScript());
+    definition = batchDefinition(itemScript());
   const run = engine.start(publish(engine, definition), [3, 4, 5]).run;
   await vi.waitFor(() => expect(engine.run(run.id).status).toBe('completed'));
   expect(engine.run(run.id).output).toEqual([6, 8, 10]);
   expect(engine.store.workflows()).toHaveLength(1);
   expect(engine.run(run.id).executions.map((e) => e.nodeId)).toEqual([
     'entry',
-    'list',
+    'batch',
     'exit',
   ]);
   for (const child of engine.inspect(run.id).children) {
-    expect(child.listNodeId).toBe('list');
+    expect(child.batchNodeId).toBe('batch');
     expect(child.executions.map((e) => e.nodeId)).toEqual(['work']);
     expect(engine.inspect(child.id).definition).toEqual(definition);
   }
 });
 it('selects itemsPath and returns an empty result without item runs', () => {
   const engine = setup(),
-    id = publish(engine, listDefinition(undefined, { itemsPath: 'items' }));
+    id = publish(engine, batchDefinition(undefined, { itemsPath: 'items' }));
   const empty = engine.start(id, { items: [] });
   expect(empty.run.output).toEqual([]);
   expect(empty.children).toHaveLength(0);
@@ -224,7 +224,7 @@ it('selects itemsPath and returns an empty result without item runs', () => {
 });
 it('enforces concurrency, orders out-of-order results, and waits before Complete', () => {
   const engine = setup(),
-    definition = listDefinition();
+    definition = batchDefinition();
   definition.nodes.push(
     nodeSchema.parse({
       id: 'synthesis',
@@ -247,7 +247,7 @@ it('enforces concurrency, orders out-of-order results, and waits before Complete
   complete(engine, run.id, 'C', 1);
   expect(engine.run(run.id).executions.map((e) => e.nodeId)).toEqual([
     'entry',
-    'list',
+    'batch',
   ]);
   complete(engine, run.id, 'A');
   const synthesis = engine.available(run.id);
@@ -262,7 +262,7 @@ it('enforces concurrency, orders out-of-order results, and waits before Complete
 });
 it('supports 200 items and concurrency 50; rejects invalid input', () => {
   const engine = setup(),
-    id = publish(engine, listDefinition(undefined, { concurrency: 50 })),
+    id = publish(engine, batchDefinition(undefined, { concurrency: 50 })),
     input = Array.from({ length: 200 }, (_, i) => i);
   const run = engine.start(id, input).run;
   expect(engine.available(run.id)).toHaveLength(50);
@@ -279,7 +279,7 @@ it('supports 200 items and concurrency 50; rejects invalid input', () => {
 it('collects failures, successes, and cancelled item executions', () => {
   const engine = setup(),
     run = engine.start(
-      publish(engine, listDefinition(undefined, { failurePolicy: 'collect' })),
+      publish(engine, batchDefinition(undefined, { failurePolicy: 'collect' })),
       ['a', 'b', 'c'],
     ).run;
   const a = claim(engine, run.id);
@@ -293,11 +293,11 @@ it('collects failures, successes, and cancelled item executions', () => {
     { status: 'cancelled', output: null, error: null },
   ]);
 });
-it('applies root/List contracts to the aggregate and node contracts to items', () => {
+it('applies root/Batch contracts to the aggregate and node contracts to items', () => {
   const engine = setup(),
     item = itemAgent();
   item.inputSchema = { type: 'number' };
-  const d = listDefinition(item, {
+  const d = batchDefinition(item, {
     failurePolicy: 'collect',
     inputSchema: { type: 'array' },
     outputSchema: { type: 'array' },
@@ -313,7 +313,7 @@ it('applies root/List contracts to the aggregate and node contracts to items', (
 });
 it('fails all, cancels unfinished work, and retries only failed or cancelled items', () => {
   const engine = setup(),
-    run = engine.start(publish(engine, listDefinition()), [
+    run = engine.start(publish(engine, batchDefinition()), [
       'a',
       'b',
       'c',
@@ -341,7 +341,7 @@ it('fails all, cancels unfinished work, and retries only failed or cancelled ite
 });
 it('keeps retries within concurrency after collect encounters many failures', () => {
   const engine = setup(),
-    d = listDefinition(undefined, {
+    d = batchDefinition(undefined, {
       failurePolicy: 'collect',
       outputSchema: { type: 'number' },
     });
@@ -356,7 +356,7 @@ it('keeps retries within concurrency after collect encounters many failures', ()
 });
 it('cancels nested item assignments and refuses late results', () => {
   const engine = setup(),
-    run = engine.start(publish(engine, nestedLists(2)), [
+    run = engine.start(publish(engine, nestedBatches(2)), [
       [1, 2],
       [3, 4],
     ]).run;
@@ -367,19 +367,21 @@ it('cancels nested item assignments and refuses late results', () => {
   expect(engine.store.runs().every((r) => r.status === 'cancelled')).toBe(true);
   expect(() => engine.submit(work.id, work.token!, null)).toThrow();
 });
-it('executes nested Lists, connecting inner List Output to outer End', async () => {
+it('executes nested Batches, connecting inner Batch Output to outer End', async () => {
   const engine = setup(),
-    definition = nestedLists(2, itemScript());
+    definition = nestedBatches(2, itemScript());
   const run = engine.start(publish(engine, definition), [[3, 4], [5]]).run;
   await vi.waitFor(() => expect(engine.run(run.id).status).toBe('completed'));
   expect(engine.run(run.id).output).toEqual([[6, 8], [10]]);
-  const grandchild = engine.store.runs().find((r) => r.listNodeId === 'list1')!;
+  const grandchild = engine.store
+    .runs()
+    .find((r) => r.batchNodeId === 'batch1')!;
   expect(engine.inspect(grandchild.id).definition).toEqual(definition);
 });
-it('enforces ten nesting levels across Lists and referenced workflows', () => {
-  const d = nestedLists(10);
+it('enforces ten nesting levels across Batches and referenced workflows', () => {
+  const d = nestedBatches(10);
   expect(() => validateDefinition(d)).not.toThrow();
-  expect(() => validateDefinition(nestedLists(11))).toThrow(
+  expect(() => validateDefinition(nestedBatches(11))).toThrow(
     'depth exceeded 10',
   );
   const engine = setup(),
@@ -401,7 +403,7 @@ it('enforces ten nesting levels across Lists and referenced workflows', () => {
 it('supports Workflow and Condition nodes in an item path and validates references', async () => {
   const engine = setup(),
     childId = publish(engine, blankDefinition());
-  const d = listDefinition(
+  const d = batchDefinition(
     nodeSchema.parse({
       id: 'work',
       kind: 'workflow',
@@ -413,7 +415,7 @@ it('supports Workflow and Condition nodes in an item path and validates referenc
   d.nodes.push(
     nodeSchema.parse({
       id: 'check',
-      listId: 'list',
+      batchId: 'batch',
       kind: 'condition',
       label: 'Check',
       path: '',
@@ -423,13 +425,13 @@ it('supports Workflow and Condition nodes in an item path and validates referenc
   d.nodes.push({
     ...itemScript('return input;'),
     id: 'identity',
-    listId: 'list',
+    batchId: 'batch',
   });
   d.edges.push({
     id: 'identity-end',
     source: 'identity',
     port: 'default',
-    target: 'list',
+    target: 'batch',
     targetHandle: 'end',
   });
   d.edges[1].target = 'check';
@@ -444,7 +446,7 @@ it('supports Workflow and Condition nodes in an item path and validates referenc
   );
   const run = engine.start(publish(engine, d), [true, false]).run;
   const work = claim(engine, run.id);
-  expect(engine.run(work.runId).listNodeId).toBeUndefined();
+  expect(engine.run(work.runId).batchNodeId).toBeUndefined();
   engine.submit(work.id, work.token!, 'yes');
   await vi.waitFor(() =>
     expect(engine.run(run.id).output).toEqual(['yes', false]),
@@ -454,15 +456,15 @@ it('supports Workflow and Condition nodes in an item path and validates referenc
   expect(() => publish(engine, d)).toThrow('referenced workflow version');
 });
 it('keeps item definitions immutable across restart, draft edits, and publication', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'interlock-list-'));
+  const dir = mkdtempSync(join(tmpdir(), 'interlock-batch-'));
   dirs.push(dir);
   const path = join(dir, 'test.db'),
     engine = setup(path),
-    original = listDefinition();
+    original = batchDefinition();
   const id = publish(engine, original),
     run = engine.start(id, [1, 2]).run,
     work = claim(engine, run.id);
-  engine.update(id, { draft: listDefinition(itemScript()), draftRevision: 1 });
+  engine.update(id, { draft: batchDefinition(itemScript()), draftRevision: 1 });
   engine.publish(id);
   engine.stop();
   engine.store.close();
@@ -475,35 +477,26 @@ it('keeps item definitions immutable across restart, draft edits, and publicatio
   expect(restarted.run(run.id).output).toEqual([2, 4]);
   expect(restarted.store.workflows()).toHaveLength(1);
 });
-it('round-trips legacy Map with omitted target handles and preserves retry and inspection', () => {
-  const engine = setup(),
-    childDefinition = blankDefinition();
-  childDefinition.nodes[1] = { ...itemAgent(), id: 'agent' };
-  const child = publish(engine, childDefinition),
-    definition = blankDefinition();
-  definition.nodes[1] = nodeSchema.parse({
-    id: 'agent',
-    label: 'Legacy research',
-    kind: 'map',
-    workflowId: child,
-    version: 1,
-  });
-  expect(parseRawDefinition(JSON.stringify(definition))).toEqual({
-    definition,
-  });
-  const run = engine.start(publish(engine, definition), [1, 2]).run;
-  complete(engine, run.id, 2);
-  const work = claim(engine, run.id);
-  engine.reportFailure(work.id, work.token!, 'Retry');
-  expect(engine.inspect(work.runId).definition).toEqual(childDefinition);
-  engine.retry(run.id);
-  complete(engine, run.id, 4);
-  expect(engine.run(run.id).output).toEqual([2, 4]);
-});
+it.each(['map', 'list'])(
+  'rejects removed %s nodes in definitions and raw editing',
+  (kind) => {
+    const definition = batchDefinition();
+    const removed = {
+      ...definition,
+      nodes: definition.nodes.map((node) =>
+        node.kind === 'batch' ? { ...node, kind } : node,
+      ),
+    };
+    expect(() => definitionSchema.parse(removed)).toThrow();
+    expect(
+      parseRawDefinition(JSON.stringify(removed)).definition,
+    ).toBeUndefined();
+  },
+);
 it('queues individual item retries when collect has no free slot', () => {
   const engine = setup(),
     run = engine.start(
-      publish(engine, listDefinition(undefined, { failurePolicy: 'collect' })),
+      publish(engine, batchDefinition(undefined, { failurePolicy: 'collect' })),
       [1, 2, 3],
     ).run;
   const first = claim(engine, run.id);
@@ -521,7 +514,7 @@ it('queues individual item retries when collect has no free slot', () => {
   ]);
 });
 it('cancels item scripts before their delayed side effects', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'interlock-list-cancel-'));
+  const dir = mkdtempSync(join(tmpdir(), 'interlock-batch-cancel-'));
   dirs.push(dir);
   const engine = setup(),
     item = itemScript(`const fs = require('node:fs');
@@ -529,7 +522,7 @@ it('cancels item scripts before their delayed side effects', async () => {
     fs.writeFileSync(dir + '/' + input + '-ready', 'ready');
     await new Promise(resolve => setTimeout(resolve, 500));
     fs.writeFileSync(dir + '/' + input + '-late', 'late'); return input;`);
-  const run = engine.start(publish(engine, listDefinition(item)), [1, 2]).run;
+  const run = engine.start(publish(engine, batchDefinition(item)), [1, 2]).run;
   await vi.waitFor(() => {
     expect(existsSync(join(dir, '1-ready'))).toBe(true);
     expect(existsSync(join(dir, '2-ready'))).toBe(true);
@@ -549,7 +542,7 @@ it('does not advance stale nested runs after an all-policy parent cancels them',
     run = engine.start(
       publish(
         engine,
-        nestedLists(2, itemAgent(), { failurePolicy: 'collect' }),
+        nestedBatches(2, itemAgent(), { failurePolicy: 'collect' }),
       ),
       [null, [1, 2, 3]],
     ).run;
@@ -561,30 +554,30 @@ it('does not advance stale nested runs after an all-policy parent cancels them',
       .every((r) => ['failed', 'cancelled'].includes(r.status)),
   ).toBe(true);
 });
-it('seeds a List with a published Workflow on its visible item path', () => {
+it('seeds a Batch with a published Workflow on its visible item path', () => {
   const engine = setup();
   seed(engine);
   const d = engine.store
     .workflows()
     .find((w) => w.name === 'DeFi opportunity brief')!.draft;
-  const list = d.nodes.find((n) => n.kind === 'list')!;
+  const batch = d.nodes.find((n) => n.kind === 'batch')!;
   const item = d.nodes.find(
     (n) =>
       n.id ===
-      d.edges.find((e) => e.source === list.id && e.port === 'item')!.target,
+      d.edges.find((e) => e.source === batch.id && e.port === 'item')!.target,
   )!;
   expect(item.kind).toBe('workflow');
-  expect(item.listId).toBe(list.id);
+  expect(item.batchId).toBe(batch.id);
   expect(d.edges.find((e) => e.source === item.id)).toMatchObject({
-    target: list.id,
+    target: batch.id,
     targetHandle: 'end',
   });
   expect(() => validateDefinition(d)).not.toThrow();
 });
 
-it('retries nested Lists while preserving successful outer and inner item executions', () => {
+it('retries nested Batches while preserving successful outer and inner item executions', () => {
   const engine = setup(),
-    run = engine.start(publish(engine, nestedLists(2)), [
+    run = engine.start(publish(engine, nestedBatches(2)), [
       [1, 2],
       [3, 4],
     ]).run;
@@ -608,29 +601,29 @@ it('retries nested Lists while preserving successful outer and inner item execut
 });
 
 it('requires explicit End connections and rejects returns to a different group', () => {
-  const d = listDefinition();
+  const d = batchDefinition();
   d.edges = d.edges.filter((e) => e.id !== 'end');
   expect(parseRawDefinition(JSON.stringify(d)).definition).toEqual(d);
   expect(() => validateDefinition(d)).toThrow('outgoing routes');
-  const nested = nestedLists(2);
-  nested.edges.find((e) => e.source === 'work')!.target = 'list';
+  const nested = nestedBatches(2);
+  nested.edges.find((e) => e.source === 'work')!.target = 'batch';
   expect(() => validateDefinition(nested)).toThrow('End must belong');
-  const ordinary = listDefinition();
+  const ordinary = batchDefinition();
   ordinary.edges.find((e) => e.id === 'end')!.target = 'work';
   expect(() => validateDefinition(ordinary)).toThrow('End must belong');
-  const outer = listDefinition();
+  const outer = batchDefinition();
   outer.edges[0].targetHandle = 'end';
   expect(() => validateDefinition(outer)).toThrow('End must belong');
 });
 it('requires array input for blank Items path and allows an enclosing object for a named path', () => {
   expect(() =>
     validateDefinition(
-      listDefinition(undefined, { inputSchema: { type: 'string' } }),
+      batchDefinition(undefined, { inputSchema: { type: 'string' } }),
     ),
   ).toThrow('array input contract');
   expect(() =>
     validateDefinition(
-      listDefinition(undefined, {
+      batchDefinition(undefined, {
         itemsPath: 'guests',
         inputSchema: { type: 'object' },
       }),
@@ -639,7 +632,7 @@ it('requires array input for blank Items path and allows an enclosing object for
   const engine = setup();
   const id = publish(
     engine,
-    listDefinition(undefined, {
+    batchDefinition(undefined, {
       itemsPath: 'guests',
       inputSchema: { type: 'object' },
     }),

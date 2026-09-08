@@ -13,7 +13,6 @@ import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 export function NodeInspector({
   node,
   workflows,
-  nodes = [],
   onChange,
   onDelete,
   definition,
@@ -21,7 +20,6 @@ export function NodeInspector({
 }: {
   node: WorkflowNode;
   workflows: Workflow[];
-  nodes?: WorkflowNode[];
   onChange: (node: WorkflowNode) => void;
   onDelete?: () => void;
   definition?: WorkflowDefinition;
@@ -45,30 +43,6 @@ export function NodeInspector({
           onChange={(e) => patch({ label: e.target.value })}
         />
 
-        {node.kind !== 'entry' && node.kind !== 'exit' && (
-          <NativeSelect
-            mb="md"
-            label="List group"
-            value={node.listId ?? ''}
-            onChange={(e) =>
-              patch({
-                listId: e.target.value || undefined,
-                position: e.target.value
-                  ? { x: 130, y: 160 }
-                  : { x: 150, y: 360 },
-              })
-            }
-          >
-            <option value="">Main workflow</option>
-            {nodes
-              .filter((n) => n.kind === 'list' && n.id !== node.id)
-              .map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.label}
-                </option>
-              ))}
-          </NativeSelect>
-        )}
         {node.kind === 'fetch' && (
           <FetchEditor node={node} onChange={onChange} />
         )}
@@ -210,7 +184,7 @@ export function NodeInspector({
             />
           </>
         )}
-        {(node.kind === 'workflow' || node.kind === 'map') && (
+        {node.kind === 'workflow' && (
           <>
             <NativeSelect
               mb="md"
@@ -245,21 +219,15 @@ export function NodeInspector({
             />
           </>
         )}
-        {node.kind === 'list' && (
+        {node.kind === 'batch' && (
           <p className="hint">
             Connect Start to the first step and every branch to End. Output
             receives the ordered collection after all items finish. Input and
-            output contracts apply to the whole List; use step contracts for
+            output contracts apply to the whole Batch; use step contracts for
             individual items.
           </p>
         )}
-        {node.kind === 'map' && (
-          <p className="hint">
-            Legacy Map runs a pinned workflow for each item. New repeated paths
-            use List nodes.
-          </p>
-        )}
-        {(node.kind === 'map' || node.kind === 'list') && (
+        {node.kind === 'batch' && (
           <>
             <TextInput
               mb="md"
@@ -342,7 +310,7 @@ export function NodeInspector({
           </>
         ) : (
           <>
-            {node.kind === 'list' && (
+            {node.kind === 'batch' && (
               <p className="hint">
                 {node.itemsPath
                   ? `The value at "${node.itemsPath}" must be an array. Input describes the enclosing value.`
@@ -352,7 +320,7 @@ export function NodeInspector({
             <ContractEditor
               label="Input"
               value={
-                node.kind === 'list' &&
+                node.kind === 'batch' &&
                 !node.itemsPath &&
                 Object.keys(node.inputSchema).length === 0
                   ? { type: 'array' }
@@ -363,7 +331,7 @@ export function NodeInspector({
             <ContractEditor
               label="Output"
               value={
-                node.kind === 'list' &&
+                node.kind === 'batch' &&
                 Object.keys(node.outputSchema).length === 0
                   ? { type: 'array' }
                   : node.outputSchema

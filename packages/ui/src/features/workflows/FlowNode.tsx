@@ -15,6 +15,7 @@ import styles from './WorkflowEditor.module.css';
 export type CanvasNode = Node<{
   node: WorkflowNode;
   status?: string;
+  boundarySchema?: WorkflowNode['inputSchema'];
   onEdit?: () => void;
   onAdd?: () => void;
   onToggle?: () => void;
@@ -27,10 +28,24 @@ const icons = {
   script: Terminal,
   fetch: Globe,
   condition: Split,
-  map: Layers,
-  list: Layers,
+  batch: Layers,
   workflow: Workflow,
 };
+function contractLabel(schema: WorkflowNode['inputSchema']): string {
+  const labels: Record<string, string> = {
+    string: 'Text',
+    object: 'Object',
+    array: 'List',
+    number: 'Number',
+    integer: 'Number',
+    boolean: 'Boolean',
+    null: 'Null',
+  };
+  return typeof schema.type === 'string'
+    ? (labels[schema.type] ?? 'Any')
+    : 'Any';
+}
+
 function Port({
   id,
   type,
@@ -64,12 +79,46 @@ function Port({
 export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
   const n = data.node,
     Icon = icons[n.kind];
-  if (n.kind === 'list')
+  const boundary = data.boundarySchema ?? {};
+  const inputSchema = n.inputSchema.type
+    ? n.inputSchema
+    : n.kind === 'entry' || n.kind === 'exit'
+      ? boundary
+      : n.kind === 'batch' && !n.itemsPath
+        ? { type: 'array' }
+        : n.inputSchema;
+  const outputSchema = n.outputSchema.type
+    ? n.outputSchema
+    : n.kind === 'entry' || n.kind === 'exit'
+      ? boundary
+      : n.kind === 'batch'
+        ? { type: 'array' }
+        : n.kind === 'fetch'
+          ? { type: 'object' }
+          : n.kind === 'condition'
+            ? inputSchema
+            : n.outputSchema;
+  const contracts = `${contractLabel(inputSchema)} → ${contractLabel(outputSchema)}`;
+  const detail =
+    n.kind === 'agent'
+      ? `${n.context.mode === 'fresh' ? 'Fresh' : 'Current'} context · ${n.maxAttempts} attempts`
+      : n.kind === 'workflow'
+        ? `Nested workflow · v${n.version}`
+        : n.kind === 'fetch'
+          ? `Method: ${n.method}`
+          : n.kind === 'condition'
+            ? `${n.path} equals ${JSON.stringify(n.equals)}`
+            : n.kind === 'entry'
+              ? 'Workflow input'
+              : n.kind === 'exit'
+                ? 'Return workflow result'
+                : undefined;
+  if (n.kind === 'batch')
     return (
       <div
-        className={`${styles.listGroup} ${selected ? styles.nodeSelected : ''}`}
+        className={`${styles.batchGroup} ${selected ? styles.nodeSelected : ''}`}
       >
-        <div className={`${styles.listHeader} list-drag`}>
+        <div className={`${styles.batchHeader} batch-drag`}>
           <Layers size={17} />
           <strong>{n.label}</strong>
           {data.status && <span>{data.status}</span>}
@@ -84,17 +133,20 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
             </button>
           )}
         </div>
-        <div className={styles.listSummary}>
-          <span>
-            Each item runs independently · Up to {n.concurrency} at once
-          </span>
+        <div className={styles.batchSummary}>
+          <div className={styles.nodeMetadata}>
+            <small>
+              Each item runs independently · Up to {n.concurrency} at once
+            </small>
+            <small>{contracts}</small>
+          </div>
           {data.onAdd && !data.collapsed && (
             <button className="nodrag nopan" onClick={data.onAdd}>
               Add step
             </button>
           )}
         </div>
-        {!data.collapsed && <span className={styles.listStart}>Start</span>}
+        {!data.collapsed && <span className={styles.batchStart}>Start</span>}
         <Port type="target" id="default" label="In" top={32} />
         <Port type="source" id="complete" label="Out" top={32} />
         <Handle
@@ -109,7 +161,7 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
           }}
           aria-label="Start"
         />
-        {!data.collapsed && <span className={styles.listEnd}>End</span>}
+        {!data.collapsed && <span className={styles.batchEnd}>End</span>}
         <Handle
           type="target"
           position={Position.Left}
@@ -155,23 +207,10 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
         </button>
       )}
       <strong>{n.label}</strong>
-      <small>
-        {n.kind === 'agent'
-          ? `${n.context.mode === 'fresh' ? 'Fresh' : 'Current'} context · ${n.maxAttempts} attempts`
-          : n.kind === 'map'
-            ? `Up to ${n.concurrency} workers · v${n.version}`
-            : n.kind === 'workflow'
-              ? `Nested workflow · v${n.version}`
-              : n.kind === 'fetch'
-                ? `${n.method} · HTTP request`
-                : n.kind === 'script'
-                  ? 'JSON in → JSON out'
-                  : n.kind === 'condition'
-                    ? `${n.path} equals ${JSON.stringify(n.equals)}`
-                    : n.kind === 'entry'
-                      ? 'Workflow input'
-                      : 'Return workflow result'}
-      </small>
+      <div className={styles.nodeMetadata}>
+        {detail && <small title={detail}>{detail}</small>}
+        <small>{contracts}</small>
+      </div>
       {n.kind !== 'entry' && <Port type="target" id="default" label="In" />}
       {n.kind !== 'exit' &&
         (n.kind === 'condition' ? (

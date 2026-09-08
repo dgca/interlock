@@ -1,4 +1,4 @@
-import { listDefinition } from './fixtures/list';
+import { batchDefinition } from './fixtures/batch';
 import { runCommand } from '../packages/cli/src/commands';
 import { it, expect } from 'vitest';
 import { serve } from '@hono/node-server';
@@ -71,9 +71,9 @@ it('completes a workflow through real MCP stdio, HTTP, and SQLite interfaces', a
     expect(
       (await rpc.runs.get.query({ id: started.run.id })).run.output,
     ).toEqual({ number: 42 });
-    const definition = listDefinition();
+    const definition = batchDefinition();
     const workflow = await call('create_workflow', {
-      name: 'List transport',
+      name: 'Batch transport',
       definition,
     });
     await call('publish_workflow', { id: workflow.id });
@@ -90,7 +90,7 @@ it('completes a workflow through real MCP stdio, HTTP, and SQLite interfaces', a
       const detail = await runCommand(['run', items[0].runId]);
       expect(detail).toMatchObject({
         definition,
-        run: { listNodeId: 'list' },
+        run: { batchNodeId: 'batch' },
       });
     } finally {
       if (previousUrl === undefined) delete process.env.INTERLOCK_URL;
@@ -99,7 +99,7 @@ it('completes a workflow through real MCP stdio, HTTP, and SQLite interfaces', a
     for (const item of items.reverse()) {
       const claimed = await call('claim_work', {
         workId: item.id,
-        workerId: 'list-mcp',
+        workerId: 'batch-mcp',
       });
       await call('submit_result', {
         workId: item.id,

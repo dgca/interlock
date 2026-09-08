@@ -1,6 +1,6 @@
 # Fetch requests
 
-A Fetch node sends an HTTP request and returns `{ "status": number, "headers": object, "body": value }`. It runs automatically, including inside List groups. Connect an Agent, Script, or Condition to its output to process the response.
+A Fetch node sends an HTTP request and returns `{ "status": number, "headers": object, "body": value }`. It runs automatically, including inside Batch groups. Connect an Agent, Script, or Condition to its output to process the response.
 
 ## Configure a request
 

@@ -7,12 +7,12 @@ type Options = {
   selected?: string;
   selectedEdges?: Set<string>;
   onEdit?: (node: WorkflowNode) => void;
-  onAdd?: (listId: string) => void;
-  onToggle?: (listId: string) => void;
+  onAdd?: (batchId: string) => void;
+  onToggle?: (batchId: string) => void;
   status?: (nodeId: string) => string | undefined;
 };
 
-/** Project explicit List membership onto React Flow Sub Flows. Also renders invalid drafts safely. */
+/** Project explicit Batch membership onto React Flow Sub Flows. Also renders invalid drafts safely. */
 export function canvasGraph(
   definition: WorkflowDefinition,
   options: Options = {},
@@ -20,14 +20,14 @@ export function canvasGraph(
   const index = new Map(definition.nodes.map((node) => [node.id, node]));
   const parentOf = (node: WorkflowNode) => {
     const seen = new Set([node.id]);
-    let parent = node.listId;
+    let parent = node.batchId;
     while (parent) {
-      if (seen.has(parent) || index.get(parent)?.kind !== 'list')
+      if (seen.has(parent) || index.get(parent)?.kind !== 'batch')
         return undefined;
       seen.add(parent);
-      parent = index.get(parent)!.listId;
+      parent = index.get(parent)!.batchId;
     }
-    return node.listId;
+    return node.batchId;
   };
   const parents = new Map(definition.nodes.map((n) => [n.id, parentOf(n)]));
   const hidden = (node: WorkflowNode) => {
@@ -42,12 +42,12 @@ export function canvasGraph(
   const size = (node: WorkflowNode): { width: number; height: number } => {
     if (sizes.has(node.id)) return sizes.get(node.id)!;
     const result =
-      node.kind !== 'list'
+      node.kind !== 'batch'
         ? { width: 220, height: 116 }
         : options.collapsed?.has(node.id)
           ? { width: 320, height: 116 }
           : { width: 520, height: 340 };
-    if (node.kind === 'list' && !options.collapsed?.has(node.id)) {
+    if (node.kind === 'batch' && !options.collapsed?.has(node.id)) {
       for (const child of definition.nodes.filter(
         (n) => parents.get(n.id) === node.id,
       )) {
@@ -80,9 +80,9 @@ export function canvasGraph(
     type: 'workflow',
     position: node.position,
     parentId: parents.get(node.id),
-    // Membership changes through the settings form, never by dragging across a border.
+    // Add step assigns membership; dragging across a border never changes it.
     extent: parents.get(node.id) ? 'parent' : undefined,
-    dragHandle: node.kind === 'list' ? '.list-drag' : undefined,
+    dragHandle: node.kind === 'batch' ? '.batch-drag' : undefined,
     ...size(node),
     style: size(node),
     hidden: hidden(node),
@@ -90,6 +90,12 @@ export function canvasGraph(
     selected: options.selected === node.id,
     data: {
       node,
+      boundarySchema:
+        node.kind === 'entry'
+          ? definition.inputSchema
+          : node.kind === 'exit'
+            ? definition.outputSchema
+            : undefined,
       collapsed: options.collapsed?.has(node.id),
       status: options.status?.(node.id),
       onEdit: options.onEdit ? () => options.onEdit!(node) : undefined,
@@ -126,7 +132,7 @@ export function withoutNodes(
   while (changed) {
     changed = false;
     for (const node of definition.nodes)
-      if (node.listId && removed.has(node.listId) && !removed.has(node.id)) {
+      if (node.batchId && removed.has(node.batchId) && !removed.has(node.id)) {
         removed.add(node.id);
         changed = true;
       }

@@ -83,7 +83,7 @@ export function seed(engine: Engine) {
         },
         {
           id: 'research',
-          kind: 'list',
+          kind: 'batch',
           label: 'Research each protocol',
           itemsPath: 'protocols',
           concurrency: 5,
@@ -92,7 +92,7 @@ export function seed(engine: Engine) {
         },
         {
           id: 'protocol-workflow',
-          listId: 'research',
+          batchId: 'research',
           kind: 'workflow',
           label: 'Research a protocol',
           workflowId: research.id,

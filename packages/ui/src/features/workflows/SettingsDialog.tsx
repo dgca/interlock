@@ -27,7 +27,7 @@ type Settings = {
 export function SettingsDialog({
   node,
   creating = false,
-  parentListId,
+  parentBatchId,
   name,
   description,
   definition,
@@ -38,7 +38,7 @@ export function SettingsDialog({
 }: Settings & {
   node?: WorkflowNode;
   creating?: boolean;
-  parentListId?: string;
+  parentBatchId?: string;
   workflows: Workflow[];
   onClose: () => void;
   onApply: (settings: Settings) => void;
@@ -63,13 +63,13 @@ export function SettingsDialog({
         nodeSchema.parse({
           id: newNodeId,
           kind,
-          listId: parentListId,
-          label: kind === 'list' ? 'List' : `New ${kind}`,
-          position: parentListId
+          batchId: parentBatchId,
+          label: kind === 'batch' ? 'Batch' : `New ${kind}`,
+          position: parentBatchId
             ? {
                 x:
                   130 +
-                  definition.nodes.filter((n) => n.listId === parentListId)
+                  definition.nodes.filter((n) => n.batchId === parentBatchId)
                     .length *
                     290,
                 y: 160,
@@ -107,15 +107,15 @@ export function SettingsDialog({
             ...settings.definition,
             edges:
               creating &&
-              parsed.listId &&
+              parsed.batchId &&
               !settings.definition.edges.some(
-                (e) => e.source === parsed.listId && e.port === 'item',
+                (e) => e.source === parsed.batchId && e.port === 'item',
               )
                 ? [
                     ...settings.definition.edges,
                     {
                       id: crypto.randomUUID(),
-                      source: parsed.listId,
+                      source: parsed.batchId,
                       port: 'item',
                       target: parsed.id,
                     },
@@ -184,14 +184,13 @@ export function SettingsDialog({
                 <option value="fetch">Fetch</option>
                 <option value="condition">Condition</option>
                 <option value="workflow">Workflow</option>
-                <option value="list">List</option>
+                <option value="batch">Batch</option>
               </NativeSelect>
             )}
             {nodeDraft ? (
               <NodeInspector
                 node={nodeDraft}
                 workflows={workflows}
-                nodes={settings.definition.nodes}
                 definition={settings.definition}
                 onBoundaryChange={(schema) =>
                   patchDefinition(

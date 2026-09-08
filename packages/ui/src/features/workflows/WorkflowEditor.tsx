@@ -9,7 +9,15 @@ import {
   applyEdgeChanges,
   type Connection,
 } from '@xyflow/react';
-import { ArrowLeft, Play, Save, Plus, Upload, Settings2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Play,
+  Save,
+  Plus,
+  Upload,
+  Settings2,
+  Trash2,
+} from 'lucide-react';
 import {
   validateDefinition,
   type Workflow,
@@ -19,6 +27,7 @@ import {
 import { Button } from '../../components/Button/Button';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 import { parseRawDefinition } from './rawDefinition';
+import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { SettingsDialog } from './SettingsDialog';
 import { FlowNode } from './FlowNode';
 import { canvasGraph, withoutNodes } from './canvasGraph';
@@ -42,6 +51,7 @@ export function WorkflowEditor({
   act: Action;
   onDirty: (dirty: boolean) => void;
 }) {
+  const [deleting, setDeleting] = useState(false);
   const [pending, setPending] = useState<'save' | 'publish'>();
   const actionInFlight = useRef(false);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -55,7 +65,7 @@ export function WorkflowEditor({
   const [editing, setEditing] = useState<{
     node?: WorkflowNode;
     creating?: boolean;
-    listId?: string;
+    batchId?: string;
   }>();
   const graphError = useMemo(() => {
     try {
@@ -147,7 +157,7 @@ export function WorkflowEditor({
         selected,
         selectedEdges,
         onEdit: (node) => setEditing({ node }),
-        onAdd: (listId) => setEditing({ creating: true, listId }),
+        onAdd: (batchId) => setEditing({ creating: true, batchId }),
         onToggle: (id) =>
           setCollapsed((current) => {
             const next = new Set(current);
@@ -235,6 +245,15 @@ export function WorkflowEditor({
             : `Draft saved · ${workflow.latestVersion ? `v${workflow.latestVersion} published` : 'unpublished'}`}
         </span>
         <div className="actions">
+          <Button
+            variant="danger"
+            disabled={Boolean(pending)}
+            onClick={() => setDeleting(true)}
+            aria-label="Delete workflow"
+            title="Delete workflow"
+          >
+            <Trash2 />
+          </Button>
           <Button
             onClick={() => perform('save', save)}
             disabled={!dirty || rawInvalid || remoteChanged || Boolean(pending)}
@@ -441,9 +460,9 @@ export function WorkflowEditor({
                     target &&
                     target.kind !== 'entry' &&
                     !(c.sourceHandle === 'item' && c.targetHandle === 'end') &&
-                    (c.targetHandle !== 'end' || target.kind === 'list') &&
-                    (c.sourceHandle === 'item' ? source.id : source.listId) ===
-                      (c.targetHandle === 'end' ? target.id : target.listId),
+                    (c.targetHandle !== 'end' || target.kind === 'batch') &&
+                    (c.sourceHandle === 'item' ? source.id : source.batchId) ===
+                      (c.targetHandle === 'end' ? target.id : target.batchId),
                   );
                 }}
                 onNodeClick={(_, n) => setSelected(n.id)}
@@ -486,11 +505,22 @@ export function WorkflowEditor({
           )}
         </div>
       </div>
+      {deleting && (
+        <DeleteWorkflowDialog
+          workflow={{ id: workflow.id, name }}
+          act={act}
+          onClose={() => setDeleting(false)}
+          onDeleted={() => {
+            onDirty(false);
+            onBack();
+          }}
+        />
+      )}
       {editing && (
         <SettingsDialog
           node={editing.node}
           creating={editing.creating}
-          parentListId={editing.listId}
+          parentBatchId={editing.batchId}
           name={name}
           description={description}
           definition={draft}
