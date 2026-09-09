@@ -302,13 +302,7 @@ export function WorkflowEditor({
   return (
     <div ref={editorRef} className={styles.editor}>
       <header className={styles.header}>
-        <Button
-          variant="ghost"
-          onClick={() => {
-            if (!dirty || window.confirm('Discard unsaved changes?')) onBack();
-          }}
-          aria-label="Back to workflows"
-        >
+        <Button variant="ghost" onClick={onBack} aria-label="Back to workflows">
           <ArrowLeft />
         </Button>
         <div className={styles.title}>

@@ -17,6 +17,8 @@ Open [http://127.0.0.1:4310](http://127.0.0.1:4310) in your browser. The package
 
 You can also start Interlock with `npx -y @type_of/interlock@latest` without a global installation. Both startup methods use the same HTTP MCP connection flow.
 
+Workflow editors and run inspectors have bookmarkable URLs. Reloading restores the workflow or run, and browser Back and Forward follow your navigation. The Runs History tab also survives reload. Unsaved draft edits still require saving; navigation asks before discarding them.
+
 Keep the terminal running while you use Interlock. Closing the browser does not stop the engine. Press Ctrl+C in the terminal to stop it.
 
 ## Run your first workflow
@@ -33,7 +35,7 @@ The initial library includes **Size up a Pokémon** and **Build a team roster**,
    {"name":"pikachu"}. Complete its assignments, then return the result.
    ```
 
-5. Open **Activity → Active** and select the execution to follow its steps. Completed, failed, and cancelled executions appear in **History**.
+5. Open **Runs → Active** and select the execution to follow its steps. Completed, failed, and cancelled executions appear in **History**.
 
 Your agent needs access to the tools required by the assignment; this example's assignment is a self-contained writing task, so no extra tools are needed. Its tool approval settings still apply.
 
@@ -71,7 +73,7 @@ The **Tidy** icon sits below **Fit View** in the canvas controls. Use **Tidy** t
 
 ### Follow an execution
 
-Open **Activity** to find active executions and past results. The live view shows step states and Batch item counts. Select a Batch child step, then an item, to inspect that item's input, output, and errors.
+Open **Runs** to find active executions and past results. The live view shows step states and Batch item counts. Select a Batch child step, then an item, to inspect that item's input, output, and errors.
 
 Starting a workflow in the UI does not launch an agent. When an assignment is ready, select **Copy instructions for agent** and paste the instructions into a connected agent conversation. The instructions resume the existing execution. **Waiting for an agent** means work is available; **Agent working** means an executor has claimed it.
 

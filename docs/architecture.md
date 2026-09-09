@@ -94,6 +94,25 @@ The Hono listener exposes Streamable HTTP MCP at `/mcp`, behind the same host, o
 
 The UI uses tRPC requests and server-sent notifications, with periodic refresh as a reconnect fallback. Events and node execution data remain in SQLite. `INTERLOCK_DB` changes the database location. `INTERLOCK_URL` changes the service URL used by CLI and MCP callers.
 
+## UI routes
+
+React Router owns browser navigation through a shared application layout and child routes in `packages/ui/src/routes`. The layout keeps the engine connection and live refresh active across route changes. URL builders live in `routes/paths.ts`.
+
+| Route                    | View                                                   |
+| ------------------------ | ------------------------------------------------------ |
+| `/`                      | Redirects to `/workflows`, replacing the history entry |
+| `/workflows`             | Workflow library                                       |
+| `/workflows/:workflowId` | Workflow draft editor                                  |
+| `/runs`                  | Active runs                                            |
+| `/runs?tab=history`      | Run history                                            |
+| `/runs/:runId`           | Run inspector, including child runs                    |
+
+Resource routes use stable, encoded IDs. Names and future folder or group membership do not determine a workflow's address. Folder and group pages can be added as sibling routes under the application layout without changing existing resource links. Query parameters represent view filters; hash fragments remain available for in-page anchors such as run output.
+
+Direct links wait for initial data instead of briefly displaying the library. Missing workflows and unknown routes show an explicit not-found view. Initial connection failures show an error without changing the URL. Editor navigation, including browser Back and Forward, asks before discarding unsaved changes. Reload and tab closure retain the browser's unsaved-change warning. URLs do not preserve unsaved edits, editor history, Visual/Raw selection, canvas state, or open dialogs.
+
+Vite and the built server serve the app for direct page requests. A future host must also serve `index.html` for UI routes while keeping API and asset handling separate. The route structure does not add hosting, authentication, multi-user access, folders, or groups; the local service restrictions still apply.
+
 ## UI components
 
 Mantine provides dialogs, form controls, tabs, menus, and status badges. The shared theme in `packages/ui/src/theme/theme.ts` defines the dark palette and component defaults. Canvas colors reference those tokens through CSS variables. CSS Modules handle product layouts and React Flow nodes.

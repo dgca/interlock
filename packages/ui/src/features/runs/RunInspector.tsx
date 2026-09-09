@@ -100,7 +100,7 @@ export function RunInspector({
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <Button variant="ghost" onClick={onBack} aria-label="Back to activity">
+        <Button variant="ghost" onClick={onBack} aria-label="Back to runs">
           <ArrowLeft />
         </Button>
         <div>

@@ -1,25 +1,39 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, AlertCircle } from 'lucide-react';
-import { Notification } from '@mantine/core';
+import { Button, Group, Modal, Notification, Text } from '@mantine/core';
+import { Outlet, useBlocker, useMatch, useNavigate } from 'react-router';
+import { paths } from './routes/paths';
 import { useActionFeedback } from './lib/useActionFeedback';
 import type { Run, Workflow } from '@interlock/core';
 import { Sidebar } from './components/Sidebar/Sidebar';
-import { WorkflowLibrary } from './features/workflows/WorkflowLibrary';
-import { WorkflowEditor } from './features/workflows/WorkflowEditor';
-import { WorkflowActivity } from './features/runs/WorkflowActivity';
-import { RunInspector } from './features/runs/RunInspector';
 import { RunDialog } from './features/runs/RunDialog';
 import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
-import { api } from './lib/api';
+import { api, errorMessage } from './lib/api';
+import type { Action } from './lib/useActionFeedback';
+
+export type AppContext = {
+  workflows: Workflow[];
+  runs: Run[];
+  loaded: boolean;
+  loadError: string;
+  tick: number;
+  act: Action;
+  onDirty: (dirty: boolean) => void;
+  onSaved: (workflow: Workflow) => void;
+  onRun: (workflow: Workflow) => void;
+  onConnect: () => void;
+};
 export function App() {
-  const [activityTab, setActivityTab] = useState<'active' | 'history'>(
-    'active',
-  );
+  const navigate = useNavigate();
+  const page = useMatch('/runs/*') ? 'runs' : 'workflows';
   const [editorDirty, setEditorDirty] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
-  const [page, setPage] = useState<'workflows' | 'runs'>('workflows'),
-    [workflowId, setWorkflowId] = useState<string>(),
-    [runId, setRunId] = useState<string>();
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      editorDirty && currentLocation.pathname !== nextLocation.pathname,
+  );
   const [workflows, setWorkflows] = useState<Workflow[]>([]),
     [runs, setRuns] = useState<Run[]>([]),
     [connected, setConnected] = useState(false),
@@ -33,6 +47,8 @@ export function App() {
     setWorkflows(w);
     setRuns(r);
     setConnected(true);
+    setLoaded(true);
+    setLoadError('');
   }, []);
   useEffect(() => {
     let mounted = true;
@@ -40,6 +56,7 @@ export function App() {
       void refresh().catch((e) => {
         if (mounted) {
           setConnected(false);
+          setLoadError(errorMessage(e));
         }
       });
       setTick((t) => t + 1);
@@ -70,25 +87,31 @@ export function App() {
     setTick((t) => t + 1);
   });
   const openRun = (id: string) => {
-    setRunId(id);
-    setPage('runs');
+    void navigate(paths.run(id));
     setRunDialog(undefined);
   };
-  const selected = workflows.find((w) => w.id === workflowId);
+  const context: AppContext = {
+    workflows,
+    runs,
+    loaded,
+    loadError,
+    tick,
+    act,
+    onDirty: setEditorDirty,
+    onSaved: (w) =>
+      setWorkflows((all) => all.map((old) => (old.id === w.id ? w : old))),
+    onRun: setRunDialog,
+    onConnect: () => setConnectDialog(true),
+  };
   return (
     <div className="app">
       <Sidebar
         onConnect={() => setConnectDialog(true)}
         page={page}
         connected={connected}
-        onNavigate={(next) => {
-          if (editorDirty && !window.confirm('Discard unsaved changes?'))
-            return;
-          setEditorDirty(false);
-          setPage(next);
-          setWorkflowId(undefined);
-          setRunId(undefined);
-        }}
+        onNavigate={(next) =>
+          void navigate(next === 'runs' ? paths.runs() : paths.workflows)
+        }
       />
       <main className="main">
         {feedback && (
@@ -113,48 +136,35 @@ export function App() {
             {feedback.message}
           </Notification>
         )}
-        {page === 'workflows' ? (
-          selected ? (
-            <WorkflowEditor
-              onDirty={setEditorDirty}
-              key={selected.id}
-              workflow={selected}
-              workflows={workflows}
-              act={act}
-              onSaved={(w) =>
-                setWorkflows((all) =>
-                  all.map((old) => (old.id === w.id ? w : old)),
-                )
-              }
-              onBack={() => setWorkflowId(undefined)}
-              onRun={setRunDialog}
-            />
-          ) : (
-            <WorkflowLibrary
-              workflows={workflows}
-              onOpen={setWorkflowId}
-              act={act}
-            />
-          )
-        ) : runId ? (
-          <RunInspector
-            key={runId}
-            id={runId}
-            tick={tick}
-            onConnect={() => setConnectDialog(true)}
-            onOpen={openRun}
-            onBack={() => setRunId(undefined)}
-            act={act}
-          />
-        ) : (
-          <WorkflowActivity
-            runs={runs}
-            onOpen={openRun}
-            tab={activityTab}
-            onTabChange={setActivityTab}
-          />
-        )}
+        <Outlet context={context} />
       </main>
+      <Modal
+        opened={blocker.state === 'blocked'}
+        onClose={() => blocker.state === 'blocked' && blocker.reset()}
+        title="Discard unsaved changes?"
+        centered
+      >
+        <Text>Your workflow has changes that have not been saved.</Text>
+        <Group justify="flex-end" mt="md">
+          <Button
+            variant="default"
+            onClick={() => blocker.state === 'blocked' && blocker.reset()}
+          >
+            Keep editing
+          </Button>
+          <Button
+            color="red"
+            onClick={() => {
+              if (blocker.state === 'blocked') {
+                setEditorDirty(false);
+                blocker.proceed();
+              }
+            }}
+          >
+            Discard changes
+          </Button>
+        </Group>
+      </Modal>
       {connectDialog && (
         <ConnectDialog onClose={() => setConnectDialog(false)} />
       )}{' '}
