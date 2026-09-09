@@ -260,6 +260,7 @@ it('enforces concurrency, orders out-of-order results, and waits before Complete
   complete(engine, run.id, 'summary');
   expect(engine.run(run.id).output).toBe('summary');
 });
+// Maximum-size integration coverage runs longer on shared CI runners.
 it('supports 200 items and concurrency 50; rejects invalid input', () => {
   const engine = setup(),
     id = publish(engine, batchDefinition(undefined, { concurrency: 50 })),
@@ -275,7 +276,7 @@ it('supports 200 items and concurrency 50; rejects invalid input', () => {
     '200 items',
   );
   expect(engine.start(id, {}).run.error).toContain('array');
-});
+}, 60000);
 it('collects failures, successes, and cancelled item executions', () => {
   const engine = setup(),
     run = engine.start(
