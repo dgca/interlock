@@ -17,6 +17,7 @@ import {
 } from '../../components/ContractEditor/ContractEditor';
 import { NodeInspector } from './NodeInspector';
 import { download } from '../../lib/api';
+import { newNodePosition, separateNodes } from './workflowLayout';
 import styles from './SettingsDialog.module.css';
 
 type Settings = {
@@ -65,16 +66,6 @@ export function SettingsDialog({
           kind,
           batchId: parentBatchId,
           label: kind === 'batch' ? 'Batch' : `New ${kind}`,
-          position: parentBatchId
-            ? {
-                x:
-                  130 +
-                  definition.nodes.filter((n) => n.batchId === parentBatchId)
-                    .length *
-                    290,
-                y: 160,
-              }
-            : { x: 150 + definition.nodes.length * 90, y: 360 },
           prompt: 'Describe the assignment.',
           url: '',
           language: 'javascript',
@@ -101,32 +92,35 @@ export function SettingsDialog({
     try {
       if (nodeDraft) {
         const parsed = nodeSchema.parse(nodeDraft);
+        if (creating)
+          parsed.position = newNodePosition(settings.definition, parsed);
+        const nextDefinition = {
+          ...settings.definition,
+          edges:
+            creating &&
+            parsed.batchId &&
+            !settings.definition.edges.some(
+              (e) => e.source === parsed.batchId && e.port === 'item',
+            )
+              ? [
+                  ...settings.definition.edges,
+                  {
+                    id: crypto.randomUUID(),
+                    source: parsed.batchId,
+                    port: 'item' as const,
+                    target: parsed.id,
+                  },
+                ]
+              : settings.definition.edges,
+          nodes: creating
+            ? [...settings.definition.nodes, parsed]
+            : settings.definition.nodes.map((n) =>
+                n.id === parsed.id ? parsed : n,
+              ),
+        };
         onApply({
           ...settings,
-          definition: {
-            ...settings.definition,
-            edges:
-              creating &&
-              parsed.batchId &&
-              !settings.definition.edges.some(
-                (e) => e.source === parsed.batchId && e.port === 'item',
-              )
-                ? [
-                    ...settings.definition.edges,
-                    {
-                      id: crypto.randomUUID(),
-                      source: parsed.batchId,
-                      port: 'item',
-                      target: parsed.id,
-                    },
-                  ]
-                : settings.definition.edges,
-            nodes: creating
-              ? [...settings.definition.nodes, parsed]
-              : settings.definition.nodes.map((n) =>
-                  n.id === parsed.id ? parsed : n,
-                ),
-          },
+          definition: creating ? separateNodes(nextDefinition) : nextDefinition,
         });
       } else {
         if (!settings.name.trim()) throw new Error('Give the workflow a name.');

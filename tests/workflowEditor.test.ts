@@ -52,7 +52,7 @@ vi.mock(
       );
     },
     Background: () => null,
-    Controls: () => null,
+    Controls: ({ children }: any) => children,
     MiniMap: () => null,
   }),
 );
@@ -113,7 +113,7 @@ const render = async () => {
 };
 const button = (name: string) =>
   Array.from(container.querySelectorAll('button')).find(
-    (b) => b.textContent === name,
+    (b) => (b.getAttribute('aria-label') ?? b.textContent) === name,
   )!;
 const click = async (name: string) => {
   await act(async () => button(name).click());
@@ -149,6 +149,36 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+});
+
+it('keeps multiple nodes selected through a move without saving selection as draft data', async () => {
+  await render();
+  const ids = canvas.props.nodes.map((node: any) => node.id);
+  await act(async () => {
+    canvas.props.onNodesChange(
+      ids.map((id: string) => ({ id, type: 'select', selected: true })),
+    );
+  });
+  expect(
+    canvas.props.nodes
+      .filter((node: any) => node.selected)
+      .map((node: any) => node.id),
+  ).toEqual(ids);
+  expect(button('Save draft').disabled).toBe(true);
+  await click(`Move ${ids[0]}`);
+  expect(
+    canvas.props.nodes
+      .filter((node: any) => node.selected)
+      .map((node: any) => node.id),
+  ).toEqual(ids);
+  await click('Save draft');
+  expect(
+    rpc.update.mock.calls[0][0].draft.nodes.every(
+      (node: any) => !('selected' in node),
+    ),
+  ).toBe(true);
+  await act(async () => canvas.props.onPaneClick());
+  expect(canvas.props.nodes.some((node: any) => node.selected)).toBe(false);
 });
 
 it('refreshes a clean open editor after an external edit and publishes without a stale save', async () => {
@@ -336,4 +366,253 @@ it('selects and deletes an End connection without persisting selection state', a
   expect(
     rpc.update.mock.calls[0][0].draft.edges.some((e: any) => e.id === 'end'),
   ).toBe(false);
+});
+
+const positions = () =>
+  canvas.props.nodes.map((n: any) => ({ id: n.id, position: n.position }));
+const shortcut = async (
+  target: HTMLElement,
+  shiftKey = false,
+  metaKey = false,
+) => {
+  const event = new KeyboardEvent('keydown', {
+    key: 'z',
+    ctrlKey: !metaKey,
+    metaKey,
+    shiftKey,
+    bubbles: true,
+    cancelable: true,
+  });
+  await act(async () => target.dispatchEvent(event));
+  return event;
+};
+
+it('undoes a complete group drag in one step and redoes it', async () => {
+  await render();
+  const original = positions();
+  await act(async () => canvas.props.onSelectionDragStart());
+  for (const offset of [10, 20, 30]) {
+    await act(async () =>
+      canvas.props.onNodesChange(
+        original.map((n: any) => ({
+          type: 'position',
+          id: n.id,
+          position: { x: n.position.x + offset, y: n.position.y + offset },
+          dragging: true,
+        })),
+      ),
+    );
+  }
+  expect(button('Undo').disabled).toBe(true);
+  await act(async () => {
+    canvas.props.onNodesChange(
+      original.map((n: any) => ({
+        type: 'position',
+        id: n.id,
+        dragging: false,
+      })),
+    );
+    canvas.props.onSelectionDragStop();
+  });
+  const moved = positions();
+  await click('Undo');
+  expect(positions()).toEqual(original);
+  expect(button('Undo').disabled).toBe(true);
+  expect(button('Save draft').disabled).toBe(true);
+  await click('Redo');
+  expect(positions()).toEqual(moved);
+  expect(button('Save draft').disabled).toBe(false);
+});
+
+it('restores a deleted Batch, descendants, and all connections as one action', async () => {
+  workflow.draft = nestedBatches(2);
+  await render();
+  const original = canvas.props.nodes.map((n: any) => n.data.node);
+  const originalEdges = canvas.props.edges;
+  await act(async () => {
+    expect(
+      await canvas.props.onBeforeDelete({
+        nodes: canvas.props.nodes.filter((n: any) => n.id === 'batch'),
+        edges: canvas.props.edges.filter(
+          (e: any) => e.source === 'batch' || e.target === 'batch',
+        ),
+      }),
+    ).toBe(false);
+  });
+  expect(canvas.props.nodes.map((n: any) => n.id)).toEqual(['entry', 'exit']);
+  await click('Undo');
+  expect(canvas.props.nodes.map((n: any) => n.data.node)).toEqual(original);
+  expect(canvas.props.edges).toEqual(originalEdges);
+  expect(button('Undo').disabled).toBe(true);
+  await click('Redo');
+  expect(canvas.props.nodes.map((n: any) => n.id)).toEqual(['entry', 'exit']);
+});
+
+it('keeps history through saving and publishing without undoing the saved revision or publication', async () => {
+  await render();
+  const original = positions();
+  await click(`Move ${original[0].id}`);
+  await click('Publish version');
+  workflow = { ...(await rpc.update.mock.results[0].value), latestVersion: 2 };
+  await render();
+  expect(button('Save draft').disabled).toBe(true);
+  await click('Undo');
+  expect(positions()).toEqual(original);
+  expect(button('Save draft').disabled).toBe(false);
+  expect(button('Run v2')).toBeDefined();
+  expect(rpc.publish).toHaveBeenCalledTimes(1);
+  await click('Save draft');
+  expect(rpc.update).toHaveBeenLastCalledWith(
+    expect.objectContaining({ draftRevision: 2 }),
+  );
+  await click('Redo');
+  expect(positions()).not.toEqual(original);
+});
+
+it('groups raw edits when applied and keeps uncommitted text out of workflow history', async () => {
+  await render();
+  await click('Raw');
+  const original = JSON.parse(rawEditor.props.value);
+  await act(async () => rawEditor.props.onChange('{'));
+  expect(button('Undo').disabled).toBe(true);
+  await act(async () =>
+    rawEditor.props.onChange(JSON.stringify({ ...original, maxSteps: 61 })),
+  );
+  await act(async () =>
+    rawEditor.props.onChange(JSON.stringify({ ...original, maxSteps: 62 })),
+  );
+  expect(button('Undo').disabled).toBe(true);
+  await click('Visual');
+  await click('Undo');
+  expect(button('Save draft').disabled).toBe(true);
+  await click('Raw');
+  expect(JSON.parse(rawEditor.props.value)).toEqual(original);
+  await click('Redo');
+  expect(JSON.parse(rawEditor.props.value).maxSteps).toBe(62);
+  await click('Save draft');
+  expect(button('Undo').disabled).toBe(false);
+  await click('Undo');
+  expect(JSON.parse(rawEditor.props.value)).toEqual(original);
+});
+
+it('records saving raw changes once, even after a failed save and retry', async () => {
+  await render();
+  await click('Raw');
+  const original = JSON.parse(rawEditor.props.value);
+  await act(async () =>
+    rawEditor.props.onChange(JSON.stringify({ ...original, maxSteps: 62 })),
+  );
+  rpc.update.mockRejectedValueOnce(new Error('Offline'));
+  await click('Save draft');
+  expect(button('Undo').disabled).toBe(false);
+  await click('Save draft');
+  await click('Visual');
+  await click('Undo');
+  expect(button('Undo').disabled).toBe(true);
+  await click('Raw');
+  expect(JSON.parse(rawEditor.props.value)).toEqual(original);
+});
+
+it('clears redo after a new edit and skips selection, collapse, and no-op changes', async () => {
+  workflow.draft = batchDefinition();
+  await render();
+  await act(async () => {
+    canvas.props.onNodesChange([
+      { type: 'select', id: 'work', selected: true },
+    ]);
+    canvas.props.nodes.find((n: any) => n.id === 'batch').data.onToggle();
+    canvas.props.onNodeDragStart();
+    canvas.props.onNodeDragStop();
+  });
+  expect(button('Undo').disabled).toBe(true);
+  await click('Move batch');
+  await click('Move batch');
+  await click('Undo');
+  expect(button('Undo').disabled).toBe(true);
+  expect(button('Redo').disabled).toBe(false);
+  await click('Workflow settings');
+  expect(button('Undo').disabled).toBe(true);
+  await click('Apply local edit');
+  expect(button('Redo').disabled).toBe(true);
+  await click('Undo');
+  expect(button('Save draft').disabled).toBe(true);
+});
+
+it('caps history at 50 actions and clears it when loading another draft or reopening', async () => {
+  await render();
+  const id = canvas.props.nodes[0].id;
+  for (let x = 1; x <= 55; x++) {
+    await act(async () =>
+      canvas.props.onNodesChange([
+        { type: 'position', id, position: { x, y: 0 } },
+      ]),
+    );
+  }
+  for (let i = 0; i < 50; i++) await click('Undo');
+  expect(canvas.props.nodes[0].position).toEqual({ x: 5, y: 0 });
+  expect(button('Undo').disabled).toBe(true);
+  workflow = { ...workflow, draftRevision: 2 };
+  await render();
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  await click('Load latest draft');
+  confirm.mockRestore();
+  expect(button('Undo').disabled).toBe(true);
+  expect(button('Redo').disabled).toBe(true);
+  await click(`Move ${id}`);
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await render();
+  expect(button('Undo').disabled).toBe(true);
+  expect(button('Redo').disabled).toBe(true);
+});
+
+it('handles Ctrl/Command+Z and Shift+Z without capturing text editing or modal shortcuts', async () => {
+  await render();
+  const original = positions();
+  await click(`Move ${original[0].id}`);
+  const target = button('Save draft');
+  expect((await shortcut(target)).defaultPrevented).toBe(true);
+  expect(positions()).toEqual(original);
+  await shortcut(target, true, true);
+  expect(positions()).not.toEqual(original);
+  const input = document.createElement('textarea');
+  target.parentElement!.append(input);
+  expect((await shortcut(input)).defaultPrevented).toBe(false);
+  expect(positions()).not.toEqual(original);
+  input.remove();
+  await click('Workflow settings');
+  expect((await shortcut(button('Apply local edit'))).defaultPrevented).toBe(
+    false,
+  );
+});
+
+it('tidies the whole workflow as one undoable action without rewriting graph semantics', async () => {
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    callback(0);
+    return 1;
+  });
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  try {
+    workflow.draft = nestedBatches(2);
+    await render();
+    const original = positions();
+    await click('Tidy');
+    const arranged = positions();
+    expect(arranged).not.toEqual(original);
+    expect(button('Save draft').disabled).toBe(false);
+    await click('Tidy');
+    await click('Undo');
+    expect(positions()).toEqual(original);
+    expect(button('Undo').disabled).toBe(true);
+    await click('Redo');
+    expect(positions()).toEqual(arranged);
+    await click('Save draft');
+    const savedDraft = rpc.update.mock.calls[0][0].draft;
+    expect(savedDraft.edges).toEqual(workflow.draft.edges);
+    expect(savedDraft.nodes.map(({ position, ...node }: any) => node)).toEqual(
+      workflow.draft.nodes.map(({ position, ...node }) => node),
+    );
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

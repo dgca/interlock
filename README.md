@@ -61,6 +61,14 @@ Configure input and output contracts in the node settings. Entry and Exit displa
 
 Select **Publish version** when the draft is ready, then **Run v1** to supply input and start a run. Each run uses a fixed published version. Editing a draft does not change an existing run.
 
+Use **Undo** and **Redo** beside **Save draft** to reverse or restore up to 50 editor actions. The shortcuts are Ctrl/Command+Z and Ctrl/Command+Shift+Z; text fields keep their own typing undo. A drag, group move, deletion, connection change, or settings application counts as one action. Saving preserves history. Leaving the workflow, reloading the page, or loading an external draft clears it. Undo changes the editable draft, never a published version.
+
+Raw edits enter workflow history as one action when you return to **Visual** or save. While raw edits are unapplied, use the text editor's undo, or apply or discard those edits before using the workflow Undo and Redo buttons.
+
+Hold **Z** and drag from empty canvas space to draw a zoom rectangle. Release the mouse to fit that area into view. Press **Escape** or release Z before releasing the mouse to cancel. A click without a drag does nothing. This shortcut is inactive in text fields and settings dialogs and does not add to Undo history.
+
+The **Tidy** icon sits below **Fit View** in the canvas controls. Use **Tidy** to arrange the whole workflow from left to right, including nested Batch contents, and fit it into view. Tidy uses expanded Batch sizes so groups have room when reopened. It changes only positions and can be undone in one step. Save the draft to keep the arrangement. Imported and agent-authored positions remain as supplied until you tidy them.
+
 ### Follow an execution
 
 Open **Activity** to find active executions and past results. The live view shows step states and Batch item counts. Select a Batch child step, then an item, to inspect that item's input, output, and errors.
@@ -71,7 +79,7 @@ Failed executions can be retried from the inspector. Retrying a failed Batch pre
 
 ### Manage workflows
 
-Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from the workflow menu and editor for active and archived workflows. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows block deletion.
+Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library for active and archived workflows. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows block deletion.
 
 ### Fetch nodes
 
