@@ -1,5 +1,30 @@
 # @type_of/interlock
 
+## 0.1.2
+
+### Patch Changes
+
+- 587408c: Hold Z and drag from empty workflow canvas space to zoom to a rectangular area. Show a zoom cursor, rectangle, and footer hint. Escape or releasing Z cancels the gesture; text editing and Undo shortcuts keep their existing behavior.
+- 587408c: Use design tool controls in the workflow editor: scroll to pan and drag the canvas to select multiple nodes.
+
+  Show the regular arrow cursor over empty canvas when selecting nodes.
+
+  Hold Command or Control to zoom by scrolling while keeping the arrow cursor.
+
+  Hide node pencil buttons while multiple nodes are selected. Batch settings remain available.
+
+- 587408c: Add Undo and Redo buttons and Ctrl/Command+Z and Ctrl/Command+Shift+Z shortcuts to the workflow editor. Keep up to 50 actions per editing session, including group moves, Batch deletion, settings changes, and applied raw edits. Saving preserves history; leaving the editor or loading an external draft clears it.
+- 587408c: Distinguish node roles with teal Agent icons and Workflow icons matching Exit. Keep Script, Fetch, Condition, and Batch icons blue, card headings gray, and preserve card backgrounds and execution status colors.
+
+  Color Condition output handles and edges green for True and red for False. Keep the handle labels and remove redundant edge labels.
+
+- ee2f5c1: Add bookmarkable workflow and run URLs that restore the selected page on reload, preserve the selected Runs tab, and support browser Back and Forward with unsaved-edit protection.
+
+  Rename Activity to Runs throughout the UI to match the run URLs and domain terminology.
+
+- 587408c: Remove the Delete button from the workflow editor. Workflows can still be deleted from the workflow list.
+- 587408c: Fix overlapping new nodes by using their rendered dimensions for placement and making room when Batch contents grow. Add an undoable Tidy action that arranges the workflow and nested Batch contents from left to right, then fits the result into view. Place Tidy below Fit View in the canvas controls.
+
 ## 0.1.1
 
 ### Patch Changes
