@@ -3,7 +3,7 @@ import type { Run } from '@interlock/core';
 import { ArrowUpRight, Activity } from 'lucide-react';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 import { Badge } from '../../components/Badge/Badge';
-export function WorkflowActivity({
+export function RunList({
   runs,
   onOpen,
   tab,
@@ -26,7 +26,7 @@ export function WorkflowActivity({
     <div className={layout.page}>
       <header className={layout.header}>
         <div>
-          <h1>Activity</h1>
+          <h1>Runs</h1>
           <p>Follow ongoing work and inspect past results.</p>
         </div>
       </header>
@@ -73,12 +73,12 @@ export function WorkflowActivity({
             <div className="empty">
               <Activity size={28} />
               <h2>
-                {tab === 'active' ? 'No active workflows.' : 'No history yet.'}
+                {tab === 'active' ? 'No active runs.' : 'No history yet.'}
               </h2>
               <p>
                 {tab === 'active'
                   ? 'Open a published workflow and choose Run to start.'
-                  : 'Completed, failed, and cancelled activity appears here.'}
+                  : 'Completed, failed, and cancelled runs appear here.'}
               </p>
             </div>
           )}

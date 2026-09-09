@@ -120,6 +120,17 @@ try {
   };
   await start();
   const html = await fetch(url).then((r) => r.text());
+  for (const path of [
+    '/workflows',
+    '/workflows/example',
+    '/runs?tab=history',
+    '/runs/example',
+  ]) {
+    const response = await fetch(`${url}${path}`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /text\/html/);
+    assert.equal(await response.text(), html);
+  }
   const asset = html.match(/src="([^"]+\.js)"/)[1];
   assert.match(
     await fetch(new URL(asset, url)).then((r) => r.text()),

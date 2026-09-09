@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
 import { expect, it, vi } from 'vitest';
 import type { Run } from '@interlock/core';
-import { WorkflowActivity } from '../packages/ui/src/features/runs/WorkflowActivity';
+import { RunList } from '../packages/ui/src/features/runs/RunList';
 
 it('separates active root executions from history and opens the selected execution', async () => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -41,7 +41,7 @@ it('separates active root executions from history and opens the selected executi
     return h(
       MantineProvider,
       {},
-      h(WorkflowActivity, { runs, onOpen: open, tab, onTabChange: setTab }),
+      h(RunList, { runs, onOpen: open, tab, onTabChange: setTab }),
     );
   }
   const container = document.createElement('div');
