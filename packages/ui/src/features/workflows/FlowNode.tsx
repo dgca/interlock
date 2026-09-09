@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { nodeKindLabel, type WorkflowNode } from '@interlock/core';
 import styles from './WorkflowEditor.module.css';
+import { conditionColors } from './conditionColors';
 export type CanvasNode = Node<{
   node: WorkflowNode;
   status?: string;
@@ -61,11 +62,13 @@ function Port({
   type,
   label,
   top = '50%',
+  color,
 }: {
   id: string;
   type: 'source' | 'target';
   label: string;
   top?: number | string;
+  color?: string;
 }) {
   return (
     <>
@@ -74,11 +77,11 @@ function Port({
         position={type === 'target' ? Position.Left : Position.Right}
         id={id}
         aria-label={label}
-        style={{ top }}
+        style={{ top, backgroundColor: color }}
       />
       <span
         className={type === 'target' ? styles.portInput : styles.portOutput}
-        style={{ top }}
+        style={{ top, color }}
       >
         {label}
       </span>
@@ -259,8 +262,20 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
       {n.kind !== 'exit' &&
         (n.kind === 'condition' ? (
           <>
-            <Port type="source" id="true" label="True" top="35%" />
-            <Port type="source" id="false" label="False" top="75%" />
+            <Port
+              type="source"
+              id="true"
+              label="True"
+              top="35%"
+              color={conditionColors.true}
+            />
+            <Port
+              type="source"
+              id="false"
+              label="False"
+              top="75%"
+              color={conditionColors.false}
+            />
           </>
         ) : (
           <Port type="source" id="default" label="Out" />

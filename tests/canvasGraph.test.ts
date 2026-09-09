@@ -45,7 +45,7 @@ it('deleting a group removes descendants and incident edges but keeps outer node
   expect(d.nodes.map((n) => n.id)).toEqual(['entry', 'exit']);
   expect(d.edges).toEqual([]);
 });
-it('renders incomplete and circular drafts safely and labels only conditional edges', () => {
+it('renders incomplete and circular drafts safely without redundant edge labels', () => {
   const d = batchDefinition();
   d.nodes.find((n) => n.id === 'batch')!.batchId = 'batch';
   expect(() => canvasGraph(d)).not.toThrow();

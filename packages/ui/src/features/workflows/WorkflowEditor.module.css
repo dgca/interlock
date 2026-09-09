@@ -45,6 +45,20 @@
   min-width: 0;
   background: var(--canvas);
 }
+.canvasWrap
+  :global(.react-flow__pane.selection:not(.draggable):not(.dragging)) {
+  cursor: default;
+}
+.boxZoomReady :global(.react-flow__pane) {
+  cursor: zoom-in;
+}
+.zoomBox {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
 .canvasToolbar {
   position: absolute;
   z-index: 5;
@@ -150,15 +164,19 @@
   background: var(--accent-soft);
 }
 .nodeIcon.agent {
-  color: var(--pink);
-  background: var(--pink-soft);
-  border-color: var(--pink-border);
+  color: var(--mantine-color-teal-2);
+  background: color-mix(
+    in srgb,
+    var(--mantine-color-teal-4) 12%,
+    var(--surface-raised)
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--mantine-color-teal-4) 45%,
+    var(--border)
+  );
 }
-.nodeIcon.batch {
-  color: var(--accent-text);
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
-}
+.nodeIcon.workflow,
 .nodeIcon.exit {
   color: var(--pink);
   background: var(--pink-soft);
@@ -280,6 +298,10 @@
 .batchHeader strong {
   font-size: 13px;
   flex: 1;
+  color: var(--muted);
+}
+.batchHeader > svg {
+  color: var(--accent-text);
 }
 .batchHeader span {
   font-size: 10px;

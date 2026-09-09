@@ -4,10 +4,12 @@ import {
   ReactFlow,
   Background,
   Controls,
+  ControlButton,
   MiniMap,
   applyNodeChanges,
   applyEdgeChanges,
   type Connection,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import {
   ArrowLeft,
@@ -16,24 +18,30 @@ import {
   Plus,
   Upload,
   Settings2,
-  Trash2,
+  Undo2,
+  Redo2,
+  WandSparkles,
 } from 'lucide-react';
 import {
   validateDefinition,
   type Workflow,
   type WorkflowNode,
   type WorkflowEdge,
+  type WorkflowDefinition,
 } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 import { parseRawDefinition } from './rawDefinition';
-import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { SettingsDialog } from './SettingsDialog';
-import { FlowNode } from './FlowNode';
+import { FlowNode, type CanvasNode } from './FlowNode';
 import { canvasGraph, withoutNodes } from './canvasGraph';
+import { useWorkflowHistory } from './useWorkflowHistory';
+import { useBoxZoom } from './useBoxZoom';
+import { tidyWorkflow } from './workflowLayout';
 import { api } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
 const nodeTypes = { workflow: FlowNode };
+const zoomKeys = ['Meta', 'Control'];
 export function WorkflowEditor({
   workflow,
   workflows,
@@ -51,17 +59,37 @@ export function WorkflowEditor({
   act: Action;
   onDirty: (dirty: boolean) => void;
 }) {
-  const [deleting, setDeleting] = useState(false);
   const [pending, setPending] = useState<'save' | 'publish'>();
   const actionInFlight = useRef(false);
   const editorRef = useRef<HTMLDivElement>(null);
+  const flowRef = useRef<ReactFlowInstance<CanvasNode> | null>(null);
+  const fitAfterTidy = useRef(false);
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [draft, setDraft] = useState(workflow.draft),
-    [name, setName] = useState(workflow.name),
-    [description, setDescription] = useState(workflow.description),
-    [revision, setRevision] = useState(workflow.draftRevision),
-    [selected, setSelected] = useState<string>();
+  const history = useWorkflowHistory({
+    draft: workflow.draft,
+    name: workflow.name,
+    description: workflow.description,
+  });
+  const { draft, name, description } = history.present;
+  useEffect(() => {
+    if (!fitAfterTidy.current) return;
+    fitAfterTidy.current = false;
+    const frame = requestAnimationFrame(() => {
+      void flowRef.current?.fitView({ padding: 0.22, duration: 180 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [draft]);
+  const setDraft = (
+    update:
+      WorkflowDefinition | ((draft: WorkflowDefinition) => WorkflowDefinition),
+  ) =>
+    history.change((current) => ({
+      ...current,
+      draft: typeof update === 'function' ? update(current.draft) : update,
+    }));
+  const [revision, setRevision] = useState(workflow.draftRevision),
+    [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<{
     node?: WorkflowNode;
     creating?: boolean;
@@ -76,6 +104,9 @@ export function WorkflowEditor({
     }
   }, [draft]);
   const [view, setView] = useState<'visual' | 'raw'>('visual');
+  const boxZoom = useBoxZoom(
+    view === 'visual' && !editing && !history.groupStart,
+  );
   const [raw, setRaw] = useState('');
   const rawResult = useMemo(
     () => (view === 'raw' ? parseRawDefinition(raw) : undefined),
@@ -111,14 +142,17 @@ export function WorkflowEditor({
     workflow.draftRevision > revision ||
     (workflow.draftRevision === revision && remoteSnapshot !== saved);
   const loadLatest = () => {
-    setDraft(workflow.draft);
+    history.reset({
+      draft: workflow.draft,
+      name: workflow.name,
+      description: workflow.description,
+    });
     setRaw(JSON.stringify(workflow.draft, null, 2));
-    setName(workflow.name);
-    setDescription(workflow.description);
     setRevision(workflow.draftRevision);
     setSaved(remoteSnapshot);
     setEditing(undefined);
-    setSelected(undefined);
+    setSelected(new Set());
+    setSelectedEdges(new Set());
   };
   useEffect(() => {
     if (remoteChanged && !dirty && !editing && !pending) loadLatest();
@@ -150,6 +184,48 @@ export function WorkflowEditor({
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
+  const rawUnapplied =
+    view === 'raw' &&
+    (rawInvalid || JSON.stringify(effectiveDraft) !== JSON.stringify(draft));
+  const historyBlocked = Boolean(
+    editing || pending || history.groupStart || rawUnapplied,
+  );
+  const canUndo = !historyBlocked && history.past.length > 0;
+  const canRedo = !historyBlocked && history.future.length > 0;
+  const travel = (direction: 'undo' | 'redo') => {
+    if (direction === 'undo' ? !canUndo : !canRedo) return;
+    const target =
+      direction === 'undo' ? history.past.at(-1)! : history.future[0];
+    history[direction]();
+    setRaw(JSON.stringify(target.draft, null, 2));
+    setSelected(new Set());
+    setSelectedEdges(new Set());
+  };
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.altKey ||
+        !(event.metaKey || event.ctrlKey) ||
+        event.key.toLowerCase() !== 'z'
+      )
+        return;
+      const target = event.target;
+      if (
+        !(target instanceof HTMLElement) ||
+        (target !== document.body && !editorRef.current?.contains(target)) ||
+        target.closest(
+          'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+        ) ||
+        editing
+      )
+        return;
+      event.preventDefault();
+      travel(event.shiftKey ? 'redo' : 'undo');
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  });
   const { nodes, edges } = useMemo(
     () =>
       canvasGraph(draft, {
@@ -179,6 +255,7 @@ export function WorkflowEditor({
       invalid.reportValidity();
       throw new Error('Fix invalid fields before saving.');
     }
+    if (view === 'raw') setDraft(effectiveDraft);
     const w = await api.workflows.update.mutate({
       id: workflow.id,
       name,
@@ -188,7 +265,6 @@ export function WorkflowEditor({
     });
     setRevision(w.draftRevision);
     if (view === 'raw') {
-      setDraft(w.draft);
       setRaw((current) =>
         current === raw ? JSON.stringify(w.draft, null, 2) : current,
       );
@@ -246,13 +322,30 @@ export function WorkflowEditor({
         </span>
         <div className="actions">
           <Button
-            variant="danger"
-            disabled={Boolean(pending)}
-            onClick={() => setDeleting(true)}
-            aria-label="Delete workflow"
-            title="Delete workflow"
+            variant="ghost"
+            disabled={!canUndo}
+            aria-label="Undo"
+            onClick={() => travel('undo')}
+            title={
+              rawUnapplied
+                ? 'Apply or discard raw changes before undoing workflow edits'
+                : 'Undo (Ctrl/Command+Z)'
+            }
           >
-            <Trash2 />
+            <Undo2 />
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={!canRedo}
+            aria-label="Redo"
+            onClick={() => travel('redo')}
+            title={
+              rawUnapplied
+                ? 'Apply or discard raw changes before redoing workflow edits'
+                : 'Redo (Ctrl/Command+Shift+Z)'
+            }
+          >
+            <Redo2 />
           </Button>
           <Button
             onClick={() => perform('save', save)}
@@ -316,7 +409,11 @@ export function WorkflowEditor({
         </div>
       )}
       <div className={styles.body}>
-        <div className={styles.canvasWrap}>
+        <div
+          ref={boxZoom.containerRef}
+          {...boxZoom.handlers}
+          className={`${styles.canvasWrap} ${boxZoom.active ? styles.boxZoomReady : ''}`}
+        >
           <div className={styles.canvasToolbar}>
             <div
               className={styles.viewToggle}
@@ -398,11 +495,48 @@ export function WorkflowEditor({
           ) : (
             <>
               <ReactFlow
+                onInit={(instance) => {
+                  flowRef.current = instance;
+                  boxZoom.onInit(instance);
+                }}
                 nodes={nodes}
                 edges={edges}
                 nodeTypes={nodeTypes}
+                onNodeDragStart={history.begin}
+                onNodeDragStop={history.end}
+                onSelectionDragStart={history.begin}
+                onSelectionDragStop={history.end}
+                onBeforeDelete={async ({
+                  nodes: deletingNodes,
+                  edges: deletingEdges,
+                }) => {
+                  const nodeIds = new Set(
+                    deletingNodes
+                      .filter((n) => n.deletable !== false)
+                      .map((n) => n.id),
+                  );
+                  const edgeIds = new Set(deletingEdges.map((e) => e.id));
+                  setDraft((d) => {
+                    const retained = withoutNodes(d, nodeIds);
+                    return {
+                      ...retained,
+                      edges: retained.edges.filter((e) => !edgeIds.has(e.id)),
+                    };
+                  });
+                  setSelected(new Set());
+                  setSelectedEdges(new Set());
+                  return false;
+                }}
                 onNodesChange={(changes) => {
                   const next = applyNodeChanges(changes, nodes);
+                  if (
+                    changes.some(
+                      (c) => c.type === 'select' || c.type === 'remove',
+                    )
+                  )
+                    setSelected(
+                      new Set(next.filter((n) => n.selected).map((n) => n.id)),
+                    );
                   if (
                     !changes.some(
                       (c) => c.type === 'position' || c.type === 'remove',
@@ -420,14 +554,14 @@ export function WorkflowEditor({
                     );
                     return {
                       ...retained,
-                      nodes: next
-                        .filter((n) =>
-                          retained.nodes.some((k) => k.id === n.id),
-                        )
-                        .map((n) => ({
-                          ...n.data.node,
-                          position: n.position,
-                        })),
+                      nodes: retained.nodes.map((n) => {
+                        const change = changes.find(
+                          (c) => c.type === 'position' && c.id === n.id,
+                        );
+                        return change?.type === 'position' && change.position
+                          ? { ...n, position: change.position }
+                          : n;
+                      }),
                     };
                   });
                 }}
@@ -439,15 +573,17 @@ export function WorkflowEditor({
                   if (changes.every((c) => c.type === 'select')) return;
                   setDraft((d) => ({
                     ...d,
-                    edges: next.map((e) => ({
-                      id: e.id,
-                      source: e.source,
-                      target: e.target,
-                      port: (e.sourceHandle ??
-                        'default') as WorkflowEdge['port'],
-                      targetHandle: (e.targetHandle ??
-                        'default') as WorkflowEdge['targetHandle'],
-                    })),
+                    edges: applyEdgeChanges(changes, canvasGraph(d).edges).map(
+                      (e) => ({
+                        id: e.id,
+                        source: e.source,
+                        target: e.target,
+                        port: (e.sourceHandle ??
+                          'default') as WorkflowEdge['port'],
+                        targetHandle: (e.targetHandle ??
+                          'default') as WorkflowEdge['targetHandle'],
+                      }),
+                    ),
                   }));
                 }}
                 onConnect={connect}
@@ -465,28 +601,78 @@ export function WorkflowEditor({
                       (c.targetHandle === 'end' ? target.id : target.batchId),
                   );
                 }}
-                onNodeClick={(_, n) => setSelected(n.id)}
                 onNodeDoubleClick={(_, n) => {
-                  setSelected(n.id);
+                  if (boxZoom.active) return;
+                  setSelected(new Set([n.id]));
                   setEditing({ node: n.data.node });
                 }}
+                panOnScroll={!boxZoom.active}
+                zoomOnScroll={!boxZoom.active}
+                zoomOnPinch={!boxZoom.active}
+                zoomActivationKeyCode={zoomKeys}
+                selectionOnDrag={!boxZoom.active}
+                selectionKeyCode={boxZoom.active ? null : 'Shift'}
+                panActivationKeyCode={boxZoom.active ? null : 'Space'}
+                nodesDraggable={!boxZoom.active}
+                nodesConnectable={!boxZoom.active}
+                elementsSelectable={!boxZoom.active}
+                panOnDrag={false}
                 zoomOnDoubleClick={false}
-                onPaneClick={() => setSelected(undefined)}
+                onPaneClick={() => setSelected(new Set())}
                 fitView
                 fitViewOptions={{ padding: 0.22 }}
                 minZoom={0.25}
                 maxZoom={1.5}
                 colorMode="dark"
-                deleteKeyCode={editing ? null : ['Backspace', 'Delete']}
+                deleteKeyCode={
+                  editing || boxZoom.active ? null : ['Backspace', 'Delete']
+                }
               >
                 <Background color="var(--canvas-dot)" gap={22} size={1} />
-                <Controls showInteractive={false} />
+                <Controls showInteractive={false}>
+                  <ControlButton
+                    aria-label="Tidy"
+                    disabled={Boolean(
+                      editing ||
+                      pending ||
+                      history.groupStart ||
+                      boxZoom.active,
+                    )}
+                    title="Tidy: Arrange the workflow and Batch contents. Undo to restore the previous layout."
+                    onClick={() => {
+                      const next = tidyWorkflow(draft);
+                      if (JSON.stringify(next) === JSON.stringify(draft)) {
+                        void flowRef.current?.fitView({
+                          padding: 0.22,
+                          duration: 180,
+                        });
+                        return;
+                      }
+                      fitAfterTidy.current = true;
+                      setDraft(next);
+                    }}
+                  >
+                    <WandSparkles />
+                  </ControlButton>
+                </Controls>
                 <MiniMap
                   style={{ width: 125, height: 85 }}
                   nodeColor="var(--accent)"
                   maskColor="#141418bb"
                 />
               </ReactFlow>
+              {boxZoom.box && (
+                <div
+                  aria-hidden="true"
+                  className={styles.zoomBox}
+                  style={{
+                    left: boxZoom.box.x,
+                    top: boxZoom.box.y,
+                    width: boxZoom.box.width,
+                    height: boxZoom.box.height,
+                  }}
+                />
+              )}
               <div className={styles.canvasFooter}>
                 <span>
                   {draft.nodes.length} nodes <b>·</b> {draft.edges.length}{' '}
@@ -498,24 +684,13 @@ export function WorkflowEditor({
                 >
                   {graphError
                     ? `Before publishing: ${graphError}`
-                    : 'Double-click to edit · Drag to arrange · Connect handles to route data'}
+                    : 'Double-click to edit · Drag to arrange · Hold Z and drag to zoom'}
                 </span>
               </div>
             </>
           )}
         </div>
       </div>
-      {deleting && (
-        <DeleteWorkflowDialog
-          workflow={{ id: workflow.id, name }}
-          act={act}
-          onClose={() => setDeleting(false)}
-          onDeleted={() => {
-            onDirty(false);
-            onBack();
-          }}
-        />
-      )}
       {editing && (
         <SettingsDialog
           node={editing.node}
@@ -527,10 +702,15 @@ export function WorkflowEditor({
           workflows={workflows}
           onClose={() => setEditing(undefined)}
           onApply={(next) => {
-            setName(next.name);
-            setDescription(next.description);
-            setDraft(next.definition);
-            if (editing.creating) setSelected(next.definition.nodes.at(-1)?.id);
+            history.change(() => ({
+              name: next.name,
+              description: next.description,
+              draft: next.definition,
+            }));
+            if (editing.creating) {
+              const id = next.definition.nodes.at(-1)?.id;
+              setSelected(new Set(id ? [id] : []));
+            }
             setEditing(undefined);
           }}
           onDelete={
@@ -538,7 +718,7 @@ export function WorkflowEditor({
               ? () => {
                   const id = editing.node!.id;
                   setDraft((d) => withoutNodes(d, new Set([id])));
-                  setSelected(undefined);
+                  setSelected(new Set());
                   setEditing(undefined);
                 }
               : undefined

@@ -313,3 +313,65 @@ it.each([
   expect(lines.at(-1)?.textContent).toBe('Object → Text');
   if (kind === 'fetch') expect(lines[0].textContent).toBe('Method: GET');
 });
+
+it.each([undefined, 'parent'])(
+  'places a new Script clear of an existing Batch in scope %s',
+  async (parentBatchId) => {
+    let definition = blankDefinition();
+    if (parentBatchId)
+      definition.nodes.push(
+        nodeSchema.parse({ id: parentBatchId, kind: 'batch', label: 'Parent' }),
+      );
+    const add = async (kind: string) => {
+      const onApply = vi.fn();
+      await act(async () =>
+        root.render(
+          h(
+            MantineProvider,
+            {},
+            h(SettingsDialog, {
+              key: kind,
+              name: 'Test',
+              description: '',
+              definition,
+              workflows: [],
+              creating: true,
+              parentBatchId,
+              onClose: vi.fn(),
+              onApply,
+            }),
+          ),
+        ),
+      );
+      await act(async () => {
+        const select = container.querySelector('select')!;
+        select.value = kind;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await act(async () =>
+        Array.from(container.querySelectorAll('button'))
+          .find((b) => b.textContent === 'Add node')!
+          .click(),
+      );
+      definition = onApply.mock.calls[0][0].definition;
+      return definition.nodes.at(-1)!;
+    };
+    const batch = await add('batch');
+    const script = await add('script');
+    const { canvasGraph } =
+      await import('../packages/ui/src/features/workflows/canvasGraph');
+    const rendered = canvasGraph(definition).nodes.find(
+      (n) => n.id === batch.id,
+    )!;
+    const overlapX =
+      Math.min(batch.position.x + rendered.width!, script.position.x + 220) -
+      Math.max(batch.position.x, script.position.x);
+    const overlapY =
+      Math.min(batch.position.y + rendered.height!, script.position.y + 116) -
+      Math.max(batch.position.y, script.position.y);
+    expect(
+      overlapX <= 0 || overlapY <= 0,
+      `Batch and Script overlap by ${overlapX} × ${overlapY}`,
+    ).toBe(true);
+  },
+);

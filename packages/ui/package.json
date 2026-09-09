@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@dagrejs/dagre": "^3.1.1",
     "@interlock/client": "workspace:*",
     "@interlock/core": "workspace:*",
     "@mantine/core": "^9.6.0",
