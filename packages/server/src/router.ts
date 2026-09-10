@@ -1,8 +1,18 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { developmentConnection, type ConnectionConfig } from './connection.js';
-import { definitionSchema, jsonSchema, InterlockError } from '@interlock/core';
+import {
+  definitionSchema,
+  jsonSchema,
+  runQuerySchema,
+  InterlockError,
+} from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
+import {
+  exportWorkflows,
+  importWorkflows,
+} from '../../runtime/src/transfer.js';
+import { workflowBundleSchema } from '../../core/src/transfer.js';
 
 const t = initTRPC
   .context<{ engine: Engine; connection?: ConnectionConfig }>()
@@ -24,10 +34,38 @@ export const appRouter = t.router({
     return { ...config, mcpUrl: new URL('/mcp', config.engineUrl).href };
   }),
   workflows: t.router({
+    export: p
+      .input(id)
+      .query(({ ctx, input }) => exportWorkflows(ctx.engine.store, input.id)),
+    exportDraft: p
+      .input(
+        id.extend({
+          name: z.string(),
+          description: z.string(),
+          draft: definitionSchema,
+        }),
+      )
+      .mutation(({ ctx, input }) =>
+        exportWorkflows(ctx.engine.store, input.id, input),
+      ),
+    import: p
+      .input(
+        z.object({
+          bundle: workflowBundleSchema,
+          force: z.boolean().optional(),
+          draftRevisions: z.record(z.number().int().positive()).optional(),
+        }),
+      )
+      .mutation(({ ctx, input }) =>
+        importWorkflows(ctx.engine.store, input.bundle, input),
+      ),
     list: p
       .input(
         z
-          .object({ ownerWorkflowId: z.string().nullable().optional() })
+          .object({
+            ownerWorkflowId: z.string().nullable().optional(),
+            includeArchived: z.boolean().optional(),
+          })
           .optional(),
       )
       .query(({ ctx, input }) =>
@@ -35,8 +73,12 @@ export const appRouter = t.router({
           .workflows()
           .filter(
             (w) =>
-              input?.ownerWorkflowId === undefined ||
-              (w.ownerWorkflowId ?? null) === input.ownerWorkflowId,
+              (input?.ownerWorkflowId === undefined ||
+                (w.ownerWorkflowId ?? null) === input.ownerWorkflowId) &&
+              (input?.includeArchived !== false ||
+                (!w.archived &&
+                  (!w.ownerWorkflowId ||
+                    !ctx.engine.workflow(w.ownerWorkflowId).archived))),
           ),
       ),
     get: p.input(id).query(({ ctx, input }) => ctx.engine.workflow(input.id)),
@@ -111,6 +153,9 @@ export const appRouter = t.router({
     }),
   }),
   runs: t.router({
+    find: p
+      .input(runQuerySchema.default({}))
+      .query(({ ctx, input }) => ctx.engine.store.findRuns(input)),
     list: p.query(({ ctx }) => ctx.engine.store.runs().reverse()),
     get: p.input(id).query(({ ctx, input }) => ctx.engine.inspect(input.id)),
     start: p
@@ -130,6 +175,21 @@ export const appRouter = t.router({
     retry: p.input(id).mutation(({ ctx, input }) => ctx.engine.retry(input.id)),
   }),
   work: t.router({
+    summaries: p
+      .input(z.object({ runId: z.string().optional() }).default({}))
+      .query(({ ctx, input }) =>
+        ctx.engine.available(input.runId).map((work) => ({
+          id: work.id,
+          runId: work.runId,
+          nodeId: work.nodeId,
+          label: work.label,
+          status: work.status,
+          context: work.context,
+          attempt: work.attempt,
+          maxAttempts: work.maxAttempts,
+          availableUntil: work.availableUntil,
+        })),
+      ),
     list: p
       .input(z.object({ runId: z.string().optional() }).default({}))
       .query(({ ctx, input }) => ctx.engine.available(input.runId)),

@@ -582,6 +582,29 @@ export class Engine {
       run.executions.push(execution);
       this.event(run, 'node.started', node.label);
       try {
+        if (node.inputBindings) {
+          execution.originalInput = run.value;
+          let workflowRun = run;
+          while (workflowRun.batchNodeId && workflowRun.parentRunId)
+            workflowRun = this.run(workflowRun.parentRunId);
+          let root = workflowRun;
+          while (root.parentRunId) root = this.run(root.parentRunId);
+          const sources = {
+            input: run.value,
+            runInput: workflowRun.input,
+            rootInput: root.input,
+            itemInput: run.input,
+          };
+          execution.input = Object.fromEntries(
+            Object.entries(node.inputBindings).map(([key, binding]) => {
+              if (binding.source === 'itemInput' && !run.batchNodeId)
+                throw new InterlockError(
+                  'itemInput is only available inside a Batch item run',
+                );
+              return [key, readPath(sources[binding.source], binding.path)];
+            }),
+          );
+        }
         if (node.batchId !== run.batchNodeId)
           throw new InterlockError('Execution cannot cross Batch groups');
         if (run.executions.length > definition.maxSteps)
@@ -1062,8 +1085,15 @@ export class Engine {
       this.save(run);
       return;
     }
-    run.value = execution.input;
-    if (execution.kind === 'batch' || execution.kind === 'workflow') {
+    run.value = Object.hasOwn(execution, 'originalInput')
+      ? execution.originalInput!
+      : execution.input;
+    // Only dispatched child runs have progress to retain. Initialization
+    // failures must resolve bindings and validate input again on retry.
+    if (
+      (execution.kind === 'batch' || execution.kind === 'workflow') &&
+      execution.childRunIds.length > 0
+    ) {
       execution.status = 'waiting';
       execution.error = undefined;
       execution.completedAt = undefined;

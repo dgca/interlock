@@ -79,6 +79,13 @@ export function WorkflowLibrary({
           if (selected)
             void act(async () => {
               const data = JSON.parse(await selected.text());
+              if (data.format === 'interlock-workflows') {
+                const result = await api.workflows.import.mutate({
+                  bundle: data,
+                });
+                onOpen(result.rootId);
+                return;
+              }
               const w = await api.workflows.create.mutate(data);
               onOpen(w.id);
             }, 'Workflow imported.');
@@ -147,15 +154,15 @@ export function WorkflowLibrary({
                       </Menu.Item>
                       <Menu.Item
                         leftSection={<Download size={14} />}
-                        disabled={workflows.some(
-                          (child) => child.ownerWorkflowId === w.id,
-                        )}
                         onClick={() =>
-                          download(`${w.name}.json`, {
-                            name: w.name,
-                            description: w.description,
-                            definition: w.draft,
-                          })
+                          void act(
+                            async () =>
+                              download(
+                                `${w.name}.json`,
+                                await api.workflows.export.query({ id: w.id }),
+                              ),
+                            'Workflow exported.',
+                          )
                         }
                       >
                         Export

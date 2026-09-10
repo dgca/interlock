@@ -23,6 +23,16 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 2,
+    up(db) {
+      db.exec(`
+        CREATE INDEX runs_created ON documents(json_extract(value, '$.createdAt') DESC) WHERE collection = 'runs';
+        CREATE INDEX runs_workflow_created ON documents(json_extract(value, '$.workflowId'), json_extract(value, '$.createdAt') DESC) WHERE collection = 'runs';
+        CREATE INDEX runs_status_created ON documents(json_extract(value, '$.status'), json_extract(value, '$.createdAt') DESC) WHERE collection = 'runs';
+      `);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

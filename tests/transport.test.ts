@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { assertContract, validateContractSchema } from '@interlock/core';
 import { batchDefinition } from './fixtures/batch';
 import { runCommand } from '../packages/cli/src/commands';
 import { it, expect } from 'vitest';
@@ -62,6 +63,7 @@ it.each(['stdio', 'http'])(
         ),
       ).toBe(true);
       const tools = (await client.listTools()).tools;
+      for (const tool of tools) validateContractSchema(tool.inputSchema);
       expect(tools.map((t) => t.name)).toContain('claim_work');
       const createDefinition = tools.find((t) => t.name === 'create_workflow')!
         .inputSchema.properties!.definition as { description: string };
@@ -72,6 +74,66 @@ it.each(['stdio', 'http'])(
       expect(createDefinition.description).toContain('maxItems');
       expect(createDefinition.description).toContain('10000');
       expect(updateDefinition.description).toBe(createDefinition.description);
+      for (const value of [
+        null,
+        false,
+        3,
+        'text',
+        '{"literal":true}',
+        [1, { nested: [false, null] }],
+        { nested: { array: [1] } },
+      ]) {
+        expect(() =>
+          assertContract(
+            tools.find((t) => t.name === 'start_run')!.inputSchema,
+            { workflowId: w.id, input: value },
+            'tool input',
+          ),
+        ).not.toThrow();
+        const roundTrip = await call('start_run', {
+          workflowId: w.id,
+          input: value,
+        });
+        const [assignment] = await call('list_work', {
+          runId: roundTrip.run.id,
+        });
+        const claim = await call('claim_work', {
+          workId: assignment.id,
+          workerId: 'json-values',
+        });
+        const completed = await call('submit_result', {
+          workId: assignment.id,
+          token: claim.token,
+          output: value,
+        });
+        expect(completed.run.output).toEqual(value);
+      }
+      const disposable = await call('create_workflow', { name: 'Disposable' });
+      await call('update_workflow', { id: disposable.id, archived: true });
+      expect(
+        (await call('list_workflows', { includeArchived: false })).some(
+          (w: { id: string }) => w.id === disposable.id,
+        ),
+      ).toBe(false);
+      await call('update_workflow', { id: disposable.id, archived: false });
+      const bundle = await call('export_workflow', { id: disposable.id });
+      expect((await call('import_workflows', { bundle })).changed).toEqual([]);
+      await call('delete_workflow', { id: disposable.id });
+      expect(
+        (await call('list_workflows', {})).some(
+          (w: { id: string }) => w.id === disposable.id,
+        ),
+      ).toBe(false);
+      expect(createDefinition).toMatchObject({ type: 'object' });
+      expect(updateDefinition).toMatchObject({ type: 'object' });
+      for (const [name, parameter] of [
+        ['start_run', 'input'],
+        ['submit_result', 'output'],
+      ]) {
+        const schema = tools.find((tool) => tool.name === name)!.inputSchema;
+        expect(schema.required).toContain(parameter);
+        expect(schema.properties![parameter]).not.toEqual({});
+      }
       expect(tools.find((t) => t.name === 'list_work')!.description).toContain(
         'availableUntil',
       );
@@ -163,6 +225,31 @@ it.each(['stdio', 'http'])(
         input: { number: 21 },
       });
       const work = await call('list_work', { runId: started.run.id });
+      expect(
+        await call('list_runs', {
+          workflowId: w.id,
+          status: 'waiting',
+          rootOnly: true,
+          limit: 1,
+          inputMatch: { path: 'number', equals: 21 },
+        }),
+      ).toMatchObject([{ id: started.run.id }]);
+      const summary = await call('list_work', {
+        runId: started.run.id,
+        fields: 'summary',
+      });
+      expect(summary).toHaveLength(work.length);
+      expect(summary[0]).toMatchObject({
+        id: work[0].id,
+        context: work[0].context,
+      });
+      for (const field of [
+        'prompt',
+        'input',
+        'outputSchema',
+        'executionInstructions',
+      ])
+        expect(summary[0]).not.toHaveProperty(field);
       const claim = await call('claim_work', {
         workId: work[0].id,
         workerId: 'mcp-test',

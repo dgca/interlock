@@ -18,7 +18,9 @@ Installed copies default to `~/.interlock/interlock.db`. Development copies use 
 
 Backups are created only when an existing database needs a schema migration. Fresh databases and ordinary restarts create none. Backups remain until you remove them. Keep the backup and the previous package version until you have verified the upgrade. These snapshots cover database state, not files written by scripts or changes to external services.
 
-Child workflow ownership requires no data conversion. Existing records without an owner remain library workflows. This release retains schema version 1, so updating from 0.1.3 does not create an automatic backup.
+Database schema 2 adds indexes for run discovery by workflow, status, and creation time. Updating a schema-1 database creates a backup before adding the indexes. Definitions, version pins, run records, and ownership remain unchanged.
+
+Startup checks whether the configured port is occupied before opening the database. A locked database error identifies its path and suggests stopping other instances. Use `lsof -nP -iTCP:4310 -sTCP:LISTEN` to identify the listener, adjusting the port when needed. If a process was suspended with Ctrl+Z, `kill -CONT <pid>` lets it handle a pending termination signal. A separate engine needs both a different port and a different database.
 
 ## Restore a pre-upgrade backup
 

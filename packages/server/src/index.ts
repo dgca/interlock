@@ -1,3 +1,4 @@
+import './sqliteWarning.js';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { startServer } from './start.js';
@@ -12,4 +13,7 @@ startServer({
   ui: fileURLToPath(new URL('../../ui/dist', import.meta.url)),
   port: 4310,
   connection: developmentConnection(),
+}).catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
 });

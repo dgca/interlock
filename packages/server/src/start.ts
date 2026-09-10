@@ -6,25 +6,39 @@ import { Engine } from '@interlock/runtime';
 import { createApp } from './app.js';
 import { seed } from './seed.js';
 import type { ConnectionConfig } from './connection.js';
+import { checkPort, startupError } from './startup.js';
 
-export function startServer(options: {
+export async function startServer(options: {
   database: string;
   workdir: string;
   ui: string;
   port: number;
   connection: ConnectionConfig;
 }) {
-  const store = new Store(options.database);
+  await checkPort(options.port);
+  let store: Store;
+  try {
+    store = new Store(options.database);
+  } catch (error) {
+    throw startupError(error, options.database);
+  }
   if (store.migration.backup)
     console.log(
       `Database upgraded from schema ${store.migration.from} to ${store.migration.to}. Backup: ${store.migration.backup}`,
     );
-  const engine = new Engine(store, options.workdir);
-  seed(engine);
+  let engine: Engine | undefined;
+  try {
+    engine = new Engine(store, options.workdir);
+    seed(engine);
+    engine.pump();
+  } catch (error) {
+    engine?.stop();
+    store.close();
+    throw startupError(error, options.database);
+  }
   const app = createApp(engine, options.connection);
   app.get('*', serveStatic({ root: options.ui }));
   app.get('*', serveStatic({ path: resolve(options.ui, 'index.html') }));
-  engine.pump();
   const timer = setInterval(() => engine.pump(), 1000);
   const server = serve(
     { fetch: app.fetch, hostname: '127.0.0.1', port: options.port },

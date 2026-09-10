@@ -41,7 +41,7 @@ Workflow records carry optional `ownerWorkflowId` metadata. Missing or null owne
 
 The library filters out owned workflows, while the app retains all workflow records for direct route resolution. Library workflow pages add a Child workflows tab at `?view=children`. The tab uses a centered, bounded card grid with descriptions, publication badges, step counts, draft usage, and a deletion menu. Active and Archived controls and search filter the parent's children. New child opens a naming dialog before saving the parent and navigating to the child. Child pages link to their owner; node actions open the target's existing resource route. Creation saves parent edits before navigation. Children retain separate editors and run histories. Direct starts reject archived children and children of archived parents; existing published invocations retain the prior archive behavior.
 
-This authoring increment blocks clone and deletion of parents with children, and disables their UI export. Moves and complete parent lifecycle operations remain unimplemented. Ownership is not editable through Raw JSON or generic metadata updates. The list interface accepts an optional owner filter while preserving unfiltered calls for existing clients.
+This authoring increment blocks clone and deletion of parents with children. Portable export includes owned children, owners, and dependencies. Moves and complete parent lifecycle operations remain unimplemented. Ownership is not editable through Raw JSON or generic metadata updates. The list interface accepts owner and archive filters while preserving unfiltered calls for existing clients.
 
 ### Batch handles and graph scopes
 
@@ -71,6 +71,10 @@ The `all` policy fails the Batch and cancels unfinished items when an item fails
 Permanent deletion removes a workflow, its versions, and its run trees, including descendant assignments and events, in one transaction. Active runs and references from other workflow drafts or published versions block deletion. Both active and archived workflows can be deleted after confirmation in the UI.
 
 ## Agent work
+
+Optional node input bindings select incoming data or original persisted workflow, root, and Batch item inputs before input validation. Resolved inputs appear in execution history. See [input bindings](agent-workflows.md#bind-original-input-into-later-steps) for scope and retry semantics.
+
+Run discovery uses schema-2 indexes for workflow, status, and creation order. Arbitrary input-path matching iterates the filtered candidates. The scheduler still scans run history; query indexes do not remove that scheduling limit. Portable bundles preserve workflow IDs and published definitions; transactional imports reject version conflicts and require a revision map or force option for draft replacement. See [agent workflow operations](agent-workflows.md).
 
 Agent nodes persist an assignment and pause. A worker claims available work with an expiring token. Claims check the requested fresh-context mode, required tools, and required skills against worker declarations. The assignment includes the exact prompt, input, context policy, and output contract.
 

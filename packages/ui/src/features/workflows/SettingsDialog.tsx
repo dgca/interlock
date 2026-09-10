@@ -23,7 +23,7 @@ import {
 } from '../../components/ContractEditor/ContractEditor';
 import { workflowTargets } from './workflowTargets';
 import { NodeInspector } from './NodeInspector';
-import { download } from '../../lib/api';
+import { api, download } from '../../lib/api';
 import { newNodePosition, separateNodes } from './workflowLayout';
 import styles from './SettingsDialog.module.css';
 
@@ -369,7 +369,23 @@ export function SettingsDialog({
                         ? 'Export with owned children is not available yet'
                         : undefined
                     }
-                    onClick={() => download(`${settings.name}.json`, settings)}
+                    onClick={() => {
+                      if (!workflowId) {
+                        download(`${settings.name}.json`, settings);
+                        return;
+                      }
+                      void api.workflows.exportDraft
+                        .mutate({
+                          id: workflowId,
+                          name: settings.name,
+                          description: settings.description,
+                          draft: settings.definition,
+                        })
+                        .then((bundle) => {
+                          download(`${settings.name}.json`, bundle);
+                        })
+                        .catch((error) => setError(error.message));
+                    }}
                   >
                     <Download />
                     Export workflow
