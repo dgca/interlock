@@ -957,6 +957,7 @@ export function WorkflowEditor({
               onCreate={(childName) =>
                 createChild(childName, { name, description, definition: draft })
               }
+              act={act}
             />
           </Tabs.Panel>
         )}

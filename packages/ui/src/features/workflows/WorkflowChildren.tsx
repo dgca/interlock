@@ -1,15 +1,25 @@
 import { useState } from 'react';
-import { Badge, SegmentedControl, TextInput } from '@mantine/core';
+import {
+  ActionIcon,
+  Badge,
+  Menu,
+  SegmentedControl,
+  TextInput,
+} from '@mantine/core';
 import {
   ArrowUpRight,
   GitBranch,
+  MoreHorizontal,
   Plus,
   Search,
+  Trash2,
   Workflow as WorkflowIcon,
 } from 'lucide-react';
 import type { Workflow } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { Modal } from '../../components/Modal/Modal';
+import type { Action } from '../../lib/useActionFeedback';
+import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import styles from './WorkflowChildren.module.css';
 
 export function WorkflowChildren({
@@ -17,18 +27,21 @@ export function WorkflowChildren({
   workflows,
   onOpen,
   onCreate,
+  act,
   disabled,
 }: {
   workflow: Workflow;
   workflows: Workflow[];
   onOpen: (id: string) => void;
   onCreate: (name: string) => Promise<void>;
+  act: Action;
   disabled: boolean;
 }) {
   const [name, setName] = useState('');
   const [archived, setArchived] = useState(false);
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<Workflow>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const owned = workflows.filter((w) => w.ownerWorkflowId === workflow.id);
@@ -91,37 +104,67 @@ export function WorkflowChildren({
               (n) => n.kind !== 'entry' && n.kind !== 'exit',
             ).length;
             return (
-              <button
-                type="button"
-                className={styles.card}
+              <article
+                className={`${styles.card} ${disabled ? styles.cardDisabled : ''}`}
                 key={child.id}
-                disabled={disabled}
-                onClick={() => onOpen(child.id)}
-                aria-label={`Open ${child.name}`}
               >
                 <div className={styles.cardTop}>
                   <span className={styles.icon}>
                     <WorkflowIcon size={21} strokeWidth={1.6} />
                   </span>
-                  <Badge
-                    variant="light"
-                    color={
-                      child.archived
-                        ? 'gray'
+                  <div className={styles.cardActions}>
+                    <Badge
+                      variant="light"
+                      color={
+                        child.archived
+                          ? 'gray'
+                          : child.latestVersion
+                            ? 'teal'
+                            : 'gray'
+                      }
+                      size="sm"
+                    >
+                      {child.archived
+                        ? 'Archived'
                         : child.latestVersion
-                          ? 'teal'
-                          : 'gray'
-                    }
-                    size="sm"
-                  >
-                    {child.archived
-                      ? 'Archived'
-                      : child.latestVersion
-                        ? `v${child.latestVersion} published`
-                        : 'Draft'}
-                  </Badge>
+                          ? `v${child.latestVersion} published`
+                          : 'Draft'}
+                    </Badge>
+                    <Menu position="bottom-end" width={160}>
+                      <Menu.Target>
+                        <ActionIcon
+                          className={styles.cardMenu}
+                          variant="subtle"
+                          color="gray"
+                          aria-label={`Actions for ${child.name}`}
+                          disabled={disabled}
+                        >
+                          <MoreHorizontal size={19} />
+                        </ActionIcon>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item
+                          color="red"
+                          leftSection={<Trash2 size={14} />}
+                          onClick={() => setDeleting(child)}
+                        >
+                          Delete
+                        </Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
+                  </div>
                 </div>
-                <h2>{child.name}</h2>
+                <h2>
+                  <button
+                    type="button"
+                    className={styles.cardLink}
+                    disabled={disabled}
+                    onClick={() => onOpen(child.id)}
+                    aria-label={`Open ${child.name}`}
+                  >
+                    {child.name}
+                  </button>
+                </h2>
                 <p className={styles.description}>
                   {child.description ||
                     'A focused piece of work, with its own steps and versions.'}
@@ -136,7 +179,7 @@ export function WorkflowChildren({
                   </span>
                   <ArrowUpRight size={17} aria-hidden="true" />
                 </div>
-              </button>
+              </article>
             );
           })}
           {!archived && !query && (
@@ -256,6 +299,14 @@ export function WorkflowChildren({
             </div>
           </form>
         </Modal>
+      )}
+      {deleting && (
+        <DeleteWorkflowDialog
+          workflow={deleting}
+          act={act}
+          onClose={() => setDeleting(undefined)}
+          onDeleted={() => setDeleting(undefined)}
+        />
       )}
     </section>
   );
