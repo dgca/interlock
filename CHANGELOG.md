@@ -1,5 +1,15 @@
 # @type_of/interlock
 
+## 0.1.4
+
+### Patch Changes
+
+- d64f7a8: Add automatic database migrations with SQLite backups before schema upgrades. Stop startup on backup or migration failures and reject unsupported newer database schemas. Document upgrades and restoring backups. Existing child workflow records need no conversion.
+- 7cc28fc: Add `interlock publish <id> --cascade` and the MCP `publish_workflow` cascade option to advance shared workflow references and republish transitive dependents atomically. Existing runs and published versions keep their pins. Unpublished dependent definition edits and dependency cycles block the cascade.
+- bccf4a8: Add owned child workflows that stay out of the main library. Create and browse helpers in the Child workflows tab, open them from Workflow nodes, and explicitly select published child versions in the parent. Support owner-scoped creation and listing through MCP and the CLI. Parent cloning, export, and deletion with children remain unavailable pending lifecycle support.
+
+  Align editor defaults with option order, show short choices as segmented controls and longer choices as radio groups, and list published versions newest-first. Give workflow section tabs more space above their hover backgrounds.
+
 ## 0.1.3
 
 ### Patch Changes
