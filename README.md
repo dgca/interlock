@@ -96,7 +96,7 @@ Edit and publish the child with the ordinary editor. Select **Use v1 in [node na
 
 The child editor links back to its owner and retains its own stable URL and Runs tab. Only the owner can reference a child. Children may invoke library workflows but cannot own or reference other children. Ownership has one level; the existing ten-level execution limit still applies.
 
-This first authoring flow does not yet support moving existing workflows, finding children from the main library search, or cloning and exporting parents with children. Parent clone and export are disabled, and deletion rejects parents with children. Delete unreferenced children first; published references can block child deletion. Archive the parent to hide it from the active library. Complete lifecycle operations are required before releasing this feature.
+This authoring flow does not yet support moving existing workflows, finding children from the main library search, or cloning parents with children. Parent clone is disabled, and deletion rejects parents with children. Portable export includes owned children and dependencies. Delete unreferenced children first; published references can block child deletion. Archive the parent to hide it from the active library. Complete lifecycle operations are required before releasing this feature.
 
 ### Follow an execution
 
@@ -214,6 +214,7 @@ The build includes TypeScript checks. Tests cover workflow contracts, runtime be
 - [Architecture and execution semantics](docs/architecture.md)
 - [Scope and limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
+- [Agent workflow operations, input bindings, and portable bundles](docs/agent-workflows.md)
 - [Fetch requests](docs/fetch.md)
 - [Upgrade and restore a database](docs/upgrading.md)
 - [Release process](docs/releases.md)

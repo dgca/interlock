@@ -493,6 +493,30 @@ export function NodeInspector({
             />
           </>
         )}
+        {node.kind !== 'entry' && node.kind !== 'exit' && (
+          <details>
+            <summary>Input bindings</summary>
+            <p className="hint">
+              Build an input object from input, runInput, rootInput, or
+              itemInput. Each field uses a source and dot-separated path. Blank
+              path selects the whole value. Use runInput for configuration that
+              must survive agent results.
+            </p>
+            <JsonEditor
+              label="Bindings"
+              value={node.inputBindings ?? {}}
+              onChange={(inputBindings) =>
+                patch({
+                  inputBindings:
+                    inputBindings && Object.keys(inputBindings).length === 0
+                      ? undefined
+                      : inputBindings,
+                })
+              }
+              rows={5}
+            />
+          </details>
+        )}
         {onDelete && node.kind !== 'entry' && node.kind !== 'exit' && (
           <Button variant="danger" onClick={onDelete}>
             Delete node

@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createClient } from '@interlock/client';
+import { parseArgs } from 'node:util';
 const parse = async (value: string | undefined) => {
   if (value === undefined) throw new Error('Missing JSON argument');
   return JSON.parse(
@@ -16,10 +17,40 @@ export async function runCommand(argv: string[]) {
       );
     case 'workflow':
       return client.workflows.get.query({ id: args[0] });
+    case 'archive':
+      return client.workflows.update.mutate({ id: args[0], archived: true });
+    case 'restore':
+      return client.workflows.update.mutate({ id: args[0], archived: false });
+    case 'delete':
+      if (args.length !== 2 || args[1] !== '--yes')
+        throw new Error(
+          'Usage: delete <id> --yes. Permanently removes the workflow and its history. Use archive to preserve history.',
+        );
+      return client.workflows.delete.mutate({ id: args[0] });
     case 'import': {
       const input = await parse(args[0]);
+      if (input.format === 'interlock-workflows') {
+        const { values } = parseArgs({
+          args: args.slice(1),
+          options: {
+            force: { type: 'boolean' },
+            revisions: { type: 'string' },
+          },
+        });
+        return client.workflows.import.mutate({
+          bundle: input,
+          force: values.force,
+          draftRevisions: values.revisions
+            ? await parse(values.revisions)
+            : undefined,
+        });
+      }
+      if (args.length !== 1)
+        throw new Error('Import options require a workflow bundle');
       return client.workflows.create.mutate(input);
     }
+    case 'export':
+      return client.workflows.export.query({ id: args[0] });
     case 'publish':
       if (!args[0] || args.slice(1).some((arg) => arg !== '--cascade'))
         throw new Error('Usage: publish <id> [--cascade]');
@@ -33,12 +64,49 @@ export async function runCommand(argv: string[]) {
         input: await parse(args[1]),
         version: args[2] ? Number(args[2]) : undefined,
       });
-    case 'runs':
-      return client.runs.list.query();
+    case 'runs': {
+      if (!args.length) return client.runs.list.query();
+      const { values } = parseArgs({
+        args,
+        options: {
+          workflow: { type: 'string' },
+          status: { type: 'string' },
+          'root-only': { type: 'boolean' },
+          limit: { type: 'string' },
+          'input-path': { type: 'string' },
+          equals: { type: 'string' },
+        },
+      });
+      if (
+        (values['input-path'] === undefined) !==
+        (values.equals === undefined)
+      )
+        throw new Error('--input-path and --equals must be supplied together');
+      const { runQuerySchema } = await import('@interlock/core');
+      return client.runs.find.query(
+        runQuerySchema.parse({
+          workflowId: values.workflow,
+          status: values.status,
+          rootOnly: values['root-only'],
+          limit: values.limit === undefined ? undefined : Number(values.limit),
+          inputMatch:
+            values['input-path'] === undefined
+              ? undefined
+              : {
+                  path: values['input-path'],
+                  equals: await parse(values.equals),
+                },
+        }),
+      );
+    }
     case 'run':
       return client.runs.get.query({ id: args[0] });
     case 'work':
-      return client.work.list.query({ runId: args[0] });
+      return args.includes('--summary')
+        ? client.work.summaries.query({
+            runId: args.find((arg) => arg !== '--summary'),
+          })
+        : client.work.list.query({ runId: args[0] });
     case 'claim':
       return client.work.claim.mutate({
         workId: args[0],
@@ -68,12 +136,16 @@ export async function runCommand(argv: string[]) {
         usage: [
           'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
           'workflow <id>',
-          'import <json|@file>',
+          'archive <id>',
+          'restore <id>',
+          'delete <id> --yes',
+          'import <json|@file> [--force | --revisions JSON] (options apply to bundles)',
+          'export <id>',
           'publish <id> [--cascade]',
           'start <workflow-id> <json|@file> [version]',
-          'runs',
+          'runs [--workflow ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
-          'work [run-id]',
+          'work [run-id] [--summary]',
           'claim <work-id> [worker-id] [capabilities-json]',
           'submit <work-id> <token> <json|@file>',
           'fail <work-id> <token> <error>',

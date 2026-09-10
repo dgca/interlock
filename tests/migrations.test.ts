@@ -51,7 +51,7 @@ function legacy(file: string) {
   return db;
 }
 const next = [
-  ...migrations,
+  ...migrations.slice(0, 1),
   {
     version: 2,
     up(db: DatabaseSync) {
@@ -69,8 +69,8 @@ const next = [
 it('initializes empty databases and reopens current databases without a backup', () => {
   const file = path();
   const db = open(file);
-  expect(migrate(db, file)).toEqual({ from: 0, to: 1 });
-  expect(migrate(db, file)).toEqual({ from: 1, to: 1 });
+  expect(migrate(db, file)).toEqual({ from: 0, to: 2 });
+  expect(migrate(db, file)).toEqual({ from: 2, to: 2 });
   expect(existsSync(`${file}.backups`)).toBe(false);
 });
 
@@ -205,7 +205,7 @@ it.each([
 
 it('supports in-memory upgrades without filesystem backups', () => {
   const db = open(':memory:');
-  migrate(db, ':memory:');
+  migrate(db, ':memory:', migrations.slice(0, 1));
   expect(migrate(db, ':memory:', next)).toEqual({ from: 1, to: 3 });
 });
 
@@ -215,7 +215,18 @@ it('opens the previous release without rewriting records and executes its publis
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   const store = new Store(file);
   connections.push(store);
-  expect(store.migration).toEqual({ from: 1, to: 1 });
+  expect(store.migration).toMatchObject({
+    from: 1,
+    to: 2,
+    backup: expect.any(String),
+  });
+  expect(
+    db
+      .prepare(
+        "SELECT name FROM sqlite_schema WHERE type = 'index' AND name LIKE 'runs_%'",
+      )
+      .all(),
+  ).toHaveLength(3);
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
     before,
   );

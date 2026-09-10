@@ -140,20 +140,23 @@ Claim an assignment only when ready to perform it. Claiming stops its unclaimed 
 
 ## MCP tools
 
-| Tools                                                    | Purpose                                                                      |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `list_workflows`, `get_workflow`                         | Find workflows and inspect drafts, contracts, and published version numbers. |
-| `create_workflow`, `update_workflow`, `publish_workflow` | Author a draft and publish an immutable version.                             |
-| `start_run`, `get_run`                                   | Start a published version and inspect its execution and descendants.         |
-| `list_work`, `claim_work`                                | Discover available assignments and reserve one with declared capabilities.   |
-| `submit_result`, `fail_work`, `renew_claim`              | Complete or fail claimed work, or extend its lease.                          |
-| `cancel_run`, `retry_run`                                | Cancel unfinished work or explicitly retry a failed run.                     |
+| Tools                                                    | Purpose                                                                         |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `list_workflows`, `get_workflow`                         | Find workflows and inspect drafts, contracts, and published version numbers.    |
+| `create_workflow`, `update_workflow`, `publish_workflow` | Author a draft and publish an immutable version.                                |
+| `start_run`, `get_run`                                   | Start a published version and inspect its execution and descendants.            |
+| `list_work`, `claim_work`                                | Discover available assignments and reserve one with declared capabilities.      |
+| `submit_result`, `fail_work`, `renew_claim`              | Complete or fail claimed work, or extend its lease.                             |
+| `cancel_run`, `retry_run`                                | Cancel unfinished work or explicitly retry a failed run.                        |
+| `list_runs`                                              | Find bounded run summaries by workflow, status, ancestry, and input.            |
+| `export_workflow`, `import_workflows`                    | Transfer workflow drafts, dependencies, and published pins in portable bundles. |
+| `delete_workflow`                                        | Permanently remove an unreferenced workflow and its inactive history.           |
 
 `list_work` returns available assignments, not claimed work. An empty list does not mean the execution has completed. Use `get_run` to inspect its status and descendant assignments. When given an existing run ID, resume it rather than calling `start_run` again.
 
 `retry_run` retries the failed step of a failed run. Inspect its error first, since Script and Fetch retries can repeat external side effects. Failed Batch retries preserve successful items. Retry a failed parent when a child belongs to a terminal parent. Completed and cancelled runs cannot be retried. The CLI equivalent is `interlock retry RUN_ID`.
 
-Archive, restore, and permanent deletion are available in the UI; these operations are not exposed as MCP tools. To browse execution history outside the UI, use `interlock runs`.
+MCP `update_workflow` accepts `archived` for archive and restore. `delete_workflow` performs guarded permanent deletion. `list_runs` returns bounded, filtered run summaries, including waiting runs. `list_work` accepts `fields: "summary"` for compact discovery, and `claim_work` returns full execution details. `export_workflow` and `import_workflows` transfer portable dependency bundles. See [agent workflow operations](agent-workflows.md) for filters, schema guidance, input bindings, import conflicts, and CLI examples.
 
 ## Diagnose a connection
 

@@ -74,13 +74,17 @@ try {
     version,
   );
   const futurePath = join(temp, 'future.db');
+  const listener = createServer().listen(0, '127.0.0.1');
+  await once(listener, 'listening');
+  const port = listener.address().port;
+  await new Promise((resolve) => listener.close(resolve));
   const future = new DatabaseSync(futurePath);
   future.exec(
     'CREATE TABLE migrations (version INTEGER PRIMARY KEY); INSERT INTO migrations VALUES (999);',
   );
   future.close();
   const before = await readFile(futurePath);
-  const refused = spawnSync(bin, ['--db', futurePath], {
+  const refused = spawnSync(bin, ['--db', futurePath, '--port', String(port)], {
     cwd: workdir,
     env,
     encoding: 'utf8',
@@ -90,10 +94,6 @@ try {
   assert.match(refused.stderr, /schema 999 is newer/);
   assert(!refused.stdout.includes('Interlock is running'));
   assert.deepEqual(await readFile(futurePath), before);
-  const listener = createServer().listen(0, '127.0.0.1');
-  await once(listener, 'listening');
-  const port = listener.address().port;
-  await new Promise((resolve) => listener.close(resolve));
   const url = `http://127.0.0.1:${port}`;
   const start = async (launch = 'global') => {
     const args = [

@@ -1,6 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
+import { readPath, type RunQuery } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
 import type {
   Run,
@@ -68,6 +70,83 @@ export class Store {
   }
   runs() {
     return this.list<Run>('runs');
+  }
+  findRuns(query: RunQuery) {
+    const filters = ["collection = 'runs'"];
+    const parameters: string[] = [];
+    if (query.workflowId !== undefined) {
+      filters.push("json_extract(value, '$.workflowId') = ?");
+      parameters.push(query.workflowId);
+    }
+    if (query.status !== undefined) {
+      filters.push("json_extract(value, '$.status') = ?");
+      parameters.push(query.status);
+    }
+    if (query.rootOnly)
+      filters.push("json_extract(value, '$.parentRunId') IS NULL");
+    const rows = this.db
+      .prepare(
+        `SELECT value FROM documents WHERE ${filters.join(' AND ')} ORDER BY json_extract(value, '$.createdAt') DESC, rowid DESC`,
+      )
+      .iterate(...parameters);
+    const result: Pick<
+      Run,
+      | 'id'
+      | 'workflowId'
+      | 'workflowName'
+      | 'version'
+      | 'status'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'cursor'
+      | 'input'
+      | 'parentRunId'
+      | 'batchNodeId'
+    >[] = [];
+    for (const row of rows) {
+      const run: Run = JSON.parse(row.value as string);
+      if (query.inputMatch) {
+        try {
+          if (
+            !isDeepStrictEqual(
+              readPath(run.input, query.inputMatch.path),
+              query.inputMatch.equals,
+            )
+          )
+            continue;
+        } catch {
+          continue;
+        } // Missing paths do not match, including JSON null.
+      }
+      const {
+        id,
+        workflowId,
+        workflowName,
+        version,
+        status,
+        createdAt,
+        updatedAt,
+        cursor,
+        input,
+        parentRunId,
+        batchNodeId,
+      } = run;
+      result.push({
+        id,
+        workflowId,
+        workflowName,
+        version,
+        status,
+        createdAt,
+        updatedAt,
+        cursor,
+        input,
+        parentRunId,
+        batchNodeId,
+      });
+      if (result.length === query.limit) break;
+    }
+    return result;
   }
   work() {
     return this.list<WorkRequest>('work');

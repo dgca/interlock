@@ -46,6 +46,17 @@ const nodeBase = {
   position: z.object({ x: z.number(), y: z.number() }).default({ x: 0, y: 0 }),
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
+  inputBindings: z
+    .record(
+      z.object({
+        source: z.enum(['input', 'runInput', 'rootInput', 'itemInput']),
+        path: z.string().default(''),
+      }),
+    )
+    .optional()
+    .describe(
+      'Optional replacement input object. Each field selects a path from incoming input, original enclosing workflow runInput, outermost rootInput, or original Batch itemInput. Blank paths select the entire value. These persisted inputs are independent of agent output.',
+    ),
 };
 export const DEFAULT_BATCH_MAX_ITEMS = 200;
 export const MAX_BATCH_ITEMS = 10_000;
@@ -177,12 +188,23 @@ export interface WorkflowVersion {
 }
 export type RunStatus =
   'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+export const runQuerySchema = z.object({
+  workflowId: z.string().optional(),
+  status: z
+    .enum(['running', 'waiting', 'completed', 'failed', 'cancelled'])
+    .optional(),
+  rootOnly: z.boolean().default(false),
+  limit: z.number().int().min(1).max(1000).default(50),
+  inputMatch: z.object({ path: z.string(), equals: jsonSchema }).optional(),
+});
+export type RunQuery = z.infer<typeof runQuerySchema>;
 export interface NodeExecution {
   id: string;
   nodeId: string;
   kind: WorkflowNode['kind'];
   label: string;
   input: Json;
+  originalInput?: Json;
   output?: Json;
   status: RunStatus;
   startedAt: string;
@@ -358,6 +380,17 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       throw new InterlockError('Edges cannot target the entry');
   }
   for (const node of d.nodes) {
+    if (node.inputBindings && (node.kind === 'entry' || node.kind === 'exit'))
+      throw new InterlockError(
+        'Entry and Exit cannot replace their input with bindings',
+      );
+    if (
+      !node.batchId &&
+      Object.values(node.inputBindings ?? {}).some(
+        (binding) => binding.source === 'itemInput',
+      )
+    )
+      throw new InterlockError('itemInput bindings require Batch membership');
     if (node.kind === 'workflow' && node.version === null)
       throw new InterlockError(
         `${node.label}: publish the referenced workflow and select a version first`,

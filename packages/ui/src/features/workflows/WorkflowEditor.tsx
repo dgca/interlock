@@ -982,7 +982,7 @@ export function WorkflowEditor({
           definition={draft}
           workflows={workflows}
           workflowId={workflow.id}
-          canExport={!hasChildren}
+          canExport={true}
           onOpenWorkflow={onOpenWorkflow}
           onCreateChild={
             !workflow.ownerWorkflowId && !workflow.archived && onOpenWorkflow
