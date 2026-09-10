@@ -117,7 +117,7 @@ A fresh-context assignment includes `executionInstructions` for a fresh session 
 
 ## Author definitions through MCP
 
-Use `create_workflow` with a definition containing flat `nodes` and `edges` arrays. `update_workflow` accepts that definition as `draft`, together with the current `draftRevision` from `get_workflow`. Pass the definition itself, not an exported workflow record. Incomplete drafts can be saved; `publish_workflow` validates the complete graph.
+Use `create_workflow` with a definition containing flat `nodes` and `edges` arrays. `update_workflow` accepts that definition as `draft`, together with the current `draftRevision` from `get_workflow`. Pass the definition itself, not an exported workflow record. Incomplete drafts can be saved; `publish_workflow` validates the complete graph. Set `cascade: true` to advance and republish transitive dependents, including archived workflows. Unpublished dependent definition edits, dependency cycles, or validation failures reject the entire cascade. Existing runs retain their published pins. See [cascade publication](../README.md#publish-a-shared-workflow-and-its-dependents) for scope and draft behavior.
 
 Use `kind: "batch"` for repeated work. Give each direct child a `batchId` matching its owner. The Batch has an `item` source port into the group and a `complete` source port into the continuation. Return every item branch to its owner with `targetHandle: "end"`. There is no nested body definition. Set `language: "javascript"` explicitly for JavaScript scripts; omitting it selects Bash. See [workflow definitions and graph scopes](architecture.md#workflow-definitions) and [Fetch configuration](fetch.md).
 

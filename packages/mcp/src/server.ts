@@ -77,8 +77,8 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'publish_workflow',
-    'Validate the draft and publish an immutable version. No execution is started.',
-    { id: z.string() },
+    'Validate the draft and publish an immutable version. Set cascade to also advance references and republish all transitive dependents from their latest published definitions, including archived workflows. Unpublished dependent definition edits or dependency cycles reject the entire operation. Existing versions and runs stay pinned. No execution is started.',
+    { id: z.string(), cascade: z.boolean().optional() },
     (input) => client.workflows.publish(input),
   );
   tool(

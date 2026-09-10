@@ -297,32 +297,96 @@ export class Engine {
       );
     return this.create(`${w.name} copy`, w.description, w.draft);
   }
-  publish(id: string) {
+  publish(id: string, cascade = false) {
     return this.store.transaction(() => {
-      const w = this.workflow(id);
-      const definition = validateDefinition(w.draft);
-      validateWorkflowReferences(w.id, definition, this.store.workflows());
-      for (const n of definition.nodes) {
-        if (
-          n.kind === 'workflow' &&
-          (n.version === null ||
-            !this.store.getVersion(n.workflowId, n.version))
-        )
-          throw new InterlockError(
-            `${n.label}: referenced workflow version does not exist`,
-          );
+      if (!cascade) return this.publishVersion(id);
+      const workflows = this.store.workflows();
+      const definitions = new Map(
+        workflows.map((w) => [
+          w.id,
+          w.id === id
+            ? w.draft
+            : this.store.getVersion(w.id, w.latestVersion)?.definition,
+        ]),
+      );
+      this.workflow(id);
+      const affected = new Set([id]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const w of workflows) {
+          if (
+            !affected.has(w.id) &&
+            definitions
+              .get(w.id)
+              ?.nodes.some(
+                (n) => n.kind === 'workflow' && affected.has(n.workflowId),
+              )
+          ) {
+            affected.add(w.id);
+            changed = true;
+          }
+        }
       }
-      w.latestVersion++;
-      w.updatedAt = now();
-      this.store.version({
-        workflowId: id,
-        version: w.latestVersion,
-        definition,
-        createdAt: now(),
-      });
-      this.store.put('workflows', w);
-      return w;
+      const ordered: string[] = [];
+      const visiting = new Set<string>();
+      const visited = new Set<string>();
+      const visit = (workflowId: string) => {
+        if (visiting.has(workflowId))
+          throw new InterlockError(
+            'Cannot cascade publication through a dependency cycle. Publish versions explicitly.',
+          );
+        if (visited.has(workflowId)) return;
+        visiting.add(workflowId);
+        for (const node of definitions.get(workflowId)!.nodes)
+          if (node.kind === 'workflow' && affected.has(node.workflowId))
+            visit(node.workflowId);
+        visiting.delete(workflowId);
+        visited.add(workflowId);
+        ordered.push(workflowId);
+      };
+      for (const workflowId of affected) visit(workflowId);
+      for (const workflowId of ordered) {
+        const w = this.workflow(workflowId);
+        if (workflowId !== id) {
+          if (!isDeepStrictEqual(w.draft, definitions.get(workflowId)))
+            throw new InterlockError(
+              `Cannot cascade: "${w.name}" has unpublished definition edits. Publish or discard them first.`,
+            );
+          for (const node of w.draft.nodes)
+            if (node.kind === 'workflow' && affected.has(node.workflowId))
+              node.version = this.workflow(node.workflowId).latestVersion;
+          w.draftRevision++;
+          this.store.put('workflows', w);
+        }
+        this.publishVersion(workflowId);
+      }
+      return this.workflow(id);
     });
+  }
+  private publishVersion(id: string) {
+    const w = this.workflow(id);
+    const definition = validateDefinition(w.draft);
+    validateWorkflowReferences(w.id, definition, this.store.workflows());
+    for (const n of definition.nodes) {
+      if (
+        n.kind === 'workflow' &&
+        (n.version === null || !this.store.getVersion(n.workflowId, n.version))
+      )
+        throw new InterlockError(
+          `${n.label}: referenced workflow version does not exist`,
+        );
+    }
+    w.latestVersion++;
+    w.updatedAt = now();
+    this.store.version({
+      workflowId: id,
+      version: w.latestVersion,
+      definition,
+      createdAt: now(),
+    });
+    this.store.put('workflows', w);
+    return w;
   }
   private pinnedVersion(node: Extract<WorkflowNode, { kind: 'workflow' }>) {
     if (node.version === null)

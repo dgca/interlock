@@ -77,7 +77,7 @@ Use child workflows for helpers that belong to one parent. The main library show
 
 In **Add node**, choose **Workflow**, select **Create child workflow**, and enter a name. **Save and create child** saves the parent draft and its new node together, then opens the child editor. Save or discard Raw edits before creating a child. The Child workflows tab also creates children without adding a node.
 
-Edit and publish the child with the ordinary editor. Select **Use v1 in [node name]** to pin that version in the parent draft and return to the parent. Connect the new node and publish the parent. A reference to an unpublished child can be saved but blocks publication. Later child publications do not change existing pins. Select a newer version explicitly in node settings or from the child editor.
+Edit and publish the child with the ordinary editor. Select **Use v1 in [node name]** to pin that version in the parent draft and return to the parent. Connect the new node and publish the parent. A reference to an unpublished child can be saved but blocks publication. By default, later child publications do not change existing pins. Select a newer version explicitly in node settings or from the child editor.
 
 The child editor links back to its owner and retains its own stable URL and Runs tab. Only the owner can reference a child. Children may invoke library workflows but cannot own or reference other children. Ownership has one level; the existing ten-level execution limit still applies.
 
@@ -210,3 +210,19 @@ interlock workflows '{"ownerWorkflowId":null}'
 ```
 
 An import without an owner remains a library workflow. A draft Workflow node can use `"version": null` until its target is published. A published reference always uses a positive version number.
+
+### Publish a shared workflow and its dependents
+
+To publish a shared workflow and advance all its published callers, run:
+
+```sh
+interlock publish CHILD_ID --cascade
+```
+
+MCP callers can use `publish_workflow` with `{"id":"CHILD_ID","cascade":true}`. The shared API accepts the same `cascade` option. Ordinary publication, including the UI's Publish version action, keeps parent pins unchanged.
+
+The cascade follows references in each workflow's latest published definition, including archived workflows and references inside Batches. It advances references to affected workflows and republishes each dependent once, children before parents. Unrelated pins stay unchanged. Draft-only workflows and references found only in older versions are excluded.
+
+Dependent drafts must match their latest published definitions. Publish or discard any definition edits before cascading. A dependency cycle or any validation failure rejects the whole operation, including publication of the requested workflow. Successful cascades update dependent drafts and their revisions, so an editor holding an older draft must reload before saving.
+
+Existing versions and runs retain their exact pins. New runs use the new versions by default; starting an explicit older version still uses its original dependencies. Contracts are checked during execution, so test changed child behavior before cascading it to callers.

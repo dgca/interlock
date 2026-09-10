@@ -9,7 +9,7 @@ import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import { createClient } from '@interlock/client';
 import { createApp } from '../packages/server/src/app';
-import { blankDefinition } from '@interlock/core';
+import { nodeSchema, blankDefinition } from '@interlock/core';
 
 it.each(['stdio', 'http'])(
   'completes a workflow through MCP %s and the shared HTTP and SQLite interfaces',
@@ -82,6 +82,18 @@ it.each(['stdio', 'http'])(
       expect(
         (await rpc.runs.get.query({ id: started.run.id })).run.output,
       ).toEqual({ number: 42 });
+      const dependentDefinition = blankDefinition();
+      dependentDefinition.nodes[1] = nodeSchema.parse({
+        id: 'agent',
+        kind: 'workflow',
+        label: 'Shared',
+        workflowId: w.id,
+        version: 1,
+      });
+      const dependent = engine.create('Dependent', '', dependentDefinition);
+      engine.publish(dependent.id);
+      await call('publish_workflow', { id: w.id, cascade: true });
+      expect(engine.workflow(dependent.id).latestVersion).toBe(2);
       const definition = batchDefinition();
       const workflow = await call('create_workflow', {
         name: 'Batch transport',
@@ -97,6 +109,8 @@ it.each(['stdio', 'http'])(
       const previousUrl = process.env.INTERLOCK_URL;
       process.env.INTERLOCK_URL = url;
       try {
+        await runCommand(['publish', w.id, '--cascade']);
+        expect(engine.workflow(dependent.id).latestVersion).toBe(3);
         expect(await runCommand(['work', root.run.id])).toMatchObject(items);
         const detail = await runCommand(['run', items[0].runId]);
         expect(detail).toMatchObject({

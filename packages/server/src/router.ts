@@ -99,8 +99,10 @@ export const appRouter = t.router({
       .mutation(({ ctx, input }) => ctx.engine.deleteWorkflow(input.id)),
     clone: p.input(id).mutation(({ ctx, input }) => ctx.engine.clone(input.id)),
     publish: p
-      .input(id)
-      .mutation(({ ctx, input }) => ctx.engine.publish(input.id)),
+      .input(id.extend({ cascade: z.boolean().optional() }))
+      .mutation(({ ctx, input }) =>
+        ctx.engine.publish(input.id, input.cascade),
+      ),
     versions: p.input(id).query(({ ctx, input }) => {
       const w = ctx.engine.workflow(input.id);
       return Array.from({ length: w.latestVersion }, (_, i) =>
