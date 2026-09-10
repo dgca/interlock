@@ -22,6 +22,10 @@ Use the root package version through `packages/core/src/version.ts` for CLI, UI,
 
 While Interlock is on `0.x`, use `patch` changesets for all non-breaking changes, including new features. A minor or major bump requires an explicit user request. Flag breaking changes before choosing a release bump.
 
+## Keep UI purposeful
+
+Every UI element should provide useful information or help the user decide or act. Use existing titles and navigation for context instead of repeating them in subtitles or labels. Omit generic filler copy added to make a layout feel complete. Keep guidance that explains a non-obvious behavior, consequence, or next step, and place it where needed. Build visual hierarchy with spacing, typography, and grouping rather than extra copy.
+
 ## Before opening or updating a PR
 
 Check README.md, related docs, CLI help, and MCP tool descriptions against the PR's final behavior. Update affected instructions, examples, UI labels, supported operations, and limits in the same PR. Verify documented commands against their implementations. Keep changeset summaries focused on user-visible changes since the latest published release, omitting intermediate designs that never shipped.

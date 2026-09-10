@@ -9,6 +9,7 @@ import {
   readPath,
   resolveFetch,
   validateDefinition,
+  validateWorkflowReferences,
   type Json,
   type NodeExecution,
   type Run,
@@ -80,7 +81,7 @@ export class Engine {
   workflow(id: string) {
     const w = this.store.get<Workflow>('workflows', id);
     if (!w) throw new InterlockError('Workflow not found');
-    return w;
+    return { ...w, ownerWorkflowId: w.ownerWorkflowId ?? null };
   }
   run(id: string) {
     const run = this.store.get<Run>('runs', id);
@@ -91,10 +92,19 @@ export class Engine {
     name: string,
     description = '',
     definition = blankDefinition(),
+    ownerWorkflowId: string | null = null,
   ): Workflow {
+    if (ownerWorkflowId) {
+      const owner = this.workflow(ownerWorkflowId);
+      if (owner.ownerWorkflowId)
+        throw new InterlockError('Children cannot own workflows');
+      if (owner.archived)
+        throw new InterlockError('Restore the parent before creating a child');
+    }
     const time = now();
     const workflow: Workflow = {
       id: randomUUID(),
+      ownerWorkflowId,
       name,
       description,
       archived: false,
@@ -104,6 +114,11 @@ export class Engine {
       createdAt: time,
       updatedAt: time,
     };
+    validateWorkflowReferences(
+      workflow.id,
+      workflow.draft,
+      this.store.workflows(),
+    );
     this.store.put('workflows', workflow);
     return workflow;
   }
@@ -128,6 +143,7 @@ export class Engine {
       if (patch.archived !== undefined) w.archived = patch.archived;
       if (patch.draft) {
         w.draft = definitionSchema.parse(patch.draft);
+        validateWorkflowReferences(w.id, w.draft, this.store.workflows());
         w.draftRevision++;
       }
       w.updatedAt = now();
@@ -135,9 +151,79 @@ export class Engine {
       return w;
     });
   }
+  createChild(input: {
+    ownerWorkflowId: string;
+    name: string;
+    parentDraftRevision: number;
+    parent: {
+      name: string;
+      description: string;
+      definition: WorkflowDefinition;
+    };
+    nodeId?: string;
+  }) {
+    return this.store.transaction(() => {
+      const parent = this.workflow(input.ownerWorkflowId);
+      if (parent.draftRevision !== input.parentDraftRevision)
+        throw new InterlockError(
+          'Draft changed elsewhere. Reload before creating a child.',
+        );
+      const child = this.create(input.name, '', blankDefinition(), parent.id);
+      const draft = definitionSchema.parse(input.parent.definition);
+      if (input.nodeId) {
+        const node = draft.nodes.find((n) => n.id === input.nodeId);
+        if (!node || node.kind !== 'workflow')
+          throw new InterlockError('Workflow node not found');
+        node.workflowId = child.id;
+        node.version = null;
+      }
+      validateWorkflowReferences(parent.id, draft, this.store.workflows());
+      parent.draft = draft;
+      parent.name = input.parent.name;
+      parent.description = input.parent.description;
+      parent.draftRevision++;
+      parent.updatedAt = now();
+      this.store.put('workflows', parent);
+      return { parent, child };
+    });
+  }
+  useChildVersion(input: {
+    id: string;
+    childId: string;
+    nodeId: string;
+    version: number;
+    draftRevision: number;
+  }) {
+    return this.store.transaction(() => {
+      const parent = this.workflow(input.id);
+      const child = this.workflow(input.childId);
+      if (parent.draftRevision !== input.draftRevision)
+        throw new InterlockError(
+          'Draft changed elsewhere. Reload before selecting a version.',
+        );
+      if (child.ownerWorkflowId !== parent.id)
+        throw new InterlockError('Child does not belong to this workflow');
+      if (!this.store.getVersion(child.id, input.version))
+        throw new InterlockError('Workflow version not found');
+      const node = parent.draft.nodes.find((n) => n.id === input.nodeId);
+      if (!node || node.kind !== 'workflow' || node.workflowId !== child.id)
+        throw new InterlockError(
+          'The parent no longer references this child at that node',
+        );
+      node.version = input.version;
+      parent.draftRevision++;
+      parent.updatedAt = now();
+      this.store.put('workflows', parent);
+      return parent;
+    });
+  }
   deleteWorkflow(id: string) {
     const result = this.store.transaction(() => {
       this.workflow(id);
+      if (this.store.workflows().some((w) => w.ownerWorkflowId === id))
+        throw new InterlockError(
+          'Delete the children first. Parent deletion with children is not available yet.',
+        );
       const references = (definition: WorkflowDefinition) =>
         definition.nodes.some(
           (node) => node.kind === 'workflow' && node.workflowId === id,
@@ -205,16 +291,22 @@ export class Engine {
   }
   clone(id: string) {
     const w = this.workflow(id);
+    if (this.store.workflows().some((child) => child.ownerWorkflowId === id))
+      throw new InterlockError(
+        'Cloning a workflow with children is not available yet.',
+      );
     return this.create(`${w.name} copy`, w.description, w.draft);
   }
   publish(id: string) {
     return this.store.transaction(() => {
       const w = this.workflow(id);
       const definition = validateDefinition(w.draft);
+      validateWorkflowReferences(w.id, definition, this.store.workflows());
       for (const n of definition.nodes) {
         if (
           n.kind === 'workflow' &&
-          !this.store.getVersion(n.workflowId, n.version)
+          (n.version === null ||
+            !this.store.getVersion(n.workflowId, n.version))
         )
           throw new InterlockError(
             `${n.label}: referenced workflow version does not exist`,
@@ -231,6 +323,13 @@ export class Engine {
       this.store.put('workflows', w);
       return w;
     });
+  }
+  private pinnedVersion(node: Extract<WorkflowNode, { kind: 'workflow' }>) {
+    if (node.version === null)
+      throw new InterlockError(
+        'Cannot execute an unpublished workflow reference',
+      );
+    return node.version;
   }
   private newRun(
     workflowId: string,
@@ -281,7 +380,10 @@ export class Engine {
   }
   start(workflowId: string, input: Json, version?: number) {
     const w = this.workflow(workflowId);
-    if (w.archived)
+    if (
+      w.archived ||
+      (w.ownerWorkflowId && this.workflow(w.ownerWorkflowId).archived)
+    )
       throw new InterlockError('Restore this workflow before starting it');
     const run = this.store.transaction(() =>
       this.newRun(workflowId, version ?? w.latestVersion, input),
@@ -497,7 +599,7 @@ export class Engine {
         ) {
           const child = this.newRun(
             node.kind === 'batch' ? run.workflowId : node.workflowId,
-            node.kind === 'batch' ? run.version : node.version,
+            node.kind === 'batch' ? run.version : this.pinnedVersion(node),
             value[execution.nextItem],
             run.id,
             node.kind === 'batch' ? node.id : undefined,

@@ -6,6 +6,10 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Workflow**: A reusable definition of work, including its steps and execution rules.
 
+**Library workflow**: A workflow that has no owner and is available for reuse by other workflows.
+
+**Child workflow**: A workflow owned by one library workflow. Only its owner can invoke it, though it can also be run directly for testing.
+
 **Workflow version**: An immutable published definition of a workflow.
 
 **Draft**: An editable workflow definition that has not been published as a version.

@@ -28,6 +28,9 @@ export type CanvasNode = Node<{
   };
   boundarySchema?: WorkflowNode['inputSchema'];
   onEdit?: () => void;
+  onOpen?: () => void;
+  targetName?: string;
+  ownedTarget?: boolean;
   onAdd?: () => void;
   onToggle?: () => void;
   collapsed?: boolean;
@@ -116,7 +119,7 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
     n.kind === 'agent'
       ? `${n.context.mode === 'fresh' ? 'Fresh' : 'Current'} context · ${n.maxAttempts} attempts`
       : n.kind === 'workflow'
-        ? `Nested workflow · v${n.version}`
+        ? `${data.targetName ?? 'Workflow'} · ${n.version === null ? 'Not published' : `v${n.version}`}`
         : n.kind === 'fetch'
           ? `Method: ${n.method}`
           : n.kind === 'condition'
@@ -256,7 +259,21 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
       <strong>{n.label}</strong>
       <div className={styles.nodeMetadata}>
         {detail && <small title={detail}>{detail}</small>}
-        <small>{contracts}</small>
+        <div className={styles.nodeContractRow}>
+          <small>{contracts}</small>
+          {data.onOpen && (
+            <button
+              className={`${styles.openWorkflow} nodrag nopan`}
+              onDoubleClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                data.onOpen?.();
+              }}
+            >
+              {data.ownedTarget ? 'Open child' : 'Open workflow'}
+            </button>
+          )}
+        </div>
       </div>
       {n.kind !== 'entry' && <Port type="target" id="default" label="In" />}
       {n.kind !== 'exit' &&

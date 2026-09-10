@@ -56,7 +56,10 @@ export class Store {
     return this.get<WorkflowVersion>('versions', `${workflowId}:${version}`);
   }
   workflows() {
-    return this.list<Workflow>('workflows');
+    return this.list<Workflow>('workflows').map((w) => ({
+      ...w,
+      ownerWorkflowId: w.ownerWorkflowId ?? null,
+    }));
   }
   runs() {
     return this.list<Run>('runs');

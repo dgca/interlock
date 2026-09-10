@@ -37,6 +37,7 @@ export function WorkflowLibrary({
   const file = useRef<HTMLInputElement>(null);
   const visible = workflows.filter(
     (w) =>
+      !w.ownerWorkflowId &&
       w.archived === archived &&
       `${w.name} ${w.description}`.toLowerCase().includes(query.toLowerCase()),
   );
@@ -91,7 +92,11 @@ export function WorkflowLibrary({
         <div className={styles.toolbar}>
           <Tabs.List>
             <Tabs.Tab value="active">
-              All workflows {workflows.filter((w) => !w.archived).length}
+              Active{' '}
+              {
+                workflows.filter((w) => !w.ownerWorkflowId && !w.archived)
+                  .length
+              }
             </Tabs.Tab>
             <Tabs.Tab value="archived">Archived</Tabs.Tab>
           </Tabs.List>
@@ -126,6 +131,9 @@ export function WorkflowLibrary({
                     <Menu.Dropdown>
                       <Menu.Item
                         leftSection={<Copy size={14} />}
+                        disabled={workflows.some(
+                          (child) => child.ownerWorkflowId === w.id,
+                        )}
                         onClick={() =>
                           void act(async () => {
                             const copy = await api.workflows.clone.mutate({
@@ -139,6 +147,9 @@ export function WorkflowLibrary({
                       </Menu.Item>
                       <Menu.Item
                         leftSection={<Download size={14} />}
+                        disabled={workflows.some(
+                          (child) => child.ownerWorkflowId === w.id,
+                        )}
                         onClick={() =>
                           download(`${w.name}.json`, {
                             name: w.name,
@@ -190,6 +201,23 @@ export function WorkflowLibrary({
                 <div className={styles.cardFooter}>
                   <span>
                     {w.draft.nodes.length} nodes <b>·</b>{' '}
+                    {workflows.some(
+                      (child) => child.ownerWorkflowId === w.id,
+                    ) && (
+                      <>
+                        {
+                          workflows.filter(
+                            (child) => child.ownerWorkflowId === w.id,
+                          ).length
+                        }{' '}
+                        {workflows.filter(
+                          (child) => child.ownerWorkflowId === w.id,
+                        ).length === 1
+                          ? 'child'
+                          : 'children'}{' '}
+                        <b>·</b>{' '}
+                      </>
+                    )}
                     {w.latestVersion ? `v${w.latestVersion}` : 'Unpublished'}
                   </span>
                   <Badge status={w.latestVersion ? 'published' : 'draft'} />

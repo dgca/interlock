@@ -1,5 +1,7 @@
 import {
   Checkbox,
+  Input,
+  SegmentedControl,
   Group,
   NativeSelect,
   Stack,
@@ -48,21 +50,26 @@ function Fields({
               value={field.name}
               onChange={(e) => patch(index, { name: e.target.value })}
             />
-            <NativeSelect
-              label={`${label} value source ${index + 1}`}
-              value={field.value.kind}
-              onChange={(e) =>
-                patch(index, {
-                  value:
-                    e.target.value === 'input'
-                      ? { kind: 'input', path: '' }
-                      : { kind: 'fixed', value: '' },
-                })
-              }
-            >
-              <option value="fixed">Fixed value</option>
-              <option value="input">From input</option>
-            </NativeSelect>
+            <Input.Wrapper label={`${label} value source ${index + 1}`}>
+              <SegmentedControl
+                mt={4}
+                style={{ display: 'flex', width: 'fit-content' }}
+                aria-label={`${label} value source ${index + 1}`}
+                value={field.value.kind}
+                onChange={(kind) =>
+                  patch(index, {
+                    value:
+                      kind === 'input'
+                        ? { kind: 'input', path: '' }
+                        : { kind: 'fixed', value: '' },
+                  })
+                }
+                data={[
+                  { value: 'fixed', label: 'Fixed value' },
+                  { value: 'input', label: 'From input' },
+                ]}
+              />
+            </Input.Wrapper>
           </Group>
           {field.value.kind === 'input' ? (
             <TextInput

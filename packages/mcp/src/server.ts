@@ -44,17 +44,18 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   }
   tool(
     'list_workflows',
-    'List workflows, draft definitions, and published version numbers.',
-    {},
-    () => client.workflows.list(),
+    'List workflows, drafts, owners, and published versions. Omit ownerWorkflowId for all workflows, use null for the library, or a parent ID for its children.',
+    { ownerWorkflowId: z.string().nullable().optional() },
+    (input) => client.workflows.list(input),
   );
   tool(
     'create_workflow',
-    'Create an editable draft from a flat definition with nodes and edges. Node kinds: entry, exit, agent, script, fetch, condition, workflow, batch. Batch members use batchId; its item edge starts the path, every branch returns via targetHandle end, and complete continues outside. Scripts must set language to javascript explicitly; omission means Bash. This does not publish or execute it.',
+    'Create an editable draft from a flat definition with nodes and edges. Node kinds: entry, exit, agent, script, fetch, condition, workflow, batch. Batch members use batchId; its item edge starts the path, every branch returns via targetHandle end, and complete continues outside. Scripts must set language to javascript explicitly; omission means Bash. Set ownerWorkflowId to create a child of a library workflow. Children cannot own children and only their owner may reference them. Workflow nodes may use version: null in drafts until a published version is selected. This does not publish or execute it.',
     {
       name: z.string(),
       description: z.string().optional(),
       definition: z.any(),
+      ownerWorkflowId: z.string().nullable().optional(),
     },
     (input) =>
       client.workflows.create({

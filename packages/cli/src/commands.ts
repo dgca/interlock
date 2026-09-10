@@ -11,7 +11,9 @@ export async function runCommand(argv: string[]) {
   const [command, ...args] = argv;
   switch (command) {
     case 'workflows':
-      return client.workflows.list.query();
+      return client.workflows.list.query(
+        args[0] ? await parse(args[0]) : undefined,
+      );
     case 'workflow':
       return client.workflows.get.query({ id: args[0] });
     case 'import': {
@@ -59,7 +61,7 @@ export async function runCommand(argv: string[]) {
     default:
       return {
         usage: [
-          'workflows',
+          'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
           'workflow <id>',
           'import <json|@file>',
           'publish <id>',

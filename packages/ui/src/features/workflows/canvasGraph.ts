@@ -1,10 +1,16 @@
-import { type WorkflowDefinition, type WorkflowNode } from '@interlock/core';
+import {
+  type WorkflowDefinition,
+  type WorkflowNode,
+  type Workflow,
+} from '@interlock/core';
 import type { Edge } from '@xyflow/react';
 import type { CanvasNode } from './FlowNode';
 import { canvasGeometry } from './canvasGeometry';
 import { conditionColors } from './conditionColors';
 
 type Options = {
+  workflows?: Workflow[];
+  onOpenWorkflow?: (id: string) => void;
   collapsed?: Set<string>;
   selected?: string | Set<string>;
   selectedEdges?: Set<string>;
@@ -59,6 +65,20 @@ export function canvasGraph(
         : (options.selected?.has(node.id) ?? false),
     data: {
       node,
+      ownedTarget:
+        node.kind === 'workflow' &&
+        Boolean(
+          options.workflows?.find((w) => w.id === node.workflowId)
+            ?.ownerWorkflowId,
+        ),
+      targetName:
+        node.kind === 'workflow'
+          ? options.workflows?.find((w) => w.id === node.workflowId)?.name
+          : undefined,
+      onOpen:
+        node.kind === 'workflow' && options.onOpenWorkflow
+          ? () => options.onOpenWorkflow!(node.workflowId)
+          : undefined,
       boundarySchema:
         node.kind === 'entry'
           ? definition.inputSchema

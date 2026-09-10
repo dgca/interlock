@@ -33,6 +33,16 @@ A condition compares a path in its input to a JSON value using structural equali
 
 A Workflow node invokes an existing published workflow version once. A Batch selects an array from `itemsPath` and repeats a visible item path for each value. A blank path selects the complete input. Each value becomes the complete input of an isolated item run. The Batch collects item results in input order, even when items finish out of order. Empty arrays produce an empty result.
 
+### Owned child workflows
+
+Workflow records carry optional `ownerWorkflowId` metadata. Missing or null ownership means a library workflow. An owner must be a library workflow. Core reference validation permits only the owner to reference an owned child in a saved draft or published version. This authoring rule does not change execution ancestry or the existing ten-level run limit.
+
+`createChild` atomically creates the child and saves the parent's name, description, and draft with an expected draft revision. An optional node ID identifies the new reference. Failure rolls back both records. Workflow nodes accept null versions in drafts; publication and execution reject unresolved pins. `useChildVersion` checks the parent revision, ownership, target node, and published version before updating the parent draft. Publication never automatically advances parent pins.
+
+The library filters out owned workflows, while the app retains all workflow records for direct route resolution. Library workflow pages add a Child workflows tab at `?view=children`. The tab uses a centered, bounded card grid with descriptions, publication badges, step counts, and draft usage. Active and Archived controls and search filter the parent's children. New child opens a naming dialog before saving the parent and navigating to the child. Child pages link to their owner; node actions open the target's existing resource route. Creation saves parent edits before navigation. Children retain separate editors and run histories. Direct starts reject archived children and children of archived parents; existing published invocations retain the prior archive behavior.
+
+This authoring increment blocks clone and deletion of parents with children, and disables their UI export. Moves and complete parent lifecycle operations remain unimplemented. Ownership is not editable through Raw JSON or generic metadata updates. The list interface accepts an optional owner filter while preserving unfiltered calls for existing clients.
+
 ### Batch handles and graph scopes
 
 A `batch` node owns `itemsPath`, `concurrency`, and `failurePolicy`. Its ordinary input receives the incoming value, and four handles control the flow:
@@ -131,7 +141,7 @@ Editor Undo and Redo keep up to 50 snapshots of the definition, name, and descri
 
 Raw text keeps its own typing history. Save beneath the raw editor persists the parsed definition and records one workflow history step only after the save succeeds. Discard restores the raw session baseline from entry or the last successful save, without discarding prior visual edits. Text typed during a pending save remains available afterward. Unapplied raw edits, open settings, active drags, and pending saves or publication disable workflow Undo and Redo. Keyboard shortcuts leave text fields and settings dialogs to handle their own input.
 
-The Add node dialog includes the node type choice and adds a node only on confirmation. Script and raw-definition editors share syntax highlighting and aligned line numbers. The minimap receives its dimensions through the React Flow component's inline style so its SVG calculations match its displayed size.
+The Add node dialog starts with Agent, the first node type, and adds a node only on confirmation. New-choice defaults follow option order. Workflow source, script language, Fetch value sources, and boolean inputs use segmented controls; Context and Batch failure behavior use radio groups. Workflow targets list owned children first, then library workflows, alphabetically within each group. The initial reference uses that same order. Run versions appear newest first. Saved values retain their selection regardless of option order. Script and raw-definition editors share syntax highlighting and aligned line numbers. The minimap receives its dimensions through the React Flow component's inline style so its SVG calculations match its displayed size.
 
 Add node sits beside Visual/Raw. The workflow menu beside Run contains Workflow settings and confirmed deletion. Raw has Save and Discard beneath the code editor, with Format JSON beside Visual/Raw. Workflow settings is unavailable while raw edits remain unsaved. The Tidy icon sits below Fit View in the canvas controls. Shared canvas geometry supplies node and Batch dimensions to rendering, placement, and layout. New nodes occupy free space with an 80-pixel gap; adding a child also shifts overlapping siblings to make room for expanded ancestor Batches while preserving their rows. Manual dragging and imported positions do not trigger automatic arrangement.
 

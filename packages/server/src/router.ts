@@ -24,7 +24,21 @@ export const appRouter = t.router({
     return { ...config, mcpUrl: new URL('/mcp', config.engineUrl).href };
   }),
   workflows: t.router({
-    list: p.query(({ ctx }) => ctx.engine.store.workflows()),
+    list: p
+      .input(
+        z
+          .object({ ownerWorkflowId: z.string().nullable().optional() })
+          .optional(),
+      )
+      .query(({ ctx, input }) =>
+        ctx.engine.store
+          .workflows()
+          .filter(
+            (w) =>
+              input?.ownerWorkflowId === undefined ||
+              (w.ownerWorkflowId ?? null) === input.ownerWorkflowId,
+          ),
+      ),
     get: p.input(id).query(({ ctx, input }) => ctx.engine.workflow(input.id)),
     create: p
       .input(
@@ -32,11 +46,43 @@ export const appRouter = t.router({
           name: z.string().trim().min(1).max(120),
           description: z.string().default(''),
           definition: definitionSchema.optional(),
+          ownerWorkflowId: z.string().min(1).nullable().optional(),
         }),
       )
       .mutation(({ ctx, input }) =>
-        ctx.engine.create(input.name, input.description, input.definition),
+        ctx.engine.create(
+          input.name,
+          input.description,
+          input.definition,
+          input.ownerWorkflowId,
+        ),
       ),
+    createChild: p
+      .input(
+        z.object({
+          ownerWorkflowId: z.string(),
+          name: z.string().trim().min(1).max(120),
+          parentDraftRevision: z.number().int(),
+          parent: z.object({
+            name: z.string().trim().min(1).max(120),
+            description: z.string(),
+            definition: definitionSchema,
+          }),
+          nodeId: z.string().optional(),
+        }),
+      )
+      .mutation(({ ctx, input }) => ctx.engine.createChild(input)),
+    useChildVersion: p
+      .input(
+        z.object({
+          id: z.string(),
+          childId: z.string(),
+          nodeId: z.string(),
+          version: z.number().int().positive(),
+          draftRevision: z.number().int(),
+        }),
+      )
+      .mutation(({ ctx, input }) => ctx.engine.useChildVersion(input)),
     update: p
       .input(
         id.extend({

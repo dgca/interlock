@@ -47,7 +47,7 @@
 }
 .subnav {
   flex-shrink: 0;
-  padding: 0 21px;
+  padding: 10px 21px 0;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
@@ -459,4 +459,34 @@
   .spinning {
     animation: none;
   }
+}
+
+.ownerLink {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.nodeContractRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+.openWorkflow {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-size: 9px;
+  line-height: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.openWorkflow:hover {
+  text-decoration: underline;
 }

@@ -54,16 +54,33 @@ function WorkflowRoute() {
       onDirty={context.onDirty}
       onSaved={context.onSaved}
       onRun={context.onRun}
-      onBack={() => void navigate(paths.workflows)}
+      onBack={() =>
+        void navigate(
+          workflow.ownerWorkflowId
+            ? paths.workflow(workflow.ownerWorkflowId)
+            : paths.workflows,
+        )
+      }
+      onOpenWorkflow={(id) => void navigate(paths.workflow(id))}
       onDeleted={() => {
         flushSync(() => context.onDirty(false));
-        void navigate(paths.workflows);
+        void navigate(
+          workflow.ownerWorkflowId
+            ? paths.workflow(workflow.ownerWorkflowId)
+            : paths.workflows,
+        );
       }}
-      section={search.get('view') === 'runs' ? 'runs' : 'editor'}
+      section={
+        search.get('view') === 'runs'
+          ? 'runs'
+          : search.get('view') === 'children' && !workflow.ownerWorkflowId
+            ? 'children'
+            : 'editor'
+      }
       onSectionChange={(section) =>
         setSearch((previous) => {
           const next = new URLSearchParams(previous);
-          if (section === 'runs') next.set('view', 'runs');
+          if (section !== 'editor') next.set('view', section);
           else next.delete('view');
           return next;
         })

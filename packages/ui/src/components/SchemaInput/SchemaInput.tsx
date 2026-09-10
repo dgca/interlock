@@ -1,4 +1,4 @@
-import { TextInput, NativeSelect } from '@mantine/core';
+import { TextInput, Input, SegmentedControl } from '@mantine/core';
 import type { Json } from '@interlock/core';
 import { JsonEditor } from '../JsonEditor/JsonEditor';
 /** Common object contracts get fields; complex values remain editable JSON. */
@@ -44,16 +44,19 @@ export function SchemaInput({
           );
         if (property.type === 'boolean')
           return (
-            <NativeSelect
-              mb="md"
-              key={key}
-              label={label}
-              value={String(value[key] ?? false)}
-              onChange={(e) => update(e.target.value === 'true')}
-            >
-              <option value="true">True</option>
-              <option value="false">False</option>
-            </NativeSelect>
+            <Input.Wrapper label={label} mb="md" key={key}>
+              <SegmentedControl
+                mt={4}
+                style={{ display: 'flex', width: 'fit-content' }}
+                aria-label={label}
+                value={String(value[key] ?? false)}
+                onChange={(next) => update(next === 'true')}
+                data={[
+                  { value: 'false', label: 'False' },
+                  { value: 'true', label: 'True' },
+                ]}
+              />
+            </Input.Wrapper>
           );
         return (
           <JsonEditor

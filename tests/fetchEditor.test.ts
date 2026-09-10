@@ -17,6 +17,14 @@ function Harness() {
   });
 }
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockImplementation(() => ({
     matches: false,
@@ -44,6 +52,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 async function render() {
@@ -105,14 +114,11 @@ it('authors distinct fixed and input query bindings', async () => {
       .click(),
   );
   await input('Query parameter name 1', 'search');
-  const select = Array.from(container.querySelectorAll('select')).find(
-    (el) =>
-      container.querySelector(`label[for="${el.id}"]`)?.textContent ===
-      'Query parameter value source 1',
-  )!;
   await act(async () => {
-    select.value = 'input';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const source = container.querySelector(
+      '[aria-label="Query parameter value source 1"]',
+    )!;
+    source.querySelector<HTMLInputElement>('input[value="input"]')!.click();
   });
   await input('Query parameter input field 1', 'term');
   expect(latest.query).toEqual([
