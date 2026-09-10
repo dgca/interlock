@@ -1,5 +1,12 @@
 # @type_of/interlock
 
+## 0.1.5
+
+### Patch Changes
+
+- be64799: Allow each Batch to configure Maximum items from 1 through 10,000, retaining 200 when unset. Larger backlogs can run with the existing concurrency and independent step budgets. Oversized-input errors report the actual count and configured limit before any item work starts.
+- 803917a: Add Wait nodes with durable duration or timestamp deadlines and optional unclaimed Agent timeouts that route original input through a Timeout branch. Configure durations in the editor and inspect deadlines and timeout outcomes in runs. Clarify independent Batch step budgets and report completed item counts when a Batch fails.
+
 ## 0.1.4
 
 ### Patch Changes
