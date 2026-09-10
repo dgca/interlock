@@ -17,7 +17,7 @@ Open [http://127.0.0.1:4310](http://127.0.0.1:4310) in your browser. The package
 
 You can also start Interlock with `npx -y @type_of/interlock@latest` without a global installation. Both startup methods use the same HTTP MCP connection flow.
 
-Workflow editors and run inspectors have bookmarkable URLs. Reloading restores the workflow or run, and browser Back and Forward follow your navigation. The Runs History tab also survives reload. Unsaved draft edits still require saving; navigation asks before discarding them.
+Workflow editors and run inspectors have bookmarkable URLs. Reloading restores the workflow or run, and browser Back and Forward follow your navigation. Each workflow has **Editor** and **Runs** tabs. The workflow Runs tab and its Active or History filter survive reload. Switching between Editor and Runs retains local edits. Unsaved draft edits still require saving; navigation asks before discarding them.
 
 Keep the terminal running while you use Interlock. Closing the browser does not stop the engine. Press Ctrl+C in the terminal to stop it.
 
@@ -65,7 +65,7 @@ Select **Publish version** when the draft is ready, then **Run v1** to supply in
 
 Use **Undo** and **Redo** beside **Save draft** to reverse or restore up to 50 editor actions. The shortcuts are Ctrl/Command+Z and Ctrl/Command+Shift+Z; text fields keep their own typing undo. A drag, group move, deletion, connection change, or settings application counts as one action. Saving preserves history. Leaving the workflow, reloading the page, or loading an external draft clears it. Undo changes the editable draft, never a published version.
 
-Raw edits enter workflow history as one action when you return to **Visual** or save. While raw edits are unapplied, use the text editor's undo, or apply or discard those edits before using the workflow Undo and Redo buttons.
+In Raw, **Save** beneath the code editor writes the workflow draft and records one history action. **Discard** restores the definition from when you entered Raw or last saved successfully, preserving earlier visual edits. Save or discard raw changes before returning to **Visual** or using workflow Undo and Redo. Failed saves retain your raw text.
 
 Hold **Z** and drag from empty canvas space to draw a zoom rectangle. Release the mouse to fit that area into view. Press **Escape** or release Z before releasing the mouse to cancel. A click without a drag does nothing. This shortcut is inactive in text fields and settings dialogs and does not add to Undo history.
 
@@ -81,7 +81,7 @@ Failed executions can be retried from the inspector. Retrying a failed Batch pre
 
 ### Manage workflows
 
-Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library for active and archived workflows. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows block deletion.
+Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library for active and archived workflows. Inside a workflow, the three-dot menu beside **Run** contains **Workflow settings** and **Delete workflow**. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows block deletion.
 
 ### Fetch nodes
 
