@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { migrate, type MigrationResult } from './migrations.js';
 import type {
   Run,
   WorkRequest,
@@ -12,13 +13,17 @@ import type {
 /** One service owns the database. Each runtime operation commits as one transaction. */
 export class Store {
   private db: DatabaseSync;
+  readonly migration: MigrationResult;
   constructor(path: string) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
-    this.db.exec(`PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;
-      CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS documents (collection TEXT NOT NULL, id TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(collection, id));
-      INSERT OR IGNORE INTO migrations VALUES (1);`);
+    try {
+      this.migration = migrate(this.db, path);
+      this.db.exec('PRAGMA journal_mode = WAL;');
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
   }
   get<T>(collection: string, id: string): T | undefined {
     const row = this.db

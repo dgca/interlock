@@ -15,6 +15,10 @@ export function startServer(options: {
   connection: ConnectionConfig;
 }) {
   const store = new Store(options.database);
+  if (store.migration.backup)
+    console.log(
+      `Database upgraded from schema ${store.migration.from} to ${store.migration.to}. Backup: ${store.migration.backup}`,
+    );
   const engine = new Engine(store, options.workdir);
   seed(engine);
   const app = createApp(engine, options.connection);

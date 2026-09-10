@@ -190,6 +190,7 @@ The build includes TypeScript checks. Tests cover workflow contracts, runtime be
 - [Scope and limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
 - [Fetch requests](docs/fetch.md)
+- [Upgrade and restore a database](docs/upgrading.md)
 - [Release process](docs/releases.md)
 
 ## License
