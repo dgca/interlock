@@ -1,5 +1,12 @@
 # @type_of/interlock
 
+## 0.1.3
+
+### Patch Changes
+
+- b3e1bcd: Make the entire workflow card a link to its editor, except for the actions menu. Support keyboard navigation and opening workflows in a new tab.
+- b3e1bcd: Add Editor and Runs navigation within each workflow, with filtered run history and links back from run inspection. Move workflow settings and deletion into the menu beside Run. Add Save and Discard actions beneath the raw editor and retain raw edits across section changes and failed saves.
+
 ## 0.1.2
 
 ### Patch Changes
