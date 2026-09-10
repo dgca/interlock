@@ -10,6 +10,8 @@ import {
 } from '@mantine/core';
 import {
   nodeKindLabel,
+  DEFAULT_BATCH_MAX_ITEMS,
+  MAX_BATCH_ITEMS,
   type WorkflowDefinition,
   type Workflow,
   type WorkflowNode,
@@ -375,6 +377,17 @@ export function NodeInspector({
               onChange={(e) => patch({ itemsPath: e.target.value })}
             />
 
+            <TextInput
+              mb="md"
+              label="Maximum items"
+              description="Reject larger lists before starting any items. Each item has its own step budget."
+              type="number"
+              required
+              min={1}
+              max={MAX_BATCH_ITEMS}
+              value={node.maxItems ?? DEFAULT_BATCH_MAX_ITEMS}
+              onChange={(e) => patch({ maxItems: Number(e.target.value) })}
+            />
             <TextInput
               mb="md"
               label="Concurrency"

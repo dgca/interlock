@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { Store } from '@interlock/storage';
 import {
   assertContract,
+  DEFAULT_BATCH_MAX_ITEMS,
   blankDefinition,
   definitionSchema,
   InterlockError,
@@ -699,8 +700,13 @@ export class Engine {
             : [execution.input];
         if (!Array.isArray(value))
           throw new InterlockError('Batch input must resolve to an array');
-        if (value.length > 200)
-          throw new InterlockError('Batch input exceeds 200 items');
+        if (
+          node.kind === 'batch' &&
+          value.length > (node.maxItems ?? DEFAULT_BATCH_MAX_ITEMS)
+        )
+          throw new InterlockError(
+            `Batch input has ${value.length} items; limit is ${node.maxItems ?? DEFAULT_BATCH_MAX_ITEMS} items (maxItems). Raise Maximum items or split the input.`,
+          );
         let children = execution.childRunIds.map((id) => this.run(id));
         if (node.kind === 'workflow' || node.failurePolicy === 'all') {
           const failed = children.find(
