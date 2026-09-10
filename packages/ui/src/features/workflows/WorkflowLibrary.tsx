@@ -1,6 +1,7 @@
 import type { Action } from '../../lib/useActionFeedback';
 import { ActionIcon, Menu, Tabs, TextInput } from '@mantine/core';
 import { useRef, useState } from 'react';
+import { Link } from 'react-router';
 import {
   ArrowRight,
   Plus,
@@ -18,6 +19,7 @@ import { Button } from '../../components/Button/Button';
 import { Badge } from '../../components/Badge/Badge';
 import { api, download } from '../../lib/api';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
+import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 import styles from './WorkflowLibrary.module.css';
 export function WorkflowLibrary({
@@ -113,6 +115,7 @@ export function WorkflowLibrary({
                   <Menu position="bottom-end" width={160}>
                     <Menu.Target>
                       <ActionIcon
+                        className={styles.cardMenu}
                         variant="subtle"
                         color="gray"
                         aria-label={`Actions for ${w.name}`}
@@ -174,27 +177,25 @@ export function WorkflowLibrary({
                     </Menu.Dropdown>
                   </Menu>
                 </div>
-                <button
-                  className={styles.cardBody}
-                  onClick={() => onOpen(w.id)}
-                >
-                  <h2>{w.name}</h2>
+                <div className={styles.cardBody}>
+                  <h2>
+                    <Link className={styles.cardLink} to={paths.workflow(w.id)}>
+                      {w.name}
+                    </Link>
+                  </h2>
                   <p>
                     {w.description || 'A new procedure, ready to take shape.'}
                   </p>
-                </button>
+                </div>
                 <div className={styles.cardFooter}>
                   <span>
                     {w.draft.nodes.length} nodes <b>·</b>{' '}
                     {w.latestVersion ? `v${w.latestVersion}` : 'Unpublished'}
                   </span>
                   <Badge status={w.latestVersion ? 'published' : 'draft'} />
-                  <button
-                    aria-label={`Open ${w.name}`}
-                    onClick={() => onOpen(w.id)}
-                  >
+                  <span className={styles.cardArrow} aria-hidden="true">
                     <ArrowRight size={15} />
-                  </button>
+                  </span>
                 </div>
               </article>
             ))}

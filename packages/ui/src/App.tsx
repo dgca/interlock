@@ -25,6 +25,7 @@ export type AppContext = {
 };
 export function App() {
   const navigate = useNavigate();
+  const workflowMatch = useMatch('/workflows/:workflowId');
   const page = useMatch('/runs/*') ? 'runs' : 'workflows';
   const [editorDirty, setEditorDirty] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
@@ -87,7 +88,7 @@ export function App() {
     setTick((t) => t + 1);
   });
   const openRun = (id: string) => {
-    void navigate(paths.run(id));
+    void navigate(paths.run(id, workflowMatch?.params.workflowId));
     setRunDialog(undefined);
   };
   const context: AppContext = {

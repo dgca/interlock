@@ -13,6 +13,7 @@ import { WorkflowEditor } from '../features/workflows/WorkflowEditor';
 import { RunList } from '../features/runs/RunList';
 import { RunInspector } from '../features/runs/RunInspector';
 import { paths } from './paths';
+import { flushSync } from 'react-dom';
 
 function LibraryRoute() {
   const { workflows, act, loaded, loadError } = useOutletContext<AppContext>();
@@ -39,6 +40,8 @@ function WorkflowRoute() {
   const { workflowId } = useParams();
   const context = useOutletContext<AppContext>();
   const navigate = useNavigate();
+  const [search, setSearch] = useSearchParams();
+  const runTab = search.get('tab') === 'history' ? 'history' : 'active';
   const workflow = context.workflows.find((w) => w.id === workflowId);
   if (!context.loaded) return <Loading error={context.loadError} />;
   if (!workflow) return <NotFound title="Workflow not found" />;
@@ -52,6 +55,35 @@ function WorkflowRoute() {
       onSaved={context.onSaved}
       onRun={context.onRun}
       onBack={() => void navigate(paths.workflows)}
+      onDeleted={() => {
+        flushSync(() => context.onDirty(false));
+        void navigate(paths.workflows);
+      }}
+      section={search.get('view') === 'runs' ? 'runs' : 'editor'}
+      onSectionChange={(section) =>
+        setSearch((previous) => {
+          const next = new URLSearchParams(previous);
+          if (section === 'runs') next.set('view', 'runs');
+          else next.delete('view');
+          return next;
+        })
+      }
+      runsView={
+        <RunList
+          runs={context.runs}
+          workflowId={workflow.id}
+          tab={runTab}
+          onTabChange={(tab) =>
+            setSearch((previous) => {
+              const next = new URLSearchParams(previous);
+              if (tab === 'history') next.set('tab', tab);
+              else next.delete('tab');
+              return next;
+            })
+          }
+          onOpen={(id) => void navigate(paths.run(id, workflow.id, runTab))}
+        />
+      }
     />
   );
 }
@@ -81,6 +113,9 @@ function RunRoute() {
   const { runId } = useParams();
   const { tick, act, onConnect, runs } = useOutletContext<AppContext>();
   const navigate = useNavigate();
+  const [search] = useSearchParams();
+  const workflowId = search.get('workflow') || undefined;
+  const returnTab = search.get('tab') === 'history' ? 'history' : 'active';
   const run = runs.find((r) => r.id === runId);
   const tab =
     run && !['running', 'waiting'].includes(run.status) ? 'history' : 'active';
@@ -91,8 +126,14 @@ function RunRoute() {
       tick={tick}
       act={act}
       onConnect={onConnect}
-      onOpen={(id) => void navigate(paths.run(id))}
-      onBack={() => void navigate(paths.runs(tab))}
+      onOpen={(id) => void navigate(paths.run(id, workflowId, returnTab))}
+      onBack={() =>
+        void navigate(
+          workflowId
+            ? paths.workflowRuns(workflowId, returnTab)
+            : paths.runs(tab),
+        )
+      }
     />
   );
 }

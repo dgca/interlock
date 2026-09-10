@@ -20,12 +20,29 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowLibrary', () => ({
     h('button', { onClick: () => onOpen('w1') }, 'Open workflow'),
 }));
 vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
-  WorkflowEditor: ({ workflow, onDirty, onBack, onRun }: any) => {
+  WorkflowEditor: ({
+    workflow,
+    onDirty,
+    onBack,
+    onRun,
+    section,
+    onSectionChange,
+    runsView,
+    onDeleted,
+  }: any) => {
     useEffect(() => () => onDirty(false), [onDirty]);
     return h(
       'section',
       {},
       `Editor ${workflow.id}`,
+      h('button', { onClick: () => onSectionChange('runs') }, 'Workflow runs'),
+      h(
+        'button',
+        { onClick: () => onSectionChange('editor') },
+        'Workflow editor',
+      ),
+      h('button', { onClick: onDeleted }, 'Confirm deletion'),
+      section === 'runs' ? runsView : null,
       h('button', { onClick: () => onDirty(true) }, 'Edit draft'),
       h('button', { onClick: () => onDirty(false) }, 'Save draft'),
       h('button', { onClick: onBack }, 'Back to library'),
@@ -81,6 +98,7 @@ beforeEach(() => {
   queries.runs.mockResolvedValue([
     {
       id: 'r1',
+      workflowId: 'w1',
       status: 'completed',
       workflowName: 'Completed workflow',
       version: 1,
@@ -102,7 +120,9 @@ async function mount(path?: string) {
   root = createRoot(container);
   router = createBrowserRouter(routes);
   await act(async () =>
-    root.render(h(MantineProvider, {}, h(RouterProvider, { router }))),
+    root.render(
+      h(MantineProvider, { env: 'test' }, h(RouterProvider, { router })),
+    ),
   );
 }
 async function click(label: string) {
@@ -214,4 +234,38 @@ it('guards unsaved edits on browser Back and app navigation, then allows navigat
   await click('Save draft');
   await click('Runs');
   expect(window.location.pathname).toBe('/runs');
+});
+
+it('restores workflow run history and returns from nested inspection to the scoped list', async () => {
+  await mount('/workflows/w1?view=runs&tab=history');
+  expect(
+    container.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+  ).toContain('History');
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('button.run-row')!.click(),
+  );
+  expect(window.location.pathname).toBe('/runs/r1');
+  expect(new URLSearchParams(window.location.search).get('workflow')).toBe(
+    'w1',
+  );
+  await click('Child run');
+  await click('Back to runs');
+  expect(window.location.pathname).toBe('/workflows/w1');
+  expect(window.location.search).toBe('?view=runs&tab=history');
+});
+
+it('allows workflow section changes with unsaved edits but still guards leaving the workflow', async () => {
+  await mount('/workflows/w1');
+  await click('Edit draft');
+  await click('Workflow runs');
+  expect(window.location.search).toBe('?view=runs');
+  expect(document.body.textContent).not.toContain('Discard unsaved changes?');
+  await traverse('back');
+  expect(window.location.search).toBe('');
+  await click('Back to library');
+  expect(document.body.textContent).toContain('Discard unsaved changes?');
+  await click('Keep editing');
+  await click('Confirm deletion');
+  expect(window.location.pathname).toBe('/workflows');
+  expect(document.body.textContent).not.toContain('Discard unsaved changes?');
 });

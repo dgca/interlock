@@ -1,5 +1,6 @@
 import type { Action } from '../../lib/useActionFeedback';
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react';
+import { ActionIcon, Menu, Tabs } from '@mantine/core';
 import {
   ReactFlow,
   Background,
@@ -21,6 +22,8 @@ import {
   Undo2,
   Redo2,
   WandSparkles,
+  MoreHorizontal,
+  Trash2,
 } from 'lucide-react';
 import {
   validateDefinition,
@@ -33,6 +36,7 @@ import { Button } from '../../components/Button/Button';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 import { parseRawDefinition } from './rawDefinition';
 import { SettingsDialog } from './SettingsDialog';
+import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { FlowNode, type CanvasNode } from './FlowNode';
 import { canvasGraph, withoutNodes } from './canvasGraph';
 import { useWorkflowHistory } from './useWorkflowHistory';
@@ -50,6 +54,10 @@ export function WorkflowEditor({
   onSaved,
   act,
   onDirty,
+  onDeleted = onBack,
+  section = 'editor',
+  onSectionChange,
+  runsView,
 }: {
   workflow: Workflow;
   workflows: Workflow[];
@@ -58,7 +66,12 @@ export function WorkflowEditor({
   onSaved: (w: Workflow) => void;
   act: Action;
   onDirty: (dirty: boolean) => void;
+  onDeleted?: () => void;
+  section?: 'editor' | 'runs';
+  onSectionChange?: (section: 'editor' | 'runs') => void;
+  runsView?: ReactNode;
 }) {
+  const [deleting, setDeleting] = useState(false);
   const [pending, setPending] = useState<'save' | 'publish'>();
   const actionInFlight = useRef(false);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -105,9 +118,15 @@ export function WorkflowEditor({
   }, [draft]);
   const [view, setView] = useState<'visual' | 'raw'>('visual');
   const boxZoom = useBoxZoom(
-    view === 'visual' && !editing && !history.groupStart,
+    section === 'editor' &&
+      view === 'visual' &&
+      !editing &&
+      !deleting &&
+      !history.groupStart,
   );
   const [raw, setRaw] = useState('');
+  const [rawBaseline, setRawBaseline] = useState('');
+  const rawEdited = view === 'raw' && raw !== rawBaseline;
   const rawResult = useMemo(
     () => (view === 'raw' ? parseRawDefinition(raw) : undefined),
     [view, raw],
@@ -116,10 +135,11 @@ export function WorkflowEditor({
   const effectiveDraft = rawResult?.definition ?? draft;
   const switchView = (next: 'visual' | 'raw') => {
     if (next === view) return;
-    if (next === 'raw') setRaw(JSON.stringify(draft, null, 2));
-    else {
-      if (!rawResult?.definition) return;
-      setDraft(rawResult.definition);
+    if (pending || (next === 'visual' && rawEdited)) return;
+    if (next === 'raw') {
+      const text = JSON.stringify(draft, null, 2);
+      setRaw(text);
+      setRawBaseline(text);
     }
     setView(next);
   };
@@ -131,6 +151,7 @@ export function WorkflowEditor({
     }),
   );
   const dirty =
+    rawEdited ||
     rawInvalid ||
     JSON.stringify({ draft: effectiveDraft, name, description }) !== saved;
   const remoteSnapshot = JSON.stringify({
@@ -148,6 +169,7 @@ export function WorkflowEditor({
       description: workflow.description,
     });
     setRaw(JSON.stringify(workflow.draft, null, 2));
+    setRawBaseline(JSON.stringify(workflow.draft, null, 2));
     setRevision(workflow.draftRevision);
     setSaved(remoteSnapshot);
     setEditing(undefined);
@@ -184,11 +206,13 @@ export function WorkflowEditor({
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
-  const rawUnapplied =
-    view === 'raw' &&
-    (rawInvalid || JSON.stringify(effectiveDraft) !== JSON.stringify(draft));
   const historyBlocked = Boolean(
-    editing || pending || history.groupStart || rawUnapplied,
+    editing ||
+    deleting ||
+    pending ||
+    history.groupStart ||
+    rawEdited ||
+    section !== 'editor',
   );
   const canUndo = !historyBlocked && history.past.length > 0;
   const canRedo = !historyBlocked && history.future.length > 0;
@@ -198,6 +222,7 @@ export function WorkflowEditor({
       direction === 'undo' ? history.past.at(-1)! : history.future[0];
     history[direction]();
     setRaw(JSON.stringify(target.draft, null, 2));
+    setRawBaseline(JSON.stringify(target.draft, null, 2));
     setSelected(new Set());
     setSelectedEdges(new Set());
   };
@@ -217,7 +242,9 @@ export function WorkflowEditor({
         target.closest(
           'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
         ) ||
-        editing
+        editing ||
+        deleting ||
+        section !== 'editor'
       )
         return;
       event.preventDefault();
@@ -255,7 +282,6 @@ export function WorkflowEditor({
       invalid.reportValidity();
       throw new Error('Fix invalid fields before saving.');
     }
-    if (view === 'raw') setDraft(effectiveDraft);
     const w = await api.workflows.update.mutate({
       id: workflow.id,
       name,
@@ -265,6 +291,8 @@ export function WorkflowEditor({
     });
     setRevision(w.draftRevision);
     if (view === 'raw') {
+      setDraft(w.draft);
+      setRawBaseline(JSON.stringify(w.draft, null, 2));
       setRaw((current) =>
         current === raw ? JSON.stringify(w.draft, null, 2) : current,
       );
@@ -306,7 +334,7 @@ export function WorkflowEditor({
           <ArrowLeft />
         </Button>
         <div className={styles.title}>
-          <span>WORKFLOW EDITOR</span>
+          <span>WORKFLOW</span>
           <strong>{name}</strong>
         </div>
         <span className={styles.saved}>
@@ -315,61 +343,69 @@ export function WorkflowEditor({
             : `Draft saved · ${workflow.latestVersion ? `v${workflow.latestVersion} published` : 'unpublished'}`}
         </span>
         <div className="actions">
-          <Button
-            variant="ghost"
-            disabled={!canUndo}
-            aria-label="Undo"
-            onClick={() => travel('undo')}
-            title={
-              rawUnapplied
-                ? 'Apply or discard raw changes before undoing workflow edits'
-                : 'Undo (Ctrl/Command+Z)'
-            }
-          >
-            <Undo2 />
-          </Button>
-          <Button
-            variant="ghost"
-            disabled={!canRedo}
-            aria-label="Redo"
-            onClick={() => travel('redo')}
-            title={
-              rawUnapplied
-                ? 'Apply or discard raw changes before redoing workflow edits'
-                : 'Redo (Ctrl/Command+Shift+Z)'
-            }
-          >
-            <Redo2 />
-          </Button>
-          <Button
-            onClick={() => perform('save', save)}
-            disabled={!dirty || rawInvalid || remoteChanged || Boolean(pending)}
-          >
-            <Save />
-            {pending === 'save' ? 'Saving…' : 'Save draft'}
-          </Button>
-          <Button
-            disabled={
-              rawInvalid ||
-              Boolean(rawResult?.publishError) ||
-              (view === 'visual' && Boolean(graphError)) ||
-              remoteChanged ||
-              Boolean(pending)
-            }
-            onClick={() =>
-              perform('publish', async () => {
-                await save();
-                const published = await api.workflows.publish.mutate({
-                  id: workflow.id,
-                });
-                onSaved(published);
-                return published;
-              })
-            }
-          >
-            <Upload />
-            {pending === 'publish' ? 'Publishing…' : 'Publish version'}
-          </Button>
+          {section === 'editor' && (
+            <>
+              <Button
+                variant="ghost"
+                disabled={!canUndo}
+                aria-label="Undo"
+                onClick={() => travel('undo')}
+                title={
+                  rawEdited
+                    ? 'Save or discard raw changes before undoing workflow edits'
+                    : 'Undo (Ctrl/Command+Z)'
+                }
+              >
+                <Undo2 />
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={!canRedo}
+                aria-label="Redo"
+                onClick={() => travel('redo')}
+                title={
+                  rawEdited
+                    ? 'Save or discard raw changes before redoing workflow edits'
+                    : 'Redo (Ctrl/Command+Shift+Z)'
+                }
+              >
+                <Redo2 />
+              </Button>
+              {view === 'visual' && (
+                <Button
+                  onClick={() => perform('save', save)}
+                  disabled={
+                    !dirty || rawInvalid || remoteChanged || Boolean(pending)
+                  }
+                >
+                  <Save />
+                  {pending === 'save' ? 'Saving…' : 'Save draft'}
+                </Button>
+              )}
+              <Button
+                disabled={
+                  rawInvalid ||
+                  Boolean(rawResult?.publishError) ||
+                  (view === 'visual' && Boolean(graphError)) ||
+                  remoteChanged ||
+                  Boolean(pending)
+                }
+                onClick={() =>
+                  perform('publish', async () => {
+                    await save();
+                    const published = await api.workflows.publish.mutate({
+                      id: workflow.id,
+                    });
+                    onSaved(published);
+                    return published;
+                  })
+                }
+              >
+                <Upload />
+                {pending === 'publish' ? 'Publishing…' : 'Publish version'}
+              </Button>
+            </>
+          )}
           <Button
             variant="primary"
             disabled={
@@ -380,195 +416,266 @@ export function WorkflowEditor({
             <Play />
             Run v{workflow.latestVersion || '—'}
           </Button>
+          <Menu position="bottom-end" width={190}>
+            <Menu.Target>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                aria-label="Workflow actions"
+                disabled={Boolean(pending)}
+              >
+                <MoreHorizontal size={19} />
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item
+                leftSection={<Settings2 size={14} />}
+                disabled={rawEdited}
+                title={
+                  rawEdited
+                    ? 'Save or discard raw changes before editing settings'
+                    : undefined
+                }
+                onClick={() => setEditing({})}
+              >
+                Workflow settings
+              </Menu.Item>
+              <Menu.Divider />
+              <Menu.Item
+                color="red"
+                leftSection={<Trash2 size={14} />}
+                onClick={() => setDeleting(true)}
+              >
+                Delete workflow
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         </div>
       </header>
-      {remoteChanged && (dirty || editing) && !pending && (
-        <div role="alert" className={styles.conflict}>
-          <span>
-            This workflow changed elsewhere. Your edits are still here. Load the
-            latest draft before saving or publishing.
-          </span>
-          <Button
-            onClick={() => {
-              if (
-                window.confirm(
-                  'Discard your local edits and load the latest draft?',
+      <Tabs
+        className={styles.sections}
+        keepMounted
+        keepMountedMode="display-none"
+        value={section}
+        onChange={(value) =>
+          onSectionChange?.(value === 'runs' ? 'runs' : 'editor')
+        }
+      >
+        <Tabs.List className={styles.subnav} aria-label="Workflow sections">
+          <Tabs.Tab value="editor">Editor</Tabs.Tab>
+          <Tabs.Tab value="runs">Runs</Tabs.Tab>
+        </Tabs.List>
+        {remoteChanged && (dirty || editing) && !pending && (
+          <div role="alert" className={styles.conflict}>
+            <span>
+              This workflow changed elsewhere. Your edits are still here. Load
+              the latest draft before saving or publishing.
+            </span>
+            <Button
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Discard your local edits and load the latest draft?',
+                  )
                 )
-              )
-                loadLatest();
-            }}
-          >
-            Load latest draft
-          </Button>
-        </div>
-      )}
-      <div className={styles.body}>
-        <div
-          ref={boxZoom.containerRef}
-          {...boxZoom.handlers}
-          className={`${styles.canvasWrap} ${boxZoom.active ? styles.boxZoomReady : ''}`}
-        >
-          <div className={styles.canvasToolbar}>
-            <div
-              className={styles.viewToggle}
-              role="group"
-              aria-label="Workflow view"
+                  loadLatest();
+              }}
             >
-              <Button
-                aria-pressed={view === 'visual'}
-                variant={view === 'visual' ? 'primary' : 'ghost'}
-                disabled={rawInvalid}
-                onClick={() => switchView('visual')}
+              Load latest draft
+            </Button>
+          </div>
+        )}
+        <Tabs.Panel value="editor" className={styles.body}>
+          <div
+            ref={boxZoom.containerRef}
+            {...boxZoom.handlers}
+            className={`${styles.canvasWrap} ${boxZoom.active ? styles.boxZoomReady : ''}`}
+          >
+            <div className={styles.canvasToolbar}>
+              <div
+                className={styles.viewToggle}
+                role="group"
+                aria-label="Workflow view"
               >
-                Visual
-              </Button>
-              <Button
-                aria-pressed={view === 'raw'}
-                variant={view === 'raw' ? 'primary' : 'ghost'}
-                onClick={() => switchView('raw')}
-              >
-                Raw
-              </Button>
+                <Button
+                  aria-pressed={view === 'visual'}
+                  variant={view === 'visual' ? 'primary' : 'ghost'}
+                  disabled={rawEdited || Boolean(pending)}
+                  title={
+                    rawEdited
+                      ? 'Save or discard raw changes before returning to Visual'
+                      : undefined
+                  }
+                  onClick={() => switchView('visual')}
+                >
+                  Visual
+                </Button>
+                <Button
+                  aria-pressed={view === 'raw'}
+                  variant={view === 'raw' ? 'primary' : 'ghost'}
+                  disabled={Boolean(pending)}
+                  onClick={() => switchView('raw')}
+                >
+                  Raw
+                </Button>
+              </div>
+              {view === 'visual' ? (
+                <>
+                  <Button onClick={() => setEditing({ creating: true })}>
+                    <Plus />
+                    Add node
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    disabled={rawInvalid || Boolean(pending)}
+                    onClick={() =>
+                      setRaw(JSON.stringify(rawResult!.definition, null, 2))
+                    }
+                  >
+                    Format JSON
+                  </Button>
+                </>
+              )}
             </div>
-            {view === 'visual' ? (
-              <>
-                <Button onClick={() => setEditing({ creating: true })}>
-                  <Plus />
-                  Add node
-                </Button>
-                <Button variant="ghost" onClick={() => setEditing({})}>
-                  <Settings2 />
-                  Workflow settings
-                </Button>
-              </>
+            {view === 'raw' ? (
+              <div className={styles.rawView}>
+                <p className="hint">
+                  Edit the workflow definition. Unfinished graphs can be saved
+                  as drafts; publishing requires a valid workflow.
+                </p>
+                {rawResult?.error && (
+                  <div role="alert" className={styles.rawError}>
+                    Fix these errors before saving, or discard your raw changes:
+                    <pre>{rawResult.error}</pre>
+                  </div>
+                )}
+                {rawResult?.publishError && (
+                  <div role="status" className={styles.rawWarning}>
+                    Draft can be saved. Before publishing:{' '}
+                    {rawResult.publishError}
+                  </div>
+                )}
+                <CodeEditor
+                  label="Workflow JSON"
+                  language="json"
+                  value={raw}
+                  onChange={setRaw}
+                  fullHeight
+                />
+                <div className={styles.rawActions}>
+                  <span>
+                    {rawEdited
+                      ? 'Save or discard raw changes before returning to Visual.'
+                      : 'Save updates the draft. Discard reverts edits made in Raw.'}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    disabled={!rawEdited || Boolean(pending)}
+                    onClick={() => setRaw(rawBaseline)}
+                  >
+                    Discard
+                  </Button>
+                  <Button
+                    variant="primary"
+                    disabled={
+                      !dirty || rawInvalid || remoteChanged || Boolean(pending)
+                    }
+                    onClick={() => perform('save', save)}
+                  >
+                    <Save />
+                    {pending === 'save' ? 'Saving…' : 'Save'}
+                  </Button>
+                </div>
+              </div>
             ) : (
               <>
-                <Button
-                  disabled={rawInvalid}
-                  onClick={() =>
-                    setRaw(JSON.stringify(rawResult!.definition, null, 2))
-                  }
-                >
-                  Format JSON
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => setRaw(JSON.stringify(draft, null, 2))}
-                >
-                  Discard raw changes
-                </Button>
-              </>
-            )}
-          </div>
-          {view === 'raw' ? (
-            <div className={styles.rawView}>
-              <p className="hint">
-                Edit the workflow definition. Unfinished graphs can be saved as
-                drafts; publishing requires a valid workflow.
-              </p>
-              {rawResult?.error && (
-                <div role="alert" className={styles.rawError}>
-                  Fix these errors before saving or returning to Visual:
-                  <pre>{rawResult.error}</pre>
-                </div>
-              )}
-              {rawResult?.publishError && (
-                <div role="status" className={styles.rawWarning}>
-                  Draft can be saved. Before publishing:{' '}
-                  {rawResult.publishError}
-                </div>
-              )}
-              <CodeEditor
-                label="Workflow JSON"
-                language="json"
-                value={raw}
-                onChange={setRaw}
-                fullHeight
-              />
-            </div>
-          ) : (
-            <>
-              <ReactFlow
-                onInit={(instance) => {
-                  flowRef.current = instance;
-                  boxZoom.onInit(instance);
-                }}
-                nodes={nodes}
-                edges={edges}
-                nodeTypes={nodeTypes}
-                onNodeDragStart={history.begin}
-                onNodeDragStop={history.end}
-                onSelectionDragStart={history.begin}
-                onSelectionDragStop={history.end}
-                onBeforeDelete={async ({
-                  nodes: deletingNodes,
-                  edges: deletingEdges,
-                }) => {
-                  const nodeIds = new Set(
-                    deletingNodes
-                      .filter((n) => n.deletable !== false)
-                      .map((n) => n.id),
-                  );
-                  const edgeIds = new Set(deletingEdges.map((e) => e.id));
-                  setDraft((d) => {
-                    const retained = withoutNodes(d, nodeIds);
-                    return {
-                      ...retained,
-                      edges: retained.edges.filter((e) => !edgeIds.has(e.id)),
-                    };
-                  });
-                  setSelected(new Set());
-                  setSelectedEdges(new Set());
-                  return false;
-                }}
-                onNodesChange={(changes) => {
-                  const next = applyNodeChanges(changes, nodes);
-                  if (
-                    changes.some(
-                      (c) => c.type === 'select' || c.type === 'remove',
-                    )
-                  )
-                    setSelected(
-                      new Set(next.filter((n) => n.selected).map((n) => n.id)),
+                <ReactFlow
+                  onInit={(instance) => {
+                    flowRef.current = instance;
+                    boxZoom.onInit(instance);
+                  }}
+                  nodes={nodes}
+                  edges={edges}
+                  nodeTypes={nodeTypes}
+                  onNodeDragStart={history.begin}
+                  onNodeDragStop={history.end}
+                  onSelectionDragStart={history.begin}
+                  onSelectionDragStop={history.end}
+                  onBeforeDelete={async ({
+                    nodes: deletingNodes,
+                    edges: deletingEdges,
+                  }) => {
+                    const nodeIds = new Set(
+                      deletingNodes
+                        .filter((n) => n.deletable !== false)
+                        .map((n) => n.id),
                     );
-                  if (
-                    !changes.some(
-                      (c) => c.type === 'position' || c.type === 'remove',
+                    const edgeIds = new Set(deletingEdges.map((e) => e.id));
+                    setDraft((d) => {
+                      const retained = withoutNodes(d, nodeIds);
+                      return {
+                        ...retained,
+                        edges: retained.edges.filter((e) => !edgeIds.has(e.id)),
+                      };
+                    });
+                    setSelected(new Set());
+                    setSelectedEdges(new Set());
+                    return false;
+                  }}
+                  onNodesChange={(changes) => {
+                    const next = applyNodeChanges(changes, nodes);
+                    if (
+                      changes.some(
+                        (c) => c.type === 'select' || c.type === 'remove',
+                      )
                     )
-                  )
-                    return;
-                  setDraft((d) => {
-                    const retained = withoutNodes(
-                      d,
-                      new Set(
-                        changes
-                          .filter((c) => c.type === 'remove')
-                          .map((c) => c.id),
-                      ),
+                      setSelected(
+                        new Set(
+                          next.filter((n) => n.selected).map((n) => n.id),
+                        ),
+                      );
+                    if (
+                      !changes.some(
+                        (c) => c.type === 'position' || c.type === 'remove',
+                      )
+                    )
+                      return;
+                    setDraft((d) => {
+                      const retained = withoutNodes(
+                        d,
+                        new Set(
+                          changes
+                            .filter((c) => c.type === 'remove')
+                            .map((c) => c.id),
+                        ),
+                      );
+                      return {
+                        ...retained,
+                        nodes: retained.nodes.map((n) => {
+                          const change = changes.find(
+                            (c) => c.type === 'position' && c.id === n.id,
+                          );
+                          return change?.type === 'position' && change.position
+                            ? { ...n, position: change.position }
+                            : n;
+                        }),
+                      };
+                    });
+                  }}
+                  onEdgesChange={(changes) => {
+                    const next = applyEdgeChanges(changes, edges);
+                    setSelectedEdges(
+                      new Set(next.filter((e) => e.selected).map((e) => e.id)),
                     );
-                    return {
-                      ...retained,
-                      nodes: retained.nodes.map((n) => {
-                        const change = changes.find(
-                          (c) => c.type === 'position' && c.id === n.id,
-                        );
-                        return change?.type === 'position' && change.position
-                          ? { ...n, position: change.position }
-                          : n;
-                      }),
-                    };
-                  });
-                }}
-                onEdgesChange={(changes) => {
-                  const next = applyEdgeChanges(changes, edges);
-                  setSelectedEdges(
-                    new Set(next.filter((e) => e.selected).map((e) => e.id)),
-                  );
-                  if (changes.every((c) => c.type === 'select')) return;
-                  setDraft((d) => ({
-                    ...d,
-                    edges: applyEdgeChanges(changes, canvasGraph(d).edges).map(
-                      (e) => ({
+                    if (changes.every((c) => c.type === 'select')) return;
+                    setDraft((d) => ({
+                      ...d,
+                      edges: applyEdgeChanges(
+                        changes,
+                        canvasGraph(d).edges,
+                      ).map((e) => ({
                         id: e.id,
                         source: e.source,
                         target: e.target,
@@ -576,115 +683,130 @@ export function WorkflowEditor({
                           'default') as WorkflowEdge['port'],
                         targetHandle: (e.targetHandle ??
                           'default') as WorkflowEdge['targetHandle'],
-                      }),
-                    ),
-                  }));
-                }}
-                onConnect={connect}
-                isValidConnection={(c) => {
-                  const source = draft.nodes.find((n) => n.id === c.source);
-                  const target = draft.nodes.find((n) => n.id === c.target);
-                  return Boolean(
-                    source &&
-                    source.kind !== 'exit' &&
-                    target &&
-                    target.kind !== 'entry' &&
-                    !(c.sourceHandle === 'item' && c.targetHandle === 'end') &&
-                    (c.targetHandle !== 'end' || target.kind === 'batch') &&
-                    (c.sourceHandle === 'item' ? source.id : source.batchId) ===
-                      (c.targetHandle === 'end' ? target.id : target.batchId),
-                  );
-                }}
-                onNodeDoubleClick={(_, n) => {
-                  if (boxZoom.active) return;
-                  setSelected(new Set([n.id]));
-                  setEditing({ node: n.data.node });
-                }}
-                panOnScroll={!boxZoom.active}
-                zoomOnScroll={!boxZoom.active}
-                zoomOnPinch={!boxZoom.active}
-                zoomActivationKeyCode={zoomKeys}
-                selectionOnDrag={!boxZoom.active}
-                selectionKeyCode={boxZoom.active ? null : 'Shift'}
-                panActivationKeyCode={boxZoom.active ? null : 'Space'}
-                nodesDraggable={!boxZoom.active}
-                nodesConnectable={!boxZoom.active}
-                elementsSelectable={!boxZoom.active}
-                panOnDrag={false}
-                zoomOnDoubleClick={false}
-                onPaneClick={() => setSelected(new Set())}
-                fitView
-                fitViewOptions={{ padding: 0.22 }}
-                minZoom={0.25}
-                maxZoom={1.5}
-                colorMode="dark"
-                deleteKeyCode={
-                  editing || boxZoom.active ? null : ['Backspace', 'Delete']
-                }
-              >
-                <Background color="var(--canvas-dot)" gap={22} size={1} />
-                <Controls showInteractive={false}>
-                  <ControlButton
-                    aria-label="Tidy"
-                    disabled={Boolean(
-                      editing ||
-                      pending ||
-                      history.groupStart ||
-                      boxZoom.active,
-                    )}
-                    title="Tidy: Arrange the workflow and Batch contents. Undo to restore the previous layout."
-                    onClick={() => {
-                      const next = tidyWorkflow(draft);
-                      if (JSON.stringify(next) === JSON.stringify(draft)) {
-                        void flowRef.current?.fitView({
-                          padding: 0.22,
-                          duration: 180,
-                        });
-                        return;
-                      }
-                      fitAfterTidy.current = true;
-                      setDraft(next);
-                    }}
-                  >
-                    <WandSparkles />
-                  </ControlButton>
-                </Controls>
-                <MiniMap
-                  style={{ width: 125, height: 85 }}
-                  nodeColor="var(--accent)"
-                  maskColor="#141418bb"
-                />
-              </ReactFlow>
-              {boxZoom.box && (
-                <div
-                  aria-hidden="true"
-                  className={styles.zoomBox}
-                  style={{
-                    left: boxZoom.box.x,
-                    top: boxZoom.box.y,
-                    width: boxZoom.box.width,
-                    height: boxZoom.box.height,
+                      })),
+                    }));
                   }}
-                />
-              )}
-              <div className={styles.canvasFooter}>
-                <span>
-                  {draft.nodes.length} nodes <b>·</b> {draft.edges.length}{' '}
-                  connections
-                </span>
-                <span
-                  role={graphError ? 'status' : undefined}
-                  title={graphError}
+                  onConnect={connect}
+                  isValidConnection={(c) => {
+                    const source = draft.nodes.find((n) => n.id === c.source);
+                    const target = draft.nodes.find((n) => n.id === c.target);
+                    return Boolean(
+                      source &&
+                      source.kind !== 'exit' &&
+                      target &&
+                      target.kind !== 'entry' &&
+                      !(
+                        c.sourceHandle === 'item' && c.targetHandle === 'end'
+                      ) &&
+                      (c.targetHandle !== 'end' || target.kind === 'batch') &&
+                      (c.sourceHandle === 'item'
+                        ? source.id
+                        : source.batchId) ===
+                        (c.targetHandle === 'end' ? target.id : target.batchId),
+                    );
+                  }}
+                  onNodeDoubleClick={(_, n) => {
+                    if (boxZoom.active) return;
+                    setSelected(new Set([n.id]));
+                    setEditing({ node: n.data.node });
+                  }}
+                  panOnScroll={!boxZoom.active}
+                  zoomOnScroll={!boxZoom.active}
+                  zoomOnPinch={!boxZoom.active}
+                  zoomActivationKeyCode={zoomKeys}
+                  selectionOnDrag={!boxZoom.active}
+                  selectionKeyCode={boxZoom.active ? null : 'Shift'}
+                  panActivationKeyCode={boxZoom.active ? null : 'Space'}
+                  nodesDraggable={!boxZoom.active}
+                  nodesConnectable={!boxZoom.active}
+                  elementsSelectable={!boxZoom.active}
+                  panOnDrag={false}
+                  zoomOnDoubleClick={false}
+                  onPaneClick={() => setSelected(new Set())}
+                  fitView
+                  fitViewOptions={{ padding: 0.22 }}
+                  minZoom={0.25}
+                  maxZoom={1.5}
+                  colorMode="dark"
+                  deleteKeyCode={
+                    editing || boxZoom.active ? null : ['Backspace', 'Delete']
+                  }
                 >
-                  {graphError
-                    ? `Before publishing: ${graphError}`
-                    : 'Double-click to edit · Drag to arrange · Hold Z and drag to zoom'}
-                </span>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+                  <Background color="var(--canvas-dot)" gap={22} size={1} />
+                  <Controls showInteractive={false}>
+                    <ControlButton
+                      aria-label="Tidy"
+                      disabled={Boolean(
+                        editing ||
+                        pending ||
+                        history.groupStart ||
+                        boxZoom.active,
+                      )}
+                      title="Tidy: Arrange the workflow and Batch contents. Undo to restore the previous layout."
+                      onClick={() => {
+                        const next = tidyWorkflow(draft);
+                        if (JSON.stringify(next) === JSON.stringify(draft)) {
+                          void flowRef.current?.fitView({
+                            padding: 0.22,
+                            duration: 180,
+                          });
+                          return;
+                        }
+                        fitAfterTidy.current = true;
+                        setDraft(next);
+                      }}
+                    >
+                      <WandSparkles />
+                    </ControlButton>
+                  </Controls>
+                  <MiniMap
+                    style={{ width: 125, height: 85 }}
+                    nodeColor="var(--accent)"
+                    maskColor="#141418bb"
+                  />
+                </ReactFlow>
+                {boxZoom.box && (
+                  <div
+                    aria-hidden="true"
+                    className={styles.zoomBox}
+                    style={{
+                      left: boxZoom.box.x,
+                      top: boxZoom.box.y,
+                      width: boxZoom.box.width,
+                      height: boxZoom.box.height,
+                    }}
+                  />
+                )}
+                <div className={styles.canvasFooter}>
+                  <span>
+                    {draft.nodes.length} nodes <b>·</b> {draft.edges.length}{' '}
+                    connections
+                  </span>
+                  <span
+                    role={graphError ? 'status' : undefined}
+                    title={graphError}
+                  >
+                    {graphError
+                      ? `Before publishing: ${graphError}`
+                      : 'Double-click to edit · Drag to arrange · Hold Z and drag to zoom'}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        </Tabs.Panel>
+        <Tabs.Panel value="runs" className={styles.runsView}>
+          {runsView}
+        </Tabs.Panel>
+      </Tabs>
+      {deleting && (
+        <DeleteWorkflowDialog
+          workflow={workflow}
+          act={act}
+          onClose={() => setDeleting(false)}
+          onDeleted={onDeleted}
+        />
+      )}
       {editing && (
         <SettingsDialog
           node={editing.node}
@@ -701,6 +823,11 @@ export function WorkflowEditor({
               description: next.description,
               draft: next.definition,
             }));
+            if (view === 'raw') {
+              const text = JSON.stringify(next.definition, null, 2);
+              setRaw(text);
+              setRawBaseline(text);
+            }
             if (editing.creating) {
               const id = next.definition.nodes.at(-1)?.id;
               setSelected(new Set(id ? [id] : []));

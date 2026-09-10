@@ -8,13 +8,17 @@ export function RunList({
   onOpen,
   tab,
   onTabChange,
+  workflowId,
 }: {
   runs: Run[];
   tab: 'active' | 'history';
   onTabChange: (tab: 'active' | 'history') => void;
   onOpen: (id: string) => void;
+  workflowId?: string;
 }) {
-  const roots = runs.filter((r) => !r.parentRunId);
+  const roots = runs.filter((r) =>
+    workflowId ? r.workflowId === workflowId && !r.batchNodeId : !r.parentRunId,
+  );
   const active = roots.filter((run) =>
     ['running', 'waiting'].includes(run.status),
   );
@@ -24,12 +28,14 @@ export function RunList({
   const visible = tab === 'active' ? active : history;
   return (
     <div className={layout.page}>
-      <header className={layout.header}>
-        <div>
-          <h1>Runs</h1>
-          <p>Follow ongoing work and inspect past results.</p>
-        </div>
-      </header>
+      {!workflowId && (
+        <header className={layout.header}>
+          <div>
+            <h1>Runs</h1>
+            <p>Follow ongoing work and inspect past results.</p>
+          </div>
+        </header>
+      )}
       <Tabs
         value={tab}
         onChange={(value) =>
@@ -77,7 +83,9 @@ export function RunList({
               </h2>
               <p>
                 {tab === 'active'
-                  ? 'Open a published workflow and choose Run to start.'
+                  ? workflowId
+                    ? 'Choose Run above to start a published version of this workflow.'
+                    : 'Open a published workflow and choose Run to start.'
                   : 'Completed, failed, and cancelled runs appear here.'}
               </p>
             </div>

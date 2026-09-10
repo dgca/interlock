@@ -96,6 +96,8 @@ The UI uses tRPC requests and server-sent notifications, with periodic refresh a
 
 ## UI routes
 
+Workflow pages have Editor and Runs sections. `?view=runs` selects workflow runs; `&tab=history` selects past runs. Section changes keep the editor mounted, including raw text, history, and canvas state. Opening a run leaves the workflow and retains the unsaved-edit navigation guard. Run links carry the originating workflow and filter so Back to runs returns to that list, including after inspecting child runs. Workflow run lists include direct executions and invocations by other workflows, but exclude Batch item runs; those remain in their parent run inspector.
+
 React Router owns browser navigation through a shared application layout and child routes in `packages/ui/src/routes`. The layout keeps the engine connection and live refresh active across route changes. URL builders live in `routes/paths.ts`.
 
 | Route                    | View                                                   |
@@ -119,7 +121,7 @@ Mantine provides dialogs, form controls, tabs, menus, and status badges. The sha
 
 Use Mantine components directly for standard controls. Keep shared components for Interlock behavior, such as JSON validation, contract editing, action variants, and status-to-color mapping. Settings dialogs hold local edits until Apply changes; contract editing uses a page within that dialog. Cancel discards the settings edit, including applied contract changes.
 
-The workflow editor holds a draft shared by Visual and Raw views. Raw JSON must parse, match the definition structure, and contain no unknown definition fields before saving or returning to Visual. Graph validation errors can remain in a saved draft but block publication. The server performs the final publication validation, including referenced child workflow versions.
+The workflow editor holds a draft shared by Visual and Raw views. Raw JSON must parse, match the definition structure, and contain no unknown definition fields before saving. Raw edits require Save or Discard before returning to Visual. Graph validation errors can remain in a saved draft but block publication. The server performs the final publication validation, including referenced child workflow versions.
 
 The editor canvas uses design tool controls: scroll to pan, pinch to zoom, and drag empty canvas space to select nodes. Hold Command or Control to zoom by scrolling while keeping the arrow cursor. The magnifying-glass cursor is reserved for holding Z to zoom to an area. Dragging a node moves it. Selection stays local to the editor and is not saved in the workflow definition.
 
@@ -127,11 +129,11 @@ Holding plain Z outside text fields and dialogs enables area zoom. A primary-but
 
 Editor Undo and Redo keep up to 50 snapshots of the definition, name, and description in memory. Drag gestures and settings applications each form one history step. Canvas deletion removes selected nodes, Batch descendants, and affected edges together. Selection, viewport changes, and collapse state stay outside history. Saving updates the saved baseline and revision without clearing history; loading an external draft resets it. Unmounting the editor ends the session. Published versions are never changed by history navigation.
 
-Raw text keeps its own typing history. Returning to Visual or saving applies the parsed definition as one workflow history step. Unapplied raw edits, open settings, active drags, and pending saves or publication disable workflow Undo and Redo. Keyboard shortcuts leave text fields and settings dialogs to handle their own input.
+Raw text keeps its own typing history. Save beneath the raw editor persists the parsed definition and records one workflow history step only after the save succeeds. Discard restores the raw session baseline from entry or the last successful save, without discarding prior visual edits. Text typed during a pending save remains available afterward. Unapplied raw edits, open settings, active drags, and pending saves or publication disable workflow Undo and Redo. Keyboard shortcuts leave text fields and settings dialogs to handle their own input.
 
 The Add node dialog includes the node type choice and adds a node only on confirmation. Script and raw-definition editors share syntax highlighting and aligned line numbers. The minimap receives its dimensions through the React Flow component's inline style so its SVG calculations match its displayed size.
 
-Add node and Workflow settings sit beside Visual/Raw. The Tidy icon sits below Fit View in the canvas controls. Shared canvas geometry supplies node and Batch dimensions to rendering, placement, and layout. New nodes occupy free space with an 80-pixel gap; adding a child also shifts overlapping siblings to make room for expanded ancestor Batches while preserving their rows. Manual dragging and imported positions do not trigger automatic arrangement.
+Add node sits beside Visual/Raw. The workflow menu beside Run contains Workflow settings and confirmed deletion. Raw has Save and Discard beneath the code editor, with Format JSON beside Visual/Raw. Workflow settings is unavailable while raw edits remain unsaved. The Tidy icon sits below Fit View in the canvas controls. Shared canvas geometry supplies node and Batch dimensions to rendering, placement, and layout. New nodes occupy free space with an 80-pixel gap; adding a child also shifts overlapping siblings to make room for expanded ancestor Batches while preserving their rows. Manual dragging and imported positions do not trigger automatic arrangement.
 
 Tidy runs Dagre separately in each graph scope, arranging nested Batch contents before their parents. Each enclosing layout uses the expanded Batch bounds with padding for its header and internal handles. Layout handles loops and disconnected drafts, ignores missing or cross-scope edges for placement, and preserves all definitions and routes except node positions. Tidy is a single undoable draft edit and fits the result into view. It reserves space for expanded groups even when they are collapsed.
 

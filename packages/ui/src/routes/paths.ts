@@ -4,5 +4,12 @@ export const paths = {
   workflow: (id: string) => `/workflows/${encodeURIComponent(id)}`,
   runs: (tab: 'active' | 'history' = 'active') =>
     tab === 'history' ? '/runs?tab=history' : '/runs',
-  run: (id: string) => `/runs/${encodeURIComponent(id)}`,
+  workflowRuns: (id: string, tab: 'active' | 'history' = 'active') =>
+    `/workflows/${encodeURIComponent(id)}?view=runs${tab === 'history' ? '&tab=history' : ''}`,
+  run: (
+    id: string,
+    workflowId?: string,
+    tab: 'active' | 'history' = 'active',
+  ) =>
+    `/runs/${encodeURIComponent(id)}${workflowId ? `?workflow=${encodeURIComponent(workflowId)}&tab=${tab}` : ''}`,
 };

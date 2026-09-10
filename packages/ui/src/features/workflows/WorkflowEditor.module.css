@@ -39,6 +39,38 @@
   flex: 1;
   min-height: 0;
 }
+.sections {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.subnav {
+  flex-shrink: 0;
+  padding: 0 21px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.subnav::before {
+  border: 0;
+}
+.runsView {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-top: 20px;
+}
+.rawActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.rawActions > span {
+  margin-right: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
 .canvasWrap {
   flex: 1;
   position: relative;
