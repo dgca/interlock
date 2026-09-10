@@ -1,5 +1,6 @@
 import {
   TextInput,
+  Switch,
   Textarea,
   NativeSelect,
   Input,
@@ -14,6 +15,7 @@ import {
   type WorkflowNode,
 } from '@interlock/core';
 import { workflowTargets } from './workflowTargets';
+import { DurationInput } from './DurationInput';
 import { FetchEditor } from './FetchEditor';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
@@ -60,6 +62,50 @@ export function NodeInspector({
 
         {node.kind === 'fetch' && (
           <FetchEditor node={node} onChange={onChange} />
+        )}
+        {node.kind === 'wait' && (
+          <>
+            <Input.Wrapper label="Resume" mb="md">
+              <SegmentedControl
+                aria-label="Resume"
+                value={node.timing.kind}
+                data={[
+                  { value: 'duration', label: 'After a delay' },
+                  { value: 'until', label: 'At a time from input' },
+                ]}
+                onChange={(kind) =>
+                  patch({
+                    timing:
+                      kind === 'duration'
+                        ? { kind, ms: 60_000 }
+                        : { kind, path: '' },
+                  })
+                }
+              />
+            </Input.Wrapper>
+            {node.timing.kind === 'duration' ? (
+              <DurationInput
+                label="Wait for"
+                value={node.timing.ms}
+                onChange={(ms) => patch({ timing: { kind: 'duration', ms } })}
+              />
+            ) : (
+              <TextInput
+                mb="md"
+                label="Timestamp input path"
+                value={node.timing.path}
+                placeholder="dueAt, or blank for the whole input"
+                description="ISO timestamp with a timezone, such as 2026-09-10T12:00:00Z. Past times resume immediately."
+                onChange={(e) =>
+                  patch({ timing: { kind: 'until', path: e.target.value } })
+                }
+              />
+            )}
+            <p className="hint">
+              Passes input through unchanged. The deadline survives a server
+              restart.
+            </p>
+          </>
         )}
         {node.kind === 'agent' && (
           <>
@@ -134,6 +180,36 @@ export function NodeInspector({
               }
             />
 
+            <Switch
+              mb="md"
+              label="Route on unclaimed timeout"
+              checked={node.unclaimedTimeoutMs !== undefined}
+              onChange={(e) =>
+                patch({
+                  unclaimedTimeoutMs: e.currentTarget.checked
+                    ? 86_400_000
+                    : undefined,
+                })
+              }
+            />
+            {node.unclaimedTimeoutMs !== undefined && (
+              <>
+                <DurationInput
+                  label="If unclaimed for"
+                  min={1}
+                  value={node.unclaimedTimeoutMs}
+                  onChange={(unclaimedTimeoutMs) =>
+                    patch({ unclaimedTimeoutMs })
+                  }
+                />
+                <p className="hint">
+                  Connect Timeout to the next step for unanswered work. It
+                  receives the original input. Claiming stops this timer; a
+                  failed or expired claim starts a new timer when work becomes
+                  available again.
+                </p>
+              </>
+            )}
             <TextInput
               mb="md"
               label="Maximum attempts"

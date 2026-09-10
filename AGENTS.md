@@ -26,9 +26,15 @@ While Interlock is on `0.x`, use `patch` changesets for all non-breaking changes
 
 Every UI element should provide useful information or help the user decide or act. Use existing titles and navigation for context instead of repeating them in subtitles or labels. Omit generic filler copy added to make a layout feel complete. Keep guidance that explains a non-obvious behavior, consequence, or next step, and place it where needed. Build visual hierarchy with spacing, typography, and grouping rather than extra copy.
 
-## Before opening or updating a PR
+## Keep documentation and MCP definitions current
 
-Check README.md, related docs, CLI help, and MCP tool descriptions against the PR's final behavior. Update affected instructions, examples, UI labels, supported operations, and limits in the same PR. Verify documented commands against their implementations. Keep changeset summaries focused on user-visible changes since the latest published release, omitting intermediate designs that never shipped.
+After changes that could affect documented behavior or agent usage, check README.md, related docs, CLI help, and [MCP definitions](packages/mcp/src/server.ts) against the final implementation before declaring the task complete or opening or updating a PR. Update affected instructions, examples, UI labels, supported operations, and limits in the same change.
+
+Review the full affected MCP workflow, including existing tools that interact with the changed behavior. Check server instructions, tool descriptions, parameter schemas and descriptions, defaults, bounds, returned fields, and error and lifecycle guidance against the shared server API. Keep guidance consistent across tools that accept the same data or participate in the same operation.
+
+Verify documented commands and examples against their implementations. When MCP definitions change, check what clients discover over both HTTP and stdio with the transport tests. State which docs and MCP flows were checked and any remaining gaps; describe a review as comprehensive only when the entire MCP tool set was audited.
+
+Keep changeset summaries focused on user-visible changes since the latest published release, omitting intermediate designs that never shipped.
 
 ## Work locally
 

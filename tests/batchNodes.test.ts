@@ -120,6 +120,7 @@ it('creates a Batch from the ordinary add dialog without a nested definition or 
     'agent',
     'script',
     'fetch',
+    'wait',
     'condition',
     'workflow',
     'batch',
@@ -496,4 +497,117 @@ it('offers only library workflows and the current parents children as targets', 
   expect(options).toContain('My child · Not published');
   expect(options).toContain('Library');
   expect(options).not.toContain('Other child');
+});
+
+it('creates a Wait with a duration expressed in days', async () => {
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(SettingsDialog, {
+          name: 'Test',
+          description: '',
+          definition: blankDefinition(),
+          workflows: [],
+          creating: true,
+          onClose: vi.fn(),
+          onApply,
+        }),
+      ),
+    ),
+  );
+  const type = container.querySelector('select')!;
+  await act(async () => {
+    type.value = 'wait';
+    type.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const unit = container.querySelector<HTMLSelectElement>(
+    '[aria-label="Wait for unit"]',
+  )!;
+  await act(async () => {
+    unit.value = '86400000';
+    unit.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await act(async () =>
+    Array.from(container.querySelectorAll('button'))
+      .find((b) => b.textContent === 'Add node')!
+      .click(),
+  );
+  expect(onApply.mock.calls[0][0].definition.nodes.at(-1)).toMatchObject({
+    kind: 'wait',
+    timing: { kind: 'duration', ms: 86_400_000 },
+  });
+});
+it('removes the Timeout edge when disabling the deadline, preserving the Result route', async () => {
+  const definition = blankDefinition();
+  const agent = definition.nodes[1];
+  if (agent.kind !== 'agent') throw new Error('Expected agent');
+  agent.unclaimedTimeoutMs = 86_400_000;
+  definition.edges.push({
+    id: 'timeout',
+    source: agent.id,
+    port: 'timeout',
+    target: 'exit',
+  });
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(SettingsDialog, {
+          name: 'Test',
+          description: '',
+          definition,
+          node: agent,
+          workflows: [],
+          onClose: vi.fn(),
+          onApply,
+        }),
+      ),
+    ),
+  );
+  await act(async () =>
+    container.querySelector<HTMLInputElement>('[role="switch"]')!.click(),
+  );
+  await act(async () =>
+    Array.from(container.querySelectorAll('button'))
+      .find((b) => b.textContent === 'Apply changes')!
+      .click(),
+  );
+  const saved = onApply.mock.calls[0][0].definition;
+  expect(saved.nodes[1].unclaimedTimeoutMs).toBeUndefined();
+  expect(saved.edges).toEqual(
+    definition.edges.filter((e) => e.port !== 'timeout'),
+  );
+});
+it('renders distinct Result and Timeout handles for an agent with a deadline', async () => {
+  await act(async () =>
+    root.render(
+      h(FlowNode, {
+        data: {
+          node: nodeSchema.parse({
+            id: 'a',
+            kind: 'agent',
+            label: 'Answer',
+            prompt: 'Answer',
+            unclaimedTimeoutMs: 259_200_000,
+          }),
+        },
+      } as any),
+    ),
+  );
+  expect(
+    container
+      .querySelector('[data-handle="timeout"]')
+      ?.getAttribute('aria-label'),
+  ).toBe('Timeout');
+  expect(
+    container
+      .querySelector('[data-type="source"][data-handle="default"]')
+      ?.getAttribute('aria-label'),
+  ).toBe('Result');
+  expect(container.textContent).toContain('3 days');
 });
