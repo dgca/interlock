@@ -154,7 +154,15 @@ export function SettingsDialog({
                     target: parsed.id,
                   },
                 ]
-              : settings.definition.edges,
+              : settings.definition.edges.filter(
+                  (e) =>
+                    !(
+                      e.source === parsed.id &&
+                      e.port === 'timeout' &&
+                      parsed.kind === 'agent' &&
+                      parsed.unclaimedTimeoutMs === undefined
+                    ),
+                ),
           nodes: creating
             ? [...settings.definition.nodes, parsed]
             : settings.definition.nodes.map((n) =>
@@ -233,6 +241,7 @@ export function SettingsDialog({
                   <option value="agent">Agent</option>
                   <option value="script">Script</option>
                   <option value="fetch">Fetch</option>
+                  <option value="wait">Wait</option>
                   <option value="condition">Condition</option>
                   <option value="workflow">Workflow</option>
                   <option value="batch">Batch</option>
@@ -342,6 +351,7 @@ export function SettingsDialog({
                   <TextInput
                     mb="md"
                     label="Maximum steps per run"
+                    description="Each Batch item has its own budget. Waiting uses one step, regardless of duration. Entry, Exit, and repeated visits count too."
                     type="number"
                     min={2}
                     max={1000}

@@ -23,7 +23,7 @@ Keep the terminal running while you use Interlock. Closing the browser does not 
 
 ## Run your first workflow
 
-The initial library includes **Size up a Pokémon** and **Build a team roster**, editable examples that together showcase every node type: a Fetch of the public PokéAPI, a JavaScript Script, a Condition branch, an Agent assignment, and a Batch that runs a workflow once per candidate.
+The initial library includes **Size up a Pokémon** and **Build a team roster**, editable examples that combine a Fetch of the public PokéAPI, a JavaScript Script, a Condition branch, an Agent assignment, and a Batch that runs a workflow once per candidate.
 
 1. Select **Connect with MCP** in the sidebar.
 2. Follow the instructions for Codex, Claude, OpenCode, or another MCP client.
@@ -45,7 +45,7 @@ The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by th
 
 Select **New workflow** to create a draft. Use **Add node** to choose each step's type, then connect the nodes in execution order. Agent is selected initially; choose another type when needed.
 
-Available nodes include entry and exit, Agent, Script, Fetch, Condition, Workflow, and Batch. A Workflow node invokes a pinned published workflow once. A Batch repeats a visible path for each item and collects the results in input order.
+Available nodes include entry and exit, Agent, Script, Fetch, Wait, Condition, Workflow, and Batch. A Workflow node invokes a pinned published workflow once. A Batch repeats a visible path for each item and collects the results in input order.
 
 Add a **Batch** and configure its items path and concurrency. Use **Add step** inside the group to create an Agent, Script, or other ordinary node. The first step connects to **Start** automatically. Connect additional steps within the group; connect the last step on every branch to **End**. Connect **Out** to the next step or Exit. The output route receives the ordered results after all items finish. Group members remain visible on the main canvas. Collapse hides them temporarily; moving the group moves its members.
 
@@ -94,6 +94,16 @@ Failed executions can be retried from the inspector. Retrying a failed Batch pre
 ### Manage workflows
 
 Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library for active and archived workflows. Inside a workflow, the three-dot menu beside **Run** contains **Workflow settings** and **Delete workflow**. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows block deletion.
+
+### Waits and unanswered assignments
+
+Add a **Wait** node to pause for a duration or until a timestamp from input. The duration editor accepts milliseconds, seconds, minutes, hours, or days. Wait passes its input through unchanged and stores its deadline in SQLite. Cancel stops the wait; restarting resumes it from the original deadline.
+
+In Agent settings, enable **Route on unclaimed timeout** and set **If unclaimed for**. Connect **Result** to the successful continuation and **Timeout** to a reminder, escalation, or exit. Timeout receives the original input. Claiming stops the timer; a failed or expired claim starts a fresh timer when work becomes available again. This does not limit how long a claimed assignment can keep renewing its lease.
+
+For a three-day reminder loop, route Timeout to a Script that sends the reminder and returns the original input fields with an incremented reminder count. Use a Condition to exit after the desired number or route back to the Agent. Fetch returns its HTTP response, so a Fetch-based reminder path must restore the request fields and counter before returning to the Agent. Each visit consumes a step; elapsed waiting time does not. See [timer configuration and execution rules](docs/timers.md).
+
+`maxSteps` allows 2 through 1000 steps per run and defaults to 100. Entry, Exit, and every node visit count, including explicit retries that create a new execution. A Batch counts once in its parent; each item has its own budget. For example, 200 items with three steps each fit a three-step item budget, with a separate three-step parent path of Entry → Batch → Exit. The independent Batch cap remains 200 items.
 
 ### Fetch nodes
 

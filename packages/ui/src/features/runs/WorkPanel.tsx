@@ -30,7 +30,7 @@ export function WorkPanel({
       sessionStorage.setItem(`claim:${work.id}`, JSON.stringify(claim));
   }, [claim, work.id]);
   useEffect(() => {
-    if (['completed', 'failed', 'cancelled'].includes(work.status))
+    if (['completed', 'failed', 'cancelled', 'timed_out'].includes(work.status))
       sessionStorage.removeItem(`claim:${work.id}`);
   }, [work.id, work.status]);
   const perform = async (fn: () => Promise<unknown>) => {
@@ -56,8 +56,16 @@ export function WorkPanel({
           ? 'Waiting for an agent to pick up this assignment.'
           : work.status === 'claimed'
             ? `Claimed by ${work.workerId}. Lease ends ${new Date(work.leaseUntil!).toLocaleTimeString()}.`
-            : `Assignment ${work.status}.`}
+            : work.status === 'timed_out'
+              ? 'Nobody claimed this assignment before its deadline. The run followed Timeout with the original input.'
+              : `Assignment ${work.status}.`}
       </p>
+      {work.status === 'available' && work.availableUntil && (
+        <p className="hint">
+          Timeout at {new Date(work.availableUntil).toLocaleString()} if nobody
+          claims it.
+        </p>
+      )}
       <div className="actions">
         <Button
           onClick={() =>

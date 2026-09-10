@@ -56,6 +56,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
     prompt: z.string(),
     context: contextPolicySchema.default({}),
     maxAttempts: z.number().int().min(1).max(10).default(2),
+    unclaimedTimeoutMs: z.number().int().min(1).max(31_536_000_000).optional(),
   }),
   z.object({
     ...nodeBase,
@@ -99,6 +100,19 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     ...nodeBase,
+    kind: z.literal('wait'),
+    timing: z
+      .discriminatedUnion('kind', [
+        z.object({
+          kind: z.literal('duration'),
+          ms: z.number().int().min(0).max(31_536_000_000),
+        }),
+        z.object({ kind: z.literal('until'), path: z.string() }),
+      ])
+      .default({ kind: 'duration', ms: 60_000 }),
+  }),
+  z.object({
+    ...nodeBase,
     kind: z.literal('condition'),
     path: z.string(),
     equals: jsonSchema,
@@ -128,7 +142,7 @@ export const definitionSchema = z.object({
       source: z.string(),
       target: z.string(),
       port: z
-        .enum(['default', 'true', 'false', 'item', 'complete'])
+        .enum(['default', 'true', 'false', 'item', 'complete', 'timeout'])
         .default('default'),
       targetHandle: z.enum(['default', 'end']).optional(),
     }),
@@ -173,6 +187,8 @@ export interface NodeExecution {
   nextItem: number;
   retryChildRunIds?: string[];
   request?: FetchRequest;
+  resumeAt?: string;
+  port?: WorkflowEdge['port'];
 }
 export interface Run {
   id: string;
@@ -203,7 +219,14 @@ export interface WorkRequest {
   input: Json;
   context: ContextPolicy;
   outputSchema: Record<string, unknown>;
-  status: 'available' | 'claimed' | 'completed' | 'failed' | 'cancelled';
+  status:
+    | 'available'
+    | 'claimed'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+    | 'timed_out';
+  availableUntil?: string;
   attempt: number;
   maxAttempts: number;
   workerId?: string;
@@ -296,6 +319,15 @@ export function readPath(value: Json, path: string): Json {
     throw new InterlockError(`Input has no path "${path}"`);
   return result;
 }
+export function outgoingPorts(node: WorkflowNode): WorkflowEdge['port'][] {
+  if (node.kind === 'exit') return [];
+  if (node.kind === 'condition') return ['true', 'false'];
+  if (node.kind === 'batch') return ['item', 'complete'];
+  if (node.kind === 'agent' && node.unclaimedTimeoutMs !== undefined)
+    return ['default', 'timeout'];
+  return ['default'];
+}
+
 export function validateDefinition(input: unknown): WorkflowDefinition {
   const d = definitionSchema.parse(input);
   const ids = new Set(d.nodes.map((n) => n.id));
@@ -338,14 +370,7 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
         `${node.label}: blank Items path requires an array input contract`,
       );
     const outgoing = d.edges.filter((e) => e.source === node.id);
-    const expected =
-      node.kind === 'exit'
-        ? []
-        : node.kind === 'condition'
-          ? ['true', 'false']
-          : node.kind === 'batch'
-            ? ['item', 'complete']
-            : ['default'];
+    const expected = outgoingPorts(node);
     if (
       outgoing.length !== expected.length ||
       expected.some((p) => outgoing.filter((e) => e.port === p).length !== 1)

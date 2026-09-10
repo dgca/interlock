@@ -1,4 +1,8 @@
-import { InterlockError, type WorkflowDefinition } from './index.js';
+import {
+  InterlockError,
+  outgoingPorts,
+  type WorkflowDefinition,
+} from './index.js';
 
 /** Membership is explicit. Positions and React Flow grouping never determine execution. */
 export function validateBatchScopes(
@@ -35,14 +39,7 @@ export function validateBatchScopes(
       target = nodes.get(edge.target);
     if (!source || !target)
       throw new InterlockError('Edge references a missing node');
-    const ports =
-      source.kind === 'exit'
-        ? []
-        : source.kind === 'batch'
-          ? ['item', 'complete']
-          : source.kind === 'condition'
-            ? ['true', 'false']
-            : ['default'];
+    const ports = outgoingPorts(source);
     if (!ports.includes(edge.port))
       throw new InterlockError(
         `${source.label}: invalid source handle ${edge.port}`,

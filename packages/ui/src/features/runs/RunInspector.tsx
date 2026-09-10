@@ -316,6 +316,17 @@ export function RunInspector({
                   : 'This step has not started.'}
               </p>
             )}
+            {execution?.resumeAt && (
+              <p className="hint">
+                {execution.status === 'waiting'
+                  ? 'Resumes at'
+                  : 'Scheduled for'}{' '}
+                {new Date(execution.resumeAt).toLocaleString()}
+              </p>
+            )}
+            {execution?.port === 'timeout' && (
+              <p className="hint">Followed Timeout with the original input.</p>
+            )}
             {execution?.error && (
               <p className="error-banner">{execution.error}</p>
             )}

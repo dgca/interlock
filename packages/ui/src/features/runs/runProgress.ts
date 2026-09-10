@@ -123,6 +123,15 @@ export function runProgress(
       label = 'Agent working';
     if (node.kind === 'agent' && state === 'waiting')
       label = node.batchId ? label : 'Waiting for an agent';
+    if (node.kind === 'wait' && state === 'waiting' && !node.batchId)
+      label = 'Waiting for timer';
+    if (
+      node.kind === 'agent' &&
+      state === 'completed' &&
+      !node.batchId &&
+      items[0]?.execution?.port === 'timeout'
+    )
+      label = 'Timed out';
     if (node.kind === 'batch' && items.some((item) => item.execution)) {
       const childStates: ProgressState[] = [];
       total = 0;
@@ -204,6 +213,10 @@ export function runProgress(
         ? run.error
         : current?.kind === 'batch'
           ? currentProgress?.label
-          : undefined,
+          : current?.kind === 'wait' &&
+              current.status === 'waiting' &&
+              current.resumeAt
+            ? `Resumes at ${new Date(current.resumeAt).toLocaleString()}`
+            : undefined,
   };
 }

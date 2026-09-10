@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { batchDefinition } from './fixtures/batch';
 import { runCommand } from '../packages/cli/src/commands';
 import { it, expect } from 'vitest';
@@ -60,9 +61,73 @@ it.each(['stdio', 'http'])(
           (item: { id: string }) => item.id === w.id,
         ),
       ).toBe(true);
-      expect((await client.listTools()).tools.map((t) => t.name)).toContain(
-        'claim_work',
+      const tools = (await client.listTools()).tools;
+      expect(tools.map((t) => t.name)).toContain('claim_work');
+      const createDefinition = tools.find((t) => t.name === 'create_workflow')!
+        .inputSchema.properties!.definition as { description: string };
+      const updateDefinition = tools.find((t) => t.name === 'update_workflow')!
+        .inputSchema.properties!.draft as { description: string };
+      expect(createDefinition.description).toContain('unclaimedTimeoutMs');
+      expect(createDefinition.description).toContain('31536000000');
+      expect(updateDefinition.description).toBe(createDefinition.description);
+      expect(tools.find((t) => t.name === 'list_work')!.description).toContain(
+        'availableUntil',
       );
+
+      // Exercise the published JSON examples through both MCP transports.
+      const examples = [
+        ...readFileSync('docs/timers.md', 'utf8').matchAll(
+          /```json\n([\s\S]*?)\n```/g,
+        ),
+      ].map((match) => JSON.parse(match[1]));
+      for (const example of examples.filter((value) => !Array.isArray(value))) {
+        const timerDefinition = blankDefinition();
+        timerDefinition.nodes[1] = nodeSchema.parse(example);
+        timerDefinition.edges = [
+          { id: 'in', source: 'entry', target: example.id, port: 'default' },
+          { id: 'out', source: example.id, target: 'exit', port: 'default' },
+          ...(example.kind === 'agent'
+            ? [
+                {
+                  id: 'timeout',
+                  source: example.id,
+                  target: 'exit',
+                  port: 'timeout' as const,
+                },
+              ]
+            : []),
+        ];
+        const timerWorkflow = await call('create_workflow', {
+          name: 'Documented timer',
+          definition: timerDefinition,
+        });
+        await call('publish_workflow', { id: timerWorkflow.id });
+        const input = { dueAt: '2000-01-01T00:00:00Z' };
+        const timerRun = await call('start_run', {
+          workflowId: timerWorkflow.id,
+          input,
+        });
+        const timerState = await call('get_run', { id: timerRun.run.id });
+        if (example.kind === 'agent') {
+          const assignments = await call('list_work', {
+            runId: timerRun.run.id,
+          });
+          expect(assignments[0].availableUntil).toBeDefined();
+          await call('cancel_run', { id: timerRun.run.id });
+        } else if (example.timing.kind === 'duration') {
+          expect(timerState.run.status).toBe('waiting');
+          expect(timerState.run.executions.at(-1).resumeAt).toBeDefined();
+          expect(await call('list_work', { runId: timerRun.run.id })).toEqual(
+            [],
+          );
+          expect(
+            (await call('cancel_run', { id: timerRun.run.id })).run.status,
+          ).toBe('cancelled');
+        } else {
+          expect(timerState.run.status).toBe('completed');
+          expect(timerState.run.output).toEqual(input);
+        }
+      }
       const started = await call('start_run', {
         workflowId: w.id,
         input: { number: 21 },

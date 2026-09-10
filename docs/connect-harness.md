@@ -104,14 +104,17 @@ Use list_work for the root run, including its child runs.
 Claim assignments with your actual capabilities.
 Perform each assignment using its prompt, input, and context policy.
 Submit JSON matching its output schema.
-Continue until the root run completes or fails.
+Inspect get_run when no assignments are available.
+For a long timer wait, report the deadline and resume this same run later.
+Do not poll continuously or submit a made-up result to end a wait.
+Continue until the root run completes, fails, or is cancelled.
 ```
 
 Starting a run in the UI does not launch an agent. When assignments are available, the run inspector shows **Waiting for an agent**, including work inside Batches and nested workflows. Use **Copy instructions for agent** and paste the instructions into your connected agent conversation. The instructions include the existing run ID. **Connect an agent** opens the connection configuration; connecting alone does not pick up assignments.
 
-`start_run` returns a persisted run. `list_work` includes descendants of the requested run, including Agent assignments in Batch item paths and nested Batches. Item run inspection resolves the published graph and identifies the owning Batch through `batchNodeId`. A claim returns its token and expiry. Keep the token for `submit_result`, `renew_claim`, or `fail_work`. Inspect `get_run` to distinguish a completed run from one waiting on claimed work or scripts.
+`start_run` returns a persisted run. `list_work` includes descendants of the requested run, including Agent assignments in Batch item paths and nested Batches. Item run inspection resolves the published graph and identifies the owning Batch through `batchNodeId`. A claim returns its token and expiry. Keep the token for `submit_result`, `renew_claim`, or `fail_work`. Inspect `get_run` to distinguish a completed run from one waiting on claimed work, scripts, Fetch requests, or timers.
 
-If execution will exceed the lease, call `renew_claim` before it expires. If a submission loses its response, submit the identical result again using the same token. If a claim has expired, discover and claim available work again. Do not submit through another worker's claim.
+If execution will exceed the lease, call `renew_claim` before it expires. If a submission loses its response, submit the identical result again using the same token. If a claim has expired, inspect the run and discover available work again. The assignment may already have timed out or exhausted its attempts. Do not submit through another worker's claim.
 
 A fresh-context assignment includes `executionInstructions` for a fresh session or an isolated subagent without inherited conversation history. If the caller cannot provide isolation, these instructions require it to leave the assignment unclaimed and give the user a ready-to-paste prompt containing the existing root run and assignment IDs. The prompt resumes the existing run instead of starting another one. Interlock does not create sessions or verify isolation. Do not declare `freshContext: true` merely because the assignment has a focused prompt. Declare required tools and skills only when the executor can actually use them.
 
@@ -120,6 +123,20 @@ A fresh-context assignment includes `executionInstructions` for a fresh session 
 Use `create_workflow` with a definition containing flat `nodes` and `edges` arrays. `update_workflow` accepts that definition as `draft`, together with the current `draftRevision` from `get_workflow`. Pass the definition itself, not an exported workflow record. Incomplete drafts can be saved; `publish_workflow` validates the complete graph. Set `cascade: true` to advance and republish transitive dependents, including archived workflows. Unpublished dependent definition edits, dependency cycles, or validation failures reject the entire cascade. Existing runs retain their published pins. See [cascade publication](../README.md#publish-a-shared-workflow-and-its-dependents) for scope and draft behavior.
 
 Use `kind: "batch"` for repeated work. Give each direct child a `batchId` matching its owner. The Batch has an `item` source port into the group and a `complete` source port into the continuation. Return every item branch to its owner with `targetHandle: "end"`. There is no nested body definition. Set `language: "javascript"` explicitly for JavaScript scripts; omitting it selects Bash. See [workflow definitions and graph scopes](architecture.md#workflow-definitions) and [Fetch configuration](fetch.md).
+
+### Author timers
+
+Use a `wait` node for a durable pause, or set `unclaimedTimeoutMs` on an Agent and connect both its `default` and `timeout` routes. Both create and update tools describe the same timer fields on their definition parameters. See [timer configuration](timers.md) for bounds, defaults, and examples.
+
+Read `get_workflow` before editing. Pass the entire updated definition as `draft` with the current `draftRevision`. Removing `unclaimedTimeoutMs` in JSON does not remove edges automatically; remove its `timeout` edge too. Incomplete routes can be saved, but they block publication. Publish a new version to apply changes to future runs; existing runs keep their original configuration and deadlines.
+
+### Resume a run that is waiting
+
+When `list_work` is empty, inspect `get_run` for the root and its descendants. A waiting Wait execution includes `resumeAt`; an available timed assignment includes `availableUntil`. These are ISO timestamps. Check the execution or assignment status too, because deadlines remain in historical records.
+
+The server advances timers without a connected agent. For a long delay, report the pending deadline and keep the run ID for later continuation. Avoid continuous polling or a new run. Do not fabricate an agent result to bypass a wait.
+
+Claim an assignment only when ready to perform it. Claiming stops its unclaimed timer, including for manual completion. If the deadline passes before the claim, inspect the existing run and rediscover work. The old assignment may be `timed_out` and its Timeout branch may already be running. A renewed claim has no total execution ceiling; an unclaimed timeout does not enforce a deadline for a person's answer after claiming.
 
 ## MCP tools
 

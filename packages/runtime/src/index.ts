@@ -15,6 +15,7 @@ import {
   type Run,
   type Workflow,
   type WorkflowDefinition,
+  type WorkflowEdge,
   type WorkflowNode,
   type WorkRequest,
 } from '@interlock/core';
@@ -520,7 +521,7 @@ export class Engine {
     execution: NodeExecution,
     node: WorkflowNode,
     output: Json,
-    port = 'default',
+    port: WorkflowEdge['port'] = 'default',
   ) {
     const edge = this.definition(run).edges.find(
       (e) => e.source === node.id && e.port === port,
@@ -531,7 +532,9 @@ export class Engine {
       );
     if (edge?.targetHandle === 'end' && edge.target !== run.batchNodeId)
       throw new InterlockError('End must belong to the current Batch group');
-    assertContract(node.outputSchema, output, `${node.label} output`);
+    // A timeout returns the original input, not an agent result.
+    if (port !== 'timeout')
+      assertContract(node.outputSchema, output, `${node.label} output`);
     if (node.kind === 'exit')
       assertContract(
         this.definition(run).outputSchema,
@@ -539,6 +542,7 @@ export class Engine {
         'Workflow output',
       );
     execution.output = output;
+    execution.port = port;
     execution.status = 'completed';
     execution.completedAt = now();
     run.value = output;
@@ -580,7 +584,9 @@ export class Engine {
         if (node.batchId !== run.batchNodeId)
           throw new InterlockError('Execution cannot cross Batch groups');
         if (run.executions.length > definition.maxSteps)
-          throw new InterlockError('Workflow step limit exceeded');
+          throw new InterlockError(
+            `Workflow step limit exceeded (${definition.maxSteps} steps); could not start ${node.label}`,
+          );
         if (node.kind === 'entry')
           assertContract(definition.inputSchema, run.input, 'Workflow input');
         assertContract(
@@ -595,7 +601,29 @@ export class Engine {
     }
     try {
       if (node.kind === 'agent') {
-        if (execution.status === 'waiting') return false;
+        if (execution.status === 'waiting') {
+          if (node.unclaimedTimeoutMs === undefined) return false;
+          const work = this.store
+            .work()
+            .find(
+              (w) =>
+                w.executionId === execution!.id && w.status === 'available',
+            );
+          if (
+            !work?.availableUntil ||
+            Date.parse(work.availableUntil) > Date.now()
+          )
+            return false;
+          work.status = 'timed_out';
+          this.store.put('work', work);
+          this.event(
+            run,
+            'work.timed_out',
+            `${node.label}: unclaimed deadline reached`,
+          );
+          this.finish(run, execution, node, execution.input, 'timeout');
+          return true;
+        }
         const work: WorkRequest = {
           id: randomUUID(),
           runId: run.id,
@@ -609,6 +637,10 @@ export class Engine {
           status: 'available',
           attempt: 0,
           maxAttempts: node.maxAttempts,
+          availableUntil:
+            node.unclaimedTimeoutMs === undefined
+              ? undefined
+              : new Date(Date.now() + node.unclaimedTimeoutMs).toISOString(),
           createdAt: now(),
         };
         this.store.put('work', work);
@@ -616,6 +648,42 @@ export class Engine {
         run.status = 'waiting';
         this.save(run);
         this.event(run, 'work.available', `Awaiting agent: ${node.label}`);
+        return true;
+      }
+      if (node.kind === 'wait') {
+        if (!execution.resumeAt) {
+          if (node.timing.kind === 'duration') {
+            execution.resumeAt = new Date(
+              Date.now() + node.timing.ms,
+            ).toISOString();
+          } else {
+            const value = readPath(execution.input, node.timing.path);
+            if (
+              typeof value !== 'string' ||
+              !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
+                value,
+              ) ||
+              !Number.isFinite(Date.parse(value)) ||
+              new Date(value.slice(0, 10) + 'T00:00:00Z')
+                .toISOString()
+                .slice(0, 10) !== value.slice(0, 10)
+            )
+              throw new InterlockError(
+                'Wait requires an ISO timestamp with a timezone, such as 2026-09-10T12:00:00Z',
+              );
+            execution.resumeAt = new Date(value).toISOString();
+          }
+          execution.status = 'waiting';
+          run.status = 'waiting';
+          this.save(run);
+          this.event(
+            run,
+            'node.waiting',
+            `${node.label}: waiting until ${execution.resumeAt}`,
+          );
+        }
+        if (Date.parse(execution.resumeAt) > Date.now()) return false;
+        this.finish(run, execution, node, execution.input);
         return true;
       }
       if (node.kind === 'script' || node.kind === 'fetch') {
@@ -644,7 +712,7 @@ export class Engine {
             for (const child of children)
               if (!terminal(child.status)) this.cancelTree(child.id);
             throw new InterlockError(
-              `Child run ${failed.id}: ${failed.error ?? failed.status}`,
+              `Child run ${failed.id}: ${failed.error ?? failed.status}${node.kind === 'batch' ? `; ${children.filter((c) => c.status === 'completed').length} of ${value.length} Batch items completed` : ''}`,
             );
           }
         }
@@ -720,12 +788,9 @@ export class Engine {
         node,
         execution.input,
         node.kind === 'condition'
-          ? String(
-              isDeepStrictEqual(
-                readPath(execution.input, node.path),
-                node.equals,
-              ),
-            )
+          ? isDeepStrictEqual(readPath(execution.input, node.path), node.equals)
+            ? 'true'
+            : 'false'
           : 'default',
       );
       return true;
@@ -862,6 +927,7 @@ export class Engine {
           `Missing capabilities: ${[...missingTools, ...missingSkills].join(', ')}`,
         );
       work.status = 'claimed';
+      work.availableUntil = undefined;
       work.attempt++;
       work.workerId = worker.workerId;
       work.token = randomUUID();
@@ -935,6 +1001,11 @@ export class Engine {
       );
     } else {
       work.status = 'available';
+      const node = this.definition(run).nodes.find((n) => n.id === work.nodeId);
+      work.availableUntil =
+        node?.kind === 'agent' && node.unclaimedTimeoutMs !== undefined
+          ? new Date(Date.now() + node.unclaimedTimeoutMs).toISOString()
+          : undefined;
       this.event(run, 'work.retry', `${work.label}: ${error}`);
     }
     this.store.put('work', work);

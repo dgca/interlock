@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { nodeKindLabel, type WorkflowNode } from '@interlock/core';
 import styles from './WorkflowEditor.module.css';
+import { formatDuration } from './DurationInput';
 import { conditionColors } from './conditionColors';
 export type CanvasNode = Node<{
   node: WorkflowNode;
@@ -39,6 +40,7 @@ const icons = {
   entry: ArrowUpFromLine,
   exit: ArrowDownToLine,
   agent: Bot,
+  wait: Clock,
   script: Terminal,
   fetch: Globe,
   condition: Split,
@@ -111,24 +113,30 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
         ? { type: 'array' }
         : n.kind === 'fetch'
           ? { type: 'object' }
-          : n.kind === 'condition'
+          : n.kind === 'condition' || n.kind === 'wait'
             ? inputSchema
             : n.outputSchema;
   const contracts = `${contractLabel(inputSchema)} → ${contractLabel(outputSchema)}`;
   const detail =
-    n.kind === 'agent'
-      ? `${n.context.mode === 'fresh' ? 'Fresh' : 'Current'} context · ${n.maxAttempts} attempts`
-      : n.kind === 'workflow'
-        ? `${data.targetName ?? 'Workflow'} · ${n.version === null ? 'Not published' : `v${n.version}`}`
-        : n.kind === 'fetch'
-          ? `Method: ${n.method}`
-          : n.kind === 'condition'
-            ? `${n.path} equals ${JSON.stringify(n.equals)}`
-            : n.kind === 'entry'
-              ? 'Workflow input'
-              : n.kind === 'exit'
-                ? 'Return workflow result'
-                : undefined;
+    n.kind === 'wait'
+      ? n.timing.kind === 'duration'
+        ? `Wait ${formatDuration(n.timing.ms)}`
+        : `Until ${n.timing.path || 'input'}`
+      : n.kind === 'agent'
+        ? n.unclaimedTimeoutMs !== undefined
+          ? `Unclaimed timeout · ${formatDuration(n.unclaimedTimeoutMs)}`
+          : `${n.context.mode === 'fresh' ? 'Fresh' : 'Current'} context · ${n.maxAttempts} attempts`
+        : n.kind === 'workflow'
+          ? `${data.targetName ?? 'Workflow'} · ${n.version === null ? 'Not published' : `v${n.version}`}`
+          : n.kind === 'fetch'
+            ? `Method: ${n.method}`
+            : n.kind === 'condition'
+              ? `${n.path} equals ${JSON.stringify(n.equals)}`
+              : n.kind === 'entry'
+                ? 'Workflow input'
+                : n.kind === 'exit'
+                  ? 'Return workflow result'
+                  : undefined;
   const progressClass = data.progress
     ? styles[`run_${data.progress.state}`]
     : '';
@@ -292,6 +300,17 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
               label="False"
               top="75%"
               color={conditionColors.false}
+            />
+          </>
+        ) : n.kind === 'agent' && n.unclaimedTimeoutMs !== undefined ? (
+          <>
+            <Port type="source" id="default" label="Result" top="35%" />
+            <Port
+              type="source"
+              id="timeout"
+              label="Timeout"
+              top="75%"
+              color="var(--mantine-color-yellow-5)"
             />
           </>
         ) : (
