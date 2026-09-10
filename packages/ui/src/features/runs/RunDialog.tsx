@@ -89,11 +89,13 @@ export function RunDialog({
           );
         }}
       >
-        {versions.map((v) => (
-          <option key={v.version} value={v.version}>
-            Version {v.version}
-          </option>
-        ))}
+        {[...versions]
+          .sort((a, b) => b.version - a.version)
+          .map((v) => (
+            <option key={v.version} value={v.version}>
+              Version {v.version}
+            </option>
+          ))}
       </NativeSelect>
 
       {canForm && (

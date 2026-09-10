@@ -107,7 +107,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
     ...nodeBase,
     kind: z.literal('workflow'),
     workflowId: z.string().min(1),
-    version: z.number().int().positive(),
+    version: z.number().int().positive().nullable(),
   }),
   z.object({
     ...nodeBase,
@@ -140,6 +140,7 @@ export type WorkflowEdge = WorkflowDefinition['edges'][number];
 export type ContextPolicy = z.infer<typeof contextPolicySchema>;
 export interface Workflow {
   id: string;
+  ownerWorkflowId?: string | null;
   name: string;
   description: string;
   archived: boolean;
@@ -320,6 +321,10 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       throw new InterlockError('Edges cannot target the entry');
   }
   for (const node of d.nodes) {
+    if (node.kind === 'workflow' && node.version === null)
+      throw new InterlockError(
+        `${node.label}: publish the referenced workflow and select a version first`,
+      );
     if (node.kind === 'fetch') validateFetch(node);
     if (
       node.kind === 'batch' &&
@@ -407,4 +412,20 @@ export {
 
 export function nodeKindLabel(kind: WorkflowNode['kind']): string {
   return kind === 'batch' ? 'Batch' : kind;
+}
+
+/** Ownership restricts authoring references, independently of execution ancestry. */
+export function validateWorkflowReferences(
+  workflowId: string,
+  definition: WorkflowDefinition,
+  workflows: Workflow[],
+) {
+  for (const node of definition.nodes) {
+    if (node.kind !== 'workflow') continue;
+    const target = workflows.find((w) => w.id === node.workflowId);
+    if (target?.ownerWorkflowId && target.ownerWorkflowId !== workflowId)
+      throw new InterlockError(
+        `${node.label}: only the owning workflow may reference "${target.name}"`,
+      );
+  }
 }

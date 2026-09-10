@@ -43,7 +43,7 @@ The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by th
 
 ## Create a workflow
 
-Select **New workflow** to create a draft. Use **Add node** to choose each step's type, then connect the nodes in execution order.
+Select **New workflow** to create a draft. Use **Add node** to choose each step's type, then connect the nodes in execution order. Agent is selected initially; choose another type when needed.
 
 Available nodes include entry and exit, Agent, Script, Fetch, Condition, Workflow, and Batch. A Workflow node invokes a pinned published workflow once. A Batch repeats a visible path for each item and collects the results in input order.
 
@@ -70,6 +70,18 @@ In Raw, **Save** beneath the code editor writes the workflow draft and records o
 Hold **Z** and drag from empty canvas space to draw a zoom rectangle. Release the mouse to fit that area into view. Press **Escape** or release Z before releasing the mouse to cancel. A click without a drag does nothing. This shortcut is inactive in text fields and settings dialogs and does not add to Undo history.
 
 The **Tidy** icon sits below **Fit View** in the canvas controls. Use **Tidy** to arrange the whole workflow from left to right, including nested Batch contents, and fit it into view. Tidy uses expanded Batch sizes so groups have room when reopened. It changes only positions and can be undone in one step. Save the draft to keep the arrangement. Imported and agent-authored positions remain as supplied until you tidy them.
+
+### Create a child workflow
+
+Use child workflows for helpers that belong to one parent. The main library shows library workflows only. Open a parent's **Child workflows** tab to find its helpers, including children not connected to a node.
+
+In **Add node**, choose **Workflow**, select **Create child workflow**, and enter a name. **Save and create child** saves the parent draft and its new node together, then opens the child editor. Save or discard Raw edits before creating a child. The Child workflows tab also creates children without adding a node.
+
+Edit and publish the child with the ordinary editor. Select **Use v1 in [node name]** to pin that version in the parent draft and return to the parent. Connect the new node and publish the parent. A reference to an unpublished child can be saved but blocks publication. By default, later child publications do not change existing pins. Select a newer version explicitly in node settings or from the child editor.
+
+The child editor links back to its owner and retains its own stable URL and Runs tab. Only the owner can reference a child. Children may invoke library workflows but cannot own or reference other children. Ownership has one level; the existing ten-level execution limit still applies.
+
+This first authoring flow does not yet support moving existing workflows, finding children from the main library search, or cloning and exporting parents with children. Parent clone and export are disabled, and deletion rejects parents with children. Delete unreferenced children first; published references can block child deletion. Archive the parent to hide it from the active library. Complete lifecycle operations are required before releasing this feature.
 
 ### Follow an execution
 
@@ -178,8 +190,39 @@ The build includes TypeScript checks. Tests cover workflow contracts, runtime be
 - [Scope and limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
 - [Fetch requests](docs/fetch.md)
+- [Upgrade and restore a database](docs/upgrading.md)
 - [Release process](docs/releases.md)
 
 ## License
 
 [MIT](LICENSE)
+
+### Author children through MCP or the CLI
+
+MCP `create_workflow` accepts `ownerWorkflowId`. `list_workflows` accepts an optional `ownerWorkflowId`: omit it for all workflows, set it to `null` for the library, or provide a parent ID for its children. Create and publish the child, then update the parent's draft with a Workflow node that pins the child's version. Include the parent's current `draftRevision` when saving.
+
+The CLI accepts the same owner field in an import document:
+
+```sh
+interlock import '{"name":"Gather evidence","ownerWorkflowId":"PARENT_ID"}'
+interlock workflows '{"ownerWorkflowId":"PARENT_ID"}'
+interlock workflows '{"ownerWorkflowId":null}'
+```
+
+An import without an owner remains a library workflow. A draft Workflow node can use `"version": null` until its target is published. A published reference always uses a positive version number.
+
+### Publish a shared workflow and its dependents
+
+To publish a shared workflow and advance all its published callers, run:
+
+```sh
+interlock publish CHILD_ID --cascade
+```
+
+MCP callers can use `publish_workflow` with `{"id":"CHILD_ID","cascade":true}`. The shared API accepts the same `cascade` option. Ordinary publication, including the UI's Publish version action, keeps parent pins unchanged.
+
+The cascade follows references in each workflow's latest published definition, including archived workflows and references inside Batches. It advances references to affected workflows and republishes each dependent once, children before parents. Unrelated pins stay unchanged. Draft-only workflows and references found only in older versions are excluded.
+
+Dependent drafts must match their latest published definitions. Publish or discard any definition edits before cascading. A dependency cycle or any validation failure rejects the whole operation, including publication of the requested workflow. Successful cascades update dependent drafts and their revisions, so an editor holding an older draft must reload before saving.
+
+Existing versions and runs retain their exact pins. New runs use the new versions by default; starting an explicit older version still uses its original dependencies. Contracts are checked during execution, so test changed child behavior before cascading it to callers.

@@ -11,7 +11,9 @@ export async function runCommand(argv: string[]) {
   const [command, ...args] = argv;
   switch (command) {
     case 'workflows':
-      return client.workflows.list.query();
+      return client.workflows.list.query(
+        args[0] ? await parse(args[0]) : undefined,
+      );
     case 'workflow':
       return client.workflows.get.query({ id: args[0] });
     case 'import': {
@@ -19,7 +21,12 @@ export async function runCommand(argv: string[]) {
       return client.workflows.create.mutate(input);
     }
     case 'publish':
-      return client.workflows.publish.mutate({ id: args[0] });
+      if (!args[0] || args.slice(1).some((arg) => arg !== '--cascade'))
+        throw new Error('Usage: publish <id> [--cascade]');
+      return client.workflows.publish.mutate({
+        id: args[0],
+        cascade: args.includes('--cascade'),
+      });
     case 'start':
       return client.runs.start.mutate({
         workflowId: args[0],
@@ -59,10 +66,10 @@ export async function runCommand(argv: string[]) {
     default:
       return {
         usage: [
-          'workflows',
+          'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
           'workflow <id>',
           'import <json|@file>',
-          'publish <id>',
+          'publish <id> [--cascade]',
           'start <workflow-id> <json|@file> [version]',
           'runs',
           'run <id>',

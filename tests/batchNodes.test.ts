@@ -44,6 +44,14 @@ vi.mock(
 );
 let root: Root, container: HTMLDivElement;
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockImplementation(() => ({
     matches: false,
@@ -57,6 +65,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
 });
 it('renders four labeled Batch handles with internal Start and End', async () => {
   await act(async () =>
@@ -108,7 +117,6 @@ it('creates a Batch from the ordinary add dialog without a nested definition or 
   );
   const select = container.querySelector('select')!;
   expect(Array.from(select.options).map((o) => o.value)).toEqual([
-    '',
     'agent',
     'script',
     'fetch',
@@ -375,3 +383,117 @@ it.each([undefined, 'parent'])(
     ).toBe(true);
   },
 );
+it('creates a named unpublished child from Add node and keeps the dialog after a failed save', async () => {
+  const onCreateChild = vi
+    .fn()
+    .mockRejectedValue(new Error('Draft changed elsewhere'));
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(SettingsDialog, {
+          name: 'Parent',
+          description: 'Unsaved',
+          definition: blankDefinition(),
+          workflows: [],
+          creating: true,
+          onClose: vi.fn(),
+          onApply,
+          onCreateChild,
+        }),
+      ),
+    ),
+  );
+  await act(async () => {
+    const select = container.querySelector('select')!;
+    select.value = 'workflow';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(
+    container.querySelector<HTMLInputElement>('input[value="existing"]')!
+      .checked,
+  ).toBe(true);
+  await act(async () =>
+    container.querySelector<HTMLInputElement>('input[value="child"]')!.click(),
+  );
+  expect(container.textContent).not.toContain('Pinned version');
+  const label = Array.from(container.querySelectorAll('label')).find((el) =>
+    el.textContent?.startsWith('Child workflow name'),
+  )!;
+  const input = document.getElementById(label.htmlFor) as HTMLInputElement;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!.call(input, 'Gather evidence');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () =>
+    Array.from(container.querySelectorAll('button'))
+      .find((b) => b.textContent === 'Save and create child')!
+      .click(),
+  );
+  expect(onCreateChild).toHaveBeenCalledTimes(1);
+  const [name, settings, nodeId] = onCreateChild.mock.calls[0];
+  expect(name).toBe('Gather evidence');
+  expect(settings.description).toBe('Unsaved');
+  expect(
+    settings.definition.nodes.find((n: any) => n.id === nodeId),
+  ).toMatchObject({
+    kind: 'workflow',
+    label: 'Gather evidence',
+    version: null,
+  });
+  expect(onApply).not.toHaveBeenCalled();
+  expect(container.textContent).toContain('Draft changed elsewhere');
+});
+it('offers only library workflows and the current parents children as targets', async () => {
+  const workflows = [
+    { id: 'library', name: 'Library', latestVersion: 1 },
+    {
+      id: 'owned',
+      name: 'My child',
+      ownerWorkflowId: 'parent',
+      latestVersion: 0,
+    },
+    {
+      id: 'other',
+      name: 'Other child',
+      ownerWorkflowId: 'other-parent',
+      latestVersion: 1,
+    },
+  ] as any;
+  const node = nodeSchema.parse({
+    id: 'ref',
+    kind: 'workflow',
+    label: 'Ref',
+    workflowId: 'owned',
+    version: null,
+  });
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(SettingsDialog, {
+          name: 'Parent',
+          description: '',
+          definition: blankDefinition(),
+          workflows,
+          workflowId: 'parent',
+          node,
+          onClose: vi.fn(),
+          onApply: vi.fn(),
+        }),
+      ),
+    ),
+  );
+  const options = Array.from(container.querySelectorAll('option')).map(
+    (o) => o.textContent,
+  );
+  expect(options).toContain('My child · Not published');
+  expect(options).toContain('Library');
+  expect(options).not.toContain('Other child');
+});

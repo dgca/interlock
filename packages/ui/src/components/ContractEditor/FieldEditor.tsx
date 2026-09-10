@@ -44,9 +44,32 @@ export function FieldEditor({
           })
         }
       >
-        {Object.entries(fieldTypes).map(([value, label]) => (
+        {(depth
+          ? [
+              'string',
+              'object',
+              'array',
+              'choice',
+              'number',
+              'integer',
+              'boolean',
+              'any',
+              'null',
+            ]
+          : [
+              'any',
+              'object',
+              'array',
+              'string',
+              'choice',
+              'number',
+              'integer',
+              'boolean',
+              'null',
+            ]
+        ).map((value) => (
           <option key={value} value={value}>
-            {label}
+            {fieldTypes[value as FieldType]}
           </option>
         ))}
       </NativeSelect>

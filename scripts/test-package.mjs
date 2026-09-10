@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { once } from 'node:events';
@@ -72,6 +73,23 @@ try {
     }).trim(),
     version,
   );
+  const futurePath = join(temp, 'future.db');
+  const future = new DatabaseSync(futurePath);
+  future.exec(
+    'CREATE TABLE migrations (version INTEGER PRIMARY KEY); INSERT INTO migrations VALUES (999);',
+  );
+  future.close();
+  const before = await readFile(futurePath);
+  const refused = spawnSync(bin, ['--db', futurePath], {
+    cwd: workdir,
+    env,
+    encoding: 'utf8',
+    timeout: 5000,
+  });
+  assert.equal(refused.status, 1, refused.stderr);
+  assert.match(refused.stderr, /schema 999 is newer/);
+  assert(!refused.stdout.includes('Interlock is running'));
+  assert.deepEqual(await readFile(futurePath), before);
   const listener = createServer().listen(0, '127.0.0.1');
   await once(listener, 'listening');
   const port = listener.address().port;

@@ -13,12 +13,14 @@ const rpc = vi.hoisted(() => ({
   update: vi.fn(),
   publish: vi.fn(),
   remove: vi.fn(),
+  createChild: vi.fn(),
 }));
 vi.mock('../packages/ui/src/lib/api', () => ({
   errorMessage: (error: Error) => error.message,
   api: {
     workflows: {
       update: { mutate: rpc.update },
+      createChild: { mutate: rpc.createChild },
       publish: { mutate: rpc.publish },
       delete: { mutate: rpc.remove },
     },
@@ -67,18 +69,62 @@ vi.mock('../packages/ui/src/features/workflows/FlowNode', () => ({
   FlowNode: () => null,
 }));
 vi.mock('../packages/ui/src/features/workflows/SettingsDialog', () => ({
-  SettingsDialog: ({ onApply, definition, name, description }: any) =>
+  SettingsDialog: ({
+    onApply,
+    onCreateChild,
+    definition,
+    name,
+    description,
+  }: any) =>
     h(
-      'button',
-      {
-        onClick: () =>
-          onApply({
-            name,
-            description,
-            definition: { ...definition, maxSteps: 60 },
-          }),
-      },
-      'Apply local edit',
+      'div',
+      {},
+      onCreateChild &&
+        h(
+          'button',
+          {
+            onClick: async () => {
+              try {
+                await onCreateChild(
+                  'Child',
+                  {
+                    name,
+                    description,
+                    definition: {
+                      ...definition,
+                      nodes: [
+                        ...definition.nodes,
+                        {
+                          ...definition.nodes[1],
+                          id: 'child-node',
+                          kind: 'workflow',
+                          workflowId: 'new-child',
+                          version: null,
+                        },
+                      ],
+                    },
+                  },
+                  'child-node',
+                );
+              } catch (e) {
+                errors.push(e);
+              }
+            },
+          },
+          'Create test child',
+        ),
+      h(
+        'button',
+        {
+          onClick: () =>
+            onApply({
+              name,
+              description,
+              definition: { ...definition, maxSteps: 60 },
+            }),
+        },
+        'Apply local edit',
+      ),
     ),
 }));
 vi.mock('../packages/ui/src/components/Button/Button', () => ({
@@ -94,6 +140,7 @@ let root: Root;
 let container: HTMLDivElement;
 let workflow: Workflow;
 const saved = vi.fn();
+const opened = vi.fn();
 const onDirty = vi.fn();
 const errors: unknown[] = [];
 const runAction = async (fn: () => Promise<unknown>) => {
@@ -118,6 +165,7 @@ const render = async () => {
           runsView: h('p', {}, 'Workflow runs'),
           workflows: [workflow],
           onBack: vi.fn(),
+          onOpenWorkflow: opened,
           onRun: vi.fn(),
           onSaved: saved,
           onDirty,
@@ -138,6 +186,14 @@ const click = async (name: string) => {
   await act(async () => button(name).click());
 };
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   vi.clearAllMocks();
   section = 'editor';
@@ -175,6 +231,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
 });
 
 it('keeps multiple nodes selected through a move without saving selection as draft data', async () => {
@@ -724,4 +781,43 @@ it('requires confirmation for workflow deletion from the editor menu', async () 
   await click('Delete');
   expect(rpc.remove).toHaveBeenCalledWith({ id: workflow.id });
   expect(deleted).toHaveBeenCalledOnce();
+});
+
+it('saves local parent edits with child creation before navigating', async () => {
+  rpc.createChild.mockImplementation(async (input) => ({
+    parent: { ...workflow, draft: input.parent.definition, draftRevision: 2 },
+    child: {
+      ...workflow,
+      id: 'child',
+      ownerWorkflowId: workflow.id,
+      latestVersion: 0,
+    },
+  }));
+  await render();
+  await click('Move entry');
+  await click('Add node');
+  await click('Create test child');
+  expect(rpc.createChild.mock.calls[0][0]).toMatchObject({
+    parentDraftRevision: 1,
+    ownerWorkflowId: 'test',
+    nodeId: 'child-node',
+  });
+  expect(
+    rpc.createChild.mock.calls[0][0].parent.definition.nodes[0].position,
+  ).toEqual({ x: 200, y: 250 });
+  expect(saved).toHaveBeenCalledTimes(2);
+  expect(opened).toHaveBeenCalledWith('child');
+  expect(onDirty).toHaveBeenLastCalledWith(false);
+  expect(rpc.update).not.toHaveBeenCalled();
+});
+it('keeps parent edits and stays in the editor if child creation fails', async () => {
+  rpc.createChild.mockRejectedValue(new Error('Draft changed elsewhere'));
+  await render();
+  await click('Move entry');
+  await click('Add node');
+  await click('Create test child');
+  expect(errors).toHaveLength(1);
+  expect(opened).not.toHaveBeenCalled();
+  expect(saved).not.toHaveBeenCalled();
+  expect(canvas.props.nodes[0].position).toEqual({ x: 200, y: 250 });
 });

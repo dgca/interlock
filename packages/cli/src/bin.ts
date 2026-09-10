@@ -26,6 +26,7 @@ Usage: interlock [--port 4310] [--workdir PATH] [--db PATH]
 With no command, starts the local engine, UI, and HTTP MCP endpoint at /mcp.
 Default MCP URL: http://127.0.0.1:4310/mcp. Keep this terminal open.
 Default database: ~/.interlock/interlock.db
+Pending database migrations run at startup, with a backup before schema upgrades.
 Default script working directory: current directory
 
 mcp       Stdio MCP bridge to the running engine. Set INTERLOCK_URL to override

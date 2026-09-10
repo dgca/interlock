@@ -100,7 +100,11 @@ export function App() {
     act,
     onDirty: setEditorDirty,
     onSaved: (w) =>
-      setWorkflows((all) => all.map((old) => (old.id === w.id ? w : old))),
+      setWorkflows((all) =>
+        all.some((old) => old.id === w.id)
+          ? all.map((old) => (old.id === w.id ? w : old))
+          : [...all, w],
+      ),
     onRun: setRunDialog,
     onConnect: () => setConnectDialog(true),
   };

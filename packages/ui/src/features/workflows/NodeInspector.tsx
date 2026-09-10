@@ -1,10 +1,19 @@
-import { TextInput, Textarea, NativeSelect } from '@mantine/core';
+import {
+  TextInput,
+  Textarea,
+  NativeSelect,
+  Input,
+  SegmentedControl,
+  Radio,
+  Stack,
+} from '@mantine/core';
 import {
   nodeKindLabel,
   type WorkflowDefinition,
   type Workflow,
   type WorkflowNode,
 } from '@interlock/core';
+import { workflowTargets } from './workflowTargets';
 import { FetchEditor } from './FetchEditor';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
@@ -13,6 +22,9 @@ import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 export function NodeInspector({
   node,
   workflows,
+  workflowId,
+  hideWorkflowTarget = false,
+  onOpenWorkflow,
   onChange,
   onDelete,
   definition,
@@ -20,6 +32,9 @@ export function NodeInspector({
 }: {
   node: WorkflowNode;
   workflows: Workflow[];
+  workflowId?: string;
+  hideWorkflowTarget?: boolean;
+  onOpenWorkflow?: (id: string) => void;
   onChange: (node: WorkflowNode) => void;
   onDelete?: () => void;
   definition?: WorkflowDefinition;
@@ -56,17 +71,17 @@ export function NodeInspector({
               onChange={(e) => patch({ prompt: e.target.value })}
             />
 
-            <NativeSelect
+            <Radio.Group
               mb="md"
               label="Context"
               value={node.context.mode}
-              onChange={(e) =>
-                patch({ context: { ...node.context, mode: e.target.value } })
-              }
+              onChange={(mode) => patch({ context: { ...node.context, mode } })}
             >
-              <option value="current">Current conversation</option>
-              <option value="fresh">Fresh agent session required</option>
-            </NativeSelect>
+              <Stack gap="xs" mt="xs">
+                <Radio value="current" label="Current conversation" />
+                <Radio value="fresh" label="Fresh agent session required" />
+              </Stack>
+            </Radio.Group>
 
             <p className="hint">
               Fresh context requires an executor that declares isolation.
@@ -132,28 +147,31 @@ export function NodeInspector({
         )}
         {node.kind === 'script' && (
           <>
-            <NativeSelect
-              mb="md"
-              label="Language"
-              value={node.language ?? 'bash'}
-              onChange={(e) => {
-                const language = e.target.value;
-                const starter =
-                  node.language === 'javascript' ? 'return input;' : 'cat';
-                patch({
-                  language,
-                  command:
-                    node.command === starter
-                      ? language === 'javascript'
-                        ? 'return input;'
-                        : 'cat'
-                      : node.command,
-                });
-              }}
-            >
-              <option value="javascript">JavaScript</option>
-              <option value="bash">Bash</option>
-            </NativeSelect>
+            <Input.Wrapper label="Language" mb="md">
+              <SegmentedControl
+                mt={4}
+                style={{ display: 'flex', width: 'fit-content' }}
+                aria-label="Language"
+                value={node.language ?? 'bash'}
+                onChange={(language) => {
+                  const starter =
+                    node.language === 'javascript' ? 'return input;' : 'cat';
+                  patch({
+                    language,
+                    command:
+                      node.command === starter
+                        ? language === 'javascript'
+                          ? 'return input;'
+                          : 'cat'
+                        : node.command,
+                  });
+                }}
+                data={[
+                  { value: 'javascript', label: 'JavaScript' },
+                  { value: 'bash', label: 'Bash' },
+                ]}
+              />
+            </Input.Wrapper>
 
             <CodeEditor
               label={
@@ -184,29 +202,43 @@ export function NodeInspector({
             />
           </>
         )}
-        {node.kind === 'workflow' && (
+        {node.kind === 'workflow' && !hideWorkflowTarget && (
           <>
             <NativeSelect
               mb="md"
-              label="Child workflow"
+              label="Referenced workflow"
               value={node.workflowId}
               onChange={(e) =>
                 patch({
                   workflowId: e.target.value,
                   version:
                     workflows.find((w) => w.id === e.target.value)
-                      ?.latestVersion || 1,
+                      ?.latestVersion || null,
                 })
               }
             >
-              <option value="">Choose a published workflow</option>
-              {workflows
-                .filter((w) => w.latestVersion)
-                .map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
+              {!workflows.some((w) => w.id === node.workflowId) && (
+                <option value={node.workflowId} disabled>
+                  Choose a workflow
+                </option>
+              )}
+              {[true, false].map((owned) => (
+                <optgroup
+                  key={String(owned)}
+                  label={
+                    owned ? 'Children of this workflow' : 'Library workflows'
+                  }
+                >
+                  {workflowTargets(workflows, workflowId, node.workflowId)
+                    .filter((w) => Boolean(w.ownerWorkflowId) === owned)
+                    .map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                        {!w.latestVersion ? ' · Not published' : ''}
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
             </NativeSelect>
 
             <TextInput
@@ -214,9 +246,39 @@ export function NodeInspector({
               label="Pinned version"
               type="number"
               min={1}
-              value={node.version}
-              onChange={(e) => patch({ version: Number(e.target.value) })}
+              value={node.version ?? ''}
+              placeholder="Not published"
+              onChange={(e) =>
+                patch({
+                  version: e.target.value ? Number(e.target.value) : null,
+                })
+              }
             />
+            {(() => {
+              const target = workflows.find((w) => w.id === node.workflowId);
+              if (!target) return null;
+              return (
+                <>
+                  <p className="hint">
+                    {target.ownerWorkflowId
+                      ? `Child of ${workflows.find((w) => w.id === target.ownerWorkflowId)?.name ?? 'this workflow'}`
+                      : 'Library workflow'}
+                  </p>
+                  {target.latestVersion > (node.version ?? 0) && (
+                    <Button
+                      onClick={() => patch({ version: target.latestVersion })}
+                    >
+                      Use v{target.latestVersion}
+                    </Button>
+                  )}
+                  {onOpenWorkflow && (
+                    <Button onClick={() => onOpenWorkflow(target.id)}>
+                      {target.ownerWorkflowId ? 'Open child' : 'Open workflow'}
+                    </Button>
+                  )}
+                </>
+              );
+            })()}
           </>
         )}
         {node.kind === 'batch' && (
@@ -247,15 +309,17 @@ export function NodeInspector({
               onChange={(e) => patch({ concurrency: Number(e.target.value) })}
             />
 
-            <NativeSelect
+            <Radio.Group
               mb="md"
               label="When a child fails"
               value={node.failurePolicy}
-              onChange={(e) => patch({ failurePolicy: e.target.value })}
+              onChange={(failurePolicy) => patch({ failurePolicy })}
             >
-              <option value="all">Fail and stop other children</option>
-              <option value="collect">Collect successes and failures</option>
-            </NativeSelect>
+              <Stack gap="xs" mt="xs">
+                <Radio value="all" label="Fail and stop other children" />
+                <Radio value="collect" label="Collect successes and failures" />
+              </Stack>
+            </Radio.Group>
           </>
         )}
         {node.kind === 'condition' && (

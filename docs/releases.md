@@ -55,6 +55,10 @@ interlock --version
 
 The `prepack` hook rebuilds the package when it is packed. Local `.interlock` data, source files, and development dependencies are excluded from the tarball.
 
+## Check database upgrades
+
+Before releasing a persistence change, follow [Add a database migration](upgrading.md#add-a-database-migration). Test the previous release's database fixture and include any upgrade steps in the changeset. Users can follow [Upgrade Interlock](upgrading.md) to install updates and restore backups.
+
 ## Retry a failed release
 
 Inspect the failed **Release** run and check the version in npm first. After fixing the cause, run **Actions → Release → Run workflow** on `main`. The workflow also runs when a fix merges to `main`.

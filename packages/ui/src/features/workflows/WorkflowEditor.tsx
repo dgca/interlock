@@ -1,4 +1,6 @@
 import type { Action } from '../../lib/useActionFeedback';
+import { flushSync } from 'react-dom';
+import { WorkflowChildren } from './WorkflowChildren';
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react';
 import { ActionIcon, Menu, Tabs } from '@mantine/core';
 import {
@@ -35,7 +37,7 @@ import {
 import { Button } from '../../components/Button/Button';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 import { parseRawDefinition } from './rawDefinition';
-import { SettingsDialog } from './SettingsDialog';
+import { SettingsDialog, type Settings } from './SettingsDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { FlowNode, type CanvasNode } from './FlowNode';
 import { canvasGraph, withoutNodes } from './canvasGraph';
@@ -58,6 +60,7 @@ export function WorkflowEditor({
   section = 'editor',
   onSectionChange,
   runsView,
+  onOpenWorkflow,
 }: {
   workflow: Workflow;
   workflows: Workflow[];
@@ -67,13 +70,24 @@ export function WorkflowEditor({
   act: Action;
   onDirty: (dirty: boolean) => void;
   onDeleted?: () => void;
-  section?: 'editor' | 'runs';
-  onSectionChange?: (section: 'editor' | 'runs') => void;
+  section?: 'editor' | 'runs' | 'children';
+  onSectionChange?: (section: 'editor' | 'runs' | 'children') => void;
+  onOpenWorkflow?: (id: string) => void;
   runsView?: ReactNode;
 }) {
+  const owner = workflows.find((w) => w.id === workflow.ownerWorkflowId);
+  const hasChildren = workflows.some((w) => w.ownerWorkflowId === workflow.id);
   const [deleting, setDeleting] = useState(false);
+  const [navigationPending, setNavigationPending] = useState(false);
   const [pending, setPending] = useState<'save' | 'publish'>();
   const actionInFlight = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const editorRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<ReactFlowInstance<CanvasNode> | null>(null);
   const fitAfterTidy = useRef(false);
@@ -260,6 +274,8 @@ export function WorkflowEditor({
         selected,
         selectedEdges,
         onEdit: (node) => setEditing({ node }),
+        onOpenWorkflow,
+        workflows,
         onAdd: (batchId) => setEditing({ creating: true, batchId }),
         onToggle: (id) =>
           setCollapsed((current) => {
@@ -269,7 +285,7 @@ export function WorkflowEditor({
             return next;
           }),
       }),
-    [draft, selected, selectedEdges, collapsed],
+    [draft, selected, selectedEdges, collapsed, workflows, onOpenWorkflow],
   );
   const save = async () => {
     if (rawInvalid) throw new Error('Fix the raw JSON before saving.');
@@ -307,6 +323,77 @@ export function WorkflowEditor({
     onSaved(w);
     return w;
   };
+  const createChild = async (
+    childName: string,
+    settings: Settings,
+    nodeId?: string,
+  ) => {
+    if (actionInFlight.current)
+      throw new Error('Wait for the current save to finish.');
+    if (rawEdited || rawInvalid)
+      throw new Error('Save or discard Raw changes before creating a child.');
+    if (remoteChanged)
+      throw new Error('Load the latest draft before creating a child.');
+    actionInFlight.current = true;
+    setNavigationPending(true);
+    setPending('save');
+    try {
+      const result = await api.workflows.createChild.mutate({
+        ownerWorkflowId: workflow.id,
+        name: childName,
+        parentDraftRevision: revision,
+        parent: settings,
+        nodeId,
+      });
+      if (!mounted.current) return;
+      flushSync(() => {
+        history.reset({
+          name: result.parent.name,
+          description: result.parent.description,
+          draft: result.parent.draft,
+        });
+        setRevision(result.parent.draftRevision);
+        setSaved(
+          JSON.stringify({
+            draft: result.parent.draft,
+            name: result.parent.name,
+            description: result.parent.description,
+          }),
+        );
+        setEditing(undefined);
+        onSaved(result.parent);
+        onSaved(result.child);
+        onDirty(false);
+      });
+      onOpenWorkflow?.(result.child.id);
+    } finally {
+      actionInFlight.current = false;
+      setNavigationPending(false);
+      setPending(undefined);
+    }
+  };
+  const useChildVersion = async (nodeId: string) => {
+    if (!owner) throw new Error('Parent workflow not found');
+    setNavigationPending(true);
+    try {
+      const parent = await api.workflows.useChildVersion.mutate({
+        id: owner.id,
+        childId: workflow.id,
+        nodeId,
+        version: workflow.latestVersion,
+        draftRevision: owner.draftRevision,
+      });
+      if (!mounted.current) return workflow;
+      flushSync(() => {
+        onSaved(parent);
+        onDirty(false);
+      });
+      onOpenWorkflow?.(owner.id);
+      return workflow;
+    } finally {
+      setNavigationPending(false);
+    }
+  };
   const connect = (c: Connection) =>
     setDraft((d) => ({
       ...d,
@@ -328,13 +415,31 @@ export function WorkflowEditor({
       ],
     }));
   return (
-    <div ref={editorRef} className={styles.editor}>
+    <div ref={editorRef} className={styles.editor} inert={navigationPending}>
       <header className={styles.header}>
-        <Button variant="ghost" onClick={onBack} aria-label="Back to workflows">
+        <Button
+          variant="ghost"
+          onClick={onBack}
+          aria-label={owner ? `Back to ${owner.name}` : 'Back to workflows'}
+        >
           <ArrowLeft />
         </Button>
         <div className={styles.title}>
-          <span>WORKFLOW</span>
+          <span>
+            {owner ? (
+              <>
+                <button
+                  className={styles.ownerLink}
+                  onClick={() => onOpenWorkflow?.(owner.id)}
+                >
+                  {owner.name}
+                </button>{' '}
+                / CHILD WORKFLOW
+              </>
+            ) : (
+              'WORKFLOW'
+            )}
+          </span>
           <strong>{name}</strong>
         </div>
         <span className={styles.saved}>
@@ -409,7 +514,10 @@ export function WorkflowEditor({
           <Button
             variant="primary"
             disabled={
-              !workflow.latestVersion || workflow.archived || Boolean(pending)
+              !workflow.latestVersion ||
+              workflow.archived ||
+              Boolean(owner?.archived) ||
+              Boolean(pending)
             }
             onClick={() => onRun(workflow)}
           >
@@ -452,18 +560,60 @@ export function WorkflowEditor({
           </Menu>
         </div>
       </header>
+      {owner && (
+        <div className={styles.conflict}>
+          <span>
+            Child of {owner.name}. Publish here, then select a version for the
+            parent.
+          </span>
+          {workflow.latestVersion > 0 &&
+            owner.draft.nodes
+              .filter(
+                (n) =>
+                  n.kind === 'workflow' &&
+                  n.workflowId === workflow.id &&
+                  n.version !== workflow.latestVersion,
+              )
+              .map((node) => (
+                <Button
+                  key={node.id}
+                  disabled={dirty || Boolean(pending)}
+                  title={
+                    dirty ? 'Save or discard child edits first' : undefined
+                  }
+                  onClick={() =>
+                    perform('save', () => useChildVersion(node.id))
+                  }
+                >
+                  Use v{workflow.latestVersion} in {node.label}
+                </Button>
+              ))}
+          <Button onClick={() => onOpenWorkflow?.(owner.id)}>
+            Back to {owner.name}
+          </Button>
+        </div>
+      )}
       <Tabs
         className={styles.sections}
         keepMounted
         keepMountedMode="display-none"
         value={section}
         onChange={(value) =>
-          onSectionChange?.(value === 'runs' ? 'runs' : 'editor')
+          onSectionChange?.(
+            value === 'runs'
+              ? 'runs'
+              : value === 'children'
+                ? 'children'
+                : 'editor',
+          )
         }
       >
         <Tabs.List className={styles.subnav} aria-label="Workflow sections">
           <Tabs.Tab value="editor">Editor</Tabs.Tab>
           <Tabs.Tab value="runs">Runs</Tabs.Tab>
+          {!workflow.ownerWorkflowId && (
+            <Tabs.Tab value="children">Child workflows</Tabs.Tab>
+          )}
         </Tabs.List>
         {remoteChanged && (dirty || editing) && !pending && (
           <div role="alert" className={styles.conflict}>
@@ -795,6 +945,21 @@ export function WorkflowEditor({
             )}
           </div>
         </Tabs.Panel>
+        {!workflow.ownerWorkflowId && (
+          <Tabs.Panel value="children" className={styles.runsView}>
+            <WorkflowChildren
+              workflow={{ ...workflow, draft }}
+              workflows={workflows}
+              disabled={
+                Boolean(pending) || rawEdited || rawInvalid || remoteChanged
+              }
+              onOpen={(id) => onOpenWorkflow?.(id)}
+              onCreate={(childName) =>
+                createChild(childName, { name, description, definition: draft })
+              }
+            />
+          </Tabs.Panel>
+        )}
         <Tabs.Panel value="runs" className={styles.runsView}>
           {runsView}
         </Tabs.Panel>
@@ -816,6 +981,14 @@ export function WorkflowEditor({
           description={description}
           definition={draft}
           workflows={workflows}
+          workflowId={workflow.id}
+          canExport={!hasChildren}
+          onOpenWorkflow={onOpenWorkflow}
+          onCreateChild={
+            !workflow.ownerWorkflowId && !workflow.archived && onOpenWorkflow
+              ? createChild
+              : undefined
+          }
           onClose={() => setEditing(undefined)}
           onApply={(next) => {
             history.change(() => ({

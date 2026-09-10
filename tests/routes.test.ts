@@ -269,3 +269,20 @@ it('allows workflow section changes with unsaved edits but still guards leaving 
   expect(window.location.pathname).toBe('/workflows');
   expect(document.body.textContent).not.toContain('Discard unsaved changes?');
 });
+
+it('opens an owned child by direct URL and returns to its owner through the navigation guard', async () => {
+  queries.workflows.mockResolvedValue([
+    { id: 'parent', name: 'Parent' },
+    { id: 'child', name: 'Child', ownerWorkflowId: 'parent' },
+  ]);
+  await mount('/workflows/child');
+  expect(container.textContent).toContain('Editor child');
+  await click('Edit draft');
+  await click('Back to library');
+  expect(document.body.textContent).toContain('Discard unsaved changes?');
+  await click('Keep editing');
+  expect(window.location.pathname).toBe('/workflows/child');
+  await click('Save draft');
+  await click('Back to library');
+  expect(window.location.pathname).toBe('/workflows/parent');
+});
