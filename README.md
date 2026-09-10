@@ -108,7 +108,7 @@ Failed executions can be retried from the inspector. Retrying a failed Batch pre
 
 ### Manage workflows
 
-Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library for active and archived workflows. Inside a workflow, the three-dot menu beside **Run** contains **Workflow settings** and **Delete workflow**. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows block deletion.
+Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library and from each card's menu in **Child workflows**. Inside a workflow, the three-dot menu beside **Run** contains **Workflow settings** and **Delete workflow**. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows block deletion.
 
 ### Waits and unanswered assignments
 

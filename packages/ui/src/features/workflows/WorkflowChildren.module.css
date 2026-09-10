@@ -35,32 +35,29 @@
   gap: 20px;
 }
 .card {
-  appearance: none;
+  position: relative;
   min-width: 0;
   padding: 24px 24px 0;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
   color: var(--text);
-  font: inherit;
   text-align: left;
-  cursor: pointer;
   display: flex;
   flex-direction: column;
   transition:
     background 150ms,
     border-color 150ms;
 }
-.card:hover:not(:disabled) {
+.card:hover:not(.cardDisabled) {
   background: var(--surface-hover);
   border-color: var(--accent-border);
 }
-.card:focus-visible,
 .newCard:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
 }
-.card:disabled,
+.cardDisabled,
 .newCard:disabled {
   opacity: 0.55;
   cursor: default;
@@ -81,6 +78,44 @@
   border: 1px solid var(--accent-border);
   border-radius: 11px;
   color: var(--accent-text);
+}
+.cardActions {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cardMenu {
+  position: relative;
+  z-index: 2;
+}
+.cardLink {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cardLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 12px;
+}
+.cardLink:focus-visible {
+  outline: none;
+}
+.cardLink:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.cardLink:disabled {
+  cursor: default;
 }
 .card h2 {
   margin: 0 0 10px;
