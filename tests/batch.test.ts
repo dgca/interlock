@@ -662,3 +662,74 @@ it('requires array input for blank Items path and allows an enclosing object for
   );
   expect(engine.start(id, { guests: 'wrong' }).run.error).toContain('array');
 });
+
+it.each([0, -1, 1.5, 10001])(
+  'rejects invalid Batch maxItems %s',
+  (maxItems) => {
+    expect(() => batchDefinition(undefined, { maxItems })).toThrow();
+  },
+);
+it('round-trips an explicit item limit independently of the step budget', () => {
+  const definition = batchDefinition(undefined, { maxItems: 10000 });
+  expect(
+    validateDefinition(definition).nodes.find((n) => n.kind === 'batch'),
+  ).toMatchObject({ maxItems: 10000 });
+  expect(parseRawDefinition(JSON.stringify(definition))).toEqual({
+    definition,
+  });
+});
+it('rejects oversized input before dispatch and retains the legacy default', () => {
+  const engine = setup();
+  for (const [options, count, limit] of [
+    [{}, 207, 200],
+    [{ maxItems: 250 }, 251, 250],
+  ] as const) {
+    const run = engine.start(
+      publish(engine, batchDefinition(undefined, options)),
+      Array(count).fill(null),
+    ).run;
+    expect(run.error).toContain(`${count} items`);
+    expect(run.error).toContain(`limit is ${limit}`);
+    expect(engine.inspect(run.id).children).toHaveLength(0);
+    expect(engine.available(run.id)).toHaveLength(0);
+  }
+});
+it('processes a 207-item backlog within configured concurrency and independent step budgets', () => {
+  const engine = setup();
+  const definition = batchDefinition(undefined, {
+    maxItems: 250,
+    concurrency: 3,
+  });
+  definition.maxSteps = 3;
+  const id = publish(engine, definition);
+  const input = Array.from({ length: 207 }, (_, i) => i);
+  const run = engine.start(id, input).run;
+  while (engine.available(run.id).length) {
+    const available = engine.available(run.id);
+    expect(available.length).toBeLessThanOrEqual(3);
+    // Complete the last available item to exercise ordered collection.
+    const work = engine.claim(available.at(-1)!.id, worker);
+    engine.submit(work.id, work.token!, work.input);
+  }
+  expect(engine.run(run.id)).toMatchObject({
+    status: 'completed',
+    output: input,
+  });
+  expect(engine.run(run.id).executions).toHaveLength(3);
+}, 60000);
+
+it('keeps published limits pinned when a draft raises Maximum items', () => {
+  const engine = setup();
+  const id = publish(engine, batchDefinition());
+  const workflow = engine.workflow(id);
+  engine.update(id, {
+    draft: batchDefinition(undefined, { maxItems: 250 }),
+    draftRevision: workflow.draftRevision,
+  });
+  engine.publish(id);
+  const input = Array(207).fill(null);
+  expect(engine.start(id, input, 1).run.error).toContain('limit is 200');
+  const current = engine.start(id, input, 2).run;
+  expect(current.status).toBe('waiting');
+  engine.cancel(current.id);
+});

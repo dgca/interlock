@@ -47,6 +47,9 @@ const nodeBase = {
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
 };
+export const DEFAULT_BATCH_MAX_ITEMS = 200;
+export const MAX_BATCH_ITEMS = 10_000;
+
 export const nodeSchema = z.discriminatedUnion('kind', [
   z.object({ ...nodeBase, kind: z.literal('entry') }),
   z.object({ ...nodeBase, kind: z.literal('exit') }),
@@ -128,6 +131,8 @@ export const nodeSchema = z.discriminatedUnion('kind', [
     kind: z.literal('batch'),
     itemsPath: z.string().default(''),
     concurrency: z.number().int().min(1).max(50).default(5),
+    // Omission preserves existing definitions without rewriting published versions.
+    maxItems: z.number().int().min(1).max(MAX_BATCH_ITEMS).optional(),
     failurePolicy: z.enum(['all', 'collect']).default('all'),
   }),
 ]);

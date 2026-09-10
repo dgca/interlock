@@ -131,6 +131,20 @@ it('creates a Batch from the ordinary add dialog without a nested definition or 
   });
   expect(container.textContent).toContain('Items path');
   expect(container.textContent).not.toContain('Child workflow');
+  const limitLabel = Array.from(container.querySelectorAll('label')).find(
+    (label) => label.textContent?.startsWith('Maximum items'),
+  )!;
+  const limitInput = container.querySelector<HTMLInputElement>(
+    `[id="${limitLabel.htmlFor}"]`,
+  )!;
+  expect(limitInput.value).toBe('200');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!.call(limitInput, '250');
+    limitInput.dispatchEvent(new Event('input', { bubbles: true }));
+  });
   const add = Array.from(container.querySelectorAll('button')).find(
     (b) => b.textContent === 'Add node',
   )!;
@@ -139,6 +153,7 @@ it('creates a Batch from the ordinary add dialog without a nested definition or 
   expect(node).toMatchObject({
     kind: 'batch',
     itemsPath: '',
+    maxItems: 250,
     concurrency: 5,
     failurePolicy: 'all',
   });
@@ -152,6 +167,7 @@ it('creates a Batch from the ordinary add dialog without a nested definition or 
       'inputSchema',
       'outputSchema',
       'itemsPath',
+      'maxItems',
       'concurrency',
       'failurePolicy',
     ].sort(),

@@ -69,6 +69,8 @@ it.each(['stdio', 'http'])(
         .inputSchema.properties!.draft as { description: string };
       expect(createDefinition.description).toContain('unclaimedTimeoutMs');
       expect(createDefinition.description).toContain('31536000000');
+      expect(createDefinition.description).toContain('maxItems');
+      expect(createDefinition.description).toContain('10000');
       expect(updateDefinition.description).toBe(createDefinition.description);
       expect(tools.find((t) => t.name === 'list_work')!.description).toContain(
         'availableUntil',
@@ -128,6 +130,34 @@ it.each(['stdio', 'http'])(
           expect(timerState.run.output).toEqual(input);
         }
       }
+      const batchDraft = await call('create_workflow', {
+        name: 'Larger backlog',
+        definition: batchDefinition(),
+      });
+      const raisedLimit = batchDefinition(undefined, {
+        maxItems: 250,
+        concurrency: 3,
+      });
+      const updatedBatch = await call('update_workflow', {
+        id: batchDraft.id,
+        draft: raisedLimit,
+        draftRevision: batchDraft.draftRevision,
+      });
+      expect(
+        updatedBatch.draft.nodes.find(
+          (n: { kind: string }) => n.kind === 'batch',
+        ).maxItems,
+      ).toBe(250);
+      await call('publish_workflow', { id: batchDraft.id });
+      const backlog = await call('start_run', {
+        workflowId: batchDraft.id,
+        input: Array.from({ length: 207 }, (_, i) => i),
+      });
+      expect(backlog.run.status).toBe('waiting');
+      expect(await call('list_work', { runId: backlog.run.id })).toHaveLength(
+        3,
+      );
+      await call('cancel_run', { id: backlog.run.id });
       const started = await call('start_run', {
         workflowId: w.id,
         input: { number: 21 },
