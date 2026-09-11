@@ -251,9 +251,20 @@ try {
     input: 21,
   });
   const [work] = await call('list_work', { runId: agentRun.run.id });
+  const [summary] = JSON.parse(
+    execFileSync(bin, ['work', agentRun.run.id, '--summary'], {
+      cwd: workdir,
+      env: { ...env, INTERLOCK_URL: url },
+      encoding: 'utf8',
+    }),
+  );
+  assert.equal(summary.rootRunId, agentRun.run.id);
+  assert.equal(summary.rootWorkflowId, agentWorkflow.id);
+  assert.equal(summary.workflowId, agentWorkflow.id);
   const claim = await call('claim_work', {
     workId: work.id,
     workerId: 'package-http-smoke',
+    leaseSeconds: 3600,
   });
   await stop();
   await start('npx');
@@ -267,6 +278,23 @@ try {
     ),
     `Expected npx cached installation, got ${restartedConnection.fallback.args[0]}`,
   );
+  // The installed CLI preserves the original lease duration after restart.
+  const renewed = JSON.parse(
+    execFileSync(bin, ['renew', work.id, claim.token], {
+      cwd: workdir,
+      env: { ...env, INTERLOCK_URL: url },
+      encoding: 'utf8',
+    }),
+  );
+  assert(Date.parse(renewed.leaseUntil) >= Date.parse(claim.leaseUntil));
+  const overridden = JSON.parse(
+    execFileSync(bin, ['renew', work.id, claim.token, '{"leaseSeconds":300}'], {
+      cwd: workdir,
+      env: { ...env, INTERLOCK_URL: url },
+      encoding: 'utf8',
+    }),
+  );
+  assert(Date.parse(overridden.leaseUntil) < Date.parse(renewed.leaseUntil));
   // The existing HTTP client and persisted claim still work after restart.
   const submitted = await call('submit_result', {
     workId: work.id,

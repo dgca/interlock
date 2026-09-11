@@ -126,7 +126,11 @@ export async function runCommand(argv: string[]) {
         error: args[2],
       });
     case 'renew':
-      return client.work.renew.mutate({ workId: args[0], token: args[1] });
+      return client.work.renew.mutate({
+        ...(args[2] ? await parse(args[2]) : {}),
+        workId: args[0],
+        token: args[1],
+      });
     case 'cancel':
       return client.runs.cancel.mutate({ id: args[0] });
     case 'retry':
@@ -149,7 +153,7 @@ export async function runCommand(argv: string[]) {
           'claim <work-id> [worker-id] [capabilities-json]',
           'submit <work-id> <token> <json|@file>',
           'fail <work-id> <token> <error>',
-          'renew <work-id> <token>',
+          'renew <work-id> <token> [options-json: {"leaseSeconds":3600}]',
           'cancel <run-id>',
           'retry <run-id>',
         ],

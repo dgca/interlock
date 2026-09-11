@@ -174,6 +174,8 @@ interlock run RUN_ID
 
 Replace `WORKFLOW_ID` with an ID from `interlock workflows` and `RUN_ID` with the run ID returned by `interlock start`. Match the input to your workflow's contract. Starting a run with agent assignments makes those assignments available for a connected agent to claim and complete.
 
+Executor scripts can use `interlock work --summary` to route assignments by `rootWorkflowId`. `interlock renew WORK_ID TOKEN` reuses the original claim duration; add `'{"leaseSeconds":300}'` to request a specific duration. See [assignment discovery and claim renewal](docs/agent-workflows.md) for fields, bounds, and compatibility details.
+
 JSON arguments also accept `@filename`, such as `interlock start WORKFLOW_ID @input.json`. Run `interlock commands` for the full command list or `interlock --help` for server options.
 
 ## Current scope
