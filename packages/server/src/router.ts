@@ -177,19 +177,7 @@ export const appRouter = t.router({
   work: t.router({
     summaries: p
       .input(z.object({ runId: z.string().optional() }).default({}))
-      .query(({ ctx, input }) =>
-        ctx.engine.available(input.runId).map((work) => ({
-          id: work.id,
-          runId: work.runId,
-          nodeId: work.nodeId,
-          label: work.label,
-          status: work.status,
-          context: work.context,
-          attempt: work.attempt,
-          maxAttempts: work.maxAttempts,
-          availableUntil: work.availableUntil,
-        })),
-      ),
+      .query(({ ctx, input }) => ctx.engine.workSummaries(input.runId)),
     list: p
       .input(z.object({ runId: z.string().optional() }).default({}))
       .query(({ ctx, input }) => ctx.engine.available(input.runId)),
@@ -210,7 +198,7 @@ export const appRouter = t.router({
     renew: p
       .input(
         claim.extend({
-          leaseSeconds: z.number().int().min(10).max(3600).default(300),
+          leaseSeconds: z.number().int().min(10).max(3600).optional(),
         }),
       )
       .mutation(({ ctx, input }) =>

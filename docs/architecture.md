@@ -74,9 +74,11 @@ Permanent deletion removes a workflow, its versions, and its run trees, includin
 
 Optional node input bindings select incoming data or original persisted workflow, root, and Batch item inputs before input validation. Resolved inputs appear in execution history. See [input bindings](agent-workflows.md#bind-original-input-into-later-steps) for scope and retry semantics.
 
+Work and run summaries derive `workflowId`, optional `parentRunId`, `rootRunId`, and `rootWorkflowId` from persisted run ancestry. Root runs identify themselves with their root IDs and omit `parentRunId`. Summary queries cache shared ancestors within each request and read ancestor identity without loading execution history. No root fields need to be backfilled into stored runs.
+
 Run discovery uses schema-2 indexes for workflow, status, and creation order. Arbitrary input-path matching iterates the filtered candidates. The scheduler still scans run history; query indexes do not remove that scheduling limit. Portable bundles preserve workflow IDs and published definitions; transactional imports reject version conflicts and require a revision map or force option for draft replacement. See [agent workflow operations](agent-workflows.md).
 
-Agent nodes persist an assignment and pause. A worker claims available work with an expiring token. Claims check the requested fresh-context mode, required tools, and required skills against worker declarations. The assignment includes the exact prompt, input, context policy, and output contract.
+Agent nodes persist an assignment and pause. A worker claims available work with an expiring token. The claim persists its original duration as optional `claimLeaseSeconds`. Omitted renewals reuse that duration, falling back to 300 seconds for older records. Explicit renewal durations affect only that renewal. Claims check the requested fresh-context mode, required tools, and required skills against worker declarations. The assignment includes the exact prompt, input, context policy, and output contract.
 
 Results must satisfy the output schema. Invalid results leave the claim active so the worker can correct them. Repeating an accepted result with the same token is idempotent. A changed duplicate, stale token, or cancelled claim is rejected.
 

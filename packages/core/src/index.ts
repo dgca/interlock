@@ -235,6 +235,12 @@ export interface Run {
   createdAt: string;
   updatedAt: string;
 }
+export interface RunAncestry {
+  workflowId: string;
+  parentRunId?: string;
+  rootRunId: string;
+  rootWorkflowId: string;
+}
 export interface WorkRequest {
   id: string;
   runId: string;
@@ -259,6 +265,8 @@ export interface WorkRequest {
   workerId?: string;
   token?: string;
   leaseUntil?: string;
+  // Duration established by the current claim, reused by omitted renewals.
+  claimLeaseSeconds?: number;
   output?: Json;
   error?: string;
   createdAt: string;

@@ -14,6 +14,7 @@ import {
   type Json,
   type NodeExecution,
   type Run,
+  type RunAncestry,
   type Workflow,
   type WorkflowDefinition,
   type WorkflowEdge,
@@ -937,6 +938,21 @@ export class Engine {
       .filter((w) => w.status === 'available' && within(w.runId))
       .map((work) => this.describeWork(work));
   }
+  workSummaries(runId?: string) {
+    const ancestry = new Map<string, RunAncestry>();
+    return this.available(runId).map((work) => ({
+      id: work.id,
+      runId: work.runId,
+      ...this.store.runAncestry(work.runId, ancestry),
+      nodeId: work.nodeId,
+      label: work.label,
+      status: work.status,
+      context: work.context,
+      attempt: work.attempt,
+      maxAttempts: work.maxAttempts,
+      availableUntil: work.availableUntil,
+    }));
+  }
   claim(workId: string, worker: Worker, leaseSeconds = 300) {
     this.pump();
     return this.store.transaction(() => {
@@ -960,6 +976,7 @@ export class Engine {
       work.attempt++;
       work.workerId = worker.workerId;
       work.token = randomUUID();
+      work.claimLeaseSeconds = leaseSeconds;
       work.leaseUntil = new Date(
         Date.now() + leaseSeconds * 1000,
       ).toISOString();
@@ -981,13 +998,13 @@ export class Engine {
       throw new InterlockError('Claim expired or no longer active');
     return work;
   }
-  renew(id: string, token: string, leaseSeconds = 300) {
+  renew(id: string, token: string, leaseSeconds?: number) {
     return this.store.transaction(() => {
       const work = this.owned(id, token);
       if (work.status !== 'claimed')
         throw new InterlockError('Work already completed');
       work.leaseUntil = new Date(
-        Date.now() + leaseSeconds * 1000,
+        Date.now() + (leaseSeconds ?? work.claimLeaseSeconds ?? 300) * 1000,
       ).toISOString();
       this.store.put('work', work);
       return work;

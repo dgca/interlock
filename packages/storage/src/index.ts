@@ -6,6 +6,7 @@ import { readPath, type RunQuery } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
 import type {
   Run,
+  RunAncestry,
   WorkRequest,
   Workflow,
   WorkflowVersion,
@@ -71,6 +72,34 @@ export class Store {
   runs() {
     return this.list<Run>('runs');
   }
+  runAncestry(id: string, cache = new Map<string, RunAncestry>()): RunAncestry {
+    const cached = cache.get(id);
+    if (cached) return cached;
+    // Select identity only: execution history is not needed to route work.
+    const row = this.db
+      .prepare(
+        `
+      SELECT json_extract(value, '$.workflowId') AS workflowId,
+             json_extract(value, '$.parentRunId') AS parentRunId
+      FROM documents WHERE collection = 'runs' AND id = ?
+    `,
+      )
+      .get(id);
+    if (!row) throw new Error(`Run ${id} not found`);
+    const workflowId = row.workflowId as string;
+    const parentRunId = (row.parentRunId as string | null) ?? undefined;
+    const parent = parentRunId
+      ? this.runAncestry(parentRunId, cache)
+      : undefined;
+    const ancestry = {
+      workflowId,
+      parentRunId,
+      rootRunId: parent?.rootRunId ?? id,
+      rootWorkflowId: parent?.rootWorkflowId ?? workflowId,
+    };
+    cache.set(id, ancestry);
+    return ancestry;
+  }
   findRuns(query: RunQuery) {
     const filters = ["collection = 'runs'"];
     const parameters: string[] = [];
@@ -89,7 +118,8 @@ export class Store {
         `SELECT value FROM documents WHERE ${filters.join(' AND ')} ORDER BY json_extract(value, '$.createdAt') DESC, rowid DESC`,
       )
       .iterate(...parameters);
-    const result: Pick<
+    const ancestry = new Map<string, RunAncestry>();
+    const result: (Pick<
       Run,
       | 'id'
       | 'workflowId'
@@ -102,7 +132,8 @@ export class Store {
       | 'input'
       | 'parentRunId'
       | 'batchNodeId'
-    >[] = [];
+    > &
+      RunAncestry)[] = [];
     for (const row of rows) {
       const run: Run = JSON.parse(row.value as string);
       if (query.inputMatch) {
@@ -132,6 +163,7 @@ export class Store {
         batchNodeId,
       } = run;
       result.push({
+        ...this.runAncestry(id, ancestry),
         id,
         workflowId,
         workflowName,

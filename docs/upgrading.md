@@ -22,6 +22,8 @@ Database schema 2 adds indexes for run discovery by workflow, status, and creati
 
 Startup checks whether the configured port is occupied before opening the database. A locked database error identifies its path and suggests stopping other instances. Use `lsof -nP -iTCP:4310 -sTCP:LISTEN` to identify the listener, adjusting the port when needed. If a process was suspended with Ctrl+Z, `kill -CONT <pid>` lets it handle a pending termination signal. A separate engine needs both a different port and a different database.
 
+New claims persist optional `claimLeaseSeconds`. Existing claims need no conversion and use 300 seconds when a renewal omits its duration. New claims reuse their original duration instead. To retain the previous renewal behavior, pass `leaseSeconds: 300` explicitly. Summary ancestry is derived from existing runs without a database rewrite.
+
 ## Restore a pre-upgrade backup
 
 Restoring replaces database state with the snapshot. Changes made after that snapshot are not included. Stop every server using the database before proceeding.

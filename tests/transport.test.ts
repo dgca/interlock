@@ -13,6 +13,17 @@ import { createClient } from '@interlock/client';
 import { createApp } from '../packages/server/src/app';
 import { nodeSchema, blankDefinition } from '@interlock/core';
 
+function leaseDeadline(value: unknown): number {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('leaseUntil' in value) ||
+    typeof value.leaseUntil !== 'string'
+  )
+    throw new Error('Expected a claim deadline');
+  return Date.parse(value.leaseUntil);
+}
+
 it.each(['stdio', 'http'])(
   'completes a workflow through MCP %s and the shared HTTP and SQLite interfaces',
   async (mode) => {
@@ -65,6 +76,17 @@ it.each(['stdio', 'http'])(
       const tools = (await client.listTools()).tools;
       for (const tool of tools) validateContractSchema(tool.inputSchema);
       expect(tools.map((t) => t.name)).toContain('claim_work');
+      const renewalSchema = tools.find(
+        (t) => t.name === 'renew_claim',
+      )!.inputSchema;
+      expect(renewalSchema.properties!.leaseSeconds).not.toHaveProperty(
+        'default',
+      );
+      expect(renewalSchema.required).not.toContain('leaseSeconds');
+      expect(renewalSchema.properties!.leaseSeconds).toMatchObject({
+        minimum: 10,
+        maximum: 3600,
+      });
       const createDefinition = tools.find((t) => t.name === 'create_workflow')!
         .inputSchema.properties!.definition as { description: string };
       const updateDefinition = tools.find((t) => t.name === 'update_workflow')!
@@ -233,15 +255,26 @@ it.each(['stdio', 'http'])(
           limit: 1,
           inputMatch: { path: 'number', equals: 21 },
         }),
-      ).toMatchObject([{ id: started.run.id }]);
+      ).toMatchObject([
+        {
+          id: started.run.id,
+          workflowId: w.id,
+          rootRunId: started.run.id,
+          rootWorkflowId: w.id,
+        },
+      ]);
       const summary = await call('list_work', {
         runId: started.run.id,
         fields: 'summary',
       });
       expect(summary).toHaveLength(work.length);
+      expect(summary[0]).not.toHaveProperty('parentRunId');
       expect(summary[0]).toMatchObject({
         id: work[0].id,
         context: work[0].context,
+        workflowId: w.id,
+        rootRunId: started.run.id,
+        rootWorkflowId: w.id,
       });
       for (const field of [
         'prompt',
@@ -253,13 +286,67 @@ it.each(['stdio', 'http'])(
       const claim = await call('claim_work', {
         workId: work[0].id,
         workerId: 'mcp-test',
+        leaseSeconds: 3600,
       });
+      const renewed = await call('renew_claim', {
+        workId: claim.id,
+        token: claim.token,
+      });
+      expect(Date.parse(renewed.leaseUntil)).toBeGreaterThanOrEqual(
+        Date.parse(claim.leaseUntil),
+      );
+      const renewalUrl = process.env.INTERLOCK_URL;
+      process.env.INTERLOCK_URL = url;
+      try {
+        const overridden = await runCommand([
+          'renew',
+          claim.id,
+          claim.token,
+          '{"leaseSeconds":60}',
+        ]);
+        expect(leaseDeadline(overridden) - Date.now()).toBeGreaterThan(55000);
+        expect(leaseDeadline(overridden) - Date.now()).toBeLessThanOrEqual(
+          60000,
+        );
+        await expect(
+          runCommand(['renew', claim.id, claim.token, '{"leaseSeconds":3601}']),
+        ).rejects.toThrow();
+        const cliRenewed = await runCommand(['renew', claim.id, claim.token]);
+        expect(leaseDeadline(cliRenewed)).toBeGreaterThanOrEqual(
+          Date.parse(renewed.leaseUntil),
+        );
+      } finally {
+        if (renewalUrl === undefined) delete process.env.INTERLOCK_URL;
+        else process.env.INTERLOCK_URL = renewalUrl;
+      }
+      for (const duration of [9, 3601, 10.5]) {
+        expect(
+          (
+            await client.callTool({
+              name: 'renew_claim',
+              arguments: {
+                workId: claim.id,
+                token: claim.token,
+                leaseSeconds: duration,
+              },
+            })
+          ).isError,
+        ).toBe(true);
+      }
       const result = await call('submit_result', {
         workId: claim.id,
         token: claim.token,
         output: { number: 42 },
       });
       expect(result.run.status).toBe('completed');
+      expect(
+        (
+          await client.callTool({
+            name: 'renew_claim',
+            arguments: { workId: claim.id, token: claim.token },
+          })
+        ).isError,
+      ).toBe(true);
       const rpc = createClient(url);
       expect(
         (await rpc.runs.get.query({ id: started.run.id })).run.output,
@@ -276,6 +363,31 @@ it.each(['stdio', 'http'])(
       engine.publish(dependent.id);
       await call('publish_workflow', { id: w.id, cascade: true });
       expect(engine.workflow(dependent.id).latestVersion).toBe(2);
+      const dependentRun = await call('start_run', {
+        workflowId: dependent.id,
+        input: {},
+      });
+      const [nested] = await call('list_work', {
+        runId: dependentRun.run.id,
+        fields: 'summary',
+      });
+      expect(nested).toMatchObject({
+        workflowId: w.id,
+        parentRunId: dependentRun.run.id,
+        rootRunId: dependentRun.run.id,
+        rootWorkflowId: dependent.id,
+      });
+      expect(
+        await call('list_runs', { workflowId: w.id, limit: 1 }),
+      ).toMatchObject([
+        {
+          id: nested.runId,
+          parentRunId: dependentRun.run.id,
+          rootRunId: dependentRun.run.id,
+          rootWorkflowId: dependent.id,
+        },
+      ]);
+      await call('cancel_run', { id: dependentRun.run.id });
       const definition = batchDefinition();
       const workflow = await call('create_workflow', {
         name: 'Batch transport',
@@ -294,6 +406,29 @@ it.each(['stdio', 'http'])(
         await runCommand(['publish', w.id, '--cascade']);
         expect(engine.workflow(dependent.id).latestVersion).toBe(3);
         expect(await runCommand(['work', root.run.id])).toMatchObject(items);
+        const summaries = await call('list_work', {
+          runId: root.run.id,
+          fields: 'summary',
+        });
+        expect(summaries).toHaveLength(2);
+        expect(summaries[0]).toMatchObject({
+          workflowId: workflow.id,
+          parentRunId: root.run.id,
+          rootRunId: root.run.id,
+          rootWorkflowId: workflow.id,
+        });
+        expect(await runCommand(['work', root.run.id, '--summary'])).toEqual(
+          summaries,
+        );
+        expect(
+          await runCommand(['runs', '--workflow', workflow.id, '--limit', '1']),
+        ).toMatchObject([
+          {
+            rootRunId: root.run.id,
+            rootWorkflowId: workflow.id,
+            parentRunId: root.run.id,
+          },
+        ]);
         const detail = await runCommand(['run', items[0].runId]);
         expect(detail).toMatchObject({
           definition,
