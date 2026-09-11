@@ -45,7 +45,7 @@
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   },
-  "version": "0.1.6",
+  "version": "0.1.7",
   "license": "MIT",
   "description": "Local workflow engine and visual editor for agent harnesses",
   "bin": {
