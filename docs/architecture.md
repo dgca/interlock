@@ -27,11 +27,11 @@ The root `@type_of/interlock` package bundles the server, CLI, and MCP code into
 
 A workflow has a stable ID, mutable metadata, and an editable draft. Publishing validates graph routes, JSON schemas, and child version references, then creates an immutable version. Draft revisions reject stale edits. Existing runs read their published version, including when the workflow is renamed or its draft changes.
 
-One entry begins a run. Each node receives the previous node's output as its whole input. Each ordinary node has one default outgoing route. Conditions have one true route and one false route. Agents with `unclaimedTimeoutMs` have default and timeout routes. Exit nodes have no outgoing route. Loops are allowed and bounded by the workflow step limit.
+One entry begins a run. Each node receives the previous node's output as its whole input. Each ordinary node has one default outgoing route. Conditions have one true route and one false route. Agents with `unclaimedTimeoutMs` have default and timeout routes. Exit nodes have no outgoing route. Workflow-level back-edges can target upstream nodes other than Entry. The same run re-executes those nodes, with each visit counted against `maxSteps`. Batch item paths must be acyclic.
 
 A condition compares a path in its input to a JSON value using structural equality. It passes the input through unchanged. Paths are dot-separated object keys or array indices. Empty paths select the entire input. They are not general JSONPath expressions.
 
-A Workflow node invokes an existing published workflow version once. A Batch selects an array from `itemsPath` and repeats a visible item path for each value. A blank path selects the complete input. Each value becomes the complete input of an isolated item run. The Batch collects item results in input order, even when items finish out of order. Empty arrays produce an empty result.
+A Workflow node invokes an existing published workflow version once. It can reference its own workflow ID, but the pinned version must already be published. A new version can therefore invoke an older version of itself, not its own unpublished definition. A Batch selects an array from `itemsPath` and repeats a visible item path for each value. A blank path selects the complete input. Each value becomes the complete input of an isolated item run. The Batch collects item results in input order, even when items finish out of order. Empty arrays produce an empty result.
 
 ### Owned child workflows
 
@@ -70,9 +70,38 @@ The `all` policy fails the Batch and cancels unfinished items when an item fails
 
 Permanent deletion removes a workflow, its versions, and its run trees, including descendant assignments and events, in one transaction. Active runs and references from other workflow drafts or published versions block deletion. Both active and archived workflows can be deleted after confirmation in the UI.
 
+### Batch output
+
+The `complete` port emits an array in input-item order. Its shape depends on `failurePolicy`:
+
+- `all`, the default, emits raw item outputs, such as `[{"answer":42},{"answer":7}]`. If any item fails or is cancelled, the Batch fails without emitting a collection.
+- `collect` emits one record per item, including failed and cancelled items:
+
+```json
+[
+  {
+    "runId": "item-1",
+    "status": "completed",
+    "output": { "answer": 42 },
+    "error": null
+  },
+  {
+    "runId": "item-2",
+    "status": "failed",
+    "output": null,
+    "error": "Unavailable"
+  },
+  { "runId": "item-3", "status": "cancelled", "output": null, "error": null }
+]
+```
+
+A collected status is `completed`, `failed`, or `cancelled`. `output` is the item's final run output, or `null` when absent. It does not contain partial node results from a failed item. `error` is the run error string, or `null` when absent. A completed item can also return JSON `null`, so use `status` to distinguish success from failure.
+
+For `collect`, downstream nodes read each record's `.output` after checking `.status`. For `all`, they read each array element directly. Both policies emit `[]` for an empty input array. The Batch output contract validates the whole emitted array.
+
 ## Agent work
 
-Optional node input bindings select incoming data or original persisted workflow, root, and Batch item inputs before input validation. Resolved inputs appear in execution history. See [input bindings](agent-workflows.md#bind-original-input-into-later-steps) for scope and retry semantics.
+Optional node input bindings select incoming data or original persisted workflow, root, and Batch item inputs, or the latest completed output of a node in the current run, before input validation. Resolved inputs appear in execution history. See [input bindings](agent-workflows.md#bind-original-input-into-later-steps) for scope and retry semantics.
 
 Work and run summaries derive `workflowId`, optional `parentRunId`, `rootRunId`, and `rootWorkflowId` from persisted run ancestry. Root runs identify themselves with their root IDs and omit `parentRunId`. Summary queries cache shared ancestors within each request and read ancestor identity without loading execution history. No root fields need to be backfilled into stored runs.
 
@@ -162,6 +191,8 @@ Add node sits beside Visual/Raw. The workflow menu beside Run contains Workflow 
 Tidy runs Dagre separately in each graph scope, arranging nested Batch contents before their parents. Each enclosing layout uses the expanded Batch bounds with padding for its header and internal handles. Layout handles loops and disconnected drafts, ignores missing or cross-scope edges for placement, and preserves all definitions and routes except node positions. Tidy is a single undoable draft edit and fits the result into view. It reserves space for expanded groups even when they are collapsed.
 
 Batch nodes use [React Flow Sub Flows](https://reactflow.dev/learn/layouting/sub-flows) to keep member nodes visible inside a group on the main canvas. Stored `batchId` becomes React Flow `parentId`; parents render before children and child positions are relative. Dragging the group header moves its members. Add step creates a member and connects the first step to Start. Add step is the visual editor’s way to create Batch children. Node settings do not change membership; connecting nodes or dragging across a border never changes execution scope. The internal Start and End handles mark each item path. Ordinary external handles are labeled In and Out. Timed Agent outputs are Result and Timeout; the Timeout handle and edge are amber. Settings use the full Input and Output labels. Edges omit redundant labels. Condition branches match their output handles: green for True and red for False. Collapse hides descendants and their edges without changing the definition. All steps use the ordinary node forms and contract editors. [Source and target handle IDs](https://reactflow.dev/learn/customization/handles) survive movement, edge changes, and Visual/Raw round trips. Invalid scopes block publication while incomplete drafts remain saveable. Run inspection uses the same grouped published graph and the item run's own execution timeline.
+
+Node settings group input configuration in one Input section. Source defaults to Previous step output; Choose fields reveals the field editor, same-scope Node output picker, and Advanced JSON. Expected format edits the input contract beneath the source controls. Changing the source does not change that contract. Canvas source indicators select and focus referenced nodes without adding execution edges or changing the draft. Node and Batch bounds include space for each distinct source indicator.
 
 Entry and Exit settings display a shared Input / Output contract backed by the workflow input or output schema. Editing it updates Workflow settings too. Existing additional node constraints remain visible and enforced. Batch settings show an array input when Items path is blank and no narrower contract is set. A named Items path allows an enclosing object; the selected value must still be an array at execution.
 

@@ -821,3 +821,25 @@ it('keeps parent edits and stays in the editor if child creation fails', async (
   expect(saved).not.toHaveBeenCalled();
   expect(canvas.props.nodes[0].position).toEqual({ x: 200, y: 250 });
 });
+
+it('focuses a binding source without editing the workflow or opening settings', async () => {
+  workflow.draft.nodes[1].inputBindings = {
+    previous: { source: 'node', nodeId: 'agent', path: '' },
+  };
+  await render();
+  const fitView = vi.fn();
+  canvas.props.onInit({ fitView });
+  await act(async () =>
+    canvas.props.nodes
+      .find((n: any) => n.id === 'agent')
+      .data.bindingSources[0].onFocus(),
+  );
+  expect(canvas.props.nodes.find((n: any) => n.id === 'agent').selected).toBe(
+    true,
+  );
+  expect(fitView).toHaveBeenCalledWith(
+    expect.objectContaining({ nodes: [{ id: 'agent' }] }),
+  );
+  expect(button('Apply local edit')).toBeUndefined();
+  expect(rpc.update).not.toHaveBeenCalled();
+});

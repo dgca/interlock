@@ -57,7 +57,7 @@ Entry → Batch
 
 For input `[3, 4, 5]`, a Script on the item path containing `return input * 2;` produces `[6, 8, 10]` on Out. An Agent can research each item directly on the canvas. The seeded opportunity brief demonstrates a Batch with a reusable Workflow node on its item path.
 
-A blank items path selects the complete input. Batches default to 200 items. Set **Maximum items** to a whole number from 1 through 10,000 to allow a larger list. Oversized input fails before any items start, with the actual count and limit in the error. **Concurrency** controls how many items run at once, from 1 through 50. Choose `all` to fail and cancel unfinished items on an error, or `collect` to receive each item's status, output, and error. Item paths can contain nested Batches and Workflow nodes, subject to ten nested levels.
+A blank items path selects the complete input. Batches default to 200 items. Set **Maximum items** to a whole number from 1 through 10,000 to allow a larger list. Oversized input fails before any items start, with the actual count and limit in the error. **Concurrency** controls how many items run at once, from 1 through 50. Choose `all` to receive raw item outputs or fail and cancel unfinished items on an error. Choose `collect` to receive `{runId,status,output,error}` records. Both arrays retain input-item order. See [Batch output](docs/architecture.md#batch-output) for examples and failed-item values. Item paths can contain nested Batches and Workflow nodes, subject to ten nested levels.
 
 For a 207-item backlog, set **Maximum items** to 250 and **Concurrency** to 3, then publish a new version. In Raw JSON or MCP, the Batch configuration is:
 
@@ -73,6 +73,8 @@ For a 207-item backlog, set **Maximum items** to 250 and **Concurrency** to 3, t
 ```
 
 This Batch accepts the whole input array and runs up to three items at once. `maxItems` counts the selected list, `concurrency` limits active item runs, and `maxSteps` bounds each run's node executions. Raising one does not raise the others. Input contracts can impose stricter bounds. Larger batches store more item runs and results and can slow the local engine and inspector; the maximum setting is a validation bound, not a throughput guarantee. Existing published versions retain their configured limit, or 200 when `maxItems` is absent. Nested Batches each enforce their own item limit.
+
+In node settings, **Input → Source** defaults to **Previous step output**. Select **Choose fields** to build a named input object. **Expected format** describes the input structure the step accepts. New fields default to **Previous step output**. Choose **Node output** to select a source node; its **Reads from** canvas label focuses that source. [Input binding rules](docs/agent-workflows.md#bind-original-input-into-later-steps) also apply to Advanced JSON, CLI, and MCP.
 
 Configure input and output contracts in the node settings. Entry and Exit display the shared workflow input and output contracts. With a blank items path, Batch input must be an array; with a named path, the selected value must be an array. Use **Visual / Raw** to switch between the graph and its JSON definition. The raw editor checks JSON syntax and structure before saving. Publishing also checks the workflow's graph.
 
@@ -117,6 +119,8 @@ Add a **Wait** node to pause for a duration or until a timestamp from input. The
 In Agent settings, enable **Route on unclaimed timeout** and set **If unclaimed for**. Connect **Result** to the successful continuation and **Timeout** to a reminder, escalation, or exit. Timeout receives the original input. Claiming stops the timer; a failed or expired claim starts a fresh timer when work becomes available again. This does not limit how long a claimed assignment can keep renewing its lease.
 
 For a three-day reminder loop, route Timeout to a Script that sends the reminder and returns the original input fields with an incremented reminder count. Use a Condition to exit after the desired number or route back to the Agent. Fetch returns its HTTP response, so a Fetch-based reminder path must restore the request fields and counter before returning to the Agent. Each visit consumes a step; elapsed waiting time does not. See [timer configuration and execution rules](docs/timers.md).
+
+Workflow-level routes can loop back to an upstream node other than Entry. The same run re-executes that node, bounded by `maxSteps`. Batch item paths must be acyclic and reach their owning Batch's End handle.
 
 `maxSteps` allows 2 through 1000 steps per run and defaults to 100. Entry, Exit, and every node visit count, including explicit retries that create a new execution. A Batch counts once in its parent; each item has its own budget. For example, 200 items with three steps each fit a three-step item budget, with a separate three-step parent path of Entry → Batch → Exit. The independent Batch `maxItems` limit defaults to 200.
 
@@ -216,7 +220,7 @@ The build includes TypeScript checks. Tests cover workflow contracts, runtime be
 - [Architecture and execution semantics](docs/architecture.md)
 - [Scope and limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
-- [Agent workflow operations, input bindings, and portable bundles](docs/agent-workflows.md)
+- [Agent workflow operations, original-input and node-output bindings, and portable bundles](docs/agent-workflows.md)
 - [Fetch requests](docs/fetch.md)
 - [Upgrade and restore a database](docs/upgrading.md)
 - [Release process](docs/releases.md)

@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { assertContract, validateContractSchema } from '@interlock/core';
+import {
+  assertContract,
+  validateContractSchema,
+  jsonSchema,
+} from '@interlock/core';
 import { batchDefinition } from './fixtures/batch';
 import { runCommand } from '../packages/cli/src/commands';
 import { it, expect } from 'vitest';
@@ -96,6 +100,90 @@ it.each(['stdio', 'http'])(
       expect(createDefinition.description).toContain('maxItems');
       expect(createDefinition.description).toContain('10000');
       expect(updateDefinition.description).toBe(createDefinition.description);
+      expect(createDefinition.description).toContain(
+        'Source node requires nodeId',
+      );
+      const boundDefinition = blankDefinition();
+      boundDefinition.nodes.splice(
+        2,
+        0,
+        nodeSchema.parse({
+          id: 'consumer',
+          kind: 'agent',
+          label: 'Consumer',
+          prompt: 'Use the earlier output',
+          inputBindings: {
+            previous: { source: 'node', nodeId: 'agent', path: '' },
+          },
+        }),
+      );
+      boundDefinition.edges.find((edge) => edge.source === 'agent')!.target =
+        'consumer';
+      boundDefinition.edges.push({
+        id: 'consumer-exit',
+        source: 'consumer',
+        target: 'exit',
+        port: 'default',
+      });
+      for (const [toolName, parameter] of [
+        ['create_workflow', 'definition'],
+        ['update_workflow', 'draft'],
+      ]) {
+        const schema = tools.find(
+          (tool) => tool.name === toolName,
+        )!.inputSchema;
+        const args =
+          toolName === 'create_workflow'
+            ? { name: 'Node binding', [parameter]: boundDefinition }
+            : { id: w.id, [parameter]: boundDefinition };
+        expect(() =>
+          assertContract(schema, jsonSchema.parse(args), 'binding definition'),
+        ).not.toThrow();
+        const invalid = structuredClone(args);
+        Reflect.deleteProperty(
+          (invalid[parameter] as typeof boundDefinition).nodes[2].inputBindings!
+            .previous,
+          'nodeId',
+        );
+        expect(() =>
+          assertContract(
+            schema,
+            jsonSchema.parse(invalid),
+            'binding definition',
+          ),
+        ).toThrow();
+      }
+      const boundWorkflow = await call('create_workflow', {
+        name: 'Node binding',
+        definition: boundDefinition,
+      });
+      await call('update_workflow', {
+        id: boundWorkflow.id,
+        draft: boundDefinition,
+        draftRevision: boundWorkflow.draftRevision,
+      });
+      await call('publish_workflow', { id: boundWorkflow.id });
+      const boundRun = await call('start_run', {
+        workflowId: boundWorkflow.id,
+        input: {},
+      });
+      const [firstWork] = await call('list_work', { runId: boundRun.run.id });
+      const firstClaim = await call('claim_work', {
+        workId: firstWork.id,
+        workerId: 'bindings',
+      });
+      await call('submit_result', {
+        workId: firstWork.id,
+        token: firstClaim.token,
+        output: { retained: 42 },
+      });
+      const [nextWork] = await call('list_work', { runId: boundRun.run.id });
+      expect(nextWork.input).toEqual({ previous: { retained: 42 } });
+      expect(
+        (await call('get_run', { id: boundRun.run.id })).run.executions.at(-1)
+          .input,
+      ).toEqual(nextWork.input);
+      await call('cancel_run', { id: boundRun.run.id });
       for (const value of [
         null,
         false,

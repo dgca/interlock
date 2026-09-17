@@ -602,6 +602,18 @@ export class Engine {
                 throw new InterlockError(
                   'itemInput is only available inside a Batch item run',
                 );
+              if (binding.source === 'node') {
+                const previous = run.executions.findLast(
+                  (candidate) =>
+                    candidate.nodeId === binding.nodeId &&
+                    candidate.status === 'completed',
+                );
+                if (!previous || previous.output === undefined)
+                  throw new InterlockError(
+                    `Node "${binding.nodeId}" has no completed output in this run`,
+                  );
+                return [key, readPath(previous.output, binding.path)];
+              }
               return [key, readPath(sources[binding.source], binding.path)];
             }),
           );

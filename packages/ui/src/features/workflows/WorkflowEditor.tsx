@@ -274,6 +274,16 @@ export function WorkflowEditor({
         selected,
         selectedEdges,
         onEdit: (node) => setEditing({ node }),
+        onFocusNode: (id) => {
+          setSelected(new Set([id]));
+          setSelectedEdges(new Set());
+          void flowRef.current?.fitView({
+            nodes: [{ id }],
+            padding: 0.5,
+            maxZoom: 1,
+            duration: 180,
+          });
+        },
         onOpenWorkflow,
         workflows,
         onAdd: (batchId) => setEditing({ creating: true, batchId }),

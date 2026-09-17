@@ -48,14 +48,26 @@ const nodeBase = {
   outputSchema: contractSchema.default({}),
   inputBindings: z
     .record(
-      z.object({
-        source: z.enum(['input', 'runInput', 'rootInput', 'itemInput']),
-        path: z.string().default(''),
-      }),
+      z.discriminatedUnion('source', [
+        z.object({
+          source: z.enum(['input', 'runInput', 'rootInput', 'itemInput']),
+          path: z.string().default(''),
+        }),
+        z.object({
+          source: z.literal('node'),
+          nodeId: z
+            .string()
+            .min(1)
+            .describe(
+              'Node in the same Batch group or main workflow scope, excluding Entry and Exit.',
+            ),
+          path: z.string().default(''),
+        }),
+      ]),
     )
     .optional()
     .describe(
-      'Optional replacement input object. Each field selects a path from incoming input, original enclosing workflow runInput, outermost rootInput, or original Batch itemInput. Blank paths select the entire value. These persisted inputs are independent of agent output.',
+      'Optional replacement input object. Each field selects a path from incoming input, original enclosing workflow runInput, outermost rootInput, original Batch itemInput, or source node with nodeId for its latest completed output in this run. Blank paths select the entire value. Original run inputs remain independent of agent output.',
     ),
 };
 export const DEFAULT_BATCH_MAX_ITEMS = 200;
@@ -399,6 +411,20 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       )
     )
       throw new InterlockError('itemInput bindings require Batch membership');
+    for (const binding of Object.values(node.inputBindings ?? {})) {
+      if (binding.source !== 'node') continue;
+      const target = d.nodes.find(
+        (candidate) => candidate.id === binding.nodeId,
+      );
+      if (!target || target.kind === 'entry' || target.kind === 'exit')
+        throw new InterlockError(
+          `${node.label}: node binding must reference an existing non-Entry/Exit node`,
+        );
+      if (target.batchId !== node.batchId)
+        throw new InterlockError(
+          `${node.label}: node binding must reference a node in the same execution scope`,
+        );
+    }
     if (node.kind === 'workflow' && node.version === null)
       throw new InterlockError(
         `${node.label}: publish the referenced workflow and select a version first`,
