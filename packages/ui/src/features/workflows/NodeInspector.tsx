@@ -464,24 +464,35 @@ export function NodeInspector({
           </>
         ) : (
           <>
-            {node.kind === 'batch' && (
-              <p className="hint">
-                {node.itemsPath
-                  ? `The value at "${node.itemsPath}" must be an array. Input describes the enclosing value.`
-                  : 'Input must be an array because Items path is blank.'}
-              </p>
-            )}
-            <ContractEditor
-              label="Input"
-              value={
-                node.kind === 'batch' &&
-                !node.itemsPath &&
-                Object.keys(node.inputSchema).length === 0
-                  ? { type: 'array' }
-                  : node.inputSchema
-              }
-              onChange={(inputSchema) => patch({ inputSchema })}
-            />
+            <section aria-label="Input">
+              <h3>Input</h3>
+              {node.kind !== 'entry' && node.kind !== 'exit' && (
+                <InputBindingsEditor
+                  key={node.id}
+                  node={node}
+                  nodes={definition?.nodes ?? [node]}
+                  onChange={(inputBindings) => patch({ inputBindings })}
+                />
+              )}
+              {node.kind === 'batch' && (
+                <p className="hint">
+                  {node.itemsPath
+                    ? `The value at "${node.itemsPath}" must be an array. Expected format describes the enclosing value.`
+                    : 'Input must be an array because Items path is blank.'}
+                </p>
+              )}
+              <ContractEditor
+                label="Expected format"
+                value={
+                  node.kind === 'batch' &&
+                  !node.itemsPath &&
+                  Object.keys(node.inputSchema).length === 0
+                    ? { type: 'array' }
+                    : node.inputSchema
+                }
+                onChange={(inputSchema) => patch({ inputSchema })}
+              />
+            </section>
             <ContractEditor
               label="Output"
               value={
@@ -493,14 +504,6 @@ export function NodeInspector({
               onChange={(outputSchema) => patch({ outputSchema })}
             />
           </>
-        )}
-        {node.kind !== 'entry' && node.kind !== 'exit' && (
-          <InputBindingsEditor
-            key={node.id}
-            node={node}
-            nodes={definition?.nodes ?? [node]}
-            onChange={(inputBindings) => patch({ inputBindings })}
-          />
         )}
         {onDelete && node.kind !== 'entry' && node.kind !== 'exit' && (
           <Button variant="danger" onClick={onDelete}>

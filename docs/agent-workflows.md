@@ -89,11 +89,11 @@ Node bindings read persisted executions of the current run. Inside a Batch, they
 
 In a workflow loop, the latest completed visit wins. Failed, cancelled, waiting, and running executions are ignored. If no completed visit exists, or its output lacks the selected path, the consuming node fails. JSON `null` is a valid completed output. Retries resolve from the same persisted execution history and incoming value. Resolved inputs remain visible in execution history.
 
-Configure **Input bindings** in node settings. Opening the editor leaves input unchanged. **Add input field** adds a named field with **Previous step output** selected by default. Choose **Node output** to select a node by its label and ID in the same execution scope. **Original Batch item** is available inside Batch item paths. Paths select nested fields or array indices; blank selects the whole value.
+In node settings, the **Input** section groups data selection and validation. **Get input from** defaults to **Previous step output**. Select **Choose fields** to reveal the field editor. Opening settings or choosing this mode alone leaves input unchanged. **Expected format** edits the input contract, which validates the selected data before execution. **Add input field** adds a named field with **Previous step output** selected by default. Choose **Node output** to select a node by its label and ID in the same execution scope. **Original Batch item** is available inside Batch item paths. Paths select nested fields or array indices; blank selects the whole value.
 
 Nodes with node-output bindings show a **Reads from [label]** indicator for each distinct source. In the workflow editor, clicking an indicator selects and focuses that source. Unavailable references remain visible in drafts and block publication until fixed. Renaming a node updates the indicator without changing its stored ID.
 
-**Advanced JSON**, Raw, CLI import, and MCP accept the same bindings. An explicit `{}` supplies an empty input object. Remove the last field or choose **Use previous step output** to remove bindings and restore normal input flow. Scripts still have the service's OS permissions; input bindings are a data-flow contract, not script sandboxing.
+**Advanced JSON**, Raw, CLI import, and MCP accept the same bindings. An explicit `{}` supplies an empty input object. Remove the last field or set **Get input from** to **Previous step output** to remove bindings and restore normal input flow. Scripts still have the service's OS permissions; input bindings are a data-flow contract, not script sandboxing.
 
 ## Export and import portable bundles
 

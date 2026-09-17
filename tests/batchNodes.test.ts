@@ -301,8 +301,16 @@ it('shows intrinsic Batch array contracts and explains selection by Items path',
     ),
   );
   expect(
-    container.querySelector('[data-contract="Input"]')!.textContent,
+    container.querySelector('[data-contract="Expected format"]')!.textContent,
   ).toContain('{"type":"array"}');
+  const inputSection = container.querySelector('section[aria-label="Input"]')!;
+  expect(
+    inputSection.querySelector('select[aria-label="Get input from"]'),
+  ).not.toBeNull();
+  expect(
+    inputSection.querySelector('[data-contract="Expected format"]'),
+  ).not.toBeNull();
+  expect(container.textContent).not.toContain('Input bindings');
   expect(
     container.querySelector('[data-contract="Output"]')!.textContent,
   ).toContain('{"type":"array"}');
