@@ -118,6 +118,8 @@ In Agent settings, enable **Route on unclaimed timeout** and set **If unclaimed 
 
 For a three-day reminder loop, route Timeout to a Script that sends the reminder and returns the original input fields with an incremented reminder count. Use a Condition to exit after the desired number or route back to the Agent. Fetch returns its HTTP response, so a Fetch-based reminder path must restore the request fields and counter before returning to the Agent. Each visit consumes a step; elapsed waiting time does not. See [timer configuration and execution rules](docs/timers.md).
 
+Workflow-level routes can loop back to an upstream node other than Entry. The same run re-executes that node, bounded by `maxSteps`. Batch item paths must be acyclic and reach their owning Batch's End handle.
+
 `maxSteps` allows 2 through 1000 steps per run and defaults to 100. Entry, Exit, and every node visit count, including explicit retries that create a new execution. A Batch counts once in its parent; each item has its own budget. For example, 200 items with three steps each fit a three-step item budget, with a separate three-step parent path of Entry → Batch → Exit. The independent Batch `maxItems` limit defaults to 200.
 
 ### Fetch nodes

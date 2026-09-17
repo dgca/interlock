@@ -27,11 +27,11 @@ The root `@type_of/interlock` package bundles the server, CLI, and MCP code into
 
 A workflow has a stable ID, mutable metadata, and an editable draft. Publishing validates graph routes, JSON schemas, and child version references, then creates an immutable version. Draft revisions reject stale edits. Existing runs read their published version, including when the workflow is renamed or its draft changes.
 
-One entry begins a run. Each node receives the previous node's output as its whole input. Each ordinary node has one default outgoing route. Conditions have one true route and one false route. Agents with `unclaimedTimeoutMs` have default and timeout routes. Exit nodes have no outgoing route. Loops are allowed and bounded by the workflow step limit.
+One entry begins a run. Each node receives the previous node's output as its whole input. Each ordinary node has one default outgoing route. Conditions have one true route and one false route. Agents with `unclaimedTimeoutMs` have default and timeout routes. Exit nodes have no outgoing route. Workflow-level back-edges can target upstream nodes other than Entry. The same run re-executes those nodes, with each visit counted against `maxSteps`. Batch item paths must be acyclic.
 
 A condition compares a path in its input to a JSON value using structural equality. It passes the input through unchanged. Paths are dot-separated object keys or array indices. Empty paths select the entire input. They are not general JSONPath expressions.
 
-A Workflow node invokes an existing published workflow version once. A Batch selects an array from `itemsPath` and repeats a visible item path for each value. A blank path selects the complete input. Each value becomes the complete input of an isolated item run. The Batch collects item results in input order, even when items finish out of order. Empty arrays produce an empty result.
+A Workflow node invokes an existing published workflow version once. It can reference its own workflow ID, but the pinned version must already be published. A new version can therefore invoke an older version of itself, not its own unpublished definition. A Batch selects an array from `itemsPath` and repeats a visible item path for each value. A blank path selects the complete input. Each value becomes the complete input of an isolated item run. The Batch collects item results in input order, even when items finish out of order. Empty arrays produce an empty result.
 
 ### Owned child workflows
 
