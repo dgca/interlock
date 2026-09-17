@@ -1,5 +1,14 @@
 # @type_of/interlock
 
+## 0.1.8
+
+### Patch Changes
+
+- 9ed89b0: Document Batch output shapes for both failure policies, including failed and cancelled item records.
+- 57f05c6: Add node input bindings that read an earlier node's latest completed output in the same run, including workflow loops and isolated Batch items.
+- 63a75d3: Group input source selection and expected format in one Input section. Default to Previous step output, with Choose fields for named input fields, scoped node selection, and Advanced JSON. Canvas source labels select and focus referenced nodes.
+- 79db9ba: Clarify that workflow-level loops are supported within the step limit, while Batch item paths must be acyclic.
+
 ## 0.1.7
 
 ### Patch Changes
