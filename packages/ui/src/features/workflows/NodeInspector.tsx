@@ -18,6 +18,7 @@ import {
 } from '@interlock/core';
 import { workflowTargets } from './workflowTargets';
 import { DurationInput } from './DurationInput';
+import { InputBindingsEditor } from './InputBindingsEditor';
 import { FetchEditor } from './FetchEditor';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
@@ -494,30 +495,12 @@ export function NodeInspector({
           </>
         )}
         {node.kind !== 'entry' && node.kind !== 'exit' && (
-          <details>
-            <summary>Input bindings</summary>
-            <p className="hint">
-              Build an input object from input, runInput, rootInput, itemInput,
-              or node. Source node also requires nodeId and reads its latest
-              completed output in the same run. Each field uses a source and
-              dot-separated path. Blank path selects the whole value. Use
-              runInput for configuration that must survive agent results. Node
-              bindings cannot cross Batch groups or referenced workflows.
-            </p>
-            <JsonEditor
-              label="Bindings"
-              value={node.inputBindings ?? {}}
-              onChange={(inputBindings) =>
-                patch({
-                  inputBindings:
-                    inputBindings && Object.keys(inputBindings).length === 0
-                      ? undefined
-                      : inputBindings,
-                })
-              }
-              rows={5}
-            />
-          </details>
+          <InputBindingsEditor
+            key={node.id}
+            node={node}
+            nodes={definition?.nodes ?? [node]}
+            onChange={(inputBindings) => patch({ inputBindings })}
+          />
         )}
         {onDelete && node.kind !== 'entry' && node.kind !== 'exit' && (
           <Button variant="danger" onClick={onDelete}>

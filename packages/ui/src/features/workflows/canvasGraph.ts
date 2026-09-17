@@ -6,6 +6,7 @@ import {
 import type { Edge } from '@xyflow/react';
 import type { CanvasNode } from './FlowNode';
 import { canvasGeometry } from './canvasGeometry';
+import { bindingNodeIds, bindingNodes } from './inputBindings';
 import { conditionColors } from './conditionColors';
 
 type Options = {
@@ -17,6 +18,7 @@ type Options = {
   onEdit?: (node: WorkflowNode) => void;
   onAdd?: (batchId: string) => void;
   onToggle?: (batchId: string) => void;
+  onFocusNode?: (nodeId: string) => void;
   status?: (nodeId: string) => string | undefined;
 };
 
@@ -65,6 +67,20 @@ export function canvasGraph(
         : (options.selected?.has(node.id) ?? false),
     data: {
       node,
+      bindingSources: bindingNodeIds(node).map((id) => {
+        const source = bindingNodes(node, definition.nodes).find(
+          (candidate) => candidate.id === id,
+        );
+        return {
+          id,
+          label: source?.label ?? id,
+          missing: !source,
+          onFocus:
+            source && options.onFocusNode
+              ? () => options.onFocusNode!(id)
+              : undefined,
+        };
+      }),
       ownedTarget:
         node.kind === 'workflow' &&
         Boolean(

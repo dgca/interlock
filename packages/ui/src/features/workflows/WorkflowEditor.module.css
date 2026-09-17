@@ -162,7 +162,8 @@
 }
 .node {
   width: 220px;
-  height: 116px;
+  height: 100%;
+  min-height: 116px;
   padding: 12px 18px;
   background: var(--surface-raised);
   border: 1px solid var(--border-strong);
@@ -489,4 +490,39 @@
 }
 .openWorkflow:hover {
   text-decoration: underline;
+}
+
+.bindingSources {
+  position: absolute;
+  bottom: 8px;
+  left: 18px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+}
+.bindingSources button,
+.bindingSources span {
+  display: block;
+  height: 22px;
+  line-height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 10px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bindingSources button {
+  cursor: pointer;
+}
+.bindingSources button:hover {
+  text-decoration: underline;
+}
+.bindingSources span {
+  color: var(--muted);
 }

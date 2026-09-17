@@ -22,6 +22,12 @@ import { conditionColors } from './conditionColors';
 export type CanvasNode = Node<{
   node: WorkflowNode;
   status?: string;
+  bindingSources?: {
+    id: string;
+    label: string;
+    missing: boolean;
+    onFocus?: () => void;
+  }[];
   progress?: {
     state:
       'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
@@ -165,6 +171,33 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
       <span>{data.progress.label}</span>
     </span>
   );
+  const bindings = Boolean(data.bindingSources?.length) && (
+    <div className={styles.bindingSources}>
+      {data.bindingSources?.map((source) =>
+        source.onFocus ? (
+          <button
+            key={source.id}
+            type="button"
+            className="nodrag nopan"
+            title={`Show ${source.label} · ${source.id}`}
+            aria-label={`Reads from ${source.label} · ${source.id}`}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              source.onFocus?.();
+            }}
+          >
+            Reads from {source.label}
+          </button>
+        ) : (
+          <span key={source.id} title={source.id}>
+            {source.missing ? 'Unavailable source: ' : 'Reads from '}
+            {source.label}
+          </span>
+        ),
+      )}
+    </div>
+  );
   if (n.kind === 'batch')
     return (
       <div
@@ -199,6 +232,7 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
             </button>
           )}
         </div>
+        {bindings}
         {!data.collapsed && <span className={styles.batchStart}>Start</span>}
         <Port type="target" id="default" label="In" top={32} />
         <Port type="source" id="complete" label="Out" top={32} />
@@ -283,6 +317,7 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
           )}
         </div>
       </div>
+      {bindings}
       {n.kind !== 'entry' && <Port type="target" id="default" label="In" />}
       {n.kind !== 'exit' &&
         (n.kind === 'condition' ? (

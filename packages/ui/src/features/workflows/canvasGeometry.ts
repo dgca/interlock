@@ -1,4 +1,5 @@
 import type { WorkflowDefinition, WorkflowNode } from '@interlock/core';
+import { bindingNodeIds } from './inputBindings';
 
 export const NODE_SIZE = { width: 220, height: 116 };
 export const BATCH_SIZE = { width: 520, height: 340 };
@@ -26,12 +27,14 @@ export function canvasGeometry(
   const sizes = new Map<string, { width: number; height: number }>();
   const size = (node: WorkflowNode): { width: number; height: number } => {
     if (sizes.has(node.id)) return sizes.get(node.id)!;
+    const bindingsHeight = bindingNodeIds(node).length * 22;
     const result =
       node.kind !== 'batch'
         ? { ...NODE_SIZE }
         : collapsed?.has(node.id)
           ? { width: 320, height: 116 }
           : { ...BATCH_SIZE };
+    result.height += bindingsHeight;
     if (node.kind === 'batch' && !collapsed?.has(node.id)) {
       for (const child of definition.nodes.filter(
         (n) => parents.get(n.id) === node.id,
@@ -43,7 +46,10 @@ export function canvasGeometry(
         );
         result.height = Math.max(
           result.height,
-          child.position.y + childSize.height + BATCH_INSET.bottom,
+          child.position.y +
+            childSize.height +
+            BATCH_INSET.bottom +
+            bindingsHeight,
         );
       }
     }

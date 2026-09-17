@@ -68,3 +68,28 @@ it('supplies shared workflow contracts to Entry and Exit cards', () => {
     { type: 'string' },
   );
 });
+
+it('shows each binding source once, retains missing references, and sizes nodes for labels', () => {
+  const definition = batchDefinition();
+  const batch = definition.nodes.find((n) => n.id === 'batch')!;
+  batch.inputBindings = {
+    one: { source: 'node', nodeId: 'batch', path: '' },
+    two: { source: 'node', nodeId: 'batch', path: 'two' },
+    gone: { source: 'node', nodeId: 'missing', path: '' },
+  };
+  const focused: string[] = [];
+  const graph = canvasGraph(definition, {
+    onFocusNode: (id) => focused.push(id),
+    collapsed: new Set(['batch']),
+  });
+  const canvas = graph.nodes.find((n) => n.id === 'batch')!;
+  expect(canvas.data.bindingSources).toHaveLength(2);
+  expect(canvas.data.bindingSources![1]).toMatchObject({
+    id: 'missing',
+    missing: true,
+    onFocus: undefined,
+  });
+  canvas.data.bindingSources![0].onFocus!();
+  expect(focused).toEqual(['batch']);
+  expect(canvas.height).toBe(116 + 44);
+});
