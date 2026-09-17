@@ -57,7 +57,7 @@ Entry → Batch
 
 For input `[3, 4, 5]`, a Script on the item path containing `return input * 2;` produces `[6, 8, 10]` on Out. An Agent can research each item directly on the canvas. The seeded opportunity brief demonstrates a Batch with a reusable Workflow node on its item path.
 
-A blank items path selects the complete input. Batches default to 200 items. Set **Maximum items** to a whole number from 1 through 10,000 to allow a larger list. Oversized input fails before any items start, with the actual count and limit in the error. **Concurrency** controls how many items run at once, from 1 through 50. Choose `all` to fail and cancel unfinished items on an error, or `collect` to receive each item's status, output, and error. Item paths can contain nested Batches and Workflow nodes, subject to ten nested levels.
+A blank items path selects the complete input. Batches default to 200 items. Set **Maximum items** to a whole number from 1 through 10,000 to allow a larger list. Oversized input fails before any items start, with the actual count and limit in the error. **Concurrency** controls how many items run at once, from 1 through 50. Choose `all` to receive raw item outputs or fail and cancel unfinished items on an error. Choose `collect` to receive `{runId,status,output,error}` records. Both arrays retain input-item order. See [Batch output](docs/architecture.md#batch-output) for examples and failed-item values. Item paths can contain nested Batches and Workflow nodes, subject to ten nested levels.
 
 For a 207-item backlog, set **Maximum items** to 250 and **Concurrency** to 3, then publish a new version. In Raw JSON or MCP, the Batch configuration is:
 

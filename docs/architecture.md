@@ -70,6 +70,35 @@ The `all` policy fails the Batch and cancels unfinished items when an item fails
 
 Permanent deletion removes a workflow, its versions, and its run trees, including descendant assignments and events, in one transaction. Active runs and references from other workflow drafts or published versions block deletion. Both active and archived workflows can be deleted after confirmation in the UI.
 
+### Batch output
+
+The `complete` port emits an array in input-item order. Its shape depends on `failurePolicy`:
+
+- `all`, the default, emits raw item outputs, such as `[{"answer":42},{"answer":7}]`. If any item fails or is cancelled, the Batch fails without emitting a collection.
+- `collect` emits one record per item, including failed and cancelled items:
+
+```json
+[
+  {
+    "runId": "item-1",
+    "status": "completed",
+    "output": { "answer": 42 },
+    "error": null
+  },
+  {
+    "runId": "item-2",
+    "status": "failed",
+    "output": null,
+    "error": "Unavailable"
+  },
+  { "runId": "item-3", "status": "cancelled", "output": null, "error": null }
+]
+```
+
+A collected status is `completed`, `failed`, or `cancelled`. `output` is the item's final run output, or `null` when absent. It does not contain partial node results from a failed item. `error` is the run error string, or `null` when absent. A completed item can also return JSON `null`, so use `status` to distinguish success from failure.
+
+For `collect`, downstream nodes read each record's `.output` after checking `.status`. For `all`, they read each array element directly. Both policies emit `[]` for an empty input array. The Batch output contract validates the whole emitted array.
+
 ## Agent work
 
 Optional node input bindings select incoming data or original persisted workflow, root, and Batch item inputs, or the latest completed output of a node in the current run, before input validation. Resolved inputs appear in execution history. See [input bindings](agent-workflows.md#bind-original-input-into-later-steps) for scope and retry semantics.
