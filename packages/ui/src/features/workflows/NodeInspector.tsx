@@ -497,10 +497,12 @@ export function NodeInspector({
           <details>
             <summary>Input bindings</summary>
             <p className="hint">
-              Build an input object from input, runInput, rootInput, or
-              itemInput. Each field uses a source and dot-separated path. Blank
-              path selects the whole value. Use runInput for configuration that
-              must survive agent results.
+              Build an input object from input, runInput, rootInput, itemInput,
+              or node. Source node also requires nodeId and reads its latest
+              completed output in the same run. Each field uses a source and
+              dot-separated path. Blank path selects the whole value. Use
+              runInput for configuration that must survive agent results. Node
+              bindings cannot cross Batch groups or referenced workflows.
             </p>
             <JsonEditor
               label="Bindings"

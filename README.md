@@ -216,7 +216,7 @@ The build includes TypeScript checks. Tests cover workflow contracts, runtime be
 - [Architecture and execution semantics](docs/architecture.md)
 - [Scope and limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
-- [Agent workflow operations, input bindings, and portable bundles](docs/agent-workflows.md)
+- [Agent workflow operations, original-input and node-output bindings, and portable bundles](docs/agent-workflows.md)
 - [Fetch requests](docs/fetch.md)
 - [Upgrade and restore a database](docs/upgrading.md)
 - [Release process](docs/releases.md)

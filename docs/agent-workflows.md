@@ -57,6 +57,7 @@ Optional `inputBindings` constructs a replacement input object before the node's
 | `runInput`  | Original input of the enclosing workflow invocation, skipping Batch item ancestors |
 | `rootInput` | Original input of the outermost run                                                |
 | `itemInput` | Original input of the current Batch item run, available only inside a Batch        |
+| `node`      | Latest completed output of `nodeId` in the current run                             |
 
 For example, an Agent may return a proposed action while the following Script reads `dryRun` from the original workflow input:
 
@@ -71,6 +72,22 @@ For example, an Agent may return a proposed action while the following Script re
 ```
 
 The Agent's result cannot replace `runInput`, `rootInput`, or `itemInput`. Those values come from persisted run records. A referenced Workflow creates a new `runInput` scope; nested Batches retain their enclosing workflow scope. Resolved node inputs are persisted for inspection. Retries resolve bindings from the same original run inputs and the failed step's incoming value. Entry and Exit cannot use bindings.
+
+Use `source: "node"` to retain an earlier result across intervening steps, such as a child workflow that returns only a posting receipt:
+
+```json
+{
+  "inputBindings": {
+    "decision": { "source": "node", "nodeId": "triage", "path": "" },
+    "posted": { "source": "input", "path": "posted" },
+    "dryRun": { "source": "runInput", "path": "dryRun" }
+  }
+}
+```
+
+Node bindings read persisted executions of the current run. Inside a Batch, they read only the current item's executions, including inside nested Batches. Unlike `runInput`, they do not walk up to the enclosing workflow. A parent cannot address nodes inside a referenced workflow, and sibling items cannot read each other's results. Publication requires an existing node in the same Batch group or main workflow scope, excluding Entry and Exit. Drafts may retain unresolved references.
+
+In a workflow loop, the latest completed visit wins. Failed, cancelled, waiting, and running executions are ignored. If no completed visit exists, or its output lacks the selected path, the consuming node fails. JSON `null` is a valid completed output. Retries resolve from the same persisted execution history and incoming value. Resolved inputs remain visible in execution history.
 
 Configure **Input bindings** in node settings, or edit the definition through Raw, CLI import, or MCP. Clearing the editor to `{}` removes the optional bindings and restores normal input flow. Scripts still have the service's OS permissions; input bindings are a data-flow contract, not script sandboxing.
 

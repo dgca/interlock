@@ -72,7 +72,7 @@ Permanent deletion removes a workflow, its versions, and its run trees, includin
 
 ## Agent work
 
-Optional node input bindings select incoming data or original persisted workflow, root, and Batch item inputs before input validation. Resolved inputs appear in execution history. See [input bindings](agent-workflows.md#bind-original-input-into-later-steps) for scope and retry semantics.
+Optional node input bindings select incoming data or original persisted workflow, root, and Batch item inputs, or the latest completed output of a node in the current run, before input validation. Resolved inputs appear in execution history. See [input bindings](agent-workflows.md#bind-original-input-into-later-steps) for scope and retry semantics.
 
 Work and run summaries derive `workflowId`, optional `parentRunId`, `rootRunId`, and `rootWorkflowId` from persisted run ancestry. Root runs identify themselves with their root IDs and omit `parentRunId`. Summary queries cache shared ancestors within each request and read ancestor identity without loading execution history. No root fields need to be backfilled into stored runs.
 
