@@ -305,7 +305,7 @@ it('shows intrinsic Batch array contracts and explains selection by Items path',
   ).toContain('{"type":"array"}');
   const inputSection = container.querySelector('section[aria-label="Input"]')!;
   expect(
-    inputSection.querySelector('select[aria-label="Get input from"]'),
+    inputSection.querySelector('select[aria-label="Source"]'),
   ).not.toBeNull();
   expect(
     inputSection.querySelector('[data-contract="Expected format"]'),

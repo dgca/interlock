@@ -69,8 +69,8 @@ export function InputBindingsEditor({
   return (
     <Stack gap="md" mb="md" ref={form}>
       <NativeSelect
-        label="Get input from"
-        aria-label="Get input from"
+        label="Source"
+        aria-label="Source"
         value={choosingFields ? 'fields' : 'previous'}
         data={[
           { value: 'previous', label: 'Previous step output' },

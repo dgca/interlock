@@ -105,7 +105,7 @@ it('leaves default input untouched and adds fields using the first source option
   expect(mode.options[0].text).toBe('Previous step output');
   expect(mode.value).toBe('previous');
   expect(button('Add input field')).toBeUndefined();
-  await select('Get input from', 'fields');
+  await select('Source', 'fields');
   await click('Advanced JSON');
   await click('Use field editor');
   expect(changed).not.toHaveBeenCalled();
@@ -164,7 +164,7 @@ it('filters node choices to the same Batch scope and retains unavailable draft r
 
 it('rejects duplicate field names without overwriting a binding', async () => {
   await render();
-  await select('Get input from', 'fields');
+  await select('Source', 'fields');
   await click('Add input field');
   await click('Add input field');
   const before = latest.inputBindings;
@@ -178,7 +178,7 @@ it('rejects duplicate field names without overwriting a binding', async () => {
 
 it('validates advanced bindings and preserves explicit empty objects until reset', async () => {
   await render();
-  await select('Get input from', 'fields');
+  await select('Source', 'fields');
   await click('Advanced JSON');
   await input('Input fields JSON', '{"decision":{"source":"node"}}');
   expect(container.querySelector('textarea:invalid')).not.toBeNull();
@@ -194,7 +194,7 @@ it('validates advanced bindings and preserves explicit empty objects until reset
   expect(latest.inputBindings).toEqual({});
   await click('Use field editor');
   expect(container.textContent).toContain('empty input object');
-  await select('Get input from', 'previous');
+  await select('Source', 'previous');
   expect(latest.inputBindings).toBeUndefined();
 });
 
@@ -208,19 +208,19 @@ it('switches back to whole previous output without changing the expected format'
   expect(
     (
       container.querySelector(
-        'select[aria-label="Get input from"]',
+        'select[aria-label="Source"]',
       ) as HTMLSelectElement
     ).value,
   ).toBe('fields');
   await click('Advanced JSON');
   await input('Input fields JSON', '{');
   expect(container.querySelector(':invalid')).not.toBeNull();
-  await select('Get input from', 'previous');
+  await select('Source', 'previous');
   expect(latest.inputBindings).toBeUndefined();
   expect(latest.inputSchema).toEqual(schema);
   expect(container.querySelector(':invalid')).toBeNull();
   expect(button('Advanced JSON')).toBeUndefined();
-  await select('Get input from', 'fields');
+  await select('Source', 'fields');
   expect(container.querySelector('input')).toBeNull();
   expect(latest.inputBindings).toBeUndefined();
 });
