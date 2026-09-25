@@ -1,5 +1,11 @@
 # @type_of/interlock
 
+## 0.1.11
+
+### Patch Changes
+
+- db21e81: Make Condition comparisons editable as typed values, Agent tool and skill requirements editable as tags, and Script and Fetch timeouts editable with time units. Clarify Batch list selection and concurrency controls without changing workflow definitions.
+
 ## 0.1.10
 
 ### Patch Changes
