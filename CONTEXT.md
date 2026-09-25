@@ -22,7 +22,7 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Wait**: A step that pauses until a persisted deadline, then passes its input through unchanged.
 
-**Switch**: A step that compares one input path against ordered cases, follows the first matching named route or a required default route, and passes its input through unchanged.
+**Switch**: A step that compares one input path against ordered cases and passes its input unchanged through the first matching route. Unmatched values fail the run unless a fallback route is configured.
 
 **Batch**: A step that repeats an item path for each value in a list and sends the ordered results to its continuation after all items finish.
 

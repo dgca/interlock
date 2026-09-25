@@ -126,7 +126,7 @@ Workflow-level routes can loop back to an upstream node other than Entry. The sa
 
 ### Switch nodes
 
-Use **Switch** to choose among several named routes from one input value. Choose an input field, add cases with typed match values, and connect every named branch and the default branch. Text matches can be entered without JSON quotes. The first matching case wins. An unmatched value takes the default route; a missing path fails the step. Switch passes its input through unchanged and supports input bindings. See [Switch routing](docs/switch.md) for an example and editing rules.
+Use **Switch** to choose among several named routes from one input value. Choose an input field, add cases with typed match values, and connect every named branch. Text matches can be entered without JSON quotes. The first matching case wins. Unmatched values fail the run unless you choose **Follow a fallback branch** under **When no case matches** and connect that branch. A missing path always fails the step. Switch passes its input through unchanged and supports input bindings. See [Switch routing](docs/switch.md) for an example and editing rules.
 
 ### Fetch nodes
 

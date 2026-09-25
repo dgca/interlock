@@ -104,57 +104,69 @@ it.each(['stdio', 'http'])(
       expect(createDefinition.description).toContain('Switch nodes');
       expect(createDefinition.description).toContain('Missing paths fail');
       expect(client.getInstructions()).toContain('Switch executions record');
-      const switchDraft = switchDefinition();
-      for (const [toolName, parameter] of [
-        ['create_workflow', 'definition'],
-        ['update_workflow', 'draft'],
-      ]) {
+      expect(createDefinition.description).toContain('Omit default to fail');
+      for (const withFallback of [true, false]) {
+        const switchDraft = switchDefinition(withFallback);
+        for (const [toolName, parameter] of [
+          ['create_workflow', 'definition'],
+          ['update_workflow', 'draft'],
+        ]) {
+          expect(() =>
+            assertContract(
+              tools.find((tool) => tool.name === toolName)!.inputSchema,
+              jsonSchema.parse(
+                toolName === 'create_workflow'
+                  ? { name: 'Switch', [parameter]: switchDraft }
+                  : { id: w.id, [parameter]: switchDraft },
+              ),
+              'Switch definition',
+            ),
+          ).not.toThrow();
+        }
+        const switchWorkflow = await call('create_workflow', {
+          name: 'Switch',
+          definition: switchDraft,
+        });
+        await call('update_workflow', {
+          id: switchWorkflow.id,
+          draftRevision: switchWorkflow.draftRevision,
+          draft: switchDraft,
+        });
+        await call('publish_workflow', { id: switchWorkflow.id });
+        const switchRun = await call('start_run', {
+          workflowId: switchWorkflow.id,
+          input: { next: { workflow: 'ticket' } },
+        });
+        const inspectedSwitch = await call('get_run', { id: switchRun.run.id });
+        expect(inspectedSwitch.run.status).toBe('completed');
+        expect(inspectedSwitch.run.executions[1]).toMatchObject({
+          kind: 'switch',
+          port: 'ticket',
+          output: { next: { workflow: 'ticket' } },
+        });
+        const unmatched = await call('start_run', {
+          workflowId: switchWorkflow.id,
+          input: { next: { workflow: 'unknown' } },
+        });
+        expect(unmatched.run.status).toBe(
+          withFallback ? 'completed' : 'failed',
+        );
+        if (!withFallback)
+          expect(unmatched.run.error).toContain('no case matched "unknown"');
+        const switchBundle = await call('export_workflow', {
+          id: switchWorkflow.id,
+        });
         expect(() =>
           assertContract(
-            tools.find((tool) => tool.name === toolName)!.inputSchema,
-            jsonSchema.parse(
-              toolName === 'create_workflow'
-                ? { name: 'Switch', [parameter]: switchDraft }
-                : { id: w.id, [parameter]: switchDraft },
-            ),
-            'Switch definition',
+            tools.find((tool) => tool.name === 'import_workflows')!.inputSchema,
+            jsonSchema.parse({ bundle: switchBundle }),
+            'Switch bundle',
           ),
         ).not.toThrow();
+        expect(
+          (await call('import_workflows', { bundle: switchBundle })).changed,
+        ).toEqual([]);
       }
-      const switchWorkflow = await call('create_workflow', {
-        name: 'Switch',
-        definition: switchDraft,
-      });
-      await call('update_workflow', {
-        id: switchWorkflow.id,
-        draftRevision: switchWorkflow.draftRevision,
-        draft: switchDraft,
-      });
-      await call('publish_workflow', { id: switchWorkflow.id });
-      const switchRun = await call('start_run', {
-        workflowId: switchWorkflow.id,
-        input: { next: { workflow: 'ticket' } },
-      });
-      const inspectedSwitch = await call('get_run', { id: switchRun.run.id });
-      expect(inspectedSwitch.run.status).toBe('completed');
-      expect(inspectedSwitch.run.executions[1]).toMatchObject({
-        kind: 'switch',
-        port: 'ticket',
-        output: { next: { workflow: 'ticket' } },
-      });
-      const switchBundle = await call('export_workflow', {
-        id: switchWorkflow.id,
-      });
-      expect(() =>
-        assertContract(
-          tools.find((tool) => tool.name === 'import_workflows')!.inputSchema,
-          jsonSchema.parse({ bundle: switchBundle }),
-          'Switch bundle',
-        ),
-      ).not.toThrow();
-      expect(
-        (await call('import_workflows', { bundle: switchBundle })).changed,
-      ).toEqual([]);
       expect(createDefinition.description).toContain(
         'Source node requires nodeId',
       );

@@ -148,7 +148,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
     kind: z.literal('switch'),
     path: z.string(),
     cases: z.array(z.object({ port: z.string(), equals: jsonSchema })),
-    default: z.string(),
+    default: z.string().optional(),
   }),
   z.object({
     ...nodeBase,
@@ -375,7 +375,10 @@ export function outgoingPorts(node: WorkflowNode): WorkflowEdge['port'][] {
   if (node.kind === 'exit') return [];
   if (node.kind === 'condition') return ['true', 'false'];
   if (node.kind === 'switch')
-    return [...node.cases.map((entry) => entry.port), node.default];
+    return [
+      ...node.cases.map((entry) => entry.port),
+      ...(node.default === undefined ? [] : [node.default]),
+    ];
   if (node.kind === 'batch') return ['item', 'complete'];
   if (node.kind === 'agent' && node.unclaimedTimeoutMs !== undefined)
     return ['default', 'timeout'];

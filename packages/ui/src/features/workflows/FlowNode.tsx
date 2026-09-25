@@ -365,7 +365,7 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
                 key={port}
                 type="source"
                 id={port}
-                label={port === n.default ? `${port} (default)` : port}
+                label={port === n.default ? `${port} (fallback)` : port}
                 top={outputPortTop(n, port)}
               />
             ))

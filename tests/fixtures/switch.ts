@@ -1,6 +1,6 @@
 import { definitionSchema } from '@interlock/core';
 
-export function switchDefinition() {
+export function switchDefinition(withFallback = true) {
   return definitionSchema.parse({
     nodes: [
       { id: 'entry', kind: 'entry', label: 'Input' },
@@ -14,13 +14,18 @@ export function switchDefinition() {
           { port: 'ticket', equals: 'ticket' },
           { port: 'assets', equals: 'assets-intake' },
         ],
-        default: 'none',
+        ...(withFallback ? { default: 'none' } : {}),
       },
       { id: 'exit', kind: 'exit', label: 'Output' },
     ],
     edges: [
       { id: 'in', source: 'entry', target: 'route' },
-      ...['investigate', 'ticket', 'assets', 'none'].map((port) => ({
+      ...[
+        'investigate',
+        'ticket',
+        'assets',
+        ...(withFallback ? ['none'] : []),
+      ].map((port) => ({
         id: port,
         source: 'route',
         port,

@@ -36,14 +36,26 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function render(values: Json[]) {
-  const definition = switchDefinition();
+async function render(values: Json[], { withFallback = true } = {}) {
+  const definition = switchDefinition(withFallback);
   const node = definition.nodes[1];
   if (node.kind !== 'switch') throw new Error('Expected Switch');
   node.cases = values.map((equals, index) => ({
     port: `branch-${index}`,
     equals,
   }));
+  definition.edges = [
+    ...definition.edges.filter((edge) => edge.source !== node.id),
+    ...[
+      ...node.cases.map((entry) => entry.port),
+      ...(node.default === undefined ? [] : [node.default]),
+    ].map((port) => ({
+      id: port,
+      source: node.id,
+      port,
+      target: 'exit',
+    })),
+  ];
   const onApply = vi.fn();
   await act(async () =>
     root.render(
@@ -97,6 +109,59 @@ async function apply() {
 }
 const cases = (onApply: ReturnType<typeof vi.fn>) =>
   onApply.mock.calls[0][0].definition.nodes[1].cases;
+
+async function chooseUnmatched(value: string) {
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>(`input[type="radio"][value="${value}"]`)!
+      .click(),
+  );
+}
+
+it('preserves existing fallbacks and their connections when settings are applied', async () => {
+  const { onApply } = await render(['ticket']);
+  expect(
+    container.querySelector<HTMLInputElement>('input[value="fallback"]')!
+      .checked,
+  ).toBe(true);
+  expect(container.textContent).toContain('Fallback branch name');
+  await apply();
+  const definition = onApply.mock.calls[0][0].definition;
+  expect(definition.nodes[1].default).toBe('none');
+  expect(
+    definition.edges.some(
+      (edge: any) => edge.source === 'route' && edge.port === 'none',
+    ),
+  ).toBe(true);
+});
+
+it('warns before removing a fallback connection and restores it if toggled back before applying', async () => {
+  const { onApply } = await render(['ticket']);
+  await chooseUnmatched('fail');
+  expect(container.textContent).not.toContain('Fallback branch name');
+  expect(container.textContent).toContain(
+    'Applying these changes removes connections for: none.',
+  );
+  await chooseUnmatched('fallback');
+  expect(container.textContent).not.toContain('connections for: none.');
+  await chooseUnmatched('fail');
+  await apply();
+  const definition = onApply.mock.calls[0][0].definition;
+  expect(definition.nodes[1].default).toBeUndefined();
+  expect(definition.edges.some((edge: any) => edge.port === 'none')).toBe(
+    false,
+  );
+});
+
+it('allows adding a fallback to a Switch that previously failed on no match', async () => {
+  const { onApply } = await render(['ticket'], { withFallback: false });
+  expect(
+    container.querySelector<HTMLInputElement>('input[value="fail"]')!.checked,
+  ).toBe(true);
+  await chooseUnmatched('fallback');
+  await apply();
+  expect(onApply.mock.calls[0][0].definition.nodes[1].default).toBe('fallback');
+});
 
 it('opens every JSON value type without changing existing definitions', async () => {
   const values: Json[] = ['42', 42, false, null, { route: 'ticket' }, [1, 'a']];

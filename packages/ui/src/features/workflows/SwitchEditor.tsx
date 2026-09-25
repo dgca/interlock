@@ -1,4 +1,4 @@
-import { TextInput } from '@mantine/core';
+import { Radio, Stack, TextInput } from '@mantine/core';
 import { useState } from 'react';
 import { Trash2, Plus } from 'lucide-react';
 import { outgoingPorts, type WorkflowNode } from '@interlock/core';
@@ -20,6 +20,14 @@ export function SwitchEditor({
   const [keys, setKeys] = useState(() =>
     node.cases.map(() => crypto.randomUUID()),
   );
+  const [fallbackName, setFallbackName] = useState(() => {
+    if (node.default !== undefined) return node.default;
+    const ports = new Set(outgoingPorts(node));
+    let name = 'fallback';
+    let number = 2;
+    while (ports.has(name)) name = `fallback-${number++}`;
+    return name;
+  });
   const patch = (value: Partial<SwitchNode>) => onChange({ ...node, ...value });
   const updateCase = (
     index: number,
@@ -45,7 +53,8 @@ export function SwitchEditor({
         <p className={styles.help}>
           Input is JSON data, usually from the previous step. For{' '}
           <code>{'{"route":"ticket"}'}</code>, enter <code>route</code>. Use
-          dots for nested fields, or leave blank to check the whole input.
+          dots for nested fields, or leave blank to check the whole input. A
+          missing field fails the run.
         </p>
       </div>
       <div className={styles.cases}>
@@ -113,12 +122,38 @@ export function SwitchEditor({
         </div>
       </div>
       <div className={styles.otherwise}>
-        <TextInput
-          label="Default branch"
-          description="Used when no case matches. Connect this branch on the canvas too."
-          value={node.default}
-          onChange={(event) => patch({ default: event.target.value })}
-        />
+        <Radio.Group
+          label="When no case matches"
+          value={node.default === undefined ? 'fail' : 'fallback'}
+          onChange={(value) =>
+            patch({ default: value === 'fallback' ? fallbackName : undefined })
+          }
+        >
+          <Stack gap="sm" mt="xs">
+            <Radio
+              value="fail"
+              label="Fail the run"
+              description="Stop with an error showing the unmatched value."
+            />
+            <Radio
+              value="fallback"
+              label="Follow a fallback branch"
+              description="Send unmatched values to another step."
+            />
+          </Stack>
+        </Radio.Group>
+        {node.default !== undefined && (
+          <TextInput
+            mt="md"
+            label="Fallback branch name"
+            description="Connect this branch to its next step on the canvas."
+            value={node.default}
+            onChange={(event) => {
+              setFallbackName(event.target.value);
+              patch({ default: event.target.value });
+            }}
+          />
+        )}
       </div>
       {removed.length > 0 && (
         <p className={styles.warning}>
