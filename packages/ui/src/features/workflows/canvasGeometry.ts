@@ -35,6 +35,8 @@ export function canvasGeometry(
           ? { width: 320, height: 116 }
           : { ...BATCH_SIZE };
     result.height += bindingsHeight;
+    if (node.kind === 'workflow' && node.mode === 'detached')
+      result.height += 18;
     if (node.kind === 'switch')
       result.height = Math.max(
         result.height,

@@ -6,6 +6,7 @@ import {
 } from '@interlock/core';
 import { batchDefinition } from './fixtures/batch';
 import { switchDefinition } from './fixtures/switch';
+import { workflowCall } from './fixtures/detached';
 import { runCommand } from '../packages/cli/src/commands';
 import { it, expect } from 'vitest';
 import { serve } from '@hono/node-server';
@@ -166,6 +167,107 @@ it.each(['stdio', 'http'])(
         expect(
           (await call('import_workflows', { bundle: switchBundle })).changed,
         ).toEqual([]);
+      }
+      expect(createDefinition.description).toContain('mode: "wait"');
+      expect(client.getInstructions()).toContain(
+        'Detached descendants can remain active',
+      );
+      expect(tools.find((t) => t.name === 'cancel_run')!.description).toContain(
+        'stops at detached',
+      );
+      expect(tools.find((t) => t.name === 'retry_run')!.description).toContain(
+        'failed detached child',
+      );
+      const targetDefinition = blankDefinition();
+      if (targetDefinition.nodes[1].kind === 'agent')
+        targetDefinition.nodes[1].maxAttempts = 1;
+      const targetWorkflow = await call('create_workflow', {
+        name: 'Independent work',
+        definition: targetDefinition,
+      });
+      await call('publish_workflow', { id: targetWorkflow.id });
+      for (const executionMode of ['wait', 'detached'] as const) {
+        const draft = workflowCall(targetWorkflow.id, executionMode);
+        const parent = await call('create_workflow', {
+          name: `Dispatch ${executionMode}`,
+          definition: draft,
+        });
+        await call('update_workflow', {
+          id: parent.id,
+          draftRevision: parent.draftRevision,
+          draft,
+        });
+        await call('publish_workflow', { id: parent.id });
+        const started = await call('start_run', {
+          workflowId: parent.id,
+          input: { hello: 'world' },
+        });
+        const childId = started.children[0].id;
+        expect(started.run.status).toBe(
+          executionMode === 'detached' ? 'completed' : 'waiting',
+        );
+        const summary = (await call('list_runs', {})).find(
+          (r: any) => r.id === childId,
+        );
+        expect(summary.parentMode).toBe(
+          executionMode === 'detached' ? 'detached' : undefined,
+        );
+        const assignments = await call('list_work', {
+          runId: started.run.id,
+          fields: 'summary',
+        });
+        expect(assignments[0].parentMode).toBe(summary.parentMode);
+        const assignment = assignments[0];
+        const claim = await call('claim_work', {
+          workId: assignment.id,
+          workerId: 'transport',
+        });
+        if (executionMode === 'detached') {
+          await call('fail_work', {
+            workId: assignment.id,
+            token: claim.token,
+            error: 'Try again',
+          });
+          expect((await call('get_run', { id: childId })).run.status).toBe(
+            'failed',
+          );
+          await call('retry_run', { id: childId });
+          const retryWork = (await call('list_work', { runId: childId }))[0];
+          const retryClaim = await call('claim_work', {
+            workId: retryWork.id,
+            workerId: 'retry',
+          });
+          await call('submit_result', {
+            workId: retryWork.id,
+            token: retryClaim.token,
+            output: 'done',
+          });
+        } else {
+          await call('submit_result', {
+            workId: assignment.id,
+            token: claim.token,
+            output: 'done',
+          });
+        }
+        expect((await call('get_run', { id: started.run.id })).run.status).toBe(
+          'completed',
+        );
+        const bundle = await call('export_workflow', { id: parent.id });
+        expect((await call('import_workflows', { bundle })).changed).toEqual(
+          [],
+        );
+        expect(
+          (await call('get_workflow', { id: parent.id })).draft.nodes[1].mode,
+        ).toBe(executionMode);
+        const active = await call('start_run', {
+          workflowId: parent.id,
+          input: null,
+        });
+        await call('cancel_run', { id: active.run.id });
+        expect(
+          (await call('get_run', { id: active.children[0].id })).run.status,
+        ).toBe(executionMode === 'detached' ? 'waiting' : 'cancelled');
+        await call('cancel_run', { id: active.children[0].id });
       }
       expect(createDefinition.description).toContain(
         'Source node requires nodeId',

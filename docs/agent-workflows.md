@@ -10,7 +10,7 @@ Agent `context.mode` accepts `current` or `fresh`. An executor satisfies `fresh`
 
 For polling, call `list_work` with `fields: "summary"`. Summaries include assignment ID, run ID, node ID, label, status, context requirements, attempt counts, and any unclaimed deadline.
 
-Work summaries also include `workflowId`, optional `parentRunId`, `rootRunId`, and `rootWorkflowId`. `workflowId` identifies the immediate run's workflow. `rootWorkflowId` identifies the outermost workflow so a dispatcher can select an executor without fetching run history. Root runs omit `parentRunId` and use their own run and workflow IDs as root IDs. Ancestry follows execution, independently of workflow ownership.
+Work summaries also include `workflowId`, optional `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, and `rootWorkflowId`. `workflowId` identifies the immediate run's workflow. `rootWorkflowId` identifies the outermost workflow so a dispatcher can select an executor without fetching run history. Root runs omit `parentRunId` and use their own run and workflow IDs as root IDs. Ancestry follows execution, independently of workflow ownership.
 
 Work summaries omit prompts, inputs, output schemas, and execution instructions. `claim_work` returns the complete assignment. The default `fields: "full"` preserves the existing response. CLI callers can use `interlock work RUN_ID --summary`. The shared API exposes `work.summaries` and `work.list`.
 
@@ -34,7 +34,7 @@ Compatibility: omitted renewals previously reset every claim to 300 seconds. Cal
 
 MCP `list_runs` and the shared API `runs.find` return summaries in descending creation order. The default limit is 50, with a maximum of 1000. Equal timestamps use descending insertion order.
 
-Available filters are `workflowId`, `status`, `rootOnly`, and `inputMatch: {path, equals}`. Status accepts `running`, `waiting`, `completed`, `failed`, or `cancelled`. `rootOnly` defaults to false, which includes nested Workflow and Batch item runs. A summary includes IDs, workflow name, version, status, timestamps, cursor, input, `parentRunId`, `rootRunId`, `rootWorkflowId`, and `batchNodeId`. Root IDs follow the same rules as work summaries. Use `get_run` for execution details.
+Available filters are `workflowId`, `status`, `rootOnly`, and `inputMatch: {path, equals}`. Status accepts `running`, `waiting`, `completed`, `failed`, or `cancelled`. `rootOnly` defaults to false, which includes nested Workflow and Batch item runs. A summary includes IDs, workflow name, version, status, timestamps, cursor, input, `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, `rootWorkflowId`, and `batchNodeId`. Root IDs follow the same rules as work summaries. Use `get_run` for execution details.
 
 Paths use dot-separated object keys or array indices. A blank path selects the complete input. Equality compares JSON structure, including object values independently of key order. Missing paths do not match, even when `equals` is null. Workflow, status, and creation ordering have database indexes. Arbitrary input-path matching scans the selected candidates until the limit is reached.
 
@@ -126,3 +126,9 @@ MCP `update_workflow` accepts `archived: true` or `false`. CLI provides `archive
 `list_workflows` includes archived workflows by default. Pass `includeArchived: false` to hide archived workflows and children of archived owners. The owner filter remains independent.
 
 MCP `delete_workflow` and `interlock delete ID --yes` permanently remove the workflow, its versions, and associated run trees, assignments, and events. Active runs, external draft or published references, and owned children block deletion. Archive is available when referenced versions must remain accessible.
+
+## Dispatch independent workflows
+
+Set a Workflow node to `mode: "detached"` to start its pinned workflow and continue with `{runId, workflowId, version}`. Omit mode or use `wait` to await its result. Input validation precedes dispatch; later child failure does not change the launching step. See [Workflow execution](workflow-execution.md) for the fixed output contract and lifecycle.
+
+`list_work` includes detached descendants, even when their parent is terminal. Root IDs describe ancestry. To operate independent work, use its own run ID. `list_runs` with `rootOnly: true` excludes detached runs, so omit that filter when finding active independent work. Cancellation stops at detached relationships. Retry failed detached runs directly; retrying a later parent step does not duplicate dispatches.

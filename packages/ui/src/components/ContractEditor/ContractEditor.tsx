@@ -29,10 +29,12 @@ export function ContractEditor({
   value,
   onChange,
   label,
+  readOnly = false,
 }: {
   value: Contract;
-  onChange: (schema: Contract) => void;
+  onChange?: (schema: Contract) => void;
   label: string;
+  readOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useContext(ContractNavigation);
@@ -58,17 +60,19 @@ export function ContractEditor({
           <small>No restrictions on the value.</small>
         )}
       </div>
-      <Button
-        onClick={() =>
-          navigate
-            ? navigate({ value, label, onApply: onChange })
-            : setOpen(true)
-        }
-      >
-        <List size={14} />
-        {issues.length ? 'Edit schema' : 'Edit fields'}
-      </Button>
-      {open && (
+      {!readOnly && onChange && (
+        <Button
+          onClick={() =>
+            navigate
+              ? navigate({ value, label, onApply: onChange })
+              : setOpen(true)
+          }
+        >
+          <List size={14} />
+          {issues.length ? 'Edit schema' : 'Edit fields'}
+        </Button>
+      )}
+      {open && onChange && (
         <Modal
           title={`${label} contract`}
           onClose={() => setOpen(false)}

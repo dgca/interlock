@@ -146,6 +146,15 @@
   padding: 16px 23px;
   border-bottom: 1px solid var(--border);
 }
+.independent {
+  padding: 12px 23px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.independent p {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
 .handoff p {
   margin: 0 0 12px;
 }

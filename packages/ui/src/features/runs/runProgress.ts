@@ -6,6 +6,7 @@ import {
   type WorkflowNode,
   type WorkRequest,
 } from '@interlock/core';
+import { detachedBoundary } from './runScope';
 
 export type ProgressState =
   'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
@@ -191,6 +192,7 @@ export function runProgress(
   const activeAssignments = work.filter(
     (assignment) =>
       assignment.status === 'available' &&
+      !detachedBoundary(assignment.runId, run.id, runs) &&
       ['running', 'waiting'].includes(runs.get(assignment.runId)?.status ?? ''),
   );
   if (title === 'Waiting' && activeAssignments.length)

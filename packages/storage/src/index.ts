@@ -16,6 +16,7 @@ import type {
 /** One service owns the database. Each runtime operation commits as one transaction. */
 export class Store {
   private db: DatabaseSync;
+  private transactionDepth = 0;
   readonly migration: MigrationResult;
   constructor(path: string) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -80,7 +81,8 @@ export class Store {
       .prepare(
         `
       SELECT json_extract(value, '$.workflowId') AS workflowId,
-             json_extract(value, '$.parentRunId') AS parentRunId
+             json_extract(value, '$.parentRunId') AS parentRunId,
+             json_extract(value, '$.parentMode') AS parentMode
       FROM documents WHERE collection = 'runs' AND id = ?
     `,
       )
@@ -94,6 +96,9 @@ export class Store {
     const ancestry = {
       workflowId,
       parentRunId,
+      ...(row.parentMode === 'detached'
+        ? { parentMode: 'detached' as const }
+        : {}),
       rootRunId: parent?.rootRunId ?? id,
       rootWorkflowId: parent?.rootWorkflowId ?? workflowId,
     };
@@ -187,14 +192,22 @@ export class Store {
     return this.list<RunEvent>('events').filter((e) => e.runId === runId);
   }
   transaction<T>(fn: () => T): T {
-    this.db.exec('BEGIN IMMEDIATE');
+    const depth = this.transactionDepth;
+    const savepoint = `interlock_${depth}`;
+    this.db.exec(depth ? `SAVEPOINT ${savepoint}` : 'BEGIN IMMEDIATE');
+    this.transactionDepth++;
     try {
       const result = fn();
-      this.db.exec('COMMIT');
+      this.db.exec(depth ? `RELEASE ${savepoint}` : 'COMMIT');
       return result;
     } catch (error) {
-      this.db.exec('ROLLBACK');
+      if (depth) {
+        this.db.exec(`ROLLBACK TO ${savepoint}`);
+        this.db.exec(`RELEASE ${savepoint}`);
+      } else this.db.exec('ROLLBACK');
       throw error;
+    } finally {
+      this.transactionDepth--;
     }
   }
   close() {

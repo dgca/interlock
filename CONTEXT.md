@@ -16,6 +16,8 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Run**: One execution of a published workflow or a Batch item path with its own inputs and progress.
 
+**Detached run**: A workflow execution that continues independently after its initiating run finishes, fails, or is cancelled. It retains its parent link for inspection.
+
 **Node**: A step in a workflow. A node can invoke another workflow.
 
 **Fetch**: A step that binds incoming data into an HTTP request and returns its response status, headers, and body.

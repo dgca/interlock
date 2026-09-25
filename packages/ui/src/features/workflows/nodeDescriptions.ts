@@ -12,7 +12,8 @@ export const nodeDescriptions: Record<WorkflowNode['kind'], string> = {
     'Checks a value and follows the True or False branch. The input stays unchanged.',
   switch:
     'Checks a value and follows one matching branch. The input stays unchanged.',
-  workflow: 'Runs a published workflow and continues with its result.',
+  workflow:
+    'Runs a published workflow. Wait for its result or start it independently.',
   batch:
     'Runs the same steps for each item in a list and collects the results.',
 };

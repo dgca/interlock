@@ -25,6 +25,7 @@ import {
 import {
   nodeKindLabel,
   outgoingPorts,
+  STARTED_RUN_SCHEMA,
   type WorkflowNode,
 } from '@interlock/core';
 import styles from './WorkflowEditor.module.css';
@@ -129,17 +130,22 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
       : n.kind === 'batch' && !n.itemsPath
         ? { type: 'array' }
         : n.inputSchema;
-  const outputSchema = n.outputSchema.type
-    ? n.outputSchema
-    : n.kind === 'entry' || n.kind === 'exit'
-      ? boundary
-      : n.kind === 'batch'
-        ? { type: 'array' }
-        : n.kind === 'fetch'
-          ? { type: 'object' }
-          : n.kind === 'condition' || n.kind === 'switch' || n.kind === 'wait'
-            ? inputSchema
-            : n.outputSchema;
+  const outputSchema =
+    n.kind === 'workflow' && n.mode === 'detached'
+      ? STARTED_RUN_SCHEMA
+      : n.outputSchema.type
+        ? n.outputSchema
+        : n.kind === 'entry' || n.kind === 'exit'
+          ? boundary
+          : n.kind === 'batch'
+            ? { type: 'array' }
+            : n.kind === 'fetch'
+              ? { type: 'object' }
+              : n.kind === 'condition' ||
+                  n.kind === 'switch' ||
+                  n.kind === 'wait'
+                ? inputSchema
+                : n.outputSchema;
   const contracts = `${contractLabel(inputSchema)} → ${contractLabel(outputSchema)}`;
   const detail =
     n.kind === 'wait'
@@ -321,6 +327,9 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
       <strong>{n.label}</strong>
       <div className={styles.nodeMetadata}>
         {detail && <small title={detail}>{detail}</small>}
+        {n.kind === 'workflow' && n.mode === 'detached' && (
+          <small>Start and continue</small>
+        )}
         <div className={styles.nodeContractRow}>
           <small>{contracts}</small>
           {data.onOpen && (

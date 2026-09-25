@@ -4,6 +4,8 @@ import { Store } from '@interlock/storage';
 import {
   assertContract,
   DEFAULT_BATCH_MAX_ITEMS,
+  STARTED_RUN_SCHEMA,
+  isStartedRunSchema,
   blankDefinition,
   definitionSchema,
   InterlockError,
@@ -509,7 +511,11 @@ export class Engine {
   }
   private fail(run: Run, execution: NodeExecution, error: string) {
     for (const id of execution.childRunIds)
-      if (!terminal(this.run(id).status)) this.cancelTree(id);
+      if (
+        this.run(id).parentMode !== 'detached' &&
+        !terminal(this.run(id).status)
+      )
+        this.cancelTree(id);
     execution.status = 'failed';
     execution.error = error;
     execution.completedAt = now();
@@ -536,7 +542,13 @@ export class Engine {
       throw new InterlockError('End must belong to the current Batch group');
     // A timeout returns the original input, not an agent result.
     if (!(node.kind === 'agent' && port === 'timeout'))
-      assertContract(node.outputSchema, output, `${node.label} output`);
+      assertContract(
+        node.kind === 'workflow' && node.mode === 'detached'
+          ? STARTED_RUN_SCHEMA
+          : node.outputSchema,
+        output,
+        `${node.label} output`,
+      );
     if (node.kind === 'exit')
       assertContract(
         this.definition(run).outputSchema,
@@ -728,6 +740,41 @@ export class Engine {
           execution.request = resolveFetch(node, execution.input);
         this.save(run);
         return false;
+      }
+      if (node.kind === 'workflow' && node.mode === 'detached') {
+        if (!isStartedRunSchema(node.outputSchema))
+          throw new InterlockError(
+            `${node.label}: Start and continue requires the fixed Started run output contract`,
+          );
+        const version = this.pinnedVersion(node);
+        const target = this.definition({
+          workflowId: node.workflowId,
+          version,
+        });
+        assertContract(
+          target.inputSchema,
+          execution.input,
+          `${node.label}: workflow input`,
+        );
+        // A savepoint protects child creation if finishing the dispatch fails.
+        // Mutate a copy so the failure path never retains rolled-back child IDs.
+        this.store.transaction(() => {
+          const dispatched = structuredClone(run);
+          const step = dispatched.executions.at(-1)!;
+          const child = step.childRunIds.length
+            ? this.run(step.childRunIds[0])
+            : this.newRun(node.workflowId, version, step.input, run.id);
+          child.parentMode = 'detached';
+          child.parentExecutionId = step.id;
+          this.save(child);
+          step.childRunIds = [child.id];
+          this.finish(dispatched, step, node, {
+            runId: child.id,
+            workflowId: child.workflowId,
+            version: child.version,
+          });
+        });
+        return true;
       }
       if (node.kind === 'workflow' || node.kind === 'batch') {
         const value =
@@ -944,7 +991,8 @@ export class Engine {
   private describeWork(work: WorkRequest): WorkRequest {
     if (work.context.mode !== 'fresh') return work;
     let root = this.run(work.runId);
-    while (root.parentRunId) root = this.run(root.parentRunId);
+    while (root.parentRunId && root.parentMode !== 'detached')
+      root = this.run(root.parentRunId);
     return {
       ...work,
       executionInstructions: freshContextInstructions(root.id, work.id),
@@ -1094,7 +1142,9 @@ export class Engine {
   private cancelTree(id: string) {
     const run = this.run(id);
     if (terminal(run.status)) return;
-    for (const child of this.store.runs().filter((r) => r.parentRunId === id))
+    for (const child of this.store
+      .runs()
+      .filter((r) => r.parentRunId === id && r.parentMode !== 'detached'))
       this.cancelTree(child.id);
     run.status = 'cancelled';
     const execution = run.executions.at(-1);
@@ -1151,9 +1201,13 @@ export class Engine {
       const run = this.run(id);
       if (run.status !== 'failed')
         throw new InterlockError('Only failed runs can be retried');
-      if (run.parentRunId && terminal(this.run(run.parentRunId).status))
+      if (
+        run.parentRunId &&
+        run.parentMode !== 'detached' &&
+        terminal(this.run(run.parentRunId).status)
+      )
         throw new InterlockError('Retry the failed parent run instead');
-      if (run.parentRunId) {
+      if (run.parentRunId && run.parentMode !== 'detached') {
         const parent = this.run(run.parentRunId);
         const execution = parent.executions.at(-1);
         if (execution?.kind === 'batch' && execution.childRunIds.includes(id)) {

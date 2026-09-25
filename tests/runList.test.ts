@@ -35,6 +35,13 @@ it('separates active root executions from history and opens the selected executi
     workflowName: 'Child item',
     parentRunId: 'running',
   });
+  runs.push({
+    ...runs[0],
+    id: 'detached',
+    workflowName: 'Independent investigation',
+    parentRunId: 'completed',
+    parentMode: 'detached',
+  });
   const open = vi.fn();
   function Harness() {
     const [tab, setTab] = useState<'active' | 'history'>('active');
@@ -52,10 +59,18 @@ it('separates active root executions from history and opens the selected executi
     const panel = () => container.querySelector('[role="tabpanel"]')!;
     expect(panel().textContent).toContain('running workflow');
     expect(panel().textContent).toContain('waiting workflow');
-    expect(panel().textContent).not.toContain('completed workflow');
+    expect(
+      Array.from(panel().querySelectorAll('strong')).map(
+        (name) => name.textContent,
+      ),
+    ).not.toContain('completed workflow');
     expect(panel().textContent).not.toContain('Child item');
+    expect(panel().textContent).toContain('Independent investigation');
+    expect(panel().textContent).toContain(
+      'Started independently · from completed workflow',
+    );
     expect(container.querySelector('[role="tab"]')?.textContent).toBe(
-      'Active 2',
+      'Active 3',
     );
     await act(async () =>
       [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
