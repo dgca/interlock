@@ -7,6 +7,7 @@ import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { batchDefinition } from './fixtures/batch';
 import { blankDefinition } from '@interlock/core';
+import { workflowCall } from './fixtures/detached';
 import { RunInspector } from '../packages/ui/src/features/runs/RunInspector';
 const graph = vi.hoisted(() => ({ props: undefined as any }));
 const rpc = vi.hoisted(() => ({ get: vi.fn(), work: vi.fn() }));
@@ -177,6 +178,49 @@ it('keeps a chosen Batch item selected across live updates without substituting 
       container.querySelector('[data-json-label="Input"]')?.textContent,
     ).toBe('"first"');
     expect(container.querySelector('[data-json-label="Output"]')).toBeNull();
+  } finally {
+    store.close();
+  }
+});
+
+it('shows active detached work after parent completion without a parent handoff or waiting state', async () => {
+  const store = new Store(':memory:');
+  try {
+    const engine = new Engine(store, process.cwd());
+    const child = engine.create('Independent investigation');
+    engine.publish(child.id);
+    const parent = engine.create(
+      'Supervisor',
+      '',
+      workflowCall(child.id, 'detached'),
+    );
+    engine.publish(parent.id);
+    const result = engine.start(parent.id, null);
+    detail = result;
+    detail.run = { ...detail.run, id: 'root-run' };
+    detail.children = detail.children.map((child: any) => ({
+      ...child,
+      parentRunId: 'root-run',
+    }));
+    detail.descendants = detail.children;
+    rpc.work.mockResolvedValue(engine.available(result.run.id));
+    await render();
+    expect(container.textContent).toContain(
+      'These independent runs are still active.',
+    );
+    expect(container.textContent).not.toContain('Waiting for an agent');
+    expect(container.textContent).toContain('Started independently');
+    expect(graph.props.progress.agent.state).toBe('completed');
+    await act(async () => graph.props.onSelect('agent'));
+    expect(container.textContent).toContain('Started run');
+    expect(
+      container.querySelector('[data-json-label="Output"]')?.textContent,
+    ).toContain(result.children[0].id);
+    detail.run.status = 'waiting';
+    await render(1);
+    expect(container.textContent).toContain(
+      'will keep running if you cancel this run',
+    );
   } finally {
     store.close();
   }

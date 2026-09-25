@@ -17,7 +17,9 @@ export function RunList({
   workflowId?: string;
 }) {
   const roots = runs.filter((r) =>
-    workflowId ? r.workflowId === workflowId && !r.batchNodeId : !r.parentRunId,
+    workflowId
+      ? r.workflowId === workflowId && !r.batchNodeId
+      : !r.parentRunId || r.parentMode === 'detached',
   );
   const active = roots.filter((run) =>
     ['running', 'waiting'].includes(run.status),
@@ -67,6 +69,13 @@ export function RunList({
                     <small>
                       v{r.version} · {r.id.slice(0, 8)}
                     </small>
+                    {r.parentMode === 'detached' && (
+                      <small>
+                        Started independently · from{' '}
+                        {runs.find((parent) => parent.id === r.parentRunId)
+                          ?.workflowName ?? r.parentRunId?.slice(0, 8)}
+                      </small>
+                    )}
                   </span>
                   <Badge status={r.status} />
                   <span>{new Date(r.createdAt).toLocaleString()}</span>

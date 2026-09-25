@@ -10,6 +10,8 @@ export {
   type FetchRequest,
 } from './fetch.js';
 import { validateBatchScopes } from './batchScopes.js';
+import { isStartedRunSchema } from './workflowMode.js';
+export { STARTED_RUN_SCHEMA, isStartedRunSchema } from './workflowMode.js';
 export { validateBatchScopes } from './batchScopes.js';
 
 export type Json =
@@ -153,6 +155,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('workflow'),
+    mode: z.enum(['wait', 'detached']).optional(),
     workflowId: z.string().min(1),
     version: z.number().int().positive().nullable(),
   }),
@@ -240,6 +243,8 @@ export interface Run {
   workflowName: string;
   version: number;
   parentRunId?: string;
+  parentMode?: 'detached';
+  parentExecutionId?: string;
   // Item runs execute members of this Batch in the same published graph.
   batchNodeId?: string;
   status: RunStatus;
@@ -255,6 +260,7 @@ export interface Run {
 export interface RunAncestry {
   workflowId: string;
   parentRunId?: string;
+  parentMode?: 'detached';
   rootRunId: string;
   rootWorkflowId: string;
 }
@@ -438,6 +444,14 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
     if (node.kind === 'workflow' && node.version === null)
       throw new InterlockError(
         `${node.label}: publish the referenced workflow and select a version first`,
+      );
+    if (
+      node.kind === 'workflow' &&
+      node.mode === 'detached' &&
+      !isStartedRunSchema(node.outputSchema)
+    )
+      throw new InterlockError(
+        `${node.label}: Start and continue uses the fixed Started run output contract. Omit outputSchema or use the runId, workflowId, and version contract.`,
       );
     if (node.kind === 'fetch') validateFetch(node);
     if (

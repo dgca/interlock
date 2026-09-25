@@ -10,6 +10,7 @@ export const paths = {
     id: string,
     workflowId?: string,
     tab: 'active' | 'history' = 'active',
+    executionId?: string,
   ) =>
-    `/runs/${encodeURIComponent(id)}${workflowId ? `?workflow=${encodeURIComponent(workflowId)}&tab=${tab}` : ''}`,
+    `/runs/${encodeURIComponent(id)}${workflowId ? `?workflow=${encodeURIComponent(workflowId)}&tab=${tab}` : ''}${executionId ? `${workflowId ? '&' : '?'}execution=${encodeURIComponent(executionId)}` : ''}`,
 };

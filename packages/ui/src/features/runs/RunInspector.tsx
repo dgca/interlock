@@ -15,6 +15,7 @@ import { Badge } from '../../components/Badge/Badge';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 import { RunGraph } from './RunGraph';
 import { runProgress } from './runProgress';
+import { detachedBoundary } from './runScope';
 import { AgentHandoff } from './AgentHandoff';
 import { WorkPanel } from './WorkPanel';
 import styles from './RunInspector.module.css';
@@ -36,11 +37,13 @@ export function RunInspector({
   onOpen,
   act,
   onConnect,
+  initialExecutionId,
 }: {
   id: string;
   tick: number;
   onBack: () => void;
-  onOpen: (id: string) => void;
+  onOpen: (id: string, executionId?: string) => void;
+  initialExecutionId?: string;
   act: Action;
   onConnect: () => void;
 }) {
@@ -74,8 +77,18 @@ export function RunInspector({
   const { run, definition, events, children, work } = data;
   const descendants = data.descendants ?? [];
   const allWork = data.descendantWork ?? work;
+  const runIndex = new Map([run, ...descendants].map((r) => [r.id, r]));
+  const independent = descendants.filter(
+    (r) =>
+      r.parentMode === 'detached' && ['running', 'waiting'].includes(r.status),
+  );
+  const requestedExecution =
+    !selected && run.executions.find((e) => e.id === initialExecutionId);
   const progress = runProgress(run, definition, descendants, allWork);
-  const nodeId = selected?.nodeId ?? run.executions.at(-1)?.nodeId;
+  const nodeId =
+    selected?.nodeId ??
+    (requestedExecution ? requestedExecution.nodeId : undefined) ??
+    run.executions.at(-1)?.nodeId;
   const node = definition.nodes.find((node) => node.id === nodeId);
   const nodeProgress = nodeId ? progress.nodes[nodeId] : undefined;
   const owner = selected?.runId
@@ -87,7 +100,8 @@ export function RunInspector({
     ? owner?.executions.find(
         (execution) => execution.id === selected.executionId,
       )
-    : owner?.executions
+    : requestedExecution ||
+      owner?.executions
         .filter((execution) => execution.nodeId === nodeId)
         .at(-1);
   const itemRuns =
@@ -110,7 +124,11 @@ export function RunInspector({
         <Badge status={progress.runStates[run.id] ?? run.status} />
         <div className="actions">
           {run.parentRunId && (
-            <Button onClick={() => onOpen(run.parentRunId!)}>Parent run</Button>
+            <Button
+              onClick={() => onOpen(run.parentRunId!, run.parentExecutionId)}
+            >
+              {run.parentMode === 'detached' ? 'Started by' : 'Parent run'}
+            </Button>
           )}
           {run.status === 'failed' && (
             <Button
@@ -151,8 +169,26 @@ export function RunInspector({
           <a href="#workflow-result">View result</a>
         )}
       </div>
+      {independent.length > 0 && (
+        <div className={styles.independent}>
+          <p>
+            {['running', 'waiting'].includes(run.status)
+              ? 'These independent runs will keep running if you cancel this run.'
+              : 'These independent runs are still active.'}
+          </p>
+          <div className="actions">
+            {independent.map((child) => (
+              <Button key={child.id} onClick={() => onOpen(child.id)}>
+                {child.workflowName} · {child.id.slice(0, 8)}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
       {['running', 'waiting'].includes(run.status) &&
-        data.availableWork.length > 0 && (
+        data.availableWork.some(
+          (w) => !detachedBoundary(w.runId, run.id, runIndex),
+        ) && (
           <div className={styles.handoff}>
             <AgentHandoff key={run.id} runId={run.id} onConnect={onConnect} />
           </div>
@@ -217,7 +253,12 @@ export function RunInspector({
                   >
                     <span>
                       {child.workflowName}
-                      <small>{child.id.slice(0, 8)}</small>
+                      <small>
+                        {child.parentMode === 'detached'
+                          ? 'Started independently · '
+                          : ''}
+                        {child.id.slice(0, 8)}
+                      </small>
                     </span>
                     <Badge
                       status={progress.runStates[child.id] ?? child.status}
@@ -306,6 +347,28 @@ export function RunInspector({
                 ))}
               </section>
             )}
+            {execution?.kind === 'workflow' &&
+              execution.childRunIds.map((childId) => {
+                const child = runIndex.get(childId);
+                return child?.parentMode === 'detached' ? (
+                  <section key={child.id}>
+                    <h3>Started run</h3>
+                    <button
+                      className={styles.child}
+                      onClick={() => onOpen(child.id)}
+                    >
+                      <span>
+                        {child.workflowName}
+                        <small>{child.id.slice(0, 8)}</small>
+                      </span>
+                      <Badge
+                        status={progress.runStates[child.id] ?? child.status}
+                      />
+                      <ArrowUpRight size={14} />
+                    </button>
+                  </section>
+                ) : null;
+              })}
             {owner && owner.id !== run.id && (
               <Button onClick={() => onOpen(owner.id)}>Open item run</Button>
             )}

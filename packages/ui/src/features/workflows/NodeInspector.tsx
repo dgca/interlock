@@ -12,6 +12,7 @@ import {
   nodeKindLabel,
   DEFAULT_BATCH_MAX_ITEMS,
   MAX_BATCH_ITEMS,
+  STARTED_RUN_SCHEMA,
   type WorkflowDefinition,
   type Workflow,
   type WorkflowNode,
@@ -21,6 +22,7 @@ import { DurationInput } from './DurationInput';
 import { InputBindingsEditor } from './InputBindingsEditor';
 import { FetchEditor } from './FetchEditor';
 import { SwitchEditor } from './SwitchEditor';
+import { WorkflowModeEditor } from './WorkflowModeEditor';
 import { nodeDescriptions } from './nodeDescriptions';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
@@ -366,6 +368,9 @@ export function NodeInspector({
             })()}
           </>
         )}
+        {node.kind === 'workflow' && (
+          <WorkflowModeEditor key={node.id} node={node} onChange={onChange} />
+        )}
         {node.kind === 'batch' && (
           <p className="hint">
             Connect Start to the first step and every branch to End. Output
@@ -510,12 +515,19 @@ export function NodeInspector({
               />
             </section>
             <ContractEditor
-              label="Output"
+              label={
+                node.kind === 'workflow' && node.mode === 'detached'
+                  ? 'Output · Started run'
+                  : 'Output'
+              }
+              readOnly={node.kind === 'workflow' && node.mode === 'detached'}
               value={
-                node.kind === 'batch' &&
-                Object.keys(node.outputSchema).length === 0
-                  ? { type: 'array' }
-                  : node.outputSchema
+                node.kind === 'workflow' && node.mode === 'detached'
+                  ? STARTED_RUN_SCHEMA
+                  : node.kind === 'batch' &&
+                      Object.keys(node.outputSchema).length === 0
+                    ? { type: 'array' }
+                    : node.outputSchema
               }
               onChange={(outputSchema) => patch({ outputSchema })}
             />

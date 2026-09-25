@@ -143,7 +143,10 @@ function RunRoute() {
       tick={tick}
       act={act}
       onConnect={onConnect}
-      onOpen={(id) => void navigate(paths.run(id, workflowId, returnTab))}
+      initialExecutionId={search.get('execution') ?? undefined}
+      onOpen={(id, executionId) =>
+        void navigate(paths.run(id, workflowId, returnTab, executionId))
+      }
       onBack={() =>
         void navigate(
           workflowId
