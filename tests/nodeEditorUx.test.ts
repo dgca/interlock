@@ -202,3 +202,31 @@ it('discards edited comparisons on Cancel', async () => {
   expect(onApply).not.toHaveBeenCalled();
   expect(node).toHaveProperty('equals', 'before');
 });
+
+it.each(['Required tools', 'Required skills'])(
+  'keeps spaces while typing %s and uses commas to add tags',
+  async (label) => {
+    const { onApply } = await render({ kind: 'agent', prompt: 'Work' });
+    await fill(label, 'web ');
+    expect(field(label).value).toBe('web ');
+    await fill(label, 'web search');
+    await act(async () =>
+      field(label).dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: ',',
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+    );
+    expect(field(label).value).toBe('');
+    await fill(label, 'read');
+    await act(async () => field(label).blur());
+    await click('Apply changes');
+    const key = label === 'Required tools' ? 'tools' : 'skills';
+    expect(onApply.mock.lastCall![0].definition.nodes[0].context[key]).toEqual([
+      'web search',
+      'read',
+    ]);
+  },
+);
