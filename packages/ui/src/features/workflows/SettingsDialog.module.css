@@ -4,11 +4,17 @@
   padding: 0 6px 16px 0;
 }
 .content :global(.inspector-heading) {
-  padding: 0 0 18px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  padding: 0;
+  margin-bottom: 20px;
+  display: grid;
+  gap: 6px;
   overflow-wrap: anywhere;
+}
+.content :global(.inspector-heading) p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 .content :global(.inspector-fields) {
   padding: 0;

@@ -9,6 +9,7 @@ import { useRef, useState } from 'react';
 import { ArrowLeft, Download } from 'lucide-react';
 import {
   nodeSchema,
+  outgoingPorts,
   type Workflow,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -23,6 +24,7 @@ import {
 } from '../../components/ContractEditor/ContractEditor';
 import { workflowTargets } from './workflowTargets';
 import { NodeInspector } from './NodeInspector';
+import { nodeDescriptions } from './nodeDescriptions';
 import { api, download } from '../../lib/api';
 import { newNodePosition, separateNodes } from './workflowLayout';
 import styles from './SettingsDialog.module.css';
@@ -104,6 +106,8 @@ export function SettingsDialog({
           command: 'return input;',
           path: '',
           equals: true,
+          cases: [{ port: 'case-1', equals: '' }],
+          default: 'default',
           workflowId: reference?.id ?? 'choose-workflow',
           version: reference?.latestVersion ?? null,
         }),
@@ -158,9 +162,11 @@ export function SettingsDialog({
                   (e) =>
                     !(
                       e.source === parsed.id &&
-                      e.port === 'timeout' &&
-                      parsed.kind === 'agent' &&
-                      parsed.unclaimedTimeoutMs === undefined
+                      ((e.port === 'timeout' &&
+                        parsed.kind === 'agent' &&
+                        parsed.unclaimedTimeoutMs === undefined) ||
+                        (parsed.kind === 'switch' &&
+                          !outgoingPorts(parsed).includes(e.port)))
                     ),
                 ),
           nodes: creating
@@ -235,6 +241,7 @@ export function SettingsDialog({
                 <NativeSelect
                   mb="md"
                   label="Node type"
+                  description={nodeDraft && nodeDescriptions[nodeDraft.kind]}
                   value={nodeDraft?.kind ?? ''}
                   onChange={(e) => chooseType(e.target.value)}
                 >
@@ -243,6 +250,7 @@ export function SettingsDialog({
                   <option value="fetch">Fetch</option>
                   <option value="wait">Wait</option>
                   <option value="condition">Condition</option>
+                  <option value="switch">Switch</option>
                   <option value="workflow">Workflow</option>
                   <option value="batch">Batch</option>
                 </NativeSelect>
@@ -279,6 +287,7 @@ export function SettingsDialog({
               {nodeDraft ? (
                 <NodeInspector
                   node={nodeDraft}
+                  creating={creating}
                   workflowId={workflowId}
                   hideWorkflowTarget={
                     creating && targetMode === 'child' && Boolean(onCreateChild)

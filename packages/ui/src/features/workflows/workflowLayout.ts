@@ -1,6 +1,7 @@
 import { graphlib, layout } from '@dagrejs/dagre';
 import type { WorkflowDefinition, WorkflowNode } from '@interlock/core';
 import { BATCH_INSET, CANVAS_GAP, canvasGeometry } from './canvasGeometry';
+import { reduceCrossings } from './reduceCrossings';
 
 /** Lay out each Batch before its enclosing scope, using expanded bounds. */
 export function tidyWorkflow(
@@ -42,6 +43,7 @@ export function tidyWorkflow(
         y: placed.y - placed.height / 2 + top,
       };
     }
+    reduceCrossings(members, result.edges, size);
   };
   arrange();
   return result;

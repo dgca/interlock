@@ -1,4 +1,11 @@
-import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
+import {
+  Handle,
+  Position,
+  useUpdateNodeInternals,
+  type NodeProps,
+  type Node,
+} from '@xyflow/react';
+import { useEffect } from 'react';
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -15,10 +22,15 @@ import {
   Clock,
   CircleMinus,
 } from 'lucide-react';
-import { nodeKindLabel, type WorkflowNode } from '@interlock/core';
+import {
+  nodeKindLabel,
+  outgoingPorts,
+  type WorkflowNode,
+} from '@interlock/core';
 import styles from './WorkflowEditor.module.css';
 import { formatDuration } from './DurationInput';
 import { conditionColors } from './conditionColors';
+import { outputPortTop } from './portLayout';
 export type CanvasNode = Node<{
   node: WorkflowNode;
   status?: string;
@@ -50,6 +62,7 @@ const icons = {
   script: Terminal,
   fetch: Globe,
   condition: Split,
+  switch: Split,
   batch: Layers,
   workflow: Workflow,
 };
@@ -103,6 +116,11 @@ function Port({
 export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
   const n = data.node,
     Icon = icons[n.kind];
+  const updateNodeInternals = useUpdateNodeInternals();
+  const portsKey = JSON.stringify(outgoingPorts(n));
+  useEffect(() => {
+    updateNodeInternals(n.id);
+  }, [n.id, portsKey, updateNodeInternals]);
   const boundary = data.boundarySchema ?? {};
   const inputSchema = n.inputSchema.type
     ? n.inputSchema
@@ -119,7 +137,7 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
         ? { type: 'array' }
         : n.kind === 'fetch'
           ? { type: 'object' }
-          : n.kind === 'condition' || n.kind === 'wait'
+          : n.kind === 'condition' || n.kind === 'switch' || n.kind === 'wait'
             ? inputSchema
             : n.outputSchema;
   const contracts = `${contractLabel(inputSchema)} → ${contractLabel(outputSchema)}`;
@@ -138,11 +156,13 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
             ? `Method: ${n.method}`
             : n.kind === 'condition'
               ? `${n.path} equals ${JSON.stringify(n.equals)}`
-              : n.kind === 'entry'
-                ? 'Workflow input'
-                : n.kind === 'exit'
-                  ? 'Return workflow result'
-                  : undefined;
+              : n.kind === 'switch'
+                ? `Compare ${n.path || 'whole input'}`
+                : n.kind === 'entry'
+                  ? 'Workflow input'
+                  : n.kind === 'exit'
+                    ? 'Return workflow result'
+                    : undefined;
   const progressClass = data.progress
     ? styles[`run_${data.progress.state}`]
     : '';
@@ -326,25 +346,42 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
               type="source"
               id="true"
               label="True"
-              top="35%"
+              top={outputPortTop(n, 'true')}
               color={conditionColors.true}
             />
             <Port
               type="source"
               id="false"
               label="False"
-              top="75%"
+              top={outputPortTop(n, 'false')}
               color={conditionColors.false}
             />
           </>
+        ) : n.kind === 'switch' ? (
+          [...new Set(outgoingPorts(n))]
+            .filter((port) => port.trim())
+            .map((port) => (
+              <Port
+                key={port}
+                type="source"
+                id={port}
+                label={port === n.default ? `${port} (default)` : port}
+                top={outputPortTop(n, port)}
+              />
+            ))
         ) : n.kind === 'agent' && n.unclaimedTimeoutMs !== undefined ? (
           <>
-            <Port type="source" id="default" label="Result" top="35%" />
+            <Port
+              type="source"
+              id="default"
+              label="Result"
+              top={outputPortTop(n, 'default')}
+            />
             <Port
               type="source"
               id="timeout"
               label="Timeout"
-              top="75%"
+              top={outputPortTop(n, 'timeout')}
               color="var(--mantine-color-yellow-5)"
             />
           </>

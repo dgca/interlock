@@ -324,8 +324,11 @@ export function RunInspector({
                 {new Date(execution.resumeAt).toLocaleString()}
               </p>
             )}
-            {execution?.port === 'timeout' && (
+            {execution?.kind === 'agent' && execution.port === 'timeout' && (
               <p className="hint">Followed Timeout with the original input.</p>
+            )}
+            {execution?.kind === 'switch' && execution.port && (
+              <p className="hint">Followed route {execution.port}.</p>
             )}
             {execution?.error && (
               <p className="error-banner">{execution.error}</p>
