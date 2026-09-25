@@ -267,7 +267,7 @@ it('creates a Batch from the ordinary add dialog without a nested definition or 
     select.value = 'batch';
     select.dispatchEvent(new Event('change', { bubbles: true }));
   });
-  expect(container.textContent).toContain('Items path');
+  expect(container.textContent).toContain('List to process');
   expect(container.textContent).not.toContain('Child workflow');
   const limitLabel = Array.from(container.querySelectorAll('label')).find(
     (label) => label.textContent?.startsWith('Maximum items'),

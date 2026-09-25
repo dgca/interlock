@@ -16,6 +16,7 @@ import {
   type FetchField,
   type FetchBinding,
 } from '@interlock/core';
+import { DurationInput } from './DurationInput';
 import { Button } from '../../components/Button/Button';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 
@@ -141,30 +142,20 @@ export function FetchEditor({
   const bodyAllowed = !['GET', 'HEAD'].includes(node.method);
   return (
     <>
-      <Group grow align="end" mb="md">
-        <NativeSelect
-          label="Method"
-          value={node.method}
-          onChange={(e) =>
-            patch({
-              method: e.target.value as FetchNode['method'],
-              ...(['GET', 'HEAD'].includes(e.target.value)
-                ? { body: { kind: 'none' } as const }
-                : {}),
-            })
-          }
-          data={['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']}
-        />
-        <TextInput
-          label="Timeout, milliseconds"
-          type="number"
-          min={100}
-          max={120000}
-          required
-          value={node.timeoutMs}
-          onChange={(e) => patch({ timeoutMs: Number(e.target.value) })}
-        />
-      </Group>
+      <NativeSelect
+        mb="md"
+        label="Method"
+        value={node.method}
+        onChange={(e) =>
+          patch({
+            method: e.target.value as FetchNode['method'],
+            ...(['GET', 'HEAD'].includes(e.target.value)
+              ? { body: { kind: 'none' } as const }
+              : {}),
+          })
+        }
+        data={['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']}
+      />
       <TextInput
         mb="xs"
         label="URL"
@@ -224,6 +215,14 @@ export function FetchEditor({
           onChange={(value) => patch({ body: { kind: 'fixed', value } })}
         />
       )}
+      <DurationInput
+        key={node.id}
+        label="Timeout"
+        min={100}
+        max={120_000}
+        value={node.timeoutMs}
+        onChange={(timeoutMs) => patch({ timeoutMs })}
+      />
       <Checkbox
         mb="md"
         label="Fail on HTTP errors (outside 200–299)"
