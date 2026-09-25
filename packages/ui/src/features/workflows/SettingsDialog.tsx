@@ -107,7 +107,6 @@ export function SettingsDialog({
           path: '',
           equals: true,
           cases: [{ port: 'case-1', equals: '' }],
-          default: 'default',
           workflowId: reference?.id ?? 'choose-workflow',
           version: reference?.latestVersion ?? null,
         }),

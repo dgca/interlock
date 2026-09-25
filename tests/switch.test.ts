@@ -22,6 +22,84 @@ function setup(definition = switchDefinition()) {
 }
 afterEach(() => stores.splice(0).forEach((store) => store.close()));
 
+it('publishes without a fallback and completes matching routes', () => {
+  const definition = switchDefinition(false);
+  const { engine, workflow } = setup(definition);
+  const input = { next: { workflow: 'ticket' } };
+  const run = engine.start(workflow.id, input).run;
+  expect(run.status).toBe('completed');
+  expect(run.output).toEqual(input);
+  expect(run.executions[1].port).toBe('ticket');
+});
+
+it.each(['next.workflow', ''])(
+  'fails unmatched values at %j without completing Exit',
+  (path) => {
+    const definition = switchDefinition(false);
+    const node = definition.nodes[1];
+    if (node.kind !== 'switch') throw new Error('Expected Switch');
+    node.path = path;
+    const { engine, workflow } = setup(definition);
+    const run = engine.start(
+      workflow.id,
+      path ? { next: { workflow: 'refund' } } : 'refund',
+    ).run;
+    expect(run.status).toBe('failed');
+    expect(run.error).toBe(
+      `Which specialist?: no case matched "refund" ${path ? 'at input field "next.workflow"' : 'for the whole input'}`,
+    );
+    expect(run.output).toBeUndefined();
+    expect(run.executions[1].status).toBe('failed');
+    expect(run.executions[1].port).toBeUndefined();
+    expect(
+      run.executions.some((execution) => execution.nodeId === 'exit'),
+    ).toBe(false);
+  },
+);
+
+it('rejects stray fallback edges and blank configured fallback names', () => {
+  const definition = switchDefinition();
+  const node = definition.nodes[1];
+  if (node.kind !== 'switch') throw new Error('Expected Switch');
+  delete node.default;
+  expect(() => validateDefinition(definition)).toThrow(
+    'expected outgoing routes',
+  );
+  node.default = '';
+  expect(() => validateDefinition(definition)).toThrow(
+    'port names must not be blank',
+  );
+});
+
+it.each(['all', 'collect'])(
+  'applies Batch %s failure policy to unmatched items without fallback',
+  (failurePolicy) => {
+    const node = nodeSchema.parse({
+      id: 'route',
+      kind: 'switch',
+      label: 'Route item',
+      path: '',
+      cases: [{ port: 'match', equals: 1 }],
+    });
+    const definition = batchDefinition(node, { failurePolicy });
+    definition.edges.find((edge) => edge.source === 'route')!.port = 'match';
+    const { engine, workflow } = setup(definition);
+    const run = engine.start(workflow.id, [1, 2]).run;
+    expect(run.status).toBe(failurePolicy === 'all' ? 'failed' : 'completed');
+    const children = engine.inspect(run.id).children;
+    expect(children.map((child) => child.status)).toEqual([
+      'completed',
+      'failed',
+    ]);
+    expect(children[1].error).toContain('no case matched 2');
+    if (failurePolicy === 'collect')
+      expect(run.output).toMatchObject([
+        { status: 'completed', output: 1 },
+        { status: 'failed', output: null },
+      ]);
+  },
+);
+
 it.each([
   ['investigate', 'investigate'],
   ['ticket', 'ticket'],

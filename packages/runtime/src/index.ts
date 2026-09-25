@@ -823,6 +823,10 @@ export class Engine {
         const port =
           node.cases.find((entry) => isDeepStrictEqual(value, entry.equals))
             ?.port ?? node.default;
+        if (port === undefined)
+          throw new InterlockError(
+            `${node.label}: no case matched ${JSON.stringify(value)} ${node.path ? `at input field "${node.path}"` : 'for the whole input'}`,
+          );
         this.finish(run, execution, node, execution.input, port);
         return true;
       }

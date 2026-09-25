@@ -95,11 +95,11 @@ it('renders named Switch handles, expands for cases, and preserves ports through
     ['investigate', 'investigate'],
     ['ticket', 'ticket'],
     ['assets', 'assets'],
-    ['none', 'none (default)'],
+    ['none', 'none (fallback)'],
   ]);
 });
 
-it('creates a Switch with editable cases and a default port', async () => {
+it('creates a Switch with editable cases and fails unmatched values by default', async () => {
   const onApply = vi.fn();
   await act(async () =>
     root.render(
@@ -131,7 +131,10 @@ it('creates a Switch with editable cases and a default port', async () => {
   expect(
     container.querySelector('[aria-label="Case 2 branch name"]'),
   ).not.toBeNull();
-  expect(container.textContent).toContain('Default branch');
+  expect(container.textContent).toContain('When no case matches');
+  expect(
+    container.querySelector<HTMLInputElement>('input[value="fail"]')!.checked,
+  ).toBe(true);
   await act(async () => button('Add node').click());
   expect(onApply.mock.calls[0][0].definition.nodes.at(-1)).toMatchObject({
     kind: 'switch',
@@ -140,8 +143,10 @@ it('creates a Switch with editable cases and a default port', async () => {
       { port: 'case-1', equals: '' },
       { port: 'case-2', equals: '' },
     ],
-    default: 'default',
   });
+  expect(
+    onApply.mock.calls[0][0].definition.nodes.at(-1).default,
+  ).toBeUndefined();
 });
 
 it('removes deleted and renamed Switch connections only when settings are applied', async () => {
@@ -174,7 +179,7 @@ it('removes deleted and renamed Switch connections only when settings are applie
       .click(),
   );
   const label = Array.from(container.querySelectorAll('label')).find(
-    (element) => element.textContent === 'Default branch',
+    (element) => element.textContent === 'Fallback branch name',
   )!;
   const input = container.querySelector<HTMLInputElement>(
     `[id="${label.htmlFor}"]`,
