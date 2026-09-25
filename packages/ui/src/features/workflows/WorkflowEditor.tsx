@@ -856,10 +856,12 @@ export function WorkflowEditor({
                       target &&
                       target.kind !== 'entry' &&
                       !(
-                        c.sourceHandle === 'item' && c.targetHandle === 'end'
+                        source.kind === 'batch' &&
+                        c.sourceHandle === 'item' &&
+                        c.targetHandle === 'end'
                       ) &&
                       (c.targetHandle !== 'end' || target.kind === 'batch') &&
-                      (c.sourceHandle === 'item'
+                      (source.kind === 'batch' && c.sourceHandle === 'item'
                         ? source.id
                         : source.batchId) ===
                         (c.targetHandle === 'end' ? target.id : target.batchId),

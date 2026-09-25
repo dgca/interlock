@@ -5,6 +5,7 @@ import {
   jsonSchema,
 } from '@interlock/core';
 import { batchDefinition } from './fixtures/batch';
+import { switchDefinition } from './fixtures/switch';
 import { runCommand } from '../packages/cli/src/commands';
 import { it, expect } from 'vitest';
 import { serve } from '@hono/node-server';
@@ -100,6 +101,60 @@ it.each(['stdio', 'http'])(
       expect(createDefinition.description).toContain('maxItems');
       expect(createDefinition.description).toContain('10000');
       expect(updateDefinition.description).toBe(createDefinition.description);
+      expect(createDefinition.description).toContain('Switch nodes');
+      expect(createDefinition.description).toContain('Missing paths fail');
+      expect(client.getInstructions()).toContain('Switch executions record');
+      const switchDraft = switchDefinition();
+      for (const [toolName, parameter] of [
+        ['create_workflow', 'definition'],
+        ['update_workflow', 'draft'],
+      ]) {
+        expect(() =>
+          assertContract(
+            tools.find((tool) => tool.name === toolName)!.inputSchema,
+            jsonSchema.parse(
+              toolName === 'create_workflow'
+                ? { name: 'Switch', [parameter]: switchDraft }
+                : { id: w.id, [parameter]: switchDraft },
+            ),
+            'Switch definition',
+          ),
+        ).not.toThrow();
+      }
+      const switchWorkflow = await call('create_workflow', {
+        name: 'Switch',
+        definition: switchDraft,
+      });
+      await call('update_workflow', {
+        id: switchWorkflow.id,
+        draftRevision: switchWorkflow.draftRevision,
+        draft: switchDraft,
+      });
+      await call('publish_workflow', { id: switchWorkflow.id });
+      const switchRun = await call('start_run', {
+        workflowId: switchWorkflow.id,
+        input: { next: { workflow: 'ticket' } },
+      });
+      const inspectedSwitch = await call('get_run', { id: switchRun.run.id });
+      expect(inspectedSwitch.run.status).toBe('completed');
+      expect(inspectedSwitch.run.executions[1]).toMatchObject({
+        kind: 'switch',
+        port: 'ticket',
+        output: { next: { workflow: 'ticket' } },
+      });
+      const switchBundle = await call('export_workflow', {
+        id: switchWorkflow.id,
+      });
+      expect(() =>
+        assertContract(
+          tools.find((tool) => tool.name === 'import_workflows')!.inputSchema,
+          jsonSchema.parse({ bundle: switchBundle }),
+          'Switch bundle',
+        ),
+      ).not.toThrow();
+      expect(
+        (await call('import_workflows', { bundle: switchBundle })).changed,
+      ).toEqual([]);
       expect(createDefinition.description).toContain(
         'Source node requires nodeId',
       );

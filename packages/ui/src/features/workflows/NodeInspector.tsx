@@ -20,6 +20,8 @@ import { workflowTargets } from './workflowTargets';
 import { DurationInput } from './DurationInput';
 import { InputBindingsEditor } from './InputBindingsEditor';
 import { FetchEditor } from './FetchEditor';
+import { SwitchEditor } from './SwitchEditor';
+import { nodeDescriptions } from './nodeDescriptions';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
@@ -29,6 +31,7 @@ export function NodeInspector({
   workflows,
   workflowId,
   hideWorkflowTarget = false,
+  creating = false,
   onOpenWorkflow,
   onChange,
   onDelete,
@@ -39,6 +42,7 @@ export function NodeInspector({
   workflows: Workflow[];
   workflowId?: string;
   hideWorkflowTarget?: boolean;
+  creating?: boolean;
   onOpenWorkflow?: (id: string) => void;
   onChange: (node: WorkflowNode) => void;
   onDelete?: () => void;
@@ -49,16 +53,18 @@ export function NodeInspector({
     onChange({ ...node, ...value } as WorkflowNode);
   return (
     <>
-      <div className="inspector-heading">
-        <span className="eyebrow">
-          {nodeKindLabel(node.kind).toUpperCase()} NODE
-        </span>
-        <code> ID: {node.id}</code>
-      </div>
+      {!creating && (
+        <div className="inspector-heading">
+          <span className="eyebrow">
+            {nodeKindLabel(node.kind).toUpperCase()} NODE
+          </span>
+          <p>{nodeDescriptions[node.kind]}</p>
+        </div>
+      )}
       <div className="inspector-fields">
         <TextInput
           mb="md"
-          label="Label"
+          label="Name"
           value={node.label}
           onChange={(e) => patch({ label: e.target.value })}
         />
@@ -428,6 +434,16 @@ export function NodeInspector({
               rows={3}
             />
           </>
+        )}
+        {node.kind === 'switch' && (
+          <SwitchEditor
+            key={node.id}
+            node={node}
+            onChange={onChange}
+            connectedBranches={definition?.edges
+              .filter((edge) => edge.source === node.id)
+              .map((edge) => edge.port)}
+          />
         )}
         {(node.kind === 'entry' || node.kind === 'exit') &&
         definition &&

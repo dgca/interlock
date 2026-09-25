@@ -35,6 +35,11 @@ export function canvasGeometry(
           ? { width: 320, height: 116 }
           : { ...BATCH_SIZE };
     result.height += bindingsHeight;
+    if (node.kind === 'switch')
+      result.height = Math.max(
+        result.height,
+        32 * (node.cases.length + 1) + 24,
+      );
     if (node.kind === 'batch' && !collapsed?.has(node.id)) {
       for (const child of definition.nodes.filter(
         (n) => parents.get(n.id) === node.id,

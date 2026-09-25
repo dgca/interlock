@@ -145,6 +145,13 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     ...nodeBase,
+    kind: z.literal('switch'),
+    path: z.string(),
+    cases: z.array(z.object({ port: z.string(), equals: jsonSchema })),
+    default: z.string(),
+  }),
+  z.object({
+    ...nodeBase,
     kind: z.literal('workflow'),
     workflowId: z.string().min(1),
     version: z.number().int().positive().nullable(),
@@ -169,9 +176,7 @@ export const definitionSchema = z.object({
       id: z.string(),
       source: z.string(),
       target: z.string(),
-      port: z
-        .enum(['default', 'true', 'false', 'item', 'complete', 'timeout'])
-        .default('default'),
+      port: z.string().min(1).default('default'),
       targetHandle: z.enum(['default', 'end']).optional(),
     }),
   ),
@@ -369,6 +374,8 @@ export function readPath(value: Json, path: string): Json {
 export function outgoingPorts(node: WorkflowNode): WorkflowEdge['port'][] {
   if (node.kind === 'exit') return [];
   if (node.kind === 'condition') return ['true', 'false'];
+  if (node.kind === 'switch')
+    return [...node.cases.map((entry) => entry.port), node.default];
   if (node.kind === 'batch') return ['item', 'complete'];
   if (node.kind === 'agent' && node.unclaimedTimeoutMs !== undefined)
     return ['default', 'timeout'];
@@ -443,6 +450,16 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       );
     const outgoing = d.edges.filter((e) => e.source === node.id);
     const expected = outgoingPorts(node);
+    if (node.kind === 'switch') {
+      if (expected.some((port) => !port.trim()))
+        throw new InterlockError(
+          `${node.label}: Switch port names must not be blank`,
+        );
+      if (new Set(expected).size !== expected.length)
+        throw new InterlockError(
+          `${node.label}: Switch case and default port names must be unique`,
+        );
+    }
     if (
       outgoing.length !== expected.length ||
       expected.some((p) => outgoing.filter((e) => e.port === p).length !== 1)

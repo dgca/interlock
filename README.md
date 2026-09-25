@@ -45,7 +45,7 @@ The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by th
 
 Select **New workflow** to create a draft. Use **Add node** to choose each step's type, then connect the nodes in execution order. Agent is selected initially; choose another type when needed.
 
-Available nodes include entry and exit, Agent, Script, Fetch, Wait, Condition, Workflow, and Batch. A Workflow node invokes a pinned published workflow once. A Batch repeats a visible path for each item and collects the results in input order.
+Available nodes include entry and exit, Agent, Script, Fetch, Wait, Condition, Switch, Workflow, and Batch. A Workflow node invokes a pinned published workflow once. A Batch repeats a visible path for each item and collects the results in input order.
 
 Add a **Batch** and configure its items path and concurrency. Use **Add step** inside the group to create an Agent, Script, or other ordinary node. The first step connects to **Start** automatically. Connect additional steps within the group; connect the last step on every branch to **End**. Connect **Out** to the next step or Exit. The output route receives the ordered results after all items finish. Group members remain visible on the main canvas. Collapse hides them temporarily; moving the group moves its members.
 
@@ -86,7 +86,7 @@ In Raw, **Save** beneath the code editor writes the workflow draft and records o
 
 Hold **Z** and drag from empty canvas space to draw a zoom rectangle. Release the mouse to fit that area into view. Press **Escape** or release Z before releasing the mouse to cancel. A click without a drag does nothing. This shortcut is inactive in text fields and settings dialogs and does not add to Undo history.
 
-The **Tidy** icon sits below **Fit View** in the canvas controls. Use **Tidy** to arrange the whole workflow from left to right, including nested Batch contents, and fit it into view. Tidy uses expanded Batch sizes so groups have room when reopened. It changes only positions and can be undone in one step. Save the draft to keep the arrangement. Imported and agent-authored positions remain as supplied until you tidy them.
+The **Tidy** icon sits below **Fit View** in the canvas controls. Use **Tidy** to arrange the whole workflow from left to right, including nested Batch contents, and fit it into view. Tidy uses expanded Batch sizes so groups have room when reopened. It accounts for output handle positions to reduce avoidable branch crossings. Complex graphs and loops may still have crossings. It changes only positions and can be undone in one step. Save the draft to keep the arrangement. Imported and agent-authored positions remain as supplied until you tidy them.
 
 ### Create a child workflow
 
@@ -123,6 +123,10 @@ For a three-day reminder loop, route Timeout to a Script that sends the reminder
 Workflow-level routes can loop back to an upstream node other than Entry. The same run re-executes that node, bounded by `maxSteps`. Batch item paths must be acyclic and reach their owning Batch's End handle.
 
 `maxSteps` allows 2 through 1000 steps per run and defaults to 100. Entry, Exit, and every node visit count, including explicit retries that create a new execution. A Batch counts once in its parent; each item has its own budget. For example, 200 items with three steps each fit a three-step item budget, with a separate three-step parent path of Entry → Batch → Exit. The independent Batch `maxItems` limit defaults to 200.
+
+### Switch nodes
+
+Use **Switch** to choose among several named routes from one input value. Choose an input field, add cases with typed match values, and connect every named branch and the default branch. Text matches can be entered without JSON quotes. The first matching case wins. An unmatched value takes the default route; a missing path fails the step. Switch passes its input through unchanged and supports input bindings. See [Switch routing](docs/switch.md) for an example and editing rules.
 
 ### Fetch nodes
 

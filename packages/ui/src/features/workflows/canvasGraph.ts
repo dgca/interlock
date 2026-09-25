@@ -128,7 +128,7 @@ export function canvasGraph(
               stroke: conditionColors[edge.port],
               strokeWidth: options.selectedEdges?.has(edge.id) ? 3 : undefined,
             }
-          : edge.port === 'timeout'
+          : index.get(edge.source)?.kind === 'agent' && edge.port === 'timeout'
             ? {
                 stroke: 'var(--mantine-color-yellow-5)',
                 strokeWidth: options.selectedEdges?.has(edge.id)
@@ -139,7 +139,8 @@ export function canvasGraph(
       hidden:
         hiddenIds.has(edge.source) ||
         hiddenIds.has(edge.target) ||
-        (edge.port === 'item' &&
+        (index.get(edge.source)?.kind === 'batch' &&
+          edge.port === 'item' &&
           Boolean(options.collapsed?.has(edge.source))) ||
         (edge.targetHandle === 'end' &&
           Boolean(options.collapsed?.has(edge.target))),

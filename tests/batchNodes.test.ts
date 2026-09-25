@@ -6,6 +6,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { blankDefinition, nodeSchema } from '@interlock/core';
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
 import { FlowNode } from '../packages/ui/src/features/workflows/FlowNode';
+import { switchDefinition } from './fixtures/switch';
+import { canvasGraph } from '../packages/ui/src/features/workflows/canvasGraph';
+import { parseRawDefinition } from '../packages/ui/src/features/workflows/rawDefinition';
 
 vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', {}, children),
@@ -14,6 +17,7 @@ vi.mock(
   '../packages/ui/node_modules/@xyflow/react',
   async (importOriginal) => ({
     ...(await importOriginal<any>()),
+    useUpdateNodeInternals: () => vi.fn(),
     Handle: ({ id, type, ...props }: any) =>
       h('span', {
         'data-handle': id,
@@ -66,6 +70,134 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+});
+it('renders named Switch handles, expands for cases, and preserves ports through raw and canvas views', async () => {
+  const definition = switchDefinition();
+  const node = definition.nodes[1];
+  const parsed = parseRawDefinition(JSON.stringify(definition)).definition!;
+  expect(parsed).toEqual(definition);
+  const graph = canvasGraph(parsed);
+  expect(
+    graph.nodes.find((item) => item.id === node.id)!.height,
+  ).toBeGreaterThan(116);
+  expect(
+    graph.edges
+      .filter((edge) => edge.source === node.id)
+      .map((edge) => edge.sourceHandle),
+  ).toEqual(['investigate', 'ticket', 'assets', 'none']);
+  await act(async () => root.render(h(FlowNode, { data: { node } } as any)));
+  expect(
+    Array.from(container.querySelectorAll('[data-type="source"]')).map((el) => [
+      el.getAttribute('data-handle'),
+      el.getAttribute('aria-label'),
+    ]),
+  ).toEqual([
+    ['investigate', 'investigate'],
+    ['ticket', 'ticket'],
+    ['assets', 'assets'],
+    ['none', 'none (default)'],
+  ]);
+});
+
+it('creates a Switch with editable cases and a default port', async () => {
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(SettingsDialog, {
+          name: 'Test',
+          description: '',
+          definition: blankDefinition(),
+          workflows: [],
+          creating: true,
+          onClose: vi.fn(),
+          onApply,
+        }),
+      ),
+    ),
+  );
+  const select = container.querySelector('select')!;
+  await act(async () => {
+    select.value = 'switch';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const button = (text: string) =>
+    Array.from(container.querySelectorAll('button')).find(
+      (element) => element.textContent === text,
+    )!;
+  await act(async () => button('Add case').click());
+  expect(
+    container.querySelector('[aria-label="Case 2 branch name"]'),
+  ).not.toBeNull();
+  expect(container.textContent).toContain('Default branch');
+  await act(async () => button('Add node').click());
+  expect(onApply.mock.calls[0][0].definition.nodes.at(-1)).toMatchObject({
+    kind: 'switch',
+    path: '',
+    cases: [
+      { port: 'case-1', equals: '' },
+      { port: 'case-2', equals: '' },
+    ],
+    default: 'default',
+  });
+});
+
+it('removes deleted and renamed Switch connections only when settings are applied', async () => {
+  const definition = switchDefinition();
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(SettingsDialog, {
+          name: 'Test',
+          description: '',
+          definition,
+          node: definition.nodes[1],
+          workflows: [],
+          onClose: vi.fn(),
+          onApply,
+        }),
+      ),
+    ),
+  );
+  const button = (text: string) =>
+    Array.from(container.querySelectorAll('button')).find(
+      (element) => element.textContent === text,
+    )!;
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Remove case 1"]')!
+      .click(),
+  );
+  const label = Array.from(container.querySelectorAll('label')).find(
+    (element) => element.textContent === 'Default branch',
+  )!;
+  const input = container.querySelector<HTMLInputElement>(
+    `[id="${label.htmlFor}"]`,
+  )!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!.call(input, 'fallback');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  expect(definition.edges).toHaveLength(5);
+  expect(onApply).not.toHaveBeenCalled();
+  await act(async () => button('Apply changes').click());
+  const edited = onApply.mock.calls[0][0].definition;
+  expect(
+    edited.edges
+      .filter((edge: any) => edge.source === 'route')
+      .map((edge: any) => edge.port),
+  ).toEqual(['ticket', 'assets']);
+  expect(parseRawDefinition(JSON.stringify(edited)).publishError).toContain(
+    'fallback',
+  );
 });
 it('renders four labeled Batch handles with internal Start and End', async () => {
   await act(async () =>
@@ -122,6 +254,7 @@ it('creates a Batch from the ordinary add dialog without a nested definition or 
     'fetch',
     'wait',
     'condition',
+    'switch',
     'workflow',
     'batch',
   ]);

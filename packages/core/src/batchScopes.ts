@@ -46,8 +46,9 @@ export function validateBatchScopes(
       );
     if (target.kind === 'entry')
       throw new InterlockError('Edges cannot target the entry');
-    const scope = edge.port === 'item' ? source.id : source.batchId;
-    if (edge.port === 'item' && edge.targetHandle === 'end')
+    const startsItem = source.kind === 'batch' && edge.port === 'item';
+    const scope = startsItem ? source.id : source.batchId;
+    if (startsItem && edge.targetHandle === 'end')
       throw new InterlockError('Start must connect to an item step');
     if (
       edge.targetHandle === 'end' &&
@@ -70,7 +71,7 @@ export function validateBatchScopes(
     for (const edge of definition.edges)
       if (
         edge.source === id &&
-        edge.port !== 'item' &&
+        !(nodes.get(id)?.kind === 'batch' && edge.port === 'item') &&
         edge.targetHandle !== 'end'
       )
         visit(edge.target);

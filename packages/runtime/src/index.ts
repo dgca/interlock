@@ -535,7 +535,7 @@ export class Engine {
     if (edge?.targetHandle === 'end' && edge.target !== run.batchNodeId)
       throw new InterlockError('End must belong to the current Batch group');
     // A timeout returns the original input, not an agent result.
-    if (port !== 'timeout')
+    if (!(node.kind === 'agent' && port === 'timeout'))
       assertContract(node.outputSchema, output, `${node.label} output`);
     if (node.kind === 'exit')
       assertContract(
@@ -817,6 +817,14 @@ export class Engine {
         run.status = 'waiting';
         this.save(run);
         return changed;
+      }
+      if (node.kind === 'switch') {
+        const value = readPath(execution.input, node.path);
+        const port =
+          node.cases.find((entry) => isDeepStrictEqual(value, entry.equals))
+            ?.port ?? node.default;
+        this.finish(run, execution, node, execution.input, port);
+        return true;
       }
       if (
         node.kind !== 'entry' &&

@@ -1,0 +1,71 @@
+.editor {
+  display: grid;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 6px 0 0;
+}
+.sectionHeading {
+  font-size: 13px;
+  margin: 0;
+}
+.cases {
+  display: grid;
+  gap: 12px;
+}
+.case {
+  border: 1px solid var(--border);
+  border-radius: var(--mantine-radius-md);
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) 32px;
+  gap: 10px;
+  align-items: start;
+}
+.caseNumber {
+  color: var(--muted);
+  font-size: 12px;
+  padding-top: 34px;
+}
+.remove {
+  margin-top: 27px;
+  padding: 0;
+  width: 32px;
+}
+.caseFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.matchValue {
+  display: grid;
+  grid-template-columns: 105px minmax(0, 1fr);
+  gap: 10px;
+}
+.value {
+  min-width: 0;
+}
+.value > div {
+  margin-bottom: 0;
+}
+.otherwise {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.warning {
+  color: var(--mantine-color-yellow-5);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0;
+}
+@media (max-width: 650px) {
+  .caseFields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}
