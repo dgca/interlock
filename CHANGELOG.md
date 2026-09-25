@@ -1,5 +1,17 @@
 # @type_of/interlock
 
+## 0.1.9
+
+### Patch Changes
+
+- e8d817a: Add Switch nodes with ordered JSON equality cases and named output ports. Configure cases with typed match values and named branches in the visual editor or through CLI and MCP workflow definitions, use input bindings and Batch item paths, and inspect the selected route in run history.
+
+  Tidy accounts for output handle positions to reduce avoidable crossings between branches, including Switch, Condition, and timed Agent routes.
+
+  Add brief node descriptions to creation and settings dialogs.
+
+- 72d0545: Let Switch nodes fail on unmatched values without requiring a fallback branch. New nodes default to failing with an error that identifies the unmatched value and input field. Settings offer an optional fallback branch and preserve existing fallback behavior, with a connection-removal warning before disabling it.
+
 ## 0.1.8
 
 ### Patch Changes
