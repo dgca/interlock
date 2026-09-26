@@ -9,6 +9,7 @@ export function InputPathInput({
   onChange,
   suggestionSource,
   arraysOnly = false,
+  stringsOnly = false,
   ...props
 }: Omit<ComponentProps<typeof Autocomplete>, 'value' | 'onChange' | 'data'> & {
   schema: Contract;
@@ -16,10 +17,19 @@ export function InputPathInput({
   onChange: (value: string) => void;
   suggestionSource?: string;
   arraysOnly?: boolean;
+  stringsOnly?: boolean;
 }) {
-  const paths = contractPaths(schema).filter(
-    (path) => !arraysOnly || contractAtPath(schema, path).type === 'array',
-  );
+  const paths = contractPaths(schema).filter((path) => {
+    const field = contractAtPath(schema, path);
+    if (arraysOnly && field.type !== 'array') return false;
+    if (!stringsOnly) return true;
+    if (field.type === 'string') return true;
+    if (field.type !== undefined) return false;
+    return (
+      !Array.isArray(field.enum) ||
+      field.enum.every((value) => typeof value === 'string')
+    );
+  });
   return (
     <SuggestionInput
       {...props}

@@ -55,10 +55,12 @@ function NumberValue({
   value,
   onChange,
   label,
+  valueLabel,
 }: {
   value: number;
   onChange: (value: number) => void;
   label: string;
+  valueLabel: string;
 }) {
   const [text, setText] = useState(String(value));
   const [error, setError] = useState('');
@@ -70,7 +72,7 @@ function NumberValue({
   }, [value]);
   return (
     <TextInput
-      label="Match value"
+      label={valueLabel}
       aria-label={label}
       inputMode="decimal"
       ref={ref}
@@ -96,16 +98,18 @@ function NumberValue({
 }
 
 /** Keep JSON types intact while making ordinary text editable without JSON syntax. */
-export function MatchValueEditor({
+export function TypedValueEditor({
   value,
   onChange,
   label,
+  valueLabel = 'Match value',
   suggestedSchema = {},
   suggestionSource,
 }: {
   value: Json;
   onChange: (value: Json) => void;
   label: string;
+  valueLabel?: string;
   suggestedSchema?: Contract;
   suggestionSource?: string;
 }) {
@@ -145,7 +149,7 @@ export function MatchValueEditor({
       <div className={styles.value}>
         {type === 'text' && choices.length > 0 ? (
           <SuggestionInput
-            label="Match value"
+            label={valueLabel}
             aria-label={label}
             value={value as string}
             options={choices}
@@ -159,7 +163,7 @@ export function MatchValueEditor({
         ) : (
           type === 'text' && (
             <TextInput
-              label="Match value"
+              label={valueLabel}
               aria-label={label}
               value={value as string}
               onChange={(event) => onChange(event.target.value)}
@@ -171,10 +175,11 @@ export function MatchValueEditor({
             value={value as number}
             onChange={onChange}
             label={label}
+            valueLabel={valueLabel}
           />
         )}
         {type === 'boolean' && (
-          <Input.Wrapper label="Match value">
+          <Input.Wrapper label={valueLabel}>
             <SegmentedControl
               aria-label={label}
               fullWidth
@@ -189,7 +194,7 @@ export function MatchValueEditor({
         )}
         {type === 'null' && (
           <TextInput
-            label="Match value"
+            label={valueLabel}
             aria-label={label}
             value="null"
             readOnly

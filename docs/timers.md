@@ -30,6 +30,8 @@ To select an absolute deadline from input, use:
 
 For example, input can contain `{"dueAt":"2026-09-12T09:00:00-06:00"}`. Paths use dot-separated keys or array indices; blank selects the whole input. A timestamp must include the date, time with seconds, and a timezone. Missing paths or invalid timestamps fail the step. A past deadline resumes immediately. The runtime selects the timestamp once and persists it as `resumeAt` on the execution.
 
+The Wait editor suggests text fields and fields of unknown type from the input contract. You can still enter any path; suggestions do not change the runtime timestamp check.
+
 Wait has one `default` output route. It can appear inside a Batch item path. Each waiting item occupies its concurrency slot until it finishes.
 
 ## Unclaimed Agent timeouts

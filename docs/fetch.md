@@ -23,6 +23,8 @@ Missing fields fail the step with the missing path in the error. Bindings cannot
 
 Query parameters and headers accept scalar values and convert them to text. Body fields preserve JSON types, including numbers, arrays, objects, and null. Body fields form one object; bind an object or use fixed JSON to supply nested structures. Body configuration also supports **Use entire input**, **Fixed JSON**, and **No body**. GET and HEAD cannot have a body. Requests with a body default to `Content-Type: application/json` unless a header overrides it.
 
+For an individual fixed body field, choose Text, Number, Boolean, Null, or JSON. Text does not need JSON quotes; use JSON for arrays and objects. Existing field values keep their JSON type when you open the editor. The **Fixed JSON** body option still edits the whole body as JSON.
+
 Expand **Request preview** and enter sample input to see the resolved request. Preview uses the same resolver as execution, sends no request, and does not save sample data.
 
 ## Inspect a response

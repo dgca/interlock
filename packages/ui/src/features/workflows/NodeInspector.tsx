@@ -25,7 +25,7 @@ import { workflowTargets } from './workflowTargets';
 import { DurationInput } from './DurationInput';
 import { InputBindingsEditor } from './InputBindingsEditor';
 import { InputPathInput } from './InputPathInput';
-import { MatchValueEditor } from './MatchValueEditor';
+import { TypedValueEditor } from './TypedValueEditor';
 import { FetchEditor } from './FetchEditor';
 import { SwitchEditor } from './SwitchEditor';
 import { WorkflowModeEditor } from './WorkflowModeEditor';
@@ -128,6 +128,7 @@ export function NodeInspector({
                 value={node.timing.path}
                 schema={inputShape}
                 suggestionSource={hint.source}
+                stringsOnly
                 placeholder="dueAt, or blank for the whole input"
                 description="ISO timestamp with a timezone, such as 2026-09-10T12:00:00Z. Past times resume immediately."
                 onChange={(path) => patch({ timing: { kind: 'until', path } })}
@@ -463,7 +464,7 @@ export function NodeInspector({
               onChange={(path) => patch({ path })}
             />
 
-            <MatchValueEditor
+            <TypedValueEditor
               key={node.id}
               label="Condition match value"
               value={node.equals}

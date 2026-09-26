@@ -8,9 +8,8 @@ import {
   type WorkflowNode,
 } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
-import { MatchValueEditor } from './MatchValueEditor';
+import { TypedValueEditor, suggestedMatchValue } from './TypedValueEditor';
 import { InputPathInput } from './InputPathInput';
-import { suggestedMatchValue } from './MatchValueEditor';
 import styles from './SwitchEditor.module.css';
 
 type SwitchNode = Extract<WorkflowNode, { kind: 'switch' }>;
@@ -87,7 +86,7 @@ export function SwitchEditor({
               {index + 1}
             </span>
             <div className={styles.caseFields}>
-              <MatchValueEditor
+              <TypedValueEditor
                 label={`Case ${index + 1} match value`}
                 value={entry.equals}
                 onChange={(equals) => updateCase(index, { equals })}

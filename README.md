@@ -132,6 +132,8 @@ Use **Switch** to choose among several named routes from one input value. Choose
 
 Use **Fetch** to call an HTTP API through a form. Bind input fields into the URL, query parameters, headers, or JSON body, and preview the resolved request with sample input. The output contains `status`, `headers`, and `body`. See [Fetch requests](docs/fetch.md) for binding rules, response handling, and retries.
 
+Individual body fields with a fixed value have typed controls, so text needs no JSON quotes and existing JSON values keep their types.
+
 ### Script nodes
 
 New script nodes default to JavaScript. Read the incoming JSON value as `input` and return a JSON value for the next node. Top-level `await` is supported:

@@ -21,6 +21,7 @@ import { DurationInput } from './DurationInput';
 import { Button } from '../../components/Button/Button';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 import { InputPathInput } from './InputPathInput';
+import { TypedValueEditor } from './TypedValueEditor';
 
 function Fields({
   label,
@@ -37,6 +38,7 @@ function Fields({
   inputSchema?: Contract;
   inputSource?: string;
 }) {
+  const [keys, setKeys] = useState(() => fields.map(() => crypto.randomUUID()));
   const patch = (index: number, value: Partial<FetchField>) =>
     onChange(
       fields.map((field, i) => (i === index ? { ...field, ...value } : field)),
@@ -47,7 +49,7 @@ function Fields({
       {fields.map((field, index) => (
         <Stack
           gap="xs"
-          key={index}
+          key={keys[index]}
           p="sm"
           style={{ border: '1px solid var(--border)', borderRadius: 6 }}
         >
@@ -90,9 +92,9 @@ function Fields({
               }
             />
           ) : json ? (
-            <JsonEditor
-              label={`${label} fixed JSON ${index + 1}`}
-              rows={3}
+            <TypedValueEditor
+              label={`${label} fixed value ${index + 1}`}
+              valueLabel="Fixed value"
               value={field.value.value}
               onChange={(value) =>
                 patch(index, {
@@ -112,19 +114,23 @@ function Fields({
             />
           )}
           <Button
-            onClick={() => onChange(fields.filter((_, i) => i !== index))}
+            onClick={() => {
+              setKeys(keys.filter((_, i) => i !== index));
+              onChange(fields.filter((_, i) => i !== index));
+            }}
           >
             Remove {label.toLowerCase()} {index + 1}
           </Button>
         </Stack>
       ))}
       <Button
-        onClick={() =>
+        onClick={() => {
+          setKeys([...keys, crypto.randomUUID()]);
           onChange([
             ...fields,
             { name: '', value: { kind: 'fixed', value: '' } },
-          ])
-        }
+          ]);
+        }}
       >
         Add {label.toLowerCase()}
       </Button>

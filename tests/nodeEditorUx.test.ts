@@ -145,6 +145,38 @@ it('keeps text distinct from numbers and blocks invalid Condition JSON', async (
   await click('Apply changes');
   expect(onApply.mock.calls[0][0].definition.nodes[0].equals).toBe(42);
 });
+it('suggests text and unknown fields for Wait while allowing another path', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: { kind: 'until', path: '' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dueAt: { type: 'string' },
+        count: { type: 'integer' },
+        details: {
+          type: 'object',
+          properties: { deadline: { type: 'string' } },
+        },
+        unknown: {},
+      },
+    },
+  });
+  await act(async () => field('Timestamp input path').focus());
+  const suggestions = Array.from(
+    document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ).map((option) => option.textContent);
+  expect(suggestions).toContain('dueAt');
+  expect(suggestions).toContain('details.deadline');
+  expect(suggestions).toContain('unknown');
+  expect(suggestions).not.toContain('count');
+  expect(suggestions).not.toContain('details');
+  await fill('Timestamp input path', 'customDeadline');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timing.path).toBe(
+    'customDeadline',
+  );
+});
 it.each(['script', 'fetch'])(
   'edits %s timeouts in seconds and enforces the existing bounds',
   async (kind) => {
