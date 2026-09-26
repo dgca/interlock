@@ -6,6 +6,7 @@ import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { nodeSchema, type FetchNode } from '@interlock/core';
 import { FetchEditor } from '../packages/ui/src/features/workflows/FetchEditor';
 let root: Root, container: HTMLDivElement, latest: FetchNode;
+const scrollIntoView = HTMLElement.prototype.scrollIntoView;
 function Harness() {
   const [node, setNode] = useState(latest);
   return h(FetchEditor, {
@@ -31,6 +32,7 @@ beforeEach(() => {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   }));
+  HTMLElement.prototype.scrollIntoView = vi.fn();
   latest = nodeSchema.parse({
     id: 'fetch',
     label: 'Fetch',
@@ -52,6 +54,8 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  if (scrollIntoView) HTMLElement.prototype.scrollIntoView = scrollIntoView;
+  else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -124,4 +128,56 @@ it('authors distinct fixed and input query bindings', async () => {
   expect(latest.query).toEqual([
     { name: 'search', value: { kind: 'input', path: 'term' } },
   ]);
+});
+
+it('edits a fixed JSON body field as typed text without JSON quotes', async () => {
+  latest.body = {
+    kind: 'fields',
+    fields: [
+      { name: 'label', value: { kind: 'fixed', value: 'ticket' } },
+      { name: 'count', value: { kind: 'fixed', value: 3 } },
+      { name: 'active', value: { kind: 'fixed', value: true } },
+      { name: 'metadata', value: { kind: 'fixed', value: { id: 1 } } },
+    ],
+  };
+  await render();
+  expect(latest.body.fields.map((field) => field.value)).toEqual([
+    { kind: 'fixed', value: 'ticket' },
+    { kind: 'fixed', value: 3 },
+    { kind: 'fixed', value: true },
+    { kind: 'fixed', value: { id: 1 } },
+  ]);
+  await input('Body field fixed value 1', 'approved');
+  expect(latest.body.fields[0].value).toEqual({
+    kind: 'fixed',
+    value: 'approved',
+  });
+  expect(latest.body.fields[1].value).toEqual({ kind: 'fixed', value: 3 });
+  expect(latest.body.fields[2].value).toEqual({ kind: 'fixed', value: true });
+  expect(latest.body.fields[3].value).toEqual({
+    kind: 'fixed',
+    value: { id: 1 },
+  });
+  const type = container.querySelector<HTMLInputElement>(
+    '[aria-label="Body field fixed value 1 type"]',
+  )!;
+  await act(async () => type.click());
+  await act(async () =>
+    document
+      .getElementById(type.getAttribute('aria-controls')!)!
+      .querySelector<HTMLElement>('[role="option"][value="boolean"]')!
+      .click(),
+  );
+  expect(latest.body.fields[0].value).toEqual({ kind: 'fixed', value: true });
+  await act(async () =>
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Remove body field 1')!
+      .click(),
+  );
+  expect(
+    container.querySelector<HTMLInputElement>(
+      '[aria-label="Body field fixed value 1 type"]',
+    )!.value,
+  ).toBe('Number');
+  expect(latest.body.fields[0].value).toEqual({ kind: 'fixed', value: 3 });
 });

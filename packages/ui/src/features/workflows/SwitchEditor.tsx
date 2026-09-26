@@ -1,9 +1,15 @@
 import { Radio, Stack, TextInput } from '@mantine/core';
 import { useState } from 'react';
 import { Trash2, Plus } from 'lucide-react';
-import { outgoingPorts, type WorkflowNode } from '@interlock/core';
+import {
+  contractAtPath,
+  outgoingPorts,
+  type Contract,
+  type WorkflowNode,
+} from '@interlock/core';
 import { Button } from '../../components/Button/Button';
-import { MatchValueEditor } from './MatchValueEditor';
+import { TypedValueEditor, suggestedMatchValue } from './TypedValueEditor';
+import { InputPathInput } from './InputPathInput';
 import styles from './SwitchEditor.module.css';
 
 type SwitchNode = Extract<WorkflowNode, { kind: 'switch' }>;
@@ -11,10 +17,14 @@ export function SwitchEditor({
   node,
   onChange,
   connectedBranches = [],
+  inputSchema = {},
+  inputSource,
 }: {
   node: SwitchNode;
   onChange: (node: SwitchNode) => void;
   connectedBranches?: string[];
+  inputSchema?: Contract;
+  inputSource?: string;
 }) {
   // Editor-only identities keep partially typed values with their row on removal.
   const [keys, setKeys] = useState(() =>
@@ -44,16 +54,17 @@ export function SwitchEditor({
   return (
     <div className={styles.editor}>
       <div>
-        <TextInput
+        <InputPathInput
           label="Check this input field"
+          aria-label="Check this input field"
           value={node.path}
+          schema={inputSchema}
+          suggestionSource={inputSource}
           placeholder="e.g. route or request.category"
-          onChange={(event) => patch({ path: event.target.value })}
+          onChange={(path) => patch({ path })}
         />
         <p className={styles.help}>
-          Input is JSON data, usually from the previous step. For{' '}
-          <code>{'{"route":"ticket"}'}</code>, enter <code>route</code>. Use
-          dots for nested fields, or leave blank to check the whole input. A
+          Use dots for nested fields. Leave blank to check the whole input. A
           missing field fails the run.
         </p>
       </div>
@@ -75,10 +86,12 @@ export function SwitchEditor({
               {index + 1}
             </span>
             <div className={styles.caseFields}>
-              <MatchValueEditor
+              <TypedValueEditor
                 label={`Case ${index + 1} match value`}
                 value={entry.equals}
                 onChange={(equals) => updateCase(index, { equals })}
+                suggestedSchema={contractAtPath(inputSchema, node.path)}
+                suggestionSource={inputSource}
               />
               <TextInput
                 label="Branch name"
@@ -112,7 +125,15 @@ export function SwitchEditor({
               while (ports.has(`case-${number}`)) number++;
               setKeys([...keys, crypto.randomUUID()]);
               patch({
-                cases: [...node.cases, { port: `case-${number}`, equals: '' }],
+                cases: [
+                  ...node.cases,
+                  {
+                    port: `case-${number}`,
+                    equals: suggestedMatchValue(
+                      contractAtPath(inputSchema, node.path),
+                    ),
+                  },
+                ],
               });
             }}
           >

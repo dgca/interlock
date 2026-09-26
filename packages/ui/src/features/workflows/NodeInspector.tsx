@@ -15,6 +15,8 @@ import {
   DEFAULT_BATCH_MAX_ITEMS,
   MAX_BATCH_ITEMS,
   STARTED_RUN_SCHEMA,
+  nodeInputHint,
+  contractAtPath,
   type WorkflowDefinition,
   type Workflow,
   type WorkflowNode,
@@ -22,13 +24,14 @@ import {
 import { workflowTargets } from './workflowTargets';
 import { DurationInput } from './DurationInput';
 import { InputBindingsEditor } from './InputBindingsEditor';
+import { InputPathInput } from './InputPathInput';
+import { TypedValueEditor } from './TypedValueEditor';
 import { FetchEditor } from './FetchEditor';
 import { SwitchEditor } from './SwitchEditor';
 import { WorkflowModeEditor } from './WorkflowModeEditor';
 import { nodeDescriptions } from './nodeDescriptions';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
-import { MatchValueEditor } from './MatchValueEditor';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 export function NodeInspector({
   node,
@@ -55,6 +58,17 @@ export function NodeInspector({
 }) {
   const patch = (value: Record<string, unknown>) =>
     onChange({ ...node, ...value } as WorkflowNode);
+  const hint = definition
+    ? nodeInputHint(definition, node)
+    : { schema: node.inputSchema, source: '', inferred: false };
+  const inputShape = hint.schema;
+  const incomingShape = definition
+    ? nodeInputHint(definition, {
+        ...node,
+        inputSchema: {},
+        inputBindings: undefined,
+      }).schema
+    : {};
   return (
     <>
       {!creating && (
@@ -74,7 +88,12 @@ export function NodeInspector({
         />
 
         {node.kind === 'fetch' && (
-          <FetchEditor node={node} onChange={onChange} />
+          <FetchEditor
+            node={node}
+            onChange={onChange}
+            inputSchema={inputShape}
+            inputSource={hint.source}
+          />
         )}
         {node.kind === 'wait' && (
           <>
@@ -103,15 +122,16 @@ export function NodeInspector({
                 onChange={(ms) => patch({ timing: { kind: 'duration', ms } })}
               />
             ) : (
-              <TextInput
+              <InputPathInput
                 mb="md"
                 label="Timestamp input path"
                 value={node.timing.path}
+                schema={inputShape}
+                suggestionSource={hint.source}
+                stringsOnly
                 placeholder="dueAt, or blank for the whole input"
                 description="ISO timestamp with a timezone, such as 2026-09-10T12:00:00Z. Past times resume immediately."
-                onChange={(e) =>
-                  patch({ timing: { kind: 'until', path: e.target.value } })
-                }
+                onChange={(path) => patch({ timing: { kind: 'until', path } })}
               />
             )}
             <p className="hint">
@@ -384,13 +404,16 @@ export function NodeInspector({
         )}
         {node.kind === 'batch' && (
           <>
-            <TextInput
+            <InputPathInput
               mb="md"
               label="List to process"
               description="Use dots for nested fields, or leave blank when the whole input is a list."
               value={node.itemsPath}
+              schema={inputShape}
+              suggestionSource={hint.source}
+              arraysOnly
               placeholder="e.g. guests or response.items"
-              onChange={(e) => patch({ itemsPath: e.target.value })}
+              onChange={(itemsPath) => patch({ itemsPath })}
             />
 
             <TextInput
@@ -430,20 +453,24 @@ export function NodeInspector({
         )}
         {node.kind === 'condition' && (
           <>
-            <TextInput
+            <InputPathInput
               mb="md"
               label="Check this input field"
               description="Use dots for nested fields, or leave blank to check the whole input. A missing field fails the run."
               placeholder="e.g. approved or request.status"
               value={node.path}
-              onChange={(e) => patch({ path: e.target.value })}
+              schema={inputShape}
+              suggestionSource={hint.source}
+              onChange={(path) => patch({ path })}
             />
 
-            <MatchValueEditor
+            <TypedValueEditor
               key={node.id}
               label="Condition match value"
               value={node.equals}
               onChange={(equals) => patch({ equals })}
+              suggestedSchema={contractAtPath(inputShape, node.path)}
+              suggestionSource={hint.source}
             />
             <Text size="xs" c="dimmed" mt="xs" mb="md">
               Matches follow True; everything else follows False. Text and
@@ -459,6 +486,8 @@ export function NodeInspector({
             connectedBranches={definition?.edges
               .filter((edge) => edge.source === node.id)
               .map((edge) => edge.port)}
+            inputSchema={inputShape}
+            inputSource={hint.source}
           />
         )}
         {(node.kind === 'entry' || node.kind === 'exit') &&
@@ -502,7 +531,13 @@ export function NodeInspector({
                 <InputBindingsEditor
                   key={node.id}
                   node={node}
-                  nodes={definition?.nodes ?? [node]}
+                  nodes={
+                    definition?.nodes.map((candidate) =>
+                      candidate.id === node.id ? node : candidate,
+                    ) ?? [node]
+                  }
+                  incomingSchema={incomingShape}
+                  workflowInputSchema={definition?.inputSchema ?? {}}
                   onChange={(inputBindings) => patch({ inputBindings })}
                 />
               )}
@@ -512,6 +547,23 @@ export function NodeInspector({
                     ? `The value at "${node.itemsPath}" must be an array. Expected format describes the enclosing value.`
                     : 'Input must be an array because List to process is blank.'}
                 </p>
+              )}
+              {hint.inferred && Object.keys(inputShape).length > 0 && (
+                <div className="hint" role="status">
+                  Input shape from {hint.source.toLowerCase()}.
+                  {(node.kind !== 'batch' ||
+                    node.itemsPath ||
+                    inputShape.type === 'array') && (
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        patch({ inputSchema: structuredClone(inputShape) })
+                      }
+                    >
+                      Use as expected format
+                    </Button>
+                  )}
+                </div>
               )}
               <ContractEditor
                 label="Expected format"

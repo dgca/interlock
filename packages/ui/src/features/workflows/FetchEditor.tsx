@@ -12,6 +12,7 @@ import { useState } from 'react';
 import {
   jsonSchema,
   resolveFetch,
+  type Contract,
   type FetchNode,
   type FetchField,
   type FetchBinding,
@@ -19,18 +20,25 @@ import {
 import { DurationInput } from './DurationInput';
 import { Button } from '../../components/Button/Button';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
+import { InputPathInput } from './InputPathInput';
+import { TypedValueEditor } from './TypedValueEditor';
 
 function Fields({
   label,
   fields,
   onChange,
   json = false,
+  inputSchema = {},
+  inputSource,
 }: {
   label: string;
   fields: FetchField[];
   onChange: (fields: FetchField[]) => void;
   json?: boolean;
+  inputSchema?: Contract;
+  inputSource?: string;
 }) {
+  const [keys, setKeys] = useState(() => fields.map(() => crypto.randomUUID()));
   const patch = (index: number, value: Partial<FetchField>) =>
     onChange(
       fields.map((field, i) => (i === index ? { ...field, ...value } : field)),
@@ -41,7 +49,7 @@ function Fields({
       {fields.map((field, index) => (
         <Stack
           gap="xs"
-          key={index}
+          key={keys[index]}
           p="sm"
           style={{ border: '1px solid var(--border)', borderRadius: 6 }}
         >
@@ -73,18 +81,20 @@ function Fields({
             </Input.Wrapper>
           </Group>
           {field.value.kind === 'input' ? (
-            <TextInput
+            <InputPathInput
               label={`${label} input field ${index + 1}`}
               placeholder="customerId"
               value={field.value.path}
-              onChange={(e) =>
-                patch(index, { value: { kind: 'input', path: e.target.value } })
+              schema={inputSchema}
+              suggestionSource={inputSource}
+              onChange={(path) =>
+                patch(index, { value: { kind: 'input', path } })
               }
             />
           ) : json ? (
-            <JsonEditor
-              label={`${label} fixed JSON ${index + 1}`}
-              rows={3}
+            <TypedValueEditor
+              label={`${label} fixed value ${index + 1}`}
+              valueLabel="Fixed value"
               value={field.value.value}
               onChange={(value) =>
                 patch(index, {
@@ -104,19 +114,23 @@ function Fields({
             />
           )}
           <Button
-            onClick={() => onChange(fields.filter((_, i) => i !== index))}
+            onClick={() => {
+              setKeys(keys.filter((_, i) => i !== index));
+              onChange(fields.filter((_, i) => i !== index));
+            }}
           >
             Remove {label.toLowerCase()} {index + 1}
           </Button>
         </Stack>
       ))}
       <Button
-        onClick={() =>
+        onClick={() => {
+          setKeys([...keys, crypto.randomUUID()]);
           onChange([
             ...fields,
             { name: '', value: { kind: 'fixed', value: '' } },
-          ])
-        }
+          ]);
+        }}
       >
         Add {label.toLowerCase()}
       </Button>
@@ -126,9 +140,13 @@ function Fields({
 export function FetchEditor({
   node,
   onChange,
+  inputSchema = {},
+  inputSource,
 }: {
   node: FetchNode;
   onChange: (node: FetchNode) => void;
+  inputSchema?: Contract;
+  inputSource?: string;
 }) {
   const patch = (value: Partial<FetchNode>) => onChange({ ...node, ...value });
   const [sample, setSample] = useState('{}');
@@ -171,11 +189,15 @@ export function FetchEditor({
       <Fields
         label="Query parameter"
         fields={node.query}
+        inputSchema={inputSchema}
+        inputSource={inputSource}
         onChange={(query) => patch({ query })}
       />
       <Fields
         label="Header"
         fields={node.headers}
+        inputSchema={inputSchema}
+        inputSource={inputSource}
         onChange={(headers) => patch({ headers })}
       />
       <NativeSelect
@@ -205,6 +227,8 @@ export function FetchEditor({
           label="Body field"
           json
           fields={node.body.fields}
+          inputSchema={inputSchema}
+          inputSource={inputSource}
           onChange={(fields) => patch({ body: { kind: 'fields', fields } })}
         />
       )}

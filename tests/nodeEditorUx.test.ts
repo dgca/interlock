@@ -10,6 +10,7 @@ vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', {}, children),
 }));
 let root: Root, container: HTMLDivElement;
+const scrollIntoView = HTMLElement.prototype.scrollIntoView;
 beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockImplementation(() => ({
@@ -25,6 +26,7 @@ beforeEach(() => {
       disconnect() {}
     },
   );
+  HTMLElement.prototype.scrollIntoView = vi.fn();
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -32,6 +34,8 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  if (scrollIntoView) HTMLElement.prototype.scrollIntoView = scrollIntoView;
+  else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
   vi.unstubAllGlobals();
 });
 
@@ -94,6 +98,16 @@ async function select(label: string, value: string) {
     field(label).dispatchEvent(new Event('change', { bubbles: true }));
   });
 }
+async function chooseType(label: string, value: string) {
+  const input = field(label) as HTMLInputElement;
+  await act(async () => input.click());
+  await act(async () =>
+    document
+      .getElementById(input.getAttribute('aria-controls')!)!
+      .querySelector<HTMLElement>(`[role="option"][value="${value}"]`)!
+      .click(),
+  );
+}
 async function click(text: string) {
   await act(async () =>
     Array.from(container.querySelectorAll('button'))
@@ -123,13 +137,45 @@ it('keeps text distinct from numbers and blocks invalid Condition JSON', async (
   await click('Apply changes');
   expect(onApply.mock.calls[0][0].definition.nodes[0].equals).toBe('42');
   onApply.mockClear();
-  await select('Condition match value type', 'json');
+  await chooseType('Condition match value type', 'json');
   await fill('Condition match value, as JSON', '{');
   await click('Apply changes');
   expect(onApply).not.toHaveBeenCalled();
   await fill('Condition match value, as JSON', '42');
   await click('Apply changes');
   expect(onApply.mock.calls[0][0].definition.nodes[0].equals).toBe(42);
+});
+it('suggests text and unknown fields for Wait while allowing another path', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: { kind: 'until', path: '' },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dueAt: { type: 'string' },
+        count: { type: 'integer' },
+        details: {
+          type: 'object',
+          properties: { deadline: { type: 'string' } },
+        },
+        unknown: {},
+      },
+    },
+  });
+  await act(async () => field('Timestamp input path').focus());
+  const suggestions = Array.from(
+    document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ).map((option) => option.textContent);
+  expect(suggestions).toContain('dueAt');
+  expect(suggestions).toContain('details.deadline');
+  expect(suggestions).toContain('unknown');
+  expect(suggestions).not.toContain('count');
+  expect(suggestions).not.toContain('details');
+  await fill('Timestamp input path', 'customDeadline');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timing.path).toBe(
+    'customDeadline',
+  );
 });
 it.each(['script', 'fetch'])(
   'edits %s timeouts in seconds and enforces the existing bounds',

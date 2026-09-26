@@ -11,6 +11,7 @@ vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', {}, children),
 }));
 let root: Root, container: HTMLDivElement;
+const scrollIntoView = HTMLElement.prototype.scrollIntoView;
 beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockImplementation(() => ({
@@ -26,6 +27,7 @@ beforeEach(() => {
       disconnect() {}
     },
   );
+  HTMLElement.prototype.scrollIntoView = vi.fn();
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -33,11 +35,20 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  if (scrollIntoView) HTMLElement.prototype.scrollIntoView = scrollIntoView;
+  else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
   vi.unstubAllGlobals();
 });
 
-async function render(values: Json[], { withFallback = true } = {}) {
+async function render(
+  values: Json[],
+  {
+    withFallback = true,
+    inputSchema,
+  }: { withFallback?: boolean; inputSchema?: Record<string, unknown> } = {},
+) {
   const definition = switchDefinition(withFallback);
+  if (inputSchema) definition.inputSchema = inputSchema;
   const node = definition.nodes[1];
   if (node.kind !== 'switch') throw new Error('Expected Switch');
   node.cases = values.map((equals, index) => ({
@@ -92,14 +103,28 @@ async function fill(label: string, value: string) {
     field.dispatchEvent(new Event('input', { bubbles: true }));
   });
 }
-async function select(label: string, value: string) {
-  const field = container.querySelector<HTMLSelectElement>(
+async function chooseType(label: string, value: string) {
+  const field = container.querySelector<HTMLInputElement>(
     `[aria-label="${label}"]`,
   )!;
-  await act(async () => {
-    field.value = value;
-    field.dispatchEvent(new Event('change', { bubbles: true }));
-  });
+  await act(async () => field.click());
+  const options = document.getElementById(
+    field.getAttribute('aria-controls')!,
+  )!;
+  await act(async () =>
+    options
+      .querySelector<HTMLElement>(`[role="option"][value="${value}"]`)!
+      .click(),
+  );
+}
+async function chooseBoolean(label: string, value: boolean) {
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>(
+        `[aria-label="${label}"] input[value="${value}"]`,
+      )!
+      .click(),
+  );
 }
 async function apply() {
   const button = Array.from(container.querySelectorAll('button')).find(
@@ -169,7 +194,7 @@ it('opens every JSON value type without changing existing definitions', async ()
   expect(container.textContent).toContain(
     'Checks a value and follows one matching branch.',
   );
-  expect(container.textContent).toContain('Input is JSON data');
+  expect(container.textContent).toContain('Use dots for nested fields.');
   expect(container.textContent).not.toContain('ID:');
   expect(
     container.querySelector<HTMLInputElement>(
@@ -178,11 +203,10 @@ it('opens every JSON value type without changing existing definitions', async ()
   ).toBe('42');
   expect(
     Array.from(
-      container.querySelectorAll<HTMLSelectElement>(
-        'select[aria-label$="type"]',
-      ),
-    ).map((select) => select.value),
-  ).toEqual(['text', 'number', 'boolean', 'null', 'json', 'json']);
+      container.querySelectorAll<HTMLInputElement>('input[aria-label$="type"]'),
+    ).map((input) => input.value),
+  ).toEqual(['Text', 'Number', 'Boolean', 'Null', 'JSON', 'JSON']);
+  expect(container.querySelector('select[aria-label$="type"]')).toBeNull();
   await apply();
   expect(cases(onApply)).toEqual(node.cases);
 });
@@ -191,7 +215,7 @@ it('edits plain text and typed values without coercing numeric-looking strings',
   const { onApply } = await render(['', 0, true, null, {}]);
   await fill('Case 1 match value', '42');
   await fill('Case 2 match value', '-3.5');
-  await select('Case 3 match value', 'false');
+  await chooseBoolean('Case 3 match value', false);
   await fill('Case 5 match value, as JSON', '[1,{"done":true}]');
   await apply();
   expect(cases(onApply).map((entry: any) => entry.equals)).toEqual([
@@ -205,8 +229,8 @@ it('edits plain text and typed values without coercing numeric-looking strings',
 
 it('preserves a scalar when switching between JSON and its ordinary editor', async () => {
   const { onApply } = await render(['ticket']);
-  await select('Case 1 match value type', 'json');
-  await select('Case 1 match value type', 'text');
+  await chooseType('Case 1 match value type', 'json');
+  await chooseType('Case 1 match value type', 'text');
   await apply();
   expect(cases(onApply)[0].equals).toBe('ticket');
 });
@@ -240,4 +264,97 @@ it('keeps invalid JSON with its case when another case is removed', async () => 
   await fill('Case 1 match value, as JSON', '[]');
   await apply();
   expect(cases(onApply)).toEqual([{ port: 'branch-1', equals: [] }]);
+});
+
+it('offers upstream fields and types while leaving the input contract as any', async () => {
+  const schema = {
+    type: 'object',
+    properties: {
+      active: { type: 'boolean' },
+      nested: { type: 'object', properties: { code: { type: 'string' } } },
+    },
+  };
+  const { onApply } = await render([true], { inputSchema: schema });
+  expect(container.textContent).toContain('Input shape from workflow input.');
+  const path =
+    container.querySelector<HTMLInputElement>(
+      'input[label="Check this input field"]',
+    ) ??
+    Array.from(container.querySelectorAll<HTMLInputElement>('input')).find(
+      (field) => field.value === 'next.workflow',
+    )!;
+  expect(path.hasAttribute('list')).toBe(false);
+  expect(document.querySelector('datalist')).toBeNull();
+  expect(container.querySelector('.mantine-Autocomplete-section')).toBeNull();
+  await fill('Check this input field', 'active');
+  await act(async () => path.focus());
+  expect(document.body.textContent).toContain('Fields from workflow input');
+  expect(
+    Array.from(document.querySelectorAll('[role="option"]')).map(
+      (option) => option.textContent,
+    ),
+  ).toContain('nested.code');
+  await fill('Check this input field', 'nested');
+  expect(
+    Array.from(document.querySelectorAll('[role="option"]')).map(
+      (option) => option.textContent,
+    ),
+  ).not.toContain('active');
+  await act(async () => path.click());
+  expect(
+    Array.from(document.querySelectorAll('[role="option"]')).map(
+      (option) => option.textContent,
+    ),
+  ).toContain('active');
+  await fill('Check this input field', 'active');
+  expect(container.textContent).toContain('Input field: Boolean');
+  await act(async () =>
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Add case')!
+      .click(),
+  );
+  await apply();
+  const edited = onApply.mock.calls[0][0].definition.nodes[1];
+  expect(edited.inputSchema).toEqual({});
+  expect(edited.cases.at(-1).equals).toBe(true);
+});
+
+it('suggests text choices while retaining free-text match values', async () => {
+  const { onApply } = await render(['legacy'], {
+    inputSchema: {
+      type: 'object',
+      properties: {
+        route: { type: 'string', enum: ['ticket', 'investigate'] },
+      },
+    },
+  });
+  await fill('Check this input field', 'route');
+  const match = container.querySelector<HTMLInputElement>(
+    '[aria-label="Case 1 match value"]',
+  )!;
+  expect(match.readOnly).toBe(false);
+  await act(async () => match.focus());
+  expect(document.body.textContent).toContain('Values from workflow input');
+  expect(
+    Array.from(document.querySelectorAll('[role="option"]')).map(
+      (option) => option.textContent,
+    ),
+  ).toContain('ticket');
+  await fill('Case 1 match value', 'future');
+  await apply();
+  expect(cases(onApply)[0].equals).toBe('future');
+});
+
+it('can turn an inferred shape into an explicit input contract', async () => {
+  const schema = { type: 'object', properties: { route: { type: 'string' } } };
+  const { onApply } = await render(['ticket'], { inputSchema: schema });
+  await act(async () =>
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Use as expected format')!
+      .click(),
+  );
+  await apply();
+  expect(onApply.mock.calls[0][0].definition.nodes[1].inputSchema).toEqual(
+    schema,
+  );
 });
