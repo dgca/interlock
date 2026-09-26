@@ -119,6 +119,8 @@ export function FetchUrlInput({
     <Combobox
       store={combobox}
       withinPortal={false}
+      width="target"
+      position="bottom-start"
       onOptionSubmit={(path) => {
         const current = input.current;
         const active = current && activeInputToken(value, cursor ?? -1);
@@ -152,7 +154,7 @@ export function FetchUrlInput({
         />
       </Combobox.Target>
       <Combobox.Dropdown>
-        <Combobox.Options>
+        <Combobox.Options style={{ maxHeight: 240, overflowY: 'auto' }}>
           {visible.length > 0 && (
             <Combobox.Group
               label={
