@@ -14,6 +14,8 @@ https://api.example.com/customers/{{input.customerId}}
 
 The host stays fixed. Inserted values are URL-encoded. Use the query parameter editor to add parameters without assembling separators yourself.
 
+While editing an input token in the URL, choose a suggested field to complete that token. Suggestions use the node's expected or inferred input shape and favor scalar fields, including nested paths. You can still type a path that is not suggested.
+
 Each query parameter, header, or body field has a name and one value source:
 
 - **Fixed value** uses the value entered in the editor. Strings are literal, even when they contain `{{input.field}}`.
