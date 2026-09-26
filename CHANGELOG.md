@@ -1,5 +1,11 @@
 # @type_of/interlock
 
+## 0.1.13
+
+### Patch Changes
+
+- f3954b6: Suggest input fields while editing Fetch URL templates.
+
 ## 0.1.12
 
 ### Patch Changes
