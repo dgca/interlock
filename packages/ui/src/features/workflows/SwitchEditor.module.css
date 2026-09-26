@@ -50,6 +50,11 @@
 .value {
   min-width: 0;
 }
+.expected {
+  display: block;
+  color: var(--muted);
+  margin-top: 5px;
+}
 .value > div {
   margin-bottom: 0;
 }

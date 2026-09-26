@@ -50,7 +50,9 @@ Switch runs automatically without an agent assignment. A routed execution record
 
 Select **Switch** in **Add node**. **Check this input field** selects a field from the JSON data the node receives. For `{"route":"ticket"}`, enter `route`. Use dots for nested fields or leave the field blank to compare the whole input.
 
-Each case has a value type, a match value, and a **Branch name**. Enter text without JSON quotes. Choose Number, Boolean, or Null for those value types, or JSON for lists, objects, and direct JSON editing. Existing values keep their types when opened. New cases start with an empty text value.
+When the input has a declared or inferred shape, the path field suggests known fields. The match editor shows the selected field's type and uses it for newly added cases; text choices can be selected from a list. Existing case values stay unchanged when the path changes. You can still type a path or select a different match-value type.
+
+Each case has a value type, a match value, and a **Branch name**. Enter text without JSON quotes. Choose Number, Boolean, or Null for those value types, or JSON for lists, objects, and direct JSON editing. Existing values keep their types when opened. New cases start with a value based on the selected field's known type, or empty text when the type is unknown.
 
 **When no case matches** defaults to **Fail the run** for new nodes. Choose **Follow a fallback branch** to reveal **Fallback branch name**, then connect that branch on the canvas. Existing Switch nodes with a fallback keep that setting. Connect each case branch too. The canvas marks the fallback handle and expands for additional cases. Branch names are stored as `port` values; the optional fallback name is stored in `default`.
 

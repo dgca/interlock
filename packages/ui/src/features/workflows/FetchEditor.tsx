@@ -12,23 +12,29 @@ import { useState } from 'react';
 import {
   jsonSchema,
   resolveFetch,
+  type Contract,
   type FetchNode,
   type FetchField,
   type FetchBinding,
 } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
+import { InputPathInput } from './InputPathInput';
 
 function Fields({
   label,
   fields,
   onChange,
   json = false,
+  inputSchema = {},
+  inputSource,
 }: {
   label: string;
   fields: FetchField[];
   onChange: (fields: FetchField[]) => void;
   json?: boolean;
+  inputSchema?: Contract;
+  inputSource?: string;
 }) {
   const patch = (index: number, value: Partial<FetchField>) =>
     onChange(
@@ -72,12 +78,14 @@ function Fields({
             </Input.Wrapper>
           </Group>
           {field.value.kind === 'input' ? (
-            <TextInput
+            <InputPathInput
               label={`${label} input field ${index + 1}`}
               placeholder="customerId"
               value={field.value.path}
-              onChange={(e) =>
-                patch(index, { value: { kind: 'input', path: e.target.value } })
+              schema={inputSchema}
+              suggestionSource={inputSource}
+              onChange={(path) =>
+                patch(index, { value: { kind: 'input', path } })
               }
             />
           ) : json ? (
@@ -125,9 +133,13 @@ function Fields({
 export function FetchEditor({
   node,
   onChange,
+  inputSchema = {},
+  inputSource,
 }: {
   node: FetchNode;
   onChange: (node: FetchNode) => void;
+  inputSchema?: Contract;
+  inputSource?: string;
 }) {
   const patch = (value: Partial<FetchNode>) => onChange({ ...node, ...value });
   const [sample, setSample] = useState('{}');
@@ -180,11 +192,15 @@ export function FetchEditor({
       <Fields
         label="Query parameter"
         fields={node.query}
+        inputSchema={inputSchema}
+        inputSource={inputSource}
         onChange={(query) => patch({ query })}
       />
       <Fields
         label="Header"
         fields={node.headers}
+        inputSchema={inputSchema}
+        inputSource={inputSource}
         onChange={(headers) => patch({ headers })}
       />
       <NativeSelect
@@ -214,6 +230,8 @@ export function FetchEditor({
           label="Body field"
           json
           fields={node.body.fields}
+          inputSchema={inputSchema}
+          inputSource={inputSource}
           onChange={(fields) => patch({ body: { kind: 'fields', fields } })}
         />
       )}

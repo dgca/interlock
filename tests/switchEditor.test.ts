@@ -36,8 +36,15 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function render(values: Json[], { withFallback = true } = {}) {
+async function render(
+  values: Json[],
+  {
+    withFallback = true,
+    inputSchema,
+  }: { withFallback?: boolean; inputSchema?: Record<string, unknown> } = {},
+) {
   const definition = switchDefinition(withFallback);
+  if (inputSchema) definition.inputSchema = inputSchema;
   const node = definition.nodes[1];
   if (node.kind !== 'switch') throw new Error('Expected Switch');
   node.cases = values.map((equals, index) => ({
@@ -169,7 +176,7 @@ it('opens every JSON value type without changing existing definitions', async ()
   expect(container.textContent).toContain(
     'Checks a value and follows one matching branch.',
   );
-  expect(container.textContent).toContain('Input is JSON data');
+  expect(container.textContent).toContain('Use dots for nested fields.');
   expect(container.textContent).not.toContain('ID:');
   expect(
     container.querySelector<HTMLInputElement>(
@@ -240,4 +247,71 @@ it('keeps invalid JSON with its case when another case is removed', async () => 
   await fill('Case 1 match value, as JSON', '[]');
   await apply();
   expect(cases(onApply)).toEqual([{ port: 'branch-1', equals: [] }]);
+});
+
+it('offers upstream fields and types while leaving the input contract as any', async () => {
+  const schema = {
+    type: 'object',
+    properties: {
+      active: { type: 'boolean' },
+      nested: { type: 'object', properties: { code: { type: 'string' } } },
+    },
+  };
+  const { onApply } = await render([true], { inputSchema: schema });
+  expect(container.textContent).toContain('Input shape from workflow input.');
+  const path =
+    container.querySelector<HTMLInputElement>(
+      'input[label="Check this input field"]',
+    ) ??
+    Array.from(container.querySelectorAll<HTMLInputElement>('input')).find(
+      (field) => field.value === 'next.workflow',
+    )!;
+  expect(path.hasAttribute('list')).toBe(false);
+  expect(document.querySelector('datalist')).toBeNull();
+  expect(container.querySelector('.mantine-Autocomplete-section')).toBeNull();
+  await fill('Check this input field', 'active');
+  await act(async () => path.focus());
+  expect(document.body.textContent).toContain('Fields from workflow input');
+  expect(
+    Array.from(document.querySelectorAll('[role="option"]')).map(
+      (option) => option.textContent,
+    ),
+  ).toContain('nested.code');
+  await fill('Check this input field', 'nested');
+  expect(
+    Array.from(document.querySelectorAll('[role="option"]')).map(
+      (option) => option.textContent,
+    ),
+  ).not.toContain('active');
+  await act(async () => path.click());
+  expect(
+    Array.from(document.querySelectorAll('[role="option"]')).map(
+      (option) => option.textContent,
+    ),
+  ).toContain('active');
+  await fill('Check this input field', 'active');
+  expect(container.textContent).toContain('Input field: Boolean');
+  await act(async () =>
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Add case')!
+      .click(),
+  );
+  await apply();
+  const edited = onApply.mock.calls[0][0].definition.nodes[1];
+  expect(edited.inputSchema).toEqual({});
+  expect(edited.cases.at(-1).equals).toBe(true);
+});
+
+it('can turn an inferred shape into an explicit input contract', async () => {
+  const schema = { type: 'object', properties: { route: { type: 'string' } } };
+  const { onApply } = await render(['ticket'], { inputSchema: schema });
+  await act(async () =>
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Use as expected format')!
+      .click(),
+  );
+  await apply();
+  expect(onApply.mock.calls[0][0].definition.nodes[1].inputSchema).toEqual(
+    schema,
+  );
 });

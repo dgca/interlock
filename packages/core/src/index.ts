@@ -540,6 +540,12 @@ export {
   type Contract,
   type FieldType,
 } from './contracts.js';
+export {
+  contractAtPath,
+  contractPaths,
+  nodeInputHint,
+  type InputHint,
+} from './inputHints.js';
 
 export function nodeKindLabel(kind: WorkflowNode['kind']): string {
   return kind === 'batch' ? 'Batch' : kind;

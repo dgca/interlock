@@ -1,6 +1,11 @@
 import { NativeSelect, TextInput } from '@mantine/core';
 import { useEffect, useRef, useState } from 'react';
-import type { Json } from '@interlock/core';
+import {
+  fieldType,
+  fieldTypes,
+  type Contract,
+  type Json,
+} from '@interlock/core';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 import styles from './SwitchEditor.module.css';
 
@@ -19,6 +24,31 @@ const defaults: Record<ValueType, Json> = {
   null: null,
   json: {},
 };
+export function suggestedMatchValue(schema: Contract): Json {
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+    const value = schema.enum[0];
+    if (
+      value === null ||
+      ['string', 'number', 'boolean'].includes(typeof value)
+    )
+      return value as Json;
+  }
+  switch (fieldType(schema)) {
+    case 'number':
+    case 'integer':
+      return 0;
+    case 'boolean':
+      return true;
+    case 'null':
+      return null;
+    case 'object':
+      return {};
+    case 'array':
+      return [];
+    default:
+      return '';
+  }
+}
 
 function NumberValue({
   value,
@@ -69,12 +99,20 @@ export function MatchValueEditor({
   value,
   onChange,
   label,
+  suggestedSchema = {},
 }: {
   value: Json;
   onChange: (value: Json) => void;
   label: string;
+  suggestedSchema?: Contract;
 }) {
   const [type, setType] = useState<ValueType>(() => valueType(value));
+  const expected = fieldType(suggestedSchema);
+  const choices =
+    Array.isArray(suggestedSchema.enum) &&
+    suggestedSchema.enum.every((item) => typeof item === 'string')
+      ? (suggestedSchema.enum as string[])
+      : [];
   return (
     <div className={styles.matchValue}>
       <NativeSelect
@@ -100,14 +138,28 @@ export function MatchValueEditor({
         ]}
       />
       <div className={styles.value}>
-        {type === 'text' && (
-          <TextInput
+        {type === 'text' && choices.length > 0 ? (
+          <NativeSelect
             label="Match value"
             aria-label={label}
-            placeholder="e.g. ticket"
             value={value as string}
+            data={
+              choices.includes(value as string)
+                ? choices
+                : [value as string, ...choices]
+            }
             onChange={(event) => onChange(event.target.value)}
           />
+        ) : (
+          type === 'text' && (
+            <TextInput
+              label="Match value"
+              aria-label={label}
+              placeholder="e.g. ticket"
+              value={value as string}
+              onChange={(event) => onChange(event.target.value)}
+            />
+          )
         )}
         {type === 'number' && (
           <NumberValue
@@ -140,6 +192,11 @@ export function MatchValueEditor({
             onChange={onChange}
             rows={2}
           />
+        )}
+        {expected !== 'any' && (
+          <small className={styles.expected}>
+            Input field: {fieldTypes[expected]}
+          </small>
         )}
       </div>
     </div>

@@ -162,6 +162,38 @@ it('filters node choices to the same Batch scope and retains unavailable draft r
   expect(Array.from(sources.options).at(-1)?.value).toBe('itemInput');
 });
 
+it('suggests paths from a selected node output without restricting free text', async () => {
+  nodes[0].outputSchema = {
+    type: 'object',
+    properties: {
+      answer: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+        },
+      },
+    },
+  };
+  await render();
+  await select('Source', 'fields');
+  await click('Add input field');
+  await select('Read from for field 1', 'node');
+  await select('Node for field 1', 'triage');
+  const path = container.querySelector<HTMLInputElement>(
+    '[aria-label="Output path for field 1"]',
+  )!;
+  expect(path.hasAttribute('list')).toBe(false);
+  await act(async () => path.focus());
+  expect(document.body.textContent).toContain('Fields from triage output');
+  expect(
+    Array.from(document.querySelectorAll('[role="option"]')).map(
+      (option) => option.textContent,
+    ),
+  ).toContain('answer.text');
+  await input('Output path for field 1', 'other.path');
+  expect(latest.inputBindings?.field.path).toBe('other.path');
+});
+
 it('rejects duplicate field names without overwriting a binding', async () => {
   await render();
   await select('Source', 'fields');

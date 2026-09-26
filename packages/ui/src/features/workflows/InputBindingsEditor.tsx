@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { NativeSelect, Stack, TextInput } from '@mantine/core';
-import { nodeSchema, type WorkflowNode } from '@interlock/core';
+import {
+  contractAtPath,
+  nodeSchema,
+  STARTED_RUN_SCHEMA,
+  type Contract,
+  type WorkflowNode,
+} from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 import { bindingNodes, type InputBinding } from './inputBindings';
+import { InputPathInput } from './InputPathInput';
 import styles from './InputBindingsEditor.module.css';
 
 type Row = { name: string; binding: InputBinding };
@@ -13,10 +20,14 @@ const rowsFrom = (value: WorkflowNode['inputBindings']): Row[] =>
 export function InputBindingsEditor({
   node,
   nodes,
+  incomingSchema = {},
+  workflowInputSchema = {},
   onChange,
 }: {
   node: WorkflowNode;
   nodes: WorkflowNode[];
+  incomingSchema?: Contract;
+  workflowInputSchema?: Contract;
   onChange: (bindings: WorkflowNode['inputBindings']) => void;
 }) {
   const value = node.inputBindings;
@@ -66,6 +77,32 @@ export function InputBindingsEditor({
         ]
       : []),
   ];
+  const sourceSchema = (binding: InputBinding): Contract => {
+    if (binding.source === 'input') return incomingSchema;
+    if (binding.source === 'runInput') return workflowInputSchema;
+    if (binding.source === 'node') {
+      const source = nodes.find((candidate) => candidate.id === binding.nodeId);
+      if (source?.kind === 'agent' && source.unclaimedTimeoutMs !== undefined)
+        return {};
+      if (source?.kind === 'workflow' && source.mode === 'detached')
+        return STARTED_RUN_SCHEMA;
+      return source?.outputSchema ?? {};
+    }
+    if (binding.source === 'itemInput') {
+      const batch = nodes.find((candidate) => candidate.id === node.batchId);
+      if (batch?.kind === 'batch') {
+        const items = contractAtPath(batch.inputSchema, batch.itemsPath).items;
+        return items && typeof items === 'object' && !Array.isArray(items)
+          ? (items as Contract)
+          : {};
+      }
+    }
+    return {};
+  };
+  const suggestionSource = (binding: InputBinding) =>
+    binding.source === 'node'
+      ? `${nodes.find((candidate) => candidate.id === binding.nodeId)?.label ?? 'Node'} output`
+      : sources.find((source) => source.value === binding.source)?.label;
   return (
     <Stack gap="md" mb="md" ref={form}>
       <NativeSelect
@@ -169,15 +206,17 @@ export function InputBindingsEditor({
                       ))}
                     </NativeSelect>
                   )}
-                  <TextInput
+                  <InputPathInput
                     label="Output path"
                     aria-label={`Output path for field ${index + 1}`}
                     value={row.binding.path}
+                    schema={sourceSchema(row.binding)}
+                    suggestionSource={suggestionSource(row.binding)}
                     placeholder="Whole output"
                     description="Dot-separated fields or array indices. Blank selects the whole value."
-                    onChange={(event) =>
+                    onChange={(path) =>
                       patch(index, {
-                        binding: { ...row.binding, path: event.target.value },
+                        binding: { ...row.binding, path },
                       })
                     }
                   />
