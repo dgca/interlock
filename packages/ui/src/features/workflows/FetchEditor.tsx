@@ -22,6 +22,7 @@ import { Button } from '../../components/Button/Button';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 import { InputPathInput } from './InputPathInput';
 import { TypedValueEditor } from './TypedValueEditor';
+import { FetchUrlInput } from './FetchUrlInput';
 
 function Fields({
   label,
@@ -174,12 +175,11 @@ export function FetchEditor({
         }
         data={['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']}
       />
-      <TextInput
-        mb="xs"
-        label="URL"
-        placeholder="https://api.example.com/customers/{{input.customerId}}"
+      <FetchUrlInput
         value={node.url}
-        onChange={(e) => patch({ url: e.target.value })}
+        onChange={(url) => patch({ url })}
+        schema={inputSchema}
+        suggestionSource={inputSource}
       />
       <p className="hint">
         Use {'{{input.field}}'} in the path or query. Inserted values are
