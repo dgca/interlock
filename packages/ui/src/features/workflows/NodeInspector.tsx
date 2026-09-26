@@ -1,5 +1,7 @@
 import {
   TextInput,
+  TagsInput,
+  Text,
   Switch,
   Textarea,
   NativeSelect,
@@ -30,7 +32,6 @@ import { WorkflowModeEditor } from './WorkflowModeEditor';
 import { nodeDescriptions } from './nodeDescriptions';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
-import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 export function NodeInspector({
   node,
@@ -177,35 +178,37 @@ export function NodeInspector({
               }
             />
 
-            <TextInput
+            <TagsInput
               mb="md"
-              label="Required tools, comma separated"
-              value={node.context.tools.join(', ')}
-              onChange={(e) =>
+              label="Required tools"
+              description="Enter a name and press Enter. These must match the executor's declared tools."
+              placeholder="Add a tool"
+              value={node.context.tools}
+              acceptValueOnBlur
+              allowDuplicates
+              onChange={(tools) =>
                 patch({
                   context: {
                     ...node.context,
-                    tools: e.target.value
-                      .split(',')
-                      .map((s) => s.trim())
-                      .filter(Boolean),
+                    tools: tools.map((name) => name.trim()).filter(Boolean),
                   },
                 })
               }
             />
 
-            <TextInput
+            <TagsInput
               mb="md"
-              label="Required skills, comma separated"
-              value={node.context.skills.join(', ')}
-              onChange={(e) =>
+              label="Required skills"
+              description="Enter a name and press Enter. These must match the executor's declared skills."
+              placeholder="Add a skill"
+              value={node.context.skills}
+              acceptValueOnBlur
+              allowDuplicates
+              onChange={(skills) =>
                 patch({
                   context: {
                     ...node.context,
-                    skills: e.target.value
-                      .split(',')
-                      .map((s) => s.trim())
-                      .filter(Boolean),
+                    skills: skills.map((name) => name.trim()).filter(Boolean),
                   },
                 })
               }
@@ -298,14 +301,13 @@ export function NodeInspector({
               Runs locally with your OS permissions.
             </p>
 
-            <TextInput
-              mb="md"
-              label="Timeout, milliseconds"
-              type="number"
+            <DurationInput
+              key={`script-timeout-${node.id}`}
+              label="Timeout"
               min={100}
-              max={120000}
+              max={120_000}
               value={node.timeoutMs}
-              onChange={(e) => patch({ timeoutMs: Number(e.target.value) })}
+              onChange={(timeoutMs) => patch({ timeoutMs })}
             />
           </>
         )}
@@ -403,12 +405,13 @@ export function NodeInspector({
           <>
             <InputPathInput
               mb="md"
-              label="Items path"
+              label="List to process"
+              description="Use dots for nested fields, or leave blank when the whole input is a list."
               value={node.itemsPath}
               schema={inputShape}
               suggestionSource={hint.source}
               arraysOnly
-              placeholder="guests, or empty for the input itself"
+              placeholder="e.g. guests or response.items"
               onChange={(itemsPath) => patch({ itemsPath })}
             />
 
@@ -425,7 +428,8 @@ export function NodeInspector({
             />
             <TextInput
               mb="md"
-              label="Concurrency"
+              label="Items at a time"
+              description="How many item paths can run at once."
               type="number"
               min={1}
               max={50}
@@ -435,12 +439,12 @@ export function NodeInspector({
 
             <Radio.Group
               mb="md"
-              label="When a child fails"
+              label="When an item fails"
               value={node.failurePolicy}
               onChange={(failurePolicy) => patch({ failurePolicy })}
             >
               <Stack gap="xs" mt="xs">
-                <Radio value="all" label="Fail and stop other children" />
+                <Radio value="all" label="Fail and stop other items" />
                 <Radio value="collect" label="Collect successes and failures" />
               </Stack>
             </Radio.Group>
@@ -450,7 +454,9 @@ export function NodeInspector({
           <>
             <InputPathInput
               mb="md"
-              label="Input path to compare"
+              label="Check this input field"
+              description="Use dots for nested fields, or leave blank to check the whole input. A missing field fails the run."
+              placeholder="e.g. approved or request.status"
               value={node.path}
               schema={inputShape}
               suggestionSource={hint.source}
@@ -458,12 +464,17 @@ export function NodeInspector({
             />
 
             <MatchValueEditor
-              label="Match value"
+              key={node.id}
+              label="Condition match value"
               value={node.equals}
               onChange={(equals) => patch({ equals })}
               suggestedSchema={contractAtPath(inputShape, node.path)}
               suggestionSource={hint.source}
             />
+            <Text size="xs" c="dimmed" mt="xs" mb="md">
+              Matches follow True; everything else follows False. Text and
+              numbers are different values.
+            </Text>
           </>
         )}
         {node.kind === 'switch' && (
@@ -533,7 +544,7 @@ export function NodeInspector({
                 <p className="hint">
                   {node.itemsPath
                     ? `The value at "${node.itemsPath}" must be an array. Expected format describes the enclosing value.`
-                    : 'Input must be an array because Items path is blank.'}
+                    : 'Input must be an array because List to process is blank.'}
                 </p>
               )}
               {hint.inferred && Object.keys(inputShape).length > 0 && (

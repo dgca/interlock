@@ -20,11 +20,13 @@ export function DurationInput({
   label,
   value,
   min = 0,
+  max = 31_536_000_000,
   onChange,
 }: {
   label: string;
   value: number;
   min?: number;
+  max?: number;
   onChange: (ms: number) => void;
 }) {
   const [unit, setUnit] = useState(
@@ -40,7 +42,7 @@ export function DurationInput({
         type="number"
         required
         min={min / unit}
-        max={31_536_000_000 / unit}
+        max={max / unit}
         step="any"
         value={value / unit}
         onChange={(e) => onChange(Number(e.target.value) * unit)}
@@ -54,10 +56,12 @@ export function DurationInput({
           onChange(Math.round((value / unit) * next));
           setUnit(next);
         }}
-        data={units.map((unit) => ({
-          value: String(unit.ms),
-          label: unit.label,
-        }))}
+        data={units
+          .filter((unit) => unit.ms <= max)
+          .map((unit) => ({
+            value: String(unit.ms),
+            label: unit.label,
+          }))}
       />
     </Group>
   );
