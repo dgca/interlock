@@ -92,6 +92,7 @@ export function SwitchEditor({
                 value={entry.equals}
                 onChange={(equals) => updateCase(index, { equals })}
                 suggestedSchema={contractAtPath(inputSchema, node.path)}
+                suggestionSource={inputSource}
               />
               <TextInput
                 label="Branch name"

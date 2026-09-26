@@ -462,6 +462,7 @@ export function NodeInspector({
               value={node.equals}
               onChange={(equals) => patch({ equals })}
               suggestedSchema={contractAtPath(inputShape, node.path)}
+              suggestionSource={hint.source}
             />
           </>
         )}

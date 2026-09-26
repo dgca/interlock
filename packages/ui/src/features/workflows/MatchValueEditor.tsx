@@ -1,4 +1,4 @@
-import { NativeSelect, TextInput } from '@mantine/core';
+import { Input, SegmentedControl, Select, TextInput } from '@mantine/core';
 import { useEffect, useRef, useState } from 'react';
 import {
   fieldType,
@@ -7,6 +7,7 @@ import {
   type Json,
 } from '@interlock/core';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
+import { SuggestionInput } from './SuggestionInput';
 import styles from './SwitchEditor.module.css';
 
 type ValueType = 'text' | 'number' | 'boolean' | 'null' | 'json';
@@ -100,11 +101,13 @@ export function MatchValueEditor({
   onChange,
   label,
   suggestedSchema = {},
+  suggestionSource,
 }: {
   value: Json;
   onChange: (value: Json) => void;
   label: string;
   suggestedSchema?: Contract;
+  suggestionSource?: string;
 }) {
   const [type, setType] = useState<ValueType>(() => valueType(value));
   const expected = fieldType(suggestedSchema);
@@ -115,18 +118,20 @@ export function MatchValueEditor({
       : [];
   return (
     <div className={styles.matchValue}>
-      <NativeSelect
+      <Select
         label="Type"
         aria-label={`${label} type`}
         value={type}
-        onChange={(event) => {
-          const next = event.target.value as ValueType;
-          setType(next);
+        allowDeselect={false}
+        onChange={(next) => {
+          if (!next) return;
+          const nextType = next as ValueType;
+          setType(nextType);
           // JSON can represent the current value without converting it.
           onChange(
-            next === 'json' || next === valueType(value)
+            nextType === 'json' || nextType === valueType(value)
               ? value
-              : defaults[next],
+              : defaults[nextType],
           );
         }}
         data={[
@@ -139,23 +144,23 @@ export function MatchValueEditor({
       />
       <div className={styles.value}>
         {type === 'text' && choices.length > 0 ? (
-          <NativeSelect
+          <SuggestionInput
             label="Match value"
             aria-label={label}
             value={value as string}
-            data={
-              choices.includes(value as string)
-                ? choices
-                : [value as string, ...choices]
+            options={choices}
+            groupLabel={
+              suggestionSource
+                ? `Values from ${suggestionSource.toLowerCase()}`
+                : 'Suggested values'
             }
-            onChange={(event) => onChange(event.target.value)}
+            onChange={onChange}
           />
         ) : (
           type === 'text' && (
             <TextInput
               label="Match value"
               aria-label={label}
-              placeholder="e.g. ticket"
               value={value as string}
               onChange={(event) => onChange(event.target.value)}
             />
@@ -169,13 +174,18 @@ export function MatchValueEditor({
           />
         )}
         {type === 'boolean' && (
-          <NativeSelect
-            label="Match value"
-            aria-label={label}
-            value={String(value)}
-            data={['true', 'false']}
-            onChange={(event) => onChange(event.target.value === 'true')}
-          />
+          <Input.Wrapper label="Match value">
+            <SegmentedControl
+              aria-label={label}
+              fullWidth
+              value={String(value)}
+              data={[
+                { value: 'true', label: 'True' },
+                { value: 'false', label: 'False' },
+              ]}
+              onChange={(next) => onChange(next === 'true')}
+            />
+          </Input.Wrapper>
         )}
         {type === 'null' && (
           <TextInput

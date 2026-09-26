@@ -1,13 +1,12 @@
-import { useState, type ComponentProps } from 'react';
+import type { ComponentProps } from 'react';
 import { Autocomplete } from '@mantine/core';
 import { contractAtPath, contractPaths, type Contract } from '@interlock/core';
+import { SuggestionInput } from './SuggestionInput';
 
 export function InputPathInput({
   schema,
   value,
   onChange,
-  onFocus,
-  onClick,
   suggestionSource,
   arraysOnly = false,
   ...props
@@ -18,52 +17,20 @@ export function InputPathInput({
   suggestionSource?: string;
   arraysOnly?: boolean;
 }) {
-  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
   const paths = contractPaths(schema).filter(
     (path) => !arraysOnly || contractAtPath(schema, path).type === 'array',
   );
-  const matchingPaths = showAllSuggestions
-    ? paths
-    : paths.filter((path) =>
-        path.toLowerCase().includes(value.trim().toLowerCase()),
-      );
-  const visiblePaths = matchingPaths.slice(0, 50);
-  const sourceLabel = suggestionSource
-    ? `Fields from ${suggestionSource.toLowerCase()}`
-    : 'Suggested fields';
-  const groupLabel =
-    matchingPaths.length > visiblePaths.length
-      ? `${sourceLabel} · first 50 of ${matchingPaths.length}, type to narrow`
-      : sourceLabel;
   return (
-    <Autocomplete
+    <SuggestionInput
       {...props}
       value={value}
-      onChange={(path) => {
-        setShowAllSuggestions(false);
-        onChange(path);
-      }}
-      onFocus={(event) => {
-        setShowAllSuggestions(true);
-        onFocus?.(event);
-      }}
-      onClick={(event) => {
-        setShowAllSuggestions(true);
-        onClick?.(event);
-      }}
-      data={
-        visiblePaths.length
-          ? [
-              {
-                group: groupLabel,
-                items: visiblePaths,
-              },
-            ]
-          : visiblePaths
+      onChange={onChange}
+      options={paths}
+      groupLabel={
+        suggestionSource
+          ? `Fields from ${suggestionSource.toLowerCase()}`
+          : 'Suggested fields'
       }
-      filter={({ options }) => options}
-      maxDropdownHeight={240}
-      comboboxProps={{ width: 'target', position: 'bottom-start' }}
     />
   );
 }
