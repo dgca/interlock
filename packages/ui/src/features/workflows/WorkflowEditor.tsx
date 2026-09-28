@@ -100,6 +100,7 @@ export function WorkflowEditor({
   const flowRef = useRef<ReactFlowInstance<CanvasNode> | null>(null);
   const fitAfterTidy = useRef(false);
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
+  const [hovered, setHovered] = useState<string>();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const history = useWorkflowHistory({
     draft: workflow.draft,
@@ -281,6 +282,7 @@ export function WorkflowEditor({
         collapsed,
         selected,
         selectedEdges,
+        hovered,
         onEdit: (node) => setEditing({ node }),
         onFocusNode: (id) => {
           setSelected(new Set([id]));
@@ -303,7 +305,15 @@ export function WorkflowEditor({
             return next;
           }),
       }),
-    [draft, selected, selectedEdges, collapsed, workflows, onOpenWorkflow],
+    [
+      draft,
+      selected,
+      selectedEdges,
+      hovered,
+      collapsed,
+      workflows,
+      onOpenWorkflow,
+    ],
   );
   const save = async () => {
     if (rawInvalid) throw new Error('Fix the raw JSON before saving.');
@@ -892,6 +902,12 @@ export function WorkflowEditor({
                   zoomOnDoubleClick={false}
                   elevateEdgesOnSelect
                   onPaneClick={() => setSelected(new Set())}
+                  onNodeMouseEnter={(_, n) => setHovered(n.id)}
+                  onNodeMouseLeave={(_, n) =>
+                    setHovered((current) =>
+                      current === n.id ? undefined : current,
+                    )
+                  }
                   fitView
                   fitViewOptions={{ padding: 0.22 }}
                   minZoom={0.25}

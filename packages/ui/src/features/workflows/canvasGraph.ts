@@ -17,6 +17,7 @@ type Options = {
   collapsed?: Set<string>;
   selected?: string | Set<string>;
   selectedEdges?: Set<string>;
+  hovered?: string;
   onEdit?: (node: WorkflowNode) => void;
   onAdd?: (batchId: string) => void;
   onToggle?: (batchId: string) => void;
@@ -73,6 +74,36 @@ export function canvasGraph(
         selectedVisibleEdges.flatMap((edge) => [edge.source, edge.target]),
       )
     : undefined;
+  // Emphasize the hovered node's routes, else the single selected node's.
+  // Only canvas selection (the Set form) counts: the run inspector passes the
+  // inspected node as a string and should not dim the rest of the run.
+  const focus =
+    selectedIds.size > 0
+      ? undefined
+      : (options.hovered ??
+        (options.selected instanceof Set && options.selected.size === 1
+          ? [...options.selected][0]
+          : undefined));
+  const linkedNodes = new Set<string>(),
+    linkedEdges = new Set<string>();
+  if (focus !== undefined && !hiddenIds.has(focus)) {
+    linkedNodes.add(focus);
+    for (const edge of definition.edges)
+      if (
+        !hiddenEdge(edge) &&
+        (edge.source === focus || edge.target === focus)
+      ) {
+        linkedEdges.add(edge.id);
+        linkedNodes.add(edge.source);
+        linkedNodes.add(edge.target);
+      }
+  }
+  const emphasis = (id: string, linked: Set<string>) =>
+    linkedNodes.size === 0
+      ? undefined
+      : linked.has(id)
+        ? 'highlighted'
+        : 'dimmed';
   const nodes: CanvasNode[] = ordered.map((node) => ({
     id: node.id,
     type: 'workflow',
@@ -88,7 +119,11 @@ export function canvasGraph(
       ? endpoints.has(node.id)
         ? styles.edgeEndpoint
         : styles.edgeDimmed
-      : undefined,
+      : linkedNodes.size
+        ? linkedNodes.has(node.id)
+          ? styles.edgeEndpoint
+          : styles.edgeDimmed
+        : undefined,
     deletable: node.kind !== 'entry' && node.kind !== 'exit',
     selected:
       typeof options.selected === 'string'
@@ -239,7 +274,11 @@ export function canvasGraph(
       sourceHandle: edge.port,
       targetHandle: edge.targetHandle ?? 'default',
       className:
-        endpoints && !selectedIds.has(edge.id) ? 'edge-dimmed' : undefined,
+        endpoints
+          ? selectedIds.has(edge.id)
+            ? undefined
+            : 'edge-dimmed'
+          : emphasis(edge.id, linkedEdges),
       // Only exception routes carry color; ordinary flow shares --edge.
       style:
         index.get(edge.source)?.kind === 'agent' && edge.port === 'timeout'

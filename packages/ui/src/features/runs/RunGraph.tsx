@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Background, Controls, ReactFlow } from '@xyflow/react';
 import type { WorkflowDefinition } from '@interlock/core';
 import { FlowNode } from '../workflows/FlowNode';
@@ -18,8 +18,9 @@ export function RunGraph({
   selected?: string;
   onSelect: (nodeId: string) => void;
 }) {
+  const [hovered, setHovered] = useState<string>();
   const graph = useMemo(() => {
-    const graph = canvasGraph(definition, { selected });
+    const graph = canvasGraph(definition, { selected, hovered });
     return {
       ...graph,
       nodes: graph.nodes.map((node) => ({
@@ -27,7 +28,7 @@ export function RunGraph({
         data: { ...node.data, progress: progress[node.id] },
       })),
     };
-  }, [definition, progress, selected]);
+  }, [definition, progress, selected, hovered]);
   return (
     <ReactFlow
       nodes={graph.nodes}
@@ -39,6 +40,10 @@ export function RunGraph({
       elementsSelectable={false}
       panOnDrag={[0, 1]}
       onNodeClick={(_, node) => onSelect(node.id)}
+      onNodeMouseEnter={(_, node) => setHovered(node.id)}
+      onNodeMouseLeave={(_, node) =>
+        setHovered((current) => (current === node.id ? undefined : current))
+      }
       fitView
       minZoom={0.1}
       colorMode="dark"
