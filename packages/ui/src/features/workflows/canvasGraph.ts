@@ -148,37 +148,59 @@ export function canvasGraph(
     const origin = parent ? absolute(index.get(parent)!) : { x: 0, y: 0 };
     return { x: origin.x + node.position.x, y: origin.y + node.position.y };
   };
-  // Backward edges (target left of source) leave the graph for a lane below
-  // its bounds, one lane per loop, so they never pass behind nodes.
-  const bottom = Math.max(
-    ...ordered
-      .filter((node) => !hiddenIds.has(node.id))
-      .map((node) => absolute(node).y + size(node).height),
-  );
+  // Loops — target entirely left of the source — leave the graph for a lane
+  // below the nodes they pass over (not the whole graph), one lane per loop,
+  // so they never run behind a card. Stacked neighbours with overlapping
+  // x-ranges keep the default curve.
+  const LOOP_MARGIN = 8;
+  const visible = ordered.filter((node) => !hiddenIds.has(node.id));
+  const span = (edge: WorkflowEdge) => {
+    const source = index.get(edge.source)!,
+      target = index.get(edge.target)!;
+    return {
+      left: absolute(target).x,
+      right: absolute(source).x + size(source).width,
+    };
+  };
   const backward = (edge: WorkflowEdge) => {
     const source = index.get(edge.source),
       target = index.get(edge.target);
     return Boolean(
       source &&
       target &&
-        absolute(target).x < absolute(source).x + size(source).width,
+      absolute(target).x + size(target).width + LOOP_MARGIN <
+        absolute(source).x,
     );
   };
-  const laneY = new Map(
-    definition.edges
-      .filter((edge) => !hiddenEdge(edge) && backward(edge))
-      .sort(
-        (a, b) =>
-          absolute(index.get(b.source)!).x - absolute(index.get(a.source)!).x,
-      )
-      .map((edge, lane) => [edge.id, bottom + 40 + lane * 24]),
+  const corridorBottom = (edge: WorkflowEdge) => {
+    const { left, right } = span(edge);
+    return Math.max(
+      ...visible
+        .filter((node) => {
+          const x = absolute(node).x;
+          return x < right && x + size(node).width > left;
+        })
+        .map((node) => absolute(node).y + size(node).height),
+    );
+  };
+  const loops = definition.edges
+    .filter((edge) => !hiddenEdge(edge) && backward(edge))
+    .sort(
+      (a, b) =>
+        absolute(index.get(b.source)!).x - absolute(index.get(a.source)!).x,
+    );
+  const lane = new Map(
+    loops.map((edge, i) => [
+      edge.id,
+      { laneY: corridorBottom(edge) + 40 + i * 24, lane: i },
+    ]),
   );
   return {
     nodes,
     edges: definition.edges.map((edge) => ({
       ...edge,
-      type: laneY.has(edge.id) ? 'loop' : undefined,
-      data: laneY.has(edge.id) ? { laneY: laneY.get(edge.id)! } : undefined,
+      type: lane.has(edge.id) ? 'loop' : undefined,
+      data: lane.get(edge.id),
       selected: selectedIds.has(edge.id),
       sourceHandle: edge.port,
       targetHandle: edge.targetHandle ?? 'default',
