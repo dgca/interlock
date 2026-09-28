@@ -887,6 +887,7 @@ export function WorkflowEditor({
                   elementsSelectable={!boxZoom.active}
                   panOnDrag={false}
                   zoomOnDoubleClick={false}
+                  elevateEdgesOnSelect
                   onPaneClick={() => setSelected(new Set())}
                   fitView
                   fitViewOptions={{ padding: 0.22 }}

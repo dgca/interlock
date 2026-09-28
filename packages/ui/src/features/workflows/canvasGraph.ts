@@ -49,6 +49,14 @@ export function canvasGraph(
     ordered.push(node);
   };
   definition.nodes.forEach(add);
+  // While an edge is selected, its endpoints stand out and everything else dims.
+  const endpoints = options.selectedEdges?.size
+    ? new Set(
+        definition.edges
+          .filter((edge) => options.selectedEdges!.has(edge.id))
+          .flatMap((edge) => [edge.source, edge.target]),
+      )
+    : undefined;
   const nodes: CanvasNode[] = ordered.map((node) => ({
     id: node.id,
     type: 'workflow',
@@ -60,6 +68,11 @@ export function canvasGraph(
     ...size(node),
     style: size(node),
     hidden: hidden(node),
+    className: endpoints
+      ? endpoints.has(node.id)
+        ? 'edge-endpoint'
+        : 'edge-dimmed'
+      : undefined,
     deletable: node.kind !== 'entry' && node.kind !== 'exit',
     selected:
       typeof options.selected === 'string'
@@ -121,20 +134,16 @@ export function canvasGraph(
       selected: options.selectedEdges?.has(edge.id),
       sourceHandle: edge.port,
       targetHandle: edge.targetHandle ?? 'default',
+      className:
+        endpoints && !options.selectedEdges?.has(edge.id)
+          ? 'edge-dimmed'
+          : undefined,
       style:
         index.get(edge.source)?.kind === 'condition' &&
         (edge.port === 'true' || edge.port === 'false')
-          ? {
-              stroke: conditionColors[edge.port],
-              strokeWidth: options.selectedEdges?.has(edge.id) ? 3 : undefined,
-            }
+          ? { stroke: conditionColors[edge.port] }
           : index.get(edge.source)?.kind === 'agent' && edge.port === 'timeout'
-            ? {
-                stroke: 'var(--mantine-color-yellow-5)',
-                strokeWidth: options.selectedEdges?.has(edge.id)
-                  ? 3
-                  : undefined,
-              }
+            ? { stroke: 'var(--mantine-color-yellow-5)' }
             : undefined,
       hidden:
         hiddenIds.has(edge.source) ||
