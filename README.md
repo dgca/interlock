@@ -78,7 +78,7 @@ In node settings, **Input → Source** defaults to **Previous step output**. Sel
 
 Configure input and output contracts in the node settings. Entry and Exit display the shared workflow input and output contracts. With a blank items path, Batch input must be an array; with a named path, the selected value must be an array. Use **Visual / Raw** to switch between the graph and its JSON definition. The raw editor checks JSON syntax and structure before saving. Publishing also checks the workflow's graph.
 
-Select **Publish version** when the draft is ready, then **Run v1** to supply input and start a run. Each run uses a fixed published version. Editing a draft does not change an existing run.
+Select **Review & publish** when the draft is ready. The review compares the current definition, including unsaved edits, with the latest published version. It lists node, route, prompt, setting, contract, and layout changes; expand an item to inspect its values. A new workflow shows its first publication. Select **Publish version** in the review to save the draft and publish it, then **Run v1** to supply input and start a run. Each run uses a fixed published version. Editing a draft does not change an existing run.
 
 Use **Undo** and **Redo** beside **Save draft** to reverse or restore up to 50 editor actions. The shortcuts are Ctrl/Command+Z and Ctrl/Command+Shift+Z; text fields keep their own typing undo. A drag, group move, deletion, connection change, or settings application counts as one action. Saving preserves history. Leaving the workflow, reloading the page, or loading an external draft clears it. Undo changes the editable draft, never a published version.
 
@@ -257,7 +257,7 @@ To publish a shared workflow and advance all its published callers, run:
 interlock publish CHILD_ID --cascade
 ```
 
-MCP callers can use `publish_workflow` with `{"id":"CHILD_ID","cascade":true}`. The shared API accepts the same `cascade` option. Ordinary publication, including the UI's Publish version action, keeps parent pins unchanged.
+MCP callers can use `publish_workflow` with `{"id":"CHILD_ID","cascade":true}`. The shared API accepts the same `cascade` option. Ordinary publication, including the editor's review and publish flow, keeps parent pins unchanged.
 
 The cascade follows references in each workflow's latest published definition, including archived workflows and references inside Batches. It advances references to affected workflows and republishes each dependent once, children before parents. Unrelated pins stay unchanged. Draft-only workflows and references found only in older versions are excluded.
 

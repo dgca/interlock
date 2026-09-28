@@ -1,0 +1,149 @@
+.modal {
+  max-height: min(90vh, 900px);
+  display: flex;
+  flex-direction: column;
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 14px;
+}
+.baseline {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.counts span {
+  padding: 5px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-size: 11px;
+}
+.empty {
+  margin: 0;
+  font-size: 12px;
+}
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #e89481;
+  font-size: 12px;
+}
+.list {
+  overflow: auto;
+  min-height: 0;
+  max-height: min(56vh, 540px);
+  padding-right: 4px;
+}
+.group + .group {
+  margin-top: 18px;
+}
+.group h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.group h3 span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+.item summary {
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 11px;
+  font-size: 12px;
+  list-style: none;
+}
+.item summary::-webkit-details-marker {
+  display: none;
+}
+.item summary::after {
+  content: '⌄';
+  margin-left: auto;
+  color: var(--muted);
+}
+.item[open] summary::after {
+  transform: rotate(180deg);
+}
+.item summary small {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kind {
+  text-transform: capitalize;
+  min-width: 54px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.added {
+  color: #80cfa6;
+}
+.removed {
+  color: #e89481;
+}
+.changed {
+  color: #e3c47f;
+}
+.details {
+  padding: 0 11px 11px;
+}
+.detail + .detail {
+  margin-top: 10px;
+}
+.path {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+.values {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 8px;
+}
+.values > div {
+  min-width: 0;
+}
+.values span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+.values pre {
+  margin: 0;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+  font-size: 11px;
+  max-height: 300px;
+  overflow: auto;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
