@@ -25,18 +25,14 @@ function Detail({ path, before, after }: ValueChange) {
     <div className={styles.detail}>
       <div className={styles.path}>{path}</div>
       <div className={styles.values}>
-        {before !== undefined && (
-          <div>
-            <span>Published</span>
-            <pre>{format(before)}</pre>
-          </div>
-        )}
-        {after !== undefined && (
-          <div>
-            <span>Draft</span>
-            <pre>{format(after)}</pre>
-          </div>
-        )}
+        <div>
+          <span>Published</span>
+          <pre>{format(before)}</pre>
+        </div>
+        <div>
+          <span>Draft</span>
+          <pre>{format(after)}</pre>
+        </div>
       </div>
     </div>
   );
@@ -165,11 +161,6 @@ export function PublishReviewDialog({
             {count === 0 && (
               <p className={styles.empty}>
                 No definition changes. Publishing still creates a new version.
-              </p>
-            )}
-            {diff.firstPublication && (
-              <p className={styles.first}>
-                This version adds the draft definition.
               </p>
             )}
             <div className={styles.list}>

@@ -25,8 +25,7 @@
   border-radius: 6px;
   font-size: 11px;
 }
-.empty,
-.first {
+.empty {
   margin: 0;
   font-size: 12px;
 }

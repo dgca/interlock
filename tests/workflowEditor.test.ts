@@ -409,6 +409,45 @@ it('reviews valid unsaved Raw edits and shows prompt details before publishing',
   expect(rpc.publish).toHaveBeenCalledTimes(1);
 });
 
+it('shows both values when node contract fields are added or removed', async () => {
+  const published = structuredClone(workflow.draft);
+  const publishedAgent = published.nodes.find((node) => node.kind === 'agent')!;
+  publishedAgent.outputSchema = {
+    type: 'object',
+    properties: { removed: { type: 'string' } },
+  };
+  const draft = structuredClone(published);
+  const draftAgent = draft.nodes.find((node) => node.kind === 'agent')!;
+  draftAgent.outputSchema = {
+    type: 'object',
+    properties: { added: { type: 'number' } },
+  };
+  workflow.draft = draft;
+  rpc.versions.mockResolvedValue([
+    {
+      workflowId: workflow.id,
+      version: 1,
+      definition: published,
+      createdAt: '',
+    },
+  ]);
+
+  await render();
+  await click('Review & publish');
+  const row = Array.from(document.querySelectorAll('details')).find((item) =>
+    item.textContent?.includes('Agent assignment'),
+  )!;
+  await act(async () => row.querySelector('summary')!.click());
+  const values = Array.from(row.querySelectorAll('pre')).map(
+    (value) => value.textContent,
+  );
+  expect(values).toHaveLength(4);
+  expect(values[0]).toBe('Not set');
+  expect(values[1]).toContain('"number"');
+  expect(values[2]).toContain('"string"');
+  expect(values[3]).toBe('Not set');
+});
+
 it('keeps the review open after a publication error', async () => {
   rpc.publish.mockRejectedValueOnce(new Error('Publish failed'));
   await render();
