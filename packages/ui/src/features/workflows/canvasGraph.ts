@@ -1,5 +1,6 @@
 import {
   type WorkflowDefinition,
+  type WorkflowEdge,
   type WorkflowNode,
   type Workflow,
 } from '@interlock/core';
@@ -141,10 +142,43 @@ export function canvasGraph(
       onToggle: options.onToggle ? () => options.onToggle!(node.id) : undefined,
     },
   }));
+  // Batch members store positions relative to their group.
+  const absolute = (node: WorkflowNode): { x: number; y: number } => {
+    const parent = parents.get(node.id);
+    const origin = parent ? absolute(index.get(parent)!) : { x: 0, y: 0 };
+    return { x: origin.x + node.position.x, y: origin.y + node.position.y };
+  };
+  // Backward edges (target left of source) leave the graph for a lane below
+  // its bounds, one lane per loop, so they never pass behind nodes.
+  const bottom = Math.max(
+    ...ordered
+      .filter((node) => !hiddenIds.has(node.id))
+      .map((node) => absolute(node).y + size(node).height),
+  );
+  const backward = (edge: WorkflowEdge) => {
+    const source = index.get(edge.source),
+      target = index.get(edge.target);
+    return Boolean(
+      source &&
+      target &&
+        absolute(target).x < absolute(source).x + size(source).width,
+    );
+  };
+  const laneY = new Map(
+    definition.edges
+      .filter((edge) => !hiddenEdge(edge) && backward(edge))
+      .sort(
+        (a, b) =>
+          absolute(index.get(b.source)!).x - absolute(index.get(a.source)!).x,
+      )
+      .map((edge, lane) => [edge.id, bottom + 40 + lane * 24]),
+  );
   return {
     nodes,
     edges: definition.edges.map((edge) => ({
       ...edge,
+      type: laneY.has(edge.id) ? 'loop' : undefined,
+      data: laneY.has(edge.id) ? { laneY: laneY.get(edge.id)! } : undefined,
       selected: selectedIds.has(edge.id),
       sourceHandle: edge.port,
       targetHandle: edge.targetHandle ?? 'default',
