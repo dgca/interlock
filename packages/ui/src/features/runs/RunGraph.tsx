@@ -34,7 +34,7 @@ export function RunGraph({
       nodesDraggable={false}
       nodesConnectable={false}
       elementsSelectable={false}
-      panOnDrag={[0, 1, 2]}
+      panOnDrag={[0, 1]}
       onNodeClick={(_, node) => onSelect(node.id)}
       fitView
       minZoom={0.1}

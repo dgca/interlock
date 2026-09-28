@@ -885,7 +885,7 @@ export function WorkflowEditor({
                   nodesDraggable={!boxZoom.active}
                   nodesConnectable={!boxZoom.active}
                   elementsSelectable={!boxZoom.active}
-                  panOnDrag={boxZoom.active ? false : [1, 2]}
+                  panOnDrag={boxZoom.active ? false : [1]}
                   zoomOnDoubleClick={false}
                   onPaneClick={() => setSelected(new Set())}
                   fitView
