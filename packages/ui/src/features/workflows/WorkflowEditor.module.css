@@ -391,6 +391,10 @@
 .portOutput {
   left: calc(100% + 6px);
 }
+.portActive {
+  color: var(--accent-text);
+  font-weight: 600;
+}
 .batchEnd {
   position: absolute;
   right: 22px;

@@ -131,6 +131,18 @@ export function canvasGraph(
         : (options.selected?.has(node.id) ?? false),
     data: {
       node,
+      activePorts: definition.edges
+        .filter(
+          (edge) =>
+            !hiddenEdge(edge) &&
+            (options.selectedEdges?.has(edge.id) || linkedEdges.has(edge.id)),
+        )
+        .flatMap((edge) => [
+          ...(edge.source === node.id ? [`source:${edge.port}`] : []),
+          ...(edge.target === node.id
+            ? [`target:${edge.targetHandle ?? 'default'}`]
+            : []),
+        ]),
       bindingSources: bindingNodeIds(node).map((id) => {
         const source = bindingNodes(node, definition.nodes).find(
           (candidate) => candidate.id === id,
