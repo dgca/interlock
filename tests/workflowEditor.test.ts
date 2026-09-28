@@ -12,6 +12,7 @@ const rawEditor = vi.hoisted(() => ({ props: undefined as any }));
 const rpc = vi.hoisted(() => ({
   update: vi.fn(),
   publish: vi.fn(),
+  versions: vi.fn(),
   remove: vi.fn(),
   createChild: vi.fn(),
 }));
@@ -22,6 +23,7 @@ vi.mock('../packages/ui/src/lib/api', () => ({
       update: { mutate: rpc.update },
       createChild: { mutate: rpc.createChild },
       publish: { mutate: rpc.publish },
+      versions: { query: rpc.versions },
       delete: { mutate: rpc.remove },
     },
   },
@@ -185,6 +187,10 @@ const click = async (name: string) => {
   expect(button(name), name).toBeTruthy();
   await act(async () => button(name).click());
 };
+const reviewPublish = async () => {
+  await click('Review & publish');
+  await click('Publish version');
+};
 beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
@@ -227,6 +233,18 @@ beforeEach(() => {
     ...workflow,
     latestVersion: workflow.latestVersion + 1,
   }));
+  rpc.versions.mockImplementation(async () =>
+    workflow.latestVersion
+      ? [
+          {
+            workflowId: workflow.id,
+            version: workflow.latestVersion,
+            definition: workflow.draft,
+            createdAt: '',
+          },
+        ]
+      : [],
+  );
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -276,7 +294,7 @@ it('refreshes a clean open editor after an external edit and publishes without a
   await render();
   expect(container.textContent).toContain('Updated externally');
   expect(container.querySelector('[data-raw]')?.textContent).toContain('75');
-  await click('Publish version');
+  await reviewPublish();
   expect(errors).toEqual([]);
   expect(rpc.update).not.toHaveBeenCalled();
   expect(rpc.publish).toHaveBeenCalledTimes(1);
@@ -291,6 +309,7 @@ it('blocks duplicate publish requests while the first is pending', async () => {
       }),
   );
   await render();
+  await click('Review & publish');
   await act(async () => {
     button('Publish version').click();
     button('Publish version').click();
@@ -313,14 +332,14 @@ it('preserves dirty edits after an external update and offers explicit recovery'
   expect(container.querySelector('[data-raw]')?.textContent).toContain('60');
   expect(container.textContent).toContain('changed elsewhere');
   expect(button('Save').disabled).toBe(true);
-  expect(button('Publish version').disabled).toBe(true);
+  expect(button('Review & publish').disabled).toBe(true);
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
   await click('Load latest draft');
   expect(container.querySelector('[data-raw]')?.textContent).toContain('60');
   confirm.mockReturnValue(true);
   await click('Load latest draft');
   expect(container.querySelector('[data-raw]')?.textContent).toContain('75');
-  expect(button('Publish version').disabled).toBe(false);
+  expect(button('Review & publish').disabled).toBe(false);
   confirm.mockRestore();
 });
 
@@ -329,15 +348,127 @@ it('saves local changes before publishing and restores actions after a failure',
   await click('Workflow settings');
   await click('Apply local edit');
   rpc.update.mockRejectedValueOnce(new Error('Offline'));
-  await click('Publish version');
+  await reviewPublish();
   expect(rpc.publish).not.toHaveBeenCalled();
-  expect(button('Publish version').disabled).toBe(false);
+  expect(button('Review & publish').disabled).toBe(false);
   await click('Publish version');
   expect(rpc.update).toHaveBeenLastCalledWith(
     expect.objectContaining({
       draftRevision: 1,
       draft: expect.objectContaining({ maxSteps: 60 }),
     }),
+  );
+  expect(rpc.publish).toHaveBeenCalledTimes(1);
+});
+
+it('reviews a first publication without saving until confirmation', async () => {
+  workflow.latestVersion = 0;
+  await render();
+  await click('Review & publish');
+  expect(document.body.textContent).toContain('First publication');
+  expect(document.body.textContent).toContain('3 node changes');
+  expect(rpc.update).not.toHaveBeenCalled();
+  expect(rpc.publish).not.toHaveBeenCalled();
+  await click('Cancel');
+  expect(rpc.publish).not.toHaveBeenCalled();
+  await reviewPublish();
+  expect(rpc.publish).toHaveBeenCalledTimes(1);
+});
+
+it('reviews valid unsaved Raw edits and shows prompt details before publishing', async () => {
+  const published = structuredClone(workflow.draft);
+  rpc.versions.mockResolvedValue([
+    {
+      workflowId: workflow.id,
+      version: 1,
+      definition: published,
+      createdAt: '',
+    },
+  ]);
+  await render();
+  await click('Raw');
+  const draft = structuredClone(workflow.draft);
+  const agent = draft.nodes.find((node) => node.kind === 'agent')!;
+  agent.prompt = 'A new prompt with details';
+  await act(async () => rawEditor.props.onChange(JSON.stringify(draft)));
+  await click('Review & publish');
+  expect(document.body.textContent).toContain('1 node change');
+  expect(rpc.update).not.toHaveBeenCalled();
+  const row = Array.from(document.querySelectorAll('details')).find((item) =>
+    item.textContent?.includes('Agent assignment'),
+  )!;
+  await act(async () => row.querySelector('summary')!.click());
+  expect(row.textContent).toContain('A new prompt with details');
+  expect(row.textContent).toContain('Process the input');
+  await click('Publish version');
+  expect(rpc.update).toHaveBeenCalledWith(
+    expect.objectContaining({
+      draft: expect.objectContaining({ nodes: draft.nodes }),
+    }),
+  );
+  expect(rpc.publish).toHaveBeenCalledTimes(1);
+});
+
+it('keeps the review open after a publication error', async () => {
+  rpc.publish.mockRejectedValueOnce(new Error('Publish failed'));
+  await render();
+  await reviewPublish();
+  expect(errors).toHaveLength(1);
+  expect(button('Publish version')).toBeTruthy();
+  await click('Publish version');
+  expect(rpc.publish).toHaveBeenCalledTimes(2);
+});
+
+it('can retry publication after saving local edits', async () => {
+  await render();
+  await click('Workflow settings');
+  await click('Apply local edit');
+  rpc.publish.mockRejectedValueOnce(new Error('Publish failed'));
+  await reviewPublish();
+  workflow = await rpc.update.mock.results[0].value;
+  await render();
+  expect(button('Publish version').disabled).toBe(false);
+  await click('Publish version');
+  expect(rpc.update).toHaveBeenCalledTimes(1);
+  expect(rpc.publish).toHaveBeenCalledTimes(2);
+});
+
+it('blocks confirming a review after a newer version appears', async () => {
+  await render();
+  await click('Review & publish');
+  workflow = { ...workflow, latestVersion: 2 };
+  await render();
+  expect(document.body.textContent).toContain(
+    'changed since the review opened',
+  );
+  expect(button('Publish version').disabled).toBe(true);
+  expect(rpc.publish).not.toHaveBeenCalled();
+});
+
+it('blocks publication when versions fail to load and offers a retry', async () => {
+  rpc.versions.mockRejectedValueOnce(new Error('Offline'));
+  await render();
+  await click('Review & publish');
+  expect(document.body.textContent).toContain(
+    'Could not load published versions: Offline',
+  );
+  expect(button('Publish version').disabled).toBe(true);
+  await click('Retry');
+  expect(document.body.textContent).toContain('No definition changes');
+  expect(button('Publish version').disabled).toBe(false);
+});
+
+it('publishes a Raw repair of an invalid visual draft', async () => {
+  const complete = structuredClone(workflow.draft);
+  workflow.draft.edges = [];
+  await render();
+  expect(button('Review & publish').disabled).toBe(true);
+  await click('Raw');
+  await act(async () => rawEditor.props.onChange(JSON.stringify(complete)));
+  expect(button('Review & publish').disabled).toBe(false);
+  await reviewPublish();
+  expect(rpc.update).toHaveBeenCalledWith(
+    expect.objectContaining({ draft: complete }),
   );
   expect(rpc.publish).toHaveBeenCalledTimes(1);
 });
@@ -420,10 +551,10 @@ it('reports invalid Batch scope routes in Visual and Raw and blocks publication'
     }),
   );
   expect(container.textContent).toContain('cannot cross Batch groups');
-  expect(button('Publish version').disabled).toBe(true);
+  expect(button('Review & publish').disabled).toBe(true);
   await click('Raw');
   expect(container.textContent).toContain('Draft can be saved');
-  expect(button('Publish version').disabled).toBe(true);
+  expect(button('Review & publish').disabled).toBe(true);
   const invalid = JSON.parse(rawEditor.props.value);
   invalid.edges[0].targetHandle = 'typo';
   await act(async () => rawEditor.props.onChange(JSON.stringify(invalid)));
@@ -444,7 +575,7 @@ it('selects and deletes an End connection without persisting selection state', a
   await act(async () =>
     canvas.props.onEdgesChange([{ type: 'remove', id: 'end' }]),
   );
-  expect(button('Publish version').disabled).toBe(true);
+  expect(button('Review & publish').disabled).toBe(true);
   await click('Save draft');
   expect(
     rpc.update.mock.calls[0][0].draft.edges.some((e: any) => e.id === 'end'),
@@ -535,7 +666,7 @@ it('keeps history through saving and publishing without undoing the saved revisi
   await render();
   const original = positions();
   await click(`Move ${original[0].id}`);
-  await click('Publish version');
+  await reviewPublish();
   workflow = { ...(await rpc.update.mock.results[0].value), latestVersion: 2 };
   await render();
   expect(button('Save draft').disabled).toBe(true);

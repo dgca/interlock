@@ -34,6 +34,14 @@
 
 The branch contains the accepted intent, spec, and plan, the comparison and dialog code, focused tests, affected docs, and a pending patch changeset. Focused tests, build, and format checks pass. The review step checks behavior against the approved artifacts before a PR is prepared for human review.
 
+## Verification results
+
+- `pnpm test`: 391 tests passed across 39 files after rebasing on current `main`. This included HTTP and stdio MCP transport tests.
+- `pnpm exec vitest run tests/workflowDiff.test.ts tests/workflowEditor.test.ts tests/rawDefinition.test.ts tests/cascadePublish.test.ts`: 47 tests passed after the final editor change.
+- `pnpm build` and `pnpm format:check`: passed after the final editor change.
+- Browser check against a temporary database: reviewed unchanged and first-publication dialogs, expanded first-publication details, published a new test workflow, then reviewed an unsaved prompt change. Checked 1200px and 390px viewports; the dialog kept details scrollable and its actions visible.
+- Compared README, `docs/architecture.md`, `docs/v1.md`, CLI publish syntax, and MCP list, get, create, update, and publish guidance with the unchanged server API. No MCP definition change was needed. The full MCP tool set was not audited.
+
 ## Open questions
 
 None blocking. Browser inspection may lead to spacing or label adjustments within the approved design.

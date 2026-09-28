@@ -39,6 +39,7 @@ import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 import { parseRawDefinition } from './rawDefinition';
 import { SettingsDialog, type Settings } from './SettingsDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
+import { PublishReviewDialog } from './PublishReviewDialog';
 import { FlowNode, type CanvasNode } from './FlowNode';
 import { canvasGraph, withoutNodes } from './canvasGraph';
 import { useWorkflowHistory } from './useWorkflowHistory';
@@ -78,6 +79,11 @@ export function WorkflowEditor({
   const owner = workflows.find((w) => w.id === workflow.ownerWorkflowId);
   const hasChildren = workflows.some((w) => w.ownerWorkflowId === workflow.id);
   const [deleting, setDeleting] = useState(false);
+  const [review, setReview] = useState<{
+    draft: WorkflowDefinition;
+    revision: number;
+    version: number;
+  }>();
   const [navigationPending, setNavigationPending] = useState(false);
   const [pending, setPending] = useState<'save' | 'publish'>();
   const actionInFlight = useRef(false);
@@ -506,18 +512,15 @@ export function WorkflowEditor({
                   Boolean(pending)
                 }
                 onClick={() =>
-                  perform('publish', async () => {
-                    await save();
-                    const published = await api.workflows.publish.mutate({
-                      id: workflow.id,
-                    });
-                    onSaved(published);
-                    return published;
+                  setReview({
+                    draft: structuredClone(effectiveDraft),
+                    revision: workflow.draftRevision,
+                    version: workflow.latestVersion,
                   })
                 }
               >
                 <Upload />
-                {pending === 'publish' ? 'Publishing…' : 'Publish version'}
+                Review &amp; publish
               </Button>
             </>
           )}
@@ -977,6 +980,45 @@ export function WorkflowEditor({
           {runsView}
         </Tabs.Panel>
       </Tabs>
+      {review && (
+        <PublishReviewDialog
+          workflowId={workflow.id}
+          latestVersion={workflow.latestVersion}
+          draft={review.draft}
+          pending={pending === 'publish'}
+          editorChanged={
+            remoteChanged ||
+            workflow.draftRevision !== review.revision ||
+            workflow.latestVersion !== review.version
+          }
+          onClose={() => setReview(undefined)}
+          onPublish={() => {
+            if (
+              remoteChanged ||
+              rawInvalid ||
+              rawResult?.publishError ||
+              (view === 'visual' && graphError) ||
+              workflow.draftRevision !== review.revision ||
+              workflow.latestVersion !== review.version
+            )
+              return;
+            perform('publish', async () => {
+              const savedWorkflow = await save();
+              setReview((current) =>
+                current
+                  ? { ...current, revision: savedWorkflow.draftRevision }
+                  : current,
+              );
+              const published = await api.workflows.publish.mutate({
+                id: workflow.id,
+              });
+              onSaved(published);
+              setReview(undefined);
+              return published;
+            });
+          }}
+        />
+      )}
       {deleting && (
         <DeleteWorkflowDialog
           workflow={workflow}
