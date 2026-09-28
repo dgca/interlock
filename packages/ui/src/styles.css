@@ -34,6 +34,7 @@
   --pink-soft: #352638;
   --pink-border: #78536e;
   --edge: #7189ae;
+  --edge-exception: var(--mantine-color-yellow-5);
   --focus-ring: #82b4ff22;
   --canvas-dot: #35353f;
 }

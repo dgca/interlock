@@ -391,7 +391,7 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
               id="timeout"
               label="Timeout"
               top={outputPortTop(n, 'timeout')}
-              color="var(--mantine-color-yellow-5)"
+              color="var(--edge-exception)"
             />
           </>
         ) : (

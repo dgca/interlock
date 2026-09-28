@@ -9,7 +9,6 @@ import type { CanvasNode } from './FlowNode';
 import type { LoopEdgeData } from './LoopEdge';
 import { canvasGeometry } from './canvasGeometry';
 import { bindingNodeIds, bindingNodes } from './inputBindings';
-import { conditionColors } from './conditionColors';
 import styles from './WorkflowEditor.module.css';
 
 type Options = {
@@ -241,13 +240,11 @@ export function canvasGraph(
       targetHandle: edge.targetHandle ?? 'default',
       className:
         endpoints && !selectedIds.has(edge.id) ? 'edge-dimmed' : undefined,
+      // Only exception routes carry color; ordinary flow shares --edge.
       style:
-        index.get(edge.source)?.kind === 'condition' &&
-        (edge.port === 'true' || edge.port === 'false')
-          ? { stroke: conditionColors[edge.port] }
-          : index.get(edge.source)?.kind === 'agent' && edge.port === 'timeout'
-            ? { stroke: 'var(--mantine-color-yellow-5)' }
-            : undefined,
+        index.get(edge.source)?.kind === 'agent' && edge.port === 'timeout'
+          ? { stroke: 'var(--edge-exception)' }
+          : undefined,
       hidden: hiddenEdge(edge),
     })),
   };
