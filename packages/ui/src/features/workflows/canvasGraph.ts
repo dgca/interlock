@@ -8,6 +8,7 @@ import type { CanvasNode } from './FlowNode';
 import { canvasGeometry } from './canvasGeometry';
 import { bindingNodeIds, bindingNodes } from './inputBindings';
 import { conditionColors } from './conditionColors';
+import styles from './WorkflowEditor.module.css';
 
 type Options = {
   workflows?: Workflow[];
@@ -49,12 +50,26 @@ export function canvasGraph(
     ordered.push(node);
   };
   definition.nodes.forEach(add);
-  // While an edge is selected, its endpoints stand out and everything else dims.
-  const endpoints = options.selectedEdges?.size
+  const hiddenIds = new Set(ordered.filter(hidden).map((node) => node.id));
+  const hiddenEdge = (edge: WorkflowDefinition['edges'][number]) =>
+    hiddenIds.has(edge.source) ||
+    hiddenIds.has(edge.target) ||
+    (index.get(edge.source)?.kind === 'batch' &&
+      edge.port === 'item' &&
+      Boolean(options.collapsed?.has(edge.source))) ||
+    (edge.targetHandle === 'end' &&
+      Boolean(options.collapsed?.has(edge.target)));
+  const selectedVisibleEdges = definition.edges.filter(
+    (edge) =>
+      options.selectedEdges?.has(edge.id) &&
+      index.has(edge.source) &&
+      index.has(edge.target) &&
+      !hiddenEdge(edge),
+  );
+  const selectedIds = new Set(selectedVisibleEdges.map((edge) => edge.id));
+  const endpoints = selectedVisibleEdges.length
     ? new Set(
-        definition.edges
-          .filter((edge) => options.selectedEdges!.has(edge.id))
-          .flatMap((edge) => [edge.source, edge.target]),
+        selectedVisibleEdges.flatMap((edge) => [edge.source, edge.target]),
       )
     : undefined;
   const nodes: CanvasNode[] = ordered.map((node) => ({
@@ -67,11 +82,11 @@ export function canvasGraph(
     dragHandle: node.kind === 'batch' ? '.batch-drag' : undefined,
     ...size(node),
     style: size(node),
-    hidden: hidden(node),
+    hidden: hiddenIds.has(node.id),
     className: endpoints
       ? endpoints.has(node.id)
-        ? 'edge-endpoint'
-        : 'edge-dimmed'
+        ? styles.edgeEndpoint
+        : styles.edgeDimmed
       : undefined,
     deletable: node.kind !== 'entry' && node.kind !== 'exit',
     selected:
@@ -126,18 +141,15 @@ export function canvasGraph(
       onToggle: options.onToggle ? () => options.onToggle!(node.id) : undefined,
     },
   }));
-  const hiddenIds = new Set(nodes.filter((n) => n.hidden).map((n) => n.id));
   return {
     nodes,
     edges: definition.edges.map((edge) => ({
       ...edge,
-      selected: options.selectedEdges?.has(edge.id),
+      selected: selectedIds.has(edge.id),
       sourceHandle: edge.port,
       targetHandle: edge.targetHandle ?? 'default',
       className:
-        endpoints && !options.selectedEdges?.has(edge.id)
-          ? 'edge-dimmed'
-          : undefined,
+        endpoints && !selectedIds.has(edge.id) ? 'edge-dimmed' : undefined,
       style:
         index.get(edge.source)?.kind === 'condition' &&
         (edge.port === 'true' || edge.port === 'false')
@@ -145,14 +157,7 @@ export function canvasGraph(
           : index.get(edge.source)?.kind === 'agent' && edge.port === 'timeout'
             ? { stroke: 'var(--mantine-color-yellow-5)' }
             : undefined,
-      hidden:
-        hiddenIds.has(edge.source) ||
-        hiddenIds.has(edge.target) ||
-        (index.get(edge.source)?.kind === 'batch' &&
-          edge.port === 'item' &&
-          Boolean(options.collapsed?.has(edge.source))) ||
-        (edge.targetHandle === 'end' &&
-          Boolean(options.collapsed?.has(edge.target))),
+      hidden: hiddenEdge(edge),
     })),
   };
 }

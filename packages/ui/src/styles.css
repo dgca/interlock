@@ -300,18 +300,10 @@ summary {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
 }
-/* A selected edge comes forward: thicker, endpoints outlined, the rest dimmed. */
 .react-flow__edge.selected .react-flow__edge-path {
   stroke-width: 3;
 }
-.react-flow__node.edge-endpoint > div {
-  border-color: var(--accent);
-  box-shadow:
-    0 0 0 2px var(--focus-ring),
-    0 5px 15px #0003;
-}
-.react-flow__edge.edge-dimmed,
-.react-flow__node.edge-dimmed {
+.react-flow__edge.edge-dimmed {
   opacity: 0.3;
 }
 .react-flow__edge-text {
