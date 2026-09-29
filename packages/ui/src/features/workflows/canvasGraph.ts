@@ -9,7 +9,6 @@ import type { CanvasNode } from './FlowNode';
 import type { LoopEdgeData } from './LoopEdge';
 import { canvasGeometry } from './canvasGeometry';
 import { bindingNodeIds, bindingNodes } from './inputBindings';
-import { conditionColors } from './conditionColors';
 import styles from './WorkflowEditor.module.css';
 
 type Options = {
@@ -18,6 +17,7 @@ type Options = {
   collapsed?: Set<string>;
   selected?: string | Set<string>;
   selectedEdges?: Set<string>;
+  hovered?: string;
   onEdit?: (node: WorkflowNode) => void;
   onAdd?: (batchId: string) => void;
   onToggle?: (batchId: string) => void;
@@ -74,6 +74,53 @@ export function canvasGraph(
         selectedVisibleEdges.flatMap((edge) => [edge.source, edge.target]),
       )
     : undefined;
+  // Emphasize the hovered node's routes, else the single selected node's.
+  // Only canvas selection (the Set form) counts: the run inspector passes the
+  // inspected node as a string and should not dim the rest of the run.
+  const hovered =
+    options.hovered &&
+    index.has(options.hovered) &&
+    !hiddenIds.has(options.hovered)
+      ? options.hovered
+      : undefined;
+  const focus =
+    selectedIds.size > 0
+      ? undefined
+      : (hovered ??
+        (options.selected instanceof Set && options.selected.size === 1
+          ? [...options.selected][0]
+          : undefined));
+  const linkedNodes = new Set<string>(),
+    linkedEdges = new Set<string>();
+  if (focus !== undefined && index.has(focus) && !hiddenIds.has(focus)) {
+    linkedNodes.add(focus);
+    for (const edge of definition.edges)
+      if (
+        !hiddenEdge(edge) &&
+        (edge.source === focus || edge.target === focus)
+      ) {
+        linkedEdges.add(edge.id);
+        linkedNodes.add(edge.source);
+        linkedNodes.add(edge.target);
+      }
+  }
+  const emphasis = (id: string, linked: Set<string>) =>
+    linkedNodes.size === 0
+      ? undefined
+      : linked.has(id)
+        ? 'highlighted'
+        : 'dimmed';
+  const activePorts = new Map<string, Set<string>>();
+  const addActivePort = (nodeId: string, port: string) => {
+    const ports = activePorts.get(nodeId) ?? new Set<string>();
+    ports.add(port);
+    activePorts.set(nodeId, ports);
+  };
+  for (const edge of definition.edges) {
+    if (!selectedIds.has(edge.id) && !linkedEdges.has(edge.id)) continue;
+    addActivePort(edge.source, `source:${edge.port}`);
+    addActivePort(edge.target, `target:${edge.targetHandle ?? 'default'}`);
+  }
   const nodes: CanvasNode[] = ordered.map((node) => ({
     id: node.id,
     type: 'workflow',
@@ -89,7 +136,11 @@ export function canvasGraph(
       ? endpoints.has(node.id)
         ? styles.edgeEndpoint
         : styles.edgeDimmed
-      : undefined,
+      : linkedNodes.size
+        ? linkedNodes.has(node.id)
+          ? styles.edgeEndpoint
+          : styles.edgeDimmed
+        : undefined,
     deletable: node.kind !== 'entry' && node.kind !== 'exit',
     selected:
       typeof options.selected === 'string'
@@ -97,6 +148,7 @@ export function canvasGraph(
         : (options.selected?.has(node.id) ?? false),
     data: {
       node,
+      activePorts: [...(activePorts.get(node.id) ?? [])],
       bindingSources: bindingNodeIds(node).map((id) => {
         const source = bindingNodes(node, definition.nodes).find(
           (candidate) => candidate.id === id,
@@ -239,15 +291,18 @@ export function canvasGraph(
       selected: selectedIds.has(edge.id),
       sourceHandle: edge.port,
       targetHandle: edge.targetHandle ?? 'default',
-      className:
-        endpoints && !selectedIds.has(edge.id) ? 'edge-dimmed' : undefined,
+      className: endpoints
+        ? selectedIds.has(edge.id)
+          ? undefined
+          : 'edge-dimmed'
+        : emphasis(edge.id, linkedEdges),
+      // Only exception routes carry color; ordinary flow shares --edge.
       style:
-        index.get(edge.source)?.kind === 'condition' &&
-        (edge.port === 'true' || edge.port === 'false')
-          ? { stroke: conditionColors[edge.port] }
-          : index.get(edge.source)?.kind === 'agent' && edge.port === 'timeout'
-            ? { stroke: 'var(--mantine-color-yellow-5)' }
-            : undefined,
+        index.get(edge.source)?.kind === 'agent' &&
+        edge.port === 'timeout' &&
+        !selectedIds.has(edge.id)
+          ? { stroke: 'var(--edge-exception)' }
+          : undefined,
       hidden: hiddenEdge(edge),
     })),
   };

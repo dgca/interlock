@@ -34,6 +34,7 @@
   --pink-soft: #352638;
   --pink-border: #78536e;
   --edge: #7189ae;
+  --edge-exception: var(--mantine-color-yellow-5);
   --focus-ring: #82b4ff22;
   --canvas-dot: #35353f;
 }
@@ -285,6 +286,17 @@ summary {
   --xy-controls-button-color: var(--accent-text);
   --xy-controls-button-border-color: var(--border-strong);
   --xy-minimap-background-color: var(--canvas);
+}
+/* Fade unrelated nodes and edges while tracing a route. */
+.react-flow__node,
+.react-flow__edge {
+  transition: opacity 120ms;
+}
+.react-flow__edge.dimmed {
+  opacity: 0.3;
+}
+.react-flow__edge.highlighted {
+  --xy-edge-stroke-width: 2.5;
 }
 .react-flow__controls {
   bottom: 39px !important;

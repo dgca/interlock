@@ -5,7 +5,7 @@ import {
   type NodeProps,
   type Node,
 } from '@xyflow/react';
-import { useEffect } from 'react';
+import { createContext, useContext, useEffect, useMemo } from 'react';
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -54,6 +54,8 @@ export type CanvasNode = Node<{
   onAdd?: () => void;
   onToggle?: () => void;
   collapsed?: boolean;
+  /** `source:<port>` / `target:<handle>` keys of ports whose edge is selected or highlighted. */
+  activePorts?: string[];
 }>;
 const icons = {
   entry: ArrowUpFromLine,
@@ -82,6 +84,7 @@ function contractLabel(schema: WorkflowNode['inputSchema']): string {
     : 'Any';
 }
 
+const ActivePorts = createContext<ReadonlySet<string>>(new Set());
 function Port({
   id,
   type,
@@ -95,6 +98,8 @@ function Port({
   top?: number | string;
   color?: string;
 }) {
+  // The port whose edge is selected or highlighted lights up with it.
+  const active = useContext(ActivePorts).has(`${type}:${id}`);
   return (
     <>
       <Handle
@@ -102,11 +107,20 @@ function Port({
         position={type === 'target' ? Position.Left : Position.Right}
         id={id}
         aria-label={label}
-        style={{ top, backgroundColor: color }}
+        style={{
+          top,
+          backgroundColor: color,
+          borderColor: active ? 'var(--accent)' : undefined,
+        }}
       />
       <span
-        className={type === 'target' ? styles.portInput : styles.portOutput}
-        style={{ top, color }}
+        className={[
+          type === 'target' ? styles.portInput : styles.portOutput,
+          active ? styles.portActive : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        style={{ top, color: active ? undefined : color }}
       >
         {label}
       </span>
@@ -114,7 +128,18 @@ function Port({
   );
 }
 
-export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
+export function FlowNode(props: NodeProps<CanvasNode>) {
+  const active = useMemo(
+    () => new Set(props.data.activePorts ?? []),
+    [props.data.activePorts],
+  );
+  return (
+    <ActivePorts.Provider value={active}>
+      <FlowNodeBody {...props} />
+    </ActivePorts.Provider>
+  );
+}
+function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
   const n = data.node,
     Icon = icons[n.kind];
   const updateNodeInternals = useUpdateNodeInternals();
@@ -391,7 +416,7 @@ export function FlowNode({ data, selected }: NodeProps<CanvasNode>) {
               id="timeout"
               label="Timeout"
               top={outputPortTop(n, 'timeout')}
-              color="var(--mantine-color-yellow-5)"
+              color="var(--edge-exception)"
             />
           </>
         ) : (
