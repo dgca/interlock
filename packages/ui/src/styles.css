@@ -278,6 +278,7 @@ summary {
   --xy-background-color: var(--canvas);
   --xy-edge-stroke: var(--edge);
   --xy-edge-stroke-width: 1.5;
+  --xy-edge-stroke-selected: var(--accent);
   --xy-handle-background-color: var(--accent);
   --xy-handle-border-color: var(--border-strong);
   --xy-controls-button-background-color: var(--accent-soft);
@@ -298,6 +299,12 @@ summary {
   box-sizing: content-box;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3;
+}
+.react-flow__edge.edge-dimmed {
+  opacity: 0.3;
 }
 .react-flow__edge-text {
   fill: var(--accent-text) !important;

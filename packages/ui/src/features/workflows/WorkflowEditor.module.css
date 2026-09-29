@@ -171,11 +171,16 @@
   box-shadow: 0 5px 15px #0003;
   position: relative;
 }
-.nodeSelected {
+.nodeSelected,
+.edgeEndpoint > .node,
+.edgeEndpoint > .batchGroup {
   border-color: var(--accent);
   box-shadow:
     0 0 0 2px var(--focus-ring),
     0 5px 15px #0003;
+}
+.edgeDimmed {
+  opacity: 0.3;
 }
 .nodeHeading {
   display: flex;

@@ -40,6 +40,52 @@ it('collapses all descendants without hiding the outer continuation or changing 
   ]);
   expect(d).toEqual(original);
 });
+it('emphasizes only edges that still exist and remain visible', () => {
+  const definition = batchDefinition();
+  const selectedEdges = new Set(['in']);
+  const selected = canvasGraph(definition, { selectedEdges });
+  const entryClass = selected.nodes.find(
+    (node) => node.id === 'entry',
+  )?.className;
+  expect(entryClass).toBeTruthy();
+  expect(selected.nodes.find((node) => node.id === 'batch')?.className).toBe(
+    entryClass,
+  );
+  expect(selected.nodes.find((node) => node.id === 'exit')?.className).not.toBe(
+    entryClass,
+  );
+  expect(
+    selected.edges.find((edge) => edge.id === 'in')?.className,
+  ).toBeUndefined();
+  expect(
+    selected.edges.find((edge) => edge.id === 'complete')?.className,
+  ).toBeTruthy();
+
+  const removed = canvasGraph(
+    {
+      ...definition,
+      edges: definition.edges.filter((edge) => edge.id !== 'in'),
+    },
+    { selectedEdges },
+  );
+  expect(removed.nodes.every((node) => node.className === undefined)).toBe(
+    true,
+  );
+  expect(removed.edges.every((edge) => edge.className === undefined)).toBe(
+    true,
+  );
+
+  const collapsed = canvasGraph(definition, {
+    selectedEdges: new Set(['item']),
+    collapsed: new Set(['batch']),
+  });
+  expect(collapsed.nodes.every((node) => node.className === undefined)).toBe(
+    true,
+  );
+  expect(collapsed.edges.every((edge) => edge.className === undefined)).toBe(
+    true,
+  );
+});
 it('deleting a group removes descendants and incident edges but keeps outer nodes', () => {
   const d = withoutNodes(nestedBatches(3), new Set(['batch']));
   expect(d.nodes.map((n) => n.id)).toEqual(['entry', 'exit']);
