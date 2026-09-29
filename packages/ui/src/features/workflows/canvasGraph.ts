@@ -77,16 +77,22 @@ export function canvasGraph(
   // Emphasize the hovered node's routes, else the single selected node's.
   // Only canvas selection (the Set form) counts: the run inspector passes the
   // inspected node as a string and should not dim the rest of the run.
+  const hovered =
+    options.hovered &&
+    index.has(options.hovered) &&
+    !hiddenIds.has(options.hovered)
+      ? options.hovered
+      : undefined;
   const focus =
     selectedIds.size > 0
       ? undefined
-      : (options.hovered ??
+      : (hovered ??
         (options.selected instanceof Set && options.selected.size === 1
           ? [...options.selected][0]
           : undefined));
   const linkedNodes = new Set<string>(),
     linkedEdges = new Set<string>();
-  if (focus !== undefined && !hiddenIds.has(focus)) {
+  if (focus !== undefined && index.has(focus) && !hiddenIds.has(focus)) {
     linkedNodes.add(focus);
     for (const edge of definition.edges)
       if (
@@ -104,6 +110,17 @@ export function canvasGraph(
       : linked.has(id)
         ? 'highlighted'
         : 'dimmed';
+  const activePorts = new Map<string, Set<string>>();
+  const addActivePort = (nodeId: string, port: string) => {
+    const ports = activePorts.get(nodeId) ?? new Set<string>();
+    ports.add(port);
+    activePorts.set(nodeId, ports);
+  };
+  for (const edge of definition.edges) {
+    if (!selectedIds.has(edge.id) && !linkedEdges.has(edge.id)) continue;
+    addActivePort(edge.source, `source:${edge.port}`);
+    addActivePort(edge.target, `target:${edge.targetHandle ?? 'default'}`);
+  }
   const nodes: CanvasNode[] = ordered.map((node) => ({
     id: node.id,
     type: 'workflow',
@@ -131,18 +148,7 @@ export function canvasGraph(
         : (options.selected?.has(node.id) ?? false),
     data: {
       node,
-      activePorts: definition.edges
-        .filter(
-          (edge) =>
-            !hiddenEdge(edge) &&
-            (options.selectedEdges?.has(edge.id) || linkedEdges.has(edge.id)),
-        )
-        .flatMap((edge) => [
-          ...(edge.source === node.id ? [`source:${edge.port}`] : []),
-          ...(edge.target === node.id
-            ? [`target:${edge.targetHandle ?? 'default'}`]
-            : []),
-        ]),
+      activePorts: [...(activePorts.get(node.id) ?? [])],
       bindingSources: bindingNodeIds(node).map((id) => {
         const source = bindingNodes(node, definition.nodes).find(
           (candidate) => candidate.id === id,
@@ -285,15 +291,16 @@ export function canvasGraph(
       selected: selectedIds.has(edge.id),
       sourceHandle: edge.port,
       targetHandle: edge.targetHandle ?? 'default',
-      className:
-        endpoints
-          ? selectedIds.has(edge.id)
-            ? undefined
-            : 'edge-dimmed'
-          : emphasis(edge.id, linkedEdges),
+      className: endpoints
+        ? selectedIds.has(edge.id)
+          ? undefined
+          : 'edge-dimmed'
+        : emphasis(edge.id, linkedEdges),
       // Only exception routes carry color; ordinary flow shares --edge.
       style:
-        index.get(edge.source)?.kind === 'agent' && edge.port === 'timeout'
+        index.get(edge.source)?.kind === 'agent' &&
+        edge.port === 'timeout' &&
+        !selectedIds.has(edge.id)
           ? { stroke: 'var(--edge-exception)' }
           : undefined,
       hidden: hiddenEdge(edge),

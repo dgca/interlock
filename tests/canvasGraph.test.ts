@@ -51,6 +51,16 @@ it('collapses all descendants without hiding the outer continuation or changing 
     'complete',
   ]);
   expect(d).toEqual(original);
+  const hovered = canvasGraph(d, {
+    collapsed: new Set(['batch']),
+    hovered: 'batch',
+  });
+  expect(hovered.edges.find((edge) => edge.id === 'item')?.className).toBe(
+    'dimmed',
+  );
+  expect(
+    hovered.nodes.find((node) => node.id === 'batch')?.data.activePorts,
+  ).not.toContain('source:item');
 });
 it('emphasizes only edges that still exist and remain visible', () => {
   const definition = batchDefinition();
@@ -97,6 +107,131 @@ it('emphasizes only edges that still exist and remain visible', () => {
   expect(collapsed.edges.every((edge) => edge.className === undefined)).toBe(
     true,
   );
+  expect(collapsed.nodes.every((node) => !node.data.activePorts?.length)).toBe(
+    true,
+  );
+});
+it('traces a hovered or singly selected node through its visible edges and ports', () => {
+  const definition = definitionSchema.parse({
+    nodes: [
+      placedNode('a', 0, 0),
+      placedNode('b', 300, 0),
+      placedNode('c', 600, 0),
+      placedNode('d', 900, 0),
+    ],
+    edges: [
+      { id: 'ab', source: 'a', target: 'b' },
+      { id: 'bc', source: 'b', target: 'c' },
+      { id: 'cd', source: 'c', target: 'd' },
+    ],
+  });
+  const hovered = canvasGraph(definition, { hovered: 'b' });
+  expect(hovered.edges.map((edge) => edge.className)).toEqual([
+    'highlighted',
+    'highlighted',
+    'dimmed',
+  ]);
+  const node = (id: string) => hovered.nodes.find((item) => item.id === id)!;
+  expect(node('a').className).toBe(node('b').className);
+  expect(node('c').className).toBe(node('b').className);
+  expect(node('d').className).not.toBe(node('b').className);
+  expect(node('a').data.activePorts).toEqual(['source:default']);
+  expect(node('b').data.activePorts).toEqual([
+    'target:default',
+    'source:default',
+  ]);
+  expect(node('c').data.activePorts).toEqual(['target:default']);
+  expect(node('d').data.activePorts).toEqual([]);
+
+  const selected = canvasGraph(definition, { selected: new Set(['b']) });
+  expect(selected.edges.map((edge) => edge.className)).toEqual(
+    hovered.edges.map((edge) => edge.className),
+  );
+  const multiple = canvasGraph(definition, { selected: new Set(['b', 'c']) });
+  expect(multiple.edges.every((edge) => edge.className === undefined)).toBe(
+    true,
+  );
+  const inspecting = canvasGraph(definition, { selected: 'b' });
+  expect(inspecting.edges.every((edge) => edge.className === undefined)).toBe(
+    true,
+  );
+});
+it('keeps selected-edge emphasis ahead of hover and ignores stale hover IDs', () => {
+  const definition = definitionSchema.parse({
+    nodes: [
+      placedNode('a', 0, 0),
+      placedNode('b', 300, 0),
+      placedNode('c', 600, 0),
+    ],
+    edges: [
+      { id: 'ab', source: 'a', target: 'b' },
+      { id: 'bc', source: 'b', target: 'c' },
+    ],
+  });
+  const graph = canvasGraph(definition, {
+    selectedEdges: new Set(['ab']),
+    hovered: 'c',
+  });
+  expect(graph.edges.find((edge) => edge.id === 'ab')).toMatchObject({
+    selected: true,
+    className: undefined,
+  });
+  expect(graph.edges.find((edge) => edge.id === 'bc')?.className).toBe(
+    'edge-dimmed',
+  );
+  expect(graph.nodes.find((node) => node.id === 'c')?.data.activePorts).toEqual(
+    [],
+  );
+  expect(graph.nodes.find((node) => node.id === 'b')?.data.activePorts).toEqual(
+    ['target:default'],
+  );
+  const stale = canvasGraph(definition, {
+    selected: new Set(['b']),
+    hovered: 'removed',
+  });
+  expect(stale.edges.find((edge) => edge.id === 'ab')?.className).toBe(
+    'highlighted',
+  );
+});
+it('colors only exception edges until they are selected', () => {
+  const definition = definitionSchema.parse({
+    nodes: [
+      nodeSchema.parse({
+        id: 'condition',
+        kind: 'condition',
+        label: 'Condition',
+        path: 'ok',
+        equals: true,
+      }),
+      nodeSchema.parse({
+        id: 'agent',
+        kind: 'agent',
+        label: 'Agent',
+        prompt: 'Do work',
+      }),
+      placedNode('target-a', 600, 0),
+      placedNode('target-b', 900, 0),
+    ],
+    edges: [
+      { id: 'true', source: 'condition', port: 'true', target: 'target-a' },
+      { id: 'false', source: 'condition', port: 'false', target: 'target-b' },
+      { id: 'timeout', source: 'agent', port: 'timeout', target: 'target-a' },
+    ],
+  });
+  const graph = canvasGraph(definition);
+  expect(graph.edges.find((edge) => edge.id === 'true')?.style).toBeUndefined();
+  expect(
+    graph.edges.find((edge) => edge.id === 'false')?.style,
+  ).toBeUndefined();
+  expect(graph.edges.find((edge) => edge.id === 'timeout')?.style).toEqual({
+    stroke: 'var(--edge-exception)',
+  });
+  const selected = canvasGraph(definition, {
+    selectedEdges: new Set(['timeout']),
+  });
+  expect(
+    selected.edges.find((edge) => edge.id === 'timeout')?.style,
+  ).toBeUndefined();
 });
 it('keeps overlapping backward edges on separate lanes', () => {
   const definition = definitionSchema.parse({

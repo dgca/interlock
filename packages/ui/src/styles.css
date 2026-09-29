@@ -287,13 +287,11 @@ summary {
   --xy-controls-button-border-color: var(--border-strong);
   --xy-minimap-background-color: var(--canvas);
 }
-/* Hovering a node (or selecting exactly one) keeps its routes and their
-   endpoints; everything else dims. */
+/* Fade unrelated nodes and edges while tracing a route. */
 .react-flow__node,
 .react-flow__edge {
   transition: opacity 120ms;
 }
-.react-flow__node.dimmed,
 .react-flow__edge.dimmed {
   opacity: 0.3;
 }

@@ -2,4 +2,4 @@
 '@type_of/interlock': patch
 ---
 
-Highlight a node's incoming and outgoing edges and their neighboring nodes when it is hovered or is the only selected node, dimming the rest of the canvas; the run inspector graph highlights on hover. Condition True and False edges now use the neutral edge color, leaving amber for exception routes such as Agent Timeout.
+Hovering a node or selecting exactly one highlights its connected edges, neighboring nodes, and port labels and handles while dimming the rest of the canvas. Run inspection highlights on hover, and a selected edge takes priority. Condition True and False edges now use the neutral color; Agent Timeout edges remain amber until selected.
