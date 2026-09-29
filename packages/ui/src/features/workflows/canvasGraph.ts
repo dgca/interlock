@@ -1,10 +1,12 @@
 import {
   type WorkflowDefinition,
+  type WorkflowEdge,
   type WorkflowNode,
   type Workflow,
 } from '@interlock/core';
 import type { Edge } from '@xyflow/react';
 import type { CanvasNode } from './FlowNode';
+import type { LoopEdgeData } from './LoopEdge';
 import { canvasGeometry } from './canvasGeometry';
 import { bindingNodeIds, bindingNodes } from './inputBindings';
 import { conditionColors } from './conditionColors';
@@ -141,10 +143,99 @@ export function canvasGraph(
       onToggle: options.onToggle ? () => options.onToggle!(node.id) : undefined,
     },
   }));
+  // Batch members store positions relative to their group.
+  const absolute = (node: WorkflowNode): { x: number; y: number } => {
+    const parent = parents.get(node.id);
+    const origin = parent ? absolute(index.get(parent)!) : { x: 0, y: 0 };
+    return { x: origin.x + node.position.x, y: origin.y + node.position.y };
+  };
+  // Route loops below the cards between their endpoints. Overlapping
+  // neighboring cards keep the default curve.
+  const LOOP_MARGIN = 8;
+  const visible = ordered.filter((node) => !hiddenIds.has(node.id));
+  const span = (edge: WorkflowEdge) => {
+    const source = index.get(edge.source)!,
+      target = index.get(edge.target)!;
+    return {
+      left: absolute(target).x,
+      right: absolute(source).x + size(source).width,
+    };
+  };
+  const backward = (edge: WorkflowEdge) => {
+    const source = index.get(edge.source),
+      target = index.get(edge.target);
+    return Boolean(
+      source &&
+      target &&
+      absolute(target).x + size(target).width + LOOP_MARGIN <
+        absolute(source).x,
+    );
+  };
+  const corridorBottom = (edge: WorkflowEdge) => {
+    const { left, right } = span(edge);
+    return Math.max(
+      ...visible
+        .filter((node) => {
+          const x = absolute(node).x;
+          return x < right && x + size(node).width > left;
+        })
+        .map((node) => absolute(node).y + size(node).height),
+    );
+  };
+  const loops = definition.edges
+    .filter((edge) => !hiddenEdge(edge) && backward(edge))
+    .sort(
+      (a, b) =>
+        absolute(index.get(b.source)!).x - absolute(index.get(a.source)!).x,
+    );
+  const sideGap = (
+    node: WorkflowNode,
+    side: 'left' | 'right',
+    laneY: number,
+  ) => {
+    const origin = absolute(node);
+    const boundary = side === 'right' ? origin.x + size(node).width : origin.x;
+    let gap = Infinity;
+    for (const other of visible) {
+      if (other.id === node.id) continue;
+      const position = absolute(other);
+      const otherRight = position.x + size(other).width;
+      if (position.y >= laneY || position.y + size(other).height <= origin.y)
+        continue;
+      if (side === 'right' && otherRight > boundary)
+        gap = Math.min(gap, Math.max(0, position.x - boundary));
+      if (side === 'left' && position.x < boundary)
+        gap = Math.min(gap, Math.max(0, boundary - otherRight));
+    }
+    return gap;
+  };
+  const lane = new Map<string, LoopEdgeData>();
+  loops.forEach((edge, i) => {
+    let laneY = corridorBottom(edge) + 40;
+    while (
+      [...lane.values()].some((route) => Math.abs(route.laneY - laneY) < 24)
+    )
+      laneY += 24;
+    const desiredOffset = 24 + i * 12;
+    const offset = (gap: number) =>
+      Number.isFinite(gap)
+        ? Math.min(
+            desiredOffset,
+            (Math.max(0, gap - 4) * (i + 1)) / (loops.length + 1),
+          )
+        : desiredOffset;
+    lane.set(edge.id, {
+      laneY,
+      outOffset: offset(sideGap(index.get(edge.source)!, 'right', laneY)),
+      inOffset: offset(sideGap(index.get(edge.target)!, 'left', laneY)),
+    });
+  });
   return {
     nodes,
     edges: definition.edges.map((edge) => ({
       ...edge,
+      type: lane.has(edge.id) ? 'loop' : undefined,
+      data: lane.get(edge.id),
       selected: selectedIds.has(edge.id),
       sourceHandle: edge.port,
       targetHandle: edge.targetHandle ?? 'default',
