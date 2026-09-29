@@ -1,7 +1,10 @@
 import { BaseEdge, type Edge, type EdgeProps } from '@xyflow/react';
-export type LoopEdgeData = { laneY: number; lane: number };
+export type LoopEdgeData = {
+  laneY: number;
+  outOffset: number;
+  inOffset: number;
+};
 const STUB = 24;
-const LANE_GAP = 12;
 const RADIUS = 8;
 /** Route a loop around the graph: out of the source, down to its lane, left, and up into the target. */
 export function LoopEdge({
@@ -15,12 +18,12 @@ export function LoopEdge({
   style,
   interactionWidth,
 }: EdgeProps<Edge<LoopEdgeData, 'loop'>>) {
-  const lane = data?.lane ?? 0;
   const laneY = data?.laneY ?? Math.max(sourceY, targetY) + STUB;
-  // Each loop also gets its own x offsets, so verticals don't stack on one line.
-  const outX = sourceX + STUB + lane * LANE_GAP;
-  const inX = targetX - STUB - lane * LANE_GAP;
-  const r = RADIUS;
+  const outOffset = data?.outOffset ?? STUB;
+  const inOffset = data?.inOffset ?? STUB;
+  const outX = sourceX + outOffset;
+  const inX = targetX - inOffset;
+  const r = Math.min(RADIUS, outOffset / 2, inOffset / 2);
   const down = laneY > sourceY;
   const up = targetY < laneY;
   const path = [

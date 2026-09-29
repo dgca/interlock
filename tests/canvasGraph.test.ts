@@ -1,9 +1,21 @@
 import { expect, it } from 'vitest';
+import { definitionSchema, nodeSchema } from '@interlock/core';
 import {
   canvasGraph,
   withoutNodes,
 } from '../packages/ui/src/features/workflows/canvasGraph';
 import { nestedBatches, batchDefinition } from './fixtures/batch';
+
+function placedNode(id: string, x: number, y: number) {
+  return nodeSchema.parse({
+    id,
+    kind: 'script',
+    label: id,
+    language: 'javascript',
+    command: 'return input;',
+    position: { x, y },
+  });
+}
 
 it('renders nested groups parent-first with relative positions and explicit End edges', () => {
   const d = nestedBatches(2);
@@ -84,6 +96,60 @@ it('emphasizes only edges that still exist and remain visible', () => {
   );
   expect(collapsed.edges.every((edge) => edge.className === undefined)).toBe(
     true,
+  );
+});
+it('keeps overlapping backward edges on separate lanes', () => {
+  const definition = definitionSchema.parse({
+    nodes: [
+      placedNode('target-a', 0, 24),
+      placedNode('source-a', 1400, 24),
+      placedNode('target-b', 400, 0),
+      placedNode('source-b', 900, 0),
+    ],
+    edges: [
+      { id: 'a', source: 'source-a', target: 'target-a' },
+      { id: 'b', source: 'source-b', target: 'target-b' },
+      { id: 'forward', source: 'target-a', target: 'source-a' },
+    ],
+  });
+  const graph = canvasGraph(definition, { selectedEdges: new Set(['a']) });
+  const a = graph.edges.find((edge) => edge.id === 'a')!;
+  const b = graph.edges.find((edge) => edge.id === 'b')!;
+  const forward = graph.edges.find((edge) => edge.id === 'forward')!;
+  expect(a.type).toBe('loop');
+  expect(b.type).toBe('loop');
+  expect(forward.type).toBeUndefined();
+  expect(a.selected).toBe(true);
+  expect(b.className).toBe('edge-dimmed');
+  const aY = (a.data as { laneY: number }).laneY;
+  const bY = (b.data as { laneY: number }).laneY;
+  expect(Math.abs(aY - bY)).toBeGreaterThanOrEqual(24);
+});
+it('keeps loop verticals in the free gaps beside their endpoints', () => {
+  const definition = definitionSchema.parse({
+    nodes: [
+      placedNode('target', 0, 0),
+      placedNode('source', 500, 0),
+      placedNode('right-neighbor', 730, 100),
+      placedNode('left-neighbor', -230, 100),
+    ],
+    edges: [{ id: 'loop', source: 'source', target: 'target' }],
+  });
+  const graph = canvasGraph(definition);
+  const edge = graph.edges.find((item) => item.id === 'loop')!;
+  const offsets = edge.data as { outOffset: number; inOffset: number };
+  const source = graph.nodes.find((node) => node.id === 'source')!;
+  const target = graph.nodes.find((node) => node.id === 'target')!;
+  const right = graph.nodes.find((node) => node.id === 'right-neighbor')!;
+  const left = graph.nodes.find((node) => node.id === 'left-neighbor')!;
+  expect(edge.type).toBe('loop');
+  expect(offsets.outOffset).toBeGreaterThan(0);
+  expect(offsets.inOffset).toBeGreaterThan(0);
+  expect(source.position.x + source.width! + offsets.outOffset).toBeLessThan(
+    right.position.x,
+  );
+  expect(target.position.x - offsets.inOffset).toBeGreaterThan(
+    left.position.x + left.width!,
   );
 });
 it('deleting a group removes descendants and incident edges but keeps outer nodes', () => {
