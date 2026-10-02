@@ -240,7 +240,8 @@ const asSchema = (value: unknown): Record<string, unknown> =>
     : {};
 const shape = (schema: Record<string, unknown>): Shape => ({
   schema,
-  state: Object.keys(schema).length ? 'known' : 'unknown',
+  state: primitiveType(schema) ? 'known' : 'unknown',
+  ...(schemaUncertain(schema) ? { uncertain: true } : {}),
 });
 const supportedKeys = new Set([
   'type',
@@ -266,6 +267,27 @@ function primitiveType(schema: Record<string, unknown>): string | undefined {
     ].includes(schema.type)
     ? schema.type
     : undefined;
+}
+function schemaUncertain(schema: Record<string, unknown>, depth = 0): boolean {
+  const type = primitiveType(schema);
+  if (
+    !type ||
+    depth >= 8 ||
+    Object.keys(schema).some((key) => !supportedKeys.has(key))
+  )
+    return true;
+  if (type === 'object')
+    return (
+      Object.values(asSchema(schema.properties)).some((property) =>
+        schemaUncertain(asSchema(property), depth + 1),
+      ) ||
+      (typeof schema.additionalProperties === 'object' &&
+        schema.additionalProperties !== null &&
+        schemaUncertain(asSchema(schema.additionalProperties), depth + 1))
+    );
+  if (type === 'array')
+    return schemaUncertain(asSchema(schema.items), depth + 1);
+  return false;
 }
 function propertyShape(source: Shape, key: string): Shape {
   if (source.propertyShapes && Object.hasOwn(source.propertyShapes, key))

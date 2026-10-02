@@ -708,6 +708,96 @@ it('reports unknown for a selected unsupported leaf without an explicit consumer
   );
 });
 
+it.each([
+  ['type union', { type: ['string', 'number'] }, 'value'],
+  ['annotation only', { description: 'Name' }, 'value'],
+  [
+    'array index with union items',
+    { type: 'array', items: { type: ['string', 'number'] } },
+    'value.0',
+  ],
+  [
+    'whole object with complex property',
+    object({ name: { anyOf: [{ type: 'string' }, { type: 'number' }] } }),
+    'value',
+  ],
+  [
+    'whole object with annotation property',
+    object({ name: { description: 'Name' } }),
+    'value',
+  ],
+  [
+    'whole array with complex items',
+    {
+      type: 'array',
+      items: { anyOf: [{ type: 'string' }, { type: 'number' }] },
+    },
+    'value',
+  ],
+  [
+    'whole array with union items',
+    { type: 'array', items: { type: ['string', 'number'] } },
+    'value',
+  ],
+] as const)(
+  'reports unknown for %s without a consumer contract',
+  (_, schema, path) => {
+    const d = blankDefinition();
+    d.inputSchema = object({ value: schema });
+    d.nodes[1].inputBindings = { selected: { source: 'input', path } };
+    expect(diagnoseDraft(d).diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'binding_unknown',
+          nodeId: 'agent',
+          path: 'nodes.1.inputBindings.selected.path',
+        }),
+      ]),
+    );
+  },
+);
+
+it('retains known siblings and excluded paths within partially unknown schemas', () => {
+  const d = blankDefinition();
+  d.inputSchema = object({
+    value: object({
+      name: { type: ['string', 'number'] },
+      count: { type: 'number' },
+    }),
+  });
+  d.nodes[1].inputBindings = {
+    whole: { source: 'input', path: 'value' },
+    known: { source: 'input', path: 'value.count' },
+    missing: { source: 'input', path: 'value.absent' },
+  };
+  d.nodes[1].inputSchema = object({ known: { type: 'string' } });
+  const diagnostics = diagnoseDraft(d).diagnostics;
+  expect(diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        code: 'binding_unknown',
+        path: 'nodes.1.inputBindings.whole.path',
+      }),
+      expect.objectContaining({
+        code: 'binding_missing_path',
+        path: 'nodes.1.inputBindings.missing.path',
+      }),
+      expect.objectContaining({
+        code: 'contract_type_conflict',
+        path: 'nodes.1.inputSchema.known',
+      }),
+    ]),
+  );
+  expect(diagnostics).not.toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        code: 'binding_unknown',
+        path: 'nodes.1.inputBindings.known.path',
+      }),
+    ]),
+  );
+});
+
 it('preserves recursive projection uncertainty and independent known field conflicts', () => {
   const recursive = blankDefinition();
   recursive.nodes[1] = nodeSchema.parse({
