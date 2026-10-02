@@ -375,6 +375,61 @@ it('rolls back disallowed owned-child references and diagnoses missing versions 
   });
 });
 
+it.each([
+  ['add_edge', false],
+  ['update_edge', false],
+  ['remove_edge', false],
+  ['update_edge', true],
+] as const)(
+  'attributes ownership errors to node edits before %s (later node update: %s)',
+  (op, updateNode) => {
+    const d = blankDefinition();
+    if (op !== 'add_edge') d.edges[1].id = 'child';
+    const { engine, workflow: w } = setup(d);
+    const other = engine.create('Other');
+    const child = engine.create('Child', '', blankDefinition(), other.id);
+    const before = engine.workflow(w.id);
+    const edits: unknown[] = [
+      {
+        op: 'add_node',
+        node: {
+          id: 'child',
+          kind: 'workflow',
+          label: 'Child',
+          workflowId: child.id,
+          version: null,
+        },
+      },
+    ];
+    if (updateNode)
+      edits.push({ op: 'update_node', id: 'child', set: { label: 'Renamed' } });
+    edits.push(
+      op === 'add_edge'
+        ? { op, edge: { id: 'child', source: 'agent', target: 'exit' } }
+        : op === 'update_edge'
+          ? { op, id: 'child', set: { source: 'entry' } }
+          : { op, id: 'child' },
+    );
+    expect(engine.editDraft(w.id, w.draftRevision, edits)).toMatchObject({
+      applied: false,
+      draftRevision: w.draftRevision,
+      changes: {
+        nodes: { added: [], updated: [], removed: [] },
+        edges: { added: [], updated: [], removed: [] },
+        settings: [],
+      },
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'workflow_ownership',
+          nodeId: 'child',
+          operationIndex: updateNode ? 1 : 0,
+        }),
+      ]),
+    });
+    expect(engine.workflow(w.id)).toEqual(before);
+  },
+);
+
 const object = (properties: Record<string, unknown>) => ({
   type: 'object',
   properties,

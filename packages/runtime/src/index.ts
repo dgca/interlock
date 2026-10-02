@@ -244,14 +244,23 @@ export class Engine {
           (d) => d.category === 'save' && d.severity === 'error',
         )
       ) {
-        // The latest edit touching a rejected reference identifies its operation.
+        // The latest node edit touching a rejected reference identifies its operation.
         for (const diagnostic of validation.diagnostics) {
-          if (diagnostic.category !== 'save' || !Array.isArray(edits)) continue;
+          if (
+            diagnostic.category !== 'save' ||
+            !diagnostic.nodeId ||
+            !Array.isArray(edits)
+          )
+            continue;
           for (let i = edits.length - 1; i >= 0; i--) {
-            const edit = edits[i] as { id?: string; node?: { id?: string } };
+            const edit = edits[i] as {
+              op: string;
+              id?: string;
+              node?: { id?: string };
+            };
             if (
-              edit.id === diagnostic.nodeId ||
-              edit.node?.id === diagnostic.nodeId
+              (edit.op === 'update_node' && edit.id === diagnostic.nodeId) ||
+              (edit.op === 'add_node' && edit.node?.id === diagnostic.nodeId)
             ) {
               diagnostic.operationIndex = i;
               break;
