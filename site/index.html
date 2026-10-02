@@ -27,6 +27,7 @@
     <script>
       document.documentElement.classList.replace('no-js', 'js');
     </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;510;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
@@ -62,6 +63,7 @@
       html {
         scroll-behavior: smooth;
         scroll-padding-top: 6rem;
+        scrollbar-color: #2a2f3a var(--void);
       }
       @media (prefers-reduced-motion: reduce) {
         html {
@@ -78,6 +80,8 @@
       }
       a {
         color: inherit;
+        text-underline-offset: 3px;
+        text-decoration-thickness: 1px;
       }
       img {
         display: block;
@@ -97,6 +101,26 @@
         margin: 0 auto;
         padding: 0 32px;
       }
+      :focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 3px;
+        border-radius: 6px;
+      }
+      .skip {
+        position: fixed;
+        left: 16px;
+        top: -60px;
+        z-index: 70;
+        padding: 10px 16px;
+        border-radius: 99px;
+        background: var(--blue);
+        color: #06101f;
+        font: 600 14px var(--sans);
+        text-decoration: none;
+      }
+      .skip:focus {
+        top: 16px;
+      }
       ::selection {
         background: rgba(130, 180, 255, 0.3);
       }
@@ -107,7 +131,7 @@
         inset: 0 0 auto 0;
         height: 2px;
         z-index: 60;
-        background: linear-gradient(90deg, var(--blue), var(--pink));
+        background: var(--blue);
         transform-origin: 0 50%;
         transform: scaleX(0);
       }
@@ -149,8 +173,8 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 0 10px 0 4px;
-        font: 600 13px var(--sans);
+        padding: 6px 10px 6px 4px;
+        font: 600 12.5px var(--sans);
         letter-spacing: 0.01em;
         text-decoration: none;
       }
@@ -201,16 +225,22 @@
       /* ============ dot rail ============ */
       .rail {
         position: fixed;
-        right: 18px;
+        right: 10px;
         top: 50%;
         translate: 0 -50%;
         z-index: 50;
         display: flex;
         flex-direction: column;
-        gap: 14px;
       }
       .rail a {
-        display: block;
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        position: relative;
+      }
+      .rail a::before {
+        content: '';
         width: 8px;
         height: 8px;
         border-radius: 50%;
@@ -218,24 +248,21 @@
         transition:
           background 0.25s,
           transform 0.25s;
-        position: relative;
       }
-      .rail a:hover {
+      .rail a:hover::before {
         background: rgba(255, 255, 255, 0.5);
       }
-      .rail a.on {
+      .rail a.on::before {
         background: var(--blue);
         transform: scale(1.25);
       }
       .rail a span {
         position: absolute;
-        right: 18px;
+        right: 28px;
         top: 50%;
         translate: 0 -50%;
         white-space: nowrap;
-        font: 600 11px var(--mono);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
+        font: 500 12.5px var(--sans);
         color: var(--dim);
         opacity: 0;
         pointer-events: none;
@@ -355,26 +382,6 @@
         margin: 0 auto;
         padding: 0 32px;
       }
-      .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        font: 600 11.5px var(--mono);
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: var(--dim);
-        border: 1px solid var(--line2);
-        border-radius: 99px;
-        padding: 7px 14px;
-        background: rgba(255, 255, 255, 0.03);
-      }
-      .eyebrow .dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--green);
-        box-shadow: 0 0 8px var(--green);
-      }
       h1 {
         font: 600 clamp(38px, 5.2vw, 68px) / 1.04 var(--sans);
         letter-spacing: -0.025em;
@@ -385,11 +392,8 @@
       h2 .gray {
         color: #646b78;
       }
-      h1 .grad {
-        background: linear-gradient(90deg, var(--blue), var(--pink));
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
+      h1 .accent {
+        color: var(--blue);
       }
       .hero .deck {
         max-width: 58ch;
@@ -436,7 +440,7 @@
         background: #9cc4ff;
       }
       .btn code {
-        font: 400 13px var(--mono);
+        font: 400 12.5px var(--mono);
       }
       .btn:focus-visible {
         outline: 2px solid var(--blue);
@@ -444,8 +448,7 @@
       }
       .hero .stampline {
         margin-top: 22px;
-        font: 400 12px var(--mono);
-        letter-spacing: 0.05em;
+        font: 400 13px var(--sans);
         color: var(--dim);
       }
 
@@ -475,8 +478,6 @@
         border: 1px solid var(--line2);
         background: rgba(255, 255, 255, 0.04);
         padding: 10px;
-        -webkit-backdrop-filter: blur(14px);
-        backdrop-filter: blur(14px);
       }
       .frame .inner {
         position: relative;
@@ -538,11 +539,10 @@
         max-width: 250px;
         padding: 11px 13px;
         border-radius: 10px;
-        border: 1px solid rgba(0, 0, 0, 0.4);
         background: #eef1f6;
         font: 400 12.5px/1.45 var(--sans);
         color: #4b5262;
-        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
         transition:
           transform 0.25s,
           opacity 0.3s;
@@ -560,9 +560,7 @@
       }
       .anno .k {
         display: block;
-        font: 600 10.5px var(--mono);
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
+        font: 600 12.5px var(--sans);
         color: var(--blue-deep);
         margin-bottom: 3px;
       }
@@ -593,14 +591,12 @@
         text-align: inherit;
       }
       button.zoom::after {
-        content: '⤢ expand';
+        content: 'Expand';
         position: absolute;
         right: 12px;
         bottom: 12px;
         z-index: 3;
-        font: 600 10.5px var(--mono);
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
+        font: 600 12.5px var(--sans);
         color: var(--ink);
         background: rgba(12, 13, 17, 0.82);
         border: 1px solid var(--line2);
@@ -681,8 +677,7 @@
         }
       }
       .chno {
-        font: 600 12px var(--mono);
-        letter-spacing: 0.14em;
+        font: 600 12.5px var(--mono);
         color: var(--blue);
         margin-bottom: 14px;
         display: flex;
@@ -710,23 +705,17 @@
         font-weight: 510;
       }
       .label {
-        font: 600 11.5px var(--mono);
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
+        font: 500 12.5px/1.55 var(--sans);
         color: var(--dim);
       }
 
       /* reveals: IO fallback layer */
       .js [data-io] {
-        opacity: 0;
-        translate: 0 26px;
-        transition:
-          opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-          translate 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+        translate: 0 14px;
+        transition: translate 0.8s cubic-bezier(0.16, 1, 0.3, 1);
         transition-delay: calc(var(--i, 0) * 90ms);
       }
       .js [data-io].in {
-        opacity: 1;
         translate: 0 0;
       }
       @media (prefers-reduced-motion: reduce) {
@@ -756,7 +745,7 @@
         padding: 22px 24px 0;
       }
       .shotcard h3 {
-        font: 600 17px var(--sans);
+        font: 600 18px var(--sans);
         margin: 0 0 6px;
         letter-spacing: -0.01em;
       }
@@ -764,31 +753,6 @@
         font: 400 14px/1.55 var(--sans);
         color: var(--dim);
         margin: 0 0 16px;
-      }
-      .shotcard .chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font: 600 10px var(--mono);
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--dim);
-        border: 1px solid var(--line2);
-        border-radius: 99px;
-        padding: 4px 9px;
-        margin-bottom: 12px;
-      }
-      .shotcard .chip i {
-        width: 5px;
-        height: 5px;
-        border-radius: 50%;
-        background: var(--blue);
-      }
-      .shotcard .chip.p i {
-        background: var(--pink);
-      }
-      .shotcard .chip.a i {
-        background: var(--amber);
       }
 
       /* grids */
@@ -829,9 +793,7 @@
       }
       .stats .lbl {
         margin-top: 8px;
-        font: 600 11px var(--mono);
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
+        font: 500 12.5px var(--sans);
         color: var(--dim);
       }
       @media (max-width: 860px) {
@@ -858,7 +820,7 @@
         border: 1px solid var(--line2);
         border-radius: 10px;
         background: var(--raise);
-        font: 510 13px var(--sans);
+        font: 510 12.5px var(--sans);
         color: var(--ink);
         white-space: nowrap;
         transition:
@@ -866,9 +828,7 @@
           opacity 0.8s;
       }
       .kchip .n {
-        font: 600 10px var(--mono);
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
+        font: 500 12.5px var(--sans);
         color: var(--dim);
       }
       .kchip i {
@@ -909,9 +869,7 @@
         bottom: 0;
         translate: -50% 0;
         color: var(--dim);
-        font: 600 11px var(--mono);
-        letter-spacing: 0.13em;
-        text-transform: uppercase;
+        font: 500 12.5px var(--sans);
         transition: opacity 0.3s;
         white-space: nowrap;
       }
@@ -943,9 +901,7 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        font: 600 11px var(--mono);
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
+        font: 500 12.5px var(--sans);
         color: var(--dim);
       }
       .legend i {
@@ -975,6 +931,7 @@
         position: relative;
         padding: 0 14px;
         text-align: center;
+        min-width: 0;
       }
       .pipe .node {
         position: relative;
@@ -987,7 +944,7 @@
         place-items: center;
         border: 1px solid var(--line2);
         background: var(--raise);
-        font: 600 13px var(--mono);
+        font: 600 12.5px var(--mono);
         color: var(--dim);
         transition:
           border-color 0.4s,
@@ -1001,18 +958,19 @@
         margin-bottom: 4px;
       }
       .pipe .d {
-        font: 400 12px/1.45 var(--sans);
+        font: 400 12.5px/1.45 var(--sans);
         color: var(--dim);
+        overflow-wrap: anywhere;
       }
       .pipe .tag {
         display: inline-block;
         margin-top: 7px;
-        font: 600 10px var(--mono);
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
+        font: 600 11px var(--sans);
         padding: 3px 7px;
         border-radius: 99px;
         border: 1px solid var(--line);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
       }
       .pipe .tag.det {
         color: var(--blue);
@@ -1029,19 +987,22 @@
       .js .pipe.in .step .node {
         border-color: rgba(130, 180, 255, 0.55);
         color: var(--ink);
-        box-shadow: 0 0 22px rgba(130, 180, 255, 0.18);
       }
       .js .pipe.in .step.agt .node {
         border-color: rgba(240, 161, 211, 0.6);
-        box-shadow: 0 0 22px rgba(240, 161, 211, 0.2);
       }
       @media (max-width: 900px) {
         .pipe {
-          grid-template-columns: repeat(3, 1fr);
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           row-gap: 28px;
         }
         .pipe::before {
           display: none;
+        }
+      }
+      @media (max-width: 560px) {
+        .pipe {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
 
@@ -1082,21 +1043,19 @@
           border-color 0.4s;
       }
       .jstep .k {
-        font: 600 11px var(--mono);
-        letter-spacing: 0.13em;
-        text-transform: uppercase;
+        font: 600 12.5px var(--sans);
         color: var(--dim);
         display: block;
         margin-bottom: 5px;
       }
       .jstep h3 {
-        font: 600 19px var(--sans);
+        font: 600 18px var(--sans);
         letter-spacing: -0.01em;
         margin: 0 0 6px;
       }
       .jstep p {
         margin: 0;
-        font-size: 13.5px;
+        font-size: 14px;
         line-height: 1.55;
         color: var(--dim);
       }
@@ -1136,7 +1095,7 @@
         height: auto;
         border-radius: 14px;
         border: 1px solid var(--line2);
-        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
       }
       .journey[data-step='0'] .jshot:nth-child(1),
       .journey[data-step='1'] .jshot:nth-child(2),
@@ -1222,9 +1181,7 @@
         gap: 8px;
         padding: 11px 16px;
         border-bottom: 1px solid var(--line);
-        font: 600 11px var(--mono);
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
+        font: 600 12.5px var(--sans);
         color: var(--dim);
       }
       .replay .bar i {
@@ -1232,7 +1189,6 @@
         height: 6px;
         border-radius: 50%;
         background: var(--green);
-        box-shadow: 0 0 8px var(--green);
       }
       .replay .bar em {
         font-style: normal;
@@ -1249,16 +1205,14 @@
       }
       .rmsg .who {
         display: block;
-        font: 600 10.5px var(--mono);
-        letter-spacing: 0.11em;
-        text-transform: uppercase;
+        font: 600 12.5px var(--sans);
         color: var(--dim);
         margin-bottom: 6px;
       }
       .rmsg p {
         margin: 0;
         padding: 12px 14px;
-        font: 400 13px/1.6 var(--sans);
+        font: 400 12.5px/1.6 var(--sans);
         color: var(--ink);
       }
       .rmsg.you {
@@ -1287,7 +1241,7 @@
         gap: 12px;
         align-items: baseline;
         flex-wrap: wrap;
-        font: 400 12px/1.5 var(--mono);
+        font: 400 12.5px/1.5 var(--mono);
         padding-left: 4px;
       }
       .rtool code {
@@ -1324,8 +1278,8 @@
       /* color break */
       .break {
         border-radius: 20px;
-        background: linear-gradient(135deg, #1d3d6b, #4f86d6 55%, #f0a1d3);
-        color: #050a14;
+        background: linear-gradient(135deg, #82b4ff, #b9b8f0 55%, #f0a1d3);
+        color: #06101f;
         padding: 56px;
         min-height: 340px;
         display: flex;
@@ -1348,15 +1302,16 @@
         letter-spacing: -0.02em;
         margin: 0;
         max-width: 20ch;
-        color: #f6f8fc;
+        color: #06101f;
       }
       .break .foot {
         display: flex;
         gap: 28px;
         flex-wrap: wrap;
-        font: 600 12px var(--mono);
-        letter-spacing: 0.06em;
-        color: rgba(5, 10, 20, 0.92);
+        font: 600 12.5px var(--sans);
+        color: rgba(6, 16, 31, 0.82);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
       }
 
       /* terminal */
@@ -1392,7 +1347,7 @@
         }
       }
       .term .c {
-        color: var(--dimmer);
+        color: #7f8899;
       }
       .term .g {
         color: var(--green);
@@ -1424,11 +1379,8 @@
         color: var(--dim);
       }
       .facts li b {
-        font: 600 11px var(--mono);
-        letter-spacing: 0.11em;
-        text-transform: uppercase;
+        font: 600 14px var(--sans);
         color: var(--ink);
-        padding-top: 3px;
       }
       @media (max-width: 600px) {
         .facts li {
@@ -1463,7 +1415,7 @@
         color: var(--ink);
       }
       .index a .mono {
-        font-size: 11.5px;
+        font-size: 11px;
         color: var(--dim);
       }
       @media (max-width: 700px) {
@@ -1479,12 +1431,12 @@
       footer {
         border-top: 1px solid var(--line);
         padding: 56px 0 80px;
-        font: 400 12.5px/1.8 var(--mono);
+        font: 400 14px/1.7 var(--sans);
         color: var(--dim);
       }
       footer b {
         color: var(--ink);
-        letter-spacing: 0.08em;
+        font-weight: 600;
       }
       footer .row {
         margin-bottom: 18px;
@@ -1521,13 +1473,13 @@
       }
       @keyframes vr {
         from {
-          opacity: 0.001;
-          transform: translateY(44px) scale(0.98);
+          transform: translateY(32px) scale(0.985);
         }
       }
     </style>
   </head>
   <body>
+    <a class="skip" href="#main">Skip to content</a>
     <div class="progress" aria-hidden="true"></div>
 
     <nav class="nav" aria-label="Page">
@@ -1585,15 +1537,11 @@
       <div class="grain" aria-hidden="true"></div>
       <div>
         <div class="hero-inner">
-          <span class="eyebrow"
-            ><span class="dot"></span>Open source · MIT · runs on your
-            machine</span
-          >
           <h1>
             Agent work you can run twice.<br /><span class="gray"
               >Draw the procedure once,</span
             >
-            <span class="grad">then replay it on the record.</span>
+            <span class="accent">then replay it on the record.</span>
           </h1>
           <p class="deck">
             Interlock is a local workflow editor and engine for AI agents. You
@@ -1612,8 +1560,8 @@
             >
           </div>
           <p class="stampline">
-            every screenshot below: interlock v0.1.14 · fresh local database ·
-            real runs captured oct 2, 2026
+            open source, MIT · screenshots from interlock v0.1.14 on a fresh
+            local database, real runs captured oct 2, 2026
           </p>
         </div>
         <figure class="heroshot" style="margin-bottom: 0">
@@ -1628,6 +1576,7 @@
               <img
                 class="zoomable"
                 src="shots/hero-batch-waiting.webp"
+                fetchpriority="high"
                 alt="Interlock run inspector for Build a team roster: a Batch group reading 4 of 7 finished, 3 waiting, a Waiting for an agent banner with Copy instructions for agent, and a details panel listing seven batch items."
                 width="2880"
                 height="1728"
@@ -1648,723 +1597,727 @@
       </div>
     </header>
 
-    <!-- ================= 1.0 DEFINE ================= -->
-    <section class="ch" id="define">
-      <div class="wrap">
-        <div class="chead">
-          <div>
-            <div class="chno">1.0 · DEFINE</div>
-            <h2>
-              Write the procedure down once.
-              <span class="gray">Every run follows the same graph.</span>
-            </h2>
-          </div>
-          <p data-io>
-            Most agent procedures live in a chat log: the steps, their order,
-            and the checks between them are only as repeatable as the last
-            prompt. In Interlock a workflow is a graph with
-            <b>one entry, typed steps, and named exits</b>. The steps that need
-            no judgment run as code. The agent gets
-            <b>only the steps that need it</b>.
-          </p>
-        </div>
-
-        <div
-          class="kinds"
-          id="kinds"
-          aria-label="Ten node kinds arranging into one workflow lane"
-        >
-          <span class="arrow">ten node kinds · one graph</span>
-        </div>
-        <div class="legend" aria-hidden="true">
-          <span><i style="background: var(--dimmer)"></i>entry and exit</span>
-          <span><i style="background: var(--blue)"></i>runs in the engine</span>
-          <span><i style="background: var(--amber)"></i>controls the flow</span>
-          <span><i style="background: var(--pink)"></i>handed to an agent</span>
-        </div>
-
-        <figure
-          class="shotcard vrise"
-          data-io
-          style="margin: 46px 0 22px; position: relative"
-        >
-          <div class="pad">
-            <span class="chip"
-              ><i></i>the visual editor · size up a pokémon</span
-            >
-            <h3>Seven nodes. One of them needs an agent.</h3>
-            <p>
-              An example from the starter library. Fetch asks the public
-              PokéAPI, a JavaScript step computes a stat sheet, a Condition
-              branches on size, and only the small ones reach the Agent node for
-              a mascot pitch. Everything else exits with raw stats.
+    <main id="main">
+      <!-- ================= 1.0 DEFINE ================= -->
+      <section class="ch" id="define">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <div class="chno">1.0</div>
+              <h2>
+                Write the procedure down once.
+                <span class="gray">Every run follows the same graph.</span>
+              </h2>
+            </div>
+            <p data-io>
+              Most agent procedures live in a chat log: the steps, their order,
+              and the checks between them are only as repeatable as the last
+              prompt. In Interlock a workflow is a graph with
+              <b>one entry, typed steps, and named exits</b>. The steps that
+              need no judgment run as code. The agent gets
+              <b>only the steps that need it</b>.
             </p>
           </div>
-          <div class="fog" style="position: relative">
-            <img
-              class="zoomable"
-              src="shots/editor-graph.webp"
-              alt="Interlock visual editor showing the Size up a Pokémon workflow: Entry, Fetch, Script, Condition, Agent assignment, and two Exit nodes, with Save draft, Review and publish, and Run v1 in the toolbar."
-              loading="lazy"
-              width="2448"
-              height="1280"
-            />
-          </div>
-          <div class="anno" style="right: 4%; top: 40%">
-            <span class="k">Deterministic until it isn't</span>Fetch, Script and
-            Condition run in the engine. The <b>Agent assignment</b> is the only
-            step that waits.
-          </div>
-        </figure>
 
-        <div class="grid2" style="align-items: start">
-          <figure class="shotcard vrise" data-io style="margin: 0">
+          <div class="kinds" id="kinds">
+            <span class="arrow">ten node kinds · one graph</span>
+          </div>
+          <div class="legend" aria-hidden="true">
+            <span><i style="background: var(--dimmer)"></i>entry and exit</span>
+            <span
+              ><i style="background: var(--blue)"></i>runs in the engine</span
+            >
+            <span
+              ><i style="background: var(--amber)"></i>controls the flow</span
+            >
+            <span
+              ><i style="background: var(--pink)"></i>handed to an agent</span
+            >
+          </div>
+
+          <figure
+            class="shotcard vrise"
+            data-io
+            style="margin: 46px 0 22px; position: relative"
+          >
             <div class="pad">
-              <span class="chip p"><i></i>agent node settings</span>
-              <h3>The assignment is written into the graph.</h3>
+              <h3>Seven nodes. One of them needs an agent.</h3>
               <p>
-                Prompt, context mode, and context instructions live on the node.
-                A fresh-session requirement is declared here too, and checked
-                against the executor's declared capabilities at claim time.
+                An example from the starter library. Fetch asks the public
+                PokéAPI, a JavaScript step computes a stat sheet, a Condition
+                branches on size, and only the small ones reach the Agent node
+                for a mascot pitch. Everything else exits with raw stats.
               </p>
             </div>
             <div class="fog" style="position: relative">
               <img
                 class="zoomable"
-                src="shots/node-agent.webp"
-                alt="Agent node settings dialog for Write the mascot pitch: name, assignment prompt, context choice between current conversation and fresh agent session, context instructions, and Apply changes."
-                loading="lazy"
-                width="1959"
-                height="1584"
-              />
-            </div>
-          </figure>
-          <figure class="shotcard vrise" data-io style="--i: 1; margin: 0">
-            <div class="pad">
-              <span class="chip"><i></i>visual / raw</span>
-              <h3>Underneath, it is plain JSON.</h3>
-              <p>
-                Switch to Raw to edit the definition directly. Unfinished graphs
-                save as drafts; publishing checks routes, contracts and
-                references. The same definition is what the CLI and MCP tools
-                read and write.
-              </p>
-            </div>
-            <div class="fog" style="position: relative">
-              <img
-                class="zoomable"
-                src="shots/raw-json.webp"
-                alt="Raw JSON editor showing the workflow definition with inputSchema, outputSchema, and the entry node, plus Format JSON, Discard and Save."
+                src="shots/editor-graph.webp"
+                alt="Interlock visual editor showing the Size up a Pokémon workflow: Entry, Fetch, Script, Condition, Agent assignment, and two Exit nodes, with Save draft, Review and publish, and Run v1 in the toolbar."
                 loading="lazy"
                 width="2448"
-                height="1764"
+                height="1280"
               />
             </div>
+            <div class="anno" style="right: 4%; top: 40%">
+              <span class="k">Deterministic until it isn't</span>Fetch, Script
+              and Condition run in the engine. The <b>Agent assignment</b> is
+              the only step that waits.
+            </div>
           </figure>
-        </div>
-      </div>
-    </section>
 
-    <!-- ================= 2.0 CONTRACT ================= -->
-    <section class="ch" id="contract">
-      <div class="wrap">
-        <div class="chead">
-          <div>
-            <div class="chno">2.0 · CONTRACT</div>
-            <h2>
-              Every step says what it accepts.
-              <span class="gray">Every result gets checked.</span>
-            </h2>
+          <div class="grid2" style="align-items: start">
+            <figure class="shotcard vrise" data-io style="margin: 0">
+              <div class="pad">
+                <h3>The assignment is written into the graph.</h3>
+                <p>
+                  Prompt, context mode, and context instructions live on the
+                  node. A fresh-session requirement is declared here too, and
+                  checked against the executor's declared capabilities at claim
+                  time.
+                </p>
+              </div>
+              <div class="fog" style="position: relative">
+                <img
+                  class="zoomable"
+                  src="shots/node-agent.webp"
+                  alt="Agent node settings dialog for Write the mascot pitch: name, assignment prompt, context choice between current conversation and fresh agent session, context instructions, and Apply changes."
+                  loading="lazy"
+                  width="1959"
+                  height="1584"
+                />
+              </div>
+            </figure>
+            <figure class="shotcard vrise" data-io style="--i: 1; margin: 0">
+              <div class="pad">
+                <h3>Underneath, it is plain JSON.</h3>
+                <p>
+                  Switch to Raw to edit the definition directly. Unfinished
+                  graphs save as drafts; publishing checks routes, contracts and
+                  references. The same definition is what the CLI and MCP tools
+                  read and write.
+                </p>
+              </div>
+              <div class="fog" style="position: relative">
+                <img
+                  class="zoomable"
+                  src="shots/raw-json.webp"
+                  alt="Raw JSON editor showing the workflow definition with inputSchema, outputSchema, and the entry node, plus Format JSON, Discard and Save."
+                  loading="lazy"
+                  width="2448"
+                  height="1764"
+                />
+              </div>
+            </figure>
           </div>
-          <p data-io>
-            Workflows and nodes carry <b>input and output contracts</b>: JSON
-            Schema, edited through a field editor or pasted from example JSON.
-            The engine validates real values at execution time. An agent that
-            returns the wrong shape is told exactly what is missing, and
-            <b>its claim stays open</b> so it can correct the answer.
+        </div>
+      </section>
+
+      <!-- ================= 2.0 CONTRACT ================= -->
+      <section class="ch" id="contract">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <div class="chno">2.0</div>
+              <h2>
+                Every step says what it accepts.
+                <span class="gray">Every result gets checked.</span>
+              </h2>
+            </div>
+            <p data-io>
+              Workflows and nodes carry <b>input and output contracts</b>: JSON
+              Schema, edited through a field editor or pasted from example JSON.
+              The engine validates real values at execution time. An agent that
+              returns the wrong shape is told exactly what is missing, and
+              <b>its claim stays open</b> so it can correct the answer.
+            </p>
+          </div>
+
+          <div class="pipe" id="pipe" data-io>
+            <div class="step" style="--i: 0">
+              <div class="node">01</div>
+              <div class="t">Entry</div>
+              <div class="d">
+                input contract: <code>name</code> is a required string
+              </div>
+              <span class="tag det">validated</span>
+            </div>
+            <div class="step" style="--i: 1">
+              <div class="node">02</div>
+              <div class="t">Fetch</div>
+              <div class="d">
+                binds <code>input.name</code> into the URL, returns status,
+                headers, body
+              </div>
+              <span class="tag det">engine</span>
+            </div>
+            <div class="step" style="--i: 2">
+              <div class="node">03</div>
+              <div class="t">Script</div>
+              <div class="d">
+                JavaScript reads <code>input</code>, returns a stat sheet
+              </div>
+              <span class="tag det">engine</span>
+            </div>
+            <div class="step" style="--i: 3">
+              <div class="node">04</div>
+              <div class="t">Condition</div>
+              <div class="d">
+                <code>smallAndAdorable</code> equals <code>true</code>
+              </div>
+              <span class="tag flow">routes</span>
+            </div>
+            <div class="step agt" style="--i: 4">
+              <div class="node">05</div>
+              <div class="t">Agent</div>
+              <div class="d">must return name, pitch and reasoning</div>
+              <span class="tag agt">your agent</span>
+            </div>
+            <div class="step" style="--i: 5">
+              <div class="node">06</div>
+              <div class="t">Exit</div>
+              <div class="d">the run's output, stored with every step</div>
+              <span class="tag det">recorded</span>
+            </div>
+          </div>
+          <p
+            class="label"
+            style="text-align: center; margin: 6px 0 46px"
+            data-io
+          >
+            blue steps rerun to the same answer · the pink step is the only one
+            that waits for judgment
           </p>
-        </div>
 
-        <div class="pipe" id="pipe" data-io>
-          <div class="step" style="--i: 0">
-            <div class="node">01</div>
-            <div class="t">Entry</div>
-            <div class="d">
-              input contract: <code>name</code> is a required string
-            </div>
-            <span class="tag det">validated</span>
-          </div>
-          <div class="step" style="--i: 1">
-            <div class="node">02</div>
-            <div class="t">Fetch</div>
-            <div class="d">
-              binds <code>input.name</code> into the URL, returns status,
-              headers, body
-            </div>
-            <span class="tag det">engine</span>
-          </div>
-          <div class="step" style="--i: 2">
-            <div class="node">03</div>
-            <div class="t">Script</div>
-            <div class="d">
-              JavaScript reads <code>input</code>, returns a stat sheet
-            </div>
-            <span class="tag det">engine</span>
-          </div>
-          <div class="step" style="--i: 3">
-            <div class="node">04</div>
-            <div class="t">Condition</div>
-            <div class="d">
-              <code>smallAndAdorable</code> equals <code>true</code>
-            </div>
-            <span class="tag flow">routes</span>
-          </div>
-          <div class="step agt" style="--i: 4">
-            <div class="node">05</div>
-            <div class="t">Agent</div>
-            <div class="d">must return name, pitch and reasoning</div>
-            <span class="tag agt">your agent</span>
-          </div>
-          <div class="step" style="--i: 5">
-            <div class="node">06</div>
-            <div class="t">Exit</div>
-            <div class="d">the run's output, stored with every step</div>
-            <span class="tag det">recorded</span>
-          </div>
-        </div>
-        <p class="label" style="text-align: center; margin: 6px 0 46px" data-io>
-          blue steps rerun to the same answer · the pink step is the only one
-          that waits for judgment
-        </p>
-
-        <div class="grid2" style="align-items: center">
-          <div class="term vrise" data-io>
-            <div class="bar"><i></i><i></i><i></i></div>
-            <pre><span class="c"># the agent's first try leaves out a required field</span>
+          <div class="grid2" style="align-items: center">
+            <div class="term vrise" data-io>
+              <div class="bar"><i></i><i></i><i></i></div>
+              <pre><span class="c"># the agent's first try leaves out a required field</span>
 $ interlock submit $WORK $TOKEN '{"name":"togepi","pitch":"Tiny."}'
 <span class="a">Agent result: Missing required field "reasoning".</span>
 
 <span class="c"># same claim, corrected answer</span>
 $ interlock submit $WORK $TOKEN @pitch.json
 <span class="c"># response: </span><span class="g">"run": { "status": "completed", … }</span></pre>
+            </div>
+            <div data-io style="--i: 1">
+              <p class="label" style="margin-bottom: 12px">
+                captured from the run on this page
+              </p>
+              <p
+                style="
+                  font: 400 16.5px/1.6 var(--sans);
+                  color: var(--dim);
+                  margin: 0 0 14px;
+                  max-width: 46ch;
+                "
+              >
+                The rejection above is real output from the Togepi run in
+                chapter 3. Repeating an accepted result with the same token is
+                idempotent; a changed duplicate, a stale token, or a cancelled
+                claim is rejected.
+              </p>
+              <p
+                style="
+                  font: 400 16.5px/1.6 var(--sans);
+                  color: var(--dim);
+                  margin: 0;
+                  max-width: 46ch;
+                "
+              >
+                When a step has no input contract of its own, the editor
+                suggests one from the connected step's output and offers its
+                fields as paths. The suggestion only enforces anything if you
+                choose to use it.
+              </p>
+            </div>
           </div>
-          <div data-io style="--i: 1">
-            <p class="label" style="margin-bottom: 12px">
-              captured from the run on this page
-            </p>
-            <p
-              style="
-                font: 400 15px/1.65 var(--sans);
-                color: var(--dim);
-                margin: 0 0 14px;
-                max-width: 46ch;
-              "
-            >
-              The rejection above is real output from the Togepi run in chapter
-              3. Repeating an accepted result with the same token is idempotent;
-              a changed duplicate, a stale token, or a cancelled claim is
-              rejected.
-            </p>
-            <p
-              style="
-                font: 400 15px/1.65 var(--sans);
-                color: var(--dim);
-                margin: 0;
-                max-width: 46ch;
-              "
-            >
-              When a step has no input contract of its own, the editor suggests
-              one from the connected step's output and offers its fields as
-              paths. The suggestion only enforces anything if you choose to use
-              it.
+
+          <div class="stats" style="--n: 4; margin-top: 64px" data-io>
+            <div class="cell">
+              <div class="num" data-count="10">0</div>
+              <div class="lbl">node kinds</div>
+            </div>
+            <div class="cell">
+              <div class="num" data-count="100">0</div>
+              <div class="lbl">default steps per run</div>
+            </div>
+            <div class="cell">
+              <div class="num" data-count="365">0</div>
+              <div class="lbl">days a Wait can hold</div>
+            </div>
+            <div class="cell">
+              <div class="num" data-count="50">0</div>
+              <div class="lbl">undoable editor actions</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 3.0 HAND OFF (pinned scrub) ================= -->
+      <section
+        class="ch journey"
+        id="handoff"
+        data-step="0"
+        style="padding-bottom: 0"
+      >
+        <div class="wrap">
+          <div class="chead" style="margin-bottom: 0">
+            <div>
+              <div class="chno">3.0</div>
+              <h2>
+                One input:
+                <code style="font-size: 0.8em">{"name":"togepi"}</code>.
+                <span class="gray">Watch where the work goes.</span>
+              </h2>
+            </div>
+            <p data-io>
+              Nothing here is staged. This is one run of the starter workflow,
+              captured at each state: started from the CLI, claimed by Claude
+              Code acting as the executor, and finished 55 seconds after it
+              started. Scroll, and the run inspector shows each step as it
+              happened.
             </p>
           </div>
         </div>
-
-        <div class="stats" style="--n: 4; margin-top: 64px" data-io>
-          <div class="cell">
-            <div class="num" data-count="10">0</div>
-            <div class="lbl">node kinds</div>
+        <div class="jtrack">
+          <div class="jstage">
+            <div class="wrap" style="display: contents">
+              <div class="jsteps" style="padding-left: 32px">
+                <div class="jstep">
+                  <span class="k">Step 1 · the engine goes first</span>
+                  <h3>Four steps finish. One waits.</h3>
+                  <p>
+                    Entry, Fetch, Script and Condition complete in under half a
+                    second, PokéAPI call included. The run pauses at the Agent
+                    node and says so: "Interlock has prepared an assignment."
+                  </p>
+                </div>
+                <div class="jstep">
+                  <span class="k">Step 2 · the assignment is the contract</span>
+                  <h3>Input, prompt, policy, schema.</h3>
+                  <p>
+                    The details panel shows exactly what the agent will receive:
+                    Togepi's stat sheet as input, the prompt, the context
+                    policy, and the output schema. Copy it, or let a connected
+                    agent discover it.
+                  </p>
+                </div>
+                <div class="jstep">
+                  <span class="k">Step 3 · an executor claims it</span>
+                  <h3>"Claimed by claude-code."</h3>
+                  <p>
+                    The claim carries an expiring token, a 300-second lease that
+                    can be renewed, and a capability check. If the agent goes
+                    quiet, the lease lapses and the work becomes available
+                    again.
+                  </p>
+                </div>
+                <div class="jstep">
+                  <span class="k">Step 4 · checked, then recorded</span>
+                  <h3>Six executions, one result.</h3>
+                  <p>
+                    The answer passed its schema on the second try. The timeline
+                    keeps every execution with its input and output. The false
+                    branch, Stat sheet, never ran, and the graph says so.
+                  </p>
+                </div>
+              </div>
+              <div class="jshots">
+                <div class="jshot">
+                  <div class="glowb"></div>
+                  <div class="stage">
+                    <img
+                      src="shots/run-1-waiting.webp"
+                      loading="lazy"
+                      alt="Run inspector for the Togepi run: waiting badge, Waiting for an agent banner, four Finished nodes and the Write the mascot pitch node marked Waiting for an agent."
+                      width="2448"
+                      height="1476"
+                    />
+                  </div>
+                </div>
+                <div class="jshot">
+                  <div class="glowb"></div>
+                  <div class="stage">
+                    <img
+                      src="shots/run-2-assignment.webp"
+                      alt="Execution details for Write the mascot pitch: Waiting for an agent, the input JSON with togepi's types, height and weight, and the agent assignment section with Copy assignment."
+                      loading="lazy"
+                      width="720"
+                      height="1180"
+                    />
+                  </div>
+                </div>
+                <div class="jshot">
+                  <div class="glowb"></div>
+                  <div class="stage">
+                    <img
+                      src="shots/run-3-claimed.webp"
+                      alt="Execution details after the claim: Agent working, Claimed by claude-code with the lease end time, and the expanded prompt and context."
+                      loading="lazy"
+                      width="720"
+                      height="1368"
+                    />
+                  </div>
+                </div>
+                <div class="jshot">
+                  <div class="glowb"></div>
+                  <div class="stage">
+                    <img
+                      src="shots/run-4-done.webp"
+                      alt="Completed run: graph with finished nodes, an execution timeline of six completed steps, and the workflow result JSON with togepi's mascot pitch and reasoning."
+                      loading="lazy"
+                      width="1728"
+                      height="2478"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="jdots" aria-hidden="true">
+              <i></i><i></i><i></i><i></i>
+            </div>
           </div>
-          <div class="cell">
-            <div class="num" data-count="100">0</div>
-            <div class="lbl">default steps per run</div>
-          </div>
-          <div class="cell">
-            <div class="num" data-count="365">0</div>
-            <div class="lbl">days a Wait can hold</div>
-          </div>
-          <div class="cell">
-            <div class="num" data-count="50">0</div>
-            <div class="lbl">undoable editor actions</div>
-          </div>
+          <div class="jsent" data-jstep="0"></div>
+          <div class="jsent" data-jstep="1"></div>
+          <div class="jsent" data-jstep="2"></div>
+          <div class="jsent" data-jstep="3"></div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ================= 3.0 HAND OFF (pinned scrub) ================= -->
-    <section
-      class="ch journey"
-      id="handoff"
-      data-step="0"
-      style="padding-bottom: 0"
-    >
-      <div class="wrap">
-        <div class="chead" style="margin-bottom: 0">
-          <div>
-            <div class="chno">3.0 · FOLLOW ONE RUN</div>
-            <h2>
-              One input:
-              <code style="font-size: 0.8em">{"name":"togepi"}</code>.
-              <span class="gray">Watch where the work goes.</span>
-            </h2>
+      <!-- ================= 4.0 AGENT ================= -->
+      <section class="ch" id="agent">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <div class="chno">4.0</div>
+              <h2>
+                Interlock never calls a model.
+                <span class="gray">Your agent does the thinking.</span>
+              </h2>
+            </div>
+            <p data-io>
+              The engine serves <b>Streamable HTTP MCP</b> at
+              <code>127.0.0.1:4310/mcp</code> from the same process as the UI.
+              Point Codex, Claude Code, OpenCode, or any MCP client at it, and
+              the agent can find a workflow, start a run, claim assignments and
+              submit results. The CLI drives the same API. Your harness keeps
+              its own tools, approvals and model.
+            </p>
           </div>
-          <p data-io>
-            Nothing here is staged. This is one run of the starter workflow,
-            captured at each state: started from the CLI, claimed by Claude Code
-            acting as the executor, and finished 55 seconds after it started.
-            Scroll, and the run inspector shows each step as it happened.
+
+          <div class="grid2" style="align-items: start">
+            <div
+              class="replay vrise"
+              data-io
+              id="replay"
+              role="figure"
+              aria-label="Replay of the executor loop for the Togepi run"
+            >
+              <div class="bar">
+                <i></i>executor loop ·
+                <em>commands from this capture</em>
+              </div>
+              <div class="rbody">
+                <div class="rstep rmsg you">
+                  <span class="who">you · to your agent</span>
+                  <p>
+                    Find the Interlock workflow "Size up a Pokémon" and run it
+                    with {"name":"togepi"}. Complete its assignments, then
+                    return the result.
+                  </p>
+                </div>
+                <div class="rstep rtool">
+                  <code>interlock work --summary</code
+                  ><span
+                    >1 available · Write the mascot pitch · attempt 0 of 2</span
+                  >
+                </div>
+                <div class="rstep rtool">
+                  <code>interlock claim … claude-code</code
+                  ><span>token issued · lease 300 s · context: current</span>
+                </div>
+                <div class="rstep rtool no">
+                  <code>interlock submit …</code
+                  ><span>rejected: missing required field "reasoning"</span>
+                </div>
+                <div class="rstep rtool ok">
+                  <code>interlock submit … @pitch.json</code
+                  ><span>accepted · run completed</span>
+                </div>
+                <div class="rstep rmsg agent">
+                  <span class="who">claude code · the submitted pitch</span>
+                  <p>
+                    "Togepi weighs 1.5 kilograms, less than a bag of sugar, and
+                    stands 0.3 metres tall, yet its base defense of 65 says it
+                    can take a hug from anyone. The smallest mascot on the
+                    shortlist, and the hardest to knock over."
+                  </p>
+                </div>
+              </div>
+            </div>
+            <figure class="shotcard vrise" data-io style="--i: 1; margin: 0">
+              <div class="pad">
+                <h3>One URL. Copy the config for your client.</h3>
+                <p>
+                  The dialog gives ready configuration for Codex, Claude Code
+                  and OpenCode, plus generic Streamable HTTP and a legacy stdio
+                  fallback for clients such as Claude Desktop. Upgrading and
+                  restarting at the same address keeps the connection working.
+                </p>
+              </div>
+              <div class="fog" style="position: relative">
+                <img
+                  class="zoomable"
+                  src="shots/mcp-connect.webp"
+                  alt="Connect with MCP dialog: MCP endpoint URL, legacy stdio checkbox, Codex, Claude, OpenCode and Other tabs, and a Codex config.toml snippet with Copy configuration."
+                  loading="lazy"
+                  width="1383"
+                  height="1098"
+                />
+              </div>
+            </figure>
+          </div>
+          <p class="label" style="margin: 14px 0 0" data-io>
+            the replay shows the CLI commands run for this capture, with work
+            ids and tokens elided · an agent connected over MCP calls the
+            matching tools: list_work, claim_work, submit_result
           </p>
         </div>
-      </div>
-      <div class="jtrack">
-        <div class="jstage">
-          <div class="wrap" style="display: contents">
-            <div class="jsteps" style="padding-left: 32px">
-              <div class="jstep">
-                <span class="k">Step 1 · the engine goes first</span>
-                <h3>Four steps finish. One waits.</h3>
-                <p>
-                  Entry, Fetch, Script and Condition complete in under half a
-                  second, PokéAPI call included. The run pauses at the Agent
-                  node and says so: "Interlock has prepared an assignment."
-                </p>
-              </div>
-              <div class="jstep">
-                <span class="k">Step 2 · the assignment is the contract</span>
-                <h3>Input, prompt, policy, schema.</h3>
-                <p>
-                  The details panel shows exactly what the agent will receive:
-                  Togepi's stat sheet as input, the prompt, the context policy,
-                  and the output schema. Copy it, or let a connected agent
-                  discover it.
-                </p>
-              </div>
-              <div class="jstep">
-                <span class="k">Step 3 · an executor claims it</span>
-                <h3>"Claimed by claude-code."</h3>
-                <p>
-                  The claim carries an expiring token, a 300-second lease that
-                  can be renewed, and a capability check. If the agent goes
-                  quiet, the lease lapses and the work becomes available again.
-                </p>
-              </div>
-              <div class="jstep">
-                <span class="k">Step 4 · checked, then recorded</span>
-                <h3>Six executions, one result.</h3>
-                <p>
-                  The answer passed its schema on the second try. The timeline
-                  keeps every execution with its input and output. The false
-                  branch, Stat sheet, never ran, and the graph says so.
-                </p>
-              </div>
-            </div>
-            <div class="jshots">
-              <div class="jshot">
-                <div class="glowb"></div>
-                <div class="stage">
-                  <img
-                    src="shots/run-1-waiting.webp"
-                    alt="Run inspector for the Togepi run: waiting badge, Waiting for an agent banner, four Finished nodes and the Write the mascot pitch node marked Waiting for an agent."
-                    width="2448"
-                    height="1476"
-                  />
-                </div>
-              </div>
-              <div class="jshot">
-                <div class="glowb"></div>
-                <div class="stage">
-                  <img
-                    src="shots/run-2-assignment.webp"
-                    alt="Execution details for Write the mascot pitch: Waiting for an agent, the input JSON with togepi's types, height and weight, and the agent assignment section with Copy assignment."
-                    loading="lazy"
-                    width="720"
-                    height="1180"
-                  />
-                </div>
-              </div>
-              <div class="jshot">
-                <div class="glowb"></div>
-                <div class="stage">
-                  <img
-                    src="shots/run-3-claimed.webp"
-                    alt="Execution details after the claim: Agent working, Claimed by claude-code with the lease end time, and the expanded prompt and context."
-                    loading="lazy"
-                    width="720"
-                    height="1368"
-                  />
-                </div>
-              </div>
-              <div class="jshot">
-                <div class="glowb"></div>
-                <div class="stage">
-                  <img
-                    src="shots/run-4-done.webp"
-                    alt="Completed run: graph with finished nodes, an execution timeline of six completed steps, and the workflow result JSON with togepi's mascot pitch and reasoning."
-                    loading="lazy"
-                    width="1728"
-                    height="2478"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="jdots" aria-hidden="true">
-            <i></i><i></i><i></i><i></i>
-          </div>
-        </div>
-        <div class="jsent" data-jstep="0"></div>
-        <div class="jsent" data-jstep="1"></div>
-        <div class="jsent" data-jstep="2"></div>
-        <div class="jsent" data-jstep="3"></div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ================= 4.0 AGENT ================= -->
-    <section class="ch" id="agent">
-      <div class="wrap">
-        <div class="chead">
-          <div>
-            <div class="chno">4.0 · BRING YOUR AGENT</div>
-            <h2>
-              Interlock never calls a model.
-              <span class="gray">Your agent does the thinking.</span>
-            </h2>
+      <!-- ================= 5.0 BATCH ================= -->
+      <section class="ch" id="batch">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <div class="chno">5.0</div>
+              <h2>
+                Seven candidates in.
+                <span class="gray">Only three needed an agent.</span>
+              </h2>
+            </div>
+            <p data-io>
+              A <b>Batch</b> repeats a visible item path once per list item and
+              collects the results <b>in input order</b>, even when items finish
+              out of order. The starter roster workflow sends each candidate
+              through "Size up a Pokémon" as a pinned child workflow, five at a
+              time, then asks an agent to pick the final six.
+            </p>
           </div>
-          <p data-io>
-            The engine serves <b>Streamable HTTP MCP</b> at
-            <code>127.0.0.1:4310/mcp</code> from the same process as the UI.
-            Point Codex, Claude Code, OpenCode, or any MCP client at it, and the
-            agent can find a workflow, start a run, claim assignments and submit
-            results. The CLI drives the same API. Your harness keeps its own
-            tools, approvals and model.
+
+          <figure class="shotcard vrise" data-io style="margin: 0 0 22px">
+            <div class="pad">
+              <h3>The item path stays on the canvas.</h3>
+              <p>
+                Start, the reusable workflow, End: the group shows exactly what
+                runs for each item. Items at a time, list path, item limit and
+                failure policy are settings on the Batch.
+              </p>
+            </div>
+            <div class="fog" style="position: relative">
+              <img
+                class="zoomable"
+                src="shots/editor-batch.webp"
+                alt="Editor for Build a team roster: Candidate list entry, a Size up each candidate group containing a Size up a Pokémon workflow node between Start and End, then Pick the final six agent assignment and Team roster exit."
+                loading="lazy"
+                width="2448"
+                height="1400"
+              />
+            </div>
+          </figure>
+
+          <div class="grid2" style="align-items: start">
+            <figure
+              class="shotcard vrise"
+              data-io
+              style="margin: 0; position: relative"
+            >
+              <div class="pad">
+                <h3>Every item is its own run.</h3>
+                <p>
+                  Pikachu, Eevee and Jigglypuff were small enough to need a
+                  pitch; Snorlax, Gengar, Lapras and Bulbasaur exited on scripts
+                  alone. With all seven back, the final pick is claimed.
+                </p>
+              </div>
+              <div class="fog" style="position: relative">
+                <img
+                  class="zoomable"
+                  src="shots/batch-claimed.webp"
+                  alt="Run inspector mid-run: Size up each candidate shows 7 finished, Pick the final six shows Agent working, and the details panel reads Claimed by claude-code with a lease end time."
+                  loading="lazy"
+                  width="2880"
+                  height="1764"
+                />
+              </div>
+            </figure>
+            <figure class="shotcard vrise" data-io style="--i: 1; margin: 0">
+              <div class="pad">
+                <h3>"Seven scouted, six picked."</h3>
+                <p>
+                  The final agent read seven ordered records and returned a
+                  markdown roster that names each role by its stats and benches
+                  Bulbasaur. Input and output for every step stay attached to
+                  the run.
+                </p>
+              </div>
+              <div class="fog" style="position: relative">
+                <img
+                  class="zoomable"
+                  src="shots/batch-done.webp"
+                  alt="Completed roster run: all nodes finished, and the details panel showing input records and the output JSON titled Seven scouted, six picked."
+                  loading="lazy"
+                  width="2880"
+                  height="1746"
+                />
+              </div>
+            </figure>
+          </div>
+
+          <div class="stats" style="--n: 4; margin-top: 56px" data-io>
+            <div class="cell">
+              <div class="num" data-count="200">0</div>
+              <div class="lbl">items by default</div>
+            </div>
+            <div class="cell">
+              <div class="num" data-count="10000">0</div>
+              <div class="lbl">items, configured max</div>
+            </div>
+            <div class="cell">
+              <div class="num" data-count="50">0</div>
+              <div class="lbl">items at a time</div>
+            </div>
+            <div class="cell">
+              <div class="num" data-count="10">0</div>
+              <div class="lbl">nested levels</div>
+            </div>
+          </div>
+          <p class="label" style="margin: 14px 0 0" data-io>
+            failure policy "all" cancels unfinished items on an error ·
+            "collect" returns {runId, status, output, error} per item · retrying
+            a failed batch keeps the items that succeeded
           </p>
         </div>
+      </section>
 
-        <div class="grid2" style="align-items: start">
-          <div
-            class="replay vrise"
-            data-io
-            id="replay"
-            aria-label="Replay of the executor loop for the Togepi run"
-          >
-            <div class="bar">
-              <i></i>executor loop ·
-              <em>commands from this capture</em>
+      <!-- ================= 6.0 PUBLISH ================= -->
+      <section class="ch" id="publish">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <div class="chno">6.0</div>
+              <h2>
+                Drafts change.
+                <span class="gray">Published versions never do.</span>
+              </h2>
             </div>
-            <div class="rbody">
-              <div class="rstep rmsg you">
-                <span class="who">you · to your agent</span>
+            <p data-io>
+              Edit freely: drafts save incomplete, and Undo covers the last 50
+              editor actions. <b>Review &amp; publish</b> compares the draft,
+              unsaved edits included, with the latest published version before
+              anything ships. Each run is pinned to one immutable version, so
+              editing a workflow <b>never changes a run already in flight</b>.
+            </p>
+          </div>
+
+          <div class="grid2" style="align-items: center">
+            <figure
+              class="shotcard vrise"
+              data-io
+              style="margin: 0; position: relative"
+            >
+              <div class="pad">
+                <h3>One changed word, shown before it ships.</h3>
                 <p>
-                  Find the Interlock workflow "Size up a Pokémon" and run it
-                  with {"name":"togepi"}. Complete its assignments, then return
-                  the result.
+                  A single prompt edit on the Agent node: one node change, zero
+                  route changes, published text beside draft text.
                 </p>
               </div>
-              <div class="rstep rtool">
-                <code>interlock work --summary</code
+              <div class="fog" style="position: relative">
+                <img
+                  class="zoomable"
+                  src="shots/review-publish.webp"
+                  alt="Review publication dialog: draft compared with published v1, 1 node change, 0 route changes, 0 workflow changes, the Write the mascot pitch prompt shown as published and draft text, with Cancel and Publish version."
+                  loading="lazy"
+                  width="1959"
+                  height="1368"
+                />
+              </div>
+            </figure>
+            <ul class="facts" data-io style="--i: 1">
+              <li>
+                <b>Pinned</b
                 ><span
-                  >1 available · Write the mascot pitch · attempt 0 of 2</span
+                  >Workflow nodes pin a published version of the workflow they
+                  call. Later publications do not move existing pins.</span
                 >
-              </div>
-              <div class="rstep rtool">
-                <code>interlock claim … claude-code</code
-                ><span>token issued · lease 300 s · context: current</span>
-              </div>
-              <div class="rstep rtool no">
-                <code>interlock submit …</code
-                ><span>rejected: missing required field "reasoning"</span>
-              </div>
-              <div class="rstep rtool ok">
-                <code>interlock submit … @pitch.json</code
-                ><span>accepted · run completed</span>
-              </div>
-              <div class="rstep rmsg agent">
-                <span class="who">claude code · the submitted pitch</span>
-                <p>
-                  "Togepi weighs 1.5 kilograms, less than a bag of sugar, and
-                  stands 0.3 metres tall, yet its base defense of 65 says it can
-                  take a hug from anyone. The smallest mascot on the shortlist,
-                  and the hardest to knock over."
-                </p>
-              </div>
+              </li>
+              <li>
+                <b>Cascade</b
+                ><span
+                  ><code>interlock publish ID --cascade</code> republishes every
+                  published caller in dependency order, in one transaction, or
+                  none of them.</span
+                >
+              </li>
+              <li>
+                <b>Retry</b
+                ><span
+                  >Failed runs retry from the inspector. Interrupted scripts are
+                  marked failed after a restart, never replayed
+                  automatically.</span
+                >
+              </li>
+              <li>
+                <b>Portable</b
+                ><span
+                  >Export a workflow with its dependencies as one bundle; import
+                  is transactional and keeps stable IDs.</span
+                >
+              </li>
+            </ul>
+          </div>
+
+          <div class="break vrise" data-io style="margin-top: 72px">
+            <svg class="wm" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <g stroke="#06101f" stroke-width="1.6">
+                <rect x="5" y="5" width="14" height="14" rx="2.5" />
+                <rect x="13" y="13" width="14" height="14" rx="2.5" />
+              </g>
+            </svg>
+            <h3>Agents do the judgment. Interlock keeps the record.</h3>
+            <div class="foot">
+              <span>IMMUTABLE VERSIONS</span><span>SCHEMA-CHECKED RESULTS</span
+              ><span>EXPIRING CLAIMS</span
+              ><span>EVERY STEP IN LOCAL SQLITE</span>
             </div>
           </div>
-          <figure class="shotcard vrise" data-io style="--i: 1; margin: 0">
-            <div class="pad">
-              <span class="chip"><i></i>connect with mcp</span>
-              <h3>One URL. Copy the config for your client.</h3>
-              <p>
-                The dialog gives ready configuration for Codex, Claude Code and
-                OpenCode, plus generic Streamable HTTP and a legacy stdio
-                fallback for clients such as Claude Desktop. Upgrading and
-                restarting at the same address keeps the connection working.
-              </p>
-            </div>
-            <div class="fog" style="position: relative">
-              <img
-                class="zoomable"
-                src="shots/mcp-connect.webp"
-                alt="Connect with MCP dialog: MCP endpoint URL, legacy stdio checkbox, Codex, Claude, OpenCode and Other tabs, and a Codex config.toml snippet with Copy configuration."
-                loading="lazy"
-                width="1383"
-                height="1098"
-              />
-            </div>
-          </figure>
         </div>
-        <p class="label" style="margin: 14px 0 0" data-io>
-          the replay shows the CLI commands run for this capture, with work ids
-          and tokens elided · an agent connected over MCP calls the matching
-          tools: list_work, claim_work, submit_result
-        </p>
-      </div>
-    </section>
+      </section>
 
-    <!-- ================= 5.0 BATCH ================= -->
-    <section class="ch" id="batch">
-      <div class="wrap">
-        <div class="chead">
-          <div>
-            <div class="chno">5.0 · FAN OUT</div>
-            <h2>
-              Seven candidates in.
-              <span class="gray">Only three needed an agent.</span>
-            </h2>
-          </div>
-          <p data-io>
-            A <b>Batch</b> repeats a visible item path once per list item and
-            collects the results <b>in input order</b>, even when items finish
-            out of order. The starter roster workflow sends each candidate
-            through "Size up a Pokémon" as a pinned child workflow, five at a
-            time, then asks an agent to pick the final six.
-          </p>
-        </div>
-
-        <figure class="shotcard vrise" data-io style="margin: 0 0 22px">
-          <div class="pad">
-            <span class="chip"><i></i>design time · build a team roster</span>
-            <h3>The item path stays on the canvas.</h3>
-            <p>
-              Start, the reusable workflow, End: the group shows exactly what
-              runs for each item. Items at a time, list path, item limit and
-              failure policy are settings on the Batch.
+      <!-- ================= 7.0 START ================= -->
+      <section class="ch" id="start">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <div class="chno">7.0</div>
+              <h2>
+                Two commands. <span class="gray">Then ask your agent.</span>
+              </h2>
+            </div>
+            <p data-io>
+              The npm package includes the engine, the UI, the CLI and the MCP
+              tools. No separate build, no account, no API key. Workflows and
+              runs live in <code>~/.interlock/interlock.db</code> and survive
+              restarts.
             </p>
           </div>
-          <div class="fog" style="position: relative">
-            <img
-              class="zoomable"
-              src="shots/editor-batch.webp"
-              alt="Editor for Build a team roster: Candidate list entry, a Size up each candidate group containing a Size up a Pokémon workflow node between Start and End, then Pick the final six agent assignment and Team roster exit."
-              loading="lazy"
-              width="2448"
-              height="1400"
-            />
-          </div>
-        </figure>
 
-        <div class="grid2" style="align-items: start">
-          <figure
-            class="shotcard vrise"
-            data-io
-            style="margin: 0; position: relative"
-          >
-            <div class="pad">
-              <span class="chip a"><i></i>mid-run · agent working</span>
-              <h3>Every item is its own run.</h3>
-              <p>
-                Pikachu, Eevee and Jigglypuff were small enough to need a pitch;
-                Snorlax, Gengar, Lapras and Bulbasaur exited on scripts alone.
-                With all seven back, the final pick is claimed.
-              </p>
-            </div>
-            <div class="fog" style="position: relative">
-              <img
-                class="zoomable"
-                src="shots/batch-claimed.webp"
-                alt="Run inspector mid-run: Size up each candidate shows 7 finished, Pick the final six shows Agent working, and the details panel reads Claimed by claude-code with a lease end time."
-                loading="lazy"
-                width="2880"
-                height="1764"
-              />
-            </div>
-          </figure>
-          <figure class="shotcard vrise" data-io style="--i: 1; margin: 0">
-            <div class="pad">
-              <span class="chip"><i></i>completed · output recorded</span>
-              <h3>"Seven scouted, six picked."</h3>
-              <p>
-                The final agent read seven ordered records and returned a
-                markdown roster that names each role by its stats and benches
-                Bulbasaur. Input and output for every step stay attached to the
-                run.
-              </p>
-            </div>
-            <div class="fog" style="position: relative">
-              <img
-                class="zoomable"
-                src="shots/batch-done.webp"
-                alt="Completed roster run: all nodes finished, and the details panel showing input records and the output JSON titled Seven scouted, six picked."
-                loading="lazy"
-                width="2880"
-                height="1746"
-              />
-            </div>
-          </figure>
-        </div>
-
-        <div class="stats" style="--n: 4; margin-top: 56px" data-io>
-          <div class="cell">
-            <div class="num" data-count="200">0</div>
-            <div class="lbl">items by default</div>
-          </div>
-          <div class="cell">
-            <div class="num" data-count="10000">0</div>
-            <div class="lbl">items, configured max</div>
-          </div>
-          <div class="cell">
-            <div class="num" data-count="50">0</div>
-            <div class="lbl">items at a time</div>
-          </div>
-          <div class="cell">
-            <div class="num" data-count="10">0</div>
-            <div class="lbl">nested levels</div>
-          </div>
-        </div>
-        <p class="label" style="margin: 14px 0 0" data-io>
-          failure policy "all" cancels unfinished items on an error · "collect"
-          returns {runId, status, output, error} per item · retrying a failed
-          batch keeps the items that succeeded
-        </p>
-      </div>
-    </section>
-
-    <!-- ================= 6.0 PUBLISH ================= -->
-    <section class="ch" id="publish">
-      <div class="wrap">
-        <div class="chead">
-          <div>
-            <div class="chno">6.0 · PUBLISH</div>
-            <h2>
-              Drafts change.
-              <span class="gray">Published versions never do.</span>
-            </h2>
-          </div>
-          <p data-io>
-            Edit freely: drafts save incomplete, and Undo covers the last 50
-            editor actions. <b>Review &amp; publish</b> compares the draft,
-            unsaved edits included, with the latest published version before
-            anything ships. Each run is pinned to one immutable version, so
-            editing a workflow <b>never changes a run already in flight</b>.
-          </p>
-        </div>
-
-        <div class="grid2" style="align-items: center">
-          <figure
-            class="shotcard vrise"
-            data-io
-            style="margin: 0; position: relative"
-          >
-            <div class="pad">
-              <span class="chip"><i></i>review publication · draft vs v1</span>
-              <h3>One changed word, shown before it ships.</h3>
-              <p>
-                A single prompt edit on the Agent node: one node change, zero
-                route changes, published text beside draft text.
-              </p>
-            </div>
-            <div class="fog" style="position: relative">
-              <img
-                class="zoomable"
-                src="shots/review-publish.webp"
-                alt="Review publication dialog: draft compared with published v1, 1 node change, 0 route changes, 0 workflow changes, the Write the mascot pitch prompt shown as published and draft text, with Cancel and Publish version."
-                loading="lazy"
-                width="1959"
-                height="1368"
-              />
-            </div>
-          </figure>
-          <ul class="facts" data-io style="--i: 1">
-            <li>
-              <b>Pinned</b
-              ><span
-                >Workflow nodes pin a published version of the workflow they
-                call. Later publications do not move existing pins.</span
-              >
-            </li>
-            <li>
-              <b>Cascade</b
-              ><span
-                ><code>interlock publish ID --cascade</code> republishes every
-                published caller in dependency order, in one transaction, or
-                none of them.</span
-              >
-            </li>
-            <li>
-              <b>Retry</b
-              ><span
-                >Failed runs retry from the inspector. Interrupted scripts are
-                marked failed after a restart, never replayed
-                automatically.</span
-              >
-            </li>
-            <li>
-              <b>Portable</b
-              ><span
-                >Export a workflow with its dependencies as one bundle; import
-                is transactional and keeps stable IDs.</span
-              >
-            </li>
-          </ul>
-        </div>
-
-        <div class="break vrise" data-io style="margin-top: 72px">
-          <svg class="wm" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-            <g stroke="#fff" stroke-width="1.6">
-              <rect x="5" y="5" width="14" height="14" rx="2.5" />
-              <rect x="13" y="13" width="14" height="14" rx="2.5" />
-            </g>
-          </svg>
-          <h3>Agents do the judgment. Interlock keeps the record.</h3>
-          <div class="foot">
-            <span>IMMUTABLE VERSIONS</span><span>SCHEMA-CHECKED RESULTS</span
-            ><span>EXPIRING CLAIMS</span><span>EVERY STEP IN LOCAL SQLITE</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================= 7.0 START ================= -->
-    <section class="ch" id="start">
-      <div class="wrap">
-        <div class="chead">
-          <div>
-            <div class="chno">7.0 · GET STARTED</div>
-            <h2>
-              Two commands. <span class="gray">Then ask your agent.</span>
-            </h2>
-          </div>
-          <p data-io>
-            The npm package includes the engine, the UI, the CLI and the MCP
-            tools. No separate build, no account, no API key. Workflows and runs
-            live in <code>~/.interlock/interlock.db</code> and survive restarts.
-          </p>
-        </div>
-
-        <div class="grid2" style="align-items: start">
-          <div class="term vrise" data-io>
-            <div class="bar"><i></i><i></i><i></i></div>
-            <pre><span class="c"># node 24.13 or later, macOS or Linux</span>
+          <div class="grid2" style="align-items: start">
+            <div class="term vrise" data-io>
+              <div class="bar"><i></i><i></i><i></i></div>
+              <pre><span class="c"># node 24.13 or later, macOS or Linux</span>
 $ npm install -g @type_of/interlock
 $ interlock
 <span class="g">Interlock is running at http://127.0.0.1:4310</span>
@@ -2375,94 +2328,95 @@ $ claude mcp add --transport http --scope user \
 
 <span class="c"># or try it without installing</span>
 $ npx -y @type_of/interlock@latest</pre>
-          </div>
-          <div data-io style="--i: 1">
-            <p class="label" style="margin-bottom: 14px">
-              know before you run it
-            </p>
-            <ul class="facts">
-              <li>
-                <b>Local</b
-                ><span
-                  >Single user, on loopback, with no authentication. Do not
-                  expose it through a public tunnel.</span
-                >
-              </li>
-              <li>
-                <b>Scripts</b
-                ><span
-                  >JavaScript and Bash steps run with your account's files,
-                  environment and network. They are not sandboxed; review
-                  imported workflows first.</span
-                >
-              </li>
-              <li>
-                <b>Agents</b
-                ><span
-                  >Interlock does not launch agent sessions or call model APIs.
-                  Agent steps need a connected executor or manual
-                  completion.</span
-                >
-              </li>
-              <li>
-                <b>Scope</b
-                ><span
-                  >No recurring schedules, multi-user access, or arbitrary
-                  parallel joins yet. See
-                  <a
-                    href="https://github.com/dgca/interlock/blob/main/docs/v1.md"
-                    >current scope</a
-                  >.</span
-                >
-              </li>
-            </ul>
-            <div
-              class="ctas"
-              style="justify-content: flex-start; margin-top: 26px"
-            >
-              <a class="btn primary" href="https://github.com/dgca/interlock"
-                >Star on GitHub</a
+            </div>
+            <div data-io style="--i: 1">
+              <p class="label" style="margin-bottom: 14px">
+                know before you run it
+              </p>
+              <ul class="facts">
+                <li>
+                  <b>Local</b
+                  ><span
+                    >Single user, on loopback, with no authentication. Do not
+                    expose it through a public tunnel.</span
+                  >
+                </li>
+                <li>
+                  <b>Scripts</b
+                  ><span
+                    >JavaScript and Bash steps run with your account's files,
+                    environment and network. They are not sandboxed; review
+                    imported workflows first.</span
+                  >
+                </li>
+                <li>
+                  <b>Agents</b
+                  ><span
+                    >Interlock does not launch agent sessions or call model
+                    APIs. Agent steps need a connected executor or manual
+                    completion.</span
+                  >
+                </li>
+                <li>
+                  <b>Scope</b
+                  ><span
+                    >No recurring schedules, multi-user access, or arbitrary
+                    parallel joins yet. See
+                    <a
+                      href="https://github.com/dgca/interlock/blob/main/docs/v1.md"
+                      >current scope</a
+                    >.</span
+                  >
+                </li>
+              </ul>
+              <div
+                class="ctas"
+                style="justify-content: flex-start; margin-top: 26px"
               >
-              <a
-                class="btn"
-                href="https://www.npmjs.com/package/@type_of/interlock"
-                >npm package →</a
-              >
+                <a class="btn primary" href="https://github.com/dgca/interlock"
+                  >Star on GitHub</a
+                >
+                <a
+                  class="btn"
+                  href="https://www.npmjs.com/package/@type_of/interlock"
+                  >npm package →</a
+                >
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="index" data-io>
-          <a href="https://github.com/dgca/interlock#readme"
-            ><span>README: install, first run, every node kind</span
-            ><span class="mono">docs →</span></a
-          >
-          <a
-            href="https://github.com/dgca/interlock/blob/main/docs/connect-harness.md"
-            ><span>Connect Codex, Claude Code, OpenCode or stdio</span
-            ><span class="mono">docs →</span></a
-          >
-          <a
-            href="https://github.com/dgca/interlock/blob/main/docs/architecture.md"
-            ><span>Architecture and execution semantics</span
-            ><span class="mono">docs →</span></a
-          >
-          <a
-            href="https://github.com/dgca/interlock/blob/main/docs/agent-workflows.md"
-            ><span>Agent operations, bindings and bundles</span
-            ><span class="mono">docs →</span></a
-          >
-          <a href="https://github.com/dgca/interlock/blob/main/CONTEXT.md"
-            ><span>Domain language: runs, claims, executors</span
-            ><span class="mono">docs →</span></a
-          >
-          <a href="https://github.com/dgca/interlock/blob/main/docs/v1.md"
-            ><span>Current scope and limits</span
-            ><span class="mono">docs →</span></a
-          >
+          <div class="index" data-io>
+            <a href="https://github.com/dgca/interlock#readme"
+              ><span>README: install, first run, every node kind</span
+              ><span class="mono">docs →</span></a
+            >
+            <a
+              href="https://github.com/dgca/interlock/blob/main/docs/connect-harness.md"
+              ><span>Connect Codex, Claude Code, OpenCode or stdio</span
+              ><span class="mono">docs →</span></a
+            >
+            <a
+              href="https://github.com/dgca/interlock/blob/main/docs/architecture.md"
+              ><span>Architecture and execution semantics</span
+              ><span class="mono">docs →</span></a
+            >
+            <a
+              href="https://github.com/dgca/interlock/blob/main/docs/agent-workflows.md"
+              ><span>Agent operations, bindings and bundles</span
+              ><span class="mono">docs →</span></a
+            >
+            <a href="https://github.com/dgca/interlock/blob/main/CONTEXT.md"
+              ><span>Domain language: runs, claims, executors</span
+              ><span class="mono">docs →</span></a
+            >
+            <a href="https://github.com/dgca/interlock/blob/main/docs/v1.md"
+              ><span>Current scope and limits</span
+              ><span class="mono">docs →</span></a
+            >
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </main>
 
     <footer>
       <div class="wrap">
@@ -2506,10 +2460,17 @@ $ npx -y @type_of/interlock@latest</pre>
       </div>
     </footer>
 
-    <dialog class="lightbox" id="lb">
+    <dialog class="lightbox" id="lb" aria-label="Screenshot">
       <button class="lbclose" id="lbclose" type="button" aria-label="Close">
-        ✕</button
-      ><img id="lbimg" alt="" />
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <path
+            d="M2 2l10 10M12 2L2 12"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
     </dialog>
 
     <script>
@@ -2849,7 +2810,7 @@ $ npx -y @type_of/interlock@latest</pre>
 
         /* ---------- lightbox: keyboard-openable zoom buttons ---------- */
         const lb = document.getElementById('lb'),
-          lbimg = document.getElementById('lbimg');
+          lbimg = lb.appendChild(document.createElement('img'));
         document.querySelectorAll('img.zoomable').forEach((img) => {
           const b = document.createElement('button');
           b.type = 'button';
