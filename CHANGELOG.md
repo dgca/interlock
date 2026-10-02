@@ -1,5 +1,15 @@
 # @type_of/interlock
 
+## 0.1.14
+
+### Patch Changes
+
+- 4c8f6bd: Hovering a node or selecting exactly one highlights its connected edges, neighboring nodes, and port labels and handles while dimming the rest of the canvas. Run inspection highlights on hover, and a selected edge takes priority. Condition True and False edges now use the neutral color; Agent Timeout edges remain amber until selected.
+- 9e3a73d: Bring a selected edge to the front of the workflow editor. The selected edge draws above nodes with a thicker accent stroke, its source and target nodes are outlined, and the rest of the graph dims until the selection clears.
+- 5ff40d8: Route backward edges through separate lanes below the cards between their endpoints. Vertical segments use the available space beside the endpoint cards, and corners are rounded. Forward edges keep their curves. The editor and run inspector use the same routes.
+- f5246e3: Pan the workflow editor by dragging with the middle mouse button. Left-button drag still selects nodes, and Space + drag still pans. The run inspector accepts the middle button too.
+- efa6dfb: Show a review of draft changes against the latest published workflow version before publishing in the editor.
+
 ## 0.1.13
 
 ### Patch Changes
