@@ -593,3 +593,200 @@ it('checks timed Agent timeout input independently of its result contract', () =
     ]),
   );
 });
+
+it('keeps node IDs and ports unambiguous in inference caches', () => {
+  const d = definitionSchema.parse({
+    inputSchema: { type: 'string' },
+    nodes: [
+      { id: 'entry', kind: 'entry', label: 'Input' },
+      { id: 'fork', kind: 'condition', label: 'Fork', path: '', equals: 'x' },
+      {
+        id: 'a:b',
+        kind: 'agent',
+        label: 'Producer',
+        prompt: 'x',
+        outputSchema: { type: 'number' },
+      },
+      {
+        id: 'first',
+        kind: 'agent',
+        label: 'First',
+        prompt: 'x',
+        inputSchema: { type: 'number' },
+      },
+      {
+        id: 'a',
+        kind: 'switch',
+        label: 'Switch',
+        path: '',
+        cases: [{ port: 'b:default', equals: 'y' }],
+      },
+      {
+        id: 'last',
+        kind: 'agent',
+        label: 'Last',
+        prompt: 'x',
+        inputSchema: { type: 'number' },
+      },
+      { id: 'exit', kind: 'exit', label: 'Output' },
+    ],
+    edges: [
+      { id: 'e0', source: 'entry', target: 'fork' },
+      { id: 'e1', source: 'fork', port: 'true', target: 'a:b' },
+      { id: 'e2', source: 'a:b', target: 'first' },
+      { id: 'e3', source: 'fork', port: 'false', target: 'a' },
+      { id: 'e4', source: 'a', port: 'b:default', target: 'last' },
+      { id: 'e5', source: 'first', target: 'exit' },
+      { id: 'e6', source: 'last', target: 'exit' },
+    ],
+  });
+  expect(diagnoseDraft(d).diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        code: 'contract_type_conflict',
+        nodeId: 'last',
+        edgeId: 'e4',
+        message: 'Upstream type string conflicts with expected number.',
+      }),
+    ]),
+  );
+  const before = diagnoseDraft(d).diagnostics;
+  d.nodes.find((n) => n.id === 'a:b')!.id = 'producer';
+  for (const edge of d.edges) {
+    if (edge.source === 'a:b') edge.source = 'producer';
+    if (edge.target === 'a:b') edge.target = 'producer';
+  }
+  expect(diagnoseDraft(d).diagnostics).toEqual(before);
+});
+
+it.each(['a.b', '', '$', '$.a'])(
+  'compares literal JSON Schema property %j independently of binding paths',
+  (key) => {
+    const d = blankDefinition();
+    d.inputSchema = object({ [key]: { type: 'string' } });
+    d.nodes[1].inputSchema = object({ [key]: { type: 'string' } });
+    expect(
+      diagnoseDraft(d).diagnostics.filter((x) => x.category === 'contract'),
+    ).toEqual([]);
+    d.nodes[1].inputSchema = object({ [key]: { type: 'number' } });
+    expect(diagnoseDraft(d).diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'contract_type_conflict',
+          nodeId: 'agent',
+          path: `nodes.1.inputSchema[${JSON.stringify(key)}]`,
+        }),
+      ]),
+    );
+    d.inputSchema = object({});
+    expect(diagnoseDraft(d).diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'contract_missing_path',
+          nodeId: 'agent',
+          path: `nodes.1.inputSchema[${JSON.stringify(key)}]`,
+        }),
+      ]),
+    );
+  },
+);
+
+it('reports unknown for a selected unsupported leaf without an explicit consumer contract', () => {
+  const d = blankDefinition();
+  d.inputSchema = object({
+    name: { anyOf: [{ type: 'string' }, { type: 'number' }] },
+  });
+  d.nodes[1].inputBindings = { name: { source: 'input', path: 'name' } };
+  expect(diagnoseDraft(d).diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        code: 'binding_unknown',
+        nodeId: 'agent',
+        path: 'nodes.1.inputBindings.name.path',
+      }),
+    ]),
+  );
+});
+
+it('preserves recursive projection uncertainty and independent known field conflicts', () => {
+  const recursive = blankDefinition();
+  recursive.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    kind: 'wait',
+    label: 'Wait',
+    inputBindings: { value: { source: 'node', nodeId: 'agent', path: '' } },
+  });
+  expect(diagnoseDraft(recursive).diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ code: 'binding_unknown', nodeId: 'agent' }),
+    ]),
+  );
+
+  const d = blankDefinition();
+  d.inputSchema = object({ count: { type: 'number' } });
+  d.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    kind: 'wait',
+    label: 'Wait',
+    inputBindings: {
+      value: { source: 'node', nodeId: 'agent', path: '' },
+      count: { source: 'runInput', path: 'count' },
+    },
+    inputSchema: object({ count: { type: 'string' } }),
+  });
+  d.nodes.splice(
+    2,
+    0,
+    nodeSchema.parse({
+      id: 'consumer',
+      kind: 'agent',
+      label: 'Consumer',
+      prompt: 'x',
+      inputBindings: {
+        all: { source: 'node', nodeId: 'agent', path: '' },
+        known: { source: 'node', nodeId: 'agent', path: 'count' },
+      },
+      inputSchema: object({ known: { type: 'string' } }),
+    }),
+  );
+  d.edges[1].target = 'consumer';
+  d.edges.push({
+    id: 'out',
+    source: 'consumer',
+    target: 'exit',
+    port: 'default',
+  });
+  const diagnostics = diagnoseDraft(d).diagnostics;
+  expect(diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        code: 'binding_unknown',
+        nodeId: 'agent',
+        path: 'nodes.1.inputBindings.value.path',
+      }),
+      expect.objectContaining({
+        code: 'contract_type_conflict',
+        nodeId: 'agent',
+        path: 'nodes.1.inputSchema.count',
+      }),
+      expect.objectContaining({
+        code: 'binding_unknown',
+        nodeId: 'consumer',
+        path: 'nodes.2.inputBindings.all.path',
+      }),
+      expect.objectContaining({
+        code: 'contract_type_conflict',
+        nodeId: 'consumer',
+        path: 'nodes.2.inputSchema.known',
+      }),
+    ]),
+  );
+  expect(diagnostics).not.toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        code: 'binding_unknown',
+        path: 'nodes.2.inputBindings.known.path',
+      }),
+    ]),
+  );
+});

@@ -230,6 +230,8 @@ export function diagnoseDraft(input: unknown): {
 type Shape = {
   schema: Record<string, unknown>;
   state: 'known' | 'unknown' | 'missing';
+  uncertain?: boolean;
+  propertyShapes?: Record<string, Shape>;
 };
 const unknownShape = (): Shape => ({ schema: {}, state: 'unknown' });
 const asSchema = (value: unknown): Record<string, unknown> =>
@@ -265,32 +267,40 @@ function primitiveType(schema: Record<string, unknown>): string | undefined {
     ? schema.type
     : undefined;
 }
+function propertyShape(source: Shape, key: string): Shape {
+  if (source.propertyShapes && Object.hasOwn(source.propertyShapes, key))
+    return source.propertyShapes[key];
+  if (source.state !== 'known') return unknownShape();
+  const properties = asSchema(source.schema.properties);
+  if (Object.hasOwn(properties, key)) return shape(asSchema(properties[key]));
+  return source.schema.additionalProperties === false
+    ? { schema: {}, state: 'missing' }
+    : unknownShape();
+}
+function diagnosticProperty(path: string, key: string): string {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)
+    ? `${path}.${key}`
+    : `${path}[${JSON.stringify(key)}]`;
+}
 function atPath(source: Shape, path: string): Shape {
   let current = source;
-  if (Object.keys(source.schema).some((key) => !supportedKeys.has(key)))
-    return unknownShape();
+  const unsupported = (value: Shape) =>
+    Object.keys(value.schema).some((key) => !supportedKeys.has(key));
   for (const part of path
     .replace(/^\$\./, '')
     .split('.')
     .filter(() => path !== '' && path !== '$')) {
-    if (current.state !== 'known') return current;
-    const schema = current.schema;
-    if (Object.keys(schema).some((key) => !supportedKeys.has(key)))
-      return unknownShape();
-    if (schema.type === 'object') {
-      const properties = asSchema(schema.properties);
-      if (Object.hasOwn(properties, part))
-        current = shape(asSchema(properties[part]));
-      else
-        return schema.additionalProperties === false
-          ? { schema: {}, state: 'missing' }
-          : unknownShape();
-    } else if (schema.type === 'array' && /^\d+$/.test(part))
-      current = shape(asSchema(schema.items));
-    else if (primitiveType(schema)) return { schema: {}, state: 'missing' };
+    if (unsupported(current)) return unknownShape();
+    if (current.schema.type === 'object')
+      current = propertyShape(current, part);
+    else if (current.state !== 'known') return current;
+    else if (current.schema.type === 'array' && /^\d+$/.test(part))
+      current = shape(asSchema(current.schema.items));
+    else if (primitiveType(current.schema))
+      return { schema: {}, state: 'missing' };
     else return unknownShape();
   }
-  return current;
+  return unsupported(current) ? unknownShape() : current;
 }
 function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
   const diagnostics: DraftDiagnostic[] = [];
@@ -324,9 +334,7 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
     const first = candidates[0];
     return first &&
       first.state === 'known' &&
-      candidates.every(
-        (c) => c.state === 'known' && structuralEqual(c.schema, first.schema),
-      )
+      candidates.every((c) => c.state === 'known' && structuralEqual(c, first))
       ? first
       : unknownShape();
   };
@@ -357,7 +365,7 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
       const first = candidates[0];
       return first &&
         candidates.every(
-          (c) => c.state === 'known' && structuralEqual(c.schema, first.schema),
+          (c) => c.state === 'known' && structuralEqual(c, first),
         )
         ? first
         : unknownShape();
@@ -367,21 +375,34 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
   const resolved = (node: WorkflowNode): Shape => {
     if (node.kind === 'entry') return shape(d.inputSchema);
     if (!node.inputBindings) return incoming(node);
-    const properties: Record<string, unknown> = {};
-    for (const [field, binding] of Object.entries(node.inputBindings))
-      properties[field] = atPath(
-        bindingSource(node, binding),
-        binding.path,
-      ).schema;
-    return shape({
-      type: 'object',
-      properties,
-      required: Object.keys(properties),
-      additionalProperties: false,
-    });
+    const propertyShapes: Record<string, Shape> = Object.fromEntries(
+      Object.entries(node.inputBindings).map(([field, binding]) => [
+        field,
+        atPath(bindingSource(node, binding), binding.path),
+      ]),
+    );
+    const properties = Object.fromEntries(
+      Object.entries(propertyShapes).map(([field, value]) => [
+        field,
+        value.schema,
+      ]),
+    );
+    return {
+      schema: {
+        type: 'object',
+        properties,
+        required: Object.keys(properties),
+        additionalProperties: false,
+      },
+      state: 'known',
+      uncertain: Object.values(propertyShapes).some(
+        (value) => value.state !== 'known' || value.uncertain,
+      ),
+      propertyShapes,
+    };
   };
   const output = (node: WorkflowNode, port: string): Shape => {
-    const key = `${node.id}:${port}`;
+    const key = JSON.stringify([node.id, port]);
     if (cache.has(key)) return cache.get(key)!;
     if (visiting.has(key) || visiting.size >= 100) return unknownShape();
     visiting.add(key);
@@ -468,13 +489,13 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
         ...required.filter((k): k is string => typeof k === 'string'),
       ]);
       for (const key of keys) {
-        const selected = atPath(source, key);
+        const selected = propertyShape(source, key);
         if (selected.state === 'missing') {
           if (required.includes(key))
             warn(
               'contract_missing_path',
               node,
-              `${path}.${key}`,
+              diagnosticProperty(path, key),
               `Upstream contract excludes required field ${key}.`,
               edgeId,
             );
@@ -483,7 +504,7 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
             selected,
             asSchema(properties[key]),
             node,
-            `${path}.${key}`,
+            diagnosticProperty(path, key),
             edgeId,
             depth + 1,
           );
@@ -512,7 +533,7 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
             path,
             `Source contract excludes path "${binding.path}".`,
           );
-        else if (value.state === 'unknown')
+        else if (value.state === 'unknown' || value.uncertain)
           warn(
             'binding_unknown',
             node,
