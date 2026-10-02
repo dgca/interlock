@@ -33,6 +33,33 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 3,
+    up(db) {
+      db.exec(`
+        CREATE TABLE continuation_sequence (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL);
+        INSERT INTO continuation_sequence VALUES (1, 0);
+        CREATE TABLE run_revisions (run_id TEXT PRIMARY KEY, revision INTEGER NOT NULL);
+        INSERT INTO run_revisions SELECT id, 0 FROM documents WHERE collection = 'runs';
+        CREATE INDEX runs_parent ON documents(json_extract(value, '$.parentRunId')) WHERE collection = 'runs';
+      `);
+      for (const operation of ['INSERT', 'UPDATE', 'DELETE']) {
+        const row = operation === 'DELETE' ? 'OLD' : 'NEW';
+        db.exec(`
+          CREATE TRIGGER continuation_${operation.toLowerCase()} AFTER ${operation} ON documents
+          WHEN ${row}.collection IN ('runs', 'work') ${operation === 'UPDATE' ? "AND json_remove(OLD.value, '$.updatedAt') != json_remove(NEW.value, '$.updatedAt')" : ''}
+          BEGIN
+            UPDATE continuation_sequence SET revision = revision + 1 WHERE id = 1;
+            INSERT INTO run_revisions(run_id, revision)
+              VALUES (CASE WHEN ${row}.collection = 'runs' THEN ${row}.id ELSE json_extract(${row}.value, '$.runId') END,
+                      (SELECT revision FROM continuation_sequence WHERE id = 1))
+              ON CONFLICT(run_id) DO UPDATE SET revision = excluded.revision;
+            ${operation === 'DELETE' ? "DELETE FROM run_revisions WHERE OLD.collection = 'runs' AND run_id = OLD.id;" : ''}
+          END;
+        `);
+      }
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

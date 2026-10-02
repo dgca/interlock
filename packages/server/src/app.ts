@@ -46,7 +46,9 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
-    const mcp = createMcpServer(appRouter.createCaller({ engine, connection }));
+    const mcp = createMcpServer(
+      appRouter.createCaller({ engine, connection, signal: c.req.raw.signal }),
+    );
     try {
       await mcp.connect(transport);
       return await transport.handleRequest(c.req.raw);
@@ -61,7 +63,7 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
       endpoint: '/trpc',
       req: c.req.raw,
       router: appRouter,
-      createContext: () => ({ engine, connection }),
+      createContext: () => ({ engine, connection, signal: c.req.raw.signal }),
     }),
   );
   app.get('/events', (c) =>

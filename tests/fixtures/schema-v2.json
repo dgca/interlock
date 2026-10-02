@@ -1,0 +1,800 @@
+{
+  "source": {
+    "package": "@type_of/interlock",
+    "version": "0.1.13",
+    "schema": 2,
+    "method": "Packed published CLI in a temporary database; JavaScript, legacy Bash, and claimed Agent runs."
+  },
+  "documents": {
+    "workflows": [
+      {
+        "id": "0118181c-5f59-40c0-9427-db0414be5840",
+        "ownerWorkflowId": null,
+        "name": "prior-javascript",
+        "description": "",
+        "archived": false,
+        "draft": {
+          "inputSchema": {},
+          "outputSchema": {},
+          "nodes": [
+            {
+              "id": "in",
+              "label": "Input",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "entry"
+            },
+            {
+              "id": "step",
+              "label": "Step",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "script",
+              "language": "javascript",
+              "command": "return {answer: 42};",
+              "timeoutMs": 30000
+            },
+            {
+              "id": "out",
+              "label": "Output",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "exit"
+            }
+          ],
+          "edges": [
+            {
+              "id": "a",
+              "source": "in",
+              "target": "step",
+              "port": "default"
+            },
+            {
+              "id": "b",
+              "source": "step",
+              "target": "out",
+              "port": "default"
+            }
+          ],
+          "maxSteps": 100
+        },
+        "draftRevision": 1,
+        "latestVersion": 1,
+        "createdAt": "2026-10-02T16:45:06.375Z",
+        "updatedAt": "2026-10-02T16:45:06.378Z"
+      },
+      {
+        "id": "a2fee95b-0b2a-4d56-bb35-896a07da5e01",
+        "ownerWorkflowId": null,
+        "name": "prior-bash",
+        "description": "",
+        "archived": false,
+        "draft": {
+          "inputSchema": {},
+          "outputSchema": {},
+          "nodes": [
+            {
+              "id": "in",
+              "label": "Input",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "entry"
+            },
+            {
+              "id": "step",
+              "label": "Step",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "script",
+              "command": "printf '{\"answer\":42}\\n'",
+              "timeoutMs": 30000
+            },
+            {
+              "id": "out",
+              "label": "Output",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "exit"
+            }
+          ],
+          "edges": [
+            {
+              "id": "a",
+              "source": "in",
+              "target": "step",
+              "port": "default"
+            },
+            {
+              "id": "b",
+              "source": "step",
+              "target": "out",
+              "port": "default"
+            }
+          ],
+          "maxSteps": 100
+        },
+        "draftRevision": 1,
+        "latestVersion": 1,
+        "createdAt": "2026-10-02T16:45:06.412Z",
+        "updatedAt": "2026-10-02T16:45:06.413Z"
+      },
+      {
+        "id": "55f5c62a-f8d2-4821-9ce8-5a8796c25ea8",
+        "ownerWorkflowId": null,
+        "name": "prior-agent",
+        "description": "",
+        "archived": false,
+        "draft": {
+          "inputSchema": {},
+          "outputSchema": {},
+          "nodes": [
+            {
+              "id": "in",
+              "label": "Input",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "entry"
+            },
+            {
+              "id": "step",
+              "label": "Step",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "agent",
+              "prompt": "Return a test value",
+              "context": {
+                "mode": "current",
+                "instructions": "",
+                "tools": [],
+                "skills": []
+              },
+              "maxAttempts": 1
+            },
+            {
+              "id": "out",
+              "label": "Output",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "exit"
+            }
+          ],
+          "edges": [
+            {
+              "id": "a",
+              "source": "in",
+              "target": "step",
+              "port": "default"
+            },
+            {
+              "id": "b",
+              "source": "step",
+              "target": "out",
+              "port": "default"
+            }
+          ],
+          "maxSteps": 100
+        },
+        "draftRevision": 1,
+        "latestVersion": 1,
+        "createdAt": "2026-10-02T16:45:06.445Z",
+        "updatedAt": "2026-10-02T16:45:06.446Z"
+      }
+    ],
+    "versions": [
+      {
+        "workflowId": "0118181c-5f59-40c0-9427-db0414be5840",
+        "version": 1,
+        "definition": {
+          "inputSchema": {},
+          "outputSchema": {},
+          "nodes": [
+            {
+              "id": "in",
+              "label": "Input",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "entry"
+            },
+            {
+              "id": "step",
+              "label": "Step",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "script",
+              "language": "javascript",
+              "command": "return {answer: 42};",
+              "timeoutMs": 30000
+            },
+            {
+              "id": "out",
+              "label": "Output",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "exit"
+            }
+          ],
+          "edges": [
+            {
+              "id": "a",
+              "source": "in",
+              "target": "step",
+              "port": "default"
+            },
+            {
+              "id": "b",
+              "source": "step",
+              "target": "out",
+              "port": "default"
+            }
+          ],
+          "maxSteps": 100
+        },
+        "createdAt": "2026-10-02T16:45:06.378Z",
+        "id": "0118181c-5f59-40c0-9427-db0414be5840:1"
+      },
+      {
+        "workflowId": "a2fee95b-0b2a-4d56-bb35-896a07da5e01",
+        "version": 1,
+        "definition": {
+          "inputSchema": {},
+          "outputSchema": {},
+          "nodes": [
+            {
+              "id": "in",
+              "label": "Input",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "entry"
+            },
+            {
+              "id": "step",
+              "label": "Step",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "script",
+              "command": "printf '{\"answer\":42}\\n'",
+              "timeoutMs": 30000
+            },
+            {
+              "id": "out",
+              "label": "Output",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "exit"
+            }
+          ],
+          "edges": [
+            {
+              "id": "a",
+              "source": "in",
+              "target": "step",
+              "port": "default"
+            },
+            {
+              "id": "b",
+              "source": "step",
+              "target": "out",
+              "port": "default"
+            }
+          ],
+          "maxSteps": 100
+        },
+        "createdAt": "2026-10-02T16:45:06.413Z",
+        "id": "a2fee95b-0b2a-4d56-bb35-896a07da5e01:1"
+      },
+      {
+        "workflowId": "55f5c62a-f8d2-4821-9ce8-5a8796c25ea8",
+        "version": 1,
+        "definition": {
+          "inputSchema": {},
+          "outputSchema": {},
+          "nodes": [
+            {
+              "id": "in",
+              "label": "Input",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "entry"
+            },
+            {
+              "id": "step",
+              "label": "Step",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "agent",
+              "prompt": "Return a test value",
+              "context": {
+                "mode": "current",
+                "instructions": "",
+                "tools": [],
+                "skills": []
+              },
+              "maxAttempts": 1
+            },
+            {
+              "id": "out",
+              "label": "Output",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "exit"
+            }
+          ],
+          "edges": [
+            {
+              "id": "a",
+              "source": "in",
+              "target": "step",
+              "port": "default"
+            },
+            {
+              "id": "b",
+              "source": "step",
+              "target": "out",
+              "port": "default"
+            }
+          ],
+          "maxSteps": 100
+        },
+        "createdAt": "2026-10-02T16:45:06.446Z",
+        "id": "55f5c62a-f8d2-4821-9ce8-5a8796c25ea8:1"
+      }
+    ],
+    "runs": [
+      {
+        "id": "d2657571-156c-4614-9a7d-8fc1bb0997d8",
+        "workflowId": "0118181c-5f59-40c0-9427-db0414be5840",
+        "workflowName": "prior-javascript",
+        "version": 1,
+        "status": "completed",
+        "input": {
+          "fixture": true
+        },
+        "cursor": "out",
+        "value": {
+          "answer": 42
+        },
+        "executions": [
+          {
+            "id": "7b864b8a-1869-4990-9685-563f85857d85",
+            "nodeId": "in",
+            "kind": "entry",
+            "label": "Input",
+            "input": {
+              "fixture": true
+            },
+            "status": "completed",
+            "startedAt": "2026-10-02T16:45:06.380Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "fixture": true
+            },
+            "port": "default",
+            "completedAt": "2026-10-02T16:45:06.380Z"
+          },
+          {
+            "id": "68adefc1-5075-46f6-849d-880ea7f6d970",
+            "nodeId": "step",
+            "kind": "script",
+            "label": "Step",
+            "input": {
+              "fixture": true
+            },
+            "status": "completed",
+            "startedAt": "2026-10-02T16:45:06.380Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "answer": 42
+            },
+            "port": "default",
+            "completedAt": "2026-10-02T16:45:06.402Z"
+          },
+          {
+            "id": "e3a7c65f-aeb8-40a7-a554-ca6f32748881",
+            "nodeId": "out",
+            "kind": "exit",
+            "label": "Output",
+            "input": {
+              "answer": 42
+            },
+            "status": "completed",
+            "startedAt": "2026-10-02T16:45:06.402Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "answer": 42
+            },
+            "port": "default",
+            "completedAt": "2026-10-02T16:45:06.402Z"
+          }
+        ],
+        "createdAt": "2026-10-02T16:45:06.380Z",
+        "updatedAt": "2026-10-02T16:45:06.402Z",
+        "output": {
+          "answer": 42
+        }
+      },
+      {
+        "id": "5390d272-320f-4180-8ddc-8748b001190c",
+        "workflowId": "a2fee95b-0b2a-4d56-bb35-896a07da5e01",
+        "workflowName": "prior-bash",
+        "version": 1,
+        "status": "completed",
+        "input": {
+          "fixture": true
+        },
+        "cursor": "out",
+        "value": {
+          "answer": 42
+        },
+        "executions": [
+          {
+            "id": "6de69c85-5599-4fda-a78a-14c23554c841",
+            "nodeId": "in",
+            "kind": "entry",
+            "label": "Input",
+            "input": {
+              "fixture": true
+            },
+            "status": "completed",
+            "startedAt": "2026-10-02T16:45:06.414Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "fixture": true
+            },
+            "port": "default",
+            "completedAt": "2026-10-02T16:45:06.415Z"
+          },
+          {
+            "id": "79f349c4-6906-487e-a9b0-d7cc51049619",
+            "nodeId": "step",
+            "kind": "script",
+            "label": "Step",
+            "input": {
+              "fixture": true
+            },
+            "status": "completed",
+            "startedAt": "2026-10-02T16:45:06.415Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "answer": 42
+            },
+            "port": "default",
+            "completedAt": "2026-10-02T16:45:06.417Z"
+          },
+          {
+            "id": "94a9accb-2efb-470d-aa24-3398c81ca7ac",
+            "nodeId": "out",
+            "kind": "exit",
+            "label": "Output",
+            "input": {
+              "answer": 42
+            },
+            "status": "completed",
+            "startedAt": "2026-10-02T16:45:06.417Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "answer": 42
+            },
+            "port": "default",
+            "completedAt": "2026-10-02T16:45:06.417Z"
+          }
+        ],
+        "createdAt": "2026-10-02T16:45:06.414Z",
+        "updatedAt": "2026-10-02T16:45:06.417Z",
+        "output": {
+          "answer": 42
+        }
+      },
+      {
+        "id": "43a5e0fd-aadc-4f1f-8c12-9b0b1b648fe6",
+        "workflowId": "55f5c62a-f8d2-4821-9ce8-5a8796c25ea8",
+        "workflowName": "prior-agent",
+        "version": 1,
+        "status": "waiting",
+        "input": {
+          "fixture": true
+        },
+        "cursor": "step",
+        "value": {
+          "fixture": true
+        },
+        "executions": [
+          {
+            "id": "af9c1eb9-357f-4f22-ba0a-cc7ff0ced631",
+            "nodeId": "in",
+            "kind": "entry",
+            "label": "Input",
+            "input": {
+              "fixture": true
+            },
+            "status": "completed",
+            "startedAt": "2026-10-02T16:45:06.447Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "fixture": true
+            },
+            "port": "default",
+            "completedAt": "2026-10-02T16:45:06.448Z"
+          },
+          {
+            "id": "59c2b1f5-4a9b-4561-9063-2e6db9caf0bf",
+            "nodeId": "step",
+            "kind": "agent",
+            "label": "Step",
+            "input": {
+              "fixture": true
+            },
+            "status": "waiting",
+            "startedAt": "2026-10-02T16:45:06.448Z",
+            "childRunIds": [],
+            "nextItem": 0
+          }
+        ],
+        "createdAt": "2026-10-02T16:45:06.447Z",
+        "updatedAt": "2026-10-02T16:45:06.448Z"
+      }
+    ],
+    "work": [
+      {
+        "id": "8178d495-b63d-4d75-a6d0-1360292ebd75",
+        "runId": "43a5e0fd-aadc-4f1f-8c12-9b0b1b648fe6",
+        "executionId": "59c2b1f5-4a9b-4561-9063-2e6db9caf0bf",
+        "nodeId": "step",
+        "label": "Step",
+        "prompt": "Return a test value",
+        "input": {
+          "fixture": true
+        },
+        "context": {
+          "mode": "current",
+          "instructions": "",
+          "tools": [],
+          "skills": []
+        },
+        "outputSchema": {},
+        "status": "claimed",
+        "attempt": 1,
+        "maxAttempts": 1,
+        "createdAt": "2026-10-02T16:45:06.448Z",
+        "workerId": "fixture-worker",
+        "token": "fixture-token",
+        "claimLeaseSeconds": 3600,
+        "leaseUntil": "2099-01-01T00:00:00.000Z"
+      }
+    ],
+    "events": [
+      {
+        "id": "ec74cb12-5f82-417f-8193-dea8b2dd95b7",
+        "runId": "d2657571-156c-4614-9a7d-8fc1bb0997d8",
+        "type": "run.started",
+        "message": "Started prior-javascript v1",
+        "at": "2026-10-02T16:45:06.380Z"
+      },
+      {
+        "id": "230ef1ac-fbf0-48c5-bedb-f4f001a9fe6f",
+        "runId": "d2657571-156c-4614-9a7d-8fc1bb0997d8",
+        "type": "node.started",
+        "message": "Input",
+        "at": "2026-10-02T16:45:06.380Z"
+      },
+      {
+        "id": "7dbed3d9-3447-4b6d-8f7a-3c524f1559e1",
+        "runId": "d2657571-156c-4614-9a7d-8fc1bb0997d8",
+        "type": "node.completed",
+        "message": "Input",
+        "at": "2026-10-02T16:45:06.380Z"
+      },
+      {
+        "id": "31943dd4-76d5-4727-ac7d-c1548724b5a5",
+        "runId": "d2657571-156c-4614-9a7d-8fc1bb0997d8",
+        "type": "node.started",
+        "message": "Step",
+        "at": "2026-10-02T16:45:06.380Z"
+      },
+      {
+        "id": "9811527f-3297-4c4d-95c9-c1bf735e09dd",
+        "runId": "d2657571-156c-4614-9a7d-8fc1bb0997d8",
+        "type": "node.completed",
+        "message": "Step",
+        "at": "2026-10-02T16:45:06.402Z"
+      },
+      {
+        "id": "cfee49b1-5c92-4fa2-b0d5-a85e006edd09",
+        "runId": "d2657571-156c-4614-9a7d-8fc1bb0997d8",
+        "type": "node.started",
+        "message": "Output",
+        "at": "2026-10-02T16:45:06.402Z"
+      },
+      {
+        "id": "2dbbb0f2-521f-4f07-badd-c27a247c94cd",
+        "runId": "d2657571-156c-4614-9a7d-8fc1bb0997d8",
+        "type": "run.completed",
+        "message": "Workflow completed",
+        "at": "2026-10-02T16:45:06.402Z"
+      },
+      {
+        "id": "1881ce79-bc0e-4291-bf4b-b56550986a71",
+        "runId": "d2657571-156c-4614-9a7d-8fc1bb0997d8",
+        "type": "node.completed",
+        "message": "Output",
+        "at": "2026-10-02T16:45:06.402Z"
+      },
+      {
+        "id": "7d0dc912-cc16-4ff6-b3ba-d7472ca0c399",
+        "runId": "5390d272-320f-4180-8ddc-8748b001190c",
+        "type": "run.started",
+        "message": "Started prior-bash v1",
+        "at": "2026-10-02T16:45:06.414Z"
+      },
+      {
+        "id": "15e3d07d-2a8c-49bc-98cc-5c6a53f04a41",
+        "runId": "5390d272-320f-4180-8ddc-8748b001190c",
+        "type": "node.started",
+        "message": "Input",
+        "at": "2026-10-02T16:45:06.414Z"
+      },
+      {
+        "id": "ff25b553-b919-42bc-a4da-b9ead93bee33",
+        "runId": "5390d272-320f-4180-8ddc-8748b001190c",
+        "type": "node.completed",
+        "message": "Input",
+        "at": "2026-10-02T16:45:06.415Z"
+      },
+      {
+        "id": "3299c395-d373-486e-a497-f1c8301e706a",
+        "runId": "5390d272-320f-4180-8ddc-8748b001190c",
+        "type": "node.started",
+        "message": "Step",
+        "at": "2026-10-02T16:45:06.415Z"
+      },
+      {
+        "id": "7853ae1d-3d05-4261-b70a-93f0ce11370a",
+        "runId": "5390d272-320f-4180-8ddc-8748b001190c",
+        "type": "node.completed",
+        "message": "Step",
+        "at": "2026-10-02T16:45:06.417Z"
+      },
+      {
+        "id": "f0012a34-7d97-4901-8c94-013c8beb0b9c",
+        "runId": "5390d272-320f-4180-8ddc-8748b001190c",
+        "type": "node.started",
+        "message": "Output",
+        "at": "2026-10-02T16:45:06.417Z"
+      },
+      {
+        "id": "52b1262a-2a25-4be7-b337-77ce927e26a1",
+        "runId": "5390d272-320f-4180-8ddc-8748b001190c",
+        "type": "run.completed",
+        "message": "Workflow completed",
+        "at": "2026-10-02T16:45:06.417Z"
+      },
+      {
+        "id": "ec619ea9-0092-4a45-9f5b-798aa5abe660",
+        "runId": "5390d272-320f-4180-8ddc-8748b001190c",
+        "type": "node.completed",
+        "message": "Output",
+        "at": "2026-10-02T16:45:06.418Z"
+      },
+      {
+        "id": "ddf6d54a-68c9-49d4-bd58-ae170ce5e3cd",
+        "runId": "43a5e0fd-aadc-4f1f-8c12-9b0b1b648fe6",
+        "type": "run.started",
+        "message": "Started prior-agent v1",
+        "at": "2026-10-02T16:45:06.447Z"
+      },
+      {
+        "id": "d1b47031-61fe-48e6-b50b-ee06c11b96e4",
+        "runId": "43a5e0fd-aadc-4f1f-8c12-9b0b1b648fe6",
+        "type": "node.started",
+        "message": "Input",
+        "at": "2026-10-02T16:45:06.447Z"
+      },
+      {
+        "id": "a3d19609-6d52-4f93-a628-ff08308123c9",
+        "runId": "43a5e0fd-aadc-4f1f-8c12-9b0b1b648fe6",
+        "type": "node.completed",
+        "message": "Input",
+        "at": "2026-10-02T16:45:06.448Z"
+      },
+      {
+        "id": "a7809374-839f-4552-9499-959d5dcce807",
+        "runId": "43a5e0fd-aadc-4f1f-8c12-9b0b1b648fe6",
+        "type": "node.started",
+        "message": "Step",
+        "at": "2026-10-02T16:45:06.448Z"
+      },
+      {
+        "id": "ef9a925a-4acf-4504-a65e-c7936d6d96f0",
+        "runId": "43a5e0fd-aadc-4f1f-8c12-9b0b1b648fe6",
+        "type": "work.available",
+        "message": "Awaiting agent: Step",
+        "at": "2026-10-02T16:45:06.448Z"
+      },
+      {
+        "id": "5b14e30a-ccef-4680-bdb9-c1b0c0b4507f",
+        "runId": "43a5e0fd-aadc-4f1f-8c12-9b0b1b648fe6",
+        "type": "work.claimed",
+        "message": "Step claimed by fixture-worker",
+        "at": "2026-10-02T16:45:06.450Z"
+      }
+    ]
+  }
+}

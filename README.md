@@ -126,6 +126,12 @@ Workflow-level routes can loop back to an upstream node other than Entry. The sa
 
 `maxSteps` allows 2 through 1000 steps per run and defaults to 100. Entry, Exit, and every node visit count, including explicit retries that create a new execution. A Batch counts once in its parent; each item has its own budget. For example, 200 items with three steps each fit a three-step item budget, with a separate three-step parent path of Entry → Batch → Exit. The independent Batch `maxItems` limit defaults to 200.
 
+### Resume an agent run
+
+Use MCP `get_run_briefing` with the existing run ID for current progress, available and claimed work, blockers, Batch counts, deadlines, and result references. Detached trees have independent lifecycle counts, including after the requested run finishes. Use `get_run_result` to read one input or output path, and `wait_for_run_change` with the returned cursor to wait for a scoped change. Waits default to 30 seconds and stop after at most 60 seconds. These reads do not claim or execute work.
+
+See [run continuation operations](docs/agent-workflows.md#resume-a-run-with-a-briefing) for response bounds, cursor recovery, and cancellation. `get_run`, `list_work`, and existing CLI commands remain available.
+
 ### Switch nodes
 
 Use **Switch** to choose among several named routes from one input value. Choose an input field, add cases with typed match values, and connect every named branch. Text matches can be entered without JSON quotes. The first matching case wins. Unmatched values fail the run unless you choose **Follow a fallback branch** under **When no case matches** and connect that branch. A missing path always fails the step. Switch passes its input through unchanged and supports input bindings. See [Switch routing](docs/switch.md) for an example and editing rules.

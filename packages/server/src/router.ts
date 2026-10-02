@@ -7,6 +7,9 @@ import {
   jsonSchema,
   runQuerySchema,
   InterlockError,
+  briefingQuerySchema,
+  waitQuerySchema,
+  resultQuerySchema,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import {
@@ -16,7 +19,11 @@ import {
 import { workflowBundleSchema } from '../../core/src/transfer.js';
 
 const t = initTRPC
-  .context<{ engine: Engine; connection?: ConnectionConfig }>()
+  .context<{
+    engine: Engine;
+    connection?: ConnectionConfig;
+    signal?: AbortSignal;
+  }>()
   .create();
 const p = t.procedure.use(async ({ next }) => {
   try {
@@ -176,6 +183,22 @@ export const appRouter = t.router({
     }),
   }),
   runs: t.router({
+    briefing: p
+      .input(briefingQuerySchema)
+      .query(({ ctx, input }) => ctx.engine.continuation.briefing(input)),
+    wait: p
+      .input(waitQuerySchema)
+      .query(({ ctx, input, signal }) =>
+        ctx.engine.continuation.wait(
+          input,
+          ctx.signal && signal
+            ? AbortSignal.any([ctx.signal, signal])
+            : (ctx.signal ?? signal),
+        ),
+      ),
+    result: p
+      .input(resultQuerySchema)
+      .query(({ ctx, input }) => ctx.engine.continuation.result(input)),
     find: p
       .input(runQuerySchema.default({}))
       .query(({ ctx, input }) => ctx.engine.store.findRuns(input)),

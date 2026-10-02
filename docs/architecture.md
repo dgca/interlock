@@ -153,6 +153,14 @@ The Hono listener exposes Streamable HTTP MCP at `/mcp`, behind the same host, o
 
 The UI uses tRPC requests and server-sent notifications, with periodic refresh as a reconnect fallback. Events and node execution data remain in SQLite. `INTERLOCK_DB` changes the database location. `INTERLOCK_URL` changes the service URL used by CLI and MCP callers.
 
+## Run continuation
+
+Core defines query contracts; storage projects run, execution, and assignment metadata without loading inputs, outputs, prompts, or tokens into the briefing. Schema 3 maintains a global transactional sequence and the latest revision per run through SQLite triggers. Timestamp-only updates do not change revisions. Store notifications wake runtime continuation waits after synchronous writes complete; rolled-back writes cannot change their visible cursor.
+
+Runtime aggregates ordinary versus detached lifecycle progress, Batch queued/dispatched counts, active deadlines, and bounded references. It subscribes before checking the persisted snapshot. Every wait ends within 60 seconds and releases its subscription and timer on response, request abort, or engine shutdown. Waiting holds no database transaction and does not pump execution. Cursors include a server incarnation so restart explicitly resets continuation.
+
+The shared API exposes `runs.briefing`, `runs.wait`, and `runs.result`; MCP exposes `get_run_briefing`, `wait_for_run_change`, and `get_run_result`. HTTP request and MCP cancellation signals reach the runtime. Client waits use separate HTTP requests instead of batching them with other queries. Existing inspection, work discovery, UI events, and timer execution retain their behavior. See [continuation response fields and limits](agent-workflows.md#resume-a-run-with-a-briefing).
+
 ## UI routes
 
 Workflow pages have Editor and Runs sections. `?view=runs` selects workflow runs; `&tab=history` selects past runs. Section changes keep the editor mounted, including raw text, history, and canvas state. Opening a run leaves the workflow and retains the unsaved-edit navigation guard. Run links carry the originating workflow and filter so Back to runs returns to that list, including after inspecting child runs. Workflow run lists include direct executions and invocations by other workflows, but exclude Batch item runs; those remain in their parent run inspector.
