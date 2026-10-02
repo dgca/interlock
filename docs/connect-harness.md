@@ -104,7 +104,9 @@ Use list_work for the root run, including its child runs.
 Claim assignments with your actual capabilities.
 Perform each assignment using its prompt, input, and context policy.
 Submit JSON matching its output schema.
-Inspect get_run when no assignments are available.
+Use get_run_briefing to resume and distinguish blockers when no work is available.
+Use get_run_result for selected data and wait_for_run_change with the briefing cursor.
+Keep get_run for full inspection.
 For a long timer wait, report the deadline and resume this same run later.
 Do not poll continuously or submit a made-up result to end a wait.
 Continue until the root run completes, fails, or is cancelled.
@@ -112,7 +114,7 @@ Continue until the root run completes, fails, or is cancelled.
 
 Starting a run in the UI does not launch an agent. When assignments are available, the run inspector shows **Waiting for an agent**, including work inside Batches and nested workflows. Use **Copy instructions for agent** and paste the instructions into your connected agent conversation. The instructions include the existing run ID. **Connect an agent** opens the connection configuration; connecting alone does not pick up assignments.
 
-`start_run` returns a persisted run. `list_work` includes descendants of the requested run, including Agent assignments in Batch item paths and nested Batches. Item run inspection resolves the published graph and identifies the owning Batch through `batchNodeId`. A claim returns its token and expiry. Keep the token for `submit_result`, `renew_claim`, or `fail_work`. Inspect `get_run` to distinguish a completed run from one waiting on claimed work, scripts, Fetch requests, or timers.
+`start_run` returns a persisted run. `list_work` includes descendants of the requested run, including Agent assignments in Batch item paths and nested Batches. Item run inspection resolves the published graph and identifies the owning Batch through `batchNodeId`. A claim returns its token and expiry. Keep the token for `submit_result`, `renew_claim`, or `fail_work`. Use `get_run_briefing` to distinguish completion, claimed work, scripts, Fetch requests, timers, and independent detached lifecycles. Read one input/output path with `get_run_result`; retain `get_run` for full inspection.
 
 If execution will exceed the lease, call `renew_claim` before it expires. Claims default to 300 seconds and accept `leaseSeconds` from 10 through 3600. An omitted renewal duration reuses the original claim duration; older stored claims without that duration fall back to 300 seconds. An explicit override affects only that renewal and can shorten the lease. See [claim renewal](agent-workflows.md#renew-claims) for CLI examples and compatibility details. If a submission loses its response, submit the identical result again using the same token. If a claim has expired, inspect the run and discover available work again. The assignment may already have timed out or exhausted its attempts. Do not submit through another worker's claim.
 
@@ -134,7 +136,7 @@ Read `get_workflow` before editing. Pass the entire updated definition as `draft
 
 ### Resume a run that is waiting
 
-When `list_work` is empty, inspect `get_run` for the root and its descendants. A waiting Wait execution includes `resumeAt`; an available timed assignment includes `availableUntil`. These are ISO timestamps. Check the execution or assignment status too, because deadlines remain in historical records.
+When `list_work` is empty, use `get_run_briefing` for current blockers, claimed work, active deadlines, and detached lifecycle counts. Use `wait_for_run_change` with its cursor for finite waits, defaulting to 30 seconds and capped at 60 seconds. Restart resets the cursor explicitly and does not mean completion. Read selected values with `get_run_result`, and use `get_run` when full history or execution details are needed. See [continuation fields, bounds, and cancellation](agent-workflows.md#resume-a-run-with-a-briefing).
 
 The server advances timers without a connected agent. For a long delay, report the pending deadline and keep the run ID for later continuation. Avoid continuous polling or a new run. Do not fabricate an agent result to bypass a wait.
 
@@ -142,19 +144,20 @@ Claim an assignment only when ready to perform it. Claiming stops its unclaimed 
 
 ## MCP tools
 
-| Tools                                                    | Purpose                                                                         |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `list_workflows`, `get_workflow`                         | Find workflows and inspect drafts, contracts, and published version numbers.    |
-| `create_workflow`, `update_workflow`, `publish_workflow` | Author a draft and publish an immutable version.                                |
-| `start_run`, `get_run`                                   | Start a published version and inspect its execution and descendants.            |
-| `list_work`, `claim_work`                                | Discover available assignments and reserve one with declared capabilities.      |
-| `submit_result`, `fail_work`, `renew_claim`              | Complete or fail claimed work, or extend its lease.                             |
-| `cancel_run`, `retry_run`                                | Cancel unfinished work or explicitly retry a failed run.                        |
-| `list_runs`                                              | Find bounded run summaries by workflow, status, ancestry, and input.            |
-| `export_workflow`, `import_workflows`                    | Transfer workflow drafts, dependencies, and published pins in portable bundles. |
-| `delete_workflow`                                        | Permanently remove an unreferenced workflow and its inactive history.           |
+| Tools                                                       | Purpose                                                                         |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `list_workflows`, `get_workflow`                            | Find workflows and inspect drafts, contracts, and published version numbers.    |
+| `create_workflow`, `update_workflow`, `publish_workflow`    | Author a draft and publish an immutable version.                                |
+| `start_run`, `get_run`                                      | Start a published version and inspect its execution and descendants.            |
+| `get_run_briefing`, `get_run_result`, `wait_for_run_change` | Resume with bounded snapshots, selected values, and finite scoped change waits. |
+| `list_work`, `claim_work`                                   | Discover available assignments and reserve one with declared capabilities.      |
+| `submit_result`, `fail_work`, `renew_claim`                 | Complete or fail claimed work, or extend its lease.                             |
+| `cancel_run`, `retry_run`                                   | Cancel unfinished work or explicitly retry a failed run.                        |
+| `list_runs`                                                 | Find bounded run summaries by workflow, status, ancestry, and input.            |
+| `export_workflow`, `import_workflows`                       | Transfer workflow drafts, dependencies, and published pins in portable bundles. |
+| `delete_workflow`                                           | Permanently remove an unreferenced workflow and its inactive history.           |
 
-`list_work` returns available assignments, not claimed work. An empty list does not mean the execution has completed. Use `get_run` to inspect its status and descendant assignments. When given an existing run ID, resume it rather than calling `start_run` again.
+`list_work` returns available assignments, not claimed work. An empty list does not mean the execution has completed. Use `get_run_briefing` for its status, claimed assignments, blockers, and detached progress. When given an existing run ID, resume it rather than calling `start_run` again.
 
 `retry_run` retries the failed step of a failed run. Inspect its error first, since Script and Fetch retries can repeat external side effects. Failed Batch retries preserve successful items. Retry a failed parent when an ordinary child belongs to a terminal parent. Failed detached children can be retried directly after their parent ends. Completed and cancelled runs cannot be retried. The CLI equivalent is `interlock retry RUN_ID`.
 
@@ -181,6 +184,6 @@ From a source checkout, the automated MCP transport test runs without a model:
 pnpm test
 ```
 
-Transport tests cover HTTP and stdio initialization, tool discovery, work discovery, claims, results, and Batch retries. HTTP checks also cover malformed requests, protocol headers, concurrent clients, and local-access restrictions. The package check, `pnpm build && pnpm test:package`, exercises global and npx startup from a local tarball, then submits a persisted claim after a restart using the same HTTP endpoint.
+Transport tests cover HTTP and stdio initialization, tool discovery, work discovery, claims, results, Batch retries, continuation snapshots, targeted reads, and finite waits. They verify cleanup on actual HTTP abort/disconnect and stdio request cancellation. HTTP checks also cover malformed requests, protocol headers, concurrent clients, and local-access restrictions. The package check, `pnpm build && pnpm test:package`, exercises global and npx startup from a local tarball, then submits a persisted claim after a restart using the same HTTP endpoint.
 
 The optional `scripts/codex-smoke.ts` check invokes the installed Codex CLI with a real account and a local text task. It creates a workflow in the running engine and consumes model usage. Its result depends on the client's authentication and tool approval settings; it is separate from the automated transport tests.

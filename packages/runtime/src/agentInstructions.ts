@@ -7,7 +7,7 @@ The isolated executor must claim the assignment with freshContext: true, perform
 
 If you cannot provide isolated execution, leave the assignment unclaimed. Give the user this ready-to-paste prompt for a fresh session:
 
-Continue existing Interlock run ${runId}. Do not start a new run. Inspect assignment ${workId} through list_work for that run. This assignment requires fresh context; claim it with freshContext: true only if this session has no inherited conversation history. Follow its prompt, input, context instructions, and required capabilities. Submit a result matching its output contract, then continue the existing run until it completes, fails, or requires another handoff. Honor each subsequent assignment's context requirements.
+Continue existing Interlock run ${runId}. Do not start a new run. Use get_run_briefing for current state, get_run_result for selected data, and wait_for_run_change with the briefing cursor for finite waits. Keep get_run for full inspection. Inspect assignment ${workId} through list_work for that run. This assignment requires fresh context; claim it with freshContext: true only if this session has no inherited conversation history. Follow its prompt, input, context instructions, and required capabilities. Submit a result matching its output contract, then continue the existing run until it completes, fails, or requires another handoff. Honor each subsequent assignment's context requirements.
 
 Tell the user to paste that prompt into a fresh session with Interlock connected.`;
 }

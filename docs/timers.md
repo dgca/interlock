@@ -77,6 +77,8 @@ In the editor, disabling the timeout removes its outgoing Timeout edge when sett
 
 ## Inspect timer state
 
+Use `get_run_briefing` for current blockers and active deadlines, then `wait_for_run_change` with its cursor for a finite wait. These reads do not advance timers. See [continuation fields, cursor recovery, and cancellation](agent-workflows.md#resume-a-run-with-a-briefing).
+
 `get_run` returns the root run, its executions, descendants, assignments, and events. Timer state appears in these fields:
 
 | Field                                                       | Meaning                                                        |

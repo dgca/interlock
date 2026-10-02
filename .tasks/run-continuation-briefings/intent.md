@@ -10,7 +10,7 @@ SDLC run: `69765657-8b45-476e-94ab-e694a20afc5d`, workflow version 1, review pol
 
 Agents resuming a run can determine its current state and next action without fetching its complete definition and execution history. External harnesses can wait for relevant changes with finite requests.
 
-Provide persisted-state briefings, targeted execution/result reads, and bounded change waits through runtime, shared API, and MCP. Preserve existing inspection, assignment discovery, timers, and detached lifecycles. No UI changes, executor launch, transport sessions, or new event stream.
+Provide persisted-state briefings, targeted execution/result reads, and bounded change waits through runtime, shared API, and MCP. Preserve existing inspection, assignment discovery, timers, and detached lifecycles. Existing copied handoff instructions can point agents to the continuation protocol. No new UI controls or layout changes, executor launch, transport sessions, or new event stream. This clarification follows the independent review guidance finding under the original autonomous issue authorization.
 
 ## Constraints
 
