@@ -12,6 +12,10 @@ import {
   readPath,
   resolveFetch,
   validateDefinition,
+  applyWorkflowEdits,
+  diagnoseDraft,
+  draftChanges,
+  type DraftDiagnostic,
   validateWorkflowReferences,
   type Json,
   type NodeExecution,
@@ -154,6 +158,134 @@ export class Engine {
       w.updatedAt = now();
       this.store.put('workflows', w);
       return w;
+    });
+  }
+  validateDraft(id: string, candidate?: unknown) {
+    const w = this.workflow(id);
+    const result = diagnoseDraft(candidate === undefined ? w.draft : candidate);
+    this.addReferenceDiagnostics(w.id, result.definition, result.diagnostics);
+    return {
+      draftRevision: w.draftRevision,
+      saveable: !result.diagnostics.some(
+        (d) => d.category === 'save' && d.severity === 'error',
+      ),
+      publishable: !result.diagnostics.some(
+        (d) => d.category !== 'contract' && d.severity === 'error',
+      ),
+      diagnostics: result.diagnostics,
+    };
+  }
+  private addReferenceDiagnostics(
+    id: string,
+    definition: WorkflowDefinition | undefined,
+    diagnostics: DraftDiagnostic[],
+  ) {
+    if (definition) {
+      const workflows = this.store.workflows();
+      for (const [i, node] of definition.nodes.entries()) {
+        if (node.kind !== 'workflow') continue;
+        try {
+          validateWorkflowReferences(
+            id,
+            { ...definition, nodes: [node] },
+            workflows,
+          );
+        } catch (error) {
+          diagnostics.push({
+            severity: 'error',
+            category: 'save',
+            code: 'workflow_ownership',
+            nodeId: node.id,
+            path: `nodes.${i}.workflowId`,
+            message: (error as Error).message,
+          });
+        }
+        if (
+          node.version !== null &&
+          !this.store.getVersion(node.workflowId, node.version)
+        )
+          diagnostics.push({
+            severity: 'error',
+            category: 'publication',
+            code: 'missing_workflow_version',
+            nodeId: node.id,
+            path: `nodes.${i}.version`,
+            message: 'Referenced workflow version does not exist.',
+          });
+      }
+    }
+  }
+  editDraft(id: string, draftRevision: number, edits: unknown) {
+    return this.store.transaction(() => {
+      const w = this.workflow(id);
+      const unchanged = draftChanges(w.draft, w.draft);
+      const failure = (diagnostics: DraftDiagnostic[]) => ({
+        applied: false,
+        draftRevision: w.draftRevision,
+        changes: unchanged,
+        diagnostics,
+      });
+      if (draftRevision !== w.draftRevision)
+        return failure([
+          {
+            severity: 'error',
+            category: 'save',
+            code: 'stale_revision',
+            path: 'draftRevision',
+            message: 'Draft changed elsewhere. Reload before editing.',
+          },
+        ]);
+      const result = applyWorkflowEdits(w.draft, edits);
+      if (!result.definition) return failure(result.diagnostics);
+      this.addReferenceDiagnostics(id, result.definition, result.diagnostics);
+      const validation = result;
+      if (
+        validation.diagnostics.some(
+          (d) => d.category === 'save' && d.severity === 'error',
+        )
+      ) {
+        // The latest node edit touching a rejected reference identifies its operation.
+        for (const diagnostic of validation.diagnostics) {
+          if (
+            diagnostic.category !== 'save' ||
+            !diagnostic.nodeId ||
+            !Array.isArray(edits)
+          )
+            continue;
+          for (let i = edits.length - 1; i >= 0; i--) {
+            const edit = edits[i] as {
+              op: string;
+              id?: string;
+              node?: { id?: string };
+            };
+            if (
+              (edit.op === 'update_node' && edit.id === diagnostic.nodeId) ||
+              (edit.op === 'add_node' && edit.node?.id === diagnostic.nodeId)
+            ) {
+              diagnostic.operationIndex = i;
+              break;
+            }
+          }
+        }
+        return failure(validation.diagnostics);
+      }
+      const changes = draftChanges(w.draft, result.definition);
+      const changed =
+        changes.settings.length > 0 ||
+        Object.values(changes.nodes).some((ids) => ids.length > 0) ||
+        Object.values(changes.edges).some((ids) => ids.length > 0);
+      if (changed) {
+        w.draft = result.definition;
+        w.draftRevision++;
+        w.updatedAt = now();
+        this.store.put('workflows', w);
+      }
+      return {
+        applied: true,
+        draftRevision: w.draftRevision,
+        changes,
+        diagnostics: validation.diagnostics,
+      };
     });
   }
   createChild(input: {

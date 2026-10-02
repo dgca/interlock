@@ -566,3 +566,13 @@ export function validateWorkflowReferences(
       );
   }
 }
+
+export {
+  workflowEditSchema,
+  workflowEditsSchema,
+  applyWorkflowEdits,
+  draftChanges,
+  type DraftChanges,
+} from './workflowEdits.js';
+
+export { diagnoseDraft, type DraftDiagnostic } from './draftDiagnostics.js';

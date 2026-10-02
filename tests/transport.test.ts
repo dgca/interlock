@@ -82,6 +82,134 @@ it.each(['stdio', 'http'])(
       const tools = (await client.listTools()).tools;
       for (const tool of tools) validateContractSchema(tool.inputSchema);
       expect(tools.map((t) => t.name)).toContain('claim_work');
+      for (const name of ['edit_workflow', 'validate_workflow'])
+        expect(tools.map((t) => t.name)).toContain(name);
+      const editSchema = tools.find(
+        (t) => t.name === 'edit_workflow',
+      )!.inputSchema;
+      expect(editSchema.required).toEqual(
+        expect.arrayContaining(['id', 'draftRevision', 'edits']),
+      );
+      expect(editSchema.properties!.edits).toMatchObject({
+        type: 'array',
+        maxItems: 100,
+      });
+      expect(
+        tools.find((t) => t.name === 'edit_workflow')!.description,
+      ).toContain('No-op');
+      expect(
+        tools.find((t) => t.name === 'edit_workflow')!.description,
+      ).toContain('Batch descendants');
+      expect(
+        tools.find((t) => t.name === 'validate_workflow')!.description,
+      ).toContain('unknown');
+      expect(client.getInstructions()).toContain('edit_workflow');
+      const editTarget = await call('create_workflow', {
+        name: 'Atomic transport edit',
+      });
+      const edited = await call('edit_workflow', {
+        id: editTarget.id,
+        draftRevision: editTarget.draftRevision,
+        edits: [
+          {
+            op: 'update_node',
+            id: 'agent',
+            set: { prompt: 'Updated through MCP' },
+          },
+          {
+            op: 'add_node',
+            node: {
+              id: 'check',
+              kind: 'script',
+              label: 'Check',
+              command: 'return input',
+            },
+          },
+          { op: 'update_edge', id: 'e2', set: { target: 'check' } },
+          {
+            op: 'add_edge',
+            edge: { id: 'check-out', source: 'check', target: 'exit' },
+          },
+        ],
+      });
+      expect(edited).toMatchObject({
+        applied: true,
+        draftRevision: editTarget.draftRevision + 1,
+        changes: { nodes: { added: ['check'], updated: ['agent'] } },
+      });
+      const persisted = await call('get_workflow', { id: editTarget.id });
+      expect(
+        persisted.draft.nodes.find((n: { id: string }) => n.id === 'check'),
+      ).toMatchObject({ language: 'javascript' });
+      expect(
+        await call('validate_workflow', { id: editTarget.id }),
+      ).toMatchObject({ saveable: true, publishable: true });
+      expect(
+        await call('edit_workflow', {
+          id: editTarget.id,
+          draftRevision: editTarget.draftRevision,
+          edits: [],
+        }),
+      ).toMatchObject({
+        applied: false,
+        diagnostics: [{ code: 'stale_revision' }],
+      });
+      expect(
+        await call('edit_workflow', {
+          id: editTarget.id,
+          draftRevision: edited.draftRevision,
+          edits: [
+            { op: 'update_node', id: 'agent', set: { prompt: 'Rollback' } },
+            { op: 'remove_node', id: 'missing' },
+          ],
+        }),
+      ).toMatchObject({
+        applied: false,
+        diagnostics: [{ code: 'invalid_edit', operationIndex: 1 }],
+      });
+      expect(await call('get_workflow', { id: editTarget.id })).toEqual(
+        persisted,
+      );
+      expect(
+        await call('edit_workflow', {
+          id: editTarget.id,
+          draftRevision: edited.draftRevision,
+          edits: [],
+        }),
+      ).toMatchObject({ applied: true, draftRevision: edited.draftRevision });
+      const candidate = { ...persisted.draft, edges: [] };
+      expect(
+        await call('validate_workflow', {
+          id: editTarget.id,
+          definition: candidate,
+        }),
+      ).toMatchObject({ saveable: true, publishable: false });
+      expect(
+        await call('validate_workflow', {
+          id: editTarget.id,
+          definition: { ...persisted.draft, unexpected: true },
+        }),
+      ).toMatchObject({
+        saveable: false,
+        diagnostics: [{ code: 'unknown_field' }],
+      });
+      expect(await call('get_workflow', { id: editTarget.id })).toEqual(
+        persisted,
+      );
+      const incomplete = await call('edit_workflow', {
+        id: editTarget.id,
+        draftRevision: edited.draftRevision,
+        edits: [{ op: 'remove_edge', id: 'check-out' }],
+      });
+      expect(incomplete.applied).toBe(true);
+      expect(incomplete.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'incomplete_routes',
+            category: 'publication',
+          }),
+        ]),
+      );
       const renewalSchema = tools.find(
         (t) => t.name === 'renew_claim',
       )!.inputSchema;
