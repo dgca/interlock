@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { readPath, type RunQuery } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
+import { continuationState } from './continuation.js';
 import type {
   Run,
   RunAncestry,
@@ -17,6 +18,44 @@ import type {
 export class Store {
   private db: DatabaseSync;
   private transactionDepth = 0;
+  private listeners = new Set<() => void>();
+  private notificationPending = false;
+  subscribe(listener: () => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+  private changed(collection: string) {
+    if (
+      (collection === 'runs' || collection === 'work') &&
+      !this.notificationPending
+    ) {
+      this.notificationPending = true;
+      queueMicrotask(() => {
+        this.notificationPending = false;
+        this.listeners.forEach((listener) => listener());
+      });
+    }
+  }
+  continuation(id: string) {
+    return continuationState(this.db, id);
+  }
+  batchSize(id: string, executionId: string, path: string) {
+    const keys =
+      !path || path === '$' ? [] : path.replace(/^\$\./, '').split('.');
+    let value = "json_quote(json_extract(e.value, '$.input'))";
+    for (const _key of keys)
+      value = `(SELECT CASE WHEN j.type IN ('array', 'object') THEN json(j.value) ELSE json_quote(j.value) END FROM json_each(${value}) j WHERE CAST(j.key AS TEXT) = ?)`;
+    const row = this.db
+      .prepare(
+        `SELECT coalesce(json_array_length(${value}), 0) AS size
+      FROM documents d, json_each(d.value, '$.executions') e
+      WHERE d.collection = 'runs' AND d.id = ? AND json_extract(e.value, '$.id') = ?`,
+      )
+      .get(...keys, id, executionId);
+    return Number(row?.size ?? 0);
+  }
   readonly migration: MigrationResult;
   constructor(path: string) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -49,11 +88,13 @@ export class Store {
         'INSERT INTO documents VALUES (?, ?, ?) ON CONFLICT(collection, id) DO UPDATE SET value = excluded.value',
       )
       .run(collection, value.id, JSON.stringify(value));
+    this.changed(collection);
   }
   remove(collection: string, id: string) {
     this.db
       .prepare('DELETE FROM documents WHERE collection = ? AND id = ?')
       .run(collection, id);
+    this.changed(collection);
   }
   version(value: WorkflowVersion) {
     this.put('versions', {

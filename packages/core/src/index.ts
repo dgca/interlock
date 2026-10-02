@@ -576,3 +576,8 @@ export {
 } from './workflowEdits.js';
 
 export { diagnoseDraft, type DraftDiagnostic } from './draftDiagnostics.js';
+export {
+  briefingQuerySchema,
+  waitQuerySchema,
+  resultQuerySchema,
+} from './continuation.js';

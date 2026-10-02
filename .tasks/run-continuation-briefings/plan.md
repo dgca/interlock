@@ -1,6 +1,6 @@
 # Run continuation implementation
 
-Follow [intent.md](intent.md) and [spec.md](spec.md). Baseline is current origin/main at task branch creation, `2abebb6`. Resolve the full object ID before build submission.
+Follow [intent.md](intent.md) and [spec.md](spec.md). Baseline is current origin/main at task branch creation, `2abebb665a0d2a9fa6ac7c161a5b29bd49606546`. This baseline remains fixed for all review iterations.
 
 ## Approach
 
@@ -19,4 +19,21 @@ Projected summaries avoid fetching stored inputs, outputs, and prompts. Aggregat
 
 ## Verification evidence
 
-Pending implementation. Tests map directly to AC1 through AC6. Review the complete affected execution flow: server instructions, get_run, list_runs, list_work, start_run, claim_work, renew_claim, submit_result, fail_work, retry_run, cancel_run, and the new operations. This is an execution-flow audit, not an audit of every authoring tool.
+Implemented the planned protocol. SQLite projections avoid briefing payload loads; targeted reads select the caller's field/path and enforce the selected-value bound. Separate HTTP requests preserve wait cancellation and response independence.
+
+Verification at implementation submission:
+
+- AC1: `tests/continuation.test.ts` verifies available/claimed work, renewals at equal timestamps, completion with null, failures, cancellation, Wait, and running local execution. Payload markers, context instructions, and claim tokens are absent.
+- AC2: The same tests verify nested Batches, queued/dispatched totals, collect-policy failure, ordinary descendants, and nested detached boundaries after parent completion. A 150-item Batch verifies truncation with exact counts.
+- AC3: Tests verify transactional rollback, timestamp-only writes, equal-timestamp revisions, invalid/foreign/future cursors, and a new Engine incarnation. Migration tests verify persisted revision on reopen.
+- AC4: Runtime tests cover multiple waiters, unrelated changes, subscription-race injection, timeout/zero timeout, abort/already-aborted signals, shutdown, deletion, and concurrent shared API writes. Transport tests verify actual HTTP disconnect cleanup and stdio protocol cancellation cleanup.
+- AC5: Tests cover null, nested arrays, UTF-8 byte counts, missing paths/outputs, unsafe property paths, foreign execution IDs, and list/value limits.
+- AC6: HTTP and stdio tests discover and call all three tools, assert defaults/bounds, claim/submit through existing operations, and verify guidance. Migration fixtures include the prior 0.1.3 data and freshly generated published 0.1.13 schema-2 data. Script pins execute after migration and the previous Agent claim completes.
+
+`pnpm test` passed all 41 files and 465 tests before adding two boundary/previous-release tests; relevant continuation and migration tests then passed all 27 tests. Transport checks passed in both modes. `pnpm build`, `pnpm test:package`, `pnpm format:check`, and `git diff --check` passed. After adding root ancestry to run summaries, continuation/transport tests and build passed again.
+
+The packed-install check exercised temporary global/npx installs, CLI startup, UI assets, both MCP transports, JavaScript, persistence, and claims across restart. No user database or real model/account was used.
+
+Documented limitation: older HTTP MCP SDKs can cancel only their local promise and leave the POST active. Actual HTTP abort/disconnect cleans up; an uncorrelated cancellation notification cannot safely identify an original stateless request. Such waits end at the finite deadline. Stdio cancellation propagates through its dedicated shared-API request. This preserves the authorized stateless transport and is documented in spec D6, MCP descriptions, and agent operations.
+
+Reviewed README, agent operations, architecture, current limits, upgrade guidance, and CLI command help against the final implementation. CLI commands retain their existing behavior. No UI journey applies. Review the complete affected execution flow: server instructions, get_run, list_runs, list_work, start_run, claim_work, renew_claim, submit_result, fail_work, retry_run, cancel_run, and the new operations. This is an execution-flow audit, not an audit of every authoring tool.

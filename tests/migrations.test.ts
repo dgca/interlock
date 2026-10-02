@@ -15,6 +15,7 @@ import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import { migrate, migrations } from '../packages/storage/src/migrations';
 import fixture from './fixtures/schema-v1.json';
+import previousRelease from './fixtures/schema-v2.json';
 
 const directories: string[] = [];
 const connections: { close(): void }[] = [];
@@ -69,8 +70,8 @@ const next = [
 it('initializes empty databases and reopens current databases without a backup', () => {
   const file = path();
   const db = open(file);
-  expect(migrate(db, file)).toEqual({ from: 0, to: 2 });
-  expect(migrate(db, file)).toEqual({ from: 2, to: 2 });
+  expect(migrate(db, file)).toEqual({ from: 0, to: 3 });
+  expect(migrate(db, file)).toEqual({ from: 3, to: 3 });
   expect(existsSync(`${file}.backups`)).toBe(false);
 });
 
@@ -217,7 +218,7 @@ it('opens the previous release without rewriting records and executes its publis
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 1,
-    to: 2,
+    to: 3,
     backup: expect.any(String),
   });
   expect(
@@ -226,7 +227,7 @@ it('opens the previous release without rewriting records and executes its publis
         "SELECT name FROM sqlite_schema WHERE type = 'index' AND name LIKE 'runs_%'",
       )
       .all(),
-  ).toHaveLength(3);
+  ).toHaveLength(4);
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
     before,
   );
@@ -245,6 +246,86 @@ it('opens the previous release without rewriting records and executes its publis
     for (const collection of ['versions', 'runs', 'events'] as const)
       for (const record of fixture[collection])
         expect(store.get(collection, record.id)).toEqual(record);
+  } finally {
+    engine.stop();
+  }
+});
+
+it('upgrades schema-2 documents without rewriting them and persists revisions across reopen', () => {
+  const file = path();
+  const db = open(file);
+  migrate(db, file, migrations.slice(0, 2));
+  for (const [collection, records] of Object.entries(previousRelease.documents))
+    for (const record of records)
+      db.prepare('INSERT INTO documents VALUES (?, ?, ?)').run(
+        collection,
+        record.id,
+        JSON.stringify(record),
+      );
+  const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
+  const store = new Store(file);
+  connections.push(store);
+  expect(store.migration).toMatchObject({
+    from: 2,
+    to: 3,
+    backup: expect.any(String),
+  });
+  expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
+    before,
+  );
+  const run = previousRelease.documents.runs[0];
+  expect(store.continuation(run.id).revision).toBe(0);
+  store.put('runs', { ...run, error: 'revision-test' });
+  const revision = store.continuation(run.id).revision;
+  expect(revision).toBeGreaterThan(0);
+  const reopened = new Store(file);
+  connections.push(reopened);
+  expect(reopened.migration).toEqual({ from: 3, to: 3 });
+  expect(reopened.continuation(run.id).revision).toBe(revision);
+  store.remove('runs', run.id);
+  expect(
+    db.prepare('SELECT * FROM run_revisions WHERE run_id = ?').get(run.id),
+  ).toBeUndefined();
+});
+
+it('continues claimed work and executes script pins from published 0.1.13 after migration', async () => {
+  const file = path(),
+    db = open(file);
+  migrate(db, file, migrations.slice(0, 2));
+  for (const [collection, records] of Object.entries(previousRelease.documents))
+    for (const record of records)
+      db.prepare('INSERT INTO documents VALUES (?, ?, ?)').run(
+        collection,
+        record.id,
+        JSON.stringify(record),
+      );
+  const store = new Store(file);
+  connections.push(store);
+  const engine = new Engine(store, process.cwd());
+  try {
+    const claim = previousRelease.documents.work[0];
+    const snapshot = engine.continuation.briefing({
+      id: claim.runId,
+      limit: 20,
+    });
+    expect(snapshot.claimed.items[0]).toMatchObject({
+      id: claim.id,
+      workerId: 'fixture-worker',
+    });
+    expect(JSON.stringify(snapshot)).not.toContain('fixture-token');
+    engine.submit(claim.id, claim.token, { upgraded: true });
+    expect(engine.run(claim.runId).output).toEqual({ upgraded: true });
+    for (const workflow of previousRelease.documents.workflows.filter(
+      (w) => w.name !== 'prior-agent',
+    )) {
+      const run = engine.start(workflow.id, {}).run;
+      await vi.waitFor(() =>
+        expect(engine.run(run.id).status).toBe('completed'),
+      );
+      expect(engine.run(run.id).output).toEqual({ answer: 42 });
+    }
+    for (const version of previousRelease.documents.versions)
+      expect(store.get('versions', version.id)).toEqual(version);
   } finally {
     engine.stop();
   }

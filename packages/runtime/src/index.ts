@@ -30,6 +30,7 @@ import {
 import { freshContextInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
+import { Continuation } from './continuation.js';
 
 const now = () => new Date().toISOString();
 const terminal = (s: string) =>
@@ -44,6 +45,7 @@ export interface Worker {
 }
 
 export class Engine {
+  readonly continuation: Continuation;
   private localJobs = new Map<string, AbortController>();
   private stopped = false;
   private listeners = new Set<() => void>();
@@ -51,6 +53,7 @@ export class Engine {
     readonly store: Store,
     private cwd: string,
   ) {
+    this.continuation = new Continuation(store);
     // A process interruption gives no evidence that local work or remote side effects completed.
     for (const run of store.runs()) {
       const execution = run.executions.at(-1);
@@ -1033,6 +1036,7 @@ export class Engine {
     }
   }
   stop() {
+    this.continuation.stop();
     this.stopped = true;
     for (const controller of this.localJobs.values()) controller.abort();
   }
