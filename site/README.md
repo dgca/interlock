@@ -1,6 +1,8 @@
 # Interlock product page
 
-A static, single-file page that lets visitors try Interlock in the browser. `.github/workflows/pages.yml` deploys this folder to GitHub Pages when `site/` changes on `main`.
+A static, single-file page that pitches Interlock chapter by chapter and lets visitors try it in the browser. `.github/workflows/pages.yml` deploys this folder to GitHub Pages when `site/` changes on `main`.
+
+`index.html` is the published page. `v2.html` keeps the earlier replica-only version for comparison; it is not linked from the page.
 
 ## Preview locally
 
@@ -12,7 +14,7 @@ Open [http://127.0.0.1:8765](http://127.0.0.1:8765).
 
 ## What is interactive
 
-The page carries three replicas of Interlock's UI, styled from `packages/ui` tokens and Lucide icons:
+The page carries three replicas of Interlock's UI, styled from `packages/ui` tokens and Lucide icons and scoped under `.rx` so they keep the app's look inside the page's own styling:
 
 - **Run inspector.** Runs "Size up a Pokémon" in the browser. The Fetch step calls the public PokéAPI, with a cached copy of the suggested names if the request fails. The Script step runs the starter workflow's JavaScript verbatim. Small Pokémon pause for an agent; the visitor claims the assignment and submits a result, which is checked against the node's output contract with Interlock's error wording from `packages/core`.
 - **Batch.** Fans the same workflow out over a candidate list with a concurrency setting and the `all` or `collect` failure policy, then returns results in input order.

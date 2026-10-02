@@ -1,0 +1,3760 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Interlock · Agent work you can run twice</title>
+    <meta
+      name="description"
+      content="Interlock is a local workflow engine and editor for AI agents. Draw a procedure once; Interlock runs the code steps, hands each judgment call to the agent you already use over MCP, and checks every answer against a contract."
+    />
+    <meta
+      property="og:title"
+      content="Interlock · Agent work you can run twice"
+    />
+    <meta
+      property="og:description"
+      content="Try a run in your browser: the Fetch is live, the Script is the workflow's own code, and you play the agent."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="shots/hero-batch-waiting.webp" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231e1e24'/%3E%3Cg fill='none' stroke='%2382b4ff' stroke-width='2'%3E%3Crect x='6' y='6' width='13' height='13' rx='2'/%3E%3Crect stroke='%23f0a1d3' x='13' y='13' width='13' height='13' rx='2'/%3E%3C/g%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://pokeapi.co" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;550;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Tokens follow Interlock's own UI (packages/ui/src/styles.css + theme.ts). */
+      :root {
+        --bg: #17171b;
+        --canvas: #141418;
+        --surface: #1e1e24;
+        --raised: #27272f;
+        --hover: #303039;
+        --border: #33333d;
+        --border-strong: #484853;
+        --text: #ececf2;
+        --text2: #c4c4cf;
+        --muted: #a0a0b0;
+        --dim: #7c7c8e;
+        --accent: #82b4ff;
+        --accent-hover: #a8cbff;
+        --accent-text: #b5d2ff;
+        --accent-soft: #232e42;
+        --accent-border: #425e85;
+        --pink: #f0a1d3;
+        --pink-soft: #352638;
+        --pink-border: #78536e;
+        --teal: #96f2d7;
+        --teal-4: #38d9a9;
+        --edge: #7189ae;
+        --dot: #35353f;
+        --waiting: #e3c47f;
+        --failed: #e89481;
+        --true: #69db7c;
+        --false: #ff8787;
+        --sans:
+          Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 84px;
+        scrollbar-color: #3a3a45 var(--bg);
+        color-scheme: dark;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 400 16px/1.6 var(--sans);
+        -webkit-font-smoothing: antialiased;
+        overflow-x: clip;
+      }
+      a {
+        color: inherit;
+        text-underline-offset: 3px;
+        text-decoration-thickness: 1px;
+      }
+      img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+        color: inherit;
+      }
+      code,
+      pre,
+      kbd {
+        font-family: var(--mono);
+      }
+      ::selection {
+        background: rgba(130, 180, 255, 0.32);
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+        border-radius: 6px;
+      }
+      .skip {
+        position: fixed;
+        left: 16px;
+        top: -60px;
+        z-index: 90;
+        padding: 10px 16px;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #0b1626;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .skip:focus {
+        top: 16px;
+      }
+      .wrap {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 0 28px;
+      }
+      @media (max-width: 600px) {
+        .wrap {
+          padding: 0 16px;
+        }
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      /* ---------- top bar ---------- */
+      .top {
+        position: sticky;
+        top: 0;
+        z-index: 60;
+        background: rgba(23, 23, 27, 0.86);
+        -webkit-backdrop-filter: saturate(1.4) blur(14px);
+        backdrop-filter: saturate(1.4) blur(14px);
+        border-bottom: 1px solid var(--border);
+      }
+      .top .wrap {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 60px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 600;
+        font-size: 16px;
+        text-decoration: none;
+        padding: 8px 8px 8px 0;
+        margin-right: auto;
+      }
+      .brand small {
+        font: 500 11px var(--mono);
+        color: var(--muted);
+        border: 1px solid var(--border-strong);
+        border-radius: 5px;
+        padding: 2px 6px;
+      }
+      .top nav a {
+        font-size: 14px;
+        color: var(--muted);
+        text-decoration: none;
+        padding: 9px 11px;
+        border-radius: 7px;
+      }
+      .top nav a:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      .top .gh {
+        margin-left: 6px;
+      }
+      @media (max-width: 720px) {
+        .top nav {
+          display: none;
+        }
+      }
+
+      /* ---------- buttons (Interlock's compact Mantine buttons) ---------- */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 36px;
+        padding: 7px 14px;
+        border-radius: 7px;
+        border: 1px solid var(--border-strong);
+        background: var(--raised);
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 550;
+        text-decoration: none;
+        cursor: pointer;
+        white-space: nowrap;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+      }
+      .btn:hover {
+        background: var(--hover);
+      }
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #0b1626;
+      }
+      .btn.primary:hover {
+        background: var(--accent-hover);
+        border-color: var(--accent-hover);
+      }
+      .btn.soft {
+        background: var(--accent-soft);
+        border-color: var(--accent-border);
+        color: var(--accent-text);
+      }
+      .btn.soft:hover {
+        background: #2a3850;
+      }
+      .btn.ghost {
+        background: none;
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .btn.ghost:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .btn svg {
+        flex-shrink: 0;
+      }
+      .copy-cmd {
+        font: 500 14px var(--mono);
+      }
+      .copy-cmd .ok {
+        display: none;
+        color: var(--true);
+      }
+      .copy-cmd.done .ok {
+        display: inline;
+      }
+      .copy-cmd.done .ic {
+        display: none;
+      }
+
+      /* ---------- hero ---------- */
+      .hero {
+        padding: 64px 0 0;
+      }
+      .hero-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+        gap: 48px;
+        align-items: end;
+        margin-bottom: 34px;
+      }
+      @media (max-width: 900px) {
+        .hero-head {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 20px;
+        }
+      }
+      h1 {
+        font: 650 clamp(40px, 5.6vw, 72px)/1 var(--sans);
+        letter-spacing: -0.035em;
+        margin: 0;
+        text-wrap: balance;
+      }
+      h1 em {
+        font-style: normal;
+        color: var(--accent);
+      }
+      .lede {
+        margin: 0;
+        color: var(--text2);
+        font-size: 18px;
+        line-height: 1.55;
+        max-width: 46ch;
+      }
+      .lede b {
+        color: var(--text);
+        font-weight: 550;
+      }
+      .hero-cta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      /* ---------- app window (replica chrome) ---------- */
+      .app {
+        border: 1px solid var(--border-strong);
+        border-radius: 12px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+      .app-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .eyeline {
+        font: 600 11px var(--sans);
+        letter-spacing: 1px;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+      .apptitle {
+        margin: 3px 0 0;
+        font-size: 16px;
+        font-weight: 550;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font: 550 12px var(--sans);
+        padding: 3px 9px;
+        border-radius: 99px;
+        border: 1px solid var(--border-strong);
+        color: var(--muted);
+        background: var(--raised);
+      }
+      .pill.running {
+        color: var(--accent-text);
+        border-color: var(--accent-border);
+        background: var(--accent-soft);
+      }
+      .pill.waiting {
+        color: var(--waiting);
+        border-color: #6b5b33;
+        background: #2d2818;
+      }
+      .pill.completed {
+        color: var(--accent-text);
+        border-color: var(--accent-border);
+        background: var(--accent-soft);
+      }
+      .pill.failed {
+        color: var(--failed);
+        border-color: #6e3f36;
+        background: #2e1e1b;
+      }
+      .pill.cancelled {
+        color: var(--dim);
+      }
+      .replica-tag {
+        margin-left: auto;
+        font: 500 12px var(--sans);
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .replica-tag i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--true);
+      }
+      .runbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--border);
+        background: #1b1b20;
+      }
+      .runbar label {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .field {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        background: var(--canvas);
+        overflow: hidden;
+      }
+      .field span {
+        font: 13px var(--mono);
+        color: var(--dim);
+        padding: 0 0 0 10px;
+        white-space: nowrap;
+      }
+      .field input {
+        border: 0;
+        background: none;
+        outline: none;
+        padding: 8px 10px 8px 4px;
+        width: 132px;
+        font: 13px var(--mono);
+        color: var(--text);
+      }
+      .field:focus-within {
+        border-color: var(--accent);
+      }
+      .chips {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        font: 500 13px var(--sans);
+        padding: 5px 10px;
+        border-radius: 99px;
+        border: 1px solid var(--border);
+        background: var(--raised);
+        color: var(--text2);
+        cursor: pointer;
+      }
+      .chip:hover {
+        border-color: var(--border-strong);
+        color: var(--text);
+      }
+      .chip small {
+        color: var(--dim);
+        font-size: 11px;
+        margin-left: 4px;
+      }
+      .chip.on {
+        border-color: var(--accent-border);
+        background: var(--accent-soft);
+        color: var(--accent-text);
+      }
+
+      /* handoff banner */
+      .handoff {
+        display: none;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        background: #1a2130;
+      }
+      .handoff.show {
+        display: flex;
+      }
+      .handoff b {
+        display: block;
+        font-size: 14px;
+        font-weight: 550;
+        color: var(--accent-text);
+      }
+      .handoff p {
+        margin: 2px 0 0;
+        font-size: 13px;
+        color: var(--text2);
+        max-width: 62ch;
+        line-height: 1.5;
+      }
+      .handoff .acts {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+      }
+
+      /* canvas */
+      .canvas {
+        position: relative;
+        background: var(--canvas);
+        background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+        background-size: 18px 18px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        border-bottom: 1px solid var(--border);
+        scrollbar-width: thin;
+      }
+      .graph {
+        position: relative;
+        margin: 0 auto;
+      }
+      .graph svg.edges {
+        position: absolute;
+        inset: 0;
+        overflow: visible;
+        pointer-events: none;
+      }
+      .edges path {
+        fill: none;
+        stroke: var(--edge);
+        stroke-width: 1.6;
+        opacity: 0.55;
+        transition:
+          opacity 0.3s,
+          stroke 0.3s;
+      }
+      .edges path.lit {
+        opacity: 1;
+        stroke: var(--accent);
+      }
+      .edges path.flow {
+        stroke-dasharray: 6 6;
+        animation: flow 0.6s linear infinite;
+      }
+      @keyframes flow {
+        to {
+          stroke-dashoffset: -12;
+        }
+      }
+      .edges text {
+        font: 600 11px var(--sans);
+        fill: var(--muted);
+      }
+      .edges text.t {
+        fill: var(--true);
+      }
+      .edges text.f {
+        fill: var(--false);
+      }
+      .node {
+        position: absolute;
+        width: 176px;
+        padding: 11px 14px 12px;
+        background: var(--raised);
+        border: 1px solid var(--border-strong);
+        border-radius: 9px;
+        box-shadow: 0 5px 15px #0003;
+        cursor: pointer;
+        text-align: left;
+        transition:
+          border-color 0.25s,
+          box-shadow 0.25s,
+          opacity 0.25s;
+      }
+      .node:hover {
+        border-color: #5a5a66;
+      }
+      .node.sel {
+        border-color: var(--accent);
+        box-shadow:
+          0 0 0 2px #82b4ff22,
+          0 5px 15px #0003;
+      }
+      .node.st-running {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-soft);
+      }
+      .node.st-waiting {
+        border-color: var(--waiting);
+      }
+      .node.st-failed {
+        border-color: var(--failed);
+      }
+      .node.st-pending {
+        opacity: 0.55;
+      }
+      .node.st-skipped {
+        opacity: 0.4;
+      }
+      .nh {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font: 600 11px var(--sans);
+        letter-spacing: 1px;
+        color: var(--muted);
+        margin-bottom: 8px;
+        text-transform: uppercase;
+      }
+      .ni {
+        width: 26px;
+        height: 26px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--accent-border);
+        border-radius: 6px;
+        color: var(--accent-text);
+        background: var(--accent-soft);
+        flex-shrink: 0;
+      }
+      .ni.agent {
+        color: var(--teal);
+        background: #1d302c;
+        border-color: #2f5f52;
+      }
+      .ni.exit,
+      .ni.workflow {
+        color: var(--pink);
+        background: var(--pink-soft);
+        border-color: var(--pink-border);
+      }
+      .node strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 550;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .node small {
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nstat {
+        position: absolute;
+        left: 0;
+        bottom: calc(100% + 6px);
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font: 500 11px var(--sans);
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .st-running .nstat,
+      .st-completed .nstat {
+        color: var(--accent-text);
+      }
+      .st-waiting .nstat {
+        color: var(--waiting);
+      }
+      .st-failed .nstat {
+        color: var(--failed);
+      }
+      .spin {
+        animation: spin 1.2s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .port {
+        position: absolute;
+        font: 500 11px var(--sans);
+        color: var(--muted);
+        background: var(--canvas);
+        padding: 1px 3px;
+        border-radius: 3px;
+        white-space: nowrap;
+      }
+      .scroll-hint {
+        display: none;
+        position: absolute;
+        right: 10px;
+        bottom: 8px;
+        font-size: 11px;
+        color: var(--dim);
+      }
+      @media (max-width: 900px) {
+        .scroll-hint {
+          display: block;
+        }
+      }
+
+      /* lower split: timeline + details */
+      .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+      }
+      @media (max-width: 900px) {
+        .split {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .timeline {
+        padding: 16px 18px 18px;
+        border-right: 1px solid var(--border);
+        min-height: 300px;
+      }
+      @media (max-width: 900px) {
+        .timeline {
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+          min-height: 0;
+        }
+      }
+      .sechead {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 0 0 10px;
+      }
+      .sechead .t {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 550;
+      }
+      .sechead span {
+        font: 12px var(--mono);
+        color: var(--dim);
+      }
+      .steps {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .steprow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        border-radius: 6px;
+        cursor: pointer;
+        text-align: left;
+      }
+      .steprow:hover {
+        border-color: var(--border-strong);
+      }
+      .steprow.sel {
+        border-color: var(--accent-border);
+        background: var(--accent-soft);
+      }
+      .steprow .ix {
+        font: 11px var(--mono);
+        color: var(--muted);
+        border: 1px solid var(--border-strong);
+        border-radius: 5px;
+        padding: 4px 6px;
+      }
+      .steprow div {
+        flex: 1;
+        min-width: 0;
+      }
+      .steprow strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .steprow small {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .steprow .s {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .steprow .s.completed {
+        color: var(--accent-text);
+      }
+      .steprow .s.waiting {
+        color: var(--waiting);
+      }
+      .steprow .s.failed {
+        color: var(--failed);
+      }
+      .steprow .s.running {
+        color: var(--accent-text);
+      }
+      .empty {
+        font-size: 14px;
+        color: var(--muted);
+        padding: 18px 2px;
+        line-height: 1.55;
+      }
+      .empty b {
+        color: var(--text);
+        font-weight: 550;
+      }
+
+      .details {
+        padding: 16px 18px 20px;
+        background: var(--surface);
+        min-width: 0;
+      }
+      .dlabel {
+        font: 600 11px var(--sans);
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 16px 0 6px;
+      }
+      .dlabel:first-child {
+        margin-top: 0;
+      }
+      .dtitle {
+        font-size: 16px;
+        font-weight: 550;
+        margin: 2px 0 2px;
+      }
+      .dstate {
+        font-size: 13px;
+      }
+      .dstate.completed,
+      .dstate.running {
+        color: var(--accent-text);
+      }
+      .dstate.waiting {
+        color: var(--waiting);
+      }
+      .dstate.failed {
+        color: var(--failed);
+      }
+      .dstate.pending {
+        color: var(--muted);
+      }
+      pre.json {
+        margin: 0;
+        max-height: 220px;
+        overflow: auto;
+        background: var(--canvas);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--text2);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      pre.json .k {
+        color: #a8cbff;
+      }
+      pre.json .s {
+        color: #9fe0b0;
+      }
+      pre.json .n {
+        color: #f0c987;
+      }
+      pre.json .b {
+        color: var(--pink);
+      }
+      .src {
+        font-size: 12px;
+        color: var(--dim);
+        margin-top: 6px;
+      }
+      .src b {
+        color: var(--true);
+        font-weight: 500;
+      }
+      .src b.c {
+        color: var(--waiting);
+      }
+      .prompt {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--text2);
+        background: var(--canvas);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin: 0;
+      }
+      .console {
+        margin-top: 14px;
+        border: 1px solid var(--accent-border);
+        border-radius: 8px;
+        background: #1a2130;
+        padding: 14px;
+      }
+      .console .who {
+        font-size: 13px;
+        color: var(--accent-text);
+        margin: 0 0 8px;
+      }
+      .console textarea {
+        width: 100%;
+        min-height: 128px;
+        resize: vertical;
+        border: 1px solid var(--border-strong);
+        border-radius: 6px;
+        background: var(--canvas);
+        padding: 10px 12px;
+        font: 13px/1.6 var(--mono);
+        color: var(--text);
+      }
+      .console textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .console .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .verdict {
+        margin: 10px 0 0;
+        font: 13px/1.5 var(--mono);
+        padding: 9px 11px;
+        border-radius: 6px;
+      }
+      .verdict.err {
+        color: var(--failed);
+        background: #2a1c1a;
+        border: 1px solid #5a362f;
+      }
+      .verdict.ok {
+        color: var(--true);
+        background: #16261b;
+        border: 1px solid #2c5236;
+      }
+      .hint {
+        font-size: 13px;
+        color: var(--muted);
+        margin: 8px 0 0;
+      }
+
+      /* ---------- section scaffolds (each section has its own layout) ---------- */
+      section {
+        padding: 120px 0 0;
+      }
+      .lead-in {
+        max-width: 760px;
+      }
+      h2 {
+        font: 650 clamp(32px, 4vw, 52px)/1.05 var(--sans);
+        letter-spacing: -0.03em;
+        margin: 0 0 16px;
+        text-wrap: balance;
+      }
+      h2 .q {
+        color: var(--muted);
+      }
+      .sub {
+        color: var(--text2);
+        font-size: 18px;
+        line-height: 1.6;
+        margin: 0;
+        max-width: 62ch;
+      }
+      .sub b {
+        color: var(--text);
+        font-weight: 550;
+      }
+      .sub code,
+      .note code {
+        font-size: 0.88em;
+        color: var(--text);
+      }
+      .note {
+        font-size: 14px;
+        color: var(--muted);
+        line-height: 1.55;
+        margin: 12px 0 0;
+      }
+
+      /* batch */
+      .batch-grid {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+        gap: 0;
+        margin-top: 40px;
+      }
+      @media (max-width: 960px) {
+        .batch-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .settings {
+        padding: 18px;
+        border-right: 1px solid var(--border);
+        background: var(--surface);
+      }
+      @media (max-width: 960px) {
+        .settings {
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+      }
+      .settings .t {
+        margin: 0 0 2px;
+        font-size: 14px;
+        font-weight: 550;
+      }
+      .settings .desc {
+        font-size: 13px;
+        color: var(--muted);
+        margin: 0 0 16px;
+        line-height: 1.5;
+      }
+      .fl {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        margin: 14px 0 6px;
+      }
+      .fl small {
+        display: block;
+        font-weight: 400;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+      .ro {
+        font: 13px var(--mono);
+        color: var(--text2);
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--canvas);
+      }
+      input[type='range'] {
+        width: 100%;
+        accent-color: var(--accent);
+      }
+      .rangeval {
+        font: 600 13px var(--mono);
+        color: var(--accent-text);
+      }
+      .seg {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        overflow: hidden;
+      }
+      .seg button {
+        border: 0;
+        background: var(--canvas);
+        padding: 8px;
+        font-size: 13px;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .seg button[aria-pressed='true'] {
+        background: var(--accent-soft);
+        color: var(--accent-text);
+      }
+      .cands {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .cand {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font: 13px var(--mono);
+        padding: 4px 4px 4px 9px;
+        border-radius: 6px;
+        border: 1px solid var(--border-strong);
+        background: var(--raised);
+      }
+      .cand button {
+        border: 0;
+        background: none;
+        color: var(--dim);
+        cursor: pointer;
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        display: grid;
+        place-items: center;
+      }
+      .cand button:hover {
+        color: var(--text);
+        background: var(--hover);
+      }
+      .addcand {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .addcand input {
+        flex: 1;
+        min-width: 0;
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        background: var(--canvas);
+        padding: 7px 10px;
+        font: 13px var(--mono);
+      }
+      .addcand input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .board {
+        padding: 18px;
+        background: var(--canvas);
+        background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+        background-size: 18px 18px;
+        min-width: 0;
+      }
+      .group {
+        border: 1px solid var(--accent-border);
+        border-radius: 12px;
+        background: var(--canvas);
+        box-shadow: inset 0 0 0 4px var(--accent-soft);
+      }
+      .group-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+        border-radius: 12px 12px 0 0;
+        color: var(--accent-text);
+      }
+      .group-head strong {
+        font-size: 14px;
+        font-weight: 550;
+        color: var(--text);
+        flex: 1;
+      }
+      .group-head span {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .lanes {
+        list-style: none;
+        margin: 0;
+        padding: 10px 12px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .lane {
+        display: grid;
+        grid-template-columns: 32px minmax(90px, 1fr) minmax(0, 2.2fr) auto;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--surface);
+        transition: border-color 0.2s;
+      }
+      @media (max-width: 600px) {
+        .lane {
+          grid-template-columns: 28px minmax(0, 1fr);
+          row-gap: 6px;
+        }
+        .lane .lstate {
+          grid-column: 2;
+          justify-content: space-between;
+          white-space: normal;
+        }
+        .lane .track {
+          grid-column: 1/-1;
+          order: 3;
+        }
+      }
+      .lane .ix {
+        font: 11px var(--mono);
+        color: var(--muted);
+      }
+      .lane .nm {
+        font: 13px var(--mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .lane.st-running {
+        border-color: var(--accent-border);
+      }
+      .lane.st-waiting {
+        border-color: #6b5b33;
+      }
+      .lane.st-failed {
+        border-color: #6e3f36;
+      }
+      .lane.st-cancelled {
+        opacity: 0.5;
+      }
+      .track {
+        display: flex;
+        gap: 4px;
+      }
+      .track i {
+        flex: 1;
+        height: 6px;
+        border-radius: 3px;
+        background: var(--border);
+      }
+      .track i.done {
+        background: var(--accent);
+      }
+      .track i.run {
+        background: var(--accent);
+        opacity: 0.5;
+      }
+      .track i.wait {
+        background: var(--waiting);
+      }
+      .track i.fail {
+        background: var(--failed);
+      }
+      .track i.skip {
+        background: transparent;
+        border: 1px dashed var(--border);
+      }
+      .lstate {
+        font-size: 12px;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .lstate .s.running,
+      .lstate .s.completed {
+        color: var(--accent-text);
+      }
+      .lstate .s.waiting {
+        color: var(--waiting);
+      }
+      .lstate .s.failed {
+        color: var(--failed);
+      }
+      .lstate .s.queued,
+      .lstate .s.cancelled {
+        color: var(--dim);
+      }
+      .lstate .btn {
+        min-height: 28px;
+        padding: 3px 9px;
+        font-size: 12px;
+      }
+      .group-foot {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 0 16px 12px;
+        font-size: 12px;
+        color: var(--accent-text);
+      }
+      .after {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 28px;
+        margin-top: 18px;
+      }
+      @media (max-width: 760px) {
+        .after {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .panel {
+        border-top: 1px solid var(--border);
+        padding: 14px 2px 4px;
+        min-width: 0;
+      }
+      .panel .t {
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 550;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .roster {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .roster th,
+      .roster td {
+        text-align: left;
+        padding: 6px 6px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      .roster th {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--muted);
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+      }
+      .roster td:first-child {
+        font-family: var(--mono);
+        white-space: nowrap;
+      }
+
+      /* publish */
+      .pub {
+        margin-top: 40px;
+      }
+      .pub-body {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      }
+      @media (max-width: 960px) {
+        .pub-body {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .pub-edit {
+        padding: 18px;
+        border-right: 1px solid var(--border);
+      }
+      @media (max-width: 960px) {
+        .pub-edit {
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+      }
+      .pub-edit textarea {
+        width: 100%;
+        min-height: 200px;
+        resize: vertical;
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        background: var(--canvas);
+        padding: 11px 12px;
+        font: 14px/1.6 var(--sans);
+        color: var(--text);
+      }
+      .pub-edit textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .pub-review {
+        padding: 18px;
+        background: #1b1b20;
+        min-width: 0;
+      }
+      .counts {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 10px 0 14px;
+      }
+      .counts span {
+        font-size: 13px;
+        padding: 3px 9px;
+        border-radius: 99px;
+        border: 1px solid var(--border-strong);
+        color: var(--muted);
+      }
+      .counts span.on {
+        color: var(--waiting);
+        border-color: #6b5b33;
+        background: #2d2818;
+      }
+      .diff {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      @media (max-width: 600px) {
+        .diff {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .diff div {
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--text2);
+        background: var(--canvas);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 10px 12px;
+        min-height: 120px;
+      }
+      .diff .lbl {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      .diff del {
+        background: #3a2020;
+        color: #ffb3a8;
+        text-decoration: line-through;
+        text-decoration-color: #ff8787;
+        border-radius: 3px;
+        padding: 0 2px;
+      }
+      .diff ins {
+        background: #1b3324;
+        color: #a8ecb9;
+        text-decoration: none;
+        border-radius: 3px;
+        padding: 0 2px;
+      }
+      .nochange {
+        font-size: 13px;
+        color: var(--muted);
+        padding: 12px 0;
+      }
+      .pub-foot {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        margin-top: 14px;
+      }
+      .versions {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        padding: 16px 18px;
+        border-top: 1px solid var(--border);
+        overflow-x: auto;
+      }
+      .ver {
+        min-width: 220px;
+        padding: 0 18px;
+        border-left: 1px solid var(--border);
+      }
+      .ver:first-child {
+        padding-left: 0;
+        border-left: 0;
+      }
+      .ver b {
+        font-size: 13px;
+        font-weight: 550;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .ver small {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+      .runchips {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      .runchips span {
+        font: 12px var(--mono);
+        padding: 3px 7px;
+        border-radius: 5px;
+        border: 1px solid var(--border-strong);
+        color: var(--text2);
+      }
+      .runchips span.w {
+        border-color: #6b5b33;
+        color: var(--waiting);
+      }
+
+      /* connect */
+      .connect {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+        gap: 48px;
+        margin-top: 40px;
+        align-items: start;
+      }
+      @media (max-width: 960px) {
+        .connect {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 32px;
+        }
+      }
+      .term {
+        border: 1px solid var(--border-strong);
+        border-radius: 10px;
+        background: #111114;
+        overflow: hidden;
+      }
+      .tabs {
+        display: flex;
+        gap: 2px;
+        padding: 6px 6px 0;
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+        background: var(--surface);
+      }
+      .tabs button {
+        border: 0;
+        background: none;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 500;
+        padding: 9px 12px;
+        border-radius: 6px 6px 0 0;
+        cursor: pointer;
+        white-space: nowrap;
+        border-bottom: 2px solid transparent;
+      }
+      .tabs button[aria-selected='true'] {
+        color: var(--text);
+        border-bottom-color: var(--accent);
+      }
+      .tabs button:hover {
+        color: var(--text);
+      }
+      .tabpanel {
+        padding: 16px 18px;
+      }
+      .tabpanel p {
+        margin: 0 0 10px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .tabpanel p code {
+        color: var(--text);
+      }
+      .codeblock {
+        position: relative;
+      }
+      .codeblock pre {
+        margin: 0;
+        padding: 14px 16px;
+        padding-right: 96px;
+        background: #0d0d10;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        font-size: 13px;
+        line-height: 1.7;
+        color: #d7dbe6;
+        overflow-x: auto;
+        white-space: pre;
+      }
+      @media (max-width: 600px) {
+        .codeblock pre {
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+          padding-right: 16px;
+          padding-top: 44px;
+        }
+      }
+      .codeblock .btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        min-height: 30px;
+        padding: 4px 10px;
+        font-size: 13px;
+      }
+      .c-dim {
+        color: #8a90a0;
+      }
+      .install {
+        margin-bottom: 22px;
+      }
+      .facts {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .facts li {
+        padding: 14px 0;
+        border-top: 1px solid var(--border);
+        font-size: 14px;
+        color: var(--text2);
+        line-height: 1.55;
+      }
+      .facts li:last-child {
+        border-bottom: 1px solid var(--border);
+      }
+      .facts b {
+        display: block;
+        color: var(--text);
+        font-weight: 550;
+        margin-bottom: 2px;
+      }
+
+      /* gallery */
+      .gallery {
+        margin-top: 36px;
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: min(78vw, 760px);
+        gap: 18px;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        padding: 4px 28px 18px;
+        scroll-padding: 0 28px;
+        scrollbar-width: thin;
+      }
+      @media (min-width: 1300px) {
+        .gallery {
+          padding-left: calc((100vw - 1240px) / 2 + 28px);
+          scroll-padding-left: calc((100vw - 1240px) / 2 + 28px);
+        }
+      }
+      .gallery figure {
+        margin: 0;
+        scroll-snap-align: start;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+      .gallery button {
+        display: block;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: var(--canvas);
+        cursor: zoom-in;
+        aspect-ratio: 16/10;
+        overflow: hidden;
+      }
+      .gallery img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top left;
+      }
+      .gallery figcaption {
+        padding: 12px 14px;
+        font-size: 14px;
+        color: var(--text2);
+        line-height: 1.5;
+      }
+      .gallery figcaption b {
+        color: var(--text);
+        font-weight: 550;
+      }
+      .gal-nav {
+        display: flex;
+        gap: 8px;
+        margin-top: 22px;
+      }
+      dialog.lb {
+        border: 0;
+        padding: 0;
+        background: none;
+        max-width: 94vw;
+        max-height: 94vh;
+      }
+      dialog.lb::backdrop {
+        background: rgba(10, 10, 12, 0.86);
+      }
+      dialog.lb img {
+        max-width: 94vw;
+        max-height: 90vh;
+        width: auto;
+        border-radius: 10px;
+        border: 1px solid var(--border-strong);
+      }
+      dialog.lb .x {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        color: var(--text);
+      }
+
+      /* close */
+      .close {
+        margin-top: 120px;
+        border-top: 1px solid var(--border);
+        padding: 72px 0 64px;
+      }
+      .close-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 32px;
+        align-items: end;
+      }
+      @media (max-width: 760px) {
+        .close-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .close h2 {
+        margin: 0;
+      }
+      .docs {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0;
+        margin-top: 44px;
+        border-top: 1px solid var(--border);
+      }
+      @media (max-width: 760px) {
+        .docs {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .docs a {
+        padding: 14px 4px;
+        border-bottom: 1px solid var(--border);
+        font-size: 14px;
+        color: var(--text2);
+        text-decoration: none;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .docs a:hover {
+        color: var(--text);
+      }
+      footer {
+        padding: 28px 0 56px;
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      footer p {
+        margin: 0 0 10px;
+        max-width: 96ch;
+      }
+      footer b {
+        color: var(--text2);
+        font-weight: 550;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+THESIS: The page is the product running. Visitors operate replicas of Interlock's run inspector, Batch group and publish review instead of reading screenshots; it refuses the hero-plus-feature-cards scaffold.
+OWN-WORLD: Interlock's own dark UI: #17171b ground, #27272f node cards, #82b4ff accent, pink exits, teal agent icon, dotted canvas, Inter, Lucide icons, compact 7px-radius buttons.
+STORY: A visitor runs a workflow and plays the agent, sees code steps run and a contract reject a bad answer, fans a list out, publishes a change without touching a pinned run, then copies the config for their own agent.
+FIRST VIEWPORT: Headline and install button over a full-width run inspector already loaded with "Size up a Pokémon" and a Run button.
+FORM: Live product replica, specified by the user (no concept roll). Seed: none.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+-->
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="top">
+      <div class="wrap">
+        <a class="brand" href="#top" aria-label="Interlock, back to top">
+          <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true">
+            <rect width="32" height="32" rx="8" fill="#1e1e24" />
+            <g fill="none" stroke-width="2">
+              <rect
+                x="6"
+                y="6"
+                width="13"
+                height="13"
+                rx="2"
+                stroke="#82b4ff"
+              />
+              <rect
+                x="13"
+                y="13"
+                width="13"
+                height="13"
+                rx="2"
+                stroke="#f0a1d3"
+              />
+            </g>
+          </svg>
+          Interlock <small>v0.1.14</small>
+        </a>
+        <nav aria-label="Page">
+          <a href="#run">Run</a><a href="#batch">Batch</a
+          ><a href="#publish">Publish</a><a href="#connect">Connect</a
+          ><a href="#real">The real app</a>
+        </nav>
+        <a class="btn gh" href="https://github.com/dgca/interlock">GitHub</a>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- ================= RUN (hero) ================= -->
+      <section class="hero" id="top" aria-labelledby="h-hero">
+        <div class="wrap">
+          <div class="hero-head">
+            <div>
+              <h1 id="h-hero">Agent work you can <em>run twice.</em></h1>
+            </div>
+            <div>
+              <p class="lede">
+                Interlock is a local workflow engine for AI agents. Draw the
+                procedure once: it runs the code steps itself,
+                <b>hands each judgment call to the agent you already use</b>,
+                and checks every answer against a contract. Try a run below. You
+                are the agent.
+              </p>
+              <div class="hero-cta">
+                <button
+                  class="btn primary copy-cmd"
+                  type="button"
+                  data-copy="npm install -g @type_of/interlock"
+                >
+                  <svg
+                    class="ic"
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect width="14" height="14" x="8" y="8" rx="2" />
+                    <path
+                      d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"
+                    /></svg
+                  ><svg
+                    class="ok"
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6 9 17l-5-5" /></svg
+                  >npm install -g @type_of/interlock
+                </button>
+                <a class="btn" href="#connect">Connect your agent</a>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="app"
+            id="run"
+            aria-label="Interactive replica of the Interlock run inspector"
+          >
+            <div class="app-head">
+              <div>
+                <div class="eyeline">Run inspector · v1</div>
+                <div class="apptitle">
+                  Size up a Pokémon <span class="pill" id="runPill">ready</span>
+                </div>
+              </div>
+              <span class="replica-tag"
+                ><i aria-hidden="true"></i>Interactive replica · Fetch calls the
+                live PokéAPI</span
+              >
+            </div>
+            <div class="runbar">
+              <label for="pkName">Input</label>
+              <div class="field">
+                <span>{"name": "</span
+                ><input
+                  id="pkName"
+                  value="togepi"
+                  autocomplete="off"
+                  spellcheck="false"
+                  aria-describedby="pkHelp"
+                /><span style="padding-right: 10px">"}</span>
+              </div>
+              <button class="btn primary" id="runBtn" type="button">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M7 4v16l13-8z" /></svg
+                >Run v1
+              </button>
+              <div
+                class="chips"
+                id="pkChips"
+                aria-label="Try another input"
+              ></div>
+              <span id="pkHelp" class="visually-hidden"
+                >Any Pokémon name works. Small ones need an agent.</span
+              >
+            </div>
+            <div class="handoff" id="handoff" role="status">
+              <div>
+                <b>Waiting for an agent</b>
+                <p>
+                  Interlock has prepared an assignment. Ask your connected agent
+                  to continue this run. Connecting an agent does not
+                  automatically pick up work.
+                </p>
+              </div>
+              <div class="acts">
+                <button class="btn primary" id="claimBtn" type="button">
+                  Claim as the agent</button
+                ><a class="btn" href="#connect">Connect an agent</a>
+              </div>
+            </div>
+            <div class="canvas" id="canvas">
+              <div class="graph" id="graph"></div>
+              <span class="scroll-hint">Scroll the graph sideways</span>
+            </div>
+            <div class="split">
+              <div class="timeline">
+                <div class="sechead">
+                  <span class="t">Execution timeline</span
+                  ><span id="runId"></span>
+                </div>
+                <ol class="steps" id="steps"></ol>
+                <p class="empty" id="stepsEmpty">
+                  Press <b>Run v1</b>. Fetch asks PokéAPI, the Script computes a
+                  stat sheet, and the Condition sends small Pokémon to the Agent
+                  step. Everything else exits with its stats.
+                </p>
+              </div>
+              <div class="details" id="details" aria-live="polite"></div>
+            </div>
+          </div>
+          <p class="note">
+            Steps are paced so you can watch them. The Script is the starter
+            workflow's own JavaScript, run in your browser, and validation
+            messages use Interlock's contract wording. No Interlock engine runs
+            on this page.
+          </p>
+        </div>
+      </section>
+
+      <!-- ================= BATCH ================= -->
+      <section id="batch" aria-labelledby="h-batch">
+        <div class="wrap">
+          <div class="lead-in">
+            <h2 id="h-batch">
+              Fan one workflow out over a list.
+              <span class="q">Answer only what needs you.</span>
+            </h2>
+            <p class="sub">
+              A <b>Batch</b> runs its item path once per list item, a few at a
+              time, and returns results <b>in input order</b> however they
+              finish. Add a name that isn't a Pokémon and switch the failure
+              policy to see what each one does.
+            </p>
+          </div>
+          <div class="app batch-grid">
+            <div class="settings">
+              <div class="t">Size up each candidate</div>
+              <p class="desc">
+                Batch settings, as in the editor. Each item runs "Size up a
+                Pokémon" v1 as its own run.
+              </p>
+              <span class="fl">List to process</span>
+              <div class="ro">candidates</div>
+              <span class="fl" id="candLbl">Candidates</span>
+              <div class="cands" id="cands" aria-labelledby="candLbl"></div>
+              <form class="addcand" id="addCand">
+                <label class="visually-hidden" for="candIn"
+                  >Add a candidate</label
+                ><input
+                  id="candIn"
+                  placeholder="add a name, e.g. mew"
+                  autocomplete="off"
+                  spellcheck="false"
+                /><button class="btn" type="submit">Add</button>
+              </form>
+              <label class="fl" for="conc"
+                >Items at a time <span class="rangeval" id="concVal">5</span
+                ><small
+                  >Interlock allows 1 to 50. A waiting item still holds its
+                  slot.</small
+                ></label
+              >
+              <input type="range" id="conc" min="1" max="8" value="5" />
+              <span class="fl" id="polLbl"
+                >When an item fails<small
+                  >"all" fails the Batch and cancels the rest. "collect" keeps
+                  going and records each item's status.</small
+                ></span
+              >
+              <div class="seg" role="group" aria-labelledby="polLbl">
+                <button type="button" data-pol="all" aria-pressed="true">
+                  all</button
+                ><button type="button" data-pol="collect" aria-pressed="false">
+                  collect
+                </button>
+              </div>
+              <div style="display: flex; gap: 8px; margin-top: 20px">
+                <button class="btn primary" id="batchRun" type="button">
+                  Run batch</button
+                ><button class="btn ghost" id="batchReset" type="button">
+                  Reset
+                </button>
+              </div>
+            </div>
+            <div class="board">
+              <div class="group">
+                <div class="group-head">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
+                    />
+                    <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
+                    <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
+                  </svg>
+                  <strong>Size up each candidate</strong>
+                  <span id="batchSummary"
+                    >Each item runs independently · Up to 5 at once</span
+                  >
+                  <button class="btn soft" id="answerAll" type="button" hidden>
+                    Answer all waiting
+                  </button>
+                </div>
+                <ol class="lanes" id="lanes" aria-live="polite"></ol>
+                <div class="group-foot"><span>Start</span><span>End</span></div>
+              </div>
+              <div class="after">
+                <div class="panel">
+                  <div class="t">
+                    Out <span class="pill" id="outPill">empty</span>
+                  </div>
+                  <pre class="json" id="outJson">[]</pre>
+                </div>
+                <div class="panel" id="pickCard">
+                  <div class="t">
+                    Pick the final six
+                    <span class="pill" id="pickPill">not started</span>
+                  </div>
+                  <div id="pickBody" class="empty" style="padding: 4px 0">
+                    Runs after every item returns. Its input is the ordered list
+                    from Out.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= PUBLISH ================= -->
+      <section id="publish" aria-labelledby="h-pub">
+        <div class="wrap">
+          <div
+            class="lead-in"
+            style="margin: 0 auto; text-align: center; max-width: 820px"
+          >
+            <h2 id="h-pub">
+              Change the prompt.
+              <span class="q">The run in flight keeps v1.</span>
+            </h2>
+            <p class="sub" style="margin: 0 auto">
+              Drafts change freely. Publishing creates an immutable version, and
+              each run is pinned to the version it started on. Edit the Agent
+              node's prompt and watch the review update.
+            </p>
+          </div>
+          <div class="app pub">
+            <div class="app-head">
+              <div>
+                <div class="eyeline">Workflow</div>
+                <div class="apptitle">
+                  Size up a Pokémon
+                  <span class="pill" id="draftPill"
+                    >Draft saved · v1 published</span
+                  >
+                </div>
+              </div>
+              <span class="replica-tag"
+                ><i aria-hidden="true"></i>Interactive replica</span
+              >
+            </div>
+            <div class="pub-body">
+              <div class="pub-edit">
+                <label class="fl" for="promptEd" style="margin-top: 0"
+                  >Assignment prompt<small
+                    >Agent node · Write the mascot pitch</small
+                  ></label
+                >
+                <textarea id="promptEd" spellcheck="false"></textarea>
+                <div
+                  style="
+                    display: flex;
+                    gap: 8px;
+                    margin-top: 10px;
+                    flex-wrap: wrap;
+                  "
+                >
+                  <button class="btn" type="button" id="tryEdit">
+                    Try an edit</button
+                  ><button class="btn ghost" type="button" id="discard">
+                    Discard
+                  </button>
+                </div>
+              </div>
+              <div class="pub-review">
+                <div class="eyeline">Review publication</div>
+                <div
+                  style="margin: 4px 0 0; font-size: 16px; font-weight: 550"
+                  id="cmpTitle"
+                >
+                  Draft compared with published v1
+                </div>
+                <div class="counts" id="counts"></div>
+                <div id="diffBox"></div>
+                <div class="pub-foot">
+                  <span
+                    class="hint"
+                    id="pubHint"
+                    style="margin: 0 auto 0 0"
+                  ></span
+                  ><button
+                    class="btn primary"
+                    type="button"
+                    id="publishBtn"
+                    disabled
+                  >
+                    Publish version
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="versions" id="versions"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= CONNECT ================= -->
+      <section id="connect" aria-labelledby="h-con">
+        <div class="wrap">
+          <div class="lead-in">
+            <h2 id="h-con">
+              Two commands, one URL. <span class="q">Then ask your agent.</span>
+            </h2>
+            <p class="sub">
+              The npm package includes the engine, the UI, the CLI and the MCP
+              tools. The engine serves Streamable HTTP MCP at
+              <code>127.0.0.1:4310/mcp</code> from the same process as the UI.
+              Interlock never calls a model; your harness keeps its own tools,
+              approvals and model.
+            </p>
+          </div>
+          <div class="connect">
+            <div>
+              <div class="codeblock install">
+                <pre><span class="c-dim"># Node 24.13 or later, macOS or Linux</span>
+npm install -g @type_of/interlock
+interlock   <span class="c-dim"># then open http://127.0.0.1:4310</span></pre>
+                <button
+                  class="btn copy-cmd"
+                  type="button"
+                  data-copy="npm install -g @type_of/interlock && interlock"
+                >
+                  <span class="ic">Copy</span><span class="ok">Copied</span>
+                </button>
+              </div>
+              <div class="term">
+                <div
+                  class="tabs"
+                  role="tablist"
+                  aria-label="MCP client"
+                  id="tabs"
+                ></div>
+                <div
+                  class="tabpanel"
+                  role="tabpanel"
+                  id="tabpanel"
+                  tabindex="0"
+                ></div>
+              </div>
+              <div class="codeblock" style="margin-top: 22px">
+                <pre
+                  style="white-space: pre-wrap"
+                ><span class="c-dim"># then ask your agent</span>
+Find the Interlock workflow "Size up a Pokémon" and run it with
+{"name":"pikachu"}. Complete its assignments, then return the result.</pre>
+                <button
+                  class="btn copy-cmd"
+                  type="button"
+                  data-copy='Find the Interlock workflow "Size up a Pokémon" and run it with {"name":"pikachu"}. Complete its assignments, then return the result.'
+                >
+                  <span class="ic">Copy</span><span class="ok">Copied</span>
+                </button>
+              </div>
+            </div>
+            <ul class="facts">
+              <li>
+                <b>Local and single-user</b>It listens on loopback without
+                authentication. Do not expose it through a public tunnel.
+              </li>
+              <li>
+                <b>Scripts are not sandboxed</b>JavaScript and Bash steps run
+                with your account's files, environment and network. Review
+                imported workflows first.
+              </li>
+              <li>
+                <b>No model calls</b>Interlock does not launch agent sessions or
+                call model APIs. Agent steps need a connected executor or manual
+                completion.
+              </li>
+              <li>
+                <b>Not yet</b>Recurring schedules, multi-user access and
+                arbitrary parallel joins. See
+                <a href="https://github.com/dgca/interlock/blob/main/docs/v1.md"
+                  >current scope</a
+                >.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= REAL APP ================= -->
+      <section id="real" aria-labelledby="h-real">
+        <div class="wrap">
+          <div class="lead-in">
+            <h2 id="h-real">The real app, unretouched.</h2>
+            <p class="sub">
+              Captured from Interlock v0.1.14 on a fresh local database on
+              October 2, 2026, during real runs of the two starter workflows.
+              Claude Code was the agent.
+            </p>
+          </div>
+        </div>
+        <div class="gallery" id="gallery">
+          <figure>
+            <button type="button" data-lb>
+              <img
+                src="shots/editor-graph.webp"
+                alt="Visual editor for Size up a Pokémon: Entry, Fetch, Script, Condition, Agent assignment and two Exit nodes."
+                width="2448"
+                height="1280"
+                loading="lazy"
+              />
+            </button>
+            <figcaption>
+              <b>The editor.</b> The same seven nodes you just ran, with Save
+              draft, Review &amp; publish and Run v1.
+            </figcaption>
+          </figure>
+          <figure>
+            <button type="button" data-lb>
+              <img
+                src="shots/run-1-waiting.webp"
+                alt="Run inspector for the Togepi run, paused with a Waiting for an agent banner."
+                width="2448"
+                height="1476"
+                loading="lazy"
+              />
+            </button>
+            <figcaption>
+              <b>A real handoff.</b> The Togepi run paused at the Agent node,
+              0.5 seconds after it started.
+            </figcaption>
+          </figure>
+          <figure>
+            <button type="button" data-lb>
+              <img
+                src="shots/hero-batch-waiting.webp"
+                alt="Build a team roster run: Batch group reading 4 of 7 finished, 3 waiting."
+                width="2880"
+                height="1728"
+                loading="lazy"
+              />
+            </button>
+            <figcaption>
+              <b>A real Batch.</b> Seven candidates, five at a time: four
+              finished on code alone, three waited for a pitch.
+            </figcaption>
+          </figure>
+          <figure>
+            <button type="button" data-lb>
+              <img
+                src="shots/batch-done.webp"
+                alt="Completed roster run with the output JSON titled Seven scouted, six picked."
+                width="2880"
+                height="1746"
+                loading="lazy"
+              />
+            </button>
+            <figcaption>
+              <b>The result.</b> "Seven scouted, six picked", with every step's
+              input and output kept on the run.
+            </figcaption>
+          </figure>
+          <figure>
+            <button type="button" data-lb>
+              <img
+                src="shots/editor-batch.webp"
+                alt="Editor for Build a team roster showing the Batch group with a workflow node between Start and End."
+                width="2448"
+                height="1400"
+                loading="lazy"
+              />
+            </button>
+            <figcaption>
+              <b>The Batch at design time.</b> The item path stays on the canvas
+              between Start and End.
+            </figcaption>
+          </figure>
+          <figure>
+            <button type="button" data-lb>
+              <img
+                src="shots/review-publish.webp"
+                alt="Review publication dialog: 1 node change, published and draft prompt text."
+                width="1959"
+                height="1368"
+                loading="lazy"
+              />
+            </button>
+            <figcaption>
+              <b>Review &amp; publish.</b> The dialog the publish replica above
+              is modeled on.
+            </figcaption>
+          </figure>
+          <figure>
+            <button type="button" data-lb>
+              <img
+                src="shots/node-agent.webp"
+                alt="Agent node settings dialog with prompt, context mode and instructions."
+                width="1959"
+                height="1584"
+                loading="lazy"
+              />
+            </button>
+            <figcaption>
+              <b>Agent node settings.</b> Prompt, context mode and instructions
+              live on the node.
+            </figcaption>
+          </figure>
+          <figure>
+            <button type="button" data-lb>
+              <img
+                src="shots/mcp-connect.webp"
+                alt="Connect with MCP dialog with Codex, Claude, OpenCode and Other tabs."
+                width="1383"
+                height="1098"
+                loading="lazy"
+              />
+            </button>
+            <figcaption>
+              <b>Connect with MCP.</b> One URL and a ready config per client.
+            </figcaption>
+          </figure>
+          <figure>
+            <button type="button" data-lb>
+              <img
+                src="shots/raw-json.webp"
+                alt="Raw JSON editor showing the workflow definition."
+                width="2448"
+                height="1764"
+                loading="lazy"
+              />
+            </button>
+            <figcaption>
+              <b>Visual / Raw.</b> Underneath, a workflow is plain JSON that the
+              CLI and MCP tools read and write.
+            </figcaption>
+          </figure>
+        </div>
+        <div class="wrap">
+          <div class="gal-nav">
+            <button
+              class="btn"
+              type="button"
+              data-gal="-1"
+              aria-label="Previous screenshots"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m15 18-6-6 6-6" />
+              </svg></button
+            ><button
+              class="btn"
+              type="button"
+              data-gal="1"
+              aria-label="Next screenshots"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div class="wrap close">
+        <div class="close-grid">
+          <h2>
+            Agents do the judgment.
+            <span class="q">Interlock keeps the record.</span>
+          </h2>
+          <div class="hero-cta" style="margin: 0">
+            <button
+              class="btn primary copy-cmd"
+              type="button"
+              data-copy="npm install -g @type_of/interlock"
+            >
+              <span class="ic">npm install -g @type_of/interlock</span
+              ><span class="ok">Copied</span></button
+            ><a class="btn" href="https://github.com/dgca/interlock"
+              >Star on GitHub</a
+            >
+          </div>
+        </div>
+        <nav class="docs" aria-label="Documentation">
+          <a href="https://github.com/dgca/interlock#readme">README</a>
+          <a
+            href="https://github.com/dgca/interlock/blob/main/docs/connect-harness.md"
+            >Connect a harness</a
+          >
+          <a
+            href="https://github.com/dgca/interlock/blob/main/docs/architecture.md"
+            >Architecture and execution</a
+          >
+          <a
+            href="https://github.com/dgca/interlock/blob/main/docs/agent-workflows.md"
+            >Agent workflow operations</a
+          >
+          <a href="https://github.com/dgca/interlock/blob/main/CONTEXT.md"
+            >Domain language</a
+          >
+          <a href="https://github.com/dgca/interlock/blob/main/docs/v1.md"
+            >Scope and limits</a
+          >
+        </nav>
+      </div>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <p>
+          <b>About the replicas.</b> The run inspector, Batch and publish review
+          above are built for this page in Interlock's own styling. The Fetch
+          step calls the public PokéAPI from your browser (with a cached copy
+          for the suggested names if the request fails), the Script runs the
+          starter workflow's code verbatim, and contract errors follow
+          Interlock's wording. Agent answers you "write for me" are templated
+          from the stat sheet, not generated by a model. Timing is slowed for
+          legibility.
+        </p>
+        <p>
+          <b>About the screenshots.</b> Captured from @type_of/interlock v0.1.14
+          on a temporary database. Claude Code acted as the executor through the
+          CLI. The sidebar in the shots reads the default address
+          127.0.0.1:4310; the capture ran on another local port.
+        </p>
+        <p>
+          This page lives in
+          <a href="https://github.com/dgca/interlock/tree/main/site">site/</a>.
+          Interlock is MIT licensed. Icons are from Lucide (ISC).
+        </p>
+      </div>
+    </footer>
+
+    <dialog class="lb" id="lb" aria-label="Screenshot">
+      <button class="x" type="button" id="lbX" aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <path
+            d="M2 2l10 10M12 2L2 12"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
+    </dialog>
+
+    <script>
+      (() => {
+        'use strict';
+        const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const $ = (s, r = document) => r.querySelector(s);
+        const el = (tag, attrs = {}, html = '') => {
+          const e = document.createElement(tag);
+          for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+          if (html) e.innerHTML = html;
+          return e;
+        };
+        const esc = (s) =>
+          String(s).replace(
+            /[&<>"]/g,
+            (c) =>
+              ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c],
+          );
+        const sleep = (ms) =>
+          new Promise((r) => setTimeout(r, reduced ? 0 : ms));
+        const hex = () =>
+          Math.random().toString(16).slice(2, 10).padEnd(8, '0');
+        const clock = (d = new Date()) =>
+          d.toLocaleTimeString([], {
+            hour: 'numeric',
+            minute: '2-digit',
+            second: '2-digit',
+          });
+
+        /* ---------- icons (Lucide, the set Interlock's UI uses) ---------- */
+        const P = {
+          entry:
+            '<path d="m18 9-6-6-6 6"/><path d="M12 3v14"/><path d="M5 21h14"/>',
+          exit: '<path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/>',
+          agent:
+            '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+          script:
+            '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+          fetch:
+            '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+          condition:
+            '<path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/>',
+          completed:
+            '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+          running: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+          waiting:
+            '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+          pending:
+            '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+          failed:
+            '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+          x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+        };
+        const icon = (k, size = 15, cls = '') =>
+          `<svg class="${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[k]}</svg>`;
+
+        /* ---------- JSON pretty-print with highlighting ---------- */
+        const jsonHtml = (v) =>
+          esc(JSON.stringify(v, null, 2)).replace(
+            /(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|(-?\d+\.?\d*)/g,
+            (m, str, colon, lit, num) =>
+              str
+                ? colon
+                  ? `<span class="k">${str}</span>${colon}`
+                  : `<span class="s">${str}</span>`
+                : lit
+                  ? `<span class="b">${lit}</span>`
+                  : `<span class="n">${num}</span>`,
+          );
+
+        /* ---------- the starter workflow, verbatim ---------- */
+        const SCRIPT = `const body = input.body;
+if (!body || typeof body.name !== 'string')
+  throw new Error('PokéAPI did not recognize that name');
+const stats = {};
+for (const stat of body.stats ?? []) stats[stat.stat.name] = stat.base_stat;
+return {
+  name: body.name,
+  types: (body.types ?? []).map((entry) => entry.type.name),
+  heightM: (body.height ?? 0) / 10,
+  weightKg: (body.weight ?? 0) / 10,
+  smallAndAdorable: (body.height ?? 999) <= 6,
+  stats,
+};`;
+        const AsyncFn = Object.getPrototypeOf(async function () {}).constructor;
+        const runScript = new AsyncFn('input', SCRIPT);
+        const PROMPT_V1 =
+          'Write a delightfully overcommitted mascot pitch for the Pokémon in the input, a scouting sheet with name, types, height, weight, and base stats. One short paragraph that leans into how small and adorable it is while citing one real stat as evidence. Do not invent abilities or moves. Return an object with name, pitch, and reasoning.';
+        const OUT_SCHEMA = {
+          type: 'object',
+          required: ['name', 'pitch', 'reasoning'],
+          properties: {
+            name: { type: 'string' },
+            pitch: { type: 'string' },
+            reasoning: { type: 'string' },
+          },
+        };
+
+        /* contract check, matching Interlock's assertContract wording (packages/core) */
+        function contractErrors(schema, value, label) {
+          const kind = (v) =>
+            v === null
+              ? 'null'
+              : Array.isArray(v)
+                ? 'a list'
+                : typeof v === 'string'
+                  ? 'text'
+                  : typeof v === 'object'
+                    ? 'an object'
+                    : typeof v;
+          const names = {
+            array: 'a list',
+            object: 'an object',
+            string: 'text',
+            boolean: 'yes/no',
+            integer: 'a whole number',
+            number: 'a number',
+          };
+          const errs = [];
+          if (
+            schema.type === 'object' &&
+            (value === null ||
+              typeof value !== 'object' ||
+              Array.isArray(value))
+          )
+            errs.push(
+              `"value" expects an object; received ${kind(value)}: ${JSON.stringify(value)?.slice(0, 100)}.`,
+            );
+          else {
+            for (const r of schema.required || [])
+              if (!(r in value)) errs.push(`Missing required field "${r}".`);
+            for (const [k, s] of Object.entries(schema.properties || {}))
+              if (k in value) {
+                const v = value[k];
+                const ok = s.type === 'string' ? typeof v === 'string' : true;
+                if (!ok)
+                  errs.push(
+                    `"${k}" expects ${names[s.type]}; received ${kind(v)}: ${JSON.stringify(v).slice(0, 100)}.`,
+                  );
+              }
+          }
+          return errs.length ? `${label}: ${errs.join(' ')}` : null;
+        }
+
+        /* ---------- PokéAPI: live, with a cached copy of the suggested names ---------- */
+        const STAT_NAMES = [
+          'hp',
+          'attack',
+          'defense',
+          'special-attack',
+          'special-defense',
+          'speed',
+        ];
+        const CACHE = {
+          togepi: [3, 15, ['fairy'], [35, 20, 65, 40, 65, 20]],
+          pikachu: [4, 60, ['electric'], [35, 55, 40, 50, 50, 90]],
+          eevee: [3, 65, ['normal'], [55, 55, 50, 45, 65, 55]],
+          jigglypuff: [5, 55, ['normal', 'fairy'], [115, 45, 20, 45, 25, 20]],
+          snorlax: [21, 4600, ['normal'], [160, 110, 65, 65, 110, 30]],
+          gengar: [15, 405, ['ghost', 'poison'], [60, 65, 60, 130, 75, 110]],
+          lapras: [25, 2200, ['water', 'ice'], [130, 85, 80, 85, 95, 60]],
+          bulbasaur: [7, 69, ['grass', 'poison'], [45, 49, 49, 65, 65, 45]],
+        };
+        const cachedBody = (n) => {
+          const [height, weight, types, st] = CACHE[n];
+          return {
+            name: n,
+            height,
+            weight,
+            types: types.map((t) => ({ type: { name: t } })),
+            stats: st.map((b, i) => ({
+              base_stat: b,
+              stat: { name: STAT_NAMES[i] },
+            })),
+          };
+        };
+        const memo = new Map();
+        async function pokeFetch(raw) {
+          const name = String(raw).trim().toLowerCase();
+          if (memo.has(name)) return memo.get(name);
+          const url = `https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(name)}`;
+          let res;
+          try {
+            const ctl = new AbortController();
+            const t = setTimeout(() => ctl.abort(), 8000);
+            const r = await fetch(url, { signal: ctl.signal });
+            clearTimeout(t);
+            if (!r.ok)
+              res = {
+                status: r.status,
+                headers: {
+                  'content-type': r.headers.get('content-type') || 'text/plain',
+                },
+                body: (await r.text()).slice(0, 200),
+                source: 'live',
+              };
+            else {
+              const full = await r.json();
+              res = {
+                status: 200,
+                headers: {
+                  'content-type':
+                    r.headers.get('content-type') || 'application/json',
+                },
+                body: {
+                  name: full.name,
+                  height: full.height,
+                  weight: full.weight,
+                  types: full.types.map((x) => ({
+                    type: { name: x.type.name },
+                  })),
+                  stats: full.stats.map((x) => ({
+                    base_stat: x.base_stat,
+                    stat: { name: x.stat.name },
+                  })),
+                },
+                source: 'live',
+              };
+            }
+          } catch (e) {
+            if (!CACHE[name])
+              throw new Error(
+                'Fetch could not reach PokéAPI from this browser',
+              );
+            res = {
+              status: 200,
+              headers: { 'content-type': 'application/json; charset=utf-8' },
+              body: cachedBody(name),
+              source: 'cache',
+            };
+          }
+          res.url = url;
+          memo.set(name, res);
+          return res;
+        }
+
+        /* ---------- the "write it for me" agent: a template over the stat sheet ---------- */
+        const nice = (s) => s.replace(/-/g, ' ');
+        function draftPitch(sheet, withReasoning) {
+          const [top, val] = Object.entries(sheet.stats).sort(
+            (a, b) => b[1] - a[1],
+          )[0];
+          const Name = sheet.name[0].toUpperCase() + sheet.name.slice(1);
+          const out = {
+            name: sheet.name,
+            pitch: `${Name} stands ${sheet.heightM} metres tall and weighs ${sheet.weightKg} kilograms, small enough to ride along to every photo op, and its base ${nice(top)} of ${val} is the number it leads with.`,
+          };
+          if (withReasoning)
+            out.reasoning = `Height ${sheet.heightM} m and weight ${sheet.weightKg} kg carry the small-and-adorable angle; ${nice(top)} ${val} is its highest base stat. No abilities or moves are cited.`;
+          return out;
+        }
+
+        /* =====================================================================
+   1. RUN INSPECTOR REPLICA
+   ===================================================================== */
+        const NODES = [
+          {
+            id: 'entry',
+            kind: 'entry',
+            label: 'Pokémon name',
+            meta: 'Workflow input',
+            ct: 'Object → Object',
+            x: 16,
+            y: 120,
+          },
+          {
+            id: 'lookup',
+            kind: 'fetch',
+            label: 'Ask PokéAPI',
+            meta: 'Method: GET',
+            ct: 'Any → Object',
+            x: 232,
+            y: 120,
+          },
+          {
+            id: 'stats',
+            kind: 'script',
+            label: 'Pull the fun stats',
+            meta: 'JavaScript',
+            ct: 'Any → Any',
+            x: 448,
+            y: 120,
+          },
+          {
+            id: 'cute',
+            kind: 'condition',
+            label: 'Small and adorable?',
+            meta: 'smallAndAdorable equals true',
+            ct: 'Any → Any',
+            x: 664,
+            y: 120,
+          },
+          {
+            id: 'pitch',
+            kind: 'agent',
+            label: 'Write the mascot pitch',
+            meta: 'Current context · 2 attempts',
+            ct: 'Any → Object',
+            x: 896,
+            y: 34,
+          },
+          {
+            id: 'exitPitch',
+            kind: 'exit',
+            label: 'Mascot pitch',
+            meta: 'Return workflow result',
+            ct: 'Any → Any',
+            x: 1112,
+            y: 34,
+          },
+          {
+            id: 'exitStats',
+            kind: 'exit',
+            label: 'Stat sheet',
+            meta: 'Return workflow result',
+            ct: 'Any → Any',
+            x: 896,
+            y: 214,
+          },
+        ];
+        const EDGES = [
+          ['entry', 'lookup'],
+          ['lookup', 'stats'],
+          ['stats', 'cute'],
+          ['cute', 'pitch', 'True', 't'],
+          ['pitch', 'exitPitch'],
+          ['cute', 'exitStats', 'False', 'f'],
+        ];
+        const NW = 176,
+          NH = 96,
+          GW = 1304,
+          GH = 330;
+        const LABELS = {
+          pending: 'Not started',
+          running: 'Running',
+          completed: 'Finished',
+          waiting: 'Waiting for an agent',
+          working: 'Agent working',
+          failed: 'Failed',
+        };
+        const graph = $('#graph');
+        graph.style.width = GW + 'px';
+        graph.style.height = GH + 'px';
+        const svg = document.createElementNS(
+          'http://www.w3.org/2000/svg',
+          'svg',
+        );
+        svg.setAttribute('class', 'edges');
+        svg.setAttribute('width', GW);
+        svg.setAttribute('height', GH);
+        svg.setAttribute('aria-hidden', 'true');
+        graph.appendChild(svg);
+        const nodeEls = {},
+          edgeEls = {};
+        const pos = Object.fromEntries(NODES.map((n) => [n.id, n]));
+        for (const [a, b, lab, cls] of EDGES) {
+          const A = pos[a],
+            B = pos[b],
+            x1 = A.x + NW,
+            y1 = A.y + NH / 2 + (lab ? (cls === 't' ? -14 : 14) : 0),
+            x2 = B.x,
+            y2 = B.y + NH / 2,
+            mx = (x1 + x2) / 2;
+          const p = document.createElementNS(
+            'http://www.w3.org/2000/svg',
+            'path',
+          );
+          p.setAttribute(
+            'd',
+            `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`,
+          );
+          svg.appendChild(p);
+          edgeEls[a + '>' + b] = p;
+          if (lab) {
+            const t = document.createElementNS(
+              'http://www.w3.org/2000/svg',
+              'text',
+            );
+            t.setAttribute('x', x1 + 8);
+            t.setAttribute('y', y1 - 5);
+            t.setAttribute('class', cls);
+            t.textContent = lab;
+            svg.appendChild(t);
+          }
+        }
+        for (const n of NODES) {
+          const b = el('button', {
+            type: 'button',
+            class: 'node st-idle',
+            style: `left:${n.x}px;top:${n.y}px`,
+            'aria-label': `${n.label}, ${n.kind}`,
+          });
+          b.innerHTML = `<span class="nstat"></span><span class="nh"><span class="ni ${n.kind}">${icon(n.kind, 15)}</span>${n.kind === 'agent' ? 'Agent assignment' : n.kind}</span><strong>${esc(n.label)}</strong><small>${esc(n.meta)}</small><small>${n.ct}</small>`;
+          b.addEventListener('click', () => select(n.id));
+          graph.appendChild(b);
+          nodeEls[n.id] = b;
+        }
+
+        const R = {
+          id: null,
+          status: 'ready',
+          nodes: {},
+          execs: [],
+          sel: null,
+          claim: null,
+          resolveAgent: null,
+          verdict: null,
+          draft: '',
+          token: 0,
+        };
+        function setNode(id, st) {
+          R.nodes[id] = st;
+          const e = nodeEls[id];
+          e.className = `node st-${st === 'working' ? 'running' : st}${R.sel === id ? ' sel' : ''}`;
+          const ic =
+            st === 'completed'
+              ? 'completed'
+              : st === 'running' || st === 'working'
+                ? 'running'
+                : st === 'failed'
+                  ? 'failed'
+                  : 'pending';
+          e.querySelector('.nstat').innerHTML =
+            st === 'idle'
+              ? ''
+              : `${icon(ic, 12, st === 'running' || st === 'working' ? 'spin' : '')}${LABELS[st] || ''}`;
+        }
+        function lightEdge(a, b, on, flow) {
+          const p = edgeEls[a + '>' + b];
+          if (p) {
+            p.classList.toggle('lit', on);
+            p.classList.toggle('flow', !!flow && !reduced);
+          }
+        }
+        function setPill(pillEl, st, text) {
+          pillEl.className = 'pill ' + st;
+          pillEl.textContent = text || st;
+        }
+        function exec(nodeId, input) {
+          const n = pos[nodeId];
+          const x = {
+            node: nodeId,
+            kind: n.kind,
+            label: n.label,
+            input,
+            output: undefined,
+            status: 'running',
+            startedAt: new Date(),
+            endedAt: null,
+            error: null,
+          };
+          R.execs.push(x);
+          renderSteps();
+          return x;
+        }
+        function done(x, output, status = 'completed') {
+          x.output = output;
+          x.status = status;
+          x.endedAt = new Date();
+          renderSteps();
+        }
+
+        function renderSteps() {
+          const ol = $('#steps');
+          ol.innerHTML = '';
+          $('#stepsEmpty').hidden = R.execs.length > 0;
+          R.execs.forEach((x, i) => {
+            const li = el('li');
+            const b = el('button', {
+              type: 'button',
+              class: 'steprow' + (R.sel === x.node ? ' sel' : ''),
+            });
+            const st = x.status === 'working' ? 'running' : x.status;
+            b.innerHTML = `<span class="ix">${String(i + 1).padStart(2, '0')}</span><div><strong>${esc(x.label)}</strong><small>${x.kind} · ${clock(x.startedAt)}</small></div><span class="s ${st}">${x.status === 'working' ? 'running' : x.status === 'waiting' ? 'waiting' : x.status}</span>`;
+            b.addEventListener('click', () => select(x.node));
+            li.appendChild(b);
+            ol.appendChild(li);
+          });
+        }
+        function select(id) {
+          R.sel = id;
+          for (const n of NODES)
+            nodeEls[n.id].classList.toggle('sel', n.id === id);
+          renderSteps();
+          renderDetails();
+        }
+
+        function renderDetails() {
+          const d = $('#details');
+          const id = R.sel;
+          if (!id) {
+            d.innerHTML = `<div class="dlabel">Execution details</div><p class="empty" style="padding-top:4px">Select a node or a timeline step to inspect its input and output.</p>`;
+            return;
+          }
+          const n = pos[id];
+          const x = [...R.execs].reverse().find((e) => e.node === id);
+          const st = R.nodes[id] || 'idle';
+          let h = `<div class="dlabel">Execution details</div><div class="dtitle">${esc(n.label)}</div><div class="dstate ${st === 'working' ? 'running' : st}">${LABELS[st] || 'Not started'}</div>`;
+          if (id === 'lookup')
+            h += `<div class="dlabel">Request</div><pre class="json">GET https://pokeapi.co/api/v2/pokemon/{{input.name}}</pre>`;
+          if (id === 'stats')
+            h += `<div class="dlabel">Script · JavaScript</div><pre class="json">${esc(SCRIPT)}</pre>`;
+          if (id === 'cute')
+            h += `<div class="dlabel">Condition</div><pre class="json">smallAndAdorable equals true</pre>`;
+          if (x) {
+            h += `<div class="dlabel">Input</div><pre class="json">${jsonHtml(x.input)}</pre>`;
+            if (id === 'lookup' && x.output)
+              h += `<p class="src">${x.output.source === 'live' ? '<b>Live response</b> from pokeapi.co, trimmed to the fields the Script reads.' : '<b class="c">Cached copy</b>: PokéAPI was unreachable, so this suggested name used a stored response.'}</p>`;
+            if (x.error)
+              h += `<div class="dlabel">Error</div><p class="verdict err">${esc(x.error)}</p>`;
+            if (
+              x.output !== undefined &&
+              !(id === 'pitch' && st !== 'completed')
+            )
+              h += `<div class="dlabel">Output</div><pre class="json">${jsonHtml(x.output)}</pre>`;
+            if (id === 'cute' && R.port)
+              h += `<p class="src">Followed the <b${R.port === 'true' ? '' : ' class="c"'}>${R.port === 'true' ? 'True' : 'False'}</b> route. Condition passes its input through unchanged.</p>`;
+          }
+          if (id === 'pitch') {
+            h += `<div class="dlabel">Prompt and context</div><p class="prompt">${esc(PROMPT_V1)}</p><div class="dlabel">Expected output schema</div><pre class="json">${jsonHtml(OUT_SCHEMA)}</pre>`;
+            if (st === 'waiting')
+              h += `<p class="hint">Waiting for an agent to pick up this assignment. Use <b>Claim as the agent</b> above.</p>`;
+            if (st === 'working') {
+              h += `<div class="console"><p class="who">Claimed by you. Lease ends ${clock(R.claim.until)}.</p><label class="visually-hidden" for="agentOut">Agent result JSON</label><textarea id="agentOut" spellcheck="false">${esc(R.draft)}</textarea><div class="row"><button class="btn primary" type="button" id="submitBtn">Submit result</button><button class="btn" type="button" id="fixBtn">Write it for me</button></div>${R.verdict ? `<p class="verdict err" role="alert">${esc(R.verdict)}</p><p class="hint">The claim stays active, so you can correct the answer and submit again.</p>` : `<p class="hint">This draft has a problem. Submit it and see what the contract says.</p>`}</div>`;
+            }
+          }
+          d.innerHTML = h;
+          if (st === 'working') {
+            const ta = $('#agentOut');
+            ta.addEventListener('input', () => {
+              R.draft = ta.value;
+            });
+            $('#submitBtn').addEventListener('click', submitAgent);
+            $('#fixBtn').addEventListener('click', () => {
+              R.draft = JSON.stringify(draftPitch(R.sheet, true), null, 2);
+              R.verdict = null;
+              renderDetails();
+              $('#agentOut').focus();
+            });
+          }
+        }
+
+        function submitAgent() {
+          let v;
+          try {
+            v = JSON.parse(R.draft);
+          } catch {
+            R.verdict =
+              "That is not valid JSON yet. (This check is the page's; Interlock receives parsed JSON from your agent.)";
+            renderDetails();
+            return;
+          }
+          const err = contractErrors(OUT_SCHEMA, v, 'Agent result');
+          if (err) {
+            R.verdict = err;
+            renderDetails();
+            return;
+          }
+          R.verdict = null;
+          const fn = R.resolveAgent;
+          R.resolveAgent = null;
+          fn(v);
+        }
+
+        $('#claimBtn').addEventListener('click', () => {
+          if (R.nodes.pitch !== 'waiting') return;
+          R.claim = { until: new Date(Date.now() + 300000) };
+          R.draft = JSON.stringify(draftPitch(R.sheet, false), null, 2);
+          setNode('pitch', 'working');
+          setPill($('#runPill'), 'running', 'running');
+          const x = R.execs.find((e) => e.node === 'pitch');
+          x.status = 'working';
+          renderSteps();
+          $('#handoff').classList.remove('show');
+          select('pitch');
+          setTimeout(() => $('#agentOut')?.focus(), 50);
+        });
+
+        async function startRun() {
+          const name = $('#pkName').value.trim().toLowerCase() || 'togepi';
+          $('#pkName').value = name;
+          const token = ++R.token;
+          R.id = hex();
+          R.execs = [];
+          R.sel = null;
+          R.claim = null;
+          R.verdict = null;
+          R.port = null;
+          R.resolveAgent = null;
+          R.sheet = null;
+          $('#runId').textContent = R.id;
+          $('#handoff').classList.remove('show');
+          for (const n of NODES) setNode(n.id, 'pending');
+          for (const k in edgeEls) edgeEls[k].classList.remove('lit', 'flow');
+          setPill($('#runPill'), 'running', 'running');
+          renderDetails();
+          const alive = () => token === R.token;
+          const fail = (x, nodeId, msg) => {
+            x.error = msg;
+            done(x, undefined, 'failed');
+            setNode(nodeId, 'failed');
+            setPill($('#runPill'), 'failed', 'failed');
+            select(nodeId);
+          };
+          // Entry
+          let x = exec('entry', { name });
+          setNode('entry', 'running');
+          await sleep(250);
+          if (!alive()) return;
+          done(x, { name });
+          setNode('entry', 'completed');
+          lightEdge('entry', 'lookup', true, true);
+          // Fetch
+          x = exec('lookup', { name });
+          setNode('lookup', 'running');
+          select('lookup');
+          let res;
+          try {
+            [res] = await Promise.all([pokeFetch(name), sleep(500)]);
+          } catch (e) {
+            if (alive()) fail(x, 'lookup', e.message);
+            return;
+          }
+          if (!alive()) return;
+          lightEdge('entry', 'lookup', true, false);
+          const fetchOut = {
+            status: res.status,
+            headers: res.headers,
+            body: res.body,
+            source: res.source,
+          };
+          if (res.status < 200 || res.status >= 300) {
+            x.output = fetchOut;
+            fail(x, 'lookup', `Fetch returned HTTP ${res.status}`);
+            return;
+          }
+          done(x, fetchOut);
+          setNode('lookup', 'completed');
+          lightEdge('lookup', 'stats', true, true);
+          // Script (the workflow's own code)
+          x = exec('stats', {
+            status: res.status,
+            headers: res.headers,
+            body: res.body,
+          });
+          setNode('stats', 'running');
+          select('stats');
+          await sleep(450);
+          if (!alive()) return;
+          let sheet;
+          try {
+            sheet = await runScript({
+              status: res.status,
+              headers: res.headers,
+              body: res.body,
+            });
+          } catch (e) {
+            fail(x, 'stats', e.message);
+            return;
+          }
+          R.sheet = sheet;
+          done(x, sheet);
+          setNode('stats', 'completed');
+          lightEdge('lookup', 'stats', true, false);
+          lightEdge('stats', 'cute', true, true);
+          // Condition
+          x = exec('cute', sheet);
+          setNode('cute', 'running');
+          await sleep(300);
+          if (!alive()) return;
+          R.port = sheet.smallAndAdorable === true ? 'true' : 'false';
+          done(x, sheet);
+          setNode('cute', 'completed');
+          lightEdge('stats', 'cute', true, false);
+          if (R.port === 'false') {
+            lightEdge('cute', 'exitStats', true, true);
+            setNode('pitch', 'skipped');
+            setNode('exitPitch', 'skipped');
+            nodeEls.pitch.querySelector('.nstat').innerHTML =
+              `${icon('pending', 12)}Not started`;
+            nodeEls.exitPitch.querySelector('.nstat').innerHTML =
+              `${icon('pending', 12)}Not started`;
+            x = exec('exitStats', sheet);
+            setNode('exitStats', 'running');
+            await sleep(250);
+            if (!alive()) return;
+            done(x, sheet);
+            setNode('exitStats', 'completed');
+            lightEdge('cute', 'exitStats', true, false);
+            setPill($('#runPill'), 'completed', 'completed');
+            select('exitStats');
+            return;
+          }
+          // Agent
+          lightEdge('cute', 'pitch', true, true);
+          setNode('exitStats', 'skipped');
+          nodeEls.exitStats.querySelector('.nstat').innerHTML =
+            `${icon('pending', 12)}Not started`;
+          x = exec('pitch', sheet);
+          x.status = 'waiting';
+          renderSteps();
+          setNode('pitch', 'waiting');
+          setPill($('#runPill'), 'waiting', 'waiting');
+          $('#handoff').classList.add('show');
+          select('pitch');
+          const result = await new Promise((r) => {
+            R.resolveAgent = r;
+          });
+          if (!alive()) return;
+          done(x, result);
+          setNode('pitch', 'completed');
+          lightEdge('cute', 'pitch', true, false);
+          lightEdge('pitch', 'exitPitch', true, true);
+          x = exec('exitPitch', result);
+          setNode('exitPitch', 'running');
+          await sleep(250);
+          if (!alive()) return;
+          done(x, result);
+          setNode('exitPitch', 'completed');
+          lightEdge('pitch', 'exitPitch', true, false);
+          setPill($('#runPill'), 'completed', 'completed');
+          select('exitPitch');
+        }
+        $('#runBtn').addEventListener('click', startRun);
+        $('#pkName').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') startRun();
+        });
+        const chipBox = $('#pkChips');
+        for (const [n, hint] of [
+          ['togepi', 'small'],
+          ['pikachu', 'small'],
+          ['snorlax', 'big'],
+          ['gengar', 'big'],
+          ['agumon', 'not a Pokémon'],
+        ]) {
+          const c = el(
+            'button',
+            { type: 'button', class: 'chip' },
+            `${n}<small>${hint}</small>`,
+          );
+          c.addEventListener('click', () => {
+            $('#pkName').value = n;
+            startRun();
+          });
+          chipBox.appendChild(c);
+        }
+        for (const n of NODES) setNode(n.id, 'idle');
+        renderDetails();
+        // center the canvas on narrow screens at the start of the graph
+        $('#canvas').scrollLeft = 0;
+
+        /* =====================================================================
+   2. BATCH REPLICA
+   ===================================================================== */
+        const B = {
+          cands: [
+            'pikachu',
+            'eevee',
+            'jigglypuff',
+            'snorlax',
+            'gengar',
+            'lapras',
+            'bulbasaur',
+          ],
+          conc: 5,
+          pol: 'all',
+          items: [],
+          running: false,
+          token: 0,
+          waiters: new Map(),
+          pick: null,
+        };
+        function renderCands() {
+          const box = $('#cands');
+          box.innerHTML = '';
+          B.cands.forEach((n, i) => {
+            const s = el(
+              'span',
+              { class: 'cand' },
+              `${esc(n)}<button type="button" aria-label="Remove ${esc(n)}">${icon('x', 12)}</button>`,
+            );
+            s.querySelector('button').addEventListener('click', () => {
+              if (B.running) return;
+              B.cands.splice(i, 1);
+              renderCands();
+              resetBatch();
+            });
+            box.appendChild(s);
+          });
+        }
+        $('#addCand').addEventListener('submit', (e) => {
+          e.preventDefault();
+          const v = $('#candIn').value.trim().toLowerCase();
+          if (!v || B.running) return;
+          B.cands.push(v);
+          $('#candIn').value = '';
+          renderCands();
+          resetBatch();
+        });
+        $('#conc').addEventListener('input', (e) => {
+          B.conc = +e.target.value;
+          $('#concVal').textContent = B.conc;
+          if (!B.running)
+            $('#batchSummary').textContent =
+              `Each item runs independently · Up to ${B.conc} at once`;
+        });
+        document.querySelectorAll('[data-pol]').forEach((b) =>
+          b.addEventListener('click', () => {
+            if (B.running) return;
+            B.pol = b.dataset.pol;
+            document
+              .querySelectorAll('[data-pol]')
+              .forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+            resetBatch();
+          }),
+        );
+        const STEPS5 = ['Fetch', 'Script', 'Condition', 'Agent', 'Exit'];
+        function laneHtml(it, i) {
+          const t = it.track.map((s) => `<i class="${s}"></i>`).join('');
+          const lab = {
+            queued: 'Queued',
+            running: 'Running',
+            waiting: 'Waiting for an agent',
+            completed: 'Finished',
+            failed: 'Failed',
+            cancelled: 'Cancelled',
+          }[it.status];
+          const act =
+            it.status === 'waiting'
+              ? `<button class="btn soft" type="button" data-answer="${i}">Answer</button>`
+              : '';
+          return `<span class="ix">${String(i + 1).padStart(2, '0')}</span><span class="nm">${esc(it.name)}</span><span class="track" aria-hidden="true">${t}</span><span class="lstate"><span class="s ${it.status}">${lab}${it.error ? ` · ${esc(it.error)}` : ''}</span>${act}</span>`;
+        }
+        function renderLanes() {
+          const ol = $('#lanes');
+          ol.innerHTML = '';
+          B.items.forEach((it, i) => {
+            const li = el(
+              'li',
+              { class: `lane st-${it.status}` },
+              laneHtml(it, i),
+            );
+            ol.appendChild(li);
+          });
+          ol.querySelectorAll('[data-answer]').forEach((b) =>
+            b.addEventListener('click', () => answerItem(+b.dataset.answer)),
+          );
+          const fin = B.items.filter((x) =>
+              ['completed', 'failed', 'cancelled'].includes(x.status),
+            ).length,
+            wait = B.items.filter((x) => x.status === 'waiting').length;
+          const nf = B.items.filter((x) => x.status === 'failed').length,
+            nc = B.items.filter((x) => x.status === 'cancelled').length,
+            ok = B.items.filter((x) => x.status === 'completed').length;
+          if (B.items.length)
+            $('#batchSummary').textContent = nc
+              ? `Batch failed · ${ok} finished, ${nf} failed, ${nc} cancelled`
+              : `${fin} of ${B.items.length} finished${wait ? ` · ${wait} waiting` : ''}${nf ? ` · ${nf} failed` : ''}`;
+          $('#answerAll').hidden = wait < 2;
+        }
+        function resetBatch() {
+          B.token++;
+          B.running = false;
+          B.waiters.clear();
+          B.pick = null;
+          B.items = B.cands.map((name) => ({
+            name,
+            status: 'queued',
+            track: STEPS5.map(() => ''),
+            error: null,
+            output: null,
+            runId: hex(),
+          }));
+          renderLanes();
+          $('#batchSummary').textContent =
+            `Each item runs independently · Up to ${B.conc} at once`;
+          setPill($('#outPill'), '', 'empty');
+          $('#outJson').textContent = '[]';
+          setPill($('#pickPill'), '', 'not started');
+          $('#pickBody').innerHTML =
+            'Runs after every item returns. Its input is the ordered list from Out.';
+          $('#pickBody').className = 'empty';
+          $('#batchRun').disabled = false;
+          $('#conc').disabled = false;
+        }
+        function answerItem(i) {
+          const w = B.waiters.get(i);
+          if (w) {
+            B.waiters.delete(i);
+            w();
+          }
+        }
+        $('#answerAll').addEventListener('click', () =>
+          [...B.waiters.keys()].forEach(answerItem),
+        );
+        async function runItem(it, i, token) {
+          const alive = () => token === B.token && it.status !== 'cancelled';
+          it.status = 'running';
+          it.track[0] = 'run';
+          renderLanes();
+          let res;
+          try {
+            [res] = await Promise.all([
+              pokeFetch(it.name),
+              sleep(400 + Math.random() * 900),
+            ]);
+          } catch (e) {
+            res = { status: 0, err: e.message };
+          }
+          if (!alive()) return;
+          if (!(res.status >= 200 && res.status < 300)) {
+            it.track[0] = 'fail';
+            it.status = 'failed';
+            it.error = res.err || `Fetch returned HTTP ${res.status}`;
+            renderLanes();
+            return;
+          }
+          it.track[0] = 'done';
+          it.track[1] = 'run';
+          renderLanes();
+          await sleep(250 + Math.random() * 500);
+          if (!alive()) return;
+          const sheet = await runScript({
+            status: res.status,
+            headers: res.headers,
+            body: res.body,
+          });
+          it.sheet = sheet;
+          it.track[1] = 'done';
+          it.track[2] = 'done';
+          renderLanes();
+          await sleep(200);
+          if (!alive()) return;
+          if (sheet.smallAndAdorable) {
+            it.track[3] = 'wait';
+            it.status = 'waiting';
+            renderLanes();
+            await new Promise((r) => B.waiters.set(i, r));
+            if (!alive()) return;
+            it.output = draftPitch(sheet, true);
+            it.track[3] = 'done';
+          } else {
+            it.output = sheet;
+            it.track[3] = 'skip';
+          }
+          it.track[4] = 'done';
+          it.status = 'completed';
+          renderLanes();
+        }
+        $('#batchRun').addEventListener('click', async () => {
+          resetBatch();
+          const token = B.token;
+          B.running = true;
+          $('#batchRun').disabled = true;
+          $('#conc').disabled = true;
+          setPill($('#outPill'), 'running', 'collecting');
+          let next = 0,
+            failedAll = false;
+          const items = B.items;
+          const worker = async () => {
+            while (next < items.length && !failedAll && token === B.token) {
+              const i = next++;
+              await runItem(items[i], i, token);
+              if (items[i].status === 'failed' && B.pol === 'all') {
+                failedAll = true;
+                for (const o of items)
+                  if (['queued', 'running', 'waiting'].includes(o.status)) {
+                    o.status = 'cancelled';
+                  }
+                for (const [k, w] of B.waiters) {
+                  B.waiters.delete(k);
+                  w();
+                }
+                renderLanes();
+              }
+            }
+          };
+          await Promise.all(
+            Array.from({ length: Math.min(B.conc, items.length) }, worker),
+          );
+          if (token !== B.token) return;
+          B.running = false;
+          $('#conc').disabled = false;
+          $('#batchRun').disabled = false;
+          if (failedAll) {
+            setPill($('#outPill'), 'failed', 'batch failed');
+            $('#outJson').textContent =
+              `No collection emitted. One item failed, so with "all" the Batch fails and unfinished items are cancelled.`;
+            setPill($('#pickPill'), 'cancelled', 'not reached');
+            return;
+          }
+          const out =
+            B.pol === 'all'
+              ? items.map((x) => x.output)
+              : items.map((x) => ({
+                  runId: x.runId,
+                  status: x.status,
+                  output: x.output,
+                  error: x.error,
+                }));
+          setPill($('#outPill'), 'completed', `${out.length} in input order`);
+          $('#outJson').innerHTML = jsonHtml(out);
+          setPill($('#pickPill'), 'waiting', 'waiting for an agent');
+          $('#pickBody').className = '';
+          $('#pickBody').innerHTML =
+            `<p class="hint" style="margin:0 0 10px">The final agent step receives the ordered list. Answer it to finish the run.</p><button class="btn primary" type="button" id="pickBtn">Answer as the agent</button>`;
+          $('#pickBtn').addEventListener('click', () => {
+            const scored = items
+              .filter((x) => x.status === 'completed')
+              .map((x) => ({
+                name: x.name,
+                sheet: x.sheet,
+                pitch: x.output.pitch,
+                total: Object.values(x.sheet.stats).reduce((a, b) => a + b, 0),
+              }));
+            scored.sort((a, b) => b.total - a.total);
+            const picks = scored.slice(0, 6),
+              bench = scored.slice(6),
+              failed = items
+                .filter((x) => x.status !== 'completed')
+                .map((x) => x.name);
+            const role = (p) => {
+              const [k, v] = Object.entries(p.sheet.stats).sort(
+                (a, b) => b[1] - a[1],
+              )[0];
+              return `Leads with ${nice(k)} ${v}${p.pitch ? '. Mascot pitch on file' : ''}.`;
+            };
+            $('#pickBody').innerHTML =
+              `<table class="roster"><thead><tr><th>Pick</th><th>Role</th></tr></thead><tbody>${picks.map((p) => `<tr><td>${esc(p.name)}</td><td>${esc(role(p))}</td></tr>`).join('')}</tbody></table><p class="hint">${bench.length ? `Bench: ${bench.map((b) => esc(b.name)).join(', ')}. ` : ''}${failed.length ? `Scouting failed: ${failed.map(esc).join(', ')}.` : 'Scouting failures: none.'} Drafted by this page from the stat sheets.</p>`;
+            setPill($('#pickPill'), 'completed', 'finished');
+          });
+        });
+        renderCands();
+        resetBatch();
+
+        /* =====================================================================
+   3. PUBLISH REPLICA
+   ===================================================================== */
+        const V = {
+          published: [PROMPT_V1],
+          runs: [{ id: 'b5fb4f41', v: 1, st: 'waiting' }],
+        };
+        const ed = $('#promptEd');
+        ed.value = PROMPT_V1;
+        const words = (s) => s.split(/(\s+)/).filter((w) => w.length);
+        function diffWords(a, b) {
+          const A = words(a),
+            Bw = words(b),
+            n = A.length,
+            m = Bw.length,
+            L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+          for (let i = n - 1; i >= 0; i--)
+            for (let j = m - 1; j >= 0; j--)
+              L[i][j] =
+                A[i] === Bw[j]
+                  ? L[i + 1][j + 1] + 1
+                  : Math.max(L[i + 1][j], L[i][j + 1]);
+          let i = 0,
+            j = 0,
+            left = '',
+            right = '';
+          while (i < n && j < m) {
+            if (A[i] === Bw[j]) {
+              left += esc(A[i]);
+              right += esc(Bw[j]);
+              i++;
+              j++;
+            } else if (L[i + 1][j] >= L[i][j + 1]) {
+              left += `<del>${esc(A[i])}</del>`;
+              i++;
+            } else {
+              right += `<ins>${esc(Bw[j])}</ins>`;
+              j++;
+            }
+          }
+          while (i < n) left += `<del>${esc(A[i++])}</del>`;
+          while (j < m) right += `<ins>${esc(Bw[j++])}</ins>`;
+          return [left, right];
+        }
+        function renderPub() {
+          const cur = V.published[V.published.length - 1],
+            v = V.published.length,
+            changed = ed.value !== cur;
+          $('#cmpTitle').textContent = `Draft compared with published v${v}`;
+          $('#counts').innerHTML =
+            `<span class="${changed ? 'on' : ''}">${changed ? 1 : 0} node change${changed ? '' : 's'}</span><span>0 route changes</span><span>0 workflow changes</span>`;
+          if (changed) {
+            const [l, r] = diffWords(cur, ed.value);
+            $('#diffBox').innerHTML =
+              `<div class="diff"><div><span class="lbl">Published · Write the mascot pitch · prompt</span>${l}</div><div><span class="lbl">Draft</span>${r}</div></div>`;
+          } else
+            $('#diffBox').innerHTML =
+              `<p class="nochange">No changes from v${v}. Edit the prompt, or press <b>Try an edit</b>.</p>`;
+          $('#publishBtn').disabled = !changed;
+          $('#publishBtn').textContent = changed
+            ? `Publish v${v + 1}`
+            : 'Publish version';
+          setPill(
+            $('#draftPill'),
+            changed ? 'waiting' : '',
+            changed ? 'Unsaved changes' : `Draft saved · v${v} published`,
+          );
+          $('#pubHint').textContent = changed
+            ? 'Publishing saves the draft and creates an immutable version.'
+            : '';
+          $('#versions').innerHTML =
+            V.published
+              .map((_, k) => {
+                const rs = V.runs.filter((r) => r.v === k + 1);
+                return `<div class="ver"><b>v${k + 1} ${k === V.published.length - 1 ? '<span class="pill completed">latest</span>' : '<span class="pill">immutable</span>'}</b><small>${k === 0 ? 'The starter workflow as shipped.' : 'Your edit. New runs start here.'}</small><div class="runchips">${rs.map((r) => `<span class="${r.st === 'waiting' ? 'w' : ''}">run ${r.id} · ${r.st}</span>`).join('') || '<span>no runs yet</span>'}</div></div>`;
+              })
+              .join('') +
+            `<div class="ver"><button class="btn" type="button" id="newRun">Start a run on v${V.published.length}</button><small>Existing runs keep their version.</small></div>`;
+          $('#newRun').addEventListener('click', () => {
+            V.runs.push({ id: hex(), v: V.published.length, st: 'running' });
+            renderPub();
+          });
+        }
+        ed.addEventListener('input', renderPub);
+        $('#tryEdit').addEventListener('click', () => {
+          ed.value = ed.value
+            .replace('One short paragraph', 'Two short sentences')
+            .replace('delightfully overcommitted', 'calmly confident');
+          renderPub();
+        });
+        $('#discard').addEventListener('click', () => {
+          ed.value = V.published[V.published.length - 1];
+          renderPub();
+        });
+        $('#publishBtn').addEventListener('click', () => {
+          V.published.push(ed.value);
+          renderPub();
+        });
+        renderPub();
+
+        /* =====================================================================
+   4. CONNECT: client configs from docs/connect-harness.md
+   ===================================================================== */
+        const CLIENTS = [
+          [
+            'Claude Code',
+            'Run this once:',
+            'claude mcp add --transport http --scope user interlock http://127.0.0.1:4310/mcp',
+          ],
+          [
+            'Codex',
+            'Add this to <code>~/.codex/config.toml</code>:',
+            '[mcp_servers.interlock]\nurl = "http://127.0.0.1:4310/mcp"',
+          ],
+          [
+            'OpenCode',
+            'Merge this into <code>opencode.json</code>:',
+            '{\n  "$schema": "https://opencode.ai/config.json",\n  "mcp": {\n    "interlock": {\n      "type": "remote",\n      "url": "http://127.0.0.1:4310/mcp",\n      "enabled": true,\n      "oauth": false\n    }\n  }\n}',
+          ],
+          [
+            'Other clients',
+            'Choose <b>Streamable HTTP</b>. No command, arguments or authentication:',
+            'http://127.0.0.1:4310/mcp',
+          ],
+          [
+            'Claude Desktop',
+            'Uses the stdio fallback. Merge into its MCP configuration:',
+            '{\n  "mcpServers": {\n    "interlock": { "command": "interlock", "args": ["mcp"] }\n  }\n}',
+          ],
+        ];
+        const tabs = $('#tabs'),
+          panel = $('#tabpanel');
+        function showTab(k) {
+          tabs.querySelectorAll('button').forEach((b, i) => {
+            b.setAttribute('aria-selected', String(i === k));
+            b.tabIndex = i === k ? 0 : -1;
+          });
+          const [name, lead, code] = CLIENTS[k];
+          panel.setAttribute('aria-labelledby', 'tab-' + k);
+          panel.innerHTML = `<p>${lead}</p><div class="codeblock"><pre>${esc(code)}</pre><button class="btn copy-cmd" type="button" data-copy="${esc(code)}"><span class="ic">Copy</span><span class="ok">Copied</span></button></div><p style="margin:10px 0 0">Restart or reconnect ${esc(name === 'Other clients' ? 'your client' : name)} afterwards, and enable Interlock's tools in its approval settings.</p>`;
+          bindCopy(panel);
+        }
+        CLIENTS.forEach(([name], i) => {
+          const b = el(
+            'button',
+            {
+              type: 'button',
+              role: 'tab',
+              id: 'tab-' + i,
+              'aria-controls': 'tabpanel',
+            },
+            esc(name),
+          );
+          b.addEventListener('click', () => showTab(i));
+          b.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+              const n =
+                (i + (e.key === 'ArrowRight' ? 1 : CLIENTS.length - 1)) %
+                CLIENTS.length;
+              showTab(n);
+              tabs.children[n].focus();
+            }
+          });
+          tabs.appendChild(b);
+        });
+
+        /* copy buttons */
+        function bindCopy(root = document) {
+          root.querySelectorAll('[data-copy]').forEach((b) => {
+            if (b.dataset.bound) return;
+            b.dataset.bound = '1';
+            b.addEventListener('click', async () => {
+              try {
+                await navigator.clipboard.writeText(b.dataset.copy);
+                b.classList.add('done');
+                setTimeout(() => b.classList.remove('done'), 1600);
+              } catch {}
+            });
+          });
+        }
+        showTab(0);
+        bindCopy();
+
+        /* =====================================================================
+   5. GALLERY + LIGHTBOX
+   ===================================================================== */
+        const lb = $('#lb'),
+          gal = $('#gallery');
+        document.querySelectorAll('[data-lb]').forEach((b) => {
+          const img = b.querySelector('img');
+          b.setAttribute('aria-label', 'Expand screenshot: ' + img.alt);
+          b.addEventListener('click', () => {
+            lb.querySelector('img')?.remove();
+            const big = el('img', { src: img.src, alt: img.alt });
+            lb.appendChild(big);
+            lb.showModal();
+          });
+        });
+        lb.addEventListener('click', (e) => {
+          if (e.target === lb || e.target.tagName === 'IMG') lb.close();
+        });
+        $('#lbX').addEventListener('click', () => lb.close());
+        document.querySelectorAll('[data-gal]').forEach((b) =>
+          b.addEventListener('click', () =>
+            gal.scrollBy({
+              left: +b.dataset.gal * Math.min(innerWidth * 0.78, 778),
+              behavior: reduced ? 'auto' : 'smooth',
+            }),
+          ),
+        );
+      })();
+    </script>
+  </body>
+</html>
