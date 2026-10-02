@@ -1,0 +1,5677 @@
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Interlock · Agent work you can run twice</title>
+    <meta
+      name="description"
+      content="Interlock is a local workflow editor and engine for AI agents. Draw the procedure once; Interlock runs the HTTP, JavaScript and Bash steps itself, hands each judgment call to the agent you already use over MCP, and checks every result against a contract. Try a run in your browser."
+    />
+    <meta
+      property="og:title"
+      content="Interlock · Agent work you can run twice"
+    />
+    <meta
+      property="og:description"
+      content="Draw the procedure as a graph. Interlock runs the deterministic steps, hands the judgment calls to your agent over MCP, checks every result against a contract, and keeps the whole run in local SQLite. Try it on the page: you play the agent."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="shots/hero-batch-waiting.webp" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231e1e24'/%3E%3Cg fill='none' stroke='%2382b4ff' stroke-width='2'%3E%3Crect x='6' y='6' width='13' height='13' rx='2'/%3E%3Crect stroke='%23f0a1d3' x='13' y='13' width='13' height='13' rx='2'/%3E%3C/g%3E%3C/svg%3E"
+    />
+    <script>
+      document.documentElement.classList.replace('no-js', 'js');
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://pokeapi.co" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;510;550;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* page world (v1) */
+      :root {
+        --void: #08090c;
+        --raise: #0f1116;
+        --raise2: #14171d;
+        --line: rgba(255, 255, 255, 0.07);
+        --line2: rgba(255, 255, 255, 0.12);
+        --ink: #eef1f6;
+        --dim: #8b93a3;
+        --dimmer: #5a6070;
+        --blue: #82b4ff;
+        --blue-deep: #2f5f9e;
+        --pink: #f0a1d3;
+        --pink-deep: #a8457f;
+        --amber: #e0a04b;
+        --green: #6fcf8a;
+        --red: #ff7b72;
+        --teal: #5fd4c4;
+        --violet: #b69cff;
+        --glow: rgba(130, 180, 255, 0.3);
+        --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+        --sans: 'Inter', system-ui, -apple-system, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 6rem;
+        scrollbar-color: #2a2f3a var(--void);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+      body {
+        margin: 0;
+        background: var(--void);
+        color: var(--ink);
+        font: 400 16.5px/1.6 var(--sans);
+        -webkit-font-smoothing: antialiased;
+        overflow-x: clip;
+      }
+      a {
+        color: inherit;
+        text-underline-offset: 3px;
+        text-decoration-thickness: 1px;
+      }
+      img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+      code,
+      .mono {
+        font-family: var(--mono);
+      }
+      p code {
+        font-size: 0.85em;
+        color: var(--ink);
+      }
+      .wrap {
+        max-width: 1204px;
+        margin: 0 auto;
+        padding: 0 32px;
+      }
+      :focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 3px;
+        border-radius: 6px;
+      }
+      .skip {
+        position: fixed;
+        left: 16px;
+        top: -60px;
+        z-index: 70;
+        padding: 10px 16px;
+        border-radius: 99px;
+        background: var(--blue);
+        color: #06101f;
+        font: 600 14px var(--sans);
+        text-decoration: none;
+      }
+      .skip:focus {
+        top: 16px;
+      }
+      ::selection {
+        background: rgba(130, 180, 255, 0.3);
+      }
+      .progress {
+        position: fixed;
+        inset: 0 0 auto 0;
+        height: 2px;
+        z-index: 60;
+        background: var(--blue);
+        transform-origin: 0 50%;
+        transform: scaleX(0);
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        @supports (animation-timeline: scroll()) {
+          .progress {
+            animation: grow linear both;
+            animation-timeline: scroll(root block);
+          }
+        }
+      }
+      @keyframes grow {
+        from {
+          transform: scaleX(0);
+        }
+        to {
+          transform: scaleX(1);
+        }
+      }
+      .nav {
+        position: fixed;
+        top: 14px;
+        left: 50%;
+        translate: -50% 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 7px 10px;
+        border-radius: 99px;
+        border: 1px solid var(--line2);
+        background: rgba(12, 13, 17, 0.72);
+        -webkit-backdrop-filter: blur(18px) saturate(1.3);
+        backdrop-filter: blur(18px) saturate(1.3);
+      }
+      .nav .mark {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px 6px 4px;
+        font: 600 12.5px var(--sans);
+        letter-spacing: 0.01em;
+        text-decoration: none;
+      }
+      .nav .mark svg {
+        display: block;
+      }
+      .nav a {
+        white-space: nowrap;
+        font: 510 12.5px var(--sans);
+        color: var(--dim);
+        text-decoration: none;
+        padding: 6px 10px;
+        border-radius: 99px;
+        transition:
+          color 0.2s,
+          background 0.2s;
+      }
+      .nav a:hover {
+        color: var(--ink);
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .nav a.on {
+        color: var(--ink);
+        background: rgba(255, 255, 255, 0.09);
+      }
+      .nav a.mark {
+        color: var(--ink);
+        background: none;
+      }
+      .nav a.cta {
+        color: #06101f;
+        background: var(--blue);
+        font-weight: 600;
+      }
+      .nav a.cta:hover {
+        background: #9cc4ff;
+        color: #06101f;
+      }
+      .nav a.cta.on {
+        box-shadow: 0 0 0 3px rgba(130, 180, 255, 0.28);
+      }
+      @media (max-width: 760px) {
+        .nav a:not(.cta):not(.mark) {
+          display: none;
+        }
+      }
+      .rail {
+        position: fixed;
+        right: 10px;
+        top: 50%;
+        translate: 0 -50%;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+      }
+      .rail a {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        position: relative;
+      }
+      .rail a::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.18);
+        transition:
+          background 0.25s,
+          transform 0.25s;
+      }
+      .rail a:hover::before {
+        background: rgba(255, 255, 255, 0.5);
+      }
+      .rail a.on::before {
+        background: var(--blue);
+        transform: scale(1.25);
+      }
+      .rail a span {
+        position: absolute;
+        right: 28px;
+        top: 50%;
+        translate: 0 -50%;
+        white-space: nowrap;
+        font: 500 12.5px var(--sans);
+        color: var(--dim);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+      }
+      .rail a:hover span {
+        opacity: 1;
+      }
+      @media (max-width: 1100px) {
+        .rail {
+          display: none;
+        }
+      }
+      .hero {
+        position: relative;
+        min-height: 100svh;
+        display: grid;
+        place-items: center;
+        overflow: clip;
+        padding: 120px 0 0;
+      }
+      #field {
+        -webkit-mask-image: radial-gradient(
+          ellipse 46% 16% at 50% 13%,
+          transparent 35%,
+          #000 80%
+        );
+        mask-image: radial-gradient(
+          ellipse 46% 16% at 50% 13%,
+          transparent 35%,
+          #000 80%
+        );
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+      }
+      .streak {
+        position: absolute;
+        z-index: 1;
+        filter: blur(70px);
+        opacity: 0.5;
+        pointer-events: none;
+      }
+      .streak.a {
+        width: 70vw;
+        height: 26vh;
+        left: -12vw;
+        top: 8vh;
+        background: linear-gradient(
+          120deg,
+          rgba(130, 180, 255, 0.42),
+          transparent 70%
+        );
+        transform: rotate(-24deg);
+      }
+      .streak.b {
+        width: 60vw;
+        height: 22vh;
+        right: -18vw;
+        top: 44vh;
+        background: linear-gradient(
+          120deg,
+          rgba(240, 161, 211, 0.36),
+          transparent 70%
+        );
+        transform: rotate(-28deg);
+      }
+      .streak.c {
+        width: 40vw;
+        height: 16vh;
+        left: 24vw;
+        bottom: -6vh;
+        background: linear-gradient(
+          120deg,
+          rgba(47, 95, 158, 0.5),
+          transparent 70%
+        );
+        transform: rotate(-20deg);
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .streak {
+          animation: drift2 26s ease-in-out infinite alternate;
+        }
+        .streak.b {
+          animation-duration: 34s;
+          animation-delay: -8s;
+        }
+        .streak.c {
+          animation-duration: 22s;
+          animation-delay: -14s;
+        }
+      }
+      @keyframes drift2 {
+        to {
+          transform: rotate(-24deg) translate(6vw, -3vh);
+          opacity: 0.7;
+        }
+      }
+      .grain {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        opacity: 0.45;
+        mix-blend-mode: overlay;
+        pointer-events: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+      }
+      .hero-inner {
+        position: relative;
+        z-index: 3;
+        text-align: center;
+        max-width: 940px;
+        margin: 0 auto;
+        padding: 0 32px;
+      }
+      h1 {
+        font: 600 clamp(38px, 5.2vw, 68px) / 1.04 var(--sans);
+        letter-spacing: -0.025em;
+        margin: 26px 0 20px;
+        color: var(--ink);
+      }
+      h1 .gray,
+      h2 .gray {
+        color: #646b78;
+      }
+      h1 .accent {
+        color: var(--blue);
+      }
+      .hero .deck {
+        max-width: 58ch;
+        margin: 0 auto;
+        color: var(--dim);
+        font-size: 18px;
+      }
+      .hero .deck b {
+        color: var(--ink);
+        font-weight: 510;
+      }
+      .ctas {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 28px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        padding: 11px 18px;
+        border-radius: 99px;
+        font: 600 14px var(--sans);
+        text-decoration: none;
+        border: 1px solid var(--line2);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--ink);
+        transition:
+          background 0.2s,
+          border-color 0.2s;
+      }
+      .btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+      .btn.primary {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: #06101f;
+      }
+      .btn.primary:hover {
+        background: #9cc4ff;
+      }
+      .btn code {
+        font: 400 12.5px var(--mono);
+      }
+      .btn:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 3px;
+      }
+      .hero .stampline {
+        margin-top: 22px;
+        font: 400 13px var(--sans);
+        color: var(--dim);
+      }
+      .heroshot {
+        position: relative;
+        z-index: 3;
+        width: min(1204px, 92vw);
+        margin: 64px auto -1px;
+      }
+      .heroshot .horizon {
+        position: absolute;
+        left: 8%;
+        right: 8%;
+        top: -70px;
+        height: 140px;
+        background: radial-gradient(
+          55% 60% at 50% 100%,
+          rgba(130, 180, 255, 0.16),
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+      .frame {
+        position: relative;
+        border-radius: 18px;
+        border: 1px solid var(--line2);
+        background: rgba(255, 255, 255, 0.04);
+        padding: 10px;
+      }
+      .frame .inner {
+        position: relative;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #0c0e13;
+      }
+      .frame .bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .frame .bar i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.14);
+      }
+      .frame .bar i:first-child {
+        background: rgba(255, 95, 86, 0.7);
+      }
+      .frame .bar i:nth-child(2) {
+        background: rgba(255, 189, 68, 0.6);
+      }
+      .frame .bar i:nth-child(3) {
+        background: rgba(0, 202, 78, 0.55);
+      }
+      .frame .bar span {
+        margin-left: 8px;
+        font: 400 11px var(--mono);
+        color: var(--dim);
+      }
+      .fog::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 26%;
+        background: linear-gradient(transparent, var(--void));
+        pointer-events: none;
+      }
+      .heroshot .glowb {
+        position: absolute;
+        inset: -12% -8%;
+        z-index: -1;
+        background: radial-gradient(closest-side, var(--glow), transparent 72%);
+        filter: blur(70px);
+        opacity: 0.6;
+        pointer-events: none;
+      }
+      .anno {
+        position: absolute;
+        z-index: 5;
+        max-width: 250px;
+        padding: 11px 13px;
+        border-radius: 10px;
+        background: #eef1f6;
+        font: 400 12.5px/1.45 var(--sans);
+        color: #4b5262;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+        transition:
+          transform 0.25s,
+          opacity 0.3s;
+      }
+      .anno b {
+        color: #0d1220;
+        font-weight: 600;
+      }
+      .anno:hover {
+        transform: translateY(-2px);
+      }
+      .anno.off {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .anno .k {
+        display: block;
+        font: 600 12.5px var(--sans);
+        color: var(--blue-deep);
+        margin-bottom: 3px;
+      }
+      .anno .k.p {
+        color: var(--pink-deep);
+      }
+      @media (max-width: 900px) {
+        .anno {
+          display: none;
+        }
+      }
+      .zoomable {
+        cursor: zoom-in;
+      }
+      button.zoom {
+        display: block;
+        position: relative;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+        cursor: zoom-in;
+        font: inherit;
+        color: inherit;
+        text-align: inherit;
+      }
+      button.zoom::after {
+        content: 'Expand';
+        position: absolute;
+        right: 12px;
+        bottom: 10px;
+        z-index: 3;
+        font: 600 12.5px var(--sans);
+        color: var(--ink);
+        background: rgba(12, 13, 17, 0.82);
+        border: 1px solid var(--line2);
+        border-radius: 99px;
+        padding: 5px 11px;
+        opacity: 0.9;
+        transition: opacity 0.2s;
+      }
+      button.zoom:hover::after,
+      button.zoom:focus-visible::after {
+        opacity: 1;
+      }
+      button.zoom:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 3px;
+        border-radius: 8px;
+      }
+      dialog.lightbox {
+        border: none;
+        padding: 0;
+        background: transparent;
+        max-width: min(1400px, 94vw);
+        width: fit-content;
+        outline: none;
+      }
+      dialog.lightbox::backdrop {
+        background: rgba(3, 4, 6, 0.88);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+      }
+      dialog.lightbox img {
+        border-radius: 12px;
+        border: 1px solid var(--line2);
+        max-height: 92vh;
+        width: auto;
+        max-width: 94vw;
+        cursor: zoom-out;
+      }
+      dialog.lightbox .lbclose {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 2;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 1px solid var(--line2);
+        background: rgba(12, 13, 17, 0.85);
+        color: var(--ink);
+        font: 400 18px/1 var(--sans);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+      }
+      dialog.lightbox .lbclose:hover {
+        background: rgba(35, 38, 46, 0.95);
+      }
+      dialog.lightbox .lbclose:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 2px;
+      }
+      section.ch {
+        position: relative;
+        border-top: 1px solid var(--line);
+        padding: 110px 0 90px;
+      }
+      .chead {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 48px;
+        align-items: end;
+        margin-bottom: 56px;
+      }
+      @media (max-width: 860px) {
+        .chead {
+          grid-template-columns: 1fr;
+        }
+      }
+      .chno {
+        font: 600 12.5px var(--mono);
+        color: var(--blue);
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .chno::after {
+        content: '';
+        height: 1px;
+        width: 56px;
+        background: linear-gradient(90deg, var(--blue), transparent);
+      }
+      h2 {
+        font: 600 clamp(30px, 4vw, 52px) / 1.06 var(--sans);
+        letter-spacing: -0.022em;
+        margin: 0;
+      }
+      .chead p {
+        color: var(--dim);
+        margin: 0;
+        font-size: 16.5px;
+      }
+      .chead p b {
+        color: var(--ink);
+        font-weight: 510;
+      }
+      .label {
+        font: 500 12.5px/1.55 var(--sans);
+        color: var(--dim);
+      }
+      .js [data-io] {
+        translate: 0 14px;
+        transition: translate 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        transition-delay: calc(var(--i, 0) * 90ms);
+      }
+      .js [data-io].in {
+        translate: 0 0;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .js [data-io] {
+          transition: none;
+          opacity: 1;
+          translate: none;
+        }
+      }
+      .shotcard {
+        position: relative;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: var(--raise);
+        overflow: hidden;
+        transition:
+          filter 0.18s ease,
+          border-color 0.18s ease;
+      }
+      .shotcard:hover {
+        filter: brightness(1.08);
+        border-color: var(--line2);
+      }
+      .shotcard .pad {
+        padding: 22px 24px 0;
+      }
+      .shotcard h3 {
+        font: 600 18px var(--sans);
+        margin: 0 0 6px;
+        letter-spacing: -0.01em;
+      }
+      .shotcard p {
+        font: 400 14px/1.55 var(--sans);
+        color: var(--dim);
+        margin: 0 0 16px;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 22px;
+      }
+      .grid3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 22px;
+      }
+      @media (max-width: 900px) {
+        .grid2,
+        .grid3 {
+          grid-template-columns: 1fr;
+        }
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(var(--n, 4), 1fr);
+        border-block: 1px solid var(--line);
+      }
+      .stats .cell {
+        padding: 26px 20px;
+        border-left: 1px solid var(--line);
+      }
+      .stats .cell:first-child {
+        border-left: 0;
+      }
+      .stats .num {
+        font: 600 clamp(30px, 3.6vw, 52px) / 1 var(--sans);
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+      }
+      .stats .lbl {
+        margin-top: 8px;
+        font: 500 12.5px var(--sans);
+        color: var(--dim);
+      }
+      @media (max-width: 860px) {
+        .stats {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .stats .cell:nth-child(odd) {
+          border-left: 0;
+        }
+      }
+      .kinds {
+        position: relative;
+        min-height: 250px;
+        margin: 30px 0 8px;
+      }
+      .kchip {
+        position: absolute;
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 15px;
+        border: 1px solid var(--line2);
+        border-radius: 10px;
+        background: var(--raise);
+        font: 510 12.5px var(--sans);
+        color: var(--ink);
+        white-space: nowrap;
+        transition:
+          transform 1s cubic-bezier(0.16, 1, 0.3, 1),
+          opacity 0.8s;
+      }
+      .kchip .n {
+        font: 500 12.5px var(--sans);
+        color: var(--dim);
+      }
+      .kchip i {
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
+        background: var(--blue);
+      }
+      .kchip.agent {
+        border-color: rgba(240, 161, 211, 0.4);
+      }
+      .kchip.agent i {
+        background: var(--pink);
+      }
+      .kchip.flow i {
+        background: var(--amber);
+      }
+      .kchip.edge i {
+        background: var(--dimmer);
+      }
+      .js .kinds:not(.in) .kchip {
+        transform: translate(var(--sx), var(--sy)) rotate(var(--sr));
+        opacity: 0.5;
+      }
+      .js .kinds.in .kchip {
+        transform: none;
+        opacity: 1;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .js .kinds:not(.in) .kchip {
+          transform: none;
+          opacity: 1;
+        }
+      }
+      .kinds .arrow {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        translate: -50% 0;
+        color: var(--dim);
+        font: 500 12.5px var(--sans);
+        transition: opacity 0.3s;
+        white-space: nowrap;
+      }
+      .no-js .kinds {
+        display: none;
+      }
+      @media (max-width: 760px) {
+        .kinds {
+          min-height: 0;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          padding-bottom: 44px;
+        }
+        .kchip {
+          position: relative;
+          left: auto !important;
+          top: auto !important;
+        }
+      }
+      .legend {
+        display: flex;
+        gap: 22px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font: 500 12.5px var(--sans);
+        color: var(--dim);
+      }
+      .legend i {
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
+      }
+      .pipe {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 0;
+        margin: 44px 0 10px;
+        position: relative;
+      }
+      .pipe::before {
+        content: '';
+        position: absolute;
+        top: 23px;
+        left: 4%;
+        right: 4%;
+        height: 1px;
+        background: var(--line2);
+      }
+      .pipe .step {
+        position: relative;
+        padding: 0 14px;
+        text-align: center;
+        min-width: 0;
+      }
+      .pipe .node {
+        position: relative;
+        z-index: 1;
+        width: 46px;
+        height: 46px;
+        margin: 0 auto 14px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--line2);
+        background: var(--raise);
+        font: 600 12.5px var(--mono);
+        color: var(--dim);
+        transition:
+          border-color 0.4s,
+          box-shadow 0.4s,
+          color 0.4s;
+        transition-delay: calc(var(--i) * 120ms);
+      }
+      .pipe .t {
+        font: 600 12.5px var(--sans);
+        letter-spacing: 0.01em;
+        margin-bottom: 4px;
+      }
+      .pipe .d {
+        font: 400 12.5px/1.45 var(--sans);
+        color: var(--dim);
+        overflow-wrap: anywhere;
+      }
+      .pipe .tag {
+        display: inline-block;
+        margin-top: 7px;
+        font: 600 11px var(--sans);
+        padding: 3px 7px;
+        border-radius: 99px;
+        border: 1px solid var(--line);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .pipe .tag.det {
+        color: var(--blue);
+        border-color: rgba(130, 180, 255, 0.3);
+      }
+      .pipe .tag.agt {
+        color: var(--pink);
+        border-color: rgba(240, 161, 211, 0.35);
+      }
+      .pipe .tag.flow {
+        color: var(--amber);
+        border-color: rgba(224, 160, 75, 0.35);
+      }
+      .js .pipe.in .step .node {
+        border-color: rgba(130, 180, 255, 0.55);
+        color: var(--ink);
+      }
+      .js .pipe.in .step.agt .node {
+        border-color: rgba(240, 161, 211, 0.6);
+      }
+      @media (max-width: 900px) {
+        .pipe {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          row-gap: 28px;
+        }
+        .pipe::before {
+          display: none;
+        }
+      }
+      @media (max-width: 560px) {
+        .pipe {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      .replay {
+        border: 1px solid var(--line2);
+        border-radius: 16px;
+        background: #0b0c10;
+        overflow: hidden;
+      }
+      .replay .bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 16px;
+        border-bottom: 1px solid var(--line);
+        font: 600 12.5px var(--sans);
+        color: var(--dim);
+      }
+      .replay .bar i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--green);
+      }
+      .replay .bar em {
+        font-style: normal;
+        color: var(--green);
+      }
+      .rbody {
+        padding: 18px 20px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 13px;
+      }
+      .rmsg {
+        max-width: 90%;
+      }
+      .rmsg .who {
+        display: block;
+        font: 600 12.5px var(--sans);
+        color: var(--dim);
+        margin-bottom: 6px;
+      }
+      .rmsg p {
+        margin: 0;
+        padding: 12px 14px;
+        font: 400 12.5px/1.6 var(--sans);
+        color: var(--ink);
+      }
+      .rmsg.you {
+        align-self: flex-end;
+        text-align: right;
+      }
+      .rmsg.you p {
+        text-align: left;
+        background: rgba(130, 180, 255, 0.08);
+        border: 1px solid rgba(130, 180, 255, 0.28);
+        border-radius: 12px 12px 4px 12px;
+      }
+      .rmsg.agent {
+        align-self: flex-start;
+      }
+      .rmsg.agent .who {
+        color: var(--pink);
+      }
+      .rmsg.agent p {
+        background: rgba(240, 161, 211, 0.07);
+        border: 1px solid rgba(240, 161, 211, 0.24);
+        border-radius: 12px 12px 12px 4px;
+      }
+      .rtool {
+        display: flex;
+        gap: 12px;
+        align-items: baseline;
+        flex-wrap: wrap;
+        font: 400 12.5px/1.5 var(--mono);
+        padding-left: 4px;
+      }
+      .rtool code {
+        color: var(--blue);
+      }
+      .rtool span {
+        color: var(--dim);
+      }
+      .rtool.no span {
+        color: var(--amber);
+      }
+      .rtool.ok span {
+        color: var(--green);
+      }
+      .js .rstep {
+        opacity: 0;
+        translate: 0 10px;
+        transition:
+          opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+          translate 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .js .rstep.on {
+        opacity: 1;
+        translate: 0 0;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .js .rstep {
+          opacity: 1;
+          translate: none;
+          transition: none;
+        }
+      }
+      .break {
+        border-radius: 20px;
+        background: linear-gradient(135deg, #82b4ff, #b9b8f0 55%, #f0a1d3);
+        color: #06101f;
+        padding: 56px;
+        min-height: 340px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        position: relative;
+        overflow: hidden;
+      }
+      .break .wm {
+        position: absolute;
+        right: -30px;
+        bottom: -60px;
+        width: 360px;
+        height: 360px;
+        opacity: 0.16;
+        pointer-events: none;
+      }
+      .break h3 {
+        font: 600 clamp(28px, 3.4vw, 44px) / 1.08 var(--sans);
+        letter-spacing: -0.02em;
+        margin: 0;
+        max-width: 20ch;
+        color: #06101f;
+      }
+      .break .foot {
+        display: flex;
+        gap: 28px;
+        flex-wrap: wrap;
+        font: 600 12.5px var(--sans);
+        color: rgba(6, 16, 31, 0.82);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .term {
+        border: 1px solid var(--line2);
+        border-radius: 14px;
+        background: #0a0b0e;
+        overflow: hidden;
+      }
+      .term .bar {
+        display: flex;
+        gap: 6px;
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .term .bar i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.12);
+      }
+      .term pre {
+        margin: 0;
+        padding: 18px 20px;
+        font: 400 12.5px/1.8 var(--mono);
+        color: #cbd2de;
+        overflow-x: auto;
+      }
+      @media (max-width: 600px) {
+        .term pre {
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+      }
+      .term .c {
+        color: #7f8899;
+      }
+      .term .g {
+        color: var(--green);
+      }
+      .term .b {
+        color: var(--blue);
+      }
+      .term .p {
+        color: var(--pink);
+      }
+      .term .a {
+        color: var(--amber);
+      }
+      .facts {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        border-top: 1px solid var(--line);
+      }
+      .facts li {
+        display: grid;
+        grid-template-columns: 150px 1fr;
+        gap: 16px;
+        padding: 13px 0;
+        border-bottom: 1px solid var(--line);
+        font: 400 14px/1.55 var(--sans);
+        color: var(--dim);
+      }
+      .facts li b {
+        font: 600 14px var(--sans);
+        color: var(--ink);
+      }
+      @media (max-width: 600px) {
+        .facts li {
+          grid-template-columns: 1fr;
+          gap: 4px;
+        }
+      }
+      .index {
+        border-top: 1px solid var(--line);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        margin-top: 64px;
+      }
+      .index a {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: baseline;
+        padding: 16px 8px;
+        border-bottom: 1px solid var(--line);
+        text-decoration: none;
+        color: var(--dim);
+        font: 510 14px var(--sans);
+        transition: color 0.2s;
+      }
+      .index a:nth-child(odd) {
+        border-right: 1px solid var(--line);
+      }
+      .index a:hover {
+        color: var(--ink);
+      }
+      .index a .mono {
+        font-size: 11px;
+        color: var(--dim);
+      }
+      @media (max-width: 700px) {
+        .index {
+          grid-template-columns: 1fr;
+        }
+        .index a:nth-child(odd) {
+          border-right: 0;
+        }
+      }
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 56px 0 80px;
+        font: 400 14px/1.7 var(--sans);
+        color: var(--dim);
+      }
+      footer b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      footer .row {
+        margin-bottom: 18px;
+        max-width: 86ch;
+      }
+      footer ul {
+        list-style: none;
+        margin: 6px 0 0;
+        padding: 0;
+      }
+      footer li {
+        padding-left: 14px;
+        position: relative;
+      }
+      footer li::before {
+        content: '·';
+        position: absolute;
+        left: 2px;
+        color: var(--dimmer);
+      }
+      footer a {
+        color: var(--dim);
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        @supports (animation-timeline: view()) {
+          .vrise {
+            animation: vr linear both;
+            animation-timeline: view();
+            animation-range: entry 0% entry 85%;
+          }
+        }
+      }
+      @keyframes vr {
+        from {
+          transform: translateY(32px) scale(0.985);
+        }
+      }
+
+      /* replicas (v2), scoped to .rx */
+      .rx {
+        --bg: #17171b;
+        --canvas: #141418;
+        --surface: #1e1e24;
+        --raised: #27272f;
+        --hover: #303039;
+        --border: #33333d;
+        --border-strong: #484853;
+        --text: #ececf2;
+        --text2: #c4c4cf;
+        --muted: #a0a0b0;
+        --dim: #7c7c8e;
+        --accent: #82b4ff;
+        --accent-hover: #a8cbff;
+        --accent-text: #b5d2ff;
+        --accent-soft: #232e42;
+        --accent-border: #425e85;
+        --pink: #f0a1d3;
+        --pink-soft: #352638;
+        --pink-border: #78536e;
+        --teal: #96f2d7;
+        --teal-4: #38d9a9;
+        --edge: #7189ae;
+        --dot: #35353f;
+        --waiting: #e3c47f;
+        --failed: #e89481;
+        --true: #69db7c;
+        --false: #ff8787;
+        --sans:
+          Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+        color: var(--text);
+        font-family: var(--sans);
+      }
+      .rx button,
+      .rx input,
+      .rx textarea,
+      .rx select {
+        font: inherit;
+        color: inherit;
+      }
+      .rx .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 36px;
+        padding: 7px 14px;
+        border-radius: 7px;
+        border: 1px solid var(--border-strong);
+        background: var(--raised);
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 550;
+        text-decoration: none;
+        cursor: pointer;
+        white-space: nowrap;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+      }
+      .rx .btn:hover {
+        background: var(--hover);
+      }
+      .rx .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #0b1626;
+      }
+      .rx .btn.primary:hover {
+        background: var(--accent-hover);
+        border-color: var(--accent-hover);
+      }
+      .rx .btn.soft {
+        background: var(--accent-soft);
+        border-color: var(--accent-border);
+        color: var(--accent-text);
+      }
+      .rx .btn.soft:hover {
+        background: #2a3850;
+      }
+      .rx .btn.ghost {
+        background: none;
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .rx .btn.ghost:hover {
+        color: var(--text);
+        background: var(--raised);
+      }
+      .rx .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .rx .btn svg {
+        flex-shrink: 0;
+      }
+      .rx .copy-cmd {
+        font: 500 14px var(--mono);
+      }
+      .rx .copy-cmd .ok {
+        display: none;
+        color: var(--true);
+      }
+      .rx .copy-cmd.done .ok {
+        display: inline;
+      }
+      .rx .copy-cmd.done .ic {
+        display: none;
+      }
+      .rx .app {
+        border: 1px solid var(--border-strong);
+        border-radius: 12px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+      .rx .app-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .rx .eyeline {
+        font: 600 11px var(--sans);
+        letter-spacing: 1px;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+      .rx .apptitle {
+        margin: 3px 0 0;
+        font-size: 16px;
+        font-weight: 550;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .rx .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font: 550 12px var(--sans);
+        padding: 3px 9px;
+        border-radius: 99px;
+        border: 1px solid var(--border-strong);
+        color: var(--muted);
+        background: var(--raised);
+      }
+      .rx .pill.running {
+        color: var(--accent-text);
+        border-color: var(--accent-border);
+        background: var(--accent-soft);
+      }
+      .rx .pill.waiting {
+        color: var(--waiting);
+        border-color: #6b5b33;
+        background: #2d2818;
+      }
+      .rx .pill.completed {
+        color: var(--accent-text);
+        border-color: var(--accent-border);
+        background: var(--accent-soft);
+      }
+      .rx .pill.failed {
+        color: var(--failed);
+        border-color: #6e3f36;
+        background: #2e1e1b;
+      }
+      .rx .pill.cancelled {
+        color: var(--dim);
+      }
+      .rx .replica-tag {
+        margin-left: auto;
+        font: 500 12px var(--sans);
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .rx .replica-tag i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--true);
+      }
+      .rx .runbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--border);
+        background: #1b1b20;
+      }
+      .rx .runbar label {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .rx .field {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        background: var(--canvas);
+        overflow: hidden;
+      }
+      .rx .field span {
+        font: 13px var(--mono);
+        color: var(--dim);
+        padding: 0 0 0 10px;
+        white-space: nowrap;
+      }
+      .rx .field input {
+        border: 0;
+        background: none;
+        outline: none;
+        padding: 8px 10px 8px 4px;
+        width: 132px;
+        font: 13px var(--mono);
+        color: var(--text);
+      }
+      .rx .field:focus-within {
+        border-color: var(--accent);
+      }
+      .rx .chips {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .rx .chip {
+        font: 500 13px var(--sans);
+        padding: 5px 10px;
+        border-radius: 99px;
+        border: 1px solid var(--border);
+        background: var(--raised);
+        color: var(--text2);
+        cursor: pointer;
+      }
+      .rx .chip:hover {
+        border-color: var(--border-strong);
+        color: var(--text);
+      }
+      .rx .chip small {
+        color: var(--dim);
+        font-size: 11px;
+        margin-left: 4px;
+      }
+      .rx .chip.on {
+        border-color: var(--accent-border);
+        background: var(--accent-soft);
+        color: var(--accent-text);
+      }
+      .rx .handoff {
+        display: none;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        background: #1a2130;
+      }
+      .rx .handoff.show {
+        display: flex;
+      }
+      .rx .handoff b {
+        display: block;
+        font-size: 14px;
+        font-weight: 550;
+        color: var(--accent-text);
+      }
+      .rx .handoff p {
+        margin: 2px 0 0;
+        font-size: 13px;
+        color: var(--text2);
+        max-width: 62ch;
+        line-height: 1.5;
+      }
+      .rx .handoff .acts {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+      }
+      .rx .canvas {
+        position: relative;
+        background: var(--canvas);
+        background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+        background-size: 18px 18px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        border-bottom: 1px solid var(--border);
+        scrollbar-width: thin;
+      }
+      .rx .graph {
+        position: relative;
+        margin: 0 auto;
+      }
+      .rx .graph svg.edges {
+        position: absolute;
+        inset: 0;
+        overflow: visible;
+        pointer-events: none;
+      }
+      .rx .edges path {
+        fill: none;
+        stroke: var(--edge);
+        stroke-width: 1.6;
+        opacity: 0.55;
+        transition:
+          opacity 0.3s,
+          stroke 0.3s;
+      }
+      .rx .edges path.lit {
+        opacity: 1;
+        stroke: var(--accent);
+      }
+      .rx .edges path.flow {
+        stroke-dasharray: 6 6;
+        animation: flow 0.6s linear infinite;
+      }
+      @keyframes flow {
+        to {
+          stroke-dashoffset: -12;
+        }
+      }
+      .rx .edges text {
+        font: 600 11px var(--sans);
+        fill: var(--muted);
+      }
+      .rx .edges text.t {
+        fill: var(--true);
+      }
+      .rx .edges text.f {
+        fill: var(--false);
+      }
+      .rx .node {
+        position: absolute;
+        width: 168px;
+        padding: 11px 14px 12px;
+        background: var(--raised);
+        border: 1px solid var(--border-strong);
+        border-radius: 9px;
+        box-shadow: 0 5px 15px #0003;
+        cursor: pointer;
+        text-align: left;
+        transition:
+          border-color 0.25s,
+          box-shadow 0.25s,
+          opacity 0.25s;
+      }
+      .rx .node:hover {
+        border-color: #5a5a66;
+      }
+      .rx .node.sel {
+        border-color: var(--accent);
+        box-shadow:
+          0 0 0 2px #82b4ff22,
+          0 5px 15px #0003;
+      }
+      .rx .node.st-running {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-soft);
+      }
+      .rx .node.st-waiting {
+        border-color: var(--waiting);
+      }
+      .rx .node.st-failed {
+        border-color: var(--failed);
+      }
+      .rx .node.st-pending {
+        opacity: 0.55;
+      }
+      .rx .node.st-skipped {
+        opacity: 0.4;
+      }
+      .rx .nh {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font: 600 11px var(--sans);
+        letter-spacing: 1px;
+        color: var(--muted);
+        margin-bottom: 8px;
+        text-transform: uppercase;
+      }
+      .rx .ni {
+        width: 26px;
+        height: 26px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--accent-border);
+        border-radius: 6px;
+        color: var(--accent-text);
+        background: var(--accent-soft);
+        flex-shrink: 0;
+      }
+      .rx .ni.agent {
+        color: var(--teal);
+        background: #1d302c;
+        border-color: #2f5f52;
+      }
+      .rx .ni.exit,
+      .rx .ni.workflow {
+        color: var(--pink);
+        background: var(--pink-soft);
+        border-color: var(--pink-border);
+      }
+      .rx .node strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 550;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .rx .node small {
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .rx .nstat {
+        position: absolute;
+        left: 0;
+        bottom: calc(100% + 6px);
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font: 500 11px var(--sans);
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .rx .st-running .nstat,
+      .rx .st-completed .nstat {
+        color: var(--accent-text);
+      }
+      .rx .st-waiting .nstat {
+        color: var(--waiting);
+      }
+      .rx .st-failed .nstat {
+        color: var(--failed);
+      }
+      .rx .spin {
+        animation: spin 1.2s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .rx .port {
+        position: absolute;
+        font: 500 11px var(--sans);
+        color: var(--muted);
+        background: var(--canvas);
+        padding: 1px 3px;
+        border-radius: 3px;
+        white-space: nowrap;
+      }
+      .rx .scroll-hint {
+        display: none;
+        position: absolute;
+        right: 10px;
+        bottom: 8px;
+        font-size: 11px;
+        color: var(--dim);
+      }
+      @media (max-width: 900px) {
+        .rx .scroll-hint {
+          display: block;
+        }
+      }
+      .rx .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+      }
+      @media (max-width: 900px) {
+        .rx .split {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .rx .timeline {
+        padding: 16px 18px 18px;
+        border-right: 1px solid var(--border);
+        min-height: 300px;
+      }
+      @media (max-width: 900px) {
+        .rx .timeline {
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+          min-height: 0;
+        }
+      }
+      .rx .sechead {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 0 0 10px;
+      }
+      .rx .sechead .t {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 550;
+      }
+      .rx .sechead span {
+        font: 12px var(--mono);
+        color: var(--dim);
+      }
+      .rx .steps {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .rx .steprow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        border-radius: 6px;
+        cursor: pointer;
+        text-align: left;
+      }
+      .rx .steprow:hover {
+        border-color: var(--border-strong);
+      }
+      .rx .steprow.sel {
+        border-color: var(--accent-border);
+        background: var(--accent-soft);
+      }
+      .rx .steprow .ix {
+        font: 11px var(--mono);
+        color: var(--muted);
+        border: 1px solid var(--border-strong);
+        border-radius: 5px;
+        padding: 4px 6px;
+      }
+      .rx .steprow div {
+        flex: 1;
+        min-width: 0;
+      }
+      .rx .steprow strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .rx .steprow small {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .rx .steprow .s {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .rx .steprow .s.completed {
+        color: var(--accent-text);
+      }
+      .rx .steprow .s.waiting {
+        color: var(--waiting);
+      }
+      .rx .steprow .s.failed {
+        color: var(--failed);
+      }
+      .rx .steprow .s.running {
+        color: var(--accent-text);
+      }
+      .rx .empty {
+        font-size: 14px;
+        color: var(--muted);
+        padding: 18px 2px;
+        line-height: 1.55;
+      }
+      .rx .empty b {
+        color: var(--text);
+        font-weight: 550;
+      }
+      .rx .details {
+        padding: 16px 18px 20px;
+        background: var(--surface);
+        min-width: 0;
+      }
+      .rx .dlabel {
+        font: 600 11px var(--sans);
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 16px 0 6px;
+      }
+      .rx .dlabel:first-child {
+        margin-top: 0;
+      }
+      .rx .dtitle {
+        font-size: 16px;
+        font-weight: 550;
+        margin: 2px 0 2px;
+      }
+      .rx .dstate {
+        font-size: 13px;
+      }
+      .rx .dstate.completed,
+      .rx .dstate.running {
+        color: var(--accent-text);
+      }
+      .rx .dstate.waiting {
+        color: var(--waiting);
+      }
+      .rx .dstate.failed {
+        color: var(--failed);
+      }
+      .rx .dstate.pending {
+        color: var(--muted);
+      }
+      .rx pre.json {
+        margin: 0;
+        max-height: 220px;
+        overflow: auto;
+        background: var(--canvas);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--text2);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .rx pre.json .k {
+        color: #a8cbff;
+      }
+      .rx pre.json .s {
+        color: #9fe0b0;
+      }
+      .rx pre.json .n {
+        color: #f0c987;
+      }
+      .rx pre.json .b {
+        color: var(--pink);
+      }
+      .rx .src {
+        font-size: 12px;
+        color: var(--dim);
+        margin-top: 6px;
+      }
+      .rx .src b {
+        color: var(--true);
+        font-weight: 500;
+      }
+      .rx .src b.c {
+        color: var(--waiting);
+      }
+      .rx .prompt {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--text2);
+        background: var(--canvas);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin: 0;
+      }
+      .rx .console {
+        margin-top: 14px;
+        border: 1px solid var(--accent-border);
+        border-radius: 8px;
+        background: #1a2130;
+        padding: 14px;
+      }
+      .rx .console .who {
+        font-size: 13px;
+        color: var(--accent-text);
+        margin: 0 0 8px;
+      }
+      .rx .console textarea {
+        width: 100%;
+        min-height: 128px;
+        resize: vertical;
+        border: 1px solid var(--border-strong);
+        border-radius: 6px;
+        background: var(--canvas);
+        padding: 10px 12px;
+        font: 13px/1.6 var(--mono);
+        color: var(--text);
+      }
+      .rx .console textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .rx .console .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .rx .verdict {
+        margin: 10px 0 0;
+        font: 13px/1.5 var(--mono);
+        padding: 9px 11px;
+        border-radius: 6px;
+      }
+      .rx .verdict.err {
+        color: var(--failed);
+        background: #2a1c1a;
+        border: 1px solid #5a362f;
+      }
+      .rx .verdict.ok {
+        color: var(--true);
+        background: #16261b;
+        border: 1px solid #2c5236;
+      }
+      .rx .hint {
+        font-size: 13px;
+        color: var(--muted);
+        margin: 8px 0 0;
+      }
+      .rx .note code {
+        font-size: 0.88em;
+        color: var(--text);
+      }
+      .rx .note {
+        font-size: 14px;
+        color: var(--muted);
+        line-height: 1.55;
+        margin: 12px 0 0;
+      }
+      .rx .batch-grid {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+        gap: 0;
+        margin-top: 40px;
+      }
+      @media (max-width: 960px) {
+        .rx .batch-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .rx .settings {
+        padding: 18px;
+        border-right: 1px solid var(--border);
+        background: var(--surface);
+      }
+      @media (max-width: 960px) {
+        .rx .settings {
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+      }
+      .rx .settings .t {
+        margin: 0 0 2px;
+        font-size: 14px;
+        font-weight: 550;
+      }
+      .rx .settings .desc {
+        font-size: 13px;
+        color: var(--muted);
+        margin: 0 0 16px;
+        line-height: 1.5;
+      }
+      .rx .fl {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        margin: 14px 0 6px;
+      }
+      .rx .fl small {
+        display: block;
+        font-weight: 400;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+      .rx .ro {
+        font: 13px var(--mono);
+        color: var(--text2);
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--canvas);
+      }
+      .rx input[type='range'] {
+        width: 100%;
+        accent-color: var(--accent);
+      }
+      .rx .rangeval {
+        font: 600 13px var(--mono);
+        color: var(--accent-text);
+      }
+      .rx .seg {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        overflow: hidden;
+      }
+      .rx .seg button {
+        border: 0;
+        background: var(--canvas);
+        padding: 8px;
+        font-size: 13px;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .rx .seg button[aria-pressed='true'] {
+        background: var(--accent-soft);
+        color: var(--accent-text);
+      }
+      .rx .cands {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .rx .cand {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font: 13px var(--mono);
+        padding: 4px 4px 4px 9px;
+        border-radius: 6px;
+        border: 1px solid var(--border-strong);
+        background: var(--raised);
+      }
+      .rx .cand button {
+        border: 0;
+        background: none;
+        color: var(--dim);
+        cursor: pointer;
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        display: grid;
+        place-items: center;
+      }
+      .rx .cand button:hover {
+        color: var(--text);
+        background: var(--hover);
+      }
+      .rx .addcand {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .rx .addcand input {
+        flex: 1;
+        min-width: 0;
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        background: var(--canvas);
+        padding: 7px 10px;
+        font: 13px var(--mono);
+      }
+      .rx .addcand input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .rx .board {
+        padding: 18px;
+        background: var(--canvas);
+        background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+        background-size: 18px 18px;
+        min-width: 0;
+      }
+      .rx .group {
+        border: 1px solid var(--accent-border);
+        border-radius: 12px;
+        background: var(--canvas);
+        box-shadow: inset 0 0 0 4px var(--accent-soft);
+      }
+      .rx .group-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+        border-radius: 12px 12px 0 0;
+        color: var(--accent-text);
+      }
+      .rx .group-head strong {
+        font-size: 14px;
+        font-weight: 550;
+        color: var(--text);
+        flex: 1;
+      }
+      .rx .group-head span {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .rx .lanes {
+        list-style: none;
+        margin: 0;
+        padding: 10px 12px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .rx .lane {
+        display: grid;
+        grid-template-columns: 32px minmax(90px, 1fr) minmax(0, 2.2fr) auto;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--surface);
+        transition: border-color 0.2s;
+      }
+      @media (max-width: 600px) {
+        .rx .lane {
+          grid-template-columns: 28px minmax(0, 1fr);
+          row-gap: 6px;
+        }
+        .rx .lane .lstate {
+          grid-column: 2;
+          justify-content: space-between;
+          white-space: normal;
+        }
+        .rx .lane .track {
+          grid-column: 1/-1;
+          order: 3;
+        }
+      }
+      .rx .lane .ix {
+        font: 11px var(--mono);
+        color: var(--muted);
+      }
+      .rx .lane .nm {
+        font: 13px var(--mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .rx .lane.st-running {
+        border-color: var(--accent-border);
+      }
+      .rx .lane.st-waiting {
+        border-color: #6b5b33;
+      }
+      .rx .lane.st-failed {
+        border-color: #6e3f36;
+      }
+      .rx .lane.st-cancelled {
+        opacity: 0.5;
+      }
+      .rx .track {
+        display: flex;
+        gap: 4px;
+      }
+      .rx .track i {
+        flex: 1;
+        height: 6px;
+        border-radius: 3px;
+        background: var(--border);
+      }
+      .rx .track i.done {
+        background: var(--accent);
+      }
+      .rx .track i.run {
+        background: var(--accent);
+        opacity: 0.5;
+      }
+      .rx .track i.wait {
+        background: var(--waiting);
+      }
+      .rx .track i.fail {
+        background: var(--failed);
+      }
+      .rx .track i.skip {
+        background: transparent;
+        border: 1px dashed var(--border);
+      }
+      .rx .lstate {
+        font-size: 12px;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .rx .lstate .s.running,
+      .rx .lstate .s.completed {
+        color: var(--accent-text);
+      }
+      .rx .lstate .s.waiting {
+        color: var(--waiting);
+      }
+      .rx .lstate .s.failed {
+        color: var(--failed);
+      }
+      .rx .lstate .s.queued,
+      .rx .lstate .s.cancelled {
+        color: var(--dim);
+      }
+      .rx .lstate .btn {
+        min-height: 28px;
+        padding: 3px 9px;
+        font-size: 12px;
+      }
+      .rx .group-foot {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 0 16px 12px;
+        font-size: 12px;
+        color: var(--accent-text);
+      }
+      .rx .after {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 28px;
+        margin-top: 18px;
+      }
+      @media (max-width: 760px) {
+        .rx .after {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .rx .panel {
+        border-top: 1px solid var(--border);
+        padding: 14px 2px 4px;
+        min-width: 0;
+      }
+      .rx .panel .t {
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 550;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .rx .roster {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .rx .roster th,
+      .rx .roster td {
+        text-align: left;
+        padding: 6px 6px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      .rx .roster th {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--muted);
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+      }
+      .rx .roster td:first-child {
+        font-family: var(--mono);
+        white-space: nowrap;
+      }
+      .rx .pub {
+        margin-top: 40px;
+      }
+      .rx .pub-body {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      }
+      @media (max-width: 960px) {
+        .rx .pub-body {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .rx .pub-edit {
+        padding: 18px;
+        border-right: 1px solid var(--border);
+      }
+      @media (max-width: 960px) {
+        .rx .pub-edit {
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+      }
+      .rx .pub-edit textarea {
+        width: 100%;
+        min-height: 200px;
+        resize: vertical;
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        background: var(--canvas);
+        padding: 11px 12px;
+        font: 14px/1.6 var(--sans);
+        color: var(--text);
+      }
+      .rx .pub-edit textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .rx .pub-review {
+        padding: 18px;
+        background: #1b1b20;
+        min-width: 0;
+      }
+      .rx .counts {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 10px 0 14px;
+      }
+      .rx .counts span {
+        font-size: 13px;
+        padding: 3px 9px;
+        border-radius: 99px;
+        border: 1px solid var(--border-strong);
+        color: var(--muted);
+      }
+      .rx .counts span.on {
+        color: var(--waiting);
+        border-color: #6b5b33;
+        background: #2d2818;
+      }
+      .rx .diff {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      @media (max-width: 600px) {
+        .rx .diff {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .rx .diff div {
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--text2);
+        background: var(--canvas);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 10px 12px;
+        min-height: 120px;
+      }
+      .rx .diff .lbl {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      .rx .diff del {
+        background: #3a2020;
+        color: #ffb3a8;
+        text-decoration: line-through;
+        text-decoration-color: #ff8787;
+        border-radius: 3px;
+        padding: 0 2px;
+      }
+      .rx .diff ins {
+        background: #1b3324;
+        color: #a8ecb9;
+        text-decoration: none;
+        border-radius: 3px;
+        padding: 0 2px;
+      }
+      .rx .nochange {
+        font-size: 13px;
+        color: var(--muted);
+        padding: 12px 0;
+      }
+      .rx .pub-foot {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        margin-top: 14px;
+      }
+      .rx .versions {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        padding: 16px 18px;
+        border-top: 1px solid var(--border);
+        overflow-x: auto;
+      }
+      .rx .ver {
+        min-width: 220px;
+        padding: 0 18px;
+        border-left: 1px solid var(--border);
+      }
+      .rx .ver:first-child {
+        padding-left: 0;
+        border-left: 0;
+      }
+      .rx .ver b {
+        font-size: 13px;
+        font-weight: 550;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .rx .ver small {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+      .rx .runchips {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      .rx .runchips span {
+        font: 12px var(--mono);
+        padding: 3px 7px;
+        border-radius: 5px;
+        border: 1px solid var(--border-strong);
+        color: var(--text2);
+      }
+      .rx .runchips span.w {
+        border-color: #6b5b33;
+        color: var(--waiting);
+      }
+      .rx .tabsbox {
+        border: 1px solid var(--border-strong);
+        border-radius: 10px;
+        background: #111114;
+        overflow: hidden;
+      }
+      .rx .tabs {
+        display: flex;
+        gap: 2px;
+        padding: 6px 6px 0;
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+        background: var(--surface);
+      }
+      .rx .tabs button {
+        border: 0;
+        background: none;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 500;
+        padding: 9px 12px;
+        border-radius: 6px 6px 0 0;
+        cursor: pointer;
+        white-space: nowrap;
+        border-bottom: 2px solid transparent;
+      }
+      .rx .tabs button[aria-selected='true'] {
+        color: var(--text);
+        border-bottom-color: var(--accent);
+      }
+      .rx .tabs button:hover {
+        color: var(--text);
+      }
+      .rx .tabpanel {
+        padding: 16px 18px;
+      }
+      .rx .tabpanel p {
+        margin: 0 0 10px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .rx .tabpanel p code {
+        color: var(--text);
+      }
+      .rx .codeblock {
+        position: relative;
+      }
+      .rx .codeblock pre {
+        margin: 0;
+        padding: 14px 16px;
+        padding-right: 96px;
+        background: #0d0d10;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        font-size: 13px;
+        line-height: 1.7;
+        color: #d7dbe6;
+        overflow-x: auto;
+        white-space: pre;
+      }
+      @media (max-width: 600px) {
+        .rx .codeblock pre {
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+          padding-right: 16px;
+          padding-top: 44px;
+        }
+      }
+      .rx .codeblock .btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        min-height: 30px;
+        padding: 4px 10px;
+        font-size: 13px;
+      }
+      .rx .c-dim {
+        color: #8a90a0;
+      }
+      .rx .install {
+        margin-bottom: 22px;
+      }
+      .rx .gallery {
+        margin-top: 36px;
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: min(78vw, 760px);
+        gap: 18px;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        padding: 4px 28px 18px;
+        scroll-padding: 0 28px;
+        scrollbar-width: thin;
+      }
+      @media (min-width: 1300px) {
+        .rx .gallery {
+          padding-left: calc((100vw - 1240px) / 2 + 28px);
+          scroll-padding-left: calc((100vw - 1240px) / 2 + 28px);
+        }
+      }
+      .rx .gallery figure {
+        margin: 0;
+        scroll-snap-align: start;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+      .rx .gallery button {
+        display: block;
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: var(--canvas);
+        cursor: zoom-in;
+        aspect-ratio: 16/10;
+        overflow: hidden;
+      }
+      .rx .gallery img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top left;
+      }
+      .rx .gallery figcaption {
+        padding: 12px 14px;
+        font-size: 14px;
+        color: var(--text2);
+        line-height: 1.5;
+      }
+      .rx .gallery figcaption b {
+        color: var(--text);
+        font-weight: 550;
+      }
+      .rx .gal-nav {
+        display: flex;
+        gap: 8px;
+        margin-top: 22px;
+      }
+
+      /* ---------- v3: joins between the page world and the replicas ---------- */
+      .heroshot .frame .inner {
+        background: var(--void);
+      }
+      .frame .rx .app {
+        border: 0;
+        border-radius: 0;
+      }
+      .rx .app {
+        text-align: left;
+      }
+      .cp {
+        font: 600 12px var(--sans);
+        opacity: 0.75;
+        margin-left: 4px;
+      }
+      .story {
+        list-style: none;
+        margin: 26px auto 0;
+        padding: 0;
+        width: min(1204px, 92vw);
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px;
+        text-align: left;
+        position: relative;
+        z-index: 3;
+      }
+      @media (max-width: 900px) {
+        .story {
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        }
+      }
+      @media (max-width: 520px) {
+        .story {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .story li {
+        border-left: 2px solid var(--line2);
+        padding: 4px 0 4px 16px;
+        opacity: 0.5;
+        transition:
+          opacity 0.4s,
+          border-color 0.4s;
+      }
+      .story li.on {
+        opacity: 1;
+        border-color: var(--blue);
+      }
+      .story .k {
+        display: block;
+        font: 600 12.5px var(--sans);
+        color: var(--blue);
+        margin-bottom: 4px;
+      }
+      .story b {
+        display: block;
+        font: 600 16.5px/1.3 var(--sans);
+        color: var(--ink);
+        margin-bottom: 4px;
+      }
+      .story p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--dim);
+      }
+      .replica-note {
+        width: min(1204px, 92vw);
+        margin: 16px auto 0;
+        position: relative;
+        z-index: 3;
+        font-size: 13px;
+        color: var(--dim);
+        text-align: left;
+      }
+      .hero {
+        padding-bottom: 40px;
+      }
+      .hero .heroshot {
+        margin-top: 52px;
+      }
+      .shot-wide {
+        margin-top: 46px;
+      }
+      .facts.row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0 28px;
+        border-top: 0;
+        margin-top: 28px;
+      }
+      .facts.row li {
+        border-top: 1px solid var(--line);
+        border-bottom: 0;
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+      @media (max-width: 900px) {
+        .facts.row {
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        }
+      }
+      @media (max-width: 520px) {
+        .facts.row {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .agent-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 22px;
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        .agent-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .rx .tabsbox {
+        border: 1px solid var(--border-strong);
+        border-radius: 14px;
+        overflow: hidden;
+        background: #111114;
+      }
+      .rx .ask {
+        margin-top: 14px;
+      }
+      #real .rx .gallery {
+        margin-top: 8px;
+      }
+      /* the Expand chip sits in its own strip under the screenshot, never over it */
+      button.zoom {
+        padding-bottom: 46px;
+      }
+      .rx .tabsbox .codeblock pre,
+      .rx .ask pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        padding: 44px 16px 14px;
+      }
+      @media (max-width: 600px) {
+        .rx .versions {
+          flex-direction: column;
+          gap: 14px;
+        }
+        .rx .ver {
+          min-width: 0;
+          padding: 14px 0 0;
+          border-left: 0;
+          border-top: 1px solid var(--border);
+        }
+        .rx .ver:first-child {
+          padding-top: 0;
+          border-top: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+THESIS: Interlock's v1 story page (animated graph field, numbered chapters, real proof) with the v2 replicas embedded where screenshots used to sit, so every selling point can be tried on the spot; it refuses both the flat screenshot tour and a bare demo with no pitch.
+OWN-WORLD: Page: near-black #08090c field, drifting blue and pink light, a canvas of workflow nodes with runs pulsing through, Inter and JetBrains Mono, blue #82b4ff and pink #f0a1d3 accents, light blue-to-pink closing band. Replicas: Interlock's own app UI (#17171b, #27272f nodes, Lucide icons) inside glowing frames.
+STORY: Visitor sees the promise, runs a workflow and plays the agent in the hero, then reads each capability (define, contracts, bring your agent, batch, publish) with a live replica or real evidence beside it, and leaves with the install command.
+FIRST VIEWPORT: Headline over the animated field, copyable install button, and the top of the run inspector replica in a glowing frame with its Run button visible.
+FORM: Merge of the user-approved v1 tour and v2 replica page, per user request. Seed: none.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+-->
+    <a class="skip" href="#main">Skip to content</a>
+    <div class="progress" aria-hidden="true"></div>
+
+    <nav class="nav" aria-label="Page">
+      <a class="mark" href="#top"
+        ><svg
+          width="16"
+          height="16"
+          viewBox="0 0 32 32"
+          fill="none"
+          aria-hidden="true"
+        >
+          <g stroke-width="2.6">
+            <rect
+              x="5"
+              y="5"
+              width="14"
+              height="14"
+              rx="2.5"
+              stroke="#82b4ff"
+            />
+            <rect
+              x="13"
+              y="13"
+              width="14"
+              height="14"
+              rx="2.5"
+              stroke="#f0a1d3"
+            />
+          </g></svg
+        >Interlock</a
+      >
+      <a href="#run">Try it</a><a href="#define">Define</a
+      ><a href="#contract">Contract</a><a href="#agent">Agent</a
+      ><a href="#batch">Batch</a><a href="#publish">Publish</a>
+      <a class="cta" href="#start">Get started</a>
+    </nav>
+
+    <nav class="rail" aria-label="Chapters">
+      <a href="#top" data-spy="top"><span>Try it</span></a>
+      <a href="#define" data-spy="define"><span>1.0 Define</span></a>
+      <a href="#contract" data-spy="contract"><span>2.0 Contract</span></a>
+      <a href="#agent" data-spy="agent"><span>3.0 Agent</span></a>
+      <a href="#batch" data-spy="batch"><span>4.0 Batch</span></a>
+      <a href="#publish" data-spy="publish"><span>5.0 Publish</span></a>
+      <a href="#start" data-spy="start"><span>6.0 Start</span></a>
+      <a href="#real" data-spy="real"><span>The real app</span></a>
+    </nav>
+
+    <!-- ================= HERO + RUN REPLICA ================= -->
+    <header class="hero" id="top">
+      <canvas id="field" aria-hidden="true"></canvas>
+      <div class="streak a" aria-hidden="true"></div>
+      <div class="streak b" aria-hidden="true"></div>
+      <div class="streak c" aria-hidden="true"></div>
+      <div class="grain" aria-hidden="true"></div>
+      <div>
+        <div class="hero-inner">
+          <h1>
+            Agent work you can run twice.<br /><span class="gray"
+              >Draw the procedure once,</span
+            >
+            <span class="accent">then replay it on the record.</span>
+          </h1>
+          <p class="deck">
+            Interlock is a local workflow editor and engine for AI agents. You
+            draw the procedure as a graph. Interlock runs the
+            <b>HTTP, JavaScript and Bash steps itself</b>, hands each judgment
+            call to the agent you already use over MCP,
+            <b>checks every result against a contract</b>, and keeps the whole
+            run in SQLite where you can inspect it.
+            <b>Try it below: you are the agent.</b>
+          </p>
+          <div class="ctas">
+            <button
+              class="btn primary"
+              type="button"
+              data-copy="npm install -g @type_of/interlock"
+            >
+              <code>npm install -g @type_of/interlock</code
+              ><span class="cp">Copy</span>
+            </button>
+            <a class="btn" href="https://github.com/dgca/interlock"
+              >View on GitHub →</a
+            >
+          </div>
+          <p class="stampline">
+            open source, MIT · the run below is an interactive replica in your
+            browser · Fetch calls the live PokéAPI
+          </p>
+        </div>
+
+        <figure class="heroshot" style="margin-bottom: 0">
+          <div class="horizon" aria-hidden="true"></div>
+          <div class="glowb" aria-hidden="true"></div>
+          <div class="frame">
+            <div class="inner">
+              <div class="rx">
+                <div
+                  class="app"
+                  id="run"
+                  aria-label="Interactive replica of the Interlock run inspector"
+                >
+                  <div class="app-head">
+                    <div>
+                      <div class="eyeline">Run inspector · v1</div>
+                      <div class="apptitle">
+                        Size up a Pokémon
+                        <span class="pill" id="runPill">ready</span>
+                      </div>
+                    </div>
+                    <span class="replica-tag"
+                      ><i aria-hidden="true"></i>Interactive replica · Fetch
+                      calls the live PokéAPI</span
+                    >
+                  </div>
+                  <div class="runbar">
+                    <label for="pkName">Input</label>
+                    <div class="field">
+                      <span>{"name": "</span
+                      ><input
+                        id="pkName"
+                        value="togepi"
+                        autocomplete="off"
+                        spellcheck="false"
+                        aria-describedby="pkHelp"
+                      /><span style="padding-right: 10px">"}</span>
+                    </div>
+                    <button class="btn primary" id="runBtn" type="button">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path d="M7 4v16l13-8z" /></svg
+                      >Run v1
+                    </button>
+                    <div
+                      class="chips"
+                      id="pkChips"
+                      aria-label="Try another input"
+                    ></div>
+                    <span id="pkHelp" class="visually-hidden"
+                      >Any Pokémon name works. Small ones need an agent.</span
+                    >
+                  </div>
+                  <div class="handoff" id="rxHandoff" role="status">
+                    <div>
+                      <b>Waiting for an agent</b>
+                      <p>
+                        Interlock has prepared an assignment. Ask your connected
+                        agent to continue this run. Connecting an agent does not
+                        automatically pick up work.
+                      </p>
+                    </div>
+                    <div class="acts">
+                      <button class="btn primary" id="claimBtn" type="button">
+                        Claim as the agent</button
+                      ><a class="btn" href="#connect">Connect an agent</a>
+                    </div>
+                  </div>
+                  <div class="canvas" id="canvas">
+                    <div class="graph" id="graph"></div>
+                    <span class="scroll-hint">Scroll the graph sideways</span>
+                  </div>
+                  <div class="split">
+                    <div class="timeline">
+                      <div class="sechead">
+                        <span class="t">Execution timeline</span
+                        ><span id="runId"></span>
+                      </div>
+                      <ol class="steps" id="steps"></ol>
+                      <p class="empty" id="stepsEmpty">
+                        Press <b>Run v1</b>. Fetch asks PokéAPI, the Script
+                        computes a stat sheet, and the Condition sends small
+                        Pokémon to the Agent step. Everything else exits with
+                        its stats.
+                      </p>
+                    </div>
+                    <div class="details" id="details" aria-live="polite"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <ol class="story" id="story" aria-label="What the run shows">
+          <li class="on">
+            <span class="k">Step 1 · the engine goes first</span
+            ><b>Code steps run. One waits.</b>
+            <p>
+              Fetch, Script and Condition run in the engine in under a second.
+              The run pauses only where judgment is needed.
+            </p>
+          </li>
+          <li>
+            <span class="k">Step 2 · the assignment is the contract</span
+            ><b>Input, prompt, policy, schema.</b>
+            <p>
+              The details panel shows exactly what the agent receives, including
+              the output schema its answer must pass.
+            </p>
+          </li>
+          <li>
+            <span class="k">Step 3 · an executor claims it</span
+            ><b>An expiring, renewable lease.</b>
+            <p>
+              The claim carries a token and a 300-second lease. If the agent
+              goes quiet, the work becomes available again.
+            </p>
+          </li>
+          <li>
+            <span class="k">Step 4 · checked, then recorded</span
+            ><b>Every execution, kept.</b>
+            <p>
+              A wrong answer is rejected with the reason and the claim stays
+              open. Each step keeps its input and output on the run.
+            </p>
+          </li>
+        </ol>
+        <p class="replica-note">
+          Steps are paced so you can watch them. The Script is the starter
+          workflow's own JavaScript and errors use Interlock's contract wording;
+          no Interlock engine runs on this page.
+        </p>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- ================= 1.0 DEFINE ================= -->
+      <section class="ch" id="define">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <div class="chno">1.0</div>
+              <h2>
+                Write the procedure down once.
+                <span class="gray">Every run follows the same graph.</span>
+              </h2>
+            </div>
+            <p data-io>
+              Most agent procedures live in a chat log: the steps, their order,
+              and the checks between them are only as repeatable as the last
+              prompt. In Interlock a workflow is a graph with
+              <b>one entry, typed steps, and named exits</b>. The steps that
+              need no judgment run as code. The agent gets
+              <b>only the steps that need it</b>.
+            </p>
+          </div>
+          <div class="kinds" id="kinds">
+            <span class="arrow">ten node kinds · one graph</span>
+          </div>
+          <div class="legend" aria-hidden="true">
+            <span><i style="background: var(--dimmer)"></i>entry and exit</span>
+            <span
+              ><i style="background: var(--blue)"></i>runs in the engine</span
+            >
+            <span
+              ><i style="background: var(--amber)"></i>controls the flow</span
+            >
+            <span
+              ><i style="background: var(--pink)"></i>handed to an agent</span
+            >
+          </div>
+          <figure
+            class="shotcard vrise shot-wide"
+            data-io
+            style="margin-bottom: 22px; position: relative"
+          >
+            <div class="pad">
+              <h3>Seven nodes. One of them needs an agent.</h3>
+              <p>
+                The workflow you just ran, in the real editor. Fetch asks the
+                public PokéAPI, a JavaScript step computes a stat sheet, a
+                Condition branches on size, and only the small ones reach the
+                Agent node. Everything else exits with raw stats.
+              </p>
+            </div>
+            <div class="fog" style="position: relative">
+              <img
+                class="zoomable"
+                src="shots/editor-graph.webp"
+                alt="Interlock visual editor showing the Size up a Pokémon workflow: Entry, Fetch, Script, Condition, Agent assignment, and two Exit nodes, with Save draft, Review and publish, and Run v1 in the toolbar."
+                loading="lazy"
+                width="2448"
+                height="1280"
+              />
+            </div>
+            <div class="anno" style="right: 4%; top: 40%">
+              <span class="k">Deterministic until it isn't</span>Fetch, Script
+              and Condition run in the engine. The <b>Agent assignment</b> is
+              the only step that waits.
+            </div>
+          </figure>
+          <div class="grid2" style="align-items: start">
+            <figure class="shotcard vrise" data-io style="margin: 0">
+              <div class="pad">
+                <h3>The assignment is written into the graph.</h3>
+                <p>
+                  Prompt, context mode, and context instructions live on the
+                  node. A fresh-session requirement is declared here too, and
+                  checked against the executor's declared capabilities at claim
+                  time.
+                </p>
+              </div>
+              <div class="fog" style="position: relative">
+                <img
+                  class="zoomable"
+                  src="shots/node-agent.webp"
+                  alt="Agent node settings dialog for Write the mascot pitch: name, assignment prompt, context choice between current conversation and fresh agent session, context instructions, and Apply changes."
+                  loading="lazy"
+                  width="1959"
+                  height="1584"
+                />
+              </div>
+            </figure>
+            <figure class="shotcard vrise" data-io style="--i: 1; margin: 0">
+              <div class="pad">
+                <h3>Underneath, it is plain JSON.</h3>
+                <p>
+                  Switch to Raw to edit the definition directly. Unfinished
+                  graphs save as drafts; publishing checks routes, contracts and
+                  references. The same definition is what the CLI and MCP tools
+                  read and write.
+                </p>
+              </div>
+              <div class="fog" style="position: relative">
+                <img
+                  class="zoomable"
+                  src="shots/raw-json.webp"
+                  alt="Raw JSON editor showing the workflow definition with inputSchema, outputSchema, and the entry node, plus Format JSON, Discard and Save."
+                  loading="lazy"
+                  width="2448"
+                  height="1764"
+                />
+              </div>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 2.0 CONTRACT ================= -->
+      <section class="ch" id="contract">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <div class="chno">2.0</div>
+              <h2>
+                Every step says what it accepts.
+                <span class="gray">Every result gets checked.</span>
+              </h2>
+            </div>
+            <p data-io>
+              Workflows and nodes carry <b>input and output contracts</b>: JSON
+              Schema, edited through a field editor or pasted from example JSON.
+              The engine validates real values at execution time. An agent that
+              returns the wrong shape is told exactly what is missing, and
+              <b>its claim stays open</b> so it can correct the answer.
+            </p>
+          </div>
+          <div class="pipe" id="pipe" data-io>
+            <div class="step" style="--i: 0">
+              <div class="node">01</div>
+              <div class="t">Entry</div>
+              <div class="d">
+                input contract: <code>name</code> is a required string
+              </div>
+              <span class="tag det">validated</span>
+            </div>
+            <div class="step" style="--i: 1">
+              <div class="node">02</div>
+              <div class="t">Fetch</div>
+              <div class="d">
+                binds <code>input.name</code> into the URL, returns status,
+                headers, body
+              </div>
+              <span class="tag det">engine</span>
+            </div>
+            <div class="step" style="--i: 2">
+              <div class="node">03</div>
+              <div class="t">Script</div>
+              <div class="d">
+                JavaScript reads <code>input</code>, returns a stat sheet
+              </div>
+              <span class="tag det">engine</span>
+            </div>
+            <div class="step" style="--i: 3">
+              <div class="node">04</div>
+              <div class="t">Condition</div>
+              <div class="d">
+                <code>smallAndAdorable</code> equals <code>true</code>
+              </div>
+              <span class="tag flow">routes</span>
+            </div>
+            <div class="step agt" style="--i: 4">
+              <div class="node">05</div>
+              <div class="t">Agent</div>
+              <div class="d">must return name, pitch and reasoning</div>
+              <span class="tag agt">your agent</span>
+            </div>
+            <div class="step" style="--i: 5">
+              <div class="node">06</div>
+              <div class="t">Exit</div>
+              <div class="d">the run's output, stored with every step</div>
+              <span class="tag det">recorded</span>
+            </div>
+          </div>
+          <p
+            class="label"
+            style="text-align: center; margin: 6px 0 46px"
+            data-io
+          >
+            blue steps rerun to the same answer · the pink step is the only one
+            that waits for judgment
+          </p>
+          <div class="grid2" style="align-items: center">
+            <div class="term vrise" data-io>
+              <div class="bar"><i></i><i></i><i></i></div>
+              <pre><span class="c"># the agent's first try leaves out a required field</span>
+$ interlock submit $WORK $TOKEN '{"name":"togepi","pitch":"Tiny."}'
+<span class="a">Agent result: Missing required field "reasoning".</span>
+
+<span class="c"># same claim, corrected answer</span>
+$ interlock submit $WORK $TOKEN @pitch.json
+<span class="c"># response: </span><span class="g">"run": { "status": "completed", … }</span></pre>
+            </div>
+            <div data-io style="--i: 1">
+              <p class="label" style="margin-bottom: 12px">
+                captured from a real run, and reproduced in the replica above
+              </p>
+              <p
+                style="
+                  font: 400 16.5px/1.6 var(--sans);
+                  color: var(--dim);
+                  margin: 0 0 14px;
+                  max-width: 46ch;
+                "
+              >
+                This rejection is real CLI output from a Togepi run. Claim the
+                assignment in the run at the top of the page and submit its
+                draft: you get the same message, because the replica uses
+                Interlock's contract wording. Repeating an accepted result with
+                the same token is idempotent; a changed duplicate, a stale
+                token, or a cancelled claim is rejected.
+              </p>
+              <p
+                style="
+                  font: 400 16.5px/1.6 var(--sans);
+                  color: var(--dim);
+                  margin: 0;
+                  max-width: 46ch;
+                "
+              >
+                When a step has no input contract of its own, the editor
+                suggests one from the connected step's output and offers its
+                fields as paths. The suggestion only enforces anything if you
+                choose to use it.
+              </p>
+            </div>
+          </div>
+          <div class="stats" style="--n: 4; margin-top: 64px" data-io>
+            <div class="cell">
+              <div class="num" data-count="10">0</div>
+              <div class="lbl">node kinds</div>
+            </div>
+            <div class="cell">
+              <div class="num" data-count="100">0</div>
+              <div class="lbl">default steps per run</div>
+            </div>
+            <div class="cell">
+              <div class="num" data-count="365">0</div>
+              <div class="lbl">days a Wait can hold</div>
+            </div>
+            <div class="cell">
+              <div class="num" data-count="50">0</div>
+              <div class="lbl">undoable editor actions</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 3.0 AGENT ================= -->
+      <section class="ch" id="agent">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <div class="chno">3.0</div>
+              <h2>
+                Interlock never calls a model.
+                <span class="gray">Your agent does the thinking.</span>
+              </h2>
+            </div>
+            <p data-io>
+              The engine serves <b>Streamable HTTP MCP</b> at
+              <code>127.0.0.1:4310/mcp</code> from the same process as the UI.
+              Point Codex, Claude Code, OpenCode, or any MCP client at it, and
+              the agent can find a workflow, start a run, claim assignments and
+              submit results. The CLI drives the same API. Your harness keeps
+              its own tools, approvals and model.
+            </p>
+          </div>
+          <div class="agent-grid">
+            <div
+              class="replay vrise"
+              data-io
+              id="replay"
+              role="figure"
+              aria-label="Replay of the executor loop for the Togepi run"
+            >
+              <div class="bar">
+                <i></i>executor loop · <em>commands from a real capture</em>
+              </div>
+              <div class="rbody">
+                <div class="rstep rmsg you">
+                  <span class="who">you · to your agent</span>
+                  <p>
+                    Find the Interlock workflow "Size up a Pokémon" and run it
+                    with {"name":"togepi"}. Complete its assignments, then
+                    return the result.
+                  </p>
+                </div>
+                <div class="rstep rtool">
+                  <code>interlock work --summary</code
+                  ><span
+                    >1 available · Write the mascot pitch · attempt 0 of 2</span
+                  >
+                </div>
+                <div class="rstep rtool">
+                  <code>interlock claim … claude-code</code
+                  ><span>token issued · lease 300 s · context: current</span>
+                </div>
+                <div class="rstep rtool no">
+                  <code>interlock submit …</code
+                  ><span>rejected: missing required field "reasoning"</span>
+                </div>
+                <div class="rstep rtool ok">
+                  <code>interlock submit … @pitch.json</code
+                  ><span>accepted · run completed</span>
+                </div>
+                <div class="rstep rmsg agent">
+                  <span class="who">claude code · the submitted pitch</span>
+                  <p>
+                    "Togepi weighs 1.5 kilograms, less than a bag of sugar, and
+                    stands 0.3 metres tall, yet its base defense of 65 says it
+                    can take a hug from anyone. The smallest mascot on the
+                    shortlist, and the hardest to knock over."
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="rx vrise" data-io style="--i: 1">
+              <div class="tabsbox">
+                <div
+                  class="tabs"
+                  role="tablist"
+                  aria-label="MCP client"
+                  id="tabs"
+                ></div>
+                <div
+                  class="tabpanel"
+                  role="tabpanel"
+                  id="tabpanel"
+                  tabindex="0"
+                ></div>
+              </div>
+              <div class="codeblock ask">
+                <pre
+                  style="white-space: pre-wrap"
+                ><span class="c-dim"># then ask your agent</span>
+Find the Interlock workflow "Size up a Pokémon" and run it with
+{"name":"pikachu"}. Complete its assignments, then return the result.</pre>
+                <button
+                  class="btn copy-cmd"
+                  type="button"
+                  data-copy='Find the Interlock workflow "Size up a Pokémon" and run it with {"name":"pikachu"}. Complete its assignments, then return the result.'
+                >
+                  <span class="ic">Copy</span><span class="ok">Copied</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <p class="label" style="margin: 14px 0 0" data-io>
+            the replay shows the CLI commands run during a real capture, with
+            work ids and tokens elided · an agent connected over MCP calls the
+            matching tools: list_work, claim_work, submit_result
+          </p>
+        </div>
+      </section>
+
+      <!-- ================= 4.0 BATCH ================= -->
+      <section class="ch" id="batch">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <div class="chno">4.0</div>
+              <h2>
+                Seven candidates in.
+                <span class="gray">Only three need an agent.</span>
+              </h2>
+            </div>
+            <p data-io>
+              A <b>Batch</b> repeats a visible item path once per list item and
+              collects the results <b>in input order</b>, even when items finish
+              out of order. Run the starter roster below: each candidate goes
+              through "Size up a Pokémon" as its own run, a few at a time. Add a
+              name that isn't a Pokémon and switch the failure policy to see
+              what each one does.
+            </p>
+          </div>
+          <div class="rx">
+            <div class="app batch-grid">
+              <div class="settings">
+                <div class="t">Size up each candidate</div>
+                <p class="desc">
+                  Batch settings, as in the editor. Each item runs "Size up a
+                  Pokémon" v1 as its own run.
+                </p>
+                <span class="fl">List to process</span>
+                <div class="ro">candidates</div>
+                <span class="fl" id="candLbl">Candidates</span>
+                <div class="cands" id="cands" aria-labelledby="candLbl"></div>
+                <form class="addcand" id="addCand">
+                  <label class="visually-hidden" for="candIn"
+                    >Add a candidate</label
+                  ><input
+                    id="candIn"
+                    placeholder="add a name, e.g. mew"
+                    autocomplete="off"
+                    spellcheck="false"
+                  /><button class="btn" type="submit">Add</button>
+                </form>
+                <label class="fl" for="conc"
+                  >Items at a time <span class="rangeval" id="concVal">5</span
+                  ><small
+                    >Interlock allows 1 to 50. A waiting item still holds its
+                    slot.</small
+                  ></label
+                >
+                <input type="range" id="conc" min="1" max="8" value="5" />
+                <span class="fl" id="polLbl"
+                  >When an item fails<small
+                    >"all" fails the Batch and cancels the rest. "collect" keeps
+                    going and records each item's status.</small
+                  ></span
+                >
+                <div class="seg" role="group" aria-labelledby="polLbl">
+                  <button type="button" data-pol="all" aria-pressed="true">
+                    all</button
+                  ><button
+                    type="button"
+                    data-pol="collect"
+                    aria-pressed="false"
+                  >
+                    collect
+                  </button>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 20px">
+                  <button class="btn primary" id="batchRun" type="button">
+                    Run batch</button
+                  ><button class="btn ghost" id="batchReset" type="button">
+                    Reset
+                  </button>
+                </div>
+              </div>
+              <div class="board">
+                <div class="group">
+                  <div class="group-head">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
+                      />
+                      <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
+                      <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
+                    </svg>
+                    <strong>Size up each candidate</strong>
+                    <span id="batchSummary"
+                      >Each item runs independently · Up to 5 at once</span
+                    >
+                    <button
+                      class="btn soft"
+                      id="answerAll"
+                      type="button"
+                      hidden
+                    >
+                      Answer all waiting
+                    </button>
+                  </div>
+                  <ol class="lanes" id="lanes" aria-live="polite"></ol>
+                  <div class="group-foot">
+                    <span>Start</span><span>End</span>
+                  </div>
+                </div>
+                <div class="after">
+                  <div class="panel">
+                    <div class="t">
+                      Out <span class="pill" id="outPill">empty</span>
+                    </div>
+                    <pre class="json" id="outJson">[]</pre>
+                  </div>
+                  <div class="panel" id="pickCard">
+                    <div class="t">
+                      Pick the final six
+                      <span class="pill" id="pickPill">not started</span>
+                    </div>
+                    <div id="pickBody" class="empty" style="padding: 4px 0">
+                      Runs after every item returns. Its input is the ordered
+                      list from Out.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stats" style="--n: 4; margin-top: 56px" data-io>
+            <div class="cell">
+              <div class="num" data-count="200">0</div>
+              <div class="lbl">items by default</div>
+            </div>
+            <div class="cell">
+              <div class="num" data-count="10000">0</div>
+              <div class="lbl">items, configured max</div>
+            </div>
+            <div class="cell">
+              <div class="num" data-count="50">0</div>
+              <div class="lbl">items at a time</div>
+            </div>
+            <div class="cell">
+              <div class="num" data-count="10">0</div>
+              <div class="lbl">nested levels</div>
+            </div>
+          </div>
+          <p class="label" style="margin: 14px 0 0" data-io>
+            failure policy "all" cancels unfinished items on an error ·
+            "collect" returns {runId, status, output, error} per item · retrying
+            a failed batch keeps the items that succeeded
+          </p>
+        </div>
+      </section>
+
+      <!-- ================= 5.0 PUBLISH ================= -->
+      <section class="ch" id="publish">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <div class="chno">5.0</div>
+              <h2>
+                Drafts change.
+                <span class="gray">Published versions never do.</span>
+              </h2>
+            </div>
+            <p data-io>
+              Edit freely: drafts save incomplete, and Undo covers the last 50
+              editor actions. <b>Review &amp; publish</b> compares the draft,
+              unsaved edits included, with the latest published version before
+              anything ships. Each run is pinned to one immutable version, so
+              editing a workflow <b>never changes a run already in flight</b>.
+              Edit the prompt below and publish it.
+            </p>
+          </div>
+          <div class="rx">
+            <div class="app pub">
+              <div class="app-head">
+                <div>
+                  <div class="eyeline">Workflow</div>
+                  <div class="apptitle">
+                    Size up a Pokémon
+                    <span class="pill" id="draftPill"
+                      >Draft saved · v1 published</span
+                    >
+                  </div>
+                </div>
+                <span class="replica-tag"
+                  ><i aria-hidden="true"></i>Interactive replica</span
+                >
+              </div>
+              <div class="pub-body">
+                <div class="pub-edit">
+                  <label class="fl" for="promptEd" style="margin-top: 0"
+                    >Assignment prompt<small
+                      >Agent node · Write the mascot pitch</small
+                    ></label
+                  >
+                  <textarea id="promptEd" spellcheck="false"></textarea>
+                  <div
+                    style="
+                      display: flex;
+                      gap: 8px;
+                      margin-top: 10px;
+                      flex-wrap: wrap;
+                    "
+                  >
+                    <button class="btn" type="button" id="tryEdit">
+                      Try an edit</button
+                    ><button class="btn ghost" type="button" id="discard">
+                      Discard
+                    </button>
+                  </div>
+                </div>
+                <div class="pub-review">
+                  <div class="eyeline">Review publication</div>
+                  <div
+                    style="margin: 4px 0 0; font-size: 16px; font-weight: 550"
+                    id="cmpTitle"
+                  >
+                    Draft compared with published v1
+                  </div>
+                  <div class="counts" id="counts"></div>
+                  <div id="diffBox"></div>
+                  <div class="pub-foot">
+                    <span
+                      class="hint"
+                      id="pubHint"
+                      style="margin: 0 auto 0 0"
+                    ></span
+                    ><button
+                      class="btn primary"
+                      type="button"
+                      id="publishBtn"
+                      disabled
+                    >
+                      Publish version
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="versions" id="versions"></div>
+            </div>
+          </div>
+          <ul class="facts row" data-io>
+            <li>
+              <b>Pinned</b
+              ><span
+                >Workflow nodes pin a published version of the workflow they
+                call. Later publications do not move existing pins.</span
+              >
+            </li>
+            <li>
+              <b>Cascade</b
+              ><span
+                ><code>interlock publish ID --cascade</code> republishes every
+                published caller in dependency order, in one transaction, or
+                none of them.</span
+              >
+            </li>
+            <li>
+              <b>Retry</b
+              ><span
+                >Failed runs retry from the inspector. Interrupted scripts are
+                marked failed after a restart, never replayed
+                automatically.</span
+              >
+            </li>
+            <li>
+              <b>Portable</b
+              ><span
+                >Export a workflow with its dependencies as one bundle; import
+                is transactional and keeps stable IDs.</span
+              >
+            </li>
+          </ul>
+          <div class="break vrise" data-io style="margin-top: 72px">
+            <svg class="wm" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <g stroke="#06101f" stroke-width="1.6">
+                <rect x="5" y="5" width="14" height="14" rx="2.5" />
+                <rect x="13" y="13" width="14" height="14" rx="2.5" />
+              </g>
+            </svg>
+            <h3>Agents do the judgment. Interlock keeps the record.</h3>
+            <div class="foot">
+              <span>IMMUTABLE VERSIONS</span><span>SCHEMA-CHECKED RESULTS</span
+              ><span>EXPIRING CLAIMS</span
+              ><span>EVERY STEP IN LOCAL SQLITE</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 6.0 START ================= -->
+      <section class="ch" id="start">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <div class="chno">6.0</div>
+              <h2>
+                Two commands. <span class="gray">Then ask your agent.</span>
+              </h2>
+            </div>
+            <p data-io>
+              The npm package includes the engine, the UI, the CLI and the MCP
+              tools. No separate build, no account, no API key. Workflows and
+              runs live in <code>~/.interlock/interlock.db</code> and survive
+              restarts.
+            </p>
+          </div>
+          <div class="grid2" style="align-items: start">
+            <div class="term vrise" data-io>
+              <div class="bar"><i></i><i></i><i></i></div>
+              <pre><span class="c"># node 24.13 or later, macOS or Linux</span>
+$ npm install -g @type_of/interlock
+$ interlock
+<span class="g">Interlock is running at http://127.0.0.1:4310</span>
+
+<span class="c"># connect your harness, e.g. Claude Code</span>
+$ claude mcp add --transport http --scope user \
+    interlock http://127.0.0.1:4310/mcp
+
+<span class="c"># or try it without installing</span>
+$ npx -y @type_of/interlock@latest</pre>
+            </div>
+            <div data-io style="--i: 1">
+              <p class="label" style="margin-bottom: 14px">
+                know before you run it
+              </p>
+              <ul class="facts">
+                <li>
+                  <b>Local</b
+                  ><span
+                    >Single user, on loopback, with no authentication. Do not
+                    expose it through a public tunnel.</span
+                  >
+                </li>
+                <li>
+                  <b>Scripts</b
+                  ><span
+                    >JavaScript and Bash steps run with your account's files,
+                    environment and network. They are not sandboxed; review
+                    imported workflows first.</span
+                  >
+                </li>
+                <li>
+                  <b>Agents</b
+                  ><span
+                    >Interlock does not launch agent sessions or call model
+                    APIs. Agent steps need a connected executor or manual
+                    completion.</span
+                  >
+                </li>
+                <li>
+                  <b>Scope</b
+                  ><span
+                    >No recurring schedules, multi-user access, or arbitrary
+                    parallel joins yet. See
+                    <a
+                      href="https://github.com/dgca/interlock/blob/main/docs/v1.md"
+                      >current scope</a
+                    >.</span
+                  >
+                </li>
+              </ul>
+              <div
+                class="ctas"
+                style="justify-content: flex-start; margin-top: 26px"
+              >
+                <a class="btn primary" href="https://github.com/dgca/interlock"
+                  >Star on GitHub</a
+                >
+                <a
+                  class="btn"
+                  href="https://www.npmjs.com/package/@type_of/interlock"
+                  >npm package →</a
+                >
+              </div>
+            </div>
+          </div>
+          <div class="index" data-io>
+            <a href="https://github.com/dgca/interlock#readme"
+              ><span>README: install, first run, every node kind</span
+              ><span class="mono">docs →</span></a
+            >
+            <a
+              href="https://github.com/dgca/interlock/blob/main/docs/connect-harness.md"
+              ><span>Connect Codex, Claude Code, OpenCode or stdio</span
+              ><span class="mono">docs →</span></a
+            >
+            <a
+              href="https://github.com/dgca/interlock/blob/main/docs/architecture.md"
+              ><span>Architecture and execution semantics</span
+              ><span class="mono">docs →</span></a
+            >
+            <a
+              href="https://github.com/dgca/interlock/blob/main/docs/agent-workflows.md"
+              ><span>Agent operations, bindings and bundles</span
+              ><span class="mono">docs →</span></a
+            >
+            <a href="https://github.com/dgca/interlock/blob/main/CONTEXT.md"
+              ><span>Domain language: runs, claims, executors</span
+              ><span class="mono">docs →</span></a
+            >
+            <a href="https://github.com/dgca/interlock/blob/main/docs/v1.md"
+              ><span>Current scope and limits</span
+              ><span class="mono">docs →</span></a
+            >
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= THE REAL APP ================= -->
+      <section class="ch" id="real">
+        <div class="wrap">
+          <div class="chead">
+            <div>
+              <h2>The real app, <span class="gray">unretouched.</span></h2>
+            </div>
+            <p data-io>
+              Everything above the fold of each chapter can be checked against
+              the product itself. These were captured from Interlock v0.1.14 on
+              a fresh local database on October 2, 2026, during real runs of the
+              two starter workflows, with Claude Code as the agent.
+            </p>
+          </div>
+        </div>
+        <div class="rx">
+          <div class="gallery" id="gallery">
+            <figure>
+              <button type="button" data-lb>
+                <img
+                  src="shots/editor-graph.webp"
+                  alt="Visual editor for Size up a Pokémon: Entry, Fetch, Script, Condition, Agent assignment and two Exit nodes."
+                  width="2448"
+                  height="1280"
+                  loading="lazy"
+                />
+              </button>
+              <figcaption>
+                <b>The editor.</b> The same seven nodes you just ran, with Save
+                draft, Review &amp; publish and Run v1.
+              </figcaption>
+            </figure>
+            <figure>
+              <button type="button" data-lb>
+                <img
+                  src="shots/run-1-waiting.webp"
+                  alt="Run inspector for the Togepi run, paused with a Waiting for an agent banner."
+                  width="2448"
+                  height="1476"
+                  loading="lazy"
+                />
+              </button>
+              <figcaption>
+                <b>A real handoff.</b> The Togepi run paused at the Agent node,
+                0.5 seconds after it started.
+              </figcaption>
+            </figure>
+            <figure>
+              <button type="button" data-lb>
+                <img
+                  src="shots/hero-batch-waiting.webp"
+                  alt="Build a team roster run: Batch group reading 4 of 7 finished, 3 waiting."
+                  width="2880"
+                  height="1728"
+                  loading="lazy"
+                />
+              </button>
+              <figcaption>
+                <b>A real Batch.</b> Seven candidates, five at a time: four
+                finished on code alone, three waited for a pitch.
+              </figcaption>
+            </figure>
+            <figure>
+              <button type="button" data-lb>
+                <img
+                  src="shots/batch-done.webp"
+                  alt="Completed roster run with the output JSON titled Seven scouted, six picked."
+                  width="2880"
+                  height="1746"
+                  loading="lazy"
+                />
+              </button>
+              <figcaption>
+                <b>The result.</b> "Seven scouted, six picked", with every
+                step's input and output kept on the run.
+              </figcaption>
+            </figure>
+            <figure>
+              <button type="button" data-lb>
+                <img
+                  src="shots/editor-batch.webp"
+                  alt="Editor for Build a team roster showing the Batch group with a workflow node between Start and End."
+                  width="2448"
+                  height="1400"
+                  loading="lazy"
+                />
+              </button>
+              <figcaption>
+                <b>The Batch at design time.</b> The item path stays on the
+                canvas between Start and End.
+              </figcaption>
+            </figure>
+            <figure>
+              <button type="button" data-lb>
+                <img
+                  src="shots/review-publish.webp"
+                  alt="Review publication dialog: 1 node change, published and draft prompt text."
+                  width="1959"
+                  height="1368"
+                  loading="lazy"
+                />
+              </button>
+              <figcaption>
+                <b>Review &amp; publish.</b> The dialog the publish replica
+                above is modeled on.
+              </figcaption>
+            </figure>
+            <figure>
+              <button type="button" data-lb>
+                <img
+                  src="shots/node-agent.webp"
+                  alt="Agent node settings dialog with prompt, context mode and instructions."
+                  width="1959"
+                  height="1584"
+                  loading="lazy"
+                />
+              </button>
+              <figcaption>
+                <b>Agent node settings.</b> Prompt, context mode and
+                instructions live on the node.
+              </figcaption>
+            </figure>
+            <figure>
+              <button type="button" data-lb>
+                <img
+                  src="shots/mcp-connect.webp"
+                  alt="Connect with MCP dialog with Codex, Claude, OpenCode and Other tabs."
+                  width="1383"
+                  height="1098"
+                  loading="lazy"
+                />
+              </button>
+              <figcaption>
+                <b>Connect with MCP.</b> One URL and a ready config per client.
+              </figcaption>
+            </figure>
+            <figure>
+              <button type="button" data-lb>
+                <img
+                  src="shots/raw-json.webp"
+                  alt="Raw JSON editor showing the workflow definition."
+                  width="2448"
+                  height="1764"
+                  loading="lazy"
+                />
+              </button>
+              <figcaption>
+                <b>Visual / Raw.</b> Underneath, a workflow is plain JSON that
+                the CLI and MCP tools read and write.
+              </figcaption>
+            </figure>
+          </div>
+          <div class="wrap">
+            <div class="gal-nav">
+              <button
+                class="btn"
+                type="button"
+                data-gal="-1"
+                aria-label="Previous screenshots"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m15 18-6-6 6-6" />
+                </svg></button
+              ><button
+                class="btn"
+                type="button"
+                data-gal="1"
+                aria-label="Next screenshots"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <div class="row">
+          <b>REPLICAS</b> · the run inspector, Batch and publish review are
+          built for this page in Interlock's own styling. Fetch calls the public
+          PokéAPI from your browser, with a cached copy for the suggested names
+          if the request fails. The Script runs the starter workflow's code
+          verbatim, and contract errors follow Interlock's wording. "Write it
+          for me" answers are templated from the stat sheet, not generated by a
+          model. Timing is slowed for legibility.
+        </div>
+        <div class="row">
+          <b>SCREENSHOTS</b> · captured from @type_of/interlock v0.1.14 on a
+          temporary database at 1440 px and 2× density. Claude Code acted as the
+          executor through the interlock CLI. The sidebar reads the default
+          address 127.0.0.1:4310; the capture server ran on another local port.
+        </div>
+        <div class="row">
+          <b>SOURCE</b> · this page lives in
+          <a href="https://github.com/dgca/interlock/tree/main/site">site/</a> ·
+          interlock is MIT licensed · icons from Lucide (ISC) ·
+          <a href="https://github.com/dgca/interlock"
+            >github.com/dgca/interlock</a
+          >
+        </div>
+      </div>
+    </footer>
+
+    <dialog class="lightbox" id="lb" aria-label="Screenshot">
+      <button class="lbclose" id="lbclose" type="button" aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <path
+            d="M2 2l10 10M12 2L2 12"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
+    </dialog>
+
+    <script>
+      (() => {
+        'use strict';
+        const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const $ = (s, r = document) => r.querySelector(s);
+        const el = (tag, attrs = {}, html = '') => {
+          const e = document.createElement(tag);
+          for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+          if (html) e.innerHTML = html;
+          return e;
+        };
+        const esc = (s) =>
+          String(s).replace(
+            /[&<>"]/g,
+            (c) =>
+              ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c],
+          );
+        const sleep = (ms) =>
+          new Promise((r) => setTimeout(r, reduced ? 0 : ms));
+        const hex = () =>
+          Math.random().toString(16).slice(2, 10).padEnd(8, '0');
+        const story = (k) =>
+          document
+            .querySelectorAll('#story li')
+            .forEach((li, i) => li.classList.toggle('on', i === k));
+        const clock = (d = new Date()) =>
+          d.toLocaleTimeString([], {
+            hour: 'numeric',
+            minute: '2-digit',
+            second: '2-digit',
+          });
+
+        /* ---------- icons (Lucide, the set Interlock's UI uses) ---------- */
+        const P = {
+          entry:
+            '<path d="m18 9-6-6-6 6"/><path d="M12 3v14"/><path d="M5 21h14"/>',
+          exit: '<path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/>',
+          agent:
+            '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+          script:
+            '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+          fetch:
+            '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+          condition:
+            '<path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/>',
+          completed:
+            '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+          running: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+          waiting:
+            '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+          pending:
+            '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+          failed:
+            '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+          x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+        };
+        const icon = (k, size = 15, cls = '') =>
+          `<svg class="${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[k]}</svg>`;
+
+        /* ---------- JSON pretty-print with highlighting ---------- */
+        const jsonHtml = (v) =>
+          esc(JSON.stringify(v, null, 2)).replace(
+            /(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|(-?\d+\.?\d*)/g,
+            (m, str, colon, lit, num) =>
+              str
+                ? colon
+                  ? `<span class="k">${str}</span>${colon}`
+                  : `<span class="s">${str}</span>`
+                : lit
+                  ? `<span class="b">${lit}</span>`
+                  : `<span class="n">${num}</span>`,
+          );
+
+        /* ---------- the starter workflow, verbatim ---------- */
+        const SCRIPT = `const body = input.body;
+if (!body || typeof body.name !== 'string')
+  throw new Error('PokéAPI did not recognize that name');
+const stats = {};
+for (const stat of body.stats ?? []) stats[stat.stat.name] = stat.base_stat;
+return {
+  name: body.name,
+  types: (body.types ?? []).map((entry) => entry.type.name),
+  heightM: (body.height ?? 0) / 10,
+  weightKg: (body.weight ?? 0) / 10,
+  smallAndAdorable: (body.height ?? 999) <= 6,
+  stats,
+};`;
+        const AsyncFn = Object.getPrototypeOf(async function () {}).constructor;
+        const runScript = new AsyncFn('input', SCRIPT);
+        const PROMPT_V1 =
+          'Write a delightfully overcommitted mascot pitch for the Pokémon in the input, a scouting sheet with name, types, height, weight, and base stats. One short paragraph that leans into how small and adorable it is while citing one real stat as evidence. Do not invent abilities or moves. Return an object with name, pitch, and reasoning.';
+        const OUT_SCHEMA = {
+          type: 'object',
+          required: ['name', 'pitch', 'reasoning'],
+          properties: {
+            name: { type: 'string' },
+            pitch: { type: 'string' },
+            reasoning: { type: 'string' },
+          },
+        };
+
+        /* contract check, matching Interlock's assertContract wording (packages/core) */
+        function contractErrors(schema, value, label) {
+          const kind = (v) =>
+            v === null
+              ? 'null'
+              : Array.isArray(v)
+                ? 'a list'
+                : typeof v === 'string'
+                  ? 'text'
+                  : typeof v === 'object'
+                    ? 'an object'
+                    : typeof v;
+          const names = {
+            array: 'a list',
+            object: 'an object',
+            string: 'text',
+            boolean: 'yes/no',
+            integer: 'a whole number',
+            number: 'a number',
+          };
+          const errs = [];
+          if (
+            schema.type === 'object' &&
+            (value === null ||
+              typeof value !== 'object' ||
+              Array.isArray(value))
+          )
+            errs.push(
+              `"value" expects an object; received ${kind(value)}: ${JSON.stringify(value)?.slice(0, 100)}.`,
+            );
+          else {
+            for (const r of schema.required || [])
+              if (!(r in value)) errs.push(`Missing required field "${r}".`);
+            for (const [k, s] of Object.entries(schema.properties || {}))
+              if (k in value) {
+                const v = value[k];
+                const ok = s.type === 'string' ? typeof v === 'string' : true;
+                if (!ok)
+                  errs.push(
+                    `"${k}" expects ${names[s.type]}; received ${kind(v)}: ${JSON.stringify(v).slice(0, 100)}.`,
+                  );
+              }
+          }
+          return errs.length ? `${label}: ${errs.join(' ')}` : null;
+        }
+
+        /* ---------- PokéAPI: live, with a cached copy of the suggested names ---------- */
+        const STAT_NAMES = [
+          'hp',
+          'attack',
+          'defense',
+          'special-attack',
+          'special-defense',
+          'speed',
+        ];
+        const CACHE = {
+          togepi: [3, 15, ['fairy'], [35, 20, 65, 40, 65, 20]],
+          pikachu: [4, 60, ['electric'], [35, 55, 40, 50, 50, 90]],
+          eevee: [3, 65, ['normal'], [55, 55, 50, 45, 65, 55]],
+          jigglypuff: [5, 55, ['normal', 'fairy'], [115, 45, 20, 45, 25, 20]],
+          snorlax: [21, 4600, ['normal'], [160, 110, 65, 65, 110, 30]],
+          gengar: [15, 405, ['ghost', 'poison'], [60, 65, 60, 130, 75, 110]],
+          lapras: [25, 2200, ['water', 'ice'], [130, 85, 80, 85, 95, 60]],
+          bulbasaur: [7, 69, ['grass', 'poison'], [45, 49, 49, 65, 65, 45]],
+        };
+        const cachedBody = (n) => {
+          const [height, weight, types, st] = CACHE[n];
+          return {
+            name: n,
+            height,
+            weight,
+            types: types.map((t) => ({ type: { name: t } })),
+            stats: st.map((b, i) => ({
+              base_stat: b,
+              stat: { name: STAT_NAMES[i] },
+            })),
+          };
+        };
+        const memo = new Map();
+        async function pokeFetch(raw) {
+          const name = String(raw).trim().toLowerCase();
+          if (memo.has(name)) return memo.get(name);
+          const url = `https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(name)}`;
+          let res;
+          try {
+            const ctl = new AbortController();
+            const t = setTimeout(() => ctl.abort(), 8000);
+            const r = await fetch(url, { signal: ctl.signal });
+            clearTimeout(t);
+            if (!r.ok)
+              res = {
+                status: r.status,
+                headers: {
+                  'content-type': r.headers.get('content-type') || 'text/plain',
+                },
+                body: (await r.text()).slice(0, 200),
+                source: 'live',
+              };
+            else {
+              const full = await r.json();
+              res = {
+                status: 200,
+                headers: {
+                  'content-type':
+                    r.headers.get('content-type') || 'application/json',
+                },
+                body: {
+                  name: full.name,
+                  height: full.height,
+                  weight: full.weight,
+                  types: full.types.map((x) => ({
+                    type: { name: x.type.name },
+                  })),
+                  stats: full.stats.map((x) => ({
+                    base_stat: x.base_stat,
+                    stat: { name: x.stat.name },
+                  })),
+                },
+                source: 'live',
+              };
+            }
+          } catch (e) {
+            if (!CACHE[name])
+              throw new Error(
+                'Fetch could not reach PokéAPI from this browser',
+              );
+            res = {
+              status: 200,
+              headers: { 'content-type': 'application/json; charset=utf-8' },
+              body: cachedBody(name),
+              source: 'cache',
+            };
+          }
+          res.url = url;
+          memo.set(name, res);
+          return res;
+        }
+
+        /* ---------- the "write it for me" agent: a template over the stat sheet ---------- */
+        const nice = (s) => s.replace(/-/g, ' ');
+        function draftPitch(sheet, withReasoning) {
+          const [top, val] = Object.entries(sheet.stats).sort(
+            (a, b) => b[1] - a[1],
+          )[0];
+          const Name = sheet.name[0].toUpperCase() + sheet.name.slice(1);
+          const out = {
+            name: sheet.name,
+            pitch: `${Name} stands ${sheet.heightM} metres tall and weighs ${sheet.weightKg} kilograms, small enough to ride along to every photo op, and its base ${nice(top)} of ${val} is the number it leads with.`,
+          };
+          if (withReasoning)
+            out.reasoning = `Height ${sheet.heightM} m and weight ${sheet.weightKg} kg carry the small-and-adorable angle; ${nice(top)} ${val} is its highest base stat. No abilities or moves are cited.`;
+          return out;
+        }
+
+        /* =====================================================================
+   1. RUN INSPECTOR REPLICA
+   ===================================================================== */
+        const NODES = [
+          {
+            id: 'entry',
+            kind: 'entry',
+            label: 'Pokémon name',
+            meta: 'Workflow input',
+            ct: 'Object → Object',
+            x: 12,
+            y: 120,
+          },
+          {
+            id: 'lookup',
+            kind: 'fetch',
+            label: 'Ask PokéAPI',
+            meta: 'Method: GET',
+            ct: 'Any → Object',
+            x: 200,
+            y: 120,
+          },
+          {
+            id: 'stats',
+            kind: 'script',
+            label: 'Pull the fun stats',
+            meta: 'JavaScript',
+            ct: 'Any → Any',
+            x: 388,
+            y: 120,
+          },
+          {
+            id: 'cute',
+            kind: 'condition',
+            label: 'Small and adorable?',
+            meta: 'smallAndAdorable equals true',
+            ct: 'Any → Any',
+            x: 576,
+            y: 120,
+          },
+          {
+            id: 'pitch',
+            kind: 'agent',
+            label: 'Write the mascot pitch',
+            meta: 'Current context · 2 attempts',
+            ct: 'Any → Object',
+            x: 784,
+            y: 34,
+          },
+          {
+            id: 'exitPitch',
+            kind: 'exit',
+            label: 'Mascot pitch',
+            meta: 'Return workflow result',
+            ct: 'Any → Any',
+            x: 976,
+            y: 34,
+          },
+          {
+            id: 'exitStats',
+            kind: 'exit',
+            label: 'Stat sheet',
+            meta: 'Return workflow result',
+            ct: 'Any → Any',
+            x: 784,
+            y: 214,
+          },
+        ];
+        const EDGES = [
+          ['entry', 'lookup'],
+          ['lookup', 'stats'],
+          ['stats', 'cute'],
+          ['cute', 'pitch', 'True', 't'],
+          ['pitch', 'exitPitch'],
+          ['cute', 'exitStats', 'False', 'f'],
+        ];
+        const NW = 168,
+          NH = 96,
+          GW = 1160,
+          GH = 330;
+        const LABELS = {
+          pending: 'Not started',
+          running: 'Running',
+          completed: 'Finished',
+          waiting: 'Waiting for an agent',
+          working: 'Agent working',
+          failed: 'Failed',
+        };
+        const graph = $('#graph');
+        graph.style.width = GW + 'px';
+        graph.style.height = GH + 'px';
+        const svg = document.createElementNS(
+          'http://www.w3.org/2000/svg',
+          'svg',
+        );
+        svg.setAttribute('class', 'edges');
+        svg.setAttribute('width', GW);
+        svg.setAttribute('height', GH);
+        svg.setAttribute('aria-hidden', 'true');
+        graph.appendChild(svg);
+        const nodeEls = {},
+          edgeEls = {};
+        const pos = Object.fromEntries(NODES.map((n) => [n.id, n]));
+        for (const [a, b, lab, cls] of EDGES) {
+          const A = pos[a],
+            B = pos[b],
+            x1 = A.x + NW,
+            y1 = A.y + NH / 2 + (lab ? (cls === 't' ? -14 : 14) : 0),
+            x2 = B.x,
+            y2 = B.y + NH / 2,
+            mx = (x1 + x2) / 2;
+          const p = document.createElementNS(
+            'http://www.w3.org/2000/svg',
+            'path',
+          );
+          p.setAttribute(
+            'd',
+            `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`,
+          );
+          svg.appendChild(p);
+          edgeEls[a + '>' + b] = p;
+          if (lab) {
+            const t = document.createElementNS(
+              'http://www.w3.org/2000/svg',
+              'text',
+            );
+            t.setAttribute('x', x1 + 8);
+            t.setAttribute('y', y1 - 5);
+            t.setAttribute('class', cls);
+            t.textContent = lab;
+            svg.appendChild(t);
+          }
+        }
+        for (const n of NODES) {
+          const b = el('button', {
+            type: 'button',
+            class: 'node st-idle',
+            style: `left:${n.x}px;top:${n.y}px`,
+            'aria-label': `${n.label}, ${n.kind}`,
+          });
+          b.innerHTML = `<span class="nstat"></span><span class="nh"><span class="ni ${n.kind}">${icon(n.kind, 15)}</span>${n.kind === 'agent' ? 'Agent assignment' : n.kind}</span><strong>${esc(n.label)}</strong><small>${esc(n.meta)}</small><small>${n.ct}</small>`;
+          b.addEventListener('click', () => select(n.id));
+          graph.appendChild(b);
+          nodeEls[n.id] = b;
+        }
+
+        const R = {
+          id: null,
+          status: 'ready',
+          nodes: {},
+          execs: [],
+          sel: null,
+          claim: null,
+          resolveAgent: null,
+          verdict: null,
+          draft: '',
+          token: 0,
+        };
+        function setNode(id, st) {
+          R.nodes[id] = st;
+          const e = nodeEls[id];
+          e.className = `node st-${st === 'working' ? 'running' : st}${R.sel === id ? ' sel' : ''}`;
+          const ic =
+            st === 'completed'
+              ? 'completed'
+              : st === 'running' || st === 'working'
+                ? 'running'
+                : st === 'failed'
+                  ? 'failed'
+                  : 'pending';
+          e.querySelector('.nstat').innerHTML =
+            st === 'idle'
+              ? ''
+              : `${icon(ic, 12, st === 'running' || st === 'working' ? 'spin' : '')}${LABELS[st] || ''}`;
+        }
+        function lightEdge(a, b, on, flow) {
+          const p = edgeEls[a + '>' + b];
+          if (p) {
+            p.classList.toggle('lit', on);
+            p.classList.toggle('flow', !!flow && !reduced);
+          }
+        }
+        function setPill(pillEl, st, text) {
+          pillEl.className = 'pill ' + st;
+          pillEl.textContent = text || st;
+        }
+        function exec(nodeId, input) {
+          const n = pos[nodeId];
+          const x = {
+            node: nodeId,
+            kind: n.kind,
+            label: n.label,
+            input,
+            output: undefined,
+            status: 'running',
+            startedAt: new Date(),
+            endedAt: null,
+            error: null,
+          };
+          R.execs.push(x);
+          renderSteps();
+          return x;
+        }
+        function done(x, output, status = 'completed') {
+          x.output = output;
+          x.status = status;
+          x.endedAt = new Date();
+          renderSteps();
+        }
+
+        function renderSteps() {
+          const ol = $('#steps');
+          ol.innerHTML = '';
+          $('#stepsEmpty').hidden = R.execs.length > 0;
+          R.execs.forEach((x, i) => {
+            const li = el('li');
+            const b = el('button', {
+              type: 'button',
+              class: 'steprow' + (R.sel === x.node ? ' sel' : ''),
+            });
+            const st = x.status === 'working' ? 'running' : x.status;
+            b.innerHTML = `<span class="ix">${String(i + 1).padStart(2, '0')}</span><div><strong>${esc(x.label)}</strong><small>${x.kind} · ${clock(x.startedAt)}</small></div><span class="s ${st}">${x.status === 'working' ? 'running' : x.status === 'waiting' ? 'waiting' : x.status}</span>`;
+            b.addEventListener('click', () => select(x.node));
+            li.appendChild(b);
+            ol.appendChild(li);
+          });
+        }
+        function select(id) {
+          R.sel = id;
+          for (const n of NODES)
+            nodeEls[n.id].classList.toggle('sel', n.id === id);
+          renderSteps();
+          renderDetails();
+        }
+
+        function renderDetails() {
+          const d = $('#details');
+          const id = R.sel;
+          if (!id) {
+            d.innerHTML = `<div class="dlabel">Execution details</div><p class="empty" style="padding-top:4px">Select a node or a timeline step to inspect its input and output.</p>`;
+            return;
+          }
+          const n = pos[id];
+          const x = [...R.execs].reverse().find((e) => e.node === id);
+          const st = R.nodes[id] || 'idle';
+          let h = `<div class="dlabel">Execution details</div><div class="dtitle">${esc(n.label)}</div><div class="dstate ${st === 'working' ? 'running' : st}">${LABELS[st] || 'Not started'}</div>`;
+          if (id === 'lookup')
+            h += `<div class="dlabel">Request</div><pre class="json">GET https://pokeapi.co/api/v2/pokemon/{{input.name}}</pre>`;
+          if (id === 'stats')
+            h += `<div class="dlabel">Script · JavaScript</div><pre class="json">${esc(SCRIPT)}</pre>`;
+          if (id === 'cute')
+            h += `<div class="dlabel">Condition</div><pre class="json">smallAndAdorable equals true</pre>`;
+          if (x) {
+            h += `<div class="dlabel">Input</div><pre class="json">${jsonHtml(x.input)}</pre>`;
+            if (id === 'lookup' && x.output)
+              h += `<p class="src">${x.output.source === 'live' ? '<b>Live response</b> from pokeapi.co, trimmed to the fields the Script reads.' : '<b class="c">Cached copy</b>: PokéAPI was unreachable, so this suggested name used a stored response.'}</p>`;
+            if (x.error)
+              h += `<div class="dlabel">Error</div><p class="verdict err">${esc(x.error)}</p>`;
+            if (
+              x.output !== undefined &&
+              !(id === 'pitch' && st !== 'completed')
+            )
+              h += `<div class="dlabel">Output</div><pre class="json">${jsonHtml(x.output)}</pre>`;
+            if (id === 'cute' && R.port)
+              h += `<p class="src">Followed the <b${R.port === 'true' ? '' : ' class="c"'}>${R.port === 'true' ? 'True' : 'False'}</b> route. Condition passes its input through unchanged.</p>`;
+          }
+          if (id === 'pitch') {
+            h += `<div class="dlabel">Prompt and context</div><p class="prompt">${esc(PROMPT_V1)}</p><div class="dlabel">Expected output schema</div><pre class="json">${jsonHtml(OUT_SCHEMA)}</pre>`;
+            if (st === 'waiting')
+              h += `<p class="hint">Waiting for an agent to pick up this assignment. Use <b>Claim as the agent</b> above.</p>`;
+            if (st === 'working') {
+              h += `<div class="console"><p class="who">Claimed by you. Lease ends ${clock(R.claim.until)}.</p><label class="visually-hidden" for="agentOut">Agent result JSON</label><textarea id="agentOut" spellcheck="false">${esc(R.draft)}</textarea><div class="row"><button class="btn primary" type="button" id="submitBtn">Submit result</button><button class="btn" type="button" id="fixBtn">Write it for me</button></div>${R.verdict ? `<p class="verdict err" role="alert">${esc(R.verdict)}</p><p class="hint">The claim stays active, so you can correct the answer and submit again.</p>` : `<p class="hint">This draft has a problem. Submit it and see what the contract says.</p>`}</div>`;
+            }
+          }
+          d.innerHTML = h;
+          if (st === 'working') {
+            const ta = $('#agentOut');
+            ta.addEventListener('input', () => {
+              R.draft = ta.value;
+            });
+            $('#submitBtn').addEventListener('click', submitAgent);
+            $('#fixBtn').addEventListener('click', () => {
+              R.draft = JSON.stringify(draftPitch(R.sheet, true), null, 2);
+              R.verdict = null;
+              renderDetails();
+              $('#agentOut').focus();
+            });
+          }
+        }
+
+        function submitAgent() {
+          let v;
+          try {
+            v = JSON.parse(R.draft);
+          } catch {
+            R.verdict =
+              "That is not valid JSON yet. (This check is the page's; Interlock receives parsed JSON from your agent.)";
+            renderDetails();
+            return;
+          }
+          const err = contractErrors(OUT_SCHEMA, v, 'Agent result');
+          if (err) {
+            R.verdict = err;
+            renderDetails();
+            return;
+          }
+          R.verdict = null;
+          const fn = R.resolveAgent;
+          R.resolveAgent = null;
+          fn(v);
+        }
+
+        $('#claimBtn').addEventListener('click', () => {
+          if (R.nodes.pitch !== 'waiting') return;
+          R.claim = { until: new Date(Date.now() + 300000) };
+          R.draft = JSON.stringify(draftPitch(R.sheet, false), null, 2);
+          setNode('pitch', 'working');
+          setPill($('#runPill'), 'running', 'running');
+          story(2);
+          const x = R.execs.find((e) => e.node === 'pitch');
+          x.status = 'working';
+          renderSteps();
+          $('#rxHandoff').classList.remove('show');
+          select('pitch');
+          setTimeout(() => $('#agentOut')?.focus(), 50);
+        });
+
+        async function startRun() {
+          const name = $('#pkName').value.trim().toLowerCase() || 'togepi';
+          $('#pkName').value = name;
+          const token = ++R.token;
+          R.id = hex();
+          R.execs = [];
+          R.sel = null;
+          R.claim = null;
+          R.verdict = null;
+          R.port = null;
+          R.resolveAgent = null;
+          R.sheet = null;
+          $('#runId').textContent = R.id;
+          $('#rxHandoff').classList.remove('show');
+          for (const n of NODES) setNode(n.id, 'pending');
+          for (const k in edgeEls) edgeEls[k].classList.remove('lit', 'flow');
+          setPill($('#runPill'), 'running', 'running');
+          story(0);
+          renderDetails();
+          const alive = () => token === R.token;
+          const fail = (x, nodeId, msg) => {
+            x.error = msg;
+            done(x, undefined, 'failed');
+            setNode(nodeId, 'failed');
+            setPill($('#runPill'), 'failed', 'failed');
+            select(nodeId);
+          };
+          // Entry
+          let x = exec('entry', { name });
+          setNode('entry', 'running');
+          await sleep(250);
+          if (!alive()) return;
+          done(x, { name });
+          setNode('entry', 'completed');
+          lightEdge('entry', 'lookup', true, true);
+          // Fetch
+          x = exec('lookup', { name });
+          setNode('lookup', 'running');
+          select('lookup');
+          let res;
+          try {
+            [res] = await Promise.all([pokeFetch(name), sleep(500)]);
+          } catch (e) {
+            if (alive()) fail(x, 'lookup', e.message);
+            return;
+          }
+          if (!alive()) return;
+          lightEdge('entry', 'lookup', true, false);
+          const fetchOut = {
+            status: res.status,
+            headers: res.headers,
+            body: res.body,
+            source: res.source,
+          };
+          if (res.status < 200 || res.status >= 300) {
+            x.output = fetchOut;
+            fail(x, 'lookup', `Fetch returned HTTP ${res.status}`);
+            return;
+          }
+          done(x, fetchOut);
+          setNode('lookup', 'completed');
+          lightEdge('lookup', 'stats', true, true);
+          // Script (the workflow's own code)
+          x = exec('stats', {
+            status: res.status,
+            headers: res.headers,
+            body: res.body,
+          });
+          setNode('stats', 'running');
+          select('stats');
+          await sleep(450);
+          if (!alive()) return;
+          let sheet;
+          try {
+            sheet = await runScript({
+              status: res.status,
+              headers: res.headers,
+              body: res.body,
+            });
+          } catch (e) {
+            fail(x, 'stats', e.message);
+            return;
+          }
+          R.sheet = sheet;
+          done(x, sheet);
+          setNode('stats', 'completed');
+          lightEdge('lookup', 'stats', true, false);
+          lightEdge('stats', 'cute', true, true);
+          // Condition
+          x = exec('cute', sheet);
+          setNode('cute', 'running');
+          await sleep(300);
+          if (!alive()) return;
+          R.port = sheet.smallAndAdorable === true ? 'true' : 'false';
+          done(x, sheet);
+          setNode('cute', 'completed');
+          lightEdge('stats', 'cute', true, false);
+          if (R.port === 'false') {
+            lightEdge('cute', 'exitStats', true, true);
+            setNode('pitch', 'skipped');
+            setNode('exitPitch', 'skipped');
+            nodeEls.pitch.querySelector('.nstat').innerHTML =
+              `${icon('pending', 12)}Not started`;
+            nodeEls.exitPitch.querySelector('.nstat').innerHTML =
+              `${icon('pending', 12)}Not started`;
+            x = exec('exitStats', sheet);
+            setNode('exitStats', 'running');
+            await sleep(250);
+            if (!alive()) return;
+            done(x, sheet);
+            setNode('exitStats', 'completed');
+            lightEdge('cute', 'exitStats', true, false);
+            setPill($('#runPill'), 'completed', 'completed');
+            story(3);
+            select('exitStats');
+            return;
+          }
+          // Agent
+          lightEdge('cute', 'pitch', true, true);
+          setNode('exitStats', 'skipped');
+          nodeEls.exitStats.querySelector('.nstat').innerHTML =
+            `${icon('pending', 12)}Not started`;
+          x = exec('pitch', sheet);
+          x.status = 'waiting';
+          renderSteps();
+          setNode('pitch', 'waiting');
+          setPill($('#runPill'), 'waiting', 'waiting');
+          story(1);
+          $('#rxHandoff').classList.add('show');
+          select('pitch');
+          const result = await new Promise((r) => {
+            R.resolveAgent = r;
+          });
+          if (!alive()) return;
+          done(x, result);
+          setNode('pitch', 'completed');
+          lightEdge('cute', 'pitch', true, false);
+          lightEdge('pitch', 'exitPitch', true, true);
+          x = exec('exitPitch', result);
+          setNode('exitPitch', 'running');
+          await sleep(250);
+          if (!alive()) return;
+          done(x, result);
+          setNode('exitPitch', 'completed');
+          lightEdge('pitch', 'exitPitch', true, false);
+          setPill($('#runPill'), 'completed', 'completed');
+          story(3);
+          select('exitPitch');
+        }
+        $('#runBtn').addEventListener('click', startRun);
+        $('#pkName').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') startRun();
+        });
+        const chipBox = $('#pkChips');
+        for (const [n, hint] of [
+          ['togepi', 'small'],
+          ['pikachu', 'small'],
+          ['snorlax', 'big'],
+          ['gengar', 'big'],
+          ['agumon', 'not a Pokémon'],
+        ]) {
+          const c = el(
+            'button',
+            { type: 'button', class: 'chip' },
+            `${n}<small>${hint}</small>`,
+          );
+          c.addEventListener('click', () => {
+            $('#pkName').value = n;
+            startRun();
+          });
+          chipBox.appendChild(c);
+        }
+        for (const n of NODES) setNode(n.id, 'idle');
+        renderDetails();
+        // center the canvas on narrow screens at the start of the graph
+        $('#canvas').scrollLeft = 0;
+
+        /* =====================================================================
+   2. BATCH REPLICA
+   ===================================================================== */
+        const B = {
+          cands: [
+            'pikachu',
+            'eevee',
+            'jigglypuff',
+            'snorlax',
+            'gengar',
+            'lapras',
+            'bulbasaur',
+          ],
+          conc: 5,
+          pol: 'all',
+          items: [],
+          running: false,
+          token: 0,
+          waiters: new Map(),
+          pick: null,
+        };
+        function renderCands() {
+          const box = $('#cands');
+          box.innerHTML = '';
+          B.cands.forEach((n, i) => {
+            const s = el(
+              'span',
+              { class: 'cand' },
+              `${esc(n)}<button type="button" aria-label="Remove ${esc(n)}">${icon('x', 12)}</button>`,
+            );
+            s.querySelector('button').addEventListener('click', () => {
+              if (B.running) return;
+              B.cands.splice(i, 1);
+              renderCands();
+              resetBatch();
+            });
+            box.appendChild(s);
+          });
+        }
+        $('#addCand').addEventListener('submit', (e) => {
+          e.preventDefault();
+          const v = $('#candIn').value.trim().toLowerCase();
+          if (!v || B.running) return;
+          B.cands.push(v);
+          $('#candIn').value = '';
+          renderCands();
+          resetBatch();
+        });
+        $('#conc').addEventListener('input', (e) => {
+          B.conc = +e.target.value;
+          $('#concVal').textContent = B.conc;
+          if (!B.running)
+            $('#batchSummary').textContent =
+              `Each item runs independently · Up to ${B.conc} at once`;
+        });
+        document.querySelectorAll('[data-pol]').forEach((b) =>
+          b.addEventListener('click', () => {
+            if (B.running) return;
+            B.pol = b.dataset.pol;
+            document
+              .querySelectorAll('[data-pol]')
+              .forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+            resetBatch();
+          }),
+        );
+        const STEPS5 = ['Fetch', 'Script', 'Condition', 'Agent', 'Exit'];
+        function laneHtml(it, i) {
+          const t = it.track.map((s) => `<i class="${s}"></i>`).join('');
+          const lab = {
+            queued: 'Queued',
+            running: 'Running',
+            waiting: 'Waiting for an agent',
+            completed: 'Finished',
+            failed: 'Failed',
+            cancelled: 'Cancelled',
+          }[it.status];
+          const act =
+            it.status === 'waiting'
+              ? `<button class="btn soft" type="button" data-answer="${i}">Answer</button>`
+              : '';
+          return `<span class="ix">${String(i + 1).padStart(2, '0')}</span><span class="nm">${esc(it.name)}</span><span class="track" aria-hidden="true">${t}</span><span class="lstate"><span class="s ${it.status}">${lab}${it.error ? ` · ${esc(it.error)}` : ''}</span>${act}</span>`;
+        }
+        function renderLanes() {
+          const ol = $('#lanes');
+          ol.innerHTML = '';
+          B.items.forEach((it, i) => {
+            const li = el(
+              'li',
+              { class: `lane st-${it.status}` },
+              laneHtml(it, i),
+            );
+            ol.appendChild(li);
+          });
+          ol.querySelectorAll('[data-answer]').forEach((b) =>
+            b.addEventListener('click', () => answerItem(+b.dataset.answer)),
+          );
+          const fin = B.items.filter((x) =>
+              ['completed', 'failed', 'cancelled'].includes(x.status),
+            ).length,
+            wait = B.items.filter((x) => x.status === 'waiting').length;
+          const nf = B.items.filter((x) => x.status === 'failed').length,
+            nc = B.items.filter((x) => x.status === 'cancelled').length,
+            ok = B.items.filter((x) => x.status === 'completed').length;
+          if (B.items.length)
+            $('#batchSummary').textContent = nc
+              ? `Batch failed · ${ok} finished, ${nf} failed, ${nc} cancelled`
+              : `${fin} of ${B.items.length} finished${wait ? ` · ${wait} waiting` : ''}${nf ? ` · ${nf} failed` : ''}`;
+          $('#answerAll').hidden = wait < 2;
+        }
+        function resetBatch() {
+          B.token++;
+          B.running = false;
+          B.waiters.clear();
+          B.pick = null;
+          B.items = B.cands.map((name) => ({
+            name,
+            status: 'queued',
+            track: STEPS5.map(() => ''),
+            error: null,
+            output: null,
+            runId: hex(),
+          }));
+          renderLanes();
+          $('#batchSummary').textContent =
+            `Each item runs independently · Up to ${B.conc} at once`;
+          setPill($('#outPill'), '', 'empty');
+          $('#outJson').textContent = '[]';
+          setPill($('#pickPill'), '', 'not started');
+          $('#pickBody').innerHTML =
+            'Runs after every item returns. Its input is the ordered list from Out.';
+          $('#pickBody').className = 'empty';
+          $('#batchRun').disabled = false;
+          $('#conc').disabled = false;
+        }
+        function answerItem(i) {
+          const w = B.waiters.get(i);
+          if (w) {
+            B.waiters.delete(i);
+            w();
+          }
+        }
+        $('#answerAll').addEventListener('click', () =>
+          [...B.waiters.keys()].forEach(answerItem),
+        );
+        async function runItem(it, i, token) {
+          const alive = () => token === B.token && it.status !== 'cancelled';
+          it.status = 'running';
+          it.track[0] = 'run';
+          renderLanes();
+          let res;
+          try {
+            [res] = await Promise.all([
+              pokeFetch(it.name),
+              sleep(400 + Math.random() * 900),
+            ]);
+          } catch (e) {
+            res = { status: 0, err: e.message };
+          }
+          if (!alive()) return;
+          if (!(res.status >= 200 && res.status < 300)) {
+            it.track[0] = 'fail';
+            it.status = 'failed';
+            it.error = res.err || `Fetch returned HTTP ${res.status}`;
+            renderLanes();
+            return;
+          }
+          it.track[0] = 'done';
+          it.track[1] = 'run';
+          renderLanes();
+          await sleep(250 + Math.random() * 500);
+          if (!alive()) return;
+          const sheet = await runScript({
+            status: res.status,
+            headers: res.headers,
+            body: res.body,
+          });
+          it.sheet = sheet;
+          it.track[1] = 'done';
+          it.track[2] = 'done';
+          renderLanes();
+          await sleep(200);
+          if (!alive()) return;
+          if (sheet.smallAndAdorable) {
+            it.track[3] = 'wait';
+            it.status = 'waiting';
+            renderLanes();
+            await new Promise((r) => B.waiters.set(i, r));
+            if (!alive()) return;
+            it.output = draftPitch(sheet, true);
+            it.track[3] = 'done';
+          } else {
+            it.output = sheet;
+            it.track[3] = 'skip';
+          }
+          it.track[4] = 'done';
+          it.status = 'completed';
+          renderLanes();
+        }
+        $('#batchRun').addEventListener('click', async () => {
+          resetBatch();
+          const token = B.token;
+          B.running = true;
+          $('#batchRun').disabled = true;
+          $('#conc').disabled = true;
+          setPill($('#outPill'), 'running', 'collecting');
+          let next = 0,
+            failedAll = false;
+          const items = B.items;
+          const worker = async () => {
+            while (next < items.length && !failedAll && token === B.token) {
+              const i = next++;
+              await runItem(items[i], i, token);
+              if (items[i].status === 'failed' && B.pol === 'all') {
+                failedAll = true;
+                for (const o of items)
+                  if (['queued', 'running', 'waiting'].includes(o.status)) {
+                    o.status = 'cancelled';
+                  }
+                for (const [k, w] of B.waiters) {
+                  B.waiters.delete(k);
+                  w();
+                }
+                renderLanes();
+              }
+            }
+          };
+          await Promise.all(
+            Array.from({ length: Math.min(B.conc, items.length) }, worker),
+          );
+          if (token !== B.token) return;
+          B.running = false;
+          $('#conc').disabled = false;
+          $('#batchRun').disabled = false;
+          if (failedAll) {
+            setPill($('#outPill'), 'failed', 'batch failed');
+            $('#outJson').textContent =
+              `No collection emitted. One item failed, so with "all" the Batch fails and unfinished items are cancelled.`;
+            setPill($('#pickPill'), 'cancelled', 'not reached');
+            return;
+          }
+          const out =
+            B.pol === 'all'
+              ? items.map((x) => x.output)
+              : items.map((x) => ({
+                  runId: x.runId,
+                  status: x.status,
+                  output: x.output,
+                  error: x.error,
+                }));
+          setPill($('#outPill'), 'completed', `${out.length} in input order`);
+          $('#outJson').innerHTML = jsonHtml(out);
+          setPill($('#pickPill'), 'waiting', 'waiting for an agent');
+          $('#pickBody').className = '';
+          $('#pickBody').innerHTML =
+            `<p class="hint" style="margin:0 0 10px">The final agent step receives the ordered list. Answer it to finish the run.</p><button class="btn primary" type="button" id="pickBtn">Answer as the agent</button>`;
+          $('#pickBtn').addEventListener('click', () => {
+            const scored = items
+              .filter((x) => x.status === 'completed')
+              .map((x) => ({
+                name: x.name,
+                sheet: x.sheet,
+                pitch: x.output.pitch,
+                total: Object.values(x.sheet.stats).reduce((a, b) => a + b, 0),
+              }));
+            scored.sort((a, b) => b.total - a.total);
+            const picks = scored.slice(0, 6),
+              bench = scored.slice(6),
+              failed = items
+                .filter((x) => x.status !== 'completed')
+                .map((x) => x.name);
+            const role = (p) => {
+              const [k, v] = Object.entries(p.sheet.stats).sort(
+                (a, b) => b[1] - a[1],
+              )[0];
+              return `Leads with ${nice(k)} ${v}${p.pitch ? '. Mascot pitch on file' : ''}.`;
+            };
+            $('#pickBody').innerHTML =
+              `<table class="roster"><thead><tr><th>Pick</th><th>Role</th></tr></thead><tbody>${picks.map((p) => `<tr><td>${esc(p.name)}</td><td>${esc(role(p))}</td></tr>`).join('')}</tbody></table><p class="hint">${bench.length ? `Bench: ${bench.map((b) => esc(b.name)).join(', ')}. ` : ''}${failed.length ? `Scouting failed: ${failed.map(esc).join(', ')}.` : 'Scouting failures: none.'} Drafted by this page from the stat sheets.</p>`;
+            setPill($('#pickPill'), 'completed', 'finished');
+          });
+        });
+        renderCands();
+        resetBatch();
+
+        /* =====================================================================
+   3. PUBLISH REPLICA
+   ===================================================================== */
+        const V = {
+          published: [PROMPT_V1],
+          runs: [{ id: 'b5fb4f41', v: 1, st: 'waiting' }],
+        };
+        const ed = $('#promptEd');
+        ed.value = PROMPT_V1;
+        const words = (s) => s.split(/(\s+)/).filter((w) => w.length);
+        function diffWords(a, b) {
+          const A = words(a),
+            Bw = words(b),
+            n = A.length,
+            m = Bw.length,
+            L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+          for (let i = n - 1; i >= 0; i--)
+            for (let j = m - 1; j >= 0; j--)
+              L[i][j] =
+                A[i] === Bw[j]
+                  ? L[i + 1][j + 1] + 1
+                  : Math.max(L[i + 1][j], L[i][j + 1]);
+          let i = 0,
+            j = 0,
+            left = '',
+            right = '';
+          while (i < n && j < m) {
+            if (A[i] === Bw[j]) {
+              left += esc(A[i]);
+              right += esc(Bw[j]);
+              i++;
+              j++;
+            } else if (L[i + 1][j] >= L[i][j + 1]) {
+              left += `<del>${esc(A[i])}</del>`;
+              i++;
+            } else {
+              right += `<ins>${esc(Bw[j])}</ins>`;
+              j++;
+            }
+          }
+          while (i < n) left += `<del>${esc(A[i++])}</del>`;
+          while (j < m) right += `<ins>${esc(Bw[j++])}</ins>`;
+          return [left, right];
+        }
+        function renderPub() {
+          const cur = V.published[V.published.length - 1],
+            v = V.published.length,
+            changed = ed.value !== cur;
+          $('#cmpTitle').textContent = `Draft compared with published v${v}`;
+          $('#counts').innerHTML =
+            `<span class="${changed ? 'on' : ''}">${changed ? 1 : 0} node change${changed ? '' : 's'}</span><span>0 route changes</span><span>0 workflow changes</span>`;
+          if (changed) {
+            const [l, r] = diffWords(cur, ed.value);
+            $('#diffBox').innerHTML =
+              `<div class="diff"><div><span class="lbl">Published · Write the mascot pitch · prompt</span>${l}</div><div><span class="lbl">Draft</span>${r}</div></div>`;
+          } else
+            $('#diffBox').innerHTML =
+              `<p class="nochange">No changes from v${v}. Edit the prompt, or press <b>Try an edit</b>.</p>`;
+          $('#publishBtn').disabled = !changed;
+          $('#publishBtn').textContent = changed
+            ? `Publish v${v + 1}`
+            : 'Publish version';
+          setPill(
+            $('#draftPill'),
+            changed ? 'waiting' : '',
+            changed ? 'Unsaved changes' : `Draft saved · v${v} published`,
+          );
+          $('#pubHint').textContent = changed
+            ? 'Publishing saves the draft and creates an immutable version.'
+            : '';
+          $('#versions').innerHTML =
+            V.published
+              .map((_, k) => {
+                const rs = V.runs.filter((r) => r.v === k + 1);
+                return `<div class="ver"><b>v${k + 1} ${k === V.published.length - 1 ? '<span class="pill completed">latest</span>' : '<span class="pill">immutable</span>'}</b><small>${k === 0 ? 'The starter workflow as shipped.' : 'Your edit. New runs start here.'}</small><div class="runchips">${rs.map((r) => `<span class="${r.st === 'waiting' ? 'w' : ''}">run ${r.id} · ${r.st}</span>`).join('') || '<span>no runs yet</span>'}</div></div>`;
+              })
+              .join('') +
+            `<div class="ver"><button class="btn" type="button" id="newRun">Start a run on v${V.published.length}</button><small>Existing runs keep their version.</small></div>`;
+          $('#newRun').addEventListener('click', () => {
+            V.runs.push({ id: hex(), v: V.published.length, st: 'running' });
+            renderPub();
+          });
+        }
+        ed.addEventListener('input', renderPub);
+        $('#tryEdit').addEventListener('click', () => {
+          ed.value = ed.value
+            .replace('One short paragraph', 'Two short sentences')
+            .replace('delightfully overcommitted', 'calmly confident');
+          renderPub();
+        });
+        $('#discard').addEventListener('click', () => {
+          ed.value = V.published[V.published.length - 1];
+          renderPub();
+        });
+        $('#publishBtn').addEventListener('click', () => {
+          V.published.push(ed.value);
+          renderPub();
+        });
+        renderPub();
+
+        /* =====================================================================
+   4. CONNECT: client configs from docs/connect-harness.md
+   ===================================================================== */
+        const CLIENTS = [
+          [
+            'Claude Code',
+            'Run this once:',
+            'claude mcp add --transport http --scope user interlock http://127.0.0.1:4310/mcp',
+          ],
+          [
+            'Codex',
+            'Add this to <code>~/.codex/config.toml</code>:',
+            '[mcp_servers.interlock]\nurl = "http://127.0.0.1:4310/mcp"',
+          ],
+          [
+            'OpenCode',
+            'Merge this into <code>opencode.json</code>:',
+            '{\n  "$schema": "https://opencode.ai/config.json",\n  "mcp": {\n    "interlock": {\n      "type": "remote",\n      "url": "http://127.0.0.1:4310/mcp",\n      "enabled": true,\n      "oauth": false\n    }\n  }\n}',
+          ],
+          [
+            'Other clients',
+            'Choose <b>Streamable HTTP</b>. No command, arguments or authentication:',
+            'http://127.0.0.1:4310/mcp',
+          ],
+          [
+            'Claude Desktop',
+            'Uses the stdio fallback. Merge into its MCP configuration:',
+            '{\n  "mcpServers": {\n    "interlock": { "command": "interlock", "args": ["mcp"] }\n  }\n}',
+          ],
+        ];
+        const tabs = $('#tabs'),
+          panel = $('#tabpanel');
+        function showTab(k) {
+          tabs.querySelectorAll('button').forEach((b, i) => {
+            b.setAttribute('aria-selected', String(i === k));
+            b.tabIndex = i === k ? 0 : -1;
+          });
+          const [name, lead, code] = CLIENTS[k];
+          panel.setAttribute('aria-labelledby', 'tab-' + k);
+          panel.innerHTML = `<p>${lead}</p><div class="codeblock"><pre>${esc(code)}</pre><button class="btn copy-cmd" type="button" data-copy="${esc(code)}"><span class="ic">Copy</span><span class="ok">Copied</span></button></div><p style="margin:10px 0 0">Restart or reconnect ${esc(name === 'Other clients' ? 'your client' : name)} afterwards, and enable Interlock's tools in its approval settings.</p>`;
+          bindCopy(panel);
+        }
+        CLIENTS.forEach(([name], i) => {
+          const b = el(
+            'button',
+            {
+              type: 'button',
+              role: 'tab',
+              id: 'tab-' + i,
+              'aria-controls': 'tabpanel',
+            },
+            esc(name),
+          );
+          b.addEventListener('click', () => showTab(i));
+          b.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+              const n =
+                (i + (e.key === 'ArrowRight' ? 1 : CLIENTS.length - 1)) %
+                CLIENTS.length;
+              showTab(n);
+              tabs.children[n].focus();
+            }
+          });
+          tabs.appendChild(b);
+        });
+
+        /* copy buttons */
+        function bindCopy(root = document) {
+          root.querySelectorAll('[data-copy]').forEach((b) => {
+            if (b.dataset.bound) return;
+            b.dataset.bound = '1';
+            b.addEventListener('click', async () => {
+              try {
+                await navigator.clipboard.writeText(b.dataset.copy);
+                b.classList.add('done');
+                const cp = b.querySelector('.cp');
+                if (cp) {
+                  cp.textContent = 'Copied';
+                  setTimeout(() => (cp.textContent = 'Copy'), 1600);
+                }
+                setTimeout(() => b.classList.remove('done'), 1600);
+              } catch {}
+            });
+          });
+        }
+        showTab(0);
+        bindCopy();
+      })();
+    </script>
+    <script>
+      (() => {
+        const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        /* ---------- hero field: a workflow graph with runs flowing through it ---------- */
+        const canvas = document.getElementById('field');
+        if (canvas) {
+          const ctx = canvas.getContext('2d');
+          const dpr = Math.min(devicePixelRatio || 1, 2);
+          let w,
+            h,
+            raf,
+            nodes = [],
+            edges = [],
+            pulses = [];
+          // seeded PRNG so the layout is stable between loads
+          let seed = 7;
+          const rnd = () =>
+            ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+          function build() {
+            seed = 7;
+            nodes = [];
+            edges = [];
+            pulses = [];
+            const colW = 150,
+              cols = Math.ceil(w / colW) + 1;
+            const layers = [];
+            for (let c = 0; c < cols; c++) {
+              const n = 3 + Math.floor(rnd() * 4),
+                layer = [];
+              for (let k = 0; k < n; k++) {
+                const kind =
+                  rnd() < 0.16 ? 'agent' : rnd() < 0.2 ? 'flow' : 'det';
+                const node = {
+                  x: c * colW + (rnd() - 0.5) * 60,
+                  y: ((k + 0.5) * h) / n + (rnd() - 0.5) * 70,
+                  kind,
+                };
+                nodes.push(node);
+                layer.push(node);
+              }
+              layers.push(layer);
+            }
+            for (let c = 0; c < layers.length - 1; c++)
+              for (const a of layers[c]) {
+                const m = 1 + (rnd() < 0.35 ? 1 : 0);
+                for (let j = 0; j < m; j++)
+                  edges.push({
+                    a,
+                    b: layers[c + 1][Math.floor(rnd() * layers[c + 1].length)],
+                  });
+              }
+          }
+          const COL = {
+            det: '130,180,255',
+            agent: '240,161,211',
+            flow: '224,160,75',
+          };
+          function bez(e, t) {
+            const { a, b } = e,
+              mx = (a.x + b.x) / 2,
+              u = 1 - t;
+            return [
+              u * u * u * a.x +
+                3 * u * u * t * mx +
+                3 * u * t * t * mx +
+                t * t * t * b.x,
+              u * u * u * a.y +
+                3 * u * u * t * a.y +
+                3 * u * t * t * b.y +
+                t * t * t * b.y,
+            ];
+          }
+          function size() {
+            const r = canvas.getBoundingClientRect();
+            w = r.width;
+            h = r.height;
+            canvas.width = w * dpr;
+            canvas.height = h * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            build();
+          }
+          function frame(static_) {
+            ctx.clearRect(0, 0, w, h);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(255,255,255,.05)';
+            for (const { a, b } of edges) {
+              const mx = (a.x + b.x) / 2;
+              ctx.beginPath();
+              ctx.moveTo(a.x, a.y);
+              ctx.bezierCurveTo(mx, a.y, mx, b.y, b.x, b.y);
+              ctx.stroke();
+            }
+            for (const n of nodes) {
+              const lit = n.lit ? Math.max(0, n.lit) : 0;
+              ctx.fillStyle = `rgba(${COL[n.kind]},${0.12 + lit * 0.6})`;
+              ctx.strokeStyle = `rgba(${COL[n.kind]},${0.25 + lit * 0.6})`;
+              ctx.beginPath();
+              ctx.roundRect(n.x - 9, n.y - 6, 18, 12, 3);
+              ctx.fill();
+              ctx.stroke();
+              if (n.lit) n.lit -= 0.02;
+            }
+            if (static_) return;
+            if (pulses.length < 26 && Math.random() < 0.25)
+              pulses.push({
+                e: edges[Math.floor(Math.random() * edges.length)],
+                t: 0,
+                v: 0.006 + Math.random() * 0.008,
+              });
+            for (let i = pulses.length - 1; i >= 0; i--) {
+              const p = pulses[i];
+              p.t += p.v;
+              if (p.t >= 1) {
+                p.e.b.lit = 1;
+                const next = edges.filter((e) => e.a === p.e.b);
+                if (next.length && Math.random() < 0.8) {
+                  p.e = next[Math.floor(Math.random() * next.length)];
+                  p.t = 0;
+                } else {
+                  pulses.splice(i, 1);
+                  continue;
+                }
+              }
+              const [x, y] = bez(p.e, p.t),
+                c = COL[p.e.b.kind];
+              const g = ctx.createRadialGradient(x, y, 0, x, y, 10);
+              g.addColorStop(0, `rgba(${c},.9)`);
+              g.addColorStop(1, `rgba(${c},0)`);
+              ctx.fillStyle = g;
+              ctx.beginPath();
+              ctx.arc(x, y, 10, 0, 7);
+              ctx.fill();
+            }
+          }
+          function tick() {
+            frame(false);
+            raf = requestAnimationFrame(tick);
+          }
+          size();
+          addEventListener('resize', () => {
+            size();
+            if (reduced) frame(true);
+          });
+          if (reduced) frame(true);
+          else
+            new IntersectionObserver(([e]) => {
+              cancelAnimationFrame(raf);
+              if (e.isIntersecting) raf = requestAnimationFrame(tick);
+            }).observe(canvas);
+          document.addEventListener(
+            'visibilitychange',
+            () => document.hidden && cancelAnimationFrame(raf),
+          );
+        }
+
+        /* ---------- IO reveals ---------- */
+        const io = new IntersectionObserver(
+          (es) => {
+            for (const e of es)
+              if (e.isIntersecting) {
+                e.target.classList.add('in');
+                io.unobserve(e.target);
+              }
+          },
+          { rootMargin: '0px 0px -10% 0px', threshold: 0.12 },
+        );
+        document.querySelectorAll('[data-io]').forEach((el) => io.observe(el));
+
+        /* ---------- node kinds: scattered, then arranged ---------- */
+        const KINDS = [
+          ['Entry', 'edge'],
+          ['Fetch', 'det'],
+          ['Script', 'det'],
+          ['Condition', 'flow'],
+          ['Switch', 'flow'],
+          ['Agent', 'agent'],
+          ['Wait', 'flow'],
+          ['Workflow', 'det'],
+          ['Batch', 'flow'],
+          ['Exit', 'edge'],
+        ];
+        const NOTES = {
+          Entry: 'input',
+          Fetch: 'http',
+          Script: 'js · bash',
+          Condition: 'branch',
+          Switch: 'route',
+          Agent: 'assignment',
+          Wait: 'timer',
+          Workflow: 'child run',
+          Batch: 'per item',
+          Exit: 'output',
+        };
+        const kinds = document.getElementById('kinds');
+        if (kinds) {
+          const cols = 5;
+          KINDS.forEach(([name, cls], i) => {
+            const el = document.createElement('span');
+            el.className = 'kchip ' + cls;
+            el.innerHTML = `<i></i>${name}<span class="n">${NOTES[name]}</span>`;
+            const col = i % cols,
+              row = (i / cols) | 0;
+            el.style.left = `calc(${col * (100 / cols)}% + ${
+              col === 0 ? 0 : 8
+            }px)`;
+            el.style.top = row * 74 + 20 + 'px';
+            const sx = ((i * 137) % 260) - 130,
+              sy = ((i * 89) % 160) - 80,
+              sr = ((i * 53) % 24) - 12;
+            el.style.setProperty('--sx', sx + 'px');
+            el.style.setProperty('--sy', sy + 'px');
+            el.style.setProperty('--sr', sr + 'deg');
+            kinds.appendChild(el);
+          });
+          new IntersectionObserver(
+            ([e]) => {
+              if (!e.isIntersecting) return;
+              kinds.classList.add('in');
+              const arrow = kinds.querySelector('.arrow');
+              setTimeout(
+                () => {
+                  arrow.style.opacity = 0;
+                  setTimeout(() => {
+                    arrow.textContent =
+                      'entry → steps → exit, published as one version';
+                    arrow.style.opacity = 1;
+                  }, 300);
+                },
+                reduced ? 0 : 1100,
+              );
+            },
+            { threshold: 0.4 },
+          ).observe(kinds);
+        }
+
+        /* ---------- count-up stats ---------- */
+        const fmt = new Intl.NumberFormat('en-US');
+        const cio = new IntersectionObserver(
+          (es) => {
+            for (const e of es) {
+              if (!e.isIntersecting) continue;
+              cio.unobserve(e.target);
+              const end = +e.target.dataset.count;
+              if (reduced) {
+                e.target.textContent = fmt.format(end);
+                continue;
+              }
+              const t0 = performance.now(),
+                D = 1300;
+              (function step(t) {
+                const p = Math.min(1, (t - t0) / D),
+                  ease = 1 - Math.pow(1 - p, 3);
+                e.target.textContent = fmt.format(Math.round(end * ease));
+                if (p < 1) requestAnimationFrame(step);
+              })(t0);
+            }
+          },
+          { threshold: 0.6 },
+        );
+        document
+          .querySelectorAll('[data-count]')
+          .forEach((el) => cio.observe(el));
+
+        /* ---------- executor loop replay ---------- */
+        const replay = document.getElementById('replay');
+        if (replay) {
+          const steps = [...replay.querySelectorAll('.rstep')];
+          if (reduced) steps.forEach((s) => s.classList.add('on'));
+          else {
+            let played = false;
+            new IntersectionObserver(
+              ([e]) => {
+                if (!e.isIntersecting || played) return;
+                played = true;
+                steps.forEach((s, i) =>
+                  setTimeout(() => s.classList.add('on'), 350 + i * 700),
+                );
+              },
+              { threshold: 0.3 },
+            ).observe(replay);
+          }
+        }
+
+        /* ---------- scroll-spy: dot rail + top nav ---------- */
+        const spy = {};
+        const track = (key, a) => (spy[key] = spy[key] || []).push(a);
+        document
+          .querySelectorAll('.rail a')
+          .forEach((a) => track(a.dataset.spy, a));
+        document
+          .querySelectorAll('.nav a[href^="#"]:not(.mark)')
+          .forEach((a) => track(a.getAttribute('href').slice(1), a));
+        const sio = new IntersectionObserver(
+          (es) => {
+            for (const e of es)
+              if (e.isIntersecting) {
+                document
+                  .querySelectorAll('.rail a.on, .nav a.on')
+                  .forEach((a) => a.classList.remove('on'));
+                (spy[e.target.id] || []).forEach((a) => a.classList.add('on'));
+              }
+          },
+          { rootMargin: '-40% 0px -55% 0px' },
+        );
+        [
+          'top',
+          'define',
+          'contract',
+          'agent',
+          'batch',
+          'publish',
+          'start',
+          'real',
+        ].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) sio.observe(el);
+        });
+
+        /* ---------- lightbox: keyboard-openable zoom buttons ---------- */
+        const lb = document.getElementById('lb'),
+          lbimg = lb.appendChild(document.createElement('img'));
+        document.querySelectorAll('img.zoomable').forEach((img) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'zoom';
+          b.setAttribute('aria-label', 'Expand screenshot: ' + img.alt);
+          img.parentNode.insertBefore(b, img);
+          b.appendChild(img);
+          b.addEventListener('click', () => {
+            lbimg.src = img.src;
+            lbimg.alt = img.alt;
+            lb.showModal();
+          });
+        });
+        document.querySelectorAll('[data-lb]').forEach((b) => {
+          const img = b.querySelector('img');
+          b.setAttribute('aria-label', 'Expand screenshot: ' + img.alt);
+          b.addEventListener('click', () => {
+            lbimg.src = img.src;
+            lbimg.alt = img.alt;
+            lb.showModal();
+          });
+        });
+        const gal = document.getElementById('gallery');
+        document.querySelectorAll('[data-gal]').forEach((b) =>
+          b.addEventListener('click', () =>
+            gal.scrollBy({
+              left: +b.dataset.gal * Math.min(innerWidth * 0.78, 778),
+              behavior: reduced ? 'auto' : 'smooth',
+            }),
+          ),
+        );
+        lb.addEventListener('click', () => lb.close());
+        document.getElementById('lbclose').addEventListener('click', (e) => {
+          e.stopPropagation();
+          lb.close();
+        });
+
+        /* ---------- annotation cards yield to the fixed nav ---------- */
+        const annos = [...document.querySelectorAll('.anno')];
+        if (annos.length) {
+          let raf2 = false;
+          const check = () => {
+            raf2 = false;
+            for (const a of annos)
+              a.classList.toggle('off', a.getBoundingClientRect().top < 92);
+          };
+          addEventListener(
+            'scroll',
+            () => {
+              if (!raf2) {
+                raf2 = true;
+                requestAnimationFrame(check);
+              }
+            },
+            { passive: true },
+          );
+          check();
+        }
+      })();
+    </script>
+  </body>
+</html>
