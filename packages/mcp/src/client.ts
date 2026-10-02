@@ -12,6 +12,8 @@ export function createMcpClient(url?: string) {
       get: client.workflows.get.query,
       create: client.workflows.create.mutate,
       update: client.workflows.update.mutate,
+      edit: client.workflows.edit.mutate,
+      validate: client.workflows.validate.query,
       publish: client.workflows.publish.mutate,
     },
     runs: {

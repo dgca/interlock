@@ -2,7 +2,7 @@
 
 ## Discover schemas and assignments
 
-MCP `create_workflow.definition` and `update_workflow.draft` expose the workflow object schema, including node fields and edge handles. Incomplete routes remain saveable drafts. Publication validates graph routes and pinned dependencies.
+MCP `create_workflow.definition` and `update_workflow.draft` expose the workflow object schema, including node fields and edge handles. Incomplete routes remain saveable drafts. Publication validates graph routes and pinned dependencies. For small changes, `edit_workflow` avoids resending the full graph. `validate_workflow` reports read-only diagnostics for the stored draft or a candidate.
 
 `start_run.input` and `submit_result.output` accept any JSON value matching the workflow or assignment contract, including objects, arrays, scalars, and null. Pass structured values directly. JSON-looking strings remain strings and are never implicitly parsed.
 
@@ -13,6 +13,79 @@ For polling, call `list_work` with `fields: "summary"`. Summaries include assign
 Work summaries also include `workflowId`, optional `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, and `rootWorkflowId`. `workflowId` identifies the immediate run's workflow. `rootWorkflowId` identifies the outermost workflow so a dispatcher can select an executor without fetching run history. Root runs omit `parentRunId` and use their own run and workflow IDs as root IDs. Ancestry follows execution, independently of workflow ownership.
 
 Work summaries omit prompts, inputs, output schemas, and execution instructions. `claim_work` returns the complete assignment. The default `fields: "full"` preserves the existing response. CLI callers can use `interlock work RUN_ID --summary`. The shared API exposes `work.summaries` and `work.list`.
+
+## Edit a draft atomically
+
+Read `get_workflow` for the current `draftRevision`, then call `edit_workflow` with at most 100 ordered edits. The shared API is `workflows.edit`. All edits apply to a copy before the final draft is validated and saved in one transaction. Stale revisions and save errors reject the whole list. Neither editing nor validation publishes or starts a run.
+
+```json
+{
+  "id": "WORKFLOW_ID",
+  "draftRevision": 3,
+  "edits": [
+    {
+      "op": "update_node",
+      "id": "research",
+      "set": { "prompt": "Research the protocol and cite primary sources." }
+    },
+    {
+      "op": "add_node",
+      "node": {
+        "id": "check",
+        "kind": "agent",
+        "label": "Check research",
+        "prompt": "Check the research against the requested contract.",
+        "inputBindings": {
+          "research": { "source": "node", "nodeId": "research", "path": "" }
+        }
+      }
+    },
+    {
+      "op": "update_edge",
+      "id": "research-next",
+      "set": { "target": "check" }
+    },
+    {
+      "op": "add_edge",
+      "edge": { "id": "check-next", "source": "check", "target": "finish" }
+    }
+  ]
+}
+```
+
+This example assumes an existing `research` node, `research-next` edge, and `finish` node. IDs identify stored objects, independently of labels and array positions.
+
+| Operation         | Fields                                 | Behavior                                                                                       |
+| ----------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `add_node`        | `node`                                 | Add a definition-format node with a new ID. Added scripts default to `language: "javascript"`. |
+| `update_node`     | `id`, optional `set`, optional `unset` | Shallowly replace named fields and remove named fields. ID and kind cannot change.             |
+| `remove_node`     | `id`                                   | Remove the node, all nested Batch members, and incident edges.                                 |
+| `add_edge`        | `edge`                                 | Add a definition-format edge with a new ID. Omitted port defaults to `default`.                |
+| `update_edge`     | `id`, optional `set`, optional `unset` | Replace or remove named edge fields. ID cannot change.                                         |
+| `remove_edge`     | `id`                                   | Remove one edge.                                                                               |
+| `update_settings` | optional `set`, optional `unset`       | Edit `inputSchema`, `outputSchema`, or `maxSteps`.                                             |
+
+`set` replaces the entire named field, including nested objects such as `context` or `inputBindings`. `unset` is an array of field names. A field cannot appear in both. Unsetting a required field fails unless the definition schema supplies a default. Unsetting an absent field also fails. Unknown operation, node, edge, or settings fields fail instead of disappearing. JSON Schema contract contents remain unrestricted. Existing scripts with omitted language retain Bash; explicitly unsetting language restores legacy Bash behavior. Defaulted fields, such as maxSteps, reset to their schema default when unset.
+
+Removing a node preserves bindings in surviving nodes. Those bindings become publication blockers until explicitly repaired. Removing or renaming a source port preserves its edges, so reconnect or remove them in the same edit list, or save and repair the incomplete draft later. Batch membership remains explicit through `batchId`; existing publication scope checks apply. Workflow ownership is not editable, and saved references still obey owned-child rules.
+
+The result contains `applied`, `draftRevision`, `changes`, and `diagnostics`. `changes.nodes` and `changes.edges` each contain added, updated, and removed IDs; `changes.settings` lists changed fields. Effective changes increment the draft revision once. Empty or equivalent edits preserve both revision and timestamp. Equality ignores object key order. Rejected edits return `applied: false`, the current revision, empty changes, and diagnostics. Invalid edits identify their zero-based `operationIndex`. A stale revision has code `stale_revision`; reload before retrying.
+
+## Validate without saving
+
+Call `validate_workflow` with an `id` to inspect its stored draft, or include a candidate `definition`. The shared API is `workflows.validate`. The result contains the stored `draftRevision`, `saveable`, `publishable`, and diagnostics. Candidate validation never saves the candidate. These calls do not create a version or a run. Full replacement remains available through `update_workflow`.
+
+Each diagnostic has `severity`, `category`, stable `code`, property `path`, and `message`, plus relevant `nodeId`, `edgeId`, or `operationIndex`. Paths use definition array positions and field names, while IDs locate the graph object. Categories have separate consequences:
+
+- `save` errors reject edits, including invalid structure, unknown fields, and child ownership conflicts.
+- `publication` errors permit saving, but block publication. Examples include missing routes, invalid contracts, scopes or bindings, and unavailable workflow pins.
+- `contract` warnings describe a conservative preflight subset. They do not block saving or publication.
+
+Common codes include `invalid_edit`, `invalid_edit_list`, `invalid_definition`, `unknown_field`, `workflow_ownership`, `duplicate_id`, `incomplete_routes`, `invalid_port`, `invalid_binding_source`, `binding_scope`, `batch_scope`, `invalid_contract`, `unresolved_version`, and `missing_workflow_version`. `publication_invalid` reports remaining rules from the authoritative publication validator. The collector reports independent problems where practical; some graph scope checks retain their first-error behavior.
+
+Contract warnings identify ordinary primitive type conflicts through `contract_type_conflict`, required fields excluded by closed object schemas through `contract_missing_path`, and excluded binding paths through `binding_missing_path`. Checks follow declared object properties, array items, binding projections, pass-through steps, Batch item inputs, and Agent timeout inputs. Explicit input contracts do not hide upstream conflicts.
+
+`contract_unknown` and `binding_unknown` report unsupported schemas, unknown source contracts, ambiguous merges, or bounded recursive inference. Complex keywords such as `anyOf`, references, enums, and numeric constraints are outside the compatibility subset. Root input contracts are unknown because a workflow can be invoked as a child. Preflight does not prove complete JSON Schema compatibility, field presence in open objects, array-index existence, or availability of an earlier node's completed output. Runtime value validation remains authoritative. `publishable: true` means publication checks pass, not that every possible run succeeds.
 
 ## Renew claims
 

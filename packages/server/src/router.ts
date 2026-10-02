@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { developmentConnection, type ConnectionConfig } from './connection.js';
 import {
   definitionSchema,
+  workflowEditsSchema,
   jsonSchema,
   runQuerySchema,
   InterlockError,
@@ -98,6 +99,28 @@ export const appRouter = t.router({
           input.definition,
           input.ownerWorkflowId,
         ),
+      ),
+    edit: p
+      .input(
+        z
+          .object({
+            id: z.string(),
+            draftRevision: z.number().int().positive(),
+            edits: workflowEditsSchema,
+          })
+          .strict(),
+      )
+      .mutation(({ ctx, input }) =>
+        ctx.engine.editDraft(input.id, input.draftRevision, input.edits),
+      ),
+    validate: p
+      .input(
+        z
+          .object({ id: z.string(), definition: jsonSchema.optional() })
+          .strict(),
+      )
+      .query(({ ctx, input }) =>
+        ctx.engine.validateDraft(input.id, input.definition),
       ),
     createChild: p
       .input(

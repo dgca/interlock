@@ -158,6 +158,8 @@ Claim an assignment only when ready to perform it. Claiming stops its unclaimed 
 
 `retry_run` retries the failed step of a failed run. Inspect its error first, since Script and Fetch retries can repeat external side effects. Failed Batch retries preserve successful items. Retry a failed parent when an ordinary child belongs to a terminal parent. Failed detached children can be retried directly after their parent ends. Completed and cancelled runs cannot be retried. The CLI equivalent is `interlock retry RUN_ID`.
 
+For authoring, `get_workflow` supplies the current draftRevision, `edit_workflow` applies small ordered edits atomically, and `validate_workflow` reports read-only save, publication, and contract diagnostics. Full-draft replacement remains available. See [editing policies and diagnostic limits](agent-workflows.md#edit-a-draft-atomically).
+
 MCP `update_workflow` accepts `archived` for archive and restore. `delete_workflow` performs guarded permanent deletion. `list_runs` returns bounded, filtered run summaries, including waiting runs. `list_work` accepts `fields: "summary"` for compact discovery, including `workflowId`, optional `parentRunId`, `rootRunId`, and `rootWorkflowId` for executor routing. `claim_work` returns full execution details. `export_workflow` and `import_workflows` transfer portable dependency bundles. See [agent workflow operations](agent-workflows.md) for filters, schema guidance, input bindings, import conflicts, and CLI examples.
 
 ## Diagnose a connection
