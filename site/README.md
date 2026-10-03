@@ -12,6 +12,12 @@ python3 -m http.server 8765 --directory site
 
 Open [http://127.0.0.1:8765](http://127.0.0.1:8765).
 
+## Social previews
+
+Both pages use `social-preview.png`, a 1200 × 630 PNG exported from the editable `social-preview.svg`. The artwork uses the site's logo and colors and depicts a workflow, rather than a captured run.
+
+Open Graph and Twitter card metadata use absolute URLs under `https://dgca.github.io/interlock/`. When changing the artwork, export the SVG at its native size with a device scale factor of 1 and update the PNG too. Keep the image dimensions and alt text in both HTML files in sync with the asset.
+
 ## What is interactive
 
 The page carries three replicas of Interlock's UI, styled from `packages/ui` tokens and Lucide icons and scoped under `.rx` so they keep the app's look inside the page's own styling:

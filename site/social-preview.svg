@@ -1,0 +1,166 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="1200"
+  height="630"
+  viewBox="0 0 1200 630"
+  role="img"
+  aria-labelledby="title description"
+>
+  <title id="title">Interlock: a workflow editor for your AI agent</title>
+  <desc id="description">
+    The Interlock logo above a workflow connecting input, a script, an agent
+    assignment, and a result.
+  </desc>
+  <defs>
+    <radialGradient id="blueGlow" cx="12%" cy="20%" r="85%">
+      <stop stop-color="#182944" />
+      <stop offset="1" stop-color="#08090c" />
+    </radialGradient>
+    <radialGradient id="pinkGlow" cx="90%" cy="90%" r="65%">
+      <stop stop-color="#f0a1d3" stop-opacity=".08" />
+      <stop offset="1" stop-color="#f0a1d3" stop-opacity="0" />
+    </radialGradient>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#82b4ff" opacity=".1" />
+    </pattern>
+    <marker
+      id="arrow"
+      viewBox="0 0 10 10"
+      refX="8"
+      refY="5"
+      markerWidth="7"
+      markerHeight="7"
+      orient="auto-start-reverse"
+    >
+      <path
+        d="m2 1 5 4-5 4"
+        fill="none"
+        stroke="#82b4ff"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="1.5"
+      />
+    </marker>
+  </defs>
+  <style>
+    text {
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .kind {
+      font-family: monospace;
+      font-size: 13px;
+      letter-spacing: 1.5px;
+      fill: #8b93a3;
+    }
+    .name {
+      font-size: 22px;
+      font-weight: 600;
+      fill: #eef1f6;
+    }
+  </style>
+  <rect width="1200" height="630" fill="url(#blueGlow)" />
+  <rect width="1200" height="630" fill="url(#pinkGlow)" />
+  <rect width="1200" height="630" fill="url(#dots)" />
+  <g transform="translate(64 54)">
+    <rect width="48" height="48" rx="12" fill="#1e1e24" />
+    <g transform="scale(1.5)" fill="none" stroke-width="2">
+      <rect x="6" y="6" width="13" height="13" rx="2" stroke="#82b4ff" />
+      <rect x="13" y="13" width="13" height="13" rx="2" stroke="#f0a1d3" />
+    </g>
+  </g>
+  <text x="128" y="88" fill="#eef1f6" font-size="30" font-weight="600">
+    Interlock
+  </text>
+  <text
+    x="64"
+    y="220"
+    fill="#eef1f6"
+    font-size="72"
+    font-weight="700"
+    letter-spacing="-2.5"
+  >
+    A workflow editor
+  </text>
+  <text
+    x="64"
+    y="304"
+    fill="#82b4ff"
+    font-size="72"
+    font-weight="700"
+    letter-spacing="-2.5"
+  >
+    for your AI agent.
+  </text>
+  <g
+    fill="none"
+    stroke="#82b4ff"
+    stroke-width="2"
+    opacity=".7"
+    marker-end="url(#arrow)"
+  >
+    <path d="M296 446h42" />
+    <path d="M576 446h42" />
+    <path d="M856 446h42" />
+  </g>
+  <g>
+    <rect
+      x="64"
+      y="394"
+      width="232"
+      height="104"
+      rx="14"
+      fill="#14171d"
+      stroke="#343b49"
+    />
+    <text class="kind" x="88" y="430">ENTRY</text>
+    <text class="name" x="88" y="469">Workflow input</text>
+    <rect
+      x="344"
+      y="394"
+      width="232"
+      height="104"
+      rx="14"
+      fill="#14171d"
+      stroke="#45608a"
+    />
+    <text class="kind" x="368" y="430">SCRIPT</text>
+    <text class="name" x="368" y="469">Run your code</text>
+    <rect
+      x="624"
+      y="394"
+      width="232"
+      height="104"
+      rx="14"
+      fill="#1d1721"
+      stroke="#a16d91"
+    />
+    <text
+      x="648"
+      y="430"
+      font-family="monospace"
+      font-size="13"
+      letter-spacing="1.5"
+      fill="#f0a1d3"
+    >
+      AGENT
+    </text>
+    <text class="name" x="648" y="469">Agent assignment</text>
+    <rect
+      x="904"
+      y="394"
+      width="232"
+      height="104"
+      rx="14"
+      fill="#14171d"
+      stroke="#343b49"
+    />
+    <text class="kind" x="928" y="430">EXIT</text>
+    <text class="name" x="928" y="469">Return the result</text>
+  </g>
+  <text x="64" y="577" fill="#8b93a3" font-size="20">
+    dgca.github.io/interlock
+  </text>
+  <text x="1136" y="577" fill="#8b93a3" font-size="20" text-anchor="end">
+    Local · Open source
+  </text>
+</svg>
