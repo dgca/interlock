@@ -1,5 +1,11 @@
 # @type_of/interlock
 
+## 0.1.15
+
+### Patch Changes
+
+- 77cd6f1: Add atomic node, route, and settings edits through MCP and the shared API, with stale-draft protection and rollback. Add read-only draft preflight with structured save errors, publication blockers, and conservative contract and binding diagnostics.
+
 ## 0.1.14
 
 ### Patch Changes
