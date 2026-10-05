@@ -153,31 +153,6 @@
       ::selection {
         background: rgba(130, 180, 255, 0.3);
       }
-      .progress {
-        position: fixed;
-        inset: 0 0 auto 0;
-        height: 2px;
-        z-index: 60;
-        background: var(--blue);
-        transform-origin: 0 50%;
-        transform: scaleX(0);
-      }
-      @media (prefers-reduced-motion: no-preference) {
-        @supports (animation-timeline: scroll()) {
-          .progress {
-            animation: grow linear both;
-            animation-timeline: scroll(root block);
-          }
-        }
-      }
-      @keyframes grow {
-        from {
-          transform: scaleX(0);
-        }
-        to {
-          transform: scaleX(1);
-        }
-      }
       .nav {
         position: fixed;
         top: 14px;
@@ -722,21 +697,6 @@
         font: 500 12.5px/1.55 var(--sans);
         color: var(--dim);
       }
-      .js [data-io] {
-        translate: 0 14px;
-        transition: translate 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-        transition-delay: calc(var(--i, 0) * 90ms);
-      }
-      .js [data-io].in {
-        translate: 0 0;
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .js [data-io] {
-          transition: none;
-          opacity: 1;
-          translate: none;
-        }
-      }
       .shotcard {
         position: relative;
         border-radius: 16px;
@@ -827,9 +787,6 @@
         font: 510 12.5px var(--sans);
         color: var(--ink);
         white-space: nowrap;
-        transition:
-          transform 1s cubic-bezier(0.16, 1, 0.3, 1),
-          opacity 0.8s;
       }
       .kchip .n {
         font: 500 12.5px var(--sans);
@@ -852,20 +809,6 @@
       }
       .kchip.edge i {
         background: var(--dimmer);
-      }
-      .js .kinds:not(.in) .kchip {
-        transform: translate(var(--sx), var(--sy)) rotate(var(--sr));
-        opacity: 0.5;
-      }
-      .js .kinds.in .kchip {
-        transform: none;
-        opacity: 1;
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .js .kinds:not(.in) .kchip {
-          transform: none;
-          opacity: 1;
-        }
       }
       .kinds .arrow {
         position: absolute;
@@ -986,11 +929,11 @@
         color: var(--amber);
         border-color: rgba(224, 160, 75, 0.35);
       }
-      .js .pipe.in .step .node {
+      .pipe .step .node {
         border-color: rgba(130, 180, 255, 0.55);
         color: var(--ink);
       }
-      .js .pipe.in .step.agt .node {
+      .pipe .step.agt .node {
         border-color: rgba(240, 161, 211, 0.6);
       }
       @media (max-width: 900px) {
@@ -1093,24 +1036,6 @@
       }
       .rtool.ok span {
         color: var(--green);
-      }
-      .js .rstep {
-        opacity: 0;
-        translate: 0 10px;
-        transition:
-          opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
-          translate 0.45s cubic-bezier(0.16, 1, 0.3, 1);
-      }
-      .js .rstep.on {
-        opacity: 1;
-        translate: 0 0;
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .js .rstep {
-          opacity: 1;
-          translate: none;
-          transition: none;
-        }
       }
       .break {
         border-radius: 20px;
@@ -1288,21 +1213,6 @@
       footer a {
         color: var(--dim);
       }
-      @media (prefers-reduced-motion: no-preference) {
-        @supports (animation-timeline: view()) {
-          .vrise {
-            animation: vr linear both;
-            animation-timeline: view();
-            animation-range: entry 0% entry 85%;
-          }
-        }
-      }
-      @keyframes vr {
-        from {
-          transform: translateY(32px) scale(0.985);
-        }
-      }
-
       /* replicas (v2), scoped to .rx */
       .rx {
         --bg: #17171b;
@@ -2842,7 +2752,6 @@ FORM: Merge of the user-approved v1 tour and v2 replica page, per user request. 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 -->
     <a class="skip" href="#main">Skip to content</a>
-    <div class="progress" aria-hidden="true"></div>
 
     <nav class="nav" aria-label="Page">
       <a class="mark" href="#top"
@@ -3083,7 +2992,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
                 <span class="gray">Every run follows the same graph.</span>
               </h2>
             </div>
-            <p data-io>
+            <p>
               Most agent procedures live in a chat log: the steps, their order,
               and the checks between them are only as repeatable as the last
               prompt. In Interlock a workflow is a graph with
@@ -3108,8 +3017,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             >
           </div>
           <figure
-            class="shotcard vrise shot-wide"
-            data-io
+            class="shotcard shot-wide"
             style="margin-bottom: 22px; position: relative"
           >
             <div class="pad">
@@ -3138,7 +3046,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
             </div>
           </figure>
           <div class="grid2" style="align-items: start">
-            <figure class="shotcard vrise" data-io style="margin: 0">
+            <figure class="shotcard" style="margin: 0">
               <div class="pad">
                 <h3>The assignment is written into the graph.</h3>
                 <p>
@@ -3159,7 +3067,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
                 />
               </div>
             </figure>
-            <figure class="shotcard vrise" data-io style="--i: 1; margin: 0">
+            <figure class="shotcard" style="--i: 1; margin: 0">
               <div class="pad">
                 <h3>Underneath, it is plain JSON.</h3>
                 <p>
@@ -3195,7 +3103,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
                 <span class="gray">Every result gets checked.</span>
               </h2>
             </div>
-            <p data-io>
+            <p>
               Workflows and nodes carry <b>input and output contracts</b>: JSON
               Schema, edited through a field editor or pasted from example JSON.
               The engine validates real values at execution time. An agent that
@@ -3203,7 +3111,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               <b>its claim stays open</b> so it can correct the answer.
             </p>
           </div>
-          <div class="pipe" id="pipe" data-io>
+          <div class="pipe" id="pipe">
             <div class="step" style="--i: 0">
               <div class="node">01</div>
               <div class="t">Entry</div>
@@ -3250,16 +3158,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
               <span class="tag det">recorded</span>
             </div>
           </div>
-          <p
-            class="label"
-            style="text-align: center; margin: 6px 0 46px"
-            data-io
-          >
+          <p class="label" style="text-align: center; margin: 6px 0 46px">
             blue steps rerun to the same answer · the pink step is the only one
             that waits for judgment
           </p>
           <div class="grid2" style="align-items: center">
-            <div class="term vrise" data-io>
+            <div class="term">
               <div class="bar"><i></i><i></i><i></i></div>
               <pre><span class="c"># the agent's first try leaves out a required field</span>
 $ interlock submit $WORK $TOKEN '{"name":"togepi","pitch":"Tiny."}'
@@ -3269,7 +3173,7 @@ $ interlock submit $WORK $TOKEN '{"name":"togepi","pitch":"Tiny."}'
 $ interlock submit $WORK $TOKEN @pitch.json
 <span class="c"># response: </span><span class="g">"run": { "status": "completed", … }</span></pre>
             </div>
-            <div data-io style="--i: 1">
+            <div style="--i: 1">
               <p class="label" style="margin-bottom: 12px">
                 captured from a real run, and reproduced in the replica above
               </p>
@@ -3303,21 +3207,21 @@ $ interlock submit $WORK $TOKEN @pitch.json
               </p>
             </div>
           </div>
-          <div class="stats" style="--n: 4; margin-top: 64px" data-io>
+          <div class="stats" style="--n: 4; margin-top: 64px">
             <div class="cell">
-              <div class="num" data-count="10">0</div>
+              <div class="num">10</div>
               <div class="lbl">node kinds</div>
             </div>
             <div class="cell">
-              <div class="num" data-count="100">0</div>
+              <div class="num">100</div>
               <div class="lbl">default steps per run</div>
             </div>
             <div class="cell">
-              <div class="num" data-count="365">0</div>
+              <div class="num">365</div>
               <div class="lbl">days a Wait can hold</div>
             </div>
             <div class="cell">
-              <div class="num" data-count="50">0</div>
+              <div class="num">50</div>
               <div class="lbl">undoable editor actions</div>
             </div>
           </div>
@@ -3335,7 +3239,7 @@ $ interlock submit $WORK $TOKEN @pitch.json
                 <span class="gray">Your agent does the thinking.</span>
               </h2>
             </div>
-            <p data-io>
+            <p>
               The engine serves <b>Streamable HTTP MCP</b> at
               <code>127.0.0.1:4310/mcp</code> from the same process as the UI.
               Point Codex, Claude Code, OpenCode, or any MCP client at it, and
@@ -3346,8 +3250,7 @@ $ interlock submit $WORK $TOKEN @pitch.json
           </div>
           <div class="agent-grid">
             <div
-              class="replay vrise"
-              data-io
+              class="replay"
               id="replay"
               role="figure"
               aria-label="Replay of the executor loop for the Togepi run"
@@ -3393,7 +3296,7 @@ $ interlock submit $WORK $TOKEN @pitch.json
                 </div>
               </div>
             </div>
-            <div class="rx vrise" data-io style="--i: 1">
+            <div class="rx" style="--i: 1">
               <div class="tabsbox">
                 <div
                   class="tabs"
@@ -3424,7 +3327,7 @@ Find the Interlock workflow "Size up a Pokémon" and run it with
               </div>
             </div>
           </div>
-          <p class="label" style="margin: 14px 0 0" data-io>
+          <p class="label" style="margin: 14px 0 0">
             the replay shows the CLI commands run during a real capture, with
             work ids and tokens elided · an agent connected over MCP calls the
             matching tools: list_work, claim_work, submit_result
@@ -3443,7 +3346,7 @@ Find the Interlock workflow "Size up a Pokémon" and run it with
                 <span class="gray">Only three need an agent.</span>
               </h2>
             </div>
-            <p data-io>
+            <p>
               A <b>Batch</b> repeats a visible item path once per list item and
               collects the results <b>in input order</b>, even when items finish
               out of order. Run the starter roster below: each candidate goes
@@ -3566,25 +3469,25 @@ Find the Interlock workflow "Size up a Pokémon" and run it with
               </div>
             </div>
           </div>
-          <div class="stats" style="--n: 4; margin-top: 56px" data-io>
+          <div class="stats" style="--n: 4; margin-top: 56px">
             <div class="cell">
-              <div class="num" data-count="200">0</div>
+              <div class="num">200</div>
               <div class="lbl">items by default</div>
             </div>
             <div class="cell">
-              <div class="num" data-count="10000">0</div>
+              <div class="num">10,000</div>
               <div class="lbl">items, configured max</div>
             </div>
             <div class="cell">
-              <div class="num" data-count="50">0</div>
+              <div class="num">50</div>
               <div class="lbl">items at a time</div>
             </div>
             <div class="cell">
-              <div class="num" data-count="10">0</div>
+              <div class="num">10</div>
               <div class="lbl">nested levels</div>
             </div>
           </div>
-          <p class="label" style="margin: 14px 0 0" data-io>
+          <p class="label" style="margin: 14px 0 0">
             failure policy "all" cancels unfinished items on an error ·
             "collect" returns {runId, status, output, error} per item · retrying
             a failed batch keeps the items that succeeded
@@ -3603,7 +3506,7 @@ Find the Interlock workflow "Size up a Pokémon" and run it with
                 <span class="gray">Published versions never do.</span>
               </h2>
             </div>
-            <p data-io>
+            <p>
               Edit freely: drafts save incomplete, and Undo covers the last 50
               editor actions. <b>Review &amp; publish</b> compares the draft,
               unsaved edits included, with the latest published version before
@@ -3681,7 +3584,7 @@ Find the Interlock workflow "Size up a Pokémon" and run it with
               <div class="versions" id="versions"></div>
             </div>
           </div>
-          <ul class="facts row" data-io>
+          <ul class="facts row">
             <li>
               <b>Pinned</b
               ><span
@@ -3713,7 +3616,7 @@ Find the Interlock workflow "Size up a Pokémon" and run it with
               >
             </li>
           </ul>
-          <div class="break vrise" data-io style="margin-top: 72px">
+          <div class="break" style="margin-top: 72px">
             <svg class="wm" viewBox="0 0 32 32" fill="none" aria-hidden="true">
               <g stroke="#06101f" stroke-width="1.6">
                 <rect x="5" y="5" width="14" height="14" rx="2.5" />
@@ -3740,7 +3643,7 @@ Find the Interlock workflow "Size up a Pokémon" and run it with
                 Two commands. <span class="gray">Then ask your agent.</span>
               </h2>
             </div>
-            <p data-io>
+            <p>
               The npm package includes the engine, the UI, the CLI and the MCP
               tools. No separate build, no account, no API key. Workflows and
               runs live in <code>~/.interlock/interlock.db</code> and survive
@@ -3748,7 +3651,7 @@ Find the Interlock workflow "Size up a Pokémon" and run it with
             </p>
           </div>
           <div class="grid2" style="align-items: start">
-            <div class="term vrise" data-io>
+            <div class="term">
               <div class="bar"><i></i><i></i><i></i></div>
               <pre><span class="c"># node 24.13 or later, macOS or Linux</span>
 $ npm install -g @type_of/interlock
@@ -3762,7 +3665,7 @@ $ claude mcp add --transport http --scope user \
 <span class="c"># or try it without installing</span>
 $ npx -y @type_of/interlock@latest</pre>
             </div>
-            <div data-io style="--i: 1">
+            <div style="--i: 1">
               <p class="label" style="margin-bottom: 14px">
                 know before you run it
               </p>
@@ -3817,7 +3720,7 @@ $ npx -y @type_of/interlock@latest</pre>
               </div>
             </div>
           </div>
-          <div class="index" data-io>
+          <div class="index">
             <a href="https://github.com/dgca/interlock#readme"
               ><span>README: install, first run, every node kind</span
               ><span class="mono">docs →</span></a
@@ -3856,7 +3759,7 @@ $ npx -y @type_of/interlock@latest</pre>
             <div>
               <h2>The real app, <span class="gray">unretouched.</span></h2>
             </div>
-            <p data-io>
+            <p>
               Everything above the fold of each chapter can be checked against
               the product itself. These were captured from Interlock v0.1.14 on
               a fresh local database on October 2, 2026, during real runs of the
@@ -5477,20 +5380,7 @@ return {
           );
         }
 
-        /* ---------- IO reveals ---------- */
-        const io = new IntersectionObserver(
-          (es) => {
-            for (const e of es)
-              if (e.isIntersecting) {
-                e.target.classList.add('in');
-                io.unobserve(e.target);
-              }
-          },
-          { rootMargin: '0px 0px -10% 0px', threshold: 0.12 },
-        );
-        document.querySelectorAll('[data-io]').forEach((el) => io.observe(el));
-
-        /* ---------- node kinds: scattered, then arranged ---------- */
+        /* ---------- node kinds ---------- */
         const KINDS = [
           ['Entry', 'edge'],
           ['Fetch', 'det'],
@@ -5528,81 +5418,8 @@ return {
               col === 0 ? 0 : 8
             }px)`;
             el.style.top = row * 74 + 20 + 'px';
-            const sx = ((i * 137) % 260) - 130,
-              sy = ((i * 89) % 160) - 80,
-              sr = ((i * 53) % 24) - 12;
-            el.style.setProperty('--sx', sx + 'px');
-            el.style.setProperty('--sy', sy + 'px');
-            el.style.setProperty('--sr', sr + 'deg');
             kinds.appendChild(el);
           });
-          new IntersectionObserver(
-            ([e]) => {
-              if (!e.isIntersecting) return;
-              kinds.classList.add('in');
-              const arrow = kinds.querySelector('.arrow');
-              setTimeout(
-                () => {
-                  arrow.style.opacity = 0;
-                  setTimeout(() => {
-                    arrow.textContent =
-                      'entry → steps → exit, published as one version';
-                    arrow.style.opacity = 1;
-                  }, 300);
-                },
-                reduced ? 0 : 1100,
-              );
-            },
-            { threshold: 0.4 },
-          ).observe(kinds);
-        }
-
-        /* ---------- count-up stats ---------- */
-        const fmt = new Intl.NumberFormat('en-US');
-        const cio = new IntersectionObserver(
-          (es) => {
-            for (const e of es) {
-              if (!e.isIntersecting) continue;
-              cio.unobserve(e.target);
-              const end = +e.target.dataset.count;
-              if (reduced) {
-                e.target.textContent = fmt.format(end);
-                continue;
-              }
-              const t0 = performance.now(),
-                D = 1300;
-              (function step(t) {
-                const p = Math.min(1, (t - t0) / D),
-                  ease = 1 - Math.pow(1 - p, 3);
-                e.target.textContent = fmt.format(Math.round(end * ease));
-                if (p < 1) requestAnimationFrame(step);
-              })(t0);
-            }
-          },
-          { threshold: 0.6 },
-        );
-        document
-          .querySelectorAll('[data-count]')
-          .forEach((el) => cio.observe(el));
-
-        /* ---------- executor loop replay ---------- */
-        const replay = document.getElementById('replay');
-        if (replay) {
-          const steps = [...replay.querySelectorAll('.rstep')];
-          if (reduced) steps.forEach((s) => s.classList.add('on'));
-          else {
-            let played = false;
-            new IntersectionObserver(
-              ([e]) => {
-                if (!e.isIntersecting || played) return;
-                played = true;
-                steps.forEach((s, i) =>
-                  setTimeout(() => s.classList.add('on'), 350 + i * 700),
-                );
-              },
-              { threshold: 0.3 },
-            ).observe(replay);
-          }
         }
 
         /* ---------- scroll-spy: dot rail + top nav ---------- */
