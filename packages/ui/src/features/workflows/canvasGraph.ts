@@ -7,8 +7,10 @@ import {
 import type { Edge } from '@xyflow/react';
 import type { CanvasNode } from './FlowNode';
 import type { LoopEdgeData } from './LoopEdge';
-import { canvasGeometry } from './canvasGeometry';
+import type { OrthoEdgeData } from './OrthoEdge';
+import { CANVAS_GAP, canvasGeometry } from './canvasGeometry';
 import { bindingNodeIds, bindingNodes } from './inputBindings';
+import { outputPortTop } from './portLayout';
 import styles from './WorkflowEditor.module.css';
 
 type Options = {
@@ -282,12 +284,185 @@ export function canvasGraph(
       inOffset: offset(sideGap(index.get(edge.target)!, 'left', laneY)),
     });
   });
+  // Route forward edges orthogonally through the gaps between columns, so a
+  // span over several columns never cuts through the cards in between.
+  // Columns cluster the top-level cards by overlapping x; member cards sit
+  // inside their Batch's column. Only the gaps hold verticals, so a route
+  // meets a card only on its horizontal runs.
+  const CHANNEL_SPACING = 12;
+  const STRAIGHT_TOLERANCE = 4;
+  type Box = { left: number; right: number; top: number; bottom: number };
+  const box = (node: WorkflowNode): Box => {
+    const { x, y } = absolute(node),
+      { width, height } = size(node);
+    return { left: x, right: x + width, top: y, bottom: y + height };
+  };
+  const cards = visible.filter((node) => !parents.get(node.id));
+  const columns: { left: number; right: number; ids: Set<string> }[] = [];
+  for (const node of [...cards].sort((a, b) => box(a).left - box(b).left)) {
+    const { left, right } = box(node);
+    const last = columns[columns.length - 1];
+    if (last && left < last.right) {
+      last.right = Math.max(last.right, right);
+      last.ids.add(node.id);
+    } else columns.push({ left, right, ids: new Set([node.id]) });
+  }
+  const columnOf = (id: string) => columns.findIndex((c) => c.ids.has(id));
+  const handleY = (node: WorkflowNode, port: string) => {
+    const top = outputPortTop(node, port);
+    return (
+      box(node).top +
+      (typeof top === 'number'
+        ? top
+        : (parseFloat(top) / 100) * size(node).height)
+    );
+  };
+  const targetY = (node: WorkflowNode) =>
+    box(node).top + (node.kind === 'batch' ? 32 : size(node).height / 2);
+  type Point = { x: number; y: number };
+  const hits = (points: Point[], skip: Set<string>) => {
+    const hit = new Set<WorkflowNode>();
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1],
+        b = points[i];
+      const x1 = Math.min(a.x, b.x),
+        x2 = Math.max(a.x, b.x),
+        y1 = Math.min(a.y, b.y),
+        y2 = Math.max(a.y, b.y);
+      for (const node of cards) {
+        if (skip.has(node.id)) continue;
+        const { left, right, top, bottom } = box(node);
+        if (left < x2 && right > x1 && top < y2 && bottom > y1) hit.add(node);
+      }
+    }
+    return hit;
+  };
+  const length = (points: Point[]) =>
+    points.reduce(
+      (sum, point, i) =>
+        i
+          ? sum +
+            Math.abs(point.x - points[i - 1].x) +
+            Math.abs(point.y - points[i - 1].y)
+          : 0,
+      0,
+    );
+  // A vertical run claims a channel in its gap; the x is assigned afterwards.
+  type Run = { gap: number; from: number; to: number; x: number };
+  type Route = { runs: Run[]; corridorY?: number };
+  const corners = (route: Route): Point[] =>
+    route.runs.flatMap((run) => [
+      { x: run.x, y: run.from },
+      { x: run.x, y: run.to },
+    ]);
+  const routes = new Map<string, Route>();
+  const center = (gap: number) =>
+    (columns[gap].right + columns[gap + 1].left) / 2;
+  const corridors: number[] = [];
+  for (const edge of definition.edges) {
+    const source = index.get(edge.source),
+      target = index.get(edge.target);
+    if (
+      !source ||
+      !target ||
+      hiddenEdge(edge) ||
+      lane.has(edge.id) ||
+      edge.targetHandle === 'end' ||
+      parents.get(source.id) ||
+      parents.get(target.id)
+    )
+      continue;
+    const from = columnOf(source.id),
+      to = columnOf(target.id);
+    if (to <= from) continue;
+    const sy = handleY(source, edge.port),
+      ty = targetY(target);
+    if (to === from + 1 && Math.abs(sy - ty) <= STRAIGHT_TOLERANCE) continue;
+    const sx = box(source).right,
+      tx = box(target).left;
+    const skip = new Set([source.id, target.id]);
+    const points = (route: Route) => [
+      { x: sx, y: sy },
+      ...corners(route),
+      { x: tx, y: ty },
+    ];
+    const bend = (gap: number): Route => ({
+      runs: [{ gap, from: sy, to: ty, x: center(gap) }],
+    });
+    const candidates = [bend(from)];
+    if (to - 1 !== from) candidates.push(bend(to - 1));
+    let scored = candidates.map((route) => ({
+      route,
+      hit: hits(points(route), skip),
+    }));
+    if (scored.every(({ hit }) => hit.size)) {
+      // Both bends cross a card: dip below the lower of the rows they cross,
+      // then run across the gap between rows. Stacked corridors spread out.
+      let corridorY =
+        Math.max(
+          ...scored.flatMap(({ hit }) => [...hit].map((n) => box(n).bottom)),
+        ) +
+        CANVAS_GAP / 2;
+      while (
+        corridors.some((y) => Math.abs(y - corridorY) < CHANNEL_SPACING) ||
+        [...lane.values()].some((l) => Math.abs(l.laneY - corridorY) < 24)
+      )
+        corridorY += CHANNEL_SPACING;
+      const corridor: Route = {
+        corridorY,
+        runs: [
+          { gap: from, from: sy, to: corridorY, x: center(from) },
+          { gap: to - 1, from: corridorY, to: ty, x: center(to - 1) },
+        ],
+      };
+      scored.push({ route: corridor, hit: hits(points(corridor), skip) });
+    }
+    scored = scored.sort(
+      (a, b) =>
+        a.hit.size - b.hit.size ||
+        length(points(a.route)) - length(points(b.route)),
+    );
+    const best = scored[0].route;
+    if (best.corridorY !== undefined) corridors.push(best.corridorY);
+    routes.set(edge.id, best);
+  }
+  // Spread the verticals in each gap. Order so that a fan-out's farther
+  // targets turn first (leftmost) and a fan-in's farther sources turn last:
+  // upward runs by ascending y-sum, then downward runs by descending y-sum.
+  const runsByGap = new Map<number, Run[]>();
+  for (const route of routes.values())
+    for (const run of route.runs) {
+      const runs = runsByGap.get(run.gap) ?? [];
+      runs.push(run);
+      runsByGap.set(run.gap, runs);
+    }
+  for (const [gap, runs] of runsByGap) {
+    const sum = (run: Run) => run.from + run.to;
+    const up = runs
+      .filter((run) => run.to < run.from)
+      .sort((a, b) => sum(a) - sum(b));
+    const down = runs
+      .filter((run) => run.to >= run.from)
+      .sort((a, b) => sum(b) - sum(a));
+    const ordered = [...up, ...down];
+    const width = columns[gap + 1].left - columns[gap].right;
+    const spacing = Math.min(CHANNEL_SPACING, width / (ordered.length + 1));
+    ordered.forEach((run, i) => {
+      run.x = center(gap) + (i - (ordered.length - 1) / 2) * spacing;
+    });
+  }
+  const ortho = new Map<string, OrthoEdgeData>();
+  for (const [id, route] of routes) ortho.set(id, { points: corners(route) });
   return {
     nodes,
     edges: definition.edges.map((edge) => ({
       ...edge,
-      type: lane.has(edge.id) ? 'loop' : undefined,
-      data: lane.get(edge.id),
+      type: lane.has(edge.id)
+        ? 'loop'
+        : ortho.has(edge.id)
+          ? 'ortho'
+          : undefined,
+      data: lane.get(edge.id) ?? ortho.get(edge.id),
       selected: selectedIds.has(edge.id),
       sourceHandle: edge.port,
       targetHandle: edge.targetHandle ?? 'default',

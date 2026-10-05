@@ -253,7 +253,7 @@ it('keeps overlapping backward edges on separate lanes', () => {
   const forward = graph.edges.find((edge) => edge.id === 'forward')!;
   expect(a.type).toBe('loop');
   expect(b.type).toBe('loop');
-  expect(forward.type).toBeUndefined();
+  expect(forward.type).not.toBe('loop');
   expect(a.selected).toBe(true);
   expect(b.className).toBe('edge-dimmed');
   const aY = (a.data as { laneY: number }).laneY;
@@ -286,6 +286,78 @@ it('keeps loop verticals in the free gaps beside their endpoints', () => {
   expect(target.position.x - offsets.inOffset).toBeGreaterThan(
     left.position.x + left.width!,
   );
+});
+type Point = { x: number; y: number };
+const route = (graph: ReturnType<typeof canvasGraph>, id: string) => {
+  const edge = graph.edges.find((item) => item.id === id)!;
+  const data = edge.data as { points: Point[] } | undefined;
+  return { type: edge.type, points: data?.points ?? [] };
+};
+it('routes a spanning forward edge below the row it would cross and keeps same-row neighbors straight', () => {
+  const definition = definitionSchema.parse({
+    nodes: [
+      placedNode('a', 0, 0),
+      placedNode('b', 300, 0),
+      placedNode('c', 600, 0),
+    ],
+    edges: [
+      { id: 'ab', source: 'a', target: 'b' },
+      { id: 'bc', source: 'b', target: 'c' },
+      { id: 'ac', source: 'a', target: 'c' },
+    ],
+  });
+  const graph = canvasGraph(definition);
+  expect(route(graph, 'ab').type).toBeUndefined();
+  expect(route(graph, 'bc').type).toBeUndefined();
+  const skip = route(graph, 'ac');
+  expect(skip.type).toBe('ortho');
+  expect(skip.points.map((point) => point.x)).toEqual([260, 260, 560, 560]);
+  expect(skip.points[1].y).toBe(skip.points[2].y);
+  expect(skip.points[1].y).toBeGreaterThan(116);
+});
+it('bends in whichever gap keeps the horizontal run clear of cards', () => {
+  const definition = (blockerY: number) =>
+    definitionSchema.parse({
+      nodes: [
+        placedNode('source', 0, 0),
+        placedNode('blocker', 300, blockerY),
+        placedNode('target', 600, 200),
+      ],
+      edges: [{ id: 'edge', source: 'source', target: 'target' }],
+    });
+  const early = route(canvasGraph(definition(200)), 'edge');
+  expect(early.type).toBe('ortho');
+  expect(early.points.map((point) => point.x)).toEqual([560, 560]);
+  const late = route(canvasGraph(definition(0)), 'edge');
+  expect(late.points.map((point) => point.x)).toEqual([260, 260]);
+  expect(late.points.map((point) => point.y)).toEqual([58, 258]);
+});
+it('spreads a fan-out across channels in its gap without crossing', () => {
+  const definition = definitionSchema.parse({
+    nodes: [
+      placedNode('source', 0, 300),
+      placedNode('top', 300, 0),
+      placedNode('high', 300, 150),
+      placedNode('low', 300, 450),
+      placedNode('bottom', 300, 600),
+    ],
+    edges: ['top', 'high', 'low', 'bottom'].map((target) => ({
+      id: target,
+      source: 'source',
+      target,
+    })),
+  });
+  const graph = canvasGraph(definition);
+  const x = (id: string) => route(graph, id).points[0].x;
+  const xs = ['top', 'high', 'bottom', 'low'].map(x);
+  expect(xs).toEqual([242, 254, 266, 278]);
+  expect(xs.every((value) => value > 220 && value < 300)).toBe(true);
+  expect(graph.edges.every((edge) => edge.type === 'ortho')).toBe(true);
+});
+it('leaves Batch-internal edges on the default type', () => {
+  const graph = canvasGraph(batchDefinition());
+  expect(graph.edges.find((edge) => edge.id === 'item')?.type).toBeUndefined();
+  expect(graph.edges.find((edge) => edge.id === 'end')?.type).toBeUndefined();
 });
 it('deleting a group removes descendants and incident edges but keeps outer nodes', () => {
   const d = withoutNodes(nestedBatches(3), new Set(['batch']));
