@@ -8,7 +8,7 @@ import { batchDefinition } from './fixtures/batch';
 import { switchDefinition } from './fixtures/switch';
 import { workflowCall } from './fixtures/detached';
 import { runCommand } from '../packages/cli/src/commands';
-import { it, expect } from 'vitest';
+import { it, expect, vi } from 'vitest';
 import { serve } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -82,6 +82,137 @@ it.each(['stdio', 'http'])(
       const tools = (await client.listTools()).tools;
       for (const tool of tools) validateContractSchema(tool.inputSchema);
       expect(tools.map((t) => t.name)).toContain('claim_work');
+      for (const name of [
+        'get_run_briefing',
+        'wait_for_run_change',
+        'get_run_result',
+      ])
+        expect(tools.map((t) => t.name)).toContain(name);
+      expect(
+        tools.find((t) => t.name === 'wait_for_run_change')!.inputSchema
+          .properties!.timeoutMs,
+      ).toMatchObject({ default: 30000, maximum: 60000, minimum: 0 });
+      expect(
+        tools.find((t) => t.name === 'get_run_briefing')!.inputSchema
+          .properties!.limit,
+      ).toMatchObject({ default: 20, maximum: 100 });
+      expect(
+        tools.find((t) => t.name === 'get_run_result')!.inputSchema.properties!
+          .maxBytes,
+      ).toMatchObject({ default: 65536, maximum: 262144 });
+      expect(client.getInstructions()).toContain('get_run_briefing');
+      // Real transport cancellation must release the server wait, not just reject the client promise.
+      const abortRun = engine.start(w.id, null).run;
+      const abortSnapshot = await call('get_run_briefing', { id: abortRun.id });
+      let subscribed = false,
+        unsubscribed = false;
+      const subscribe = engine.store.subscribe.bind(engine.store);
+      const subscriptionSpy = vi
+        .spyOn(engine.store, 'subscribe')
+        .mockImplementation((listener) => {
+          subscribed = true;
+          const stop = subscribe(listener);
+          return () => {
+            unsubscribed = true;
+            stop();
+          };
+        });
+      const abortController = new AbortController();
+      const abortArgs = {
+        id: abortRun.id,
+        cursor: abortSnapshot.cursor,
+        timeoutMs: 60000,
+      };
+      const abortCall =
+        mode === 'http'
+          ? fetch(`${url}/mcp`, {
+              method: 'POST',
+              signal: abortController.signal,
+              headers: {
+                'content-type': 'application/json',
+                accept: 'application/json, text/event-stream',
+              },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 'abort-wait',
+                method: 'tools/call',
+                params: { name: 'wait_for_run_change', arguments: abortArgs },
+              }),
+            })
+          : client.callTool(
+              { name: 'wait_for_run_change', arguments: abortArgs },
+              undefined,
+              { signal: abortController.signal, timeout: 65000 },
+            );
+      const abortRejected = expect(abortCall).rejects.toThrow();
+      await vi.waitFor(() => expect(subscribed).toBe(true));
+      abortController.abort();
+      await abortRejected;
+      await vi.waitFor(() => expect(unsubscribed).toBe(true));
+      subscriptionSpy.mockRestore();
+      engine.cancel(abortRun.id);
+      const continuationRun = engine.start(w.id, {
+        keep: [null, 'selected'],
+      }).run;
+      const continuation = await call('get_run_briefing', {
+        id: continuationRun.id,
+      });
+      expect(continuation.available.total).toBe(1);
+      expect(
+        await call('get_run_result', {
+          id: continuationRun.id,
+          field: 'input',
+          path: 'keep.0',
+        }),
+      ).toMatchObject({ value: null });
+      expect(
+        await call('wait_for_run_change', {
+          id: continuationRun.id,
+          cursor: continuation.cursor,
+          timeoutMs: 5,
+        }),
+      ).toMatchObject({ changed: false, timedOut: true, reset: false });
+      const changedWait = call('wait_for_run_change', {
+        id: continuationRun.id,
+        cursor: continuation.cursor,
+        timeoutMs: 1000,
+      });
+      const continuationClaim = await call('claim_work', {
+        workId: continuation.available.items[0].id,
+        workerId: 'continuation-test',
+      });
+      const changedSnapshot = await changedWait;
+      expect(changedSnapshot).toMatchObject({
+        changed: true,
+        reset: false,
+        claimed: { total: 1 },
+      });
+      expect(JSON.stringify(changedSnapshot)).not.toContain(
+        continuationClaim.token,
+      );
+      await call('submit_result', {
+        workId: continuationClaim.id,
+        token: continuationClaim.token,
+        output: { done: true },
+      });
+      expect(
+        await call('get_run_result', {
+          id: continuationRun.id,
+          executionId: continuationClaim.executionId,
+          path: 'done',
+        }),
+      ).toMatchObject({ value: true });
+      expect(
+        await call('wait_for_run_change', {
+          id: continuationRun.id,
+          cursor: 'stale',
+          timeoutMs: 0,
+        }),
+      ).toMatchObject({
+        changed: true,
+        reset: true,
+        run: { status: 'completed' },
+      });
       for (const name of ['edit_workflow', 'validate_workflow'])
         expect(tools.map((t) => t.name)).toContain(name);
       const editSchema = tools.find(

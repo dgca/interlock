@@ -76,7 +76,7 @@ interlock cancel RUN_ID
 interlock retry RUN_ID
 ```
 
-The MCP equivalents are `get_run`, `list_work`, `cancel_run`, and `retry_run`. A detached run carries `parentMode: "detached"` and `parentExecutionId`, alongside `parentRunId`. Run and work summaries expose `parentMode` for the immediate run. `rootRunId` and `rootWorkflowId` still identify the original ancestor. `rootOnly: true` excludes detached runs because they have parents; omit that filter to find independent work.
+The MCP equivalents are `get_run`, `list_work`, `cancel_run`, and `retry_run`. For continuation, prefer `get_run_briefing` to distinguish requested completion from active independent trees. Use `get_run_result` for selected values and `wait_for_run_change` for finite waits scoped to the requested ancestry. See [continuation scope and bounds](agent-workflows.md#resume-a-run-with-a-briefing). A detached run carries `parentMode: "detached"` and `parentExecutionId`, alongside `parentRunId`. Run and work summaries expose `parentMode` for the immediate run. `rootRunId` and `rootWorkflowId` still identify the original ancestor. `rootOnly: true` excludes detached runs because they have parents; omit that filter to find independent work.
 
 Parent-scoped assignment discovery still includes all descendants, including detached work after the parent ends. A terminal parent does not mean its detached descendants finished. Use each independent run's ID to continue its work. Fresh-session assignment instructions target the nearest detached ancestor, or the original root when no detached boundary exists.
 

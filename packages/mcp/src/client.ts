@@ -17,6 +17,9 @@ export function createMcpClient(url?: string) {
       publish: client.workflows.publish.mutate,
     },
     runs: {
+      briefing: client.runs.briefing.query,
+      wait: client.runs.wait.query,
+      result: client.runs.result.query,
       find: client.runs.find.query,
       start: client.runs.start.mutate,
       get: client.runs.get.query,

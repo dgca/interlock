@@ -110,6 +110,13 @@ it('shows descendant assignments at the root and copies instructions to continue
     ),
   );
   expect(writeText.mock.calls[0][0]).toContain('including child runs');
+  for (const tool of [
+    'get_run_briefing',
+    'get_run_result',
+    'wait_for_run_change',
+  ])
+    expect(writeText.mock.calls[0][0]).toContain(tool);
+  expect(writeText.mock.calls[0][0]).toContain('get_run for full inspection');
   expect(container.textContent).toContain('Instructions copied');
   await click('Connect an agent');
   expect(onConnect).toHaveBeenCalledOnce();

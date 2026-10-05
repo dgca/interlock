@@ -87,6 +87,59 @@ Contract warnings identify ordinary primitive type conflicts through `contract_t
 
 `contract_unknown` and `binding_unknown` report unsupported schemas, unknown source contracts, ambiguous merges, or bounded recursive inference. Complex keywords such as `anyOf`, references, enums, and numeric constraints are outside the compatibility subset, as are type unions and schemas containing only annotations. Selecting an entire object or array with unknown nested shapes reports uncertainty; selecting a separately known field still supports type and missing-path diagnostics. Root input contracts are unknown because a workflow can be invoked as a child. Preflight does not prove complete JSON Schema compatibility, field presence in open objects, array-index existence, or availability of an earlier node's completed output. Runtime value validation remains authoritative. `publishable: true` means publication checks pass, not that every possible run succeeds.
 
+## Resume a run with a briefing
+
+Call `get_run_briefing` with `{id: RUN_ID}` when resuming an existing run. The shared API is `runs.briefing`. This read does not pump the engine, claim work, or change timers.
+
+The response contains these fields:
+
+| Field                       | Meaning                                                                                                                                                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run`                       | Requested identity, workflow/version, status, ancestry, current execution ID, and result reference. No input, output, or definition.                                                                                      |
+| `progress.requested`        | Run status counts for the requested run and ordinary descendants, excluding detached trees.                                                                                                                               |
+| `progress.independent`      | Run status counts across detached trees within the requested ancestry.                                                                                                                                                    |
+| `progress.executions`       | Execution-visit status counts in the requested lifecycle, including earlier attempts and loop visits.                                                                                                                     |
+| `descendants`, `detached`   | Run summaries and detached boundary references. `lifecycleRunId` is the requested ID for ordinary descendants, and the nearest detached ancestor's ID for independent trees. A directly detached run identifies itself.   |
+| `available`, `claimed`      | Assignment identity, execution reference, ancestry, lifecycle, context mode, tool/skill requirements, attempts, worker, and applicable deadline. Prompts, instructions, schemas, inputs, outputs, and tokens are omitted. |
+| `blockers`                  | `available_work`, `claimed_work`, `wait`, `children`, `executing`, or `failure`, with run/execution/work references.                                                                                                      |
+| `failures`                  | Currently failed run references and errors. Collected Batch item failures can appear while their parent remains waiting or completes.                                                                                     |
+| `batches`                   | Per-execution total, dispatched and queued item counts, plus dispatched item status counts. Terminal status distinguishes undispatched items from work still pending.                                                     |
+| `deadlines`, `nextDeadline` | Sorted active Wait, unclaimed timeout, and claim lease deadlines. Earliest deadline or null.                                                                                                                              |
+| `recentResults`             | Recent completed execution references, labels, kinds, selected ports, timestamps, and output availability. No result values.                                                                                              |
+| `next`                      | Suggested action: `claim_work`, `wait_for_worker`, `wait_for_change`, `inspect_failure`, or `inspect_result`. Inspect requested status and lifecycle IDs before acting on independent work.                               |
+| `cursor`, `revision`        | Continuation cursor and monotonically increasing scoped revision. These differ from the graph-node `cursor` inside `run`.                                                                                                 |
+
+Each list has `{items, total, truncated}`. `limit` defaults to 20, accepts 1 through 100, and applies independently to every list. Totals, status counts, and the earliest deadline remain complete. Limits bound record counts, not the size of stored labels, capability names, or error text. Large trees still require metadata aggregation. Use `list_work` for all available assignments or `list_runs` to find individual descendants when a list truncates.
+
+Briefing scope includes all descendants. Requested completion is independent of detached progress. Operate a detached lifecycle with its own run ID. `rootRunId` and `rootWorkflowId` continue to describe ancestry and do not define cancellation or waiting boundaries. A completed parent never establishes that a dispatched child completed.
+
+Call `claim_work` for the full assignment. For one persisted value, call `get_run_result`, shared API `runs.result`:
+
+```json
+{
+  "id": "RUN_ID",
+  "executionId": "EXECUTION_ID",
+  "field": "output",
+  "path": "recommendation.title"
+}
+```
+
+Omit `executionId` for run data. `field` is `input` or `output`, defaulting to `output`. Blank `path` selects the whole field; dot-separated paths select object keys or array indices. JSON null is a value. Missing runs, foreign execution IDs, unavailable outputs, missing paths, and unsafe property paths return errors. `maxBytes` limits the selected value's UTF-8 JSON encoding, defaults to 65536, and accepts 1 through 262144. Oversized values return an error with their size; select a narrower path. It limits the value, not the complete response envelope. `get_run` remains full inspection, including execution errors and resolved Fetch requests.
+
+## Wait for a scoped change
+
+Call `wait_for_run_change`, shared API `runs.wait`, with `{id, cursor}` from the last briefing or wait. `limit` has the same bounds as briefing. `timeoutMs` defaults to 30000, accepts 0 through 60000, and zero checks immediately. Configure the client request timeout above the selected duration.
+
+Each response is a fresh bounded briefing plus `changed`, `timedOut`, and `reset`. Current cursors wait until a relevant change or timeout. On timeout, `changed:false`, `timedOut:true`, and `reset:false` accompany the current snapshot. No historical prompts, results, or events are replayed. Save the returned cursor for the next call.
+
+Run and assignment changes throughout the requested ancestry wake the wait, including claims, lease renewal, completion, retries, cancellation, timer advancement, and detached descendants. Timestamp-only run writes, unrelated runs, and workflow edits do not wake it. The timer pump continues independently; the read does not advance timers. Writes rolled back in a transaction do not advance the visible cursor.
+
+SQLite stores one latest revision per retained run and one global sequence. Revisions advance transactionally and do not depend on timestamp uniqueness or event retention. Run deletion removes its revision record; events remain governed by existing history/deletion behavior. The opaque cursor includes the server incarnation and requested ID. Do not construct or compare cursor strings for ordering. Compare numeric revisions within an incarnation.
+
+Restart, malformed, foreign-run, and future cursors return a fresh snapshot immediately with `changed:true`, `reset:true`, and `timedOut:false`. Continue with that cursor. Reset does not mean completion. A valid older cursor in the same incarnation returns a changed snapshot without reset. Missing or deleted runs error.
+
+Concurrent waiters are independent. Subscription precedes snapshot generation, so an intervening change cannot be lost. No database transaction stays open while waiting. Request cancellation, disconnect, and engine shutdown release listeners and timers. Shared API clients can pass an AbortSignal; Stdio MCP request cancellation releases the proxied wait. HTTP MCP releases waits when the actual HTTP request is aborted or disconnected. Some MCP clients cancel only their local promise and send a separate notification while leaving the POST active. The stateless endpoint cannot safely correlate that notification across clients; such waits end at their finite deadline. The stdio bridge gives each wait its own HTTP request, so another operation can complete or be cancelled independently. HTTP MCP remains stateless JSON request/response, with no transport session or standalone notification stream.
+
 ## Renew claims
 
 Claims accept `leaseSeconds` from 10 through 3600, defaulting to 300. Renew before `leaseUntil` expires. Renewal sets the deadline to the current time plus the requested duration.
