@@ -67,6 +67,10 @@ vi.mock(
     MiniMap: () => null,
   }),
 );
+const elk = vi.hoisted(() => ({ tidy: vi.fn() }));
+vi.mock('../packages/ui/src/features/workflows/workflowLayoutElk', () => ({
+  tidyWorkflowElk: elk.tidy,
+}));
 vi.mock('../packages/ui/src/features/workflows/FlowNode', () => ({
   FlowNode: () => null,
 }));
@@ -184,6 +188,7 @@ const button = (name: string) =>
 const click = async (name: string) => {
   if (name === 'Workflow settings' || name === 'Delete workflow')
     await act(async () => button('Workflow actions').click());
+  if (name.startsWith('Tidy (')) await act(async () => button('Tidy').click());
   expect(button(name), name).toBeTruthy();
   await act(async () => button(name).click());
 };
@@ -852,11 +857,11 @@ it('tidies the whole workflow as one undoable action without rewriting graph sem
     workflow.draft = nestedBatches(2);
     await render();
     const original = positions();
-    await click('Tidy');
+    await click('Tidy (Dagre)');
     const arranged = positions();
     expect(arranged).not.toEqual(original);
     expect(button('Save draft').disabled).toBe(false);
-    await click('Tidy');
+    await click('Tidy (Dagre)');
     await click('Undo');
     expect(positions()).toEqual(original);
     expect(button('Undo').disabled).toBe(true);
@@ -871,6 +876,52 @@ it('tidies the whole workflow as one undoable action without rewriting graph sem
   } finally {
     vi.unstubAllGlobals();
   }
+});
+
+it('applies the ELK layout as one undoable action and reports failures', async () => {
+  workflow.draft = nestedBatches(2);
+  await render();
+  const original = positions();
+  let settle!: (definition: typeof workflow.draft) => void;
+  let fail!: (error: Error) => void;
+  elk.tidy.mockImplementation(
+    (definition) =>
+      new Promise((resolve, reject) => {
+        settle = () =>
+          resolve({
+            ...definition,
+            nodes: definition.nodes.map((node: any) => ({
+              ...node,
+              position: { x: node.position.x + 40, y: node.position.y },
+            })),
+          });
+        fail = reject;
+      }),
+  );
+  await click('Tidy (ELK)');
+  expect(elk.tidy).toHaveBeenCalledWith(workflow.draft);
+  expect(button('Tidy').disabled).toBe(true);
+  expect(positions()).toEqual(original);
+  await act(async () => settle(workflow.draft));
+  expect(button('Tidy').disabled).toBe(false);
+  const arranged = positions();
+  expect(arranged).toEqual(
+    original.map((p: any) => ({
+      ...p,
+      position: { ...p.position, x: p.position.x + 40 },
+    })),
+  );
+  expect(button('Save draft').disabled).toBe(false);
+  await click('Undo');
+  expect(positions()).toEqual(original);
+  expect(button('Undo').disabled).toBe(true);
+  await click('Tidy (ELK)');
+  await act(async () => fail(new Error('ELK failed to load')));
+  expect(errors.map((e) => (e as Error).message)).toEqual([
+    'ELK failed to load',
+  ]);
+  expect(button('Tidy').disabled).toBe(false);
+  expect(positions()).toEqual(original);
 });
 
 it('discards invalid raw edits while retaining earlier unsaved visual changes', async () => {

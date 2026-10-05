@@ -2,7 +2,7 @@ import type { Action } from '../../lib/useActionFeedback';
 import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react';
-import { ActionIcon, Menu, Tabs } from '@mantine/core';
+import { ActionIcon, Loader, Menu, Tabs } from '@mantine/core';
 import {
   ReactFlow,
   Background,
@@ -46,6 +46,7 @@ import { canvasGraph, withoutNodes } from './canvasGraph';
 import { useWorkflowHistory } from './useWorkflowHistory';
 import { useBoxZoom } from './useBoxZoom';
 import { tidyWorkflow } from './workflowLayout';
+import { tidyWorkflowElk } from './workflowLayoutElk';
 import { api } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
 const nodeTypes = { workflow: FlowNode };
@@ -99,6 +100,7 @@ export function WorkflowEditor({
   const editorRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<ReactFlowInstance<CanvasNode> | null>(null);
   const fitAfterTidy = useRef(false);
+  const [arranging, setArranging] = useState(false);
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
   const [hovered, setHovered] = useState<string>();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -124,6 +126,33 @@ export function WorkflowEditor({
       ...current,
       draft: typeof update === 'function' ? update(current.draft) : update,
     }));
+  const latestDraft = useRef(draft);
+  useEffect(() => {
+    latestDraft.current = draft;
+  }, [draft]);
+  const applyTidy = (before: WorkflowDefinition, next: WorkflowDefinition) => {
+    if (JSON.stringify(next) === JSON.stringify(before)) {
+      void flowRef.current?.fitView({ padding: 0.22, duration: 180 });
+      return;
+    }
+    fitAfterTidy.current = true;
+    setDraft(next);
+  };
+  const tidyElk = async () => {
+    const before = draft;
+    setArranging(true);
+    try {
+      const next = await tidyWorkflowElk(before);
+      // Skip a layout computed for a draft that changed meanwhile.
+      if (mounted.current && latestDraft.current === before)
+        applyTidy(before, next);
+    } catch (error) {
+      // Nothing to refresh; act only reports the failure.
+      void act(() => Promise.reject(error));
+    } finally {
+      if (mounted.current) setArranging(false);
+    }
+  };
   const [revision, setRevision] = useState(workflow.draftRevision),
     [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<{
@@ -919,30 +948,41 @@ export function WorkflowEditor({
                 >
                   <Background color="var(--canvas-dot)" gap={22} size={1} />
                   <Controls showInteractive={false}>
-                    <ControlButton
-                      aria-label="Tidy"
-                      disabled={Boolean(
-                        editing ||
-                        pending ||
-                        history.groupStart ||
-                        boxZoom.active,
-                      )}
-                      title="Tidy: Arrange the workflow and Batch contents. Undo to restore the previous layout."
-                      onClick={() => {
-                        const next = tidyWorkflow(draft);
-                        if (JSON.stringify(next) === JSON.stringify(draft)) {
-                          void flowRef.current?.fitView({
-                            padding: 0.22,
-                            duration: 180,
-                          });
-                          return;
-                        }
-                        fitAfterTidy.current = true;
-                        setDraft(next);
-                      }}
-                    >
-                      <WandSparkles />
-                    </ControlButton>
+                    <Menu position="right-start" width={160}>
+                      <Menu.Target>
+                        <ControlButton
+                          aria-label="Tidy"
+                          disabled={Boolean(
+                            editing ||
+                            pending ||
+                            arranging ||
+                            history.groupStart ||
+                            boxZoom.active,
+                          )}
+                          title={
+                            arranging
+                              ? 'Arranging…'
+                              : 'Tidy: Arrange the workflow and Batch contents. Undo to restore the previous layout.'
+                          }
+                        >
+                          {arranging ? (
+                            <Loader size={12} color="var(--accent-text)" />
+                          ) : (
+                            <WandSparkles />
+                          )}
+                        </ControlButton>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item
+                          onClick={() => applyTidy(draft, tidyWorkflow(draft))}
+                        >
+                          Tidy (Dagre)
+                        </Menu.Item>
+                        <Menu.Item onClick={() => void tidyElk()}>
+                          Tidy (ELK)
+                        </Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
                   </Controls>
                   <MiniMap
                     style={{ width: 125, height: 85 }}

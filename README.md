@@ -88,7 +88,7 @@ In Raw, **Save** beneath the code editor writes the workflow draft and records o
 
 Hold **Z** and drag from empty canvas space to draw a zoom rectangle. Release the mouse to fit that area into view. Press **Escape** or release Z before releasing the mouse to cancel. A click without a drag does nothing. This shortcut is inactive in text fields and settings dialogs and does not add to Undo history.
 
-The **Tidy** icon sits below **Fit View** in the canvas controls. Use **Tidy** to arrange the whole workflow from left to right, including nested Batch contents, and fit it into view. Tidy uses expanded Batch sizes so groups have room when reopened. It accounts for output handle positions to reduce avoidable branch crossings. Complex graphs and loops may still have crossings. It changes only positions and can be undone in one step. Save the draft to keep the arrangement. Imported and agent-authored positions remain as supplied until you tidy them.
+The **Tidy** icon sits below **Fit View** in the canvas controls and offers two layouts: **Tidy (Dagre)** and **Tidy (ELK)**, which downloads the layout engine the first time you use it and keeps branch handles in order. Use either to arrange the whole workflow from left to right, including nested Batch contents, and fit it into view. Tidy uses expanded Batch sizes so groups have room when reopened. It accounts for output handle positions to reduce avoidable branch crossings. Complex graphs and loops may still have crossings. It changes only positions and can be undone in one step. Save the draft to keep the arrangement. Imported and agent-authored positions remain as supplied until you tidy them.
 
 ### Create a child workflow
 
