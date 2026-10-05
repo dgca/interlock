@@ -260,6 +260,34 @@ it('keeps overlapping backward edges on separate lanes', () => {
   const bY = (b.data as { laneY: number }).laneY;
   expect(Math.abs(aY - bY)).toBeGreaterThanOrEqual(24);
 });
+it('sends an overlapping loop to the emptier side and a lone loop below', () => {
+  const definition = definitionSchema.parse({
+    nodes: [
+      placedNode('a', 0, 0),
+      placedNode('b', 300, 0),
+      placedNode('c', 600, 0),
+      placedNode('d', 900, 0),
+    ],
+    edges: [
+      { id: 'ab', source: 'a', target: 'b' },
+      { id: 'bc', source: 'b', target: 'c' },
+      { id: 'cd', source: 'c', target: 'd' },
+      { id: 'outer', source: 'd', target: 'a' },
+      { id: 'inner', source: 'c', target: 'b' },
+    ],
+  });
+  const laneY = (graph: ReturnType<typeof canvasGraph>, id: string) =>
+    (graph.edges.find((edge) => edge.id === id)!.data as { laneY: number })
+      .laneY;
+  const graph = canvasGraph(definition);
+  expect(laneY(graph, 'outer')).toBeGreaterThan(116);
+  expect(laneY(graph, 'inner')).toBeLessThan(0);
+  const lone = canvasGraph({
+    ...definition,
+    edges: definition.edges.filter((edge) => edge.id !== 'outer'),
+  });
+  expect(laneY(lone, 'inner')).toBeGreaterThan(116);
+});
 it('keeps loop verticals in the free gaps beside their endpoints', () => {
   const definition = definitionSchema.parse({
     nodes: [

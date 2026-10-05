@@ -203,7 +203,8 @@ export function canvasGraph(
     const origin = parent ? absolute(index.get(parent)!) : { x: 0, y: 0 };
     return { x: origin.x + node.position.x, y: origin.y + node.position.y };
   };
-  // Route loops below the cards between their endpoints. Overlapping
+  // Route loops around the cards between their endpoints, on whichever side
+  // already carries fewer loops over that span (ties go below). Overlapping
   // neighboring cards keep the default curve.
   const LOOP_MARGIN = 8;
   const visible = ordered.filter((node) => !hiddenIds.has(node.id));
@@ -225,17 +226,19 @@ export function canvasGraph(
         absolute(source).x,
     );
   };
-  const corridorBottom = (edge: WorkflowEdge) => {
+  const crossed = (edge: WorkflowEdge) => {
     const { left, right } = span(edge);
-    return Math.max(
-      ...visible
-        .filter((node) => {
-          const x = absolute(node).x;
-          return x < right && x + size(node).width > left;
-        })
-        .map((node) => absolute(node).y + size(node).height),
-    );
+    return visible.filter((node) => {
+      const x = absolute(node).x;
+      return x < right && x + size(node).width > left;
+    });
   };
+  const corridorBottom = (edge: WorkflowEdge) =>
+    Math.max(
+      ...crossed(edge).map((node) => absolute(node).y + size(node).height),
+    );
+  const corridorTop = (edge: WorkflowEdge) =>
+    Math.min(...crossed(edge).map((node) => absolute(node).y));
   const loops = definition.edges
     .filter((edge) => !hiddenEdge(edge) && backward(edge))
     .sort(
@@ -249,12 +252,15 @@ export function canvasGraph(
   ) => {
     const origin = absolute(node);
     const boundary = side === 'right' ? origin.x + size(node).width : origin.x;
+    // Only cards beside the vertical run, between the card and its lane, matter.
+    const top = Math.min(laneY, origin.y),
+      bottom = Math.max(laneY, origin.y + size(node).height);
     let gap = Infinity;
     for (const other of visible) {
       if (other.id === node.id) continue;
       const position = absolute(other);
       const otherRight = position.x + size(other).width;
-      if (position.y >= laneY || position.y + size(other).height <= origin.y)
+      if (position.y >= bottom || position.y + size(other).height <= top)
         continue;
       if (side === 'right' && otherRight > boundary)
         gap = Math.min(gap, Math.max(0, position.x - boundary));
@@ -264,12 +270,21 @@ export function canvasGraph(
     return gap;
   };
   const lane = new Map<string, LoopEdgeData>();
+  const placed: { left: number; right: number; above: boolean }[] = [];
   loops.forEach((edge, i) => {
-    let laneY = corridorBottom(edge) + 40;
+    const { left, right } = span(edge);
+    const traffic = (above: boolean) =>
+      placed.filter(
+        (p) => p.above === above && p.left < right && p.right > left,
+      ).length;
+    const above = traffic(true) < traffic(false);
+    const step = above ? -24 : 24;
+    let laneY = above ? corridorTop(edge) - 40 : corridorBottom(edge) + 40;
     while (
       [...lane.values()].some((route) => Math.abs(route.laneY - laneY) < 24)
     )
-      laneY += 24;
+      laneY += step;
+    placed.push({ left, right, above });
     const desiredOffset = 24 + i * 12;
     const offset = (gap: number) =>
       Number.isFinite(gap)
