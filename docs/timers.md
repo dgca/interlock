@@ -34,6 +34,41 @@ The Wait editor suggests text fields and fields of unknown type from the input c
 
 Wait has one `default` output route. It can appear inside a Batch item path. Each waiting item occupies its concurrency slot until it finishes.
 
+## Polling waits
+
+A Wait can also wait for something slow outside Interlock: an environment bootstrap, a CI run, a job in another system. The slow work runs on its own; the Wait only runs a short **check** on an interval until the check's result matches.
+
+```json
+{
+  "id": "lab-up",
+  "kind": "wait",
+  "label": "Wait until the lab is up",
+  "timing": {
+    "kind": "poll",
+    "everyMs": 120000,
+    "timeoutMs": 5400000,
+    "check": {
+      "kind": "script",
+      "language": "bash",
+      "command": "if [ -f /tmp/lab.exit ]; then echo '{\"ready\":true}'; else echo '{\"ready\":false}'; fi",
+      "timeoutMs": 30000
+    },
+    "path": "ready",
+    "equals": true
+  }
+}
+```
+
+- `check` is a Script (`command`, optional `language`, `timeoutMs` from 100 through 120,000 ms) or a Fetch (`url`, `method`, `query`, `headers`, `body`, `timeoutMs`, `failOnHttpError`) with the same rules and bounds as the matching node. It receives the step input: a Script reads it on stdin or as `input`; a Fetch binds it into the request.
+- The server runs the first check as soon as the step starts, then every `everyMs` milliseconds (1,000 through 365 days; default 60,000) after each check finishes. No worker is involved.
+- The step continues when the check output at `path` structurally equals `equals`, as a Condition compares. The output is the step input with the check output merged over it when both are objects; otherwise it is the check output alone. The output contract applies to that value.
+- A check that fails (non-zero exit, timeout, a Fetch error, or an HTTP error with `failOnHttpError`) is recorded on the execution and runs again at the next interval. A passing check whose output has no value at `path` fails the step, as a missing path fails a Condition.
+- `timeoutMs` (1 ms through 365 days) sets a deadline from the step's start. At the deadline the step follows its `timeout` route with the original input, without applying the output contract. Publication requires the `timeout` edge when `timeoutMs` is set and rejects it otherwise.
+- The schedule persists: `nextCheckAt` (also exposed as `resumeAt`), `timeoutAt`, and the latest `check` with its `count`, `at`, and `output` or `error`. A restart re-runs an overdue check; a check interrupted by the restart simply runs again, so checks should be idempotent probes. Cancellation aborts a check in flight.
+- One execution counts once against `maxSteps` however many checks run, unlike a Wait → Script → Switch loop, which spends three steps per iteration.
+
+In the editor, choose **When a check passes**, pick Script or Fetch, set **Check every**, the **Check output field**, and the value to continue on, and optionally **Give up after a deadline**. The run inspector shows the next check time and the latest check result.
+
 ## Unclaimed Agent timeouts
 
 `unclaimedTimeoutMs` is an optional integer and ranges from one millisecond through 365 days. Omitting it preserves indefinite waiting for a claim.
@@ -81,12 +116,13 @@ Use `get_run_briefing` for current blockers and active deadlines, then `wait_for
 
 `get_run` returns the root run, its executions, descendants, assignments, and events. Timer state appears in these fields:
 
-| Field                                                       | Meaning                                                        |
-| ----------------------------------------------------------- | -------------------------------------------------------------- |
-| Wait execution `status: "waiting"` and `resumeAt`           | The step is waiting until its persisted ISO deadline.          |
-| Assignment `status: "available"` and `availableUntil`       | Work can be claimed before its ISO deadline.                   |
-| Assignment `status: "timed_out"`                            | Nobody claimed this availability interval before the deadline. |
-| Agent execution `status: "completed"` and `port: "timeout"` | The step followed Timeout with the original input.             |
+| Field                                                       | Meaning                                                                    |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Wait execution `status: "waiting"` and `resumeAt`           | The step is waiting until its persisted ISO deadline.                      |
+| Wait execution `nextCheckAt`, `timeoutAt`, `check`          | A polling Wait: its next check, its deadline, and the latest check result. |
+| Assignment `status: "available"` and `availableUntil`       | Work can be claimed before its ISO deadline.                               |
+| Assignment `status: "timed_out"`                            | Nobody claimed this availability interval before the deadline.             |
+| Agent execution `status: "completed"` and `port: "timeout"` | The step followed Timeout with the original input.                         |
 
 A completed timeout step does not mean the whole run completed. The next step can still be running or waiting. Deadlines remain in execution history after completion or cancellation, so status determines whether a deadline is active. Claiming clears `availableUntil`; releasing work for another attempt sets a new value.
 

@@ -276,3 +276,38 @@ it.each(['Required tools', 'Required skills'])(
     ]);
   },
 );
+it('switches a Wait to a polling check and applies its schedule, path, value and deadline', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: { kind: 'duration', ms: 60_000 },
+  });
+  const resume = Array.from(
+    container.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
+  ).find((input) => input.value === 'poll')!;
+  await act(async () => resume.click());
+  const language = Array.from(
+    container.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
+  ).filter((input) => ['javascript', 'bash'].includes(input.value));
+  expect(language.find((input) => input.checked)?.value).toBe('javascript');
+  await fill('Check every', '2');
+  expect(field('Check every unit').value).toBe('60000');
+  await fill('Check output field', 'body.state');
+  const deadline = Array.from(
+    container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+  ).find((input) =>
+    container
+      .querySelector(`label[for="${input.id}"]`)
+      ?.textContent?.includes('Give up after a deadline'),
+  )!;
+  await act(async () => deadline.click());
+  await fill('Deadline', '1.5');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timing).toMatchObject({
+    kind: 'poll',
+    everyMs: 120_000,
+    timeoutMs: 90 * 60_000,
+    check: { kind: 'script', language: 'javascript' },
+    path: 'body.state',
+    equals: true,
+  });
+});

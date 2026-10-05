@@ -688,7 +688,8 @@ it.each(['stdio', 'http'])(
         timerDefinition.edges = [
           { id: 'in', source: 'entry', target: example.id, port: 'default' },
           { id: 'out', source: example.id, target: 'exit', port: 'default' },
-          ...(example.kind === 'agent'
+          ...(example.kind === 'agent' ||
+          example.timing?.timeoutMs !== undefined
             ? [
                 {
                   id: 'timeout',
@@ -716,9 +717,11 @@ it.each(['stdio', 'http'])(
           });
           expect(assignments[0].availableUntil).toBeDefined();
           await call('cancel_run', { id: timerRun.run.id });
-        } else if (example.timing.kind === 'duration') {
+        } else if (['duration', 'poll'].includes(example.timing.kind)) {
           expect(timerState.run.status).toBe('waiting');
           expect(timerState.run.executions.at(-1).resumeAt).toBeDefined();
+          if (example.timing.kind === 'poll')
+            expect(timerState.run.executions.at(-1).nextCheckAt).toBeDefined();
           expect(await call('list_work', { runId: timerRun.run.id })).toEqual(
             [],
           );

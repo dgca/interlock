@@ -41,6 +41,39 @@ const fetchFieldSchema = z.object({
   name: z.string(),
   value: fetchBindingSchema,
 });
+const fetchRequestFields = {
+  url: z.string(),
+  method: z
+    .enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])
+    .default('GET'),
+  query: z.array(fetchFieldSchema).default([]),
+  headers: z.array(fetchFieldSchema).default([]),
+  body: z
+    .discriminatedUnion('kind', [
+      z.object({ kind: z.literal('none') }),
+      z.object({ kind: z.literal('input') }),
+      z.object({ kind: z.literal('fixed'), value: jsonSchema }),
+      z.object({
+        kind: z.literal('fields'),
+        fields: z.array(fetchFieldSchema),
+      }),
+    ])
+    .default({ kind: 'none' }),
+  timeoutMs: z.number().int().min(100).max(120000).default(30000),
+  failOnHttpError: z.boolean().default(true),
+};
+/** A probe a polling Wait runs on the server: a Script or a Fetch, bounded like the matching node. */
+export const pollCheckSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('script'),
+    // Omitted language runs as Bash, like Script nodes saved before JavaScript existed.
+    language: z.enum(['javascript', 'bash']).optional(),
+    command: z.string().min(1),
+    timeoutMs: z.number().int().min(100).max(120000).default(30000),
+  }),
+  z.object({ kind: z.literal('fetch'), ...fetchRequestFields }),
+]);
+export type PollCheck = z.infer<typeof pollCheckSchema>;
 const nodeBase = {
   id: z.string().min(1),
   label: z.string().min(1),
@@ -106,25 +139,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
         body: {},
       },
     }),
-    url: z.string(),
-    method: z
-      .enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])
-      .default('GET'),
-    query: z.array(fetchFieldSchema).default([]),
-    headers: z.array(fetchFieldSchema).default([]),
-    body: z
-      .discriminatedUnion('kind', [
-        z.object({ kind: z.literal('none') }),
-        z.object({ kind: z.literal('input') }),
-        z.object({ kind: z.literal('fixed'), value: jsonSchema }),
-        z.object({
-          kind: z.literal('fields'),
-          fields: z.array(fetchFieldSchema),
-        }),
-      ])
-      .default({ kind: 'none' }),
-    timeoutMs: z.number().int().min(100).max(120000).default(30000),
-    failOnHttpError: z.boolean().default(true),
+    ...fetchRequestFields,
   }),
   z.object({
     ...nodeBase,
@@ -136,6 +151,19 @@ export const nodeSchema = z.discriminatedUnion('kind', [
           ms: z.number().int().min(0).max(31_536_000_000),
         }),
         z.object({ kind: z.literal('until'), path: z.string() }),
+        z.object({
+          kind: z.literal('poll'),
+          everyMs: z
+            .number()
+            .int()
+            .min(1000)
+            .max(31_536_000_000)
+            .default(60_000),
+          timeoutMs: z.number().int().min(1).max(31_536_000_000).optional(),
+          check: pollCheckSchema,
+          path: z.string(),
+          equals: jsonSchema,
+        }),
       ])
       .default({ kind: 'duration', ms: 60_000 }),
   }),
@@ -235,7 +263,17 @@ export interface NodeExecution {
   retryChildRunIds?: string[];
   request?: FetchRequest;
   resumeAt?: string;
+  /** Polling Wait: when the next check runs, the deadline, and the latest check. */
+  nextCheckAt?: string;
+  timeoutAt?: string;
+  check?: PollCheckResult;
   port?: WorkflowEdge['port'];
+}
+export interface PollCheckResult {
+  count: number;
+  at: string;
+  output?: Json;
+  error?: string;
 }
 export interface Run {
   id: string;
@@ -388,7 +426,26 @@ export function outgoingPorts(node: WorkflowNode): WorkflowEdge['port'][] {
   if (node.kind === 'batch') return ['item', 'complete'];
   if (node.kind === 'agent' && node.unclaimedTimeoutMs !== undefined)
     return ['default', 'timeout'];
+  if (isPollWait(node) && node.timing.timeoutMs !== undefined)
+    return ['default', 'timeout'];
   return ['default'];
+}
+export type PollWaitNode = Extract<WorkflowNode, { kind: 'wait' }> & {
+  timing: Extract<
+    Extract<WorkflowNode, { kind: 'wait' }>['timing'],
+    { kind: 'poll' }
+  >;
+};
+/** A Wait that re-runs a check until its result matches, instead of waiting for a clock. */
+export function isPollWait(node: WorkflowNode): node is PollWaitNode {
+  return node.kind === 'wait' && node.timing.kind === 'poll';
+}
+/** Whether a node's `timeout` route carries its original input instead of a result. */
+export function hasTimeoutRoute(node: WorkflowNode): boolean {
+  return (
+    (node.kind === 'agent' && node.unclaimedTimeoutMs !== undefined) ||
+    (isPollWait(node) && node.timing.timeoutMs !== undefined)
+  );
 }
 
 export function validateDefinition(input: unknown): WorkflowDefinition {
@@ -454,6 +511,8 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
         `${node.label}: Start and continue uses the fixed Started run output contract. Omit outputSchema or use the runId, workflowId, and version contract.`,
       );
     if (node.kind === 'fetch') validateFetch(node);
+    if (isPollWait(node) && node.timing.check.kind === 'fetch')
+      validateFetch(node.timing.check);
     if (
       node.kind === 'batch' &&
       !node.itemsPath &&

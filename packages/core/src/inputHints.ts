@@ -1,4 +1,8 @@
-import type { WorkflowDefinition, WorkflowNode } from './index.js';
+import {
+  isPollWait,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from './index.js';
 import type { Contract } from './contracts.js';
 import { STARTED_RUN_SCHEMA } from './workflowMode.js';
 
@@ -186,7 +190,7 @@ export function nodeInputHint(
     if (
       source.kind === 'condition' ||
       source.kind === 'switch' ||
-      source.kind === 'wait'
+      (source.kind === 'wait' && !isPollWait(source))
     )
       return input(source).schema;
     if (source.kind === 'batch') return { type: 'array' };

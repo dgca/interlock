@@ -218,7 +218,7 @@ export function runProgress(
           : current?.kind === 'wait' &&
               current.status === 'waiting' &&
               current.resumeAt
-            ? `Resumes at ${new Date(current.resumeAt).toLocaleString()}`
+            ? `${current.nextCheckAt ? 'Checks again at' : 'Resumes at'} ${new Date(current.resumeAt).toLocaleString()}`
             : undefined,
   };
 }
