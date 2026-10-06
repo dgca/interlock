@@ -67,7 +67,7 @@ export function TidyControl({
             <Menu.Item
               key={option}
               disabled={disabled}
-              leftSection={layout === option ? <Check size={12} /> : undefined}
+              rightSection={layout === option ? <Check size={12} /> : undefined}
               onClick={() => choose(option)}
             >
               {layouts[option]}
