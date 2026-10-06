@@ -321,6 +321,87 @@ const route = (graph: ReturnType<typeof canvasGraph>, id: string) => {
   const data = edge.data as { points: Point[] } | undefined;
   return { type: edge.type, points: data?.points ?? [] };
 };
+const expectClearRoute = (
+  graph: ReturnType<typeof canvasGraph>,
+  id: string,
+) => {
+  const edge = graph.edges.find((item) => item.id === id)!;
+  const source = graph.nodes.find((node) => node.id === edge.source)!;
+  const target = graph.nodes.find((node) => node.id === edge.target)!;
+  const routed = route(graph, id);
+  expect(routed.type).toBe('ortho');
+  const points = [
+    {
+      x: source.position.x + source.width!,
+      y: source.position.y + source.height! / 2,
+    },
+    ...routed.points,
+    { x: target.position.x, y: target.position.y + target.height! / 2 },
+  ];
+  expect(
+    points
+      .slice(1)
+      .every((point, i) => point.x === points[i].x || point.y === points[i].y),
+  ).toBe(true);
+  const crossed = graph.nodes.filter(
+    (node) =>
+      !node.hidden &&
+      !node.parentId &&
+      node.id !== edge.source &&
+      node.id !== edge.target &&
+      points.slice(1).some((point, i) => {
+        const previous = points[i];
+        return (
+          node.position.x < Math.max(previous.x, point.x) &&
+          node.position.x + node.width! > Math.min(previous.x, point.x) &&
+          node.position.y < Math.max(previous.y, point.y) &&
+          node.position.y + node.height! > Math.min(previous.y, point.y)
+        );
+      }),
+  );
+  expect(crossed.map((node) => node.id)).toEqual([]);
+};
+it('finds a clear corridor when additional rows block the first detour', () => {
+  const graph = canvasGraph(
+    definitionSchema.parse({
+      nodes: [
+        placedNode('source', 0, 0),
+        placedNode('blocker', 300, 0),
+        placedNode('lower', 300, 120),
+        placedNode('lowest', 300, 240),
+        placedNode('target', 600, 0),
+      ],
+      edges: [{ id: 'edge', source: 'source', target: 'target' }],
+    }),
+  );
+  expectClearRoute(graph, 'edge');
+});
+it.each([500, 120])(
+  'routes past cards when a wide Batch at y=%i overlaps their x ranges',
+  (batchY) => {
+    const graph = canvasGraph(
+      definitionSchema.parse({
+        nodes: [
+          placedNode('source', 0, 0),
+          placedNode('blocker', 300, 0),
+          placedNode('target', 600, 0),
+          nodeSchema.parse({
+            id: 'batch',
+            kind: 'batch',
+            label: 'batch',
+            position: { x: 150, y: batchY },
+            concurrency: 1,
+          }),
+        ],
+        edges: [{ id: 'edge', source: 'source', target: 'target' }],
+      }),
+    );
+    expectClearRoute(graph, 'edge');
+    if (batchY === 120) {
+      expect(route(graph, 'edge').points[1].y).toBeLessThan(0);
+    }
+  },
+);
 it('routes a spanning forward edge below the row it would cross and keeps same-row neighbors straight', () => {
   const definition = definitionSchema.parse({
     nodes: [

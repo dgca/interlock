@@ -313,16 +313,22 @@ export function canvasGraph(
     return { left: x, right: x + width, top: y, bottom: y + height };
   };
   const cards = visible.filter((node) => !parents.get(node.id));
-  const columns: { left: number; right: number; ids: Set<string> }[] = [];
-  for (const node of [...cards].sort((a, b) => box(a).left - box(b).left)) {
-    const { left, right } = box(node);
-    const last = columns[columns.length - 1];
-    if (last && left < last.right) {
-      last.right = Math.max(last.right, right);
-      last.ids.add(node.id);
-    } else columns.push({ left, right, ids: new Set([node.id]) });
-  }
-  const columnOf = (id: string) => columns.findIndex((c) => c.ids.has(id));
+  type Column = { left: number; right: number; ids: Set<string> };
+  const columnsFor = (nodes: WorkflowNode[]) => {
+    const columns: Column[] = [];
+    for (const node of [...nodes].sort((a, b) => box(a).left - box(b).left)) {
+      const { left, right } = box(node);
+      const last = columns[columns.length - 1];
+      if (last && left < last.right) {
+        last.right = Math.max(last.right, right);
+        last.ids.add(node.id);
+      } else columns.push({ left, right, ids: new Set([node.id]) });
+    }
+    return columns;
+  };
+  const columns = columnsFor(cards);
+  const columnOf = (columns: Column[], id: string) =>
+    columns.findIndex((c) => c.ids.has(id));
   const handleY = (node: WorkflowNode, port: string) => {
     const top = outputPortTop(node, port);
     return (
@@ -363,7 +369,16 @@ export function canvasGraph(
       0,
     );
   // A vertical run claims a channel in its gap; the x is assigned afterwards.
-  type Run = { gap: number; from: number; to: number; x: number };
+  type Gap = { left: number; right: number };
+  const gaps = new Map<string, Gap>();
+  const gapBetween = (columns: Column[], i: number) => {
+    const left = columns[i].right,
+      right = columns[i + 1].left;
+    const key = `${left}:${right}`;
+    if (!gaps.has(key)) gaps.set(key, { left, right });
+    return gaps.get(key)!;
+  };
+  type Run = { gap: Gap; from: number; to: number; x: number };
   type Route = { runs: Run[]; corridorY?: number };
   const corners = (route: Route): Point[] =>
     route.runs.flatMap((run) => [
@@ -371,8 +386,7 @@ export function canvasGraph(
       { x: run.x, y: run.to },
     ]);
   const routes = new Map<string, Route>();
-  const center = (gap: number) =>
-    (columns[gap].right + columns[gap + 1].left) / 2;
+  const center = (gap: Gap) => (gap.left + gap.right) / 2;
   const corridors: number[] = [];
   for (const edge of definition.edges) {
     const source = index.get(edge.source),
@@ -387,50 +401,88 @@ export function canvasGraph(
       parents.get(target.id)
     )
       continue;
-    const from = columnOf(source.id),
-      to = columnOf(target.id);
-    if (to <= from) continue;
     const sy = handleY(source, edge.port),
       ty = targetY(target);
-    if (to === from + 1 && Math.abs(sy - ty) <= STRAIGHT_TOLERANCE) continue;
     const sx = box(source).right,
       tx = box(target).left;
+    if (tx <= sx) continue;
+    let edgeColumns = columns;
+    let from = columnOf(edgeColumns, source.id),
+      to = columnOf(edgeColumns, target.id);
+    if (to <= from) {
+      // A wide card on another row can merge otherwise separate columns.
+      // Recover gaps near this edge, but still score routes against all cards.
+      edgeColumns = columnsFor(
+        cards.filter(
+          (node) =>
+            node.id === source.id ||
+            node.id === target.id ||
+            (box(node).top <= Math.max(sy, ty) &&
+              box(node).bottom >= Math.min(sy, ty)),
+        ),
+      );
+      from = columnOf(edgeColumns, source.id);
+      to = columnOf(edgeColumns, target.id);
+    }
+    if (to <= from) continue;
+    if (to === from + 1 && Math.abs(sy - ty) <= STRAIGHT_TOLERANCE) continue;
+    const firstGap = gapBetween(edgeColumns, from),
+      lastGap = gapBetween(edgeColumns, to - 1);
     const skip = new Set([source.id, target.id]);
     const points = (route: Route) => [
       { x: sx, y: sy },
       ...corners(route),
       { x: tx, y: ty },
     ];
-    const bend = (gap: number): Route => ({
+    const bend = (gap: Gap): Route => ({
       runs: [{ gap, from: sy, to: ty, x: center(gap) }],
     });
-    const candidates = [bend(from)];
-    if (to - 1 !== from) candidates.push(bend(to - 1));
+    const candidates = [bend(firstGap)];
+    if (lastGap !== firstGap) candidates.push(bend(lastGap));
     let scored = candidates.map((route) => ({
       route,
       hit: hits(points(route), skip),
     }));
     if (scored.every(({ hit }) => hit.size)) {
-      // Both bends cross a card: dip below the lower of the rows they cross,
-      // then run across the gap between rows. Stacked corridors spread out.
-      let corridorY =
-        Math.max(
-          ...scored.flatMap(({ hit }) => [...hit].map((n) => box(n).bottom)),
-        ) +
-        CANVAS_GAP / 2;
-      while (
-        corridors.some((y) => Math.abs(y - corridorY) < CHANNEL_SPACING) ||
-        [...lane.values()].some((l) => Math.abs(l.laneY - corridorY) < 24)
-      )
-        corridorY += CHANNEL_SPACING;
-      const corridor: Route = {
-        corridorY,
-        runs: [
-          { gap: from, from: sy, to: corridorY, x: center(from) },
-          { gap: to - 1, from: corridorY, to: ty, x: center(to - 1) },
-        ],
-      };
-      scored.push({ route: corridor, hit: hits(points(corridor), skip) });
+      // Try below first, continuing past every newly encountered row. Local
+      // gaps can be blocked on that side, so also try above if none is clear.
+      const blocked = scored.flatMap(({ hit }) => [...hit]);
+      for (const direction of [1, -1]) {
+        let corridorY =
+          direction === 1
+            ? Math.max(...blocked.map((node) => box(node).bottom)) +
+              CANVAS_GAP / 2
+            : Math.min(...blocked.map((node) => box(node).top)) -
+              CANVAS_GAP / 2;
+        for (let attempt = 0; attempt <= cards.length; attempt++) {
+          while (
+            corridors.some((y) => Math.abs(y - corridorY) < CHANNEL_SPACING) ||
+            [...lane.values()].some((l) => Math.abs(l.laneY - corridorY) < 24)
+          )
+            corridorY += direction * CHANNEL_SPACING;
+          const corridor: Route = {
+            corridorY,
+            runs: [
+              { gap: firstGap, from: sy, to: corridorY, x: center(firstGap) },
+              { gap: lastGap, from: corridorY, to: ty, x: center(lastGap) },
+            ],
+          };
+          const hit = hits(points(corridor), skip);
+          scored.push({ route: corridor, hit });
+          if (!hit.size) break;
+          const nextY =
+            direction === 1
+              ? Math.max(...[...hit].map((node) => box(node).bottom)) +
+                CANVAS_GAP / 2
+              : Math.min(...[...hit].map((node) => box(node).top)) -
+                CANVAS_GAP / 2;
+          // A persistent intersection with a vertical leg cannot be solved
+          // by moving farther along the same corridor direction.
+          if (direction * (nextY - corridorY) <= 0) break;
+          corridorY = nextY;
+        }
+        if (scored.some(({ hit }) => !hit.size)) break;
+      }
     }
     scored = scored.sort(
       (a, b) =>
@@ -444,7 +496,7 @@ export function canvasGraph(
   // Spread the verticals in each gap. Order so that a fan-out's farther
   // targets turn first (leftmost) and a fan-in's farther sources turn last:
   // upward runs by ascending y-sum, then downward runs by descending y-sum.
-  const runsByGap = new Map<number, Run[]>();
+  const runsByGap = new Map<Gap, Run[]>();
   for (const route of routes.values())
     for (const run of route.runs) {
       const runs = runsByGap.get(run.gap) ?? [];
@@ -460,7 +512,7 @@ export function canvasGraph(
       .filter((run) => run.to >= run.from)
       .sort((a, b) => sum(b) - sum(a));
     const ordered = [...up, ...down];
-    const width = columns[gap + 1].left - columns[gap].right;
+    const width = gap.right - gap.left;
     const spacing = Math.min(CHANNEL_SPACING, width / (ordered.length + 1));
     ordered.forEach((run, i) => {
       run.x = center(gap) + (i - (ordered.length - 1) / 2) * spacing;
