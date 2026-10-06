@@ -797,7 +797,7 @@ function PollEditor({
         <DurationInput
           key={`poll-timeout-${node.id}`}
           label="Deadline"
-          min={1000}
+          min={1}
           value={timing.timeoutMs}
           onChange={(timeoutMs) => patch({ timeoutMs })}
         />

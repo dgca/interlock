@@ -372,3 +372,24 @@ it.each(['disable', 'duration', 'until'])(
     expect(() => validateDefinition(saved)).not.toThrow();
   },
 );
+
+it('preserves a valid subsecond polling deadline when settings are applied unchanged', async () => {
+  const { node, onApply } = await render({
+    kind: 'wait',
+    timing: {
+      kind: 'poll',
+      everyMs: 1000,
+      timeoutMs: 500,
+      check: {
+        kind: 'script',
+        language: 'javascript',
+        command: 'return true;',
+      },
+      path: '',
+      equals: true,
+    },
+  });
+  await click('Apply changes');
+  expect(onApply).toHaveBeenCalled();
+  expect(onApply.mock.lastCall![0].definition.nodes[0]).toEqual(node);
+});
