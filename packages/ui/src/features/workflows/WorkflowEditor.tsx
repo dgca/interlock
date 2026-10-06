@@ -2,12 +2,11 @@ import type { Action } from '../../lib/useActionFeedback';
 import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react';
-import { ActionIcon, Loader, Menu, Tabs } from '@mantine/core';
+import { ActionIcon, Menu, Tabs } from '@mantine/core';
 import {
   ReactFlow,
   Background,
   Controls,
-  ControlButton,
   MiniMap,
   applyNodeChanges,
   applyEdgeChanges,
@@ -23,7 +22,6 @@ import {
   Settings2,
   Undo2,
   Redo2,
-  WandSparkles,
   MoreHorizontal,
   Trash2,
 } from 'lucide-react';
@@ -48,6 +46,7 @@ import { useWorkflowHistory } from './useWorkflowHistory';
 import { useBoxZoom } from './useBoxZoom';
 import { tidyWorkflow } from './workflowLayout';
 import { tidyWorkflowElk } from './workflowLayoutElk';
+import { TidyControl } from './TidyControl';
 import { api } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
 const nodeTypes = { workflow: FlowNode };
@@ -139,21 +138,6 @@ export function WorkflowEditor({
     fitAfterTidy.current = true;
     setDraft(next);
   };
-  const tidyElk = async () => {
-    const before = draft;
-    setArranging(true);
-    try {
-      const next = await tidyWorkflowElk(before);
-      // Skip a layout computed for a draft that changed meanwhile.
-      if (mounted.current && latestDraft.current === before)
-        applyTidy(before, next);
-    } catch (error) {
-      // Nothing to refresh; act only reports the failure.
-      void act(() => Promise.reject(error));
-    } finally {
-      if (mounted.current) setArranging(false);
-    }
-  };
   const [revision, setRevision] = useState(workflow.draftRevision),
     [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<{
@@ -186,9 +170,48 @@ export function WorkflowEditor({
   );
   const rawInvalid = Boolean(rawResult?.error);
   const effectiveDraft = rawResult?.definition ?? draft;
+  const canTidy = Boolean(
+    section === 'editor' &&
+    view === 'visual' &&
+    !editing &&
+    !deleting &&
+    !review &&
+    !pending &&
+    !navigationPending &&
+    !history.groupStart &&
+    !boxZoom.active,
+  );
+  const tidyRequest = useRef(0);
+  const cancelTidy = () => {
+    tidyRequest.current += 1;
+    setArranging(false);
+  };
+  // Invalidate results when another interaction or a new draft takes over.
+  useEffect(() => {
+    cancelTidy();
+  }, [draft, canTidy]);
+  const tidyElk = async () => {
+    const before = draft;
+    const request = ++tidyRequest.current;
+    setArranging(true);
+    const current = () =>
+      mounted.current &&
+      tidyRequest.current === request &&
+      latestDraft.current === before;
+    try {
+      const next = await tidyWorkflowElk(before);
+      if (current()) applyTidy(before, next);
+    } catch (error) {
+      if (current()) void act(() => Promise.reject(error));
+    } finally {
+      if (mounted.current && tidyRequest.current === request)
+        setArranging(false);
+    }
+  };
   const switchView = (next: 'visual' | 'raw') => {
     if (next === view) return;
     if (pending || (next === 'visual' && rawEdited)) return;
+    cancelTidy();
     if (next === 'raw') {
       const text = JSON.stringify(draft, null, 2);
       setRaw(text);
@@ -948,42 +971,19 @@ export function WorkflowEditor({
                   }
                 >
                   <Background color="var(--canvas-dot)" gap={22} size={1} />
-                  <Controls showInteractive={false}>
-                    <Menu position="right-start" width={160}>
-                      <Menu.Target>
-                        <ControlButton
-                          aria-label="Tidy"
-                          disabled={Boolean(
-                            editing ||
-                            pending ||
-                            arranging ||
-                            history.groupStart ||
-                            boxZoom.active,
-                          )}
-                          title={
-                            arranging
-                              ? 'Arranging…'
-                              : 'Tidy: Arrange the workflow and Batch contents. Undo to restore the previous layout.'
-                          }
-                        >
-                          {arranging ? (
-                            <Loader size={12} color="var(--accent-text)" />
-                          ) : (
-                            <WandSparkles />
-                          )}
-                        </ControlButton>
-                      </Menu.Target>
-                      <Menu.Dropdown>
-                        <Menu.Item
-                          onClick={() => applyTidy(draft, tidyWorkflow(draft))}
-                        >
-                          Tidy (Dagre)
-                        </Menu.Item>
-                        <Menu.Item onClick={() => void tidyElk()}>
-                          Tidy (ELK)
-                        </Menu.Item>
-                      </Menu.Dropdown>
-                    </Menu>
+                  <Controls
+                    showInteractive={false}
+                    className={styles.canvasControls}
+                  >
+                    <TidyControl
+                      disabled={!canTidy || arranging}
+                      arranging={arranging}
+                      onTidy={(layout) => {
+                        if (!canTidy || arranging) return;
+                        if (layout === 'elk') void tidyElk();
+                        else applyTidy(draft, tidyWorkflow(draft));
+                      }}
+                    />
                   </Controls>
                   <MiniMap
                     style={{ width: 125, height: 85 }}

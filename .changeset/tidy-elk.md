@@ -2,4 +2,4 @@
 '@type_of/interlock': patch
 ---
 
-Add a Tidy (ELK) layout option beside Tidy (Dagre) in the canvas controls. ELK's layered layout keeps Switch, Condition, and timed Agent handles in rendered order and lays out Batches as compound nodes. The engine loads on first use, the result changes node positions only, and it can be undone in one step.
+Add ELK as an alternative layout for Tidy, with ordered branch handles and nested Batch layouts. The Tidy button runs the last chosen layout in one click; its arrow menu applies and remembers a choice across workflows and browser sessions. ELK loads on first use, changes only node positions, and supports one-step undo. Pending layouts are discarded when the draft changes or the editor switches away from the canvas.

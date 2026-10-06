@@ -25,6 +25,12 @@ const layered = {
   'elk.layered.spacing.nodeNodeBetweenLayers': `${CANVAS_GAP}`,
 };
 
+// ELK shares one identifier namespace across nodes, ports, and edges.
+const nodeId = (id: string) => JSON.stringify(['node', id]);
+const portId = (id: string, direction: 'source' | 'target', name: string) =>
+  JSON.stringify(['port', id, direction, name]);
+const rootScope = Symbol('root');
+
 /** Describe the whole workflow as one ELK graph. Handles become fixed-order ports
  * so fan-outs keep their rendered order; Batches become compound nodes whose
  * padding is the rendered inset and whose internal Start/End handles are ports
@@ -38,9 +44,9 @@ export function elkGraph(definition: WorkflowDefinition): ElkNode {
     (node.kind === 'batch' ? ['complete', 'item'] : outputs(node)).includes(
       port,
     )
-      ? `${node.id}.${port}`
-      : node.id;
-  const edges = new Map<string | undefined, ElkExtendedEdge[]>();
+      ? portId(node.id, 'source', port)
+      : nodeId(node.id);
+  const edges = new Map<string | typeof rootScope, ElkExtendedEdge[]>();
   for (const edge of definition.edges) {
     const from = index.get(edge.source),
       to = index.get(edge.target);
@@ -55,14 +61,16 @@ export function elkGraph(definition: WorkflowDefinition): ElkNode {
             ? from.id
             : undefined
           : parents.get(from.id) === parents.get(to.id)
-            ? (parents.get(from.id) ?? 'root')
+            ? (parents.get(from.id) ?? rootScope)
             : undefined;
-    if (!container) continue;
+    if (container === undefined) continue;
     const list = edges.get(container) ?? [];
     list.push({
-      id: edge.id,
+      id: JSON.stringify(['edge', edge.id]),
       sources: [source(from, edge.port)],
-      targets: [`${to.id}.${edge.targetHandle === 'end' ? 'end' : 'in'}`],
+      targets: [
+        portId(to.id, 'target', edge.targetHandle === 'end' ? 'end' : 'in'),
+      ],
     });
     edges.set(container, list);
   }
@@ -76,7 +84,17 @@ export function elkGraph(definition: WorkflowDefinition): ElkNode {
           : ['in'];
     const east = node.kind === 'batch' ? ['complete', 'end'] : outputs(node);
     const port = (name: string, side: string, index: number): ElkPort => ({
-      id: `${node.id}.${name}`,
+      id: portId(
+        node.id,
+        (
+          node.kind === 'batch'
+            ? name === 'item' || name === 'complete'
+            : side === 'EAST'
+        )
+          ? 'source'
+          : 'target',
+        name,
+      ),
       layoutOptions: { 'elk.port.side': side, 'elk.port.index': `${index}` },
     });
     return [
@@ -89,7 +107,7 @@ export function elkGraph(definition: WorkflowDefinition): ElkNode {
       .filter((node) => parents.get(node.id) === parentId)
       .map((node) => {
         const result: ElkNode = {
-          id: node.id,
+          id: nodeId(node.id),
           ports: ports(node),
           layoutOptions: { 'elk.portConstraints': 'FIXED_ORDER' },
         };
@@ -109,13 +127,13 @@ export function elkGraph(definition: WorkflowDefinition): ElkNode {
         };
       });
   return {
-    id: 'root',
+    id: JSON.stringify(['root']),
     layoutOptions: {
       ...layered,
       'elk.padding': '[top=160,left=60,bottom=0,right=0]',
     },
     children: children(),
-    edges: edges.get('root') ?? [],
+    edges: edges.get(rootScope) ?? [],
   };
 }
 
@@ -137,7 +155,7 @@ export async function tidyWorkflowElk(
   definition: WorkflowDefinition,
 ): Promise<WorkflowDefinition> {
   const result = structuredClone(definition);
-  const { index } = canvasGeometry(result);
+  const index = new Map(result.nodes.map((node) => [nodeId(node.id), node]));
   const laid = await (await elk()).layout(elkGraph(result));
   // Child coordinates are relative to their compound, matching batch members.
   const place = (parent: ElkNode) => {

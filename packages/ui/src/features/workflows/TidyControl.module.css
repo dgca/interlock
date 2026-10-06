@@ -1,0 +1,10 @@
+.control {
+  display: flex;
+}
+.run {
+  flex: 1;
+}
+.choose {
+  width: 18px;
+  border-left: 1px solid var(--border-strong);
+}

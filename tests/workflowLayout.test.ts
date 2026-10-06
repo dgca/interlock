@@ -349,6 +349,10 @@ function batchForkDefinition() {
 }
 
 it('describes handles as ordered ports and Batches as padded compounds for ELK', () => {
+  const nodeId = (id: string) => JSON.stringify(['node', id]);
+  const edgeId = (id: string) => JSON.stringify(['edge', id]);
+  const portId = (id: string, direction: string, name: string) =>
+    JSON.stringify(['port', id, direction, name]);
   const definition = batchForkDefinition();
   definition.edges.push({
     id: 'cross',
@@ -357,35 +361,35 @@ it('describes handles as ordered ports and Batches as padded compounds for ELK',
     port: 'default',
   });
   const graph = elkGraph(definition);
-  expect(graph.children!.map((n) => n.id)).toEqual(['entry', 'exit', 'batch']);
-  expect(graph.edges!.map((e) => e.id)).toEqual(['start', 'complete']);
-  const batch = graph.children!.find((n) => n.id === 'batch')!;
+  expect(graph.children!.map((n) => n.id)).toEqual(
+    ['entry', 'exit', 'batch'].map(nodeId),
+  );
+  expect(graph.edges!.map((e) => e.id)).toEqual(
+    ['start', 'complete'].map(edgeId),
+  );
+  const batch = graph.children!.find((n) => n.id === nodeId('batch'))!;
   expect(batch.layoutOptions).toMatchObject({
     'elk.algorithm': 'layered',
     'elk.padding': `[top=${BATCH_INSET.top},left=${BATCH_INSET.left},bottom=${BATCH_INSET.bottom},right=${BATCH_INSET.right}]`,
     'elk.portConstraints': 'FIXED_ORDER',
   });
   expect(batch.width).toBeUndefined();
-  expect(batch.children!.map((n) => n.id)).toEqual([
-    'switch',
-    'investigate',
-    'ticket',
-    'assets',
-    'fallback',
-  ]);
-  expect(batch.edges!.find((e) => e.id === 'item')).toEqual({
-    id: 'item',
-    sources: ['batch.item'],
-    targets: ['switch.in'],
+  expect(batch.children!.map((n) => n.id)).toEqual(
+    ['switch', 'investigate', 'ticket', 'assets', 'fallback'].map(nodeId),
+  );
+  expect(batch.edges!.find((e) => e.id === edgeId('item'))).toEqual({
+    id: edgeId('item'),
+    sources: [portId('batch', 'source', 'item')],
+    targets: [portId('switch', 'target', 'in')],
   });
-  expect(batch.edges!.find((e) => e.id === 'finish-ticket')).toEqual({
-    id: 'finish-ticket',
-    sources: ['ticket.default'],
-    targets: ['batch.end'],
+  expect(batch.edges!.find((e) => e.id === edgeId('finish-ticket'))).toEqual({
+    id: edgeId('finish-ticket'),
+    sources: [portId('ticket', 'source', 'default')],
+    targets: [portId('batch', 'target', 'end')],
   });
   const ports = (id: string, side: string) =>
     [...graph.children!, ...batch.children!]
-      .find((n) => n.id === id)!
+      .find((n) => n.id === nodeId(id))!
       .ports!.filter((p) => p.layoutOptions!['elk.port.side'] === side)
       .sort(
         (a, b) =>
@@ -394,13 +398,19 @@ it('describes handles as ordered ports and Batches as padded compounds for ELK',
       )
       .map((p) => p.id);
   expect(ports('switch', 'EAST')).toEqual([
-    'switch.investigate',
-    'switch.ticket',
-    'switch.assets',
-    'switch.fallback',
+    portId('switch', 'source', 'investigate'),
+    portId('switch', 'source', 'ticket'),
+    portId('switch', 'source', 'assets'),
+    portId('switch', 'source', 'fallback'),
   ]);
-  expect(ports('batch', 'EAST')).toEqual(['batch.complete', 'batch.end']);
-  expect(ports('batch', 'WEST')).toEqual(['batch.item', 'batch.in']);
+  expect(ports('batch', 'EAST')).toEqual([
+    portId('batch', 'source', 'complete'),
+    portId('batch', 'target', 'end'),
+  ]);
+  expect(ports('batch', 'WEST')).toEqual([
+    portId('batch', 'source', 'item'),
+    portId('batch', 'target', 'in'),
+  ]);
   expect(ports('entry', 'WEST')).toEqual([]);
   expect(ports('exit', 'EAST')).toEqual([]);
 });
@@ -482,4 +492,76 @@ it('ELK separates forks, joins, disconnected nodes, loops, and incomplete routes
   assertClear(tidy);
   expect(semantics(tidy)).toEqual(semantics(definition));
   expect(await tidyWorkflowElk(tidy)).toEqual(tidy);
+});
+
+it('lays out a valid chain whose node ID matches another node output port', async () => {
+  const definition = blankDefinition();
+  definition.nodes = definition.nodes.filter((node) => node.kind !== 'agent');
+  definition.nodes.splice(
+    1,
+    0,
+    ...['a', 'a.default'].map((id) =>
+      nodeSchema.parse({
+        id,
+        kind: 'script',
+        label: id,
+        language: 'javascript',
+        command: 'return input;',
+      }),
+    ),
+  );
+  definition.edges = [
+    { id: '1', source: 'entry', target: 'a', port: 'default' },
+    { id: '2', source: 'a', target: 'a.default', port: 'default' },
+    { id: '3', source: 'a.default', target: 'exit', port: 'default' },
+  ];
+  const tidy = await tidyWorkflowElk(definition);
+  for (const edge of definition.edges) {
+    const source = tidy.nodes.find((node) => node.id === edge.source)!;
+    const target = tidy.nodes.find((node) => node.id === edge.target)!;
+    expect(target.position.x).toBeGreaterThanOrEqual(
+      source.position.x + 220 + CANVAS_GAP,
+    );
+  }
+  assertClear(tidy);
+  expect(semantics(tidy)).toEqual(semantics(definition));
+});
+it('keeps input and output ports distinct for a Switch case named in', async () => {
+  const definition = forkDefinition();
+  const route = definition.nodes.find((node) => node.kind === 'switch')!;
+  if (route.kind !== 'switch') throw new Error('Expected Switch');
+  route.cases[0].port = 'in';
+  definition.edges.find(
+    (edge) => edge.source === route.id && edge.port === 'investigate',
+  )!.port = 'in';
+  const graph = elkGraph(definition);
+  const identifiers: string[] = [];
+  const collect = (node: typeof graph) => {
+    identifiers.push(
+      node.id,
+      ...(node.ports ?? []).map((port) => port.id),
+      ...(node.edges ?? []).map((edge) => edge.id),
+    );
+    node.children?.forEach(collect);
+  };
+  collect(graph);
+  expect(new Set(identifiers).size).toBe(identifiers.length);
+  const tidy = await tidyWorkflowElk(definition);
+  assertClear(tidy);
+  expect(semantics(tidy)).toEqual(semantics(definition));
+});
+
+it('keeps the graph root separate from a Batch named root', async () => {
+  const definition = batchForkDefinition();
+  for (const node of definition.nodes) {
+    if (node.id === 'batch') node.id = 'root';
+    if (node.batchId === 'batch') node.batchId = 'root';
+  }
+  for (const edge of definition.edges) {
+    if (edge.source === 'batch') edge.source = 'root';
+    if (edge.target === 'batch') edge.target = 'root';
+  }
+  const tidy = await tidyWorkflowElk(definition);
+  assertClear(tidy);
+  expect(semantics(tidy)).toEqual(semantics(definition));
 });

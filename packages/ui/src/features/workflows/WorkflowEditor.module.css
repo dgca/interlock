@@ -535,3 +535,10 @@
 .bindingSources span {
   color: var(--muted);
 }
+
+.canvasControls {
+  width: 48px;
+}
+.canvasControls > :global(button) {
+  width: 100%;
+}
