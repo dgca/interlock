@@ -158,9 +158,6 @@ it('clears picker search after selection, preserves order, and exposes missing r
       .click(),
   );
   expect(changed).toHaveBeenLastCalledWith(['p2', 'p1']);
-  expect(container.querySelectorAll('details')[2].textContent).toMatch(
-    /Style[\s\S]*Review[\s\S]*Task/,
-  );
   const node = nodeSchema.parse({
     id: 'a',
     kind: 'agent',
@@ -179,7 +176,6 @@ it('clears picker search after selection, preserves order, and exposes missing r
     ),
   );
   expect(container.textContent).toContain('Missing prompt: gone');
-  expect(container.textContent).toContain('Preview unavailable');
 });
 async function render(value = prompt) {
   await act(async () =>

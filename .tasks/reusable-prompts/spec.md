@@ -12,7 +12,7 @@ The edit page lists workflows that reference the prompt, distinguishing draft an
 
 ## Agent authoring and composition
 
-Agent nodes optionally reference an ordered list of saved prompt IDs. Omission preserves existing behavior. An ID appears at most once per node. The Agent form has a searchable Saved prompts picker above Task instructions, controls to remove and reorder selected prompts, a way to inspect their content in the form, and a combined-instructions preview. Preview reflects the current saved content and pending node instructions; editing an unsaved library prompt does not change it.
+Agent nodes optionally reference an ordered list of saved prompt IDs. Omission preserves existing behavior. An ID appears at most once per node. The Agent form has a searchable Saved prompts picker above Task instructions, controls to remove and reorder selected prompts, and a way to inspect their content in the form.
 
 Execution includes saved prompts in their selected order, followed by the node's task instructions. Each saved prompt is identified by name and separated from the task text. With no saved prompts, the existing assignment prompt remains unchanged. Context instructions, mode, required tools and skills, input, and output contracts retain their existing meanings. Instructions cannot grant capabilities or change contracts. The UI guidance says that runs use the latest saved prompts and describes capture at startup.
 
@@ -51,7 +51,7 @@ Prompt management and references use the shared server interface for UI and agen
 ## Acceptance criteria
 
 - AC1: Authors can reach Prompts through the sidebar and create, search, open, edit, save, discard, and reopen named Markdown prompts. Saved data survives restart. Stale saves and navigation preserve unsaved author text appropriately.
-- AC2: An Agent node can select zero, one, or multiple distinct prompts, reorder and remove them, inspect their content, and preview assembled instructions. Saving and reopening in visual or raw editing preserves selected IDs and order.
+- AC2: An Agent node can select zero, one, or multiple distinct prompts, reorder and remove them, and inspect their content. Saving and reopening in visual or raw editing preserves selected IDs and order.
 - AC3: Editing or renaming a referenced prompt affects a new run of an already published workflow without changing its published definition or requiring publication.
 - AC4: A captured run retains the same prompt content and revision through later Agent steps, Batch dispatch, loops, reclaim, explicit retries, and restart. Invoked Workflow runs independently capture current content as specified in S1.
 - AC5: Run inspection, full assignments, and fresh-session handoffs expose the instructions actually used. Compact discovery and briefings omit instruction bodies and preserve their existing bounds.
@@ -68,6 +68,6 @@ Revision-protected saves, stable IDs, navigation protection, and guarded deletio
 
 ## Risks and alternatives
 
-Central editing intentionally changes future executions of published workflows. Usage lists and startup-capture guidance make that impact visible. Prompt conflicts can still change agent behavior; previews aid authors but do not prove instruction compatibility. Capture storage grows with the instructions required by each execution. Import rejects divergent shared content to avoid changing unrelated workflows as a side effect.
+Central editing intentionally changes future executions of published workflows. Usage lists and startup-capture guidance make that impact visible. Prompt conflicts can still change agent behavior. Capture storage grows with the instructions required by each execution. Import rejects divergent shared content to avoid changing unrelated workflows as a side effect.
 
 Pinning at publication was considered and rejected by the user's central-update decision. Resolving prompts at each Agent step was rejected in favor of consistent captured instructions. Attaching skills or granting tools remains outside this feature.

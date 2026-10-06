@@ -4,7 +4,7 @@
 
 On October 6, 2026, the user proposed reusable instructions for Agent nodes, chose the name Prompts, and requested a sidebar library with creation and editing plus optional selection of one or more prompts in the Agent form. The user explicitly chose central updates: "editing should improve the prompt everywhere."
 
-The user then requested: "Great, can you use the SDLC workflow to build this?" This task uses published SDLC workflow version 2, run `e42e9590-fc61-46cc-b4eb-608f481acd0e`, in `/Users/dan/dev/interlock`. Artifacts live in `.tasks/reusable-prompts/`. Review policy is auto with human decisions at unresolved review steps. Delivery is local; no PR was requested.
+The user then requested: "Great, can you use the SDLC workflow to build this?" This task uses published SDLC workflow version 2, run `e42e9590-fc61-46cc-b4eb-608f481acd0e`, in `/Users/dan/dev/interlock`. Artifacts live in `.tasks/reusable-prompts/`. Review policy is auto with human decisions at unresolved review steps. The original delivery was local. The user subsequently requested [PR #89](https://github.com/dgca/interlock/pull/89).
 
 ## Problem and outcome
 
@@ -14,7 +14,7 @@ Authors and executors must still be able to inspect the instructions used by an 
 
 ## Users and scope
 
-Workflow authors create and maintain saved prompts, attach them to Agent nodes, and inspect the assembled instructions. Connected agents receive the saved guidance together with each node's task. Run inspectors can identify the exact guidance used. Portable workflow bundles must carry the prompts their definitions reference.
+Workflow authors create and maintain saved prompts, attach them to Agent nodes, and inspect their content. Connected agents receive the saved guidance together with each node's task. Run inspectors can identify the exact guidance used. Portable workflow bundles must carry the prompts their definitions reference.
 
 The first version provides plain Markdown guidance with names and optional descriptions. It includes shared-server access for the UI and agent callers, prompt references in workflow authoring, runtime capture, and inspection. Pinning, variables, attachments, conditional loading, external skill packages, and direct model or session execution are outside scope.
 
@@ -25,7 +25,7 @@ The first version provides plain Markdown guidance with names and optional descr
 - D3: Updates affect future runs of published workflows without republishing. Source: the user's explicit central-update preference.
 - D4: A run captures prompt content at startup and retains it through steps, Batch items, and retries. Exact content and revision remain inspectable. Source: the proposed run behavior immediately preceding the user's "Great" and build request.
 - D5: Saved prompts supplement node task instructions. They do not grant capabilities or control an external agent's system prompt. Existing context policy retains its meaning. Source: the feature discussion and current execution contract.
-- D6: The author can order selected prompts, inspect them, and preview the assembled instructions. Source: the proposed Agent form behavior preceding the build request.
+- D6: The author can order selected prompts and inspect their content. The Agent form omits a combined-instructions preview. Source: the user's October 6 request to remove **Preview combined instructions**.
 
 ## Constraints
 

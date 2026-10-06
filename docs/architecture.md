@@ -129,7 +129,7 @@ Every non-Batch workflow run captures the latest prompts referenced anywhere in 
 
 Prompt-bearing bundles use format version 2, including current shared prompt records from exported drafts and all versions; prompt-free bundles retain version 1. Import preserves IDs, reuses identical local content, and rejects divergent shared content even with force. Re-importing a deleted prompt allocates a current revision above retained local history, preserving old revisions and subsequent edits. Truly new IDs retain the bundle revision. Revision history and run captures are excluded from workflow bundles.
 
-The Prompts library and editor use the shared Mantine theme and navigation protection. Dirty prompt text retains its original save revision across external refreshes. Agent settings provide searchable ordered prompt selection, content inspection, and a combined preview above Task instructions. Run inspection shows captured content and revisions.
+The Prompts library and editor use the shared Mantine theme and navigation protection. Dirty prompt text retains its original save revision across external refreshes. Agent settings provide searchable ordered prompt selection and content inspection above Task instructions. Run inspection shows captured content and revisions.
 
 ## Timers
 

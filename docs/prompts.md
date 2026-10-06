@@ -13,9 +13,9 @@ The editor lists workflows that reference the prompt, including drafts and publi
 1. Open the Agent node's settings.
 2. Use **Saved prompts** to select one or more prompts. Move them up or down to set their order.
 3. Open **View instructions** to inspect a selection. Add this step's specific work in **Task instructions**.
-4. Open **Preview combined instructions**, then apply, save, and publish the workflow.
+4. Select **Apply changes**, then save and publish the workflow.
 
-Saved prompt sections precede the node's task instructions. The existing Context controls still govern session isolation and required capabilities. Saved instructions do not provide tools or skills, change input or output contracts, or control the external agent's system prompt. Review contradictory instructions in the preview before running.
+Saved prompt sections precede the node's task instructions. The existing Context controls still govern session isolation and required capabilities. Saved instructions do not provide tools or skills, change input or output contracts, or control the external agent's system prompt. Check the selected prompts for contradictory instructions before running.
 
 ## Apply improvements centrally
 

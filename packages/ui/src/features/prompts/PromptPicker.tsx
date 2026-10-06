@@ -1,11 +1,7 @@
 import { ActionIcon, Group, Select, Stack, Text } from '@mantine/core';
 import { useState } from 'react';
 import { ArrowUp, ArrowDown, X } from 'lucide-react';
-import {
-  composePrompt,
-  type SavedPrompt,
-  type WorkflowNode,
-} from '@interlock/core';
+import type { SavedPrompt, WorkflowNode } from '@interlock/core';
 import styles from './Prompts.module.css';
 
 export function PromptPicker({
@@ -94,21 +90,6 @@ export function PromptPicker({
           )}
         </div>
       ))}
-      <details>
-        <summary>Preview combined instructions</summary>
-        {selected.some((p) => !p) ? (
-          <Text c="red" size="sm">
-            Preview unavailable while saved prompts are missing.
-          </Text>
-        ) : (
-          <p className="assignment-prompt">
-            {composePrompt(
-              node.prompt,
-              selected.filter((p): p is SavedPrompt => !!p),
-            )}
-          </p>
-        )}
-      </details>
     </Stack>
   );
 }
