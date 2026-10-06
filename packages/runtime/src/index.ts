@@ -6,6 +6,8 @@ import {
   DEFAULT_BATCH_MAX_ITEMS,
   STARTED_RUN_SCHEMA,
   isStartedRunSchema,
+  isPollWait,
+  hasTimeoutRoute,
   blankDefinition,
   definitionSchema,
   InterlockError,
@@ -675,8 +677,8 @@ export class Engine {
       );
     if (edge?.targetHandle === 'end' && edge.target !== run.batchNodeId)
       throw new InterlockError('End must belong to the current Batch group');
-    // A timeout returns the original input, not an agent result.
-    if (!(node.kind === 'agent' && port === 'timeout'))
+    // A timeout returns the original input, not a result.
+    if (!(port === 'timeout' && hasTimeoutRoute(node)))
       assertContract(
         node.kind === 'workflow' && node.mode === 'detached'
           ? STARTED_RUN_SCHEMA
@@ -833,6 +835,27 @@ export class Engine {
         this.save(run);
         this.event(run, 'work.available', `Awaiting agent: ${node.label}`);
         return true;
+      }
+      if (isPollWait(node)) {
+        if (!execution.nextCheckAt) {
+          const started = Date.now();
+          execution.nextCheckAt = new Date(started).toISOString();
+          execution.resumeAt = execution.nextCheckAt;
+          if (node.timing.timeoutMs !== undefined)
+            execution.timeoutAt = new Date(
+              started + node.timing.timeoutMs,
+            ).toISOString();
+          execution.status = 'waiting';
+          run.status = 'waiting';
+          this.save(run);
+          this.event(
+            run,
+            'node.waiting',
+            `${node.label}: checking every ${Math.round(node.timing.everyMs / 1000)}s${execution.timeoutAt ? ` until ${execution.timeoutAt}` : ''}`,
+          );
+        }
+        if (this.finishPollTimeout(run, execution, node)) return true;
+        return false;
       }
       if (node.kind === 'wait') {
         if (!execution.resumeAt) {
@@ -1061,11 +1084,16 @@ export class Engine {
     });
     for (const run of this.store.runs()) {
       const execution = run.executions.at(-1);
+      if (!execution || this.localJobs.has(execution.id)) continue;
+      if (execution.kind === 'wait') {
+        if (run.status === 'waiting' && execution.status === 'waiting')
+          this.runPollCheck(run, execution);
+        continue;
+      }
       if (
         run.status !== 'running' ||
-        (execution?.kind !== 'script' && execution?.kind !== 'fetch') ||
-        execution.status !== 'running' ||
-        this.localJobs.has(execution.id)
+        (execution.kind !== 'script' && execution.kind !== 'fetch') ||
+        execution.status !== 'running'
       )
         continue;
       const node = this.definition(run).nodes.find(
@@ -1123,6 +1151,134 @@ export class Engine {
           this.pump();
         });
     }
+  }
+  private finishPollTimeout(
+    run: Run,
+    execution: NodeExecution,
+    node: WorkflowNode,
+  ): boolean {
+    if (!execution.timeoutAt || Date.parse(execution.timeoutAt) > Date.now())
+      return false;
+    this.localJobs.get(execution.id)?.abort();
+    this.event(
+      run,
+      'node.timed_out',
+      `${node.label}: no passing check before ${execution.timeoutAt}`,
+    );
+    this.finish(run, execution, node, execution.input, 'timeout');
+    return true;
+  }
+  /**
+   * Run a polling Wait's check when it is due. The check is a server-side job
+   * like a Script or Fetch step, but the execution stays `waiting`: a passing
+   * result finishes the step, anything else schedules the next check. A check
+   * interrupted by a restart simply runs again.
+   */
+  private runPollCheck(run: Run, execution: NodeExecution) {
+    const node = this.definition(run).nodes.find(
+      (n) => n.id === execution.nodeId,
+    );
+    if (!node || !isPollWait(node)) return;
+    if (
+      !execution.nextCheckAt ||
+      Date.parse(execution.nextCheckAt) > Date.now() ||
+      (execution.timeoutAt && Date.parse(execution.timeoutAt) <= Date.now())
+    )
+      return;
+    const { timing } = node;
+    const controller = new AbortController();
+    this.localJobs.set(execution.id, controller);
+    const job: Promise<Json> = Promise.resolve().then(() => {
+      controller.signal.throwIfAborted();
+      return timing.check.kind === 'fetch'
+        ? executeFetch(
+            resolveFetch(timing.check, execution.input),
+            timing.check.timeoutMs,
+            controller.signal,
+          ).then((output) => {
+            const status = (output as { status: number }).status;
+            if (
+              timing.check.kind === 'fetch' &&
+              timing.check.failOnHttpError &&
+              (status < 200 || status >= 300)
+            )
+              throw new InterlockError(`Fetch returned HTTP ${status}`);
+            return output;
+          })
+        : executeScript(
+            timing.check.command,
+            execution.input,
+            timing.check.timeoutMs,
+            this.cwd,
+            controller.signal,
+            timing.check.language,
+          );
+    });
+    const settle = (result: { output?: Json; error?: string }) => {
+      if (this.stopped) return;
+      this.store.transaction(() => {
+        const latest = this.run(run.id);
+        const current = latest.executions.at(-1);
+        if (
+          latest.status !== 'waiting' ||
+          current?.id !== execution.id ||
+          current.status !== 'waiting'
+        )
+          return;
+        if (this.finishPollTimeout(latest, current, node)) return;
+        const checked = now();
+        current.check = {
+          count: (current.check?.count ?? 0) + 1,
+          at: checked,
+          ...result,
+        };
+        if (result.error === undefined) {
+          let value: Json;
+          try {
+            value = readPath(result.output!, timing.path);
+          } catch (error) {
+            this.fail(
+              latest,
+              current,
+              `${node.label}: check output ${message(error).replace(/^Input /, '')}`,
+            );
+            return;
+          }
+          if (isDeepStrictEqual(value, timing.equals)) {
+            const input = current.input;
+            const output =
+              input !== null &&
+              typeof input === 'object' &&
+              !Array.isArray(input) &&
+              result.output !== null &&
+              typeof result.output === 'object' &&
+              !Array.isArray(result.output)
+                ? { ...input, ...(result.output as Record<string, Json>) }
+                : result.output!;
+            try {
+              this.finish(latest, current, node, output);
+            } catch (error) {
+              this.fail(latest, current, message(error));
+            }
+            return;
+          }
+        }
+        current.nextCheckAt = new Date(
+          Date.parse(checked) + timing.everyMs,
+        ).toISOString();
+        current.resumeAt = current.nextCheckAt;
+        this.save(latest);
+      });
+    };
+    void job
+      .then(
+        (output) => settle({ output }),
+        (error) => settle({ error: message(error) }),
+      )
+      .finally(() => {
+        this.localJobs.delete(execution.id);
+        this.pump();
+      });
   }
   private describeWork(work: WorkRequest): WorkRequest {
     if (work.context.mode !== 'fresh') return work;

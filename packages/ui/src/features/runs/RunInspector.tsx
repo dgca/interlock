@@ -387,8 +387,25 @@ export function RunInspector({
                 {new Date(execution.resumeAt).toLocaleString()}
               </p>
             )}
-            {execution?.kind === 'agent' && execution.port === 'timeout' && (
+            {execution?.port === 'timeout' && (
               <p className="hint">Followed Timeout with the original input.</p>
+            )}
+            {execution?.check && (
+              <>
+                <p className="hint">
+                  Check {execution.check.count} at{' '}
+                  {new Date(execution.check.at).toLocaleString()}
+                  {execution.check.error
+                    ? ` failed: ${execution.check.error}`
+                    : ''}
+                </p>
+                {execution.check.output !== undefined && (
+                  <JsonEditor
+                    label="Last check output"
+                    value={execution.check.output}
+                  />
+                )}
+              </>
             )}
             {execution?.kind === 'switch' && execution.port && (
               <p className="hint">Followed route {execution.port}.</p>

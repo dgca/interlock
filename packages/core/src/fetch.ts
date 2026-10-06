@@ -1,5 +1,10 @@
 import { InterlockError, type Json, type WorkflowNode } from './index.js';
 export type FetchNode = Extract<WorkflowNode, { kind: 'fetch' }>;
+/** The request fields shared by Fetch nodes and polling Wait checks. */
+export type FetchConfig = Pick<
+  FetchNode,
+  'url' | 'method' | 'query' | 'headers' | 'body'
+>;
 export type FetchBinding = FetchNode['query'][number]['value'];
 export type FetchField = FetchNode['query'][number];
 export interface FetchRequest {
@@ -58,7 +63,7 @@ function interpolate(template: string, read: (path: string) => Json): string {
     );
   return url.href;
 }
-export function validateFetch(node: FetchNode): void {
+export function validateFetch(node: FetchConfig): void {
   // Keep the origin fixed; interpolation is for path and query values.
   const origin = node.url.match(/^https?:\/\/[^/?#]+/i)?.[0];
   if (!origin || /[{}]/.test(origin))
@@ -96,7 +101,7 @@ export function validateFetch(node: FetchNode): void {
     throw new InterlockError(`${node.method} requests cannot have a body`);
 }
 /** Pure request resolution shared by execution and the sample-input preview. */
-export function resolveFetch(node: FetchNode, input: Json): FetchRequest {
+export function resolveFetch(node: FetchConfig, input: Json): FetchRequest {
   validateFetch(node);
   const url = new URL(interpolate(node.url, (path) => inputField(input, path)));
   for (const field of node.query)

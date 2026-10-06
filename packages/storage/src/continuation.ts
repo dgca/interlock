@@ -7,8 +7,17 @@ export type RunMetadata = Omit<
 > & { lifecycleRunId: string };
 export type ExecutionMetadata = Omit<
   NodeExecution,
-  'input' | 'output' | 'originalInput' | 'request' | 'retryChildRunIds'
-> & { runId: string; hasOutput: boolean };
+  | 'input'
+  | 'output'
+  | 'originalInput'
+  | 'request'
+  | 'retryChildRunIds'
+  | 'check'
+> & {
+  runId: string;
+  hasOutput: boolean;
+  check?: Omit<NonNullable<NodeExecution['check']>, 'output'>;
+};
 export type WorkMetadata = Pick<
   WorkRequest,
   | 'id'
@@ -49,7 +58,7 @@ export function continuationState(db: DatabaseSync, id: string) {
     db
       .prepare(
         `${tree}
-    SELECT json_set(json_remove(e.value, '$.input', '$.output', '$.originalInput', '$.request', '$.retryChildRunIds'),
+    SELECT json_set(json_remove(e.value, '$.input', '$.output', '$.originalInput', '$.request', '$.retryChildRunIds', '$.check.output'),
       '$.runId', d.id, '$.hasOutput', json_type(e.value, '$.output') IS NOT NULL) AS value
     FROM tree JOIN documents d ON d.collection = 'runs' AND d.id = tree.id, json_each(d.value, '$.executions') e
     ORDER BY d.rowid, CAST(e.key AS INTEGER)

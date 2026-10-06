@@ -1,5 +1,7 @@
 import {
   definitionSchema,
+  isPollWait,
+  hasTimeoutRoute,
   outgoingPorts,
   validateContractSchema,
   validateDefinition,
@@ -429,7 +431,7 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
     if (visiting.has(key) || visiting.size >= 100) return unknownShape();
     visiting.add(key);
     let result: Shape;
-    if (node.kind === 'agent' && port === 'timeout') result = resolved(node);
+    if (hasTimeoutRoute(node) && port === 'timeout') result = resolved(node);
     else if (node.kind === 'batch' && port === 'item') {
       const list = atPath(resolved(node), node.itemsPath);
       result =
@@ -448,7 +450,10 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
         additionalProperties: false,
       });
     else if (node.kind === 'entry') result = shape(d.inputSchema);
-    else if (['condition', 'switch', 'wait'].includes(node.kind))
+    else if (
+      ['condition', 'switch', 'wait'].includes(node.kind) &&
+      !isPollWait(node)
+    )
       result = resolved(node);
     else if (Object.keys(node.outputSchema).length)
       result = shape(node.outputSchema);
@@ -586,7 +591,10 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
         );
       }
     }
-    if (['condition', 'switch', 'wait'].includes(node.kind))
+    if (
+      ['condition', 'switch', 'wait'].includes(node.kind) &&
+      !isPollWait(node)
+    )
       compare(resolved(node), node.outputSchema, node, `${base}.outputSchema`);
     if (node.kind === 'exit')
       compare(resolved(node), d.outputSchema, node, 'outputSchema');

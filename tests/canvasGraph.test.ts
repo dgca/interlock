@@ -521,3 +521,26 @@ it('shows each binding source once, retains missing references, and sizes nodes 
   expect(focused).toEqual(['batch']);
   expect(canvas.height).toBe(116 + 44);
 });
+
+it('separates successful and timeout handles for polling Waits', async () => {
+  const { outputPortTop } =
+    await import('../packages/ui/src/features/workflows/portLayout');
+  const { nodeSchema } = await import('@interlock/core');
+  const node = nodeSchema.parse({
+    id: 'poll',
+    kind: 'wait',
+    label: 'Check',
+    timing: {
+      kind: 'poll',
+      timeoutMs: 1000,
+      check: { kind: 'script', command: 'echo true' },
+      path: '',
+      equals: true,
+    },
+  });
+  expect(outputPortTop(node, 'default')).toBe('35%');
+  expect(outputPortTop(node, 'timeout')).toBe('75%');
+  if (node.kind === 'wait' && node.timing.kind === 'poll')
+    delete node.timing.timeoutMs;
+  expect(outputPortTop(node, 'default')).toBe('50%');
+});

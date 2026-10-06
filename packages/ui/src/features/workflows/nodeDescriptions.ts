@@ -7,7 +7,7 @@ export const nodeDescriptions: Record<WorkflowNode['kind'], string> = {
     'Pauses for an agent or person to complete an assignment and return a result.',
   script: 'Runs JavaScript or Bash to transform data or perform a task.',
   fetch: 'Sends an HTTP request and returns the response.',
-  wait: 'Pauses for a duration or until a specified time, then continues with the same input.',
+  wait: 'Pauses for a duration, until a specified time, or until a repeated check passes, then continues.',
   condition:
     'Checks a value and follows the True or False branch. The input stays unchanged.',
   switch:

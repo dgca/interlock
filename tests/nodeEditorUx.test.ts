@@ -3,7 +3,12 @@ import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
-import { definitionSchema, nodeSchema } from '@interlock/core';
+import {
+  definitionSchema,
+  nodeSchema,
+  validateDefinition,
+  type WorkflowDefinition,
+} from '@interlock/core';
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
 
 vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
@@ -39,12 +44,17 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function render(config: Record<string, unknown>) {
+async function render(
+  config: Record<string, unknown>,
+  graph?: WorkflowDefinition,
+) {
   const node = nodeSchema.parse({ id: 'step', label: 'Step', ...config });
-  const definition = definitionSchema.parse({
-    nodes: [node, { id: 'exit', kind: 'exit', label: 'Exit' }],
-    edges: [],
-  });
+  const definition =
+    graph ??
+    definitionSchema.parse({
+      nodes: [node, { id: 'exit', kind: 'exit', label: 'Exit' }],
+      edges: [],
+    });
   const onApply = vi.fn();
   const onClose = vi.fn();
   await act(async () =>
@@ -276,3 +286,110 @@ it.each(['Required tools', 'Required skills'])(
     ]);
   },
 );
+it('switches a Wait to a polling check and applies its schedule, path, value and deadline', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: { kind: 'duration', ms: 60_000 },
+  });
+  const resume = Array.from(
+    container.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
+  ).find((input) => input.value === 'poll')!;
+  await act(async () => resume.click());
+  const language = Array.from(
+    container.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
+  ).filter((input) => ['javascript', 'bash'].includes(input.value));
+  expect(language.find((input) => input.checked)?.value).toBe('javascript');
+  await fill('Check every', '2');
+  expect(field('Check every unit').value).toBe('60000');
+  await fill('Check output field', 'body.state');
+  const deadline = Array.from(
+    container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+  ).find((input) =>
+    container
+      .querySelector(`label[for="${input.id}"]`)
+      ?.textContent?.includes('Give up after a deadline'),
+  )!;
+  await act(async () => deadline.click());
+  await fill('Deadline', '1.5');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timing).toMatchObject({
+    kind: 'poll',
+    everyMs: 120_000,
+    timeoutMs: 90 * 60_000,
+    check: { kind: 'script', language: 'javascript' },
+    path: 'body.state',
+    equals: true,
+  });
+});
+
+it.each(['disable', 'duration', 'until'])(
+  'removes the obsolete polling Timeout connection on Apply: %s',
+  async (change) => {
+    const config = {
+      kind: 'wait',
+      timing: {
+        kind: 'poll',
+        everyMs: 1000,
+        timeoutMs: 1000,
+        check: {
+          kind: 'script',
+          language: 'javascript',
+          command: 'return false;',
+        },
+        path: '',
+        equals: true,
+      },
+    };
+    const graph = definitionSchema.parse({
+      nodes: [
+        { id: 'entry', kind: 'entry', label: 'Start' },
+        { id: 'step', label: 'Step', ...config },
+        { id: 'exit', kind: 'exit', label: 'End' },
+      ],
+      edges: [
+        { id: 'in', source: 'entry', target: 'step' },
+        { id: 'out', source: 'step', target: 'exit' },
+        { id: 'late', source: 'step', port: 'timeout', target: 'exit' },
+      ],
+    });
+    const { onApply } = await render(config, graph);
+    if (change === 'disable')
+      await act(async () =>
+        container
+          .querySelector<HTMLInputElement>('input[type=checkbox]')!
+          .click(),
+      );
+    else
+      await act(async () =>
+        container
+          .querySelector<HTMLInputElement>(`input[value="${change}"]`)!
+          .click(),
+      );
+    await click('Apply changes');
+    const saved = onApply.mock.lastCall![0].definition;
+    expect(saved.edges.map((edge: any) => edge.id)).toEqual(['in', 'out']);
+    expect(saved.nodes.some((node: any) => node.id === 'exit')).toBe(true);
+    expect(() => validateDefinition(saved)).not.toThrow();
+  },
+);
+
+it('preserves a valid subsecond polling deadline when settings are applied unchanged', async () => {
+  const { node, onApply } = await render({
+    kind: 'wait',
+    timing: {
+      kind: 'poll',
+      everyMs: 1000,
+      timeoutMs: 500,
+      check: {
+        kind: 'script',
+        language: 'javascript',
+        command: 'return true;',
+      },
+      path: '',
+      equals: true,
+    },
+  });
+  await click('Apply changes');
+  expect(onApply).toHaveBeenCalled();
+  expect(onApply.mock.lastCall![0].definition.nodes[0]).toEqual(node);
+});

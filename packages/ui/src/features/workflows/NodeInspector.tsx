@@ -20,6 +20,8 @@ import {
   type WorkflowDefinition,
   type Workflow,
   type WorkflowNode,
+  type FetchNode,
+  type PollCheck,
 } from '@interlock/core';
 import { workflowTargets } from './workflowTargets';
 import { DurationInput } from './DurationInput';
@@ -104,13 +106,27 @@ export function NodeInspector({
                 data={[
                   { value: 'duration', label: 'After a delay' },
                   { value: 'until', label: 'At a time from input' },
+                  { value: 'poll', label: 'When a check passes' },
                 ]}
                 onChange={(kind) =>
                   patch({
                     timing:
                       kind === 'duration'
                         ? { kind, ms: 60_000 }
-                        : { kind, path: '' },
+                        : kind === 'until'
+                          ? { kind, path: '' }
+                          : {
+                              kind,
+                              everyMs: 60_000,
+                              check: {
+                                kind: 'script',
+                                language: 'javascript',
+                                command: 'return { ready: true };',
+                                timeoutMs: 30_000,
+                              },
+                              path: 'ready',
+                              equals: true,
+                            },
                   })
                 }
               />
@@ -121,7 +137,7 @@ export function NodeInspector({
                 value={node.timing.ms}
                 onChange={(ms) => patch({ timing: { kind: 'duration', ms } })}
               />
-            ) : (
+            ) : node.timing.kind === 'until' ? (
               <InputPathInput
                 mb="md"
                 label="Timestamp input path"
@@ -133,11 +149,21 @@ export function NodeInspector({
                 description="ISO timestamp with a timezone, such as 2026-09-10T12:00:00Z. Past times resume immediately."
                 onChange={(path) => patch({ timing: { kind: 'until', path } })}
               />
+            ) : (
+              <PollEditor
+                node={node}
+                timing={node.timing}
+                inputSchema={inputShape}
+                inputSource={hint.source}
+                onChange={(timing) => patch({ timing })}
+              />
             )}
-            <p className="hint">
-              Passes input through unchanged. The deadline survives a server
-              restart.
-            </p>
+            {node.timing.kind !== 'poll' && (
+              <p className="hint">
+                Passes input through unchanged. The deadline survives a server
+                restart.
+              </p>
+            )}
           </>
         )}
         {node.kind === 'agent' && (
@@ -602,6 +628,186 @@ export function NodeInspector({
           </Button>
         )}
       </div>
+    </>
+  );
+}
+
+type PollTiming = Extract<
+  Extract<WorkflowNode, { kind: 'wait' }>['timing'],
+  { kind: 'poll' }
+>;
+const blankFetchCheck: PollCheck = {
+  kind: 'fetch',
+  url: '',
+  method: 'GET',
+  query: [],
+  headers: [],
+  body: { kind: 'none' },
+  timeoutMs: 30_000,
+  failOnHttpError: true,
+};
+function PollEditor({
+  node,
+  timing,
+  inputSchema,
+  inputSource,
+  onChange,
+}: {
+  node: WorkflowNode;
+  timing: PollTiming;
+  inputSchema: Record<string, unknown>;
+  inputSource?: string;
+  onChange: (timing: PollTiming) => void;
+}) {
+  const patch = (value: Partial<PollTiming>) =>
+    onChange({ ...timing, ...value });
+  const check = timing.check;
+  return (
+    <>
+      <Input.Wrapper label="Check" mb="md">
+        <SegmentedControl
+          mt={4}
+          style={{ display: 'flex', width: 'fit-content' }}
+          aria-label="Check"
+          value={check.kind}
+          data={[
+            { value: 'script', label: 'Script' },
+            { value: 'fetch', label: 'Fetch' },
+          ]}
+          onChange={(kind) =>
+            patch({
+              check:
+                kind === check.kind
+                  ? check
+                  : kind === 'fetch'
+                    ? blankFetchCheck
+                    : {
+                        kind: 'script',
+                        language: 'javascript',
+                        command: 'return { ready: true };',
+                        timeoutMs: 30_000,
+                      },
+            })
+          }
+        />
+      </Input.Wrapper>
+      {check.kind === 'script' ? (
+        <>
+          <Input.Wrapper label="Language" mb="md">
+            <SegmentedControl
+              mt={4}
+              style={{ display: 'flex', width: 'fit-content' }}
+              aria-label="Check language"
+              value={check.language ?? 'bash'}
+              onChange={(language) =>
+                patch({
+                  check: {
+                    ...check,
+                    language: language as 'javascript' | 'bash',
+                  },
+                })
+              }
+              data={[
+                { value: 'javascript', label: 'JavaScript' },
+                { value: 'bash', label: 'Bash' },
+              ]}
+            />
+          </Input.Wrapper>
+          <CodeEditor
+            label={
+              check.language === 'javascript'
+                ? 'Check JavaScript code'
+                : 'Check Bash command'
+            }
+            language={check.language ?? 'bash'}
+            value={check.command}
+            onChange={(command) => patch({ check: { ...check, command } })}
+          />
+          <p className="hint">
+            {check.language === 'javascript'
+              ? 'Reads the input variable and returns a JSON value.'
+              : 'Reads the step input as JSON on stdin and writes one JSON value to stdout.'}{' '}
+            Runs on the server with your OS permissions each time the check is
+            due. A failing check is recorded and tried again.
+          </p>
+          <DurationInput
+            key={`check-timeout-${node.id}`}
+            label="Check timeout"
+            min={100}
+            max={120_000}
+            value={check.timeoutMs}
+            onChange={(timeoutMs) => patch({ check: { ...check, timeoutMs } })}
+          />
+        </>
+      ) : (
+        <FetchEditor
+          node={{ ...node, outputSchema: {}, ...check } as FetchNode}
+          inputSchema={inputSchema}
+          inputSource={inputSource}
+          onChange={(fetch) =>
+            patch({
+              check: {
+                kind: 'fetch',
+                url: fetch.url,
+                method: fetch.method,
+                query: fetch.query,
+                headers: fetch.headers,
+                body: fetch.body,
+                timeoutMs: fetch.timeoutMs,
+                failOnHttpError: fetch.failOnHttpError,
+              },
+            })
+          }
+        />
+      )}
+      <DurationInput
+        key={`poll-every-${node.id}`}
+        label="Check every"
+        min={1000}
+        value={timing.everyMs}
+        onChange={(everyMs) => patch({ everyMs })}
+      />
+      <TextInput
+        mb="md"
+        label="Check output field"
+        description="Dot-separated path in the check's output. A missing field fails the step."
+        placeholder="e.g. ready or body.state"
+        value={timing.path}
+        onChange={(e) => patch({ path: e.target.value })}
+      />
+      <TypedValueEditor
+        key={`poll-equals-${node.id}`}
+        label="Continue when it equals"
+        value={timing.equals}
+        onChange={(equals) => patch({ equals })}
+      />
+      <Switch
+        mt="xs"
+        mb="md"
+        label="Give up after a deadline"
+        description="Disabling removes the Timeout connection when changes are applied."
+        checked={timing.timeoutMs !== undefined}
+        onChange={(e) =>
+          patch({
+            timeoutMs: e.currentTarget.checked ? 3_600_000 : undefined,
+          })
+        }
+      />
+      {timing.timeoutMs !== undefined && (
+        <DurationInput
+          key={`poll-timeout-${node.id}`}
+          label="Deadline"
+          min={1}
+          value={timing.timeoutMs}
+          onChange={(timeoutMs) => patch({ timeoutMs })}
+        />
+      )}
+      <p className="hint">
+        Continues with the input merged with the passing check's output. The
+        schedule survives a server restart; an interrupted check runs again.
+        {timing.timeoutMs !== undefined &&
+          ' At the deadline, Timeout receives the original input.'}
+      </p>
     </>
   );
 }

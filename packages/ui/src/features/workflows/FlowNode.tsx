@@ -25,6 +25,7 @@ import {
 import {
   nodeKindLabel,
   outgoingPorts,
+  hasTimeoutRoute,
   STARTED_RUN_SCHEMA,
   type WorkflowNode,
 } from '@interlock/core';
@@ -176,7 +177,9 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
     n.kind === 'wait'
       ? n.timing.kind === 'duration'
         ? `Wait ${formatDuration(n.timing.ms)}`
-        : `Until ${n.timing.path || 'input'}`
+        : n.timing.kind === 'until'
+          ? `Until ${n.timing.path || 'input'}`
+          : `Check every ${formatDuration(n.timing.everyMs)}${n.timing.timeoutMs === undefined ? '' : ` · up to ${formatDuration(n.timing.timeoutMs)}`}`
       : n.kind === 'agent'
         ? n.unclaimedTimeoutMs !== undefined
           ? `Unclaimed timeout · ${formatDuration(n.unclaimedTimeoutMs)}`
@@ -403,12 +406,12 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
                 top={outputPortTop(n, port)}
               />
             ))
-        ) : n.kind === 'agent' && n.unclaimedTimeoutMs !== undefined ? (
+        ) : hasTimeoutRoute(n) ? (
           <>
             <Port
               type="source"
               id="default"
-              label="Result"
+              label={n.kind === 'agent' ? 'Result' : 'Out'}
               top={outputPortTop(n, 'default')}
             />
             <Port

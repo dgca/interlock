@@ -1,4 +1,9 @@
-import type { WorkflowDefinition, WorkflowNode } from './index.js';
+import {
+  isPollWait,
+  hasTimeoutRoute,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from './index.js';
 import type { Contract } from './contracts.js';
 import { STARTED_RUN_SCHEMA } from './workflowMode.js';
 
@@ -142,10 +147,7 @@ export function nodeInputHint(
             if (
               referenced &&
               referenced.batchId === target.batchId &&
-              !(
-                referenced.kind === 'agent' &&
-                referenced.unclaimedTimeoutMs !== undefined
-              )
+              !hasTimeoutRoute(referenced)
             )
               source = output(referenced, 'default');
           }
@@ -168,7 +170,7 @@ export function nodeInputHint(
   };
 
   const output = (source: WorkflowNode, port: string): Contract => {
-    if (source.kind === 'agent' && port === 'timeout')
+    if (hasTimeoutRoute(source) && port === 'timeout')
       return input(source).schema;
     if (source.kind === 'batch' && port === 'item') {
       const items = contractAtPath(
@@ -186,7 +188,7 @@ export function nodeInputHint(
     if (
       source.kind === 'condition' ||
       source.kind === 'switch' ||
-      source.kind === 'wait'
+      (source.kind === 'wait' && !isPollWait(source))
     )
       return input(source).schema;
     if (source.kind === 'batch') return { type: 'array' };
