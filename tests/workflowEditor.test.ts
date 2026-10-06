@@ -188,10 +188,16 @@ const button = (name: string) =>
 const click = async (name: string) => {
   if (name === 'Workflow settings' || name === 'Delete workflow')
     await act(async () => button('Workflow actions').click());
-  if (name.startsWith('Tidy ('))
-    await act(async () => button('Choose Tidy layout').click());
   expect(button(name), name).toBeTruthy();
   await act(async () => button(name).click());
+};
+const chooseTidyMode = async (mode: 'Dagre' | 'ELK') => {
+  await click('Tidy mode');
+  await click(mode);
+};
+const tidy = async (mode: 'Dagre' | 'ELK') => {
+  await chooseTidyMode(mode);
+  await click('Tidy');
 };
 const reviewPublish = async () => {
   await click('Review & publish');
@@ -859,11 +865,11 @@ it('tidies the whole workflow as one undoable action without rewriting graph sem
     workflow.draft = nestedBatches(2);
     await render();
     const original = positions();
-    await click('Tidy (Dagre)');
+    await tidy('Dagre');
     const arranged = positions();
     expect(arranged).not.toEqual(original);
     expect(button('Save draft').disabled).toBe(false);
-    await click('Tidy (Dagre)');
+    await tidy('Dagre');
     await click('Undo');
     expect(positions()).toEqual(original);
     expect(button('Undo').disabled).toBe(true);
@@ -900,7 +906,7 @@ it('applies the ELK layout as one undoable action and reports failures', async (
         fail = reject;
       }),
   );
-  await click('Tidy (ELK)');
+  await tidy('ELK');
   expect(elk.tidy).toHaveBeenCalledWith(workflow.draft);
   expect(button('Tidy').disabled).toBe(true);
   expect(positions()).toEqual(original);
@@ -917,7 +923,7 @@ it('applies the ELK layout as one undoable action and reports failures', async (
   await click('Undo');
   expect(positions()).toEqual(original);
   expect(button('Undo').disabled).toBe(true);
-  await click('Tidy (ELK)');
+  await tidy('ELK');
   await act(async () => fail(new Error('ELK failed to load')));
   expect(errors.map((e) => (e as Error).message)).toEqual([
     'ELK failed to load',
@@ -1083,7 +1089,7 @@ it('keeps Raw and Visual positions consistent when ELK finishes in Raw', async (
           });
       }),
   );
-  await click('Tidy (ELK)');
+  await tidy('ELK');
   await click('Raw');
   await act(async () => settle());
   const rawPositions = JSON.parse(rawEditor.props.value).nodes.map(
@@ -1093,30 +1099,34 @@ it('keeps Raw and Visual positions consistent when ELK finishes in Raw', async (
   expect(positions()).toEqual(rawPositions);
 });
 
-it('runs Tidy in one click and remembers a menu choice when reopening the editor', async () => {
+it('chooses a remembered Tidy mode without arranging until the wand is clicked', async () => {
   workflow.draft = nestedBatches(2);
   await render();
   const original = positions();
   expect(button('Tidy').title).toContain('Tidy using Dagre');
   await click('Tidy');
-  expect(positions()).not.toEqual(original);
+  const arranged = positions();
+  expect(arranged).not.toEqual(original);
   expect(elk.tidy).not.toHaveBeenCalled();
   elk.tidy.mockImplementation(async (definition) => definition);
-  await click('Tidy (ELK)');
-  expect(elk.tidy).toHaveBeenCalledTimes(1);
+  await chooseTidyMode('ELK');
+  expect(elk.tidy).not.toHaveBeenCalled();
+  expect(positions()).toEqual(arranged);
   expect(button('Tidy').title).toContain('Tidy using ELK');
   await click('Tidy');
-  expect(elk.tidy).toHaveBeenCalledTimes(2);
+  expect(elk.tidy).toHaveBeenCalledTimes(1);
   await act(async () => root.unmount());
   root = createRoot(container);
   await render();
   expect(button('Tidy').title).toContain('Tidy using ELK');
   await click('Tidy');
-  expect(elk.tidy).toHaveBeenCalledTimes(3);
-  await click('Tidy (Dagre)');
+  expect(elk.tidy).toHaveBeenCalledTimes(2);
+  const beforeModeChange = positions();
+  await chooseTidyMode('Dagre');
   expect(button('Tidy').title).toContain('Tidy using Dagre');
+  expect(positions()).toEqual(beforeModeChange);
   await click('Tidy');
-  expect(elk.tidy).toHaveBeenCalledTimes(3);
+  expect(elk.tidy).toHaveBeenCalledTimes(2);
 });
 
 it('ignores a cancelled ELK request after returning to Visual without clearing a newer request', async () => {
@@ -1126,7 +1136,7 @@ it('ignores a cancelled ELK request after returning to Visual without clearing a
   elk.tidy.mockImplementation(
     () => new Promise((resolve) => requests.push(resolve)),
   );
-  await click('Tidy (ELK)');
+  await tidy('ELK');
   await click('Raw');
   await click('Visual');
   expect(button('Tidy').disabled).toBe(false);

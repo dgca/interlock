@@ -971,10 +971,7 @@ export function WorkflowEditor({
                   }
                 >
                   <Background color="var(--canvas-dot)" gap={22} size={1} />
-                  <Controls
-                    showInteractive={false}
-                    className={styles.canvasControls}
-                  >
+                  <Controls showInteractive={false}>
                     <TidyControl
                       disabled={!canTidy || arranging}
                       arranging={arranging}

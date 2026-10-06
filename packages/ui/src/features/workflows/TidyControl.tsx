@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Loader, Menu } from '@mantine/core';
 import { ControlButton } from '@xyflow/react';
-import { Check, ChevronDown, WandSparkles } from 'lucide-react';
-import styles from './TidyControl.module.css';
+import { Check, Settings, WandSparkles } from 'lucide-react';
 
 type Layout = 'dagre' | 'elk';
 const preferenceKey = 'interlock.tidy-layout';
@@ -33,10 +32,9 @@ export function TidyControl({
     } catch {
       // Tidy still works when the browser cannot store preferences.
     }
-    onTidy(next);
   };
   return (
-    <div className={styles.control}>
+    <>
       <ControlButton
         aria-label="Tidy"
         disabled={disabled}
@@ -46,7 +44,6 @@ export function TidyControl({
             : `Tidy using ${layouts[layout]}. Undo to restore the previous layout.`
         }
         onClick={() => onTidy(layout)}
-        className={styles.run}
       >
         {arranging ? (
           <Loader size={12} color="var(--accent-text)" />
@@ -57,15 +54,15 @@ export function TidyControl({
       <Menu position="right-start" width={160}>
         <Menu.Target>
           <ControlButton
-            aria-label="Choose Tidy layout"
-            title="Choose Tidy layout"
+            aria-label="Tidy mode"
+            title="Tidy mode"
             disabled={disabled}
-            className={styles.choose}
           >
-            <ChevronDown />
+            <Settings style={{ fill: 'none' }} />
           </ControlButton>
         </Menu.Target>
         <Menu.Dropdown>
+          <Menu.Label>Tidy mode</Menu.Label>
           {(Object.keys(layouts) as Layout[]).map((option) => (
             <Menu.Item
               key={option}
@@ -73,11 +70,11 @@ export function TidyControl({
               leftSection={layout === option ? <Check size={12} /> : undefined}
               onClick={() => choose(option)}
             >
-              Tidy ({layouts[option]})
+              {layouts[option]}
             </Menu.Item>
           ))}
         </Menu.Dropdown>
       </Menu>
-    </div>
+    </>
   );
 }
