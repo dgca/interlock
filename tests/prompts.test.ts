@@ -356,3 +356,37 @@ it('exports dependencies and owned children with shared prompt IDs and imports t
   expect(legacy.formatVersion).toBe(1);
   expect(() => importWorkflows(empty.store, legacy)).not.toThrow();
 });
+
+it('imports deleted prompts above retained history and keeps subsequent edits usable', () => {
+  const engine = setup();
+  const p = prompt(engine);
+  const id = publish(engine, definition([p.id]));
+  const root = engine.start(id, null).run;
+  complete(engine, root.id);
+  const bundle = exportWorkflows(engine.store, id);
+  update(engine, p.id, 'Revision two content');
+  engine.deleteWorkflow(id);
+  engine.prompts.delete(p.id);
+  const invalid = structuredClone(bundle);
+  invalid.workflows[0].versions[0].definition.edges = [];
+  expect(() => importWorkflows(engine.store, invalid)).toThrow();
+  expect(engine.prompts.list()).toEqual([]);
+  expect(engine.store.latestPromptRevision(p.id)).toBe(2);
+  importWorkflows(engine.store, bundle);
+  expect(engine.prompts.get(p.id)).toMatchObject({
+    revision: 3,
+    content: p.content,
+  });
+  expect(engine.store.get<any>('promptRevisions', `${p.id}:2`).content).toBe(
+    'Revision two content',
+  );
+  expect(engine.store.get<any>('promptRevisions', `${p.id}:1`).content).toBe(
+    p.content,
+  );
+  expect(importWorkflows(engine.store, bundle).changed).toEqual([]);
+  expect(engine.prompts.get(p.id).revision).toBe(3);
+  expect(update(engine, p.id, 'New imported edit').revision).toBe(4);
+  const empty = setup();
+  importWorkflows(empty.store, bundle);
+  expect(empty.prompts.get(p.id).revision).toBe(p.revision);
+});

@@ -161,7 +161,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'import_workflows',
-    'Transactionally upsert a portable bundle. New workflows retain bundle IDs. Identical imports are no-ops. To replace existing drafts, supply draftRevisions keyed by target workflow ID from get_workflow, or force:true. Force replaces workflow drafts and metadata but cannot overwrite published versions, shared prompt content, or change ownership. Version-2 bundles must include all referenced prompts. Identical prompt content reuses the local revision; divergent content rejects the entire bundle even with force. Conflicts roll back the entire bundle. Existing runs and archive flags remain unchanged. Legacy create_workflow still creates a new workflow.',
+    'Transactionally upsert a portable bundle. New workflows retain bundle IDs. Identical imports are no-ops. To replace existing drafts, supply draftRevisions keyed by target workflow ID from get_workflow, or force:true. Force replaces workflow drafts and metadata but cannot overwrite published versions, shared prompt content, or change ownership. Version-2 bundles must include all referenced prompts. Identical prompt content reuses the local revision; divergent content rejects the entire bundle even with force. Restoring a deleted prompt ID allocates a revision above retained local history; a new ID retains its bundle revision. Conflicts roll back the entire bundle. Existing runs and archive flags remain unchanged. Legacy create_workflow still creates a new workflow.',
     {
       bundle: workflowBundleSchema.describe(
         `Portable bundle containing workflow definitions. ${definitionGuide}`,

@@ -115,7 +115,15 @@ export function importWorkflows(
           `Prompt conflict for ${prompt.id}. Shared prompt content cannot be overwritten by workflow import, even with force.`,
         );
       if (!existing)
-        store.savePrompt({ ...prompt, createdAt: now, updatedAt: now });
+        store.savePrompt({
+          ...prompt,
+          revision: Math.max(
+            prompt.revision,
+            store.latestPromptRevision(prompt.id) + 1,
+          ),
+          createdAt: now,
+          updatedAt: now,
+        });
     }
     const changed: string[] = [];
     for (const entry of bundle.workflows) {

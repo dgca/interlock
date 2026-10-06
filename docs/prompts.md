@@ -35,6 +35,8 @@ Workflow exports include current content for every referenced saved prompt acros
 
 Import preserves shared IDs. Identical content reuses the local prompt and revision. Different current content under the same ID rejects the entire import, even with the workflow `force` option. Resolve the shared content deliberately through a prompt edit before importing. Workflow bundles exclude prompt revision history and historical run captures. See [portable bundles](agent-workflows.md#export-and-import-portable-bundles).
 
+Importing a previously deleted prompt creates a revision newer than its retained local history. A genuinely new ID keeps the bundle's revision. Historical content remains unchanged, and subsequent edits continue from the imported current revision.
+
 ## Use prompts through MCP
 
 Discover IDs with `list_prompts` and inspect content and usage with `get_prompt`. Use `create_prompt`, revision-protected `update_prompt`, and guarded `delete_prompt` for management.

@@ -230,6 +230,18 @@ export class Store {
   work() {
     return this.list<WorkRequest>('work');
   }
+  latestPromptRevision(id: string): number {
+    const row = this.db
+      .prepare(
+        `
+      SELECT MAX(json_extract(value, '$.revision')) AS revision
+      FROM documents
+      WHERE collection = 'promptRevisions' AND json_extract(value, '$.promptId') = ?
+    `,
+      )
+      .get(id) as { revision: number | null };
+    return row.revision ?? 0;
+  }
   savePrompt(prompt: SavedPrompt) {
     const key = `${prompt.id}:${prompt.revision}`;
     const previous = this.get<SavedPrompt>('promptRevisions', key);
