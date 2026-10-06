@@ -42,6 +42,7 @@ import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { PublishReviewDialog } from './PublishReviewDialog';
 import { FlowNode, type CanvasNode } from './FlowNode';
 import { LoopEdge } from './LoopEdge';
+import { OrthoEdge } from './OrthoEdge';
 import { canvasGraph, withoutNodes } from './canvasGraph';
 import { useWorkflowHistory } from './useWorkflowHistory';
 import { useBoxZoom } from './useBoxZoom';
@@ -49,7 +50,7 @@ import { tidyWorkflow } from './workflowLayout';
 import { api } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
 const nodeTypes = { workflow: FlowNode };
-const edgeTypes = { loop: LoopEdge };
+const edgeTypes = { loop: LoopEdge, ortho: OrthoEdge };
 const zoomKeys = ['Meta', 'Control'];
 export function WorkflowEditor({
   workflow,
