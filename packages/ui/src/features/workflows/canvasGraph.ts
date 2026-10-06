@@ -7,8 +7,10 @@ import {
 import type { Edge } from '@xyflow/react';
 import type { CanvasNode } from './FlowNode';
 import type { LoopEdgeData } from './LoopEdge';
-import { canvasGeometry } from './canvasGeometry';
+import type { OrthoEdgeData } from './OrthoEdge';
+import { CANVAS_GAP, canvasGeometry } from './canvasGeometry';
 import { bindingNodeIds, bindingNodes } from './inputBindings';
+import { outputPortTop } from './portLayout';
 import styles from './WorkflowEditor.module.css';
 
 type Options = {
@@ -201,7 +203,8 @@ export function canvasGraph(
     const origin = parent ? absolute(index.get(parent)!) : { x: 0, y: 0 };
     return { x: origin.x + node.position.x, y: origin.y + node.position.y };
   };
-  // Route loops below the cards between their endpoints. Overlapping
+  // Route loops around the cards between their endpoints, on whichever side
+  // already carries fewer loops over that span (ties go below). Overlapping
   // neighboring cards keep the default curve.
   const LOOP_MARGIN = 8;
   const visible = ordered.filter((node) => !hiddenIds.has(node.id));
@@ -223,17 +226,19 @@ export function canvasGraph(
         absolute(source).x,
     );
   };
-  const corridorBottom = (edge: WorkflowEdge) => {
+  const crossed = (edge: WorkflowEdge) => {
     const { left, right } = span(edge);
-    return Math.max(
-      ...visible
-        .filter((node) => {
-          const x = absolute(node).x;
-          return x < right && x + size(node).width > left;
-        })
-        .map((node) => absolute(node).y + size(node).height),
-    );
+    return visible.filter((node) => {
+      const x = absolute(node).x;
+      return x < right && x + size(node).width > left;
+    });
   };
+  const corridorBottom = (edge: WorkflowEdge) =>
+    Math.max(
+      ...crossed(edge).map((node) => absolute(node).y + size(node).height),
+    );
+  const corridorTop = (edge: WorkflowEdge) =>
+    Math.min(...crossed(edge).map((node) => absolute(node).y));
   const loops = definition.edges
     .filter((edge) => !hiddenEdge(edge) && backward(edge))
     .sort(
@@ -247,12 +252,15 @@ export function canvasGraph(
   ) => {
     const origin = absolute(node);
     const boundary = side === 'right' ? origin.x + size(node).width : origin.x;
+    // Only cards beside the vertical run, between the card and its lane, matter.
+    const top = Math.min(laneY, origin.y),
+      bottom = Math.max(laneY, origin.y + size(node).height);
     let gap = Infinity;
     for (const other of visible) {
       if (other.id === node.id) continue;
       const position = absolute(other);
       const otherRight = position.x + size(other).width;
-      if (position.y >= laneY || position.y + size(other).height <= origin.y)
+      if (position.y >= bottom || position.y + size(other).height <= top)
         continue;
       if (side === 'right' && otherRight > boundary)
         gap = Math.min(gap, Math.max(0, position.x - boundary));
@@ -262,12 +270,21 @@ export function canvasGraph(
     return gap;
   };
   const lane = new Map<string, LoopEdgeData>();
+  const placed: { left: number; right: number; above: boolean }[] = [];
   loops.forEach((edge, i) => {
-    let laneY = corridorBottom(edge) + 40;
+    const { left, right } = span(edge);
+    const traffic = (above: boolean) =>
+      placed.filter(
+        (p) => p.above === above && p.left < right && p.right > left,
+      ).length;
+    const above = traffic(true) < traffic(false);
+    const step = above ? -24 : 24;
+    let laneY = above ? corridorTop(edge) - 40 : corridorBottom(edge) + 40;
     while (
       [...lane.values()].some((route) => Math.abs(route.laneY - laneY) < 24)
     )
-      laneY += 24;
+      laneY += step;
+    placed.push({ left, right, above });
     const desiredOffset = 24 + i * 12;
     const offset = (gap: number) =>
       Number.isFinite(gap)
@@ -282,12 +299,237 @@ export function canvasGraph(
       inOffset: offset(sideGap(index.get(edge.target)!, 'left', laneY)),
     });
   });
+  // Route forward edges orthogonally through the gaps between columns, so a
+  // span over several columns never cuts through the cards in between.
+  // Columns cluster the top-level cards by overlapping x; member cards sit
+  // inside their Batch's column. Only the gaps hold verticals, so a route
+  // meets a card only on its horizontal runs.
+  const CHANNEL_SPACING = 12;
+  const STRAIGHT_TOLERANCE = 4;
+  type Box = { left: number; right: number; top: number; bottom: number };
+  const box = (node: WorkflowNode): Box => {
+    const { x, y } = absolute(node),
+      { width, height } = size(node);
+    return { left: x, right: x + width, top: y, bottom: y + height };
+  };
+  const cards = visible.filter((node) => !parents.get(node.id));
+  type Column = { left: number; right: number; ids: Set<string> };
+  const columnsFor = (nodes: WorkflowNode[]) => {
+    const columns: Column[] = [];
+    for (const node of [...nodes].sort((a, b) => box(a).left - box(b).left)) {
+      const { left, right } = box(node);
+      const last = columns[columns.length - 1];
+      if (last && left < last.right) {
+        last.right = Math.max(last.right, right);
+        last.ids.add(node.id);
+      } else columns.push({ left, right, ids: new Set([node.id]) });
+    }
+    return columns;
+  };
+  const columns = columnsFor(cards);
+  const columnOf = (columns: Column[], id: string) =>
+    columns.findIndex((c) => c.ids.has(id));
+  const handleY = (node: WorkflowNode, port: string) => {
+    const top = outputPortTop(node, port);
+    return (
+      box(node).top +
+      (typeof top === 'number'
+        ? top
+        : (parseFloat(top) / 100) * size(node).height)
+    );
+  };
+  const targetY = (node: WorkflowNode) =>
+    box(node).top + (node.kind === 'batch' ? 32 : size(node).height / 2);
+  type Point = { x: number; y: number };
+  const hits = (points: Point[], skip: Set<string>) => {
+    const hit = new Set<WorkflowNode>();
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1],
+        b = points[i];
+      const x1 = Math.min(a.x, b.x),
+        x2 = Math.max(a.x, b.x),
+        y1 = Math.min(a.y, b.y),
+        y2 = Math.max(a.y, b.y);
+      for (const node of cards) {
+        if (skip.has(node.id)) continue;
+        const { left, right, top, bottom } = box(node);
+        if (left < x2 && right > x1 && top < y2 && bottom > y1) hit.add(node);
+      }
+    }
+    return hit;
+  };
+  const length = (points: Point[]) =>
+    points.reduce(
+      (sum, point, i) =>
+        i
+          ? sum +
+            Math.abs(point.x - points[i - 1].x) +
+            Math.abs(point.y - points[i - 1].y)
+          : 0,
+      0,
+    );
+  // A vertical run claims a channel in its gap; the x is assigned afterwards.
+  type Gap = { left: number; right: number };
+  const gaps = new Map<string, Gap>();
+  const gapBetween = (columns: Column[], i: number) => {
+    const left = columns[i].right,
+      right = columns[i + 1].left;
+    const key = `${left}:${right}`;
+    if (!gaps.has(key)) gaps.set(key, { left, right });
+    return gaps.get(key)!;
+  };
+  type Run = { gap: Gap; from: number; to: number; x: number };
+  type Route = { runs: Run[]; corridorY?: number };
+  const corners = (route: Route): Point[] =>
+    route.runs.flatMap((run) => [
+      { x: run.x, y: run.from },
+      { x: run.x, y: run.to },
+    ]);
+  const routes = new Map<string, Route>();
+  const center = (gap: Gap) => (gap.left + gap.right) / 2;
+  const corridors: number[] = [];
+  for (const edge of definition.edges) {
+    const source = index.get(edge.source),
+      target = index.get(edge.target);
+    if (
+      !source ||
+      !target ||
+      hiddenEdge(edge) ||
+      lane.has(edge.id) ||
+      edge.targetHandle === 'end' ||
+      parents.get(source.id) ||
+      parents.get(target.id)
+    )
+      continue;
+    const sy = handleY(source, edge.port),
+      ty = targetY(target);
+    const sx = box(source).right,
+      tx = box(target).left;
+    if (tx <= sx) continue;
+    let edgeColumns = columns;
+    let from = columnOf(edgeColumns, source.id),
+      to = columnOf(edgeColumns, target.id);
+    if (to <= from) {
+      // A wide card on another row can merge otherwise separate columns.
+      // Recover gaps near this edge, but still score routes against all cards.
+      edgeColumns = columnsFor(
+        cards.filter(
+          (node) =>
+            node.id === source.id ||
+            node.id === target.id ||
+            (box(node).top <= Math.max(sy, ty) &&
+              box(node).bottom >= Math.min(sy, ty)),
+        ),
+      );
+      from = columnOf(edgeColumns, source.id);
+      to = columnOf(edgeColumns, target.id);
+    }
+    if (to <= from) continue;
+    if (to === from + 1 && Math.abs(sy - ty) <= STRAIGHT_TOLERANCE) continue;
+    const firstGap = gapBetween(edgeColumns, from),
+      lastGap = gapBetween(edgeColumns, to - 1);
+    const skip = new Set([source.id, target.id]);
+    const points = (route: Route) => [
+      { x: sx, y: sy },
+      ...corners(route),
+      { x: tx, y: ty },
+    ];
+    const bend = (gap: Gap): Route => ({
+      runs: [{ gap, from: sy, to: ty, x: center(gap) }],
+    });
+    const candidates = [bend(firstGap)];
+    if (lastGap !== firstGap) candidates.push(bend(lastGap));
+    let scored = candidates.map((route) => ({
+      route,
+      hit: hits(points(route), skip),
+    }));
+    if (scored.every(({ hit }) => hit.size)) {
+      // Try below first, continuing past every newly encountered row. Local
+      // gaps can be blocked on that side, so also try above if none is clear.
+      const blocked = scored.flatMap(({ hit }) => [...hit]);
+      for (const direction of [1, -1]) {
+        let corridorY =
+          direction === 1
+            ? Math.max(...blocked.map((node) => box(node).bottom)) +
+              CANVAS_GAP / 2
+            : Math.min(...blocked.map((node) => box(node).top)) -
+              CANVAS_GAP / 2;
+        for (let attempt = 0; attempt <= cards.length; attempt++) {
+          while (
+            corridors.some((y) => Math.abs(y - corridorY) < CHANNEL_SPACING) ||
+            [...lane.values()].some((l) => Math.abs(l.laneY - corridorY) < 24)
+          )
+            corridorY += direction * CHANNEL_SPACING;
+          const corridor: Route = {
+            corridorY,
+            runs: [
+              { gap: firstGap, from: sy, to: corridorY, x: center(firstGap) },
+              { gap: lastGap, from: corridorY, to: ty, x: center(lastGap) },
+            ],
+          };
+          const hit = hits(points(corridor), skip);
+          scored.push({ route: corridor, hit });
+          if (!hit.size) break;
+          const nextY =
+            direction === 1
+              ? Math.max(...[...hit].map((node) => box(node).bottom)) +
+                CANVAS_GAP / 2
+              : Math.min(...[...hit].map((node) => box(node).top)) -
+                CANVAS_GAP / 2;
+          // A persistent intersection with a vertical leg cannot be solved
+          // by moving farther along the same corridor direction.
+          if (direction * (nextY - corridorY) <= 0) break;
+          corridorY = nextY;
+        }
+        if (scored.some(({ hit }) => !hit.size)) break;
+      }
+    }
+    scored = scored.sort(
+      (a, b) =>
+        a.hit.size - b.hit.size ||
+        length(points(a.route)) - length(points(b.route)),
+    );
+    const best = scored[0].route;
+    if (best.corridorY !== undefined) corridors.push(best.corridorY);
+    routes.set(edge.id, best);
+  }
+  // Spread the verticals in each gap. Order so that a fan-out's farther
+  // targets turn first (leftmost) and a fan-in's farther sources turn last:
+  // upward runs by ascending y-sum, then downward runs by descending y-sum.
+  const runsByGap = new Map<Gap, Run[]>();
+  for (const route of routes.values())
+    for (const run of route.runs) {
+      const runs = runsByGap.get(run.gap) ?? [];
+      runs.push(run);
+      runsByGap.set(run.gap, runs);
+    }
+  for (const [gap, runs] of runsByGap) {
+    const sum = (run: Run) => run.from + run.to;
+    const up = runs
+      .filter((run) => run.to < run.from)
+      .sort((a, b) => sum(a) - sum(b));
+    const down = runs
+      .filter((run) => run.to >= run.from)
+      .sort((a, b) => sum(b) - sum(a));
+    const ordered = [...up, ...down];
+    const width = gap.right - gap.left;
+    const spacing = Math.min(CHANNEL_SPACING, width / (ordered.length + 1));
+    ordered.forEach((run, i) => {
+      run.x = center(gap) + (i - (ordered.length - 1) / 2) * spacing;
+    });
+  }
+  const ortho = new Map<string, OrthoEdgeData>();
+  for (const [id, route] of routes) ortho.set(id, { points: corners(route) });
   return {
     nodes,
     edges: definition.edges.map((edge) => ({
       ...edge,
-      type: lane.has(edge.id) ? 'loop' : undefined,
-      data: lane.get(edge.id),
+      type: lane.has(edge.id)
+        ? 'loop'
+        : ortho.has(edge.id)
+          ? 'ortho'
+          : undefined,
+      data: lane.get(edge.id) ?? ortho.get(edge.id),
       selected: selectedIds.has(edge.id),
       sourceHandle: edge.port,
       targetHandle: edge.targetHandle ?? 'default',
