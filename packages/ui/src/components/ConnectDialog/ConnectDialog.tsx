@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Checkbox, Tabs } from '@mantine/core';
+import { Checkbox, Group, SegmentedControl, Tabs, Text } from '@mantine/core';
 import { Copy } from 'lucide-react';
 import { Modal } from '../Modal/Modal';
 import { Button } from '../Button/Button';
@@ -120,14 +120,24 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
           when you upgrade and restart Interlock at the same address.
         </p>
       )}
-      <Checkbox
-        label="Use legacy stdio transport"
-        checked={stdio}
-        onChange={(event) => {
-          setStdio(event.currentTarget.checked);
-          setCopied(false);
-        }}
-      />
+      <Group justify="space-between" gap="sm" my="md">
+        <Text size="xs" c="dimmed">
+          Transport
+        </Text>
+        <SegmentedControl
+          aria-label="MCP transport"
+          size="xs"
+          value={stdio ? 'stdio' : 'http'}
+          data={[
+            { value: 'http', label: 'HTTP' },
+            { value: 'stdio', label: 'Legacy stdio' },
+          ]}
+          onChange={(value) => {
+            setStdio(value === 'stdio');
+            setCopied(false);
+          }}
+        />
+      </Group>
       {stdio && config?.development && (
         <p className="hint">
           This development server uses paths to this checkout. Installed copies
@@ -195,6 +205,7 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
       )}
       {stdio && config?.fallback && (
         <Checkbox
+          size="xs"
           label="Use absolute paths if your harness cannot find interlock"
           checked={absolute}
           onChange={(event) => {
@@ -228,8 +239,8 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
           <p>
             For Claude Desktop, use the stdio bridge below. It requires an
             installed Interlock command or the absolute paths from this server.
-            Select Use legacy stdio transport to choose absolute paths, then
-            merge this into your Claude Desktop MCP configuration.
+            Select Legacy stdio to choose absolute paths, then merge this into
+            your Claude Desktop MCP configuration.
           </p>
           <pre>
             {JSON.stringify(

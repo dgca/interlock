@@ -70,7 +70,7 @@ Restart or reconnect your harness after changing configuration. Enable Interlock
 
 ## Stdio fallback
 
-Existing stdio configurations remain supported. Select **Use legacy stdio transport** in the connection dialog for client-specific snippets. For globally installed copies, the command is `interlock` with arguments `["mcp"]`. The harness launches this bridge, which connects to the running engine.
+Existing stdio configurations remain supported. Select **Legacy stdio** under **Transport** in the connection dialog for client-specific snippets. For globally installed copies, the command is `interlock` with arguments `["mcp"]`. The harness launches this bridge, which connects to the running engine.
 
 For Claude Desktop, merge this into its MCP configuration:
 
