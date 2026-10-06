@@ -35,9 +35,11 @@ import { nodeDescriptions } from './nodeDescriptions';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
+import { PromptPicker } from '../prompts/PromptPicker';
 export function NodeInspector({
   node,
   workflows,
+  prompts = [],
   workflowId,
   hideWorkflowTarget = false,
   creating = false,
@@ -49,6 +51,7 @@ export function NodeInspector({
 }: {
   node: WorkflowNode;
   workflows: Workflow[];
+  prompts?: import('@interlock/core').SavedPrompt[];
   workflowId?: string;
   hideWorkflowTarget?: boolean;
   creating?: boolean;
@@ -168,9 +171,16 @@ export function NodeInspector({
         )}
         {node.kind === 'agent' && (
           <>
+            <PromptPicker
+              node={node}
+              prompts={prompts}
+              onChange={(promptIds) =>
+                patch({ promptIds: promptIds.length ? promptIds : undefined })
+              }
+            />
             <Textarea
               mb="md"
-              label="Assignment prompt"
+              label="Task instructions"
               rows={8}
               value={node.prompt}
               onChange={(e) => patch({ prompt: e.target.value })}

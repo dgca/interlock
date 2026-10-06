@@ -1,4 +1,5 @@
 import type { Action } from '../../lib/useActionFeedback';
+import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react';
@@ -55,6 +56,7 @@ const zoomKeys = ['Meta', 'Control'];
 export function WorkflowEditor({
   workflow,
   workflows,
+  prompts = [],
   onBack,
   onRun,
   onSaved,
@@ -68,6 +70,7 @@ export function WorkflowEditor({
 }: {
   workflow: Workflow;
   workflows: Workflow[];
+  prompts?: import('@interlock/core').SavedPrompt[];
   onBack: () => void;
   onRun: (workflow: Workflow) => void;
   onSaved: (w: Workflow) => void;
@@ -272,16 +275,7 @@ export function WorkflowEditor({
     onDirty(dirty);
     return () => onDirty(false);
   }, [dirty, onDirty]);
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (dirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [dirty]);
+  useBeforeUnloadWarning(dirty);
   const historyBlocked = Boolean(
     editing ||
     deleting ||
@@ -1087,6 +1081,7 @@ export function WorkflowEditor({
       )}
       {editing && (
         <SettingsDialog
+          prompts={prompts}
           node={editing.node}
           creating={editing.creating}
           parentBatchId={editing.batchId}

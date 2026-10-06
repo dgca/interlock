@@ -1,5 +1,7 @@
 // Resource URLs use stable IDs, independent of names or future folder membership.
 export const paths = {
+  prompts: '/prompts',
+  prompt: (id: string) => `/prompts/${encodeURIComponent(id)}`,
   workflows: '/workflows',
   workflow: (id: string) => `/workflows/${encodeURIComponent(id)}`,
   runs: (tab: 'active' | 'history' = 'active') =>

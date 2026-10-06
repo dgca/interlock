@@ -10,6 +10,7 @@ import {
   briefingQuerySchema,
   waitQuerySchema,
   resultQuerySchema,
+  promptContentSchema,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import {
@@ -40,6 +41,29 @@ export const appRouter = t.router({
   connection: p.query(({ ctx }) => {
     const config = ctx.connection ?? developmentConnection();
     return { ...config, mcpUrl: new URL('/mcp', config.engineUrl).href };
+  }),
+  prompts: t.router({
+    list: p.query(({ ctx }) => ctx.engine.prompts.list()),
+    get: p.input(id).query(({ ctx, input }) => ({
+      ...ctx.engine.prompts.get(input.id),
+      usage: ctx.engine.prompts.usage(input.id),
+    })),
+    create: p
+      .input(promptContentSchema)
+      .mutation(({ ctx, input }) => ctx.engine.prompts.create(input)),
+    update: p
+      .input(
+        promptContentSchema.extend({
+          id: z.string(),
+          revision: z.number().int().positive(),
+        }),
+      )
+      .mutation(({ ctx, input }) =>
+        ctx.engine.prompts.update(input.id, input.revision, input),
+      ),
+    delete: p
+      .input(id)
+      .mutation(({ ctx, input }) => ctx.engine.prompts.delete(input.id)),
   }),
   workflows: t.router({
     export: p

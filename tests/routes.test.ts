@@ -12,6 +12,7 @@ vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
     workflows: { list: { query: queries.workflows } },
     runs: { list: { query: queries.runs } },
+    prompts: { list: { query: () => Promise.resolve([]) } },
   },
   errorMessage: (error: Error) => error.message,
 }));

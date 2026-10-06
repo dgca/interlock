@@ -18,6 +18,14 @@ const url = 'http://127.0.0.1:4400/mcp';
 const writeText = vi.fn().mockResolvedValue(undefined);
 beforeEach(async () => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   window.matchMedia = vi.fn().mockImplementation(() => ({
     matches: false,
     addEventListener: vi.fn(),
@@ -47,6 +55,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 const click = async (text: string) =>
   act(async () => {
@@ -80,14 +89,14 @@ it('defaults to the running HTTP URL and copies each client configuration', asyn
 it('retains stdio configuration and absolute paths without changing HTTP configuration', async () => {
   await act(async () =>
     container
-      .querySelector<HTMLInputElement>('input[type="checkbox"]')!
+      .querySelector<HTMLInputElement>('input[type="radio"][value="stdio"]')!
       .click(),
   );
   expect(snippet()).toContain('command = "interlock"');
   expect(snippet()).toContain('INTERLOCK_URL = "http://127.0.0.1:4400"');
   await act(async () =>
     container
-      .querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[1]
+      .querySelector<HTMLInputElement>('input[type="checkbox"]')!
       .click(),
   );
   expect(snippet()).toContain('command = "/node"');
@@ -99,7 +108,7 @@ it('retains stdio configuration and absolute paths without changing HTTP configu
   });
   await act(async () =>
     container
-      .querySelector<HTMLInputElement>('input[type="checkbox"]')!
+      .querySelector<HTMLInputElement>('input[type="radio"][value="http"]')!
       .click(),
   );
   await click('Codex');

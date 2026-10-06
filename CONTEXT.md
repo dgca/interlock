@@ -34,6 +34,10 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Tool requirement**: A named capability an agent assignment requires its executor to provide.
 
+**Saved prompt**: Centrally maintained named Markdown instructions that Agent nodes reference in order.
+
+**Prompt capture**: The saved prompt content and revisions selected when a workflow run starts. Batch item runs inherit capture; invoked workflows capture independently.
+
 **Context policy**: Rules governing the information and capabilities an agent execution receives.
 
 **Work request**: A bounded assignment that a run makes available to an agent executor.

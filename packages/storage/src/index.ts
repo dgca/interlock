@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { readPath, type RunQuery } from '@interlock/core';
+import { readPath, InterlockError, type RunQuery } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
 import { continuationState } from './continuation.js';
 import type {
@@ -12,6 +12,7 @@ import type {
   Workflow,
   WorkflowVersion,
   RunEvent,
+  SavedPrompt,
 } from '@interlock/core';
 
 /** One service owns the database. Each runtime operation commits as one transaction. */
@@ -228,6 +229,41 @@ export class Store {
   }
   work() {
     return this.list<WorkRequest>('work');
+  }
+  latestPromptRevision(id: string): number {
+    const row = this.db
+      .prepare(
+        `
+      SELECT MAX(json_extract(value, '$.revision')) AS revision
+      FROM documents
+      WHERE collection = 'promptRevisions' AND json_extract(value, '$.promptId') = ?
+    `,
+      )
+      .get(id) as { revision: number | null };
+    return row.revision ?? 0;
+  }
+  savePrompt(prompt: SavedPrompt) {
+    const key = `${prompt.id}:${prompt.revision}`;
+    const previous = this.get<SavedPrompt>('promptRevisions', key);
+    if (
+      previous &&
+      !isDeepStrictEqual(
+        {
+          name: previous.name,
+          description: previous.description,
+          content: previous.content,
+        },
+        {
+          name: prompt.name,
+          description: prompt.description,
+          content: prompt.content,
+        },
+      )
+    )
+      throw new InterlockError(`Prompt revision conflict for ${key}`);
+    this.put('prompts', prompt);
+    if (!previous)
+      this.put('promptRevisions', { ...prompt, promptId: prompt.id, id: key });
   }
   events(runId: string) {
     return this.list<RunEvent>('events').filter((e) => e.runId === runId);

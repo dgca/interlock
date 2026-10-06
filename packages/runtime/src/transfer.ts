@@ -5,6 +5,9 @@ import {
   validateDefinition,
   validateWorkflowReferences,
   type Workflow,
+  type SavedPrompt,
+  promptIds,
+  snapshotPrompt,
 } from '@interlock/core';
 import {
   workflowBundleSchema,
@@ -49,9 +52,25 @@ export function exportWorkflows(
         if (node.kind === 'workflow') include(node.workflowId);
   };
   include(rootId);
+  const referencedPrompts = [
+    ...new Set(
+      records.flatMap((w) =>
+        [w.draft, ...w.versions.map((v) => v.definition)].flatMap(promptIds),
+      ),
+    ),
+  ];
+  const prompts = referencedPrompts.map((id) => {
+    const prompt = store.get<SavedPrompt>('prompts', id);
+    if (!prompt)
+      throw new InterlockError(
+        `Cannot export: saved prompt ${id} does not exist`,
+      );
+    return snapshotPrompt(prompt);
+  });
   return {
     format: 'interlock-workflows',
-    formatVersion: 1,
+    formatVersion: prompts.length ? 2 : 1,
+    ...(prompts.length ? { prompts } : {}),
     rootId,
     workflows: records,
   };
@@ -70,8 +89,51 @@ export function importWorkflows(
         'Bundle must contain unique workflow IDs and its root',
       );
     const now = new Date().toISOString();
+    const includedPrompts = bundle.prompts ?? [];
+    if (
+      new Set(includedPrompts.map((p) => p.id)).size !== includedPrompts.length
+    )
+      throw new InterlockError('Bundle must contain unique prompt IDs');
+    for (const prompt of includedPrompts) {
+      const existing = store.get<SavedPrompt>('prompts', prompt.id);
+      if (
+        existing &&
+        !isDeepStrictEqual(
+          {
+            name: existing.name,
+            description: existing.description,
+            content: existing.content,
+          },
+          {
+            name: prompt.name,
+            description: prompt.description,
+            content: prompt.content,
+          },
+        )
+      )
+        throw new InterlockError(
+          `Prompt conflict for ${prompt.id}. Shared prompt content cannot be overwritten by workflow import, even with force.`,
+        );
+      if (!existing)
+        store.savePrompt({
+          ...prompt,
+          revision: Math.max(
+            prompt.revision,
+            store.latestPromptRevision(prompt.id) + 1,
+          ),
+          createdAt: now,
+          updatedAt: now,
+        });
+    }
     const changed: string[] = [];
     for (const entry of bundle.workflows) {
+      for (const definition of [
+        entry.draft,
+        ...entry.versions.map((v) => v.definition),
+      ])
+        for (const id of promptIds(definition))
+          if (!includedPrompts.some((p) => p.id === id))
+            throw new InterlockError(`Bundle is missing saved prompt ${id}`);
       const existing = store.get<Workflow>('workflows', entry.id);
       if (
         existing &&
