@@ -1,5 +1,15 @@
 # @type_of/interlock
 
+## 0.1.15
+
+### Patch Changes
+
+- 77cd6f1: Add atomic node, route, and settings edits through MCP and the shared API, with stale-draft protection and rollback. Add read-only draft preflight with structured save errors, publication blockers, and conservative contract and binding diagnostics.
+- 92f6b29: Route forward edges between top-level workflow cards through column gaps, with separate channels and detours around obstructing rows. Preserve usable gaps when wide cards on other rows overlap the route's horizontal range. Loops choose the side of the graph with less loop traffic. Routing applies in the editor and run inspection and follows Tidy or manual drags without changing the definition.
+- 57121de: Add polling Waits: a Wait node can run a Script or Fetch check on an interval until the check output at a path equals a value, then continue with the check output merged into its input. The slow work stays outside the node, so a restart only repeats the check. An optional deadline routes the original input through a Timeout branch. Run inspection shows the next check time and the latest check result; one execution counts once against the step limit.
+- 63fcf08: Add compact run briefings, targeted input/output reads, and cancellable change waits through MCP and the shared API. Briefings distinguish claimed work, timers, Batch progress, and independent detached runs. Sequence cursors recover explicitly after restart. Database schema 3 adds transactional revision tracking with a pre-upgrade backup while preserving existing workflow and run records.
+- 4ca6bfc: Add ELK as an alternative layout for Tidy, with ordered branch handles and nested Batch layouts. The Tidy button runs the last chosen layout in one click; a gear beneath it selects and remembers the mode across workflows and browser sessions. ELK loads on first use, changes only node positions, and supports one-step undo. Pending layouts are discarded when the draft changes or the editor switches away from the canvas.
+
 ## 0.1.14
 
 ### Patch Changes
