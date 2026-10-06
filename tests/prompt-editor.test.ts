@@ -26,6 +26,7 @@ vi.mock('../packages/ui/src/lib/api', () => ({
 }));
 let root: Root;
 let container: HTMLDivElement;
+const scrollIntoView = HTMLElement.prototype.scrollIntoView;
 const dirty = vi.fn();
 let error = '';
 const prompt: SavedPrompt = {
@@ -76,6 +77,8 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  if (scrollIntoView) HTMLElement.prototype.scrollIntoView = scrollIntoView;
+  else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
   vi.unstubAllGlobals();
 });
 
@@ -257,4 +260,25 @@ it('loads external revisions when clean and becomes clean after a successful sav
   );
   expect(dirty).toHaveBeenLastCalledWith(false);
   expect(container.textContent).toContain('Revision 3');
+  await input('Another unsaved edit');
+  await click('Discard changes');
+  expect(container.querySelectorAll('textarea')[1].value).toBe('Saved edit');
+  expect(container.textContent).toContain('Revision 3');
+});
+
+it('warns before reload or closure while dirty and removes the warning after discard and unmount', async () => {
+  await render();
+  function unload() {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
+  expect(unload()).toBe(false);
+  await input('Unsaved instructions');
+  expect(unload()).toBe(true);
+  await click('Discard changes');
+  expect(unload()).toBe(false);
+  await input('Unsaved again');
+  await act(async () => root.render(null));
+  expect(unload()).toBe(false);
 });

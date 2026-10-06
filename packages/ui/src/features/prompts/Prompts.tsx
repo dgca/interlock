@@ -5,6 +5,7 @@ import { Plus, Search } from 'lucide-react';
 import type { PromptContent, PromptUsage, SavedPrompt } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import type { Action } from '../../lib/useActionFeedback';
+import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
@@ -183,6 +184,7 @@ export function PromptEditor({
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const dirty = !same(draft, baseline);
+  useBeforeUnloadWarning(dirty);
   useEffect(() => {
     onDirty(dirty);
   }, [dirty, onDirty]);
@@ -273,8 +275,10 @@ export function PromptEditor({
             <Button
               disabled={busy || !dirty}
               onClick={() => {
-                setBaseline(prompt);
-                setDraft(fields(prompt));
+                const latest =
+                  prompt.revision > baseline.revision ? prompt : baseline;
+                setBaseline(latest);
+                setDraft(fields(latest));
               }}
             >
               Discard changes

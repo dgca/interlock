@@ -184,6 +184,8 @@ React Router owns browser navigation through a shared application layout and chi
 | `/`                      | Redirects to `/workflows`, replacing the history entry |
 | `/workflows`             | Workflow library                                       |
 | `/workflows/:workflowId` | Workflow draft editor                                  |
+| `/prompts`               | Saved prompt library                                   |
+| `/prompts/:promptId`     | Saved prompt editor                                    |
 | `/runs`                  | Active runs                                            |
 | `/runs?tab=history`      | Run history                                            |
 | `/runs/:runId`           | Run inspector, including child runs                    |

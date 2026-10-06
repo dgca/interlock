@@ -1155,3 +1155,18 @@ it('ignores a cancelled ELK request after returning to Visual without clearing a
   expect(positions()).not.toEqual(original);
   expect(button('Tidy').disabled).toBe(false);
 });
+
+it('keeps browser unload protection for unsaved workflow edits through the shared hook', async () => {
+  await render();
+  function unload() {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
+  expect(unload()).toBe(false);
+  await click('Raw');
+  await act(async () => rawEditor.props.onChange('{'));
+  expect(unload()).toBe(true);
+  await click('Discard');
+  expect(unload()).toBe(false);
+});

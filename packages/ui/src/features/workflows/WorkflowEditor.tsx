@@ -1,4 +1,5 @@
 import type { Action } from '../../lib/useActionFeedback';
+import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react';
@@ -274,16 +275,7 @@ export function WorkflowEditor({
     onDirty(dirty);
     return () => onDirty(false);
   }, [dirty, onDirty]);
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (dirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [dirty]);
+  useBeforeUnloadWarning(dirty);
   const historyBlocked = Boolean(
     editing ||
     deleting ||
