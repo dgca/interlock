@@ -7,7 +7,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  ControlButton,
   MiniMap,
   applyNodeChanges,
   applyEdgeChanges,
@@ -23,7 +22,6 @@ import {
   Settings2,
   Undo2,
   Redo2,
-  WandSparkles,
   MoreHorizontal,
   Trash2,
 } from 'lucide-react';
@@ -47,6 +45,8 @@ import { canvasGraph, withoutNodes } from './canvasGraph';
 import { useWorkflowHistory } from './useWorkflowHistory';
 import { useBoxZoom } from './useBoxZoom';
 import { tidyWorkflow } from './workflowLayout';
+import { tidyWorkflowElk } from './workflowLayoutElk';
+import { TidyControl } from './TidyControl';
 import { api } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
 const nodeTypes = { workflow: FlowNode };
@@ -100,6 +100,7 @@ export function WorkflowEditor({
   const editorRef = useRef<HTMLDivElement>(null);
   const flowRef = useRef<ReactFlowInstance<CanvasNode> | null>(null);
   const fitAfterTidy = useRef(false);
+  const [arranging, setArranging] = useState(false);
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
   const [hovered, setHovered] = useState<string>();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -125,6 +126,18 @@ export function WorkflowEditor({
       ...current,
       draft: typeof update === 'function' ? update(current.draft) : update,
     }));
+  const latestDraft = useRef(draft);
+  useEffect(() => {
+    latestDraft.current = draft;
+  }, [draft]);
+  const applyTidy = (before: WorkflowDefinition, next: WorkflowDefinition) => {
+    if (JSON.stringify(next) === JSON.stringify(before)) {
+      void flowRef.current?.fitView({ padding: 0.22, duration: 180 });
+      return;
+    }
+    fitAfterTidy.current = true;
+    setDraft(next);
+  };
   const [revision, setRevision] = useState(workflow.draftRevision),
     [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<{
@@ -157,9 +170,48 @@ export function WorkflowEditor({
   );
   const rawInvalid = Boolean(rawResult?.error);
   const effectiveDraft = rawResult?.definition ?? draft;
+  const canTidy = Boolean(
+    section === 'editor' &&
+    view === 'visual' &&
+    !editing &&
+    !deleting &&
+    !review &&
+    !pending &&
+    !navigationPending &&
+    !history.groupStart &&
+    !boxZoom.active,
+  );
+  const tidyRequest = useRef(0);
+  const cancelTidy = () => {
+    tidyRequest.current += 1;
+    setArranging(false);
+  };
+  // Invalidate results when another interaction or a new draft takes over.
+  useEffect(() => {
+    cancelTidy();
+  }, [draft, canTidy]);
+  const tidyElk = async () => {
+    const before = draft;
+    const request = ++tidyRequest.current;
+    setArranging(true);
+    const current = () =>
+      mounted.current &&
+      tidyRequest.current === request &&
+      latestDraft.current === before;
+    try {
+      const next = await tidyWorkflowElk(before);
+      if (current()) applyTidy(before, next);
+    } catch (error) {
+      if (current()) void act(() => Promise.reject(error));
+    } finally {
+      if (mounted.current && tidyRequest.current === request)
+        setArranging(false);
+    }
+  };
   const switchView = (next: 'visual' | 'raw') => {
     if (next === view) return;
     if (pending || (next === 'visual' && rawEdited)) return;
+    cancelTidy();
     if (next === 'raw') {
       const text = JSON.stringify(draft, null, 2);
       setRaw(text);
@@ -920,30 +972,15 @@ export function WorkflowEditor({
                 >
                   <Background color="var(--canvas-dot)" gap={22} size={1} />
                   <Controls showInteractive={false}>
-                    <ControlButton
-                      aria-label="Tidy"
-                      disabled={Boolean(
-                        editing ||
-                        pending ||
-                        history.groupStart ||
-                        boxZoom.active,
-                      )}
-                      title="Tidy: Arrange the workflow and Batch contents. Undo to restore the previous layout."
-                      onClick={() => {
-                        const next = tidyWorkflow(draft);
-                        if (JSON.stringify(next) === JSON.stringify(draft)) {
-                          void flowRef.current?.fitView({
-                            padding: 0.22,
-                            duration: 180,
-                          });
-                          return;
-                        }
-                        fitAfterTidy.current = true;
-                        setDraft(next);
+                    <TidyControl
+                      disabled={!canTidy || arranging}
+                      arranging={arranging}
+                      onTidy={(layout) => {
+                        if (!canTidy || arranging) return;
+                        if (layout === 'elk') void tidyElk();
+                        else applyTidy(draft, tidyWorkflow(draft));
                       }}
-                    >
-                      <WandSparkles />
-                    </ControlButton>
+                    />
                   </Controls>
                   <MiniMap
                     style={{ width: 125, height: 85 }}

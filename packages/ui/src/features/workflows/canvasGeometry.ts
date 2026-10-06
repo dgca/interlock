@@ -5,6 +5,8 @@ export const NODE_SIZE = { width: 220, height: 116 };
 export const BATCH_SIZE = { width: 520, height: 340 };
 export const BATCH_INSET = { left: 130, top: 160, right: 120, bottom: 60 };
 export const CANVAS_GAP = 80;
+export const bindingsHeight = (node: WorkflowNode) =>
+  bindingNodeIds(node).length * 22;
 
 /** Shared rendered bounds, including nested Batch contents and incomplete drafts. */
 export function canvasGeometry(
@@ -27,14 +29,14 @@ export function canvasGeometry(
   const sizes = new Map<string, { width: number; height: number }>();
   const size = (node: WorkflowNode): { width: number; height: number } => {
     if (sizes.has(node.id)) return sizes.get(node.id)!;
-    const bindingsHeight = bindingNodeIds(node).length * 22;
+    const bindings = bindingsHeight(node);
     const result =
       node.kind !== 'batch'
         ? { ...NODE_SIZE }
         : collapsed?.has(node.id)
           ? { width: 320, height: 116 }
           : { ...BATCH_SIZE };
-    result.height += bindingsHeight;
+    result.height += bindings;
     if (node.kind === 'workflow' && node.mode === 'detached')
       result.height += 18;
     if (node.kind === 'switch')
@@ -53,10 +55,7 @@ export function canvasGeometry(
         );
         result.height = Math.max(
           result.height,
-          child.position.y +
-            childSize.height +
-            BATCH_INSET.bottom +
-            bindingsHeight,
+          child.position.y + childSize.height + BATCH_INSET.bottom + bindings,
         );
       }
     }

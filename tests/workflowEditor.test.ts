@@ -67,6 +67,10 @@ vi.mock(
     MiniMap: () => null,
   }),
 );
+const elk = vi.hoisted(() => ({ tidy: vi.fn() }));
+vi.mock('../packages/ui/src/features/workflows/workflowLayoutElk', () => ({
+  tidyWorkflowElk: elk.tidy,
+}));
 vi.mock('../packages/ui/src/features/workflows/FlowNode', () => ({
   FlowNode: () => null,
 }));
@@ -187,11 +191,20 @@ const click = async (name: string) => {
   expect(button(name), name).toBeTruthy();
   await act(async () => button(name).click());
 };
+const chooseTidyMode = async (mode: 'Dagre' | 'ELK') => {
+  await click('Tidy mode');
+  await click(mode);
+};
+const tidy = async (mode: 'Dagre' | 'ELK') => {
+  await chooseTidyMode(mode);
+  await click('Tidy');
+};
 const reviewPublish = async () => {
   await click('Review & publish');
   await click('Publish version');
 };
 beforeEach(() => {
+  localStorage.clear();
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -852,11 +865,11 @@ it('tidies the whole workflow as one undoable action without rewriting graph sem
     workflow.draft = nestedBatches(2);
     await render();
     const original = positions();
-    await click('Tidy');
+    await tidy('Dagre');
     const arranged = positions();
     expect(arranged).not.toEqual(original);
     expect(button('Save draft').disabled).toBe(false);
-    await click('Tidy');
+    await tidy('Dagre');
     await click('Undo');
     expect(positions()).toEqual(original);
     expect(button('Undo').disabled).toBe(true);
@@ -871,6 +884,52 @@ it('tidies the whole workflow as one undoable action without rewriting graph sem
   } finally {
     vi.unstubAllGlobals();
   }
+});
+
+it('applies the ELK layout as one undoable action and reports failures', async () => {
+  workflow.draft = nestedBatches(2);
+  await render();
+  const original = positions();
+  let settle!: (definition: typeof workflow.draft) => void;
+  let fail!: (error: Error) => void;
+  elk.tidy.mockImplementation(
+    (definition) =>
+      new Promise((resolve, reject) => {
+        settle = () =>
+          resolve({
+            ...definition,
+            nodes: definition.nodes.map((node: any) => ({
+              ...node,
+              position: { x: node.position.x + 40, y: node.position.y },
+            })),
+          });
+        fail = reject;
+      }),
+  );
+  await tidy('ELK');
+  expect(elk.tidy).toHaveBeenCalledWith(workflow.draft);
+  expect(button('Tidy').disabled).toBe(true);
+  expect(positions()).toEqual(original);
+  await act(async () => settle(workflow.draft));
+  expect(button('Tidy').disabled).toBe(false);
+  const arranged = positions();
+  expect(arranged).toEqual(
+    original.map((p: any) => ({
+      ...p,
+      position: { ...p.position, x: p.position.x + 40 },
+    })),
+  );
+  expect(button('Save draft').disabled).toBe(false);
+  await click('Undo');
+  expect(positions()).toEqual(original);
+  expect(button('Undo').disabled).toBe(true);
+  await tidy('ELK');
+  await act(async () => fail(new Error('ELK failed to load')));
+  expect(errors.map((e) => (e as Error).message)).toEqual([
+    'ELK failed to load',
+  ]);
+  expect(button('Tidy').disabled).toBe(false);
+  expect(positions()).toEqual(original);
 });
 
 it('discards invalid raw edits while retaining earlier unsaved visual changes', async () => {
@@ -1012,4 +1071,87 @@ it('focuses a binding source without editing the workflow or opening settings', 
   );
   expect(button('Apply local edit')).toBeUndefined();
   expect(rpc.update).not.toHaveBeenCalled();
+});
+
+it('keeps Raw and Visual positions consistent when ELK finishes in Raw', async () => {
+  await render();
+  let settle!: () => void;
+  elk.tidy.mockImplementation(
+    (definition) =>
+      new Promise((resolve) => {
+        settle = () =>
+          resolve({
+            ...definition,
+            nodes: definition.nodes.map((node: any) => ({
+              ...node,
+              position: { x: node.position.x + 40, y: node.position.y },
+            })),
+          });
+      }),
+  );
+  await tidy('ELK');
+  await click('Raw');
+  await act(async () => settle());
+  const rawPositions = JSON.parse(rawEditor.props.value).nodes.map(
+    (node: any) => ({ id: node.id, position: node.position }),
+  );
+  await click('Visual');
+  expect(positions()).toEqual(rawPositions);
+});
+
+it('chooses a remembered Tidy mode without arranging until the wand is clicked', async () => {
+  workflow.draft = nestedBatches(2);
+  await render();
+  const original = positions();
+  expect(button('Tidy').title).toContain('Tidy using Dagre');
+  await click('Tidy');
+  const arranged = positions();
+  expect(arranged).not.toEqual(original);
+  expect(elk.tidy).not.toHaveBeenCalled();
+  elk.tidy.mockImplementation(async (definition) => definition);
+  await chooseTidyMode('ELK');
+  expect(elk.tidy).not.toHaveBeenCalled();
+  expect(positions()).toEqual(arranged);
+  expect(button('Tidy').title).toContain('Tidy using ELK');
+  await click('Tidy');
+  expect(elk.tidy).toHaveBeenCalledTimes(1);
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await render();
+  expect(button('Tidy').title).toContain('Tidy using ELK');
+  await click('Tidy');
+  expect(elk.tidy).toHaveBeenCalledTimes(2);
+  const beforeModeChange = positions();
+  await chooseTidyMode('Dagre');
+  expect(button('Tidy').title).toContain('Tidy using Dagre');
+  expect(positions()).toEqual(beforeModeChange);
+  await click('Tidy');
+  expect(elk.tidy).toHaveBeenCalledTimes(2);
+});
+
+it('ignores a cancelled ELK request after returning to Visual without clearing a newer request', async () => {
+  await render();
+  const original = positions();
+  const requests: Array<(definition: typeof workflow.draft) => void> = [];
+  elk.tidy.mockImplementation(
+    () => new Promise((resolve) => requests.push(resolve)),
+  );
+  await tidy('ELK');
+  await click('Raw');
+  await click('Visual');
+  expect(button('Tidy').disabled).toBe(false);
+  await click('Tidy');
+  const arranged = {
+    ...workflow.draft,
+    nodes: workflow.draft.nodes.map((node) => ({
+      ...node,
+      position: { ...node.position, x: node.position.x + 40 },
+    })),
+  };
+  await act(async () => requests[0](arranged));
+  expect(positions()).toEqual(original);
+  expect(button('Tidy').disabled).toBe(true);
+  await act(async () => requests[1](arranged));
+  expect(positions()).not.toEqual(original);
+  expect(button('Tidy').disabled).toBe(false);
 });
