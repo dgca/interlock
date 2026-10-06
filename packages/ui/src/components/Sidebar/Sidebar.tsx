@@ -22,8 +22,8 @@ export function Sidebar({
         {(
           [
             { id: 'workflows', label: 'Workflows', Icon: GitBranch },
-            { id: 'prompts', label: 'Prompts', Icon: FileText },
             { id: 'runs', label: 'Runs', Icon: Activity },
+            { id: 'prompts', label: 'Prompts', Icon: FileText },
           ] as const
         ).map(({ id, label, Icon }) => (
           <button
