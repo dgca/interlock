@@ -85,7 +85,13 @@ afterEach(async () => {
 it('shows deletion failure inside the confirmation dialog', async () => {
   await render();
   queries.delete.mockRejectedValue(new Error('Referenced by Example workflow'));
-  await click('Delete prompt');
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Prompt actions"]')!
+      .click(),
+  );
+  const remove = document.querySelector<HTMLElement>('[role="menuitem"]')!;
+  await act(async () => remove.click());
   const confirm = [...document.querySelectorAll('button')].find(
     (b) => b.textContent === 'Delete',
   )!;

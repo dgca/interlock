@@ -1,25 +1,78 @@
-.list {
+.toolbar {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.row {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 20px;
-  padding: 18px 20px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 23px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.search {
+  width: 240px;
+}
+.cardDescription {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--muted);
+}
+.empty svg {
+  color: var(--text-dim);
+}
+.empty h2 {
+  font-size: 16px;
   color: var(--text);
-  text-decoration: none;
+  font-weight: 550;
 }
-a.row:hover {
-  border-color: var(--accent-border);
+.empty p {
+  font-size: 12px;
+  margin: 0 0 20px;
 }
-.editor {
-  max-width: 900px;
+.detailHeader > .detailTitle {
+  min-width: 0;
+}
+.detailTitle strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detailHeader > button,
+.detailHeader :global(.actions) {
+  flex-shrink: 0;
+}
+.editorBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.editorContent {
+  max-width: 1320px;
+  padding: 32px 40px 48px;
+  margin: 0 auto;
+}
+.editGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-rows: max-content 1fr;
+  gap: 32px;
+  align-items: start;
+}
+.metadata {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+}
+.instructions {
+  grid-column: 1;
+  grid-row: 1 / span 2;
 }
 .fields {
   padding: 0;
@@ -28,13 +81,87 @@ a.row:hover {
   min-width: 0;
 }
 .usage {
-  margin-top: 32px;
+  grid-column: 2;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
-.usage h2 {
-  font-size: 16px;
-  font-weight: 500;
+.usage > h2 {
+  font-size: 13px;
+  font-weight: 550;
   margin: 0;
+  color: var(--text-secondary);
+}
+.usageEmpty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: 9px;
+  color: var(--muted);
+}
+.usageEmpty svg {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+.usageEmpty p {
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 0;
+}
+.promptCard h2,
+.usageCard h2 {
+  overflow-wrap: anywhere;
+}
+.selection {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+}
+@media (max-width: 1050px) {
+  .editorContent {
+    padding: 24px;
+  }
+  .editGrid {
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 24px;
+  }
+}
+@media (max-width: 800px) {
+  .editGrid {
+    display: flex;
+    flex-direction: column;
+  }
+  .metadata,
+  .instructions,
+  .usage {
+    width: 100%;
+  }
+}
+@media (max-width: 600px) {
+  .toolbar {
+    flex-wrap: wrap;
+  }
+  header.detailHeader {
+    height: auto;
+    min-height: 82px;
+    padding: 16px;
+    flex-wrap: wrap;
+  }
+  .detailHeader > .detailTitle {
+    flex: 1;
+  }
+  .detailHeader :global(.actions) {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .search {
+    width: 100%;
+  }
+  .editorContent {
+    padding: 20px 16px;
+  }
 }

@@ -1,15 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Group, Modal, Stack, Text, TextInput, Textarea } from '@mantine/core';
-import { Plus, Search } from 'lucide-react';
+import {
+  ActionIcon,
+  Group,
+  Menu,
+  Stack,
+  Text,
+  TextInput,
+  Textarea,
+} from '@mantine/core';
+import {
+  ArrowLeft,
+  ArrowRight,
+  FileText,
+  GitBranch,
+  MoreHorizontal,
+  Plus,
+  Save,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import type { PromptContent, PromptUsage, SavedPrompt } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
+import { Modal } from '../../components/Modal/Modal';
 import type { Action } from '../../lib/useActionFeedback';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 import styles from './Prompts.module.css';
+import cards from '../workflows/WorkflowLibrary.module.css';
+import editorLayout from '../workflows/WorkflowEditor.module.css';
 
 const fields = ({
   name,
@@ -19,7 +40,7 @@ const fields = ({
 const same = (a: PromptContent, b: PromptContent) =>
   JSON.stringify(fields(a)) === JSON.stringify(fields(b));
 
-function PromptFields({
+function PromptMetadata({
   value,
   onChange,
 }: {
@@ -37,21 +58,53 @@ function PromptFields({
       />
       <Textarea
         label="Description"
-        rows={2}
+        rows={3}
         value={value.description}
         onChange={(e) => onChange({ ...value, description: e.target.value })}
       />
-      <Textarea
-        label="Instructions"
-        description="Markdown"
-        required
-        autosize
-        minRows={12}
-        maxRows={30}
-        value={value.content}
-        onChange={(e) => onChange({ ...value, content: e.target.value })}
-        styles={{ input: { fontFamily: 'var(--mono)', lineHeight: 1.6 } }}
-      />
+    </Stack>
+  );
+}
+
+function InstructionsField({
+  value,
+  onChange,
+  editing = false,
+}: {
+  value: PromptContent;
+  onChange: (value: PromptContent) => void;
+  editing?: boolean;
+}) {
+  return (
+    <Textarea
+      label="Instructions"
+      description={
+        editing
+          ? 'Markdown instructions for future runs, including published workflows. Active runs keep their captured instructions.'
+          : "Markdown instructions added before the Agent node's task instructions."
+      }
+      required
+      autosize
+      minRows={editing ? 20 : 10}
+      maxRows={40}
+      value={value.content}
+      onChange={(e) => onChange({ ...value, content: e.target.value })}
+      styles={{ input: { fontFamily: 'var(--mono)', lineHeight: 1.6 } }}
+    />
+  );
+}
+
+function PromptFields({
+  value,
+  onChange,
+}: {
+  value: PromptContent;
+  onChange: (value: PromptContent) => void;
+}) {
+  return (
+    <Stack>
+      <PromptMetadata value={value} onChange={onChange} />
+      <InstructionsField value={value} onChange={onChange} />
     </Stack>
   );
 }
@@ -67,6 +120,7 @@ export function PromptLibrary({
   const [query, setQuery] = useState('');
   const [draft, setDraft] = useState<PromptContent>();
   const [busy, setBusy] = useState(false);
+  const openCreate = () => setDraft({ name: '', description: '', content: '' });
   const visible = prompts
     .filter((p) =>
       `${p.name} ${p.description}`.toLowerCase().includes(query.toLowerCase()),
@@ -76,55 +130,73 @@ export function PromptLibrary({
     <div className={layout.page}>
       <header className={layout.header}>
         <h1>Prompts</h1>
-        <Button
-          variant="primary"
-          onClick={() => setDraft({ name: '', description: '', content: '' })}
-        >
+        <Button variant="primary" onClick={openCreate}>
           <Plus size={16} />
           New prompt
         </Button>
       </header>
-      <TextInput
-        mb="lg"
-        aria-label="Search prompts"
-        placeholder="Search prompts"
-        leftSection={<Search size={15} />}
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      <div className={styles.list}>
+      <div className={styles.toolbar}>
+        <span>
+          {query ? `${visible.length} of ${prompts.length}` : prompts.length}{' '}
+          {prompts.length === 1 ? 'prompt' : 'prompts'}
+        </span>
+        <TextInput
+          size="xs"
+          className={styles.search}
+          aria-label="Search prompts"
+          placeholder="Search prompts..."
+          leftSection={<Search size={15} />}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+      <div className={cards.grid}>
         {visible.map((p) => (
-          <Link key={p.id} to={paths.prompt(p.id)} className={styles.row}>
-            <div>
-              <Text fw={500}>{p.name}</Text>
-              {p.description && (
-                <Text size="sm" c="dimmed">
-                  {p.description}
-                </Text>
-              )}
+          <article key={p.id} className={`${cards.card} ${styles.promptCard}`}>
+            <div className={cards.cardTop}>
+              <span className={cards.cardIcon}>
+                <FileText size={19} />
+              </span>
             </div>
-            <Text size="xs" c="dimmed">
-              Revision {p.revision}
-            </Text>
-          </Link>
+            <div className={cards.cardBody}>
+              <h2>
+                <Link to={paths.prompt(p.id)} className={cards.cardLink}>
+                  {p.name}
+                </Link>
+              </h2>
+              <p className={styles.cardDescription}>{p.description}</p>
+            </div>
+            <div className={cards.cardFooter}>
+              <span>Revision {p.revision}</span>
+              <span className={cards.cardArrow} aria-hidden="true">
+                <ArrowRight size={15} />
+              </span>
+            </div>
+          </article>
         ))}
-        {!visible.length && (
-          <Text c="dimmed">
-            {query
-              ? 'No matching prompts.'
-              : 'Create a prompt to reuse instructions across Agent nodes.'}
-          </Text>
+        {!query && (
+          <button className={cards.newCard} onClick={openCreate}>
+            <span>
+              <Plus size={23} />
+            </span>
+            Create a prompt<small>Reusable instructions for Agent nodes</small>
+          </button>
         )}
       </div>
-      <Modal
-        opened={!!draft}
-        onClose={() => !busy && setDraft(undefined)}
-        title="New prompt"
-        size="lg"
-        centered
-        closeOnClickOutside={false}
-      >
-        {draft && (
+      {query && !visible.length && (
+        <div className={styles.empty}>
+          <FileText size={24} />
+          <h2>No matching prompts</h2>
+          <p>Try another name or description.</p>
+          <Button onClick={() => setQuery('')}>Clear search</Button>
+        </div>
+      )}
+      {draft && (
+        <Modal
+          onClose={() => !busy && setDraft(undefined)}
+          title="New prompt"
+          size={650}
+        >
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -158,8 +230,8 @@ export function PromptLibrary({
               </Button>
             </Group>
           </form>
-        )}
-      </Modal>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -183,6 +255,7 @@ export function PromptEditor({
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const formId = useId();
   const dirty = !same(draft, baseline);
   useBeforeUnloadWarning(dirty);
   useEffect(() => {
@@ -213,155 +286,212 @@ export function PromptEditor({
     };
   }, [prompt.id, tick]);
   return (
-    <div className={layout.page}>
-      <header className={layout.header}>
-        <div>
-          <Link to={paths.prompts}>Prompts</Link>
-          <h1>{baseline.name}</h1>
-        </div>
+    <section className={editorLayout.editor}>
+      <header className={`${editorLayout.header} ${styles.detailHeader}`}>
         <Button
-          variant="danger"
-          disabled={busy || dirty}
-          onClick={() => {
-            setDeleteError('');
-            setDeleting(true);
-          }}
+          variant="ghost"
+          aria-label="Back to prompts"
+          disabled={busy}
+          onClick={() => void navigate(paths.prompts)}
         >
-          Delete prompt
+          <ArrowLeft />
         </Button>
-      </header>
-      <div className={styles.editor}>
-        <Text size="sm" c="dimmed" mb="lg">
-          Changes apply to future runs of every workflow using this prompt.
-          Active runs keep their captured instructions.
-        </Text>
-        {dirty && prompt.revision > baseline.revision && (
-          <Text role="alert" c="yellow" mb="md">
-            This prompt changed elsewhere. Your edits are preserved. Discard
-            changes to load the latest revision before editing again.
-          </Text>
-        )}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void (async () => {
-              setBusy(true);
-              await act(async () => {
-                const saved = await api.prompts.update.mutate({
-                  id: prompt.id,
-                  revision: baseline.revision,
-                  ...draft,
-                });
-                setBaseline(saved);
-                setDraft(fields(saved));
-              }, 'Prompt saved.');
-              setBusy(false);
-            })();
-          }}
-        >
-          <fieldset disabled={busy} className={styles.fields}>
-            <PromptFields value={draft} onChange={setDraft} />
-          </fieldset>
-          <Group mt="lg">
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={
-                busy || !dirty || !draft.name.trim() || !draft.content.trim()
-              }
-            >
-              Save
-            </Button>
-            <Button
-              disabled={busy || !dirty}
-              onClick={() => {
-                const latest =
-                  prompt.revision > baseline.revision ? prompt : baseline;
-                setBaseline(latest);
-                setDraft(fields(latest));
-              }}
-            >
-              Discard changes
-            </Button>
-            <Text size="xs" c="dimmed">
-              Revision {baseline.revision}
-            </Text>
-          </Group>
-        </form>
-        <section className={styles.usage}>
-          <h2>Used by</h2>
-          {usageError ? (
-            <Text role="alert" c="red">
-              {usageError}
-            </Text>
-          ) : !usage.length ? (
-            <Text c="dimmed" size="sm">
-              No workflow references.
-            </Text>
-          ) : (
-            usage.map((w) => (
-              <div key={w.workflowId} className={styles.row}>
-                <Link to={paths.workflow(w.workflowId)}>{w.name}</Link>
-                <Text size="xs" c="dimmed">
-                  {[w.draft ? 'Draft' : '', ...w.versions.map((v) => `v${v}`)]
-                    .filter(Boolean)
-                    .join(', ')}
-                </Text>
-              </div>
-            ))
-          )}
-        </section>
-      </div>
-      <Modal
-        opened={deleting}
-        onClose={() => !busy && setDeleting(false)}
-        title={`Delete ${baseline.name}?`}
-        centered
-      >
-        <Text size="sm">
-          Deletion removes this prompt from the library. Any draft or published
-          workflow reference blocks deletion. Historical run instructions remain
-          available.
-        </Text>
-        {!!usage.length && (
-          <Text mt="md" size="sm">
-            Referenced by {usage.map((w) => w.name).join(', ')}.
-          </Text>
-        )}
-        {deleteError && (
-          <Text role="alert" c="red" mt="md">
-            {deleteError}
-          </Text>
-        )}
-        <Group justify="flex-end" mt="lg">
-          <Button disabled={busy} onClick={() => setDeleting(false)}>
-            Cancel
+        <div className={`${editorLayout.title} ${styles.detailTitle}`}>
+          <span>PROMPT</span>
+          <strong>{baseline.name}</strong>
+        </div>
+        <span className={editorLayout.saved}>
+          {dirty ? 'Unsaved changes' : 'Saved'} · Revision {baseline.revision}
+        </span>
+        <div className="actions">
+          <Button
+            disabled={busy || !dirty}
+            onClick={() => {
+              const latest =
+                prompt.revision > baseline.revision ? prompt : baseline;
+              setBaseline(latest);
+              setDraft(fields(latest));
+            }}
+          >
+            Discard changes
           </Button>
           <Button
-            variant="danger"
-            disabled={busy}
-            onClick={() => {
+            form={formId}
+            type="submit"
+            disabled={
+              busy || !dirty || !draft.name.trim() || !draft.content.trim()
+            }
+          >
+            <Save />
+            Save
+          </Button>
+          <Menu position="bottom-end" width={180}>
+            <Menu.Target>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                aria-label="Prompt actions"
+                disabled={busy}
+              >
+                <MoreHorizontal size={19} />
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item
+                color="red"
+                leftSection={<Trash2 size={14} />}
+                disabled={dirty}
+                onClick={() => {
+                  setDeleteError('');
+                  setDeleting(true);
+                }}
+              >
+                Delete prompt
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        </div>
+      </header>
+      <div className={styles.editorBody}>
+        <div className={styles.editorContent}>
+          {dirty && prompt.revision > baseline.revision && (
+            <Text role="alert" c="yellow" mb="md">
+              This prompt changed elsewhere. Your edits are preserved. Discard
+              changes to load the latest revision before editing again.
+            </Text>
+          )}
+          <form
+            id={formId}
+            className={styles.editGrid}
+            onSubmit={(e) => {
+              e.preventDefault();
               void (async () => {
                 setBusy(true);
-                let deleted = false;
                 await act(async () => {
-                  try {
-                    await api.prompts.delete.mutate({ id: prompt.id });
-                  } catch (error) {
-                    setDeleteError(errorMessage(error));
-                    throw error;
-                  }
-                  deleted = true;
-                }, 'Prompt deleted.');
+                  const saved = await api.prompts.update.mutate({
+                    id: prompt.id,
+                    revision: baseline.revision,
+                    ...draft,
+                  });
+                  setBaseline(saved);
+                  setDraft(fields(saved));
+                }, 'Prompt saved.');
                 setBusy(false);
-                if (deleted) void navigate(paths.prompts);
               })();
             }}
           >
-            Delete
-          </Button>
-        </Group>
-      </Modal>
-    </div>
+            <aside className={styles.metadata}>
+              <fieldset disabled={busy} className={styles.fields}>
+                <PromptMetadata value={draft} onChange={setDraft} />
+              </fieldset>
+            </aside>
+            <fieldset
+              disabled={busy}
+              className={`${styles.fields} ${styles.instructions}`}
+            >
+              <InstructionsField value={draft} onChange={setDraft} editing />
+            </fieldset>
+            <section className={styles.usage}>
+              <h2>Used by</h2>
+              {usageError ? (
+                <Text role="alert" c="red" size="sm">
+                  {usageError}
+                </Text>
+              ) : !usage.length ? (
+                <div className={styles.usageEmpty}>
+                  <GitBranch size={19} />
+                  <p>No workflows use this prompt yet.</p>
+                </div>
+              ) : (
+                usage.map((w) => (
+                  <article
+                    key={w.workflowId}
+                    className={`${cards.card} ${styles.usageCard}`}
+                  >
+                    <div className={cards.cardTop}>
+                      <span className={cards.cardIcon}>
+                        <GitBranch size={19} />
+                      </span>
+                    </div>
+                    <div className={cards.cardBody}>
+                      <h2>
+                        <Link
+                          to={paths.workflow(w.workflowId)}
+                          className={cards.cardLink}
+                        >
+                          {w.name}
+                        </Link>
+                      </h2>
+                    </div>
+                    <div className={cards.cardFooter}>
+                      <span>
+                        {[
+                          w.draft ? 'Draft' : '',
+                          ...w.versions.map((v) => `v${v} published`),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                      <span className={cards.cardArrow} aria-hidden="true">
+                        <ArrowRight size={15} />
+                      </span>
+                    </div>
+                  </article>
+                ))
+              )}
+            </section>
+          </form>
+        </div>
+      </div>
+      {deleting && (
+        <Modal
+          onClose={() => !busy && setDeleting(false)}
+          title={`Delete ${baseline.name}?`}
+        >
+          <p>
+            Prompts used by draft or published workflows cannot be deleted. Past
+            runs keep their captured instructions.
+          </p>
+          {!!usage.length && (
+            <Text mt="md" size="sm">
+              Referenced by {usage.map((w) => w.name).join(', ')}.
+            </Text>
+          )}
+          {deleteError && (
+            <Text role="alert" c="red" mt="md">
+              {deleteError}
+            </Text>
+          )}
+          <Group justify="flex-end" mt="lg">
+            <Button disabled={busy} onClick={() => setDeleting(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() => {
+                void (async () => {
+                  setBusy(true);
+                  let deleted = false;
+                  await act(async () => {
+                    try {
+                      await api.prompts.delete.mutate({ id: prompt.id });
+                    } catch (error) {
+                      setDeleteError(errorMessage(error));
+                      throw error;
+                    }
+                    deleted = true;
+                  }, 'Prompt deleted.');
+                  setBusy(false);
+                  if (deleted) void navigate(paths.prompts);
+                })();
+              }}
+            >
+              Delete
+            </Button>
+          </Group>
+        </Modal>
+      )}
+    </section>
   );
 }

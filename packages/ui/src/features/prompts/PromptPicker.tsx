@@ -6,6 +6,7 @@ import {
   type SavedPrompt,
   type WorkflowNode,
 } from '@interlock/core';
+import styles from './Prompts.module.css';
 
 export function PromptPicker({
   node,
@@ -28,7 +29,7 @@ export function PromptPicker({
     <Stack gap="sm" mb="md">
       <Select
         label="Saved prompts"
-        description="Runs use the latest saved prompts at startup. Each invoked workflow captures independently."
+        description="Prompts are added in this order before the task instructions. New runs use the latest saved revisions."
         placeholder="Add a prompt"
         searchable
         searchValue={search}
@@ -48,7 +49,7 @@ export function PromptPicker({
         }}
       />
       {ids.map((id, i) => (
-        <div key={id}>
+        <div key={id} className={styles.selection}>
           <Group justify="space-between" wrap="nowrap">
             <Text size="sm">
               {selected[i]?.name ?? `Missing prompt: ${id}`}

@@ -27,7 +27,7 @@ Open **Captured prompts** in run inspection to see the actual content and revisi
 
 ## Remove an unused prompt
 
-Open the prompt, select **Delete prompt**, and confirm. Any draft or published workflow version reference blocks deletion and identifies the dependent workflows. Removing a reference from the latest draft does not remove it from historical published versions. Deleting an unused prompt keeps historical captured run instructions available.
+Open the prompt, open **Prompt actions**, select **Delete prompt**, and confirm. Any draft or published workflow version reference blocks deletion and identifies the dependent workflows. Removing a reference from the latest draft does not remove it from historical published versions. Deleting an unused prompt keeps historical captured run instructions available.
 
 ## Transfer workflows and prompts
 
