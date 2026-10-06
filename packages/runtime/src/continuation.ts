@@ -76,14 +76,34 @@ export class Continuation {
     }));
     const deadlines = [
       ...state.executions
-        .filter(
-          (e) => e.kind === 'wait' && e.status === 'waiting' && e.resumeAt,
-        )
-        .map((e) => ({
-          ...reference(e.runId, e.id),
-          kind: 'wait' as const,
-          at: e.resumeAt!,
-        })),
+        .filter((e) => e.kind === 'wait' && e.status === 'waiting')
+        .flatMap((e) => {
+          const deadlines: {
+            runId: string;
+            executionId?: string;
+            kind: 'wait' | 'poll_check' | 'poll_timeout';
+            at: string;
+          }[] = [];
+          if (e.nextCheckAt)
+            deadlines.push({
+              ...reference(e.runId, e.id),
+              kind: 'poll_check',
+              at: e.nextCheckAt,
+            });
+          else if (e.resumeAt)
+            deadlines.push({
+              ...reference(e.runId, e.id),
+              kind: 'wait',
+              at: e.resumeAt,
+            });
+          if (e.timeoutAt)
+            deadlines.push({
+              ...reference(e.runId, e.id),
+              kind: 'poll_timeout',
+              at: e.timeoutAt,
+            });
+          return deadlines;
+        }),
       ...work
         .filter((w) => w.availableUntil || w.leaseUntil)
         .map((w) => ({
@@ -121,6 +141,9 @@ export class Continuation {
           workId: assignment?.id,
           error: run.error,
           resumeAt: execution?.resumeAt,
+          nextCheckAt: execution?.nextCheckAt,
+          timeoutAt: execution?.timeoutAt,
+          check: execution?.check,
         };
       });
     const batches = state.executions

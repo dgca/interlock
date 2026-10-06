@@ -10,6 +10,7 @@ import { ArrowLeft, Download } from 'lucide-react';
 import {
   nodeSchema,
   outgoingPorts,
+  hasTimeoutRoute,
   type Workflow,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -162,8 +163,8 @@ export function SettingsDialog({
                     !(
                       e.source === parsed.id &&
                       ((e.port === 'timeout' &&
-                        parsed.kind === 'agent' &&
-                        parsed.unclaimedTimeoutMs === undefined) ||
+                        (parsed.kind === 'agent' || parsed.kind === 'wait') &&
+                        !hasTimeoutRoute(parsed)) ||
                         (parsed.kind === 'switch' &&
                           !outgoingPorts(parsed).includes(e.port)))
                     ),

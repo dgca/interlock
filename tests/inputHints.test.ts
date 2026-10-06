@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import {
+  diagnoseDraft,
   contractAtPath,
   contractPaths,
   definitionSchema,
@@ -158,4 +159,61 @@ it('uses the selected item shape at a Batch Start port', () => {
     type: 'object',
     properties: { id: { type: 'integer' } },
   });
+});
+
+it('infers original input on polling Timeout and stays conservative for node references', () => {
+  const definition = definitionSchema.parse({
+    inputSchema: { type: 'number' },
+    nodes: [
+      { id: 'entry', kind: 'entry', label: 'Start' },
+      {
+        id: 'poll',
+        kind: 'wait',
+        label: 'Check',
+        outputSchema: { type: 'object' },
+        timing: {
+          kind: 'poll',
+          timeoutMs: 1000,
+          check: { kind: 'script', command: 'echo true' },
+          path: '',
+          equals: true,
+        },
+      },
+      { id: 'success', kind: 'exit', label: 'Success' },
+      {
+        id: 'timeout',
+        kind: 'exit',
+        label: 'Timeout',
+        inputSchema: { type: 'number' },
+      },
+      {
+        id: 'reference',
+        kind: 'script',
+        label: 'Reference',
+        command: 'echo true',
+        inputBindings: { all: { source: 'node', nodeId: 'poll', path: '' } },
+      },
+    ],
+    edges: [
+      { id: 'in', source: 'entry', target: 'poll' },
+      { id: 'out', source: 'poll', target: 'success' },
+      { id: 'late', source: 'poll', port: 'timeout', target: 'timeout' },
+    ],
+  });
+  const inferred = structuredClone(definition);
+  inferred.nodes[3].inputSchema = {};
+  expect(nodeInputHint(inferred, inferred.nodes[3]).schema).toEqual({
+    type: 'number',
+  });
+  expect(nodeInputHint(definition, definition.nodes[2]).schema).toEqual({
+    type: 'object',
+  });
+  expect(nodeInputHint(definition, definition.nodes[4]).schema).toMatchObject({
+    properties: { all: {} },
+  });
+  expect(
+    diagnoseDraft(definition).diagnostics.filter(
+      (d) => d.edgeId === 'late' && d.category === 'contract',
+    ),
+  ).toEqual([]);
 });

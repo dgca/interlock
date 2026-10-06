@@ -854,19 +854,7 @@ export class Engine {
             `${node.label}: checking every ${Math.round(node.timing.everyMs / 1000)}s${execution.timeoutAt ? ` until ${execution.timeoutAt}` : ''}`,
           );
         }
-        if (
-          execution.timeoutAt &&
-          Date.parse(execution.timeoutAt) <= Date.now() &&
-          !this.localJobs.has(execution.id)
-        ) {
-          this.event(
-            run,
-            'node.timed_out',
-            `${node.label}: no passing check before ${execution.timeoutAt}`,
-          );
-          this.finish(run, execution, node, execution.input, 'timeout');
-          return true;
-        }
+        if (this.finishPollTimeout(run, execution, node)) return true;
         return false;
       }
       if (node.kind === 'wait') {
@@ -1164,6 +1152,22 @@ export class Engine {
         });
     }
   }
+  private finishPollTimeout(
+    run: Run,
+    execution: NodeExecution,
+    node: WorkflowNode,
+  ): boolean {
+    if (!execution.timeoutAt || Date.parse(execution.timeoutAt) > Date.now())
+      return false;
+    this.localJobs.get(execution.id)?.abort();
+    this.event(
+      run,
+      'node.timed_out',
+      `${node.label}: no passing check before ${execution.timeoutAt}`,
+    );
+    this.finish(run, execution, node, execution.input, 'timeout');
+    return true;
+  }
   /**
    * Run a polling Wait's check when it is due. The check is a server-side job
    * like a Script or Fetch step, but the execution stays `waiting`: a passing
@@ -1184,8 +1188,9 @@ export class Engine {
     const { timing } = node;
     const controller = new AbortController();
     this.localJobs.set(execution.id, controller);
-    const job: Promise<Json> =
-      timing.check.kind === 'fetch'
+    const job: Promise<Json> = Promise.resolve().then(() => {
+      controller.signal.throwIfAborted();
+      return timing.check.kind === 'fetch'
         ? executeFetch(
             resolveFetch(timing.check, execution.input),
             timing.check.timeoutMs,
@@ -1208,6 +1213,7 @@ export class Engine {
             controller.signal,
             timing.check.language,
           );
+    });
     const settle = (result: { output?: Json; error?: string }) => {
       if (this.stopped) return;
       this.store.transaction(() => {
@@ -1219,6 +1225,7 @@ export class Engine {
           current.status !== 'waiting'
         )
           return;
+        if (this.finishPollTimeout(latest, current, node)) return;
         const checked = now();
         current.check = {
           count: (current.check?.count ?? 0) + 1,
@@ -1248,7 +1255,11 @@ export class Engine {
               !Array.isArray(result.output)
                 ? { ...input, ...(result.output as Record<string, Json>) }
                 : result.output!;
-            this.finish(latest, current, node, output);
+            try {
+              this.finish(latest, current, node, output);
+            } catch (error) {
+              this.fail(latest, current, message(error));
+            }
             return;
           }
         }
@@ -1260,8 +1271,10 @@ export class Engine {
       });
     };
     void job
-      .then((output) => settle({ output }))
-      .catch((error) => settle({ error: message(error) }))
+      .then(
+        (output) => settle({ output }),
+        (error) => settle({ error: message(error) }),
+      )
       .finally(() => {
         this.localJobs.delete(execution.id);
         this.pump();

@@ -1,5 +1,6 @@
 import {
   isPollWait,
+  hasTimeoutRoute,
   type WorkflowDefinition,
   type WorkflowNode,
 } from './index.js';
@@ -146,10 +147,7 @@ export function nodeInputHint(
             if (
               referenced &&
               referenced.batchId === target.batchId &&
-              !(
-                referenced.kind === 'agent' &&
-                referenced.unclaimedTimeoutMs !== undefined
-              )
+              !hasTimeoutRoute(referenced)
             )
               source = output(referenced, 'default');
           }
@@ -172,7 +170,7 @@ export function nodeInputHint(
   };
 
   const output = (source: WorkflowNode, port: string): Contract => {
-    if (source.kind === 'agent' && port === 'timeout')
+    if (hasTimeoutRoute(source) && port === 'timeout')
       return input(source).schema;
     if (source.kind === 'batch' && port === 'item') {
       const items = contractAtPath(

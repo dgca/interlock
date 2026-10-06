@@ -1,6 +1,7 @@
 import {
   definitionSchema,
   isPollWait,
+  hasTimeoutRoute,
   outgoingPorts,
   validateContractSchema,
   validateDefinition,
@@ -430,7 +431,7 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
     if (visiting.has(key) || visiting.size >= 100) return unknownShape();
     visiting.add(key);
     let result: Shape;
-    if (node.kind === 'agent' && port === 'timeout') result = resolved(node);
+    if (hasTimeoutRoute(node) && port === 'timeout') result = resolved(node);
     else if (node.kind === 'batch' && port === 'item') {
       const list = atPath(resolved(node), node.itemsPath);
       result =

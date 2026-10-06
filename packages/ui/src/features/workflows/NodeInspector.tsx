@@ -785,6 +785,7 @@ function PollEditor({
         mt="xs"
         mb="md"
         label="Give up after a deadline"
+        description="Disabling removes the Timeout connection when changes are applied."
         checked={timing.timeoutMs !== undefined}
         onChange={(e) =>
           patch({

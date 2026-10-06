@@ -1,4 +1,8 @@
-import { outgoingPorts, type WorkflowNode } from '@interlock/core';
+import {
+  hasTimeoutRoute,
+  outgoingPorts,
+  type WorkflowNode,
+} from '@interlock/core';
 
 /** Share source handle positions between rendering and crossing reduction. */
 export function outputPortTop(
@@ -14,7 +18,6 @@ export function outputPortTop(
     return index < 0 ? '50%' : `${((index + 1) / (ports.length + 1)) * 100}%`;
   }
   if (node.kind === 'condition') return port === 'true' ? '35%' : '75%';
-  if (node.kind === 'agent' && node.unclaimedTimeoutMs !== undefined)
-    return port === 'default' ? '35%' : '75%';
+  if (hasTimeoutRoute(node)) return port === 'default' ? '35%' : '75%';
   return '50%';
 }

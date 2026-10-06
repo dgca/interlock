@@ -361,6 +361,15 @@ it.each(['stdio', 'http'])(
       expect(createDefinition.description).toContain('maxItems');
       expect(createDefinition.description).toContain('10000');
       expect(updateDefinition.description).toBe(createDefinition.description);
+      expect(createDefinition.description).toContain('Fetch binding error');
+      expect(createDefinition.description).toContain(
+        'Late results cannot override Timeout',
+      );
+      expect(client.getInstructions()).toContain('poll_timeout');
+      for (const name of ['get_run_briefing', 'wait_for_run_change'])
+        expect(tools.find((tool) => tool.name === name)!.description).toContain(
+          'poll_timeout',
+        );
       expect(createDefinition.description).toContain('Switch nodes');
       expect(createDefinition.description).toContain('Missing paths fail');
       expect(client.getInstructions()).toContain('Switch executions record');
@@ -720,8 +729,39 @@ it.each(['stdio', 'http'])(
         } else if (['duration', 'poll'].includes(example.timing.kind)) {
           expect(timerState.run.status).toBe('waiting');
           expect(timerState.run.executions.at(-1).resumeAt).toBeDefined();
-          if (example.timing.kind === 'poll')
-            expect(timerState.run.executions.at(-1).nextCheckAt).toBeDefined();
+          if (example.timing.kind === 'poll') {
+            const execution = timerState.run.executions.at(-1);
+            expect(execution.nextCheckAt).toBeDefined();
+            const briefing = await call('get_run_briefing', {
+              id: timerRun.run.id,
+            });
+            expect(briefing.deadlines.items).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({ kind: 'poll_check' }),
+                expect.objectContaining({
+                  kind: 'poll_timeout',
+                  at: execution.timeoutAt,
+                }),
+              ]),
+            );
+            expect(briefing.blockers.items[0]).toMatchObject({
+              nextCheckAt: expect.any(String),
+              timeoutAt: execution.timeoutAt,
+            });
+            expect(briefing.blockers.items[0].check ?? {}).not.toHaveProperty(
+              'output',
+            );
+            const resumed = await call('wait_for_run_change', {
+              id: timerRun.run.id,
+              cursor: briefing.cursor,
+              timeoutMs: 0,
+            });
+            expect(
+              resumed.deadlines.items.some(
+                (deadline: any) => deadline.kind === 'poll_timeout',
+              ),
+            ).toBe(true);
+          }
           expect(await call('list_work', { runId: timerRun.run.id })).toEqual(
             [],
           );

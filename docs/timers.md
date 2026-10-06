@@ -2,7 +2,7 @@
 
 ## Wait nodes
 
-A Wait receives JSON and returns that same value when its deadline arrives. Its input and output contracts both apply.
+A duration or timestamp Wait receives JSON and returns that same value when its deadline arrives. Its input and output contracts both apply.
 
 Use a duration in milliseconds:
 
@@ -32,7 +32,7 @@ For example, input can contain `{"dueAt":"2026-09-12T09:00:00-06:00"}`. Paths us
 
 The Wait editor suggests text fields and fields of unknown type from the input contract. You can still enter any path; suggestions do not change the runtime timestamp check.
 
-Wait has one `default` output route. It can appear inside a Batch item path. Each waiting item occupies its concurrency slot until it finishes.
+Duration and timestamp Waits have one `default` output route. It can appear inside a Batch item path. Each waiting item occupies its concurrency slot until it finishes.
 
 ## Polling waits
 
@@ -61,13 +61,13 @@ A Wait can also wait for something slow outside Interlock: an environment bootst
 
 - `check` is a Script (`command`, optional `language`, `timeoutMs` from 100 through 120,000 ms) or a Fetch (`url`, `method`, `query`, `headers`, `body`, `timeoutMs`, `failOnHttpError`) with the same rules and bounds as the matching node. It receives the step input: a Script reads it on stdin or as `input`; a Fetch binds it into the request.
 - The server runs the first check as soon as the step starts, then every `everyMs` milliseconds (1,000 through 365 days; default 60,000) after each check finishes. No worker is involved.
-- The step continues when the check output at `path` structurally equals `equals`, as a Condition compares. The output is the step input with the check output merged over it when both are objects; otherwise it is the check output alone. The output contract applies to that value.
-- A check that fails (non-zero exit, timeout, a Fetch error, or an HTTP error with `failOnHttpError`) is recorded on the execution and runs again at the next interval. A passing check whose output has no value at `path` fails the step, as a missing path fails a Condition.
-- `timeoutMs` (1 ms through 365 days) sets a deadline from the step's start. At the deadline the step follows its `timeout` route with the original input, without applying the output contract. Publication requires the `timeout` edge when `timeoutMs` is set and rejects it otherwise.
+- The step continues when the check output at `path` structurally equals `equals`, as a Condition compares. The output is the step input with the check output merged over it when both are objects; otherwise it is the check output alone. The output contract applies to that value. A matched check whose completion output violates the contract fails the step; its successful check output remains available for inspection.
+- A check that fails (non-zero exit, check timeout, a Fetch binding or request error, or an HTTP error with `failOnHttpError`) is recorded on the execution and runs again at the next interval. A passing check whose output has no value at `path` fails the step, as a missing path fails a Condition.
+- `timeoutMs` (1 ms through 365 days) sets a deadline from the step's start. The deadline aborts any in-flight check and ignores late results. Once the deadline has elapsed, even a matching result takes Timeout. At the deadline the step follows its `timeout` route with the original input, without applying the output contract. Publication requires the `timeout` edge when `timeoutMs` is set and rejects it otherwise.
 - The schedule persists: `nextCheckAt` (also exposed as `resumeAt`), `timeoutAt`, and the latest `check` with its `count`, `at`, and `output` or `error`. A restart re-runs an overdue check; a check interrupted by the restart simply runs again, so checks should be idempotent probes. Cancellation aborts a check in flight.
 - One execution counts once against `maxSteps` however many checks run, unlike a Wait → Script → Switch loop, which spends three steps per iteration.
 
-In the editor, choose **When a check passes**, pick Script or Fetch, set **Check every**, the **Check output field**, and the value to continue on, and optionally **Give up after a deadline**. The run inspector shows the next check time and the latest check result.
+In the editor, choose **When a check passes**, pick Script or Fetch, set **Check every**, the **Check output field**, and the value to continue on, and optionally **Give up after a deadline**. Disabling the deadline or switching to a duration or timestamp Wait removes the outgoing Timeout connection when changes are applied; the destination node remains. Raw JSON and MCP edits must remove that edge explicitly. The run inspector shows the next check time and the latest check result.
 
 ## Unclaimed Agent timeouts
 
@@ -112,21 +112,21 @@ In the editor, disabling the timeout removes its outgoing Timeout edge when sett
 
 ## Inspect timer state
 
-Use `get_run_briefing` for current blockers and active deadlines, then `wait_for_run_change` with its cursor for a finite wait. These reads do not advance timers. See [continuation fields, cursor recovery, and cancellation](agent-workflows.md#resume-a-run-with-a-briefing).
+Use `get_run_briefing` for current blockers and active deadlines, then `wait_for_run_change` with its cursor for a finite wait. These reads do not advance timers. Polling blockers include `nextCheckAt`, optional `timeoutAt`, and latest check metadata (`count`, `at`, optional `error`) without check output. Active polling deadlines have kinds `poll_check` and `poll_timeout`; `nextDeadline` selects the earliest across all timer kinds. Use `get_run` to inspect the latest probe output. See [continuation fields, cursor recovery, and cancellation](agent-workflows.md#resume-a-run-with-a-briefing).
 
 `get_run` returns the root run, its executions, descendants, assignments, and events. Timer state appears in these fields:
 
-| Field                                                       | Meaning                                                                    |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Wait execution `status: "waiting"` and `resumeAt`           | The step is waiting until its persisted ISO deadline.                      |
-| Wait execution `nextCheckAt`, `timeoutAt`, `check`          | A polling Wait: its next check, its deadline, and the latest check result. |
-| Assignment `status: "available"` and `availableUntil`       | Work can be claimed before its ISO deadline.                               |
-| Assignment `status: "timed_out"`                            | Nobody claimed this availability interval before the deadline.             |
-| Agent execution `status: "completed"` and `port: "timeout"` | The step followed Timeout with the original input.                         |
+| Field                                                       | Meaning                                                                                        |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Wait execution `status: "waiting"` and `resumeAt`           | For duration or timestamp Waits, the persisted ISO deadline; for polling, the next check time. |
+| Wait execution `nextCheckAt`, `timeoutAt`, `check`          | A polling Wait: its next check, its deadline, and the latest check result.                     |
+| Assignment `status: "available"` and `availableUntil`       | Work can be claimed before its ISO deadline.                                                   |
+| Assignment `status: "timed_out"`                            | Nobody claimed this availability interval before the deadline.                                 |
+| Agent execution `status: "completed"` and `port: "timeout"` | The step followed Timeout with the original input.                                             |
 
 A completed timeout step does not mean the whole run completed. The next step can still be running or waiting. Deadlines remain in execution history after completion or cancellation, so status determines whether a deadline is active. Claiming clears `availableUntil`; releasing work for another attempt sets a new value.
 
-The runtime records `node.waiting` when a Wait starts and `work.timed_out` when an unclaimed deadline expires. `list_work` includes only available assignments. An empty list can mean a Wait is active or another executor holds a claim. The CLI exposes the same data through `interlock run RUN_ID` and `interlock work RUN_ID`.
+The runtime records `node.waiting` when a Wait starts, `node.timed_out` when a polling deadline expires, and `work.timed_out` when an unclaimed deadline expires. `list_work` includes only available assignments. An empty list can mean a Wait is active or another executor holds a claim. The CLI exposes the same data through `interlock run RUN_ID` and `interlock work RUN_ID`.
 
 ## Persistence and step budgets
 

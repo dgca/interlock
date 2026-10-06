@@ -318,3 +318,166 @@ it('requires the timeout route only when a deadline is set, and validates Fetch 
     definitionSchema.parse(definition(poll('x', { everyMs: 10 }))),
   ).toThrow();
 });
+
+it.each([true, false])(
+  'lets the deadline win a slow passing check (pump active: %s)',
+  async (pumpActive) => {
+    if (!pumpActive) clearInterval(tick);
+    const engine = setup();
+    const marker = join(dir, 'late-side-effect');
+    const d = definition(
+      poll('unused', {
+        timeoutMs: 150,
+        check: {
+          kind: 'script',
+          language: 'bash',
+          command: `sleep 0.6; touch '${marker}'; echo '{"ready":true}'`,
+          timeoutMs: 5000,
+        },
+      }),
+      true,
+    );
+    d.nodes[1].outputSchema = { type: 'object', required: ['ready'] };
+    const run = start(engine, d);
+    await settled(engine, run.id);
+    expect(engine.run(run.id).executions[1].port).toBe('timeout');
+    expect(engine.run(run.id).output).toEqual(run.input);
+    if (pumpActive) {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      expect(existsSync(marker)).toBe(false);
+      expect(engine.run(run.id).output).toEqual(run.input);
+    }
+  },
+);
+
+it('records synchronous Fetch binding errors and retries them across restart', async () => {
+  const db = join(dir, 'binding.db');
+  const engine = setup(db);
+  const run = start(
+    engine,
+    definition(
+      poll('unused', {
+        check: { kind: 'fetch', url: 'https://example.com/{{input.job}}' },
+      }),
+    ),
+    {},
+  );
+  await checked(engine, run.id, 1);
+  expect(engine.run(run.id).executions[1].check?.error).toContain('job');
+  engine.stop();
+  engines.splice(engines.indexOf(engine), 1);
+  const resumed = setup(db);
+  await checked(resumed, run.id, 2);
+  expect(resumed.run(run.id).status).toBe('waiting');
+  expect(resumed.run(run.id).executions[1].check?.error).toContain('job');
+});
+
+it('fails a matched check with invalid completion output and retains the successful probe', async () => {
+  const engine = setup();
+  const d = definition(
+    poll('unused', {
+      check: {
+        kind: 'script',
+        language: 'javascript',
+        command: 'return {ready: true};',
+      },
+    }),
+  );
+  d.nodes[1].outputSchema = { type: 'object', required: ['answer'] };
+  const run = start(engine, d);
+  await vi.waitFor(() => expect(engine.run(run.id).status).toBe('failed'), {
+    timeout: 1500,
+  });
+  expect(engine.run(run.id).executions[1].check).toMatchObject({
+    count: 1,
+    output: { ready: true },
+  });
+  expect(engine.run(run.id).executions[1].check?.error).toBeUndefined();
+  expect(engine.run(run.id).error).toContain('answer');
+});
+
+it('briefs the earliest polling deadline and excludes probe payloads from continuation metadata', async () => {
+  const engine = setup();
+  const run = start(
+    engine,
+    definition(
+      poll('unused', {
+        everyMs: 120_000,
+        timeoutMs: 30_000,
+        check: {
+          kind: 'script',
+          language: 'javascript',
+          command:
+            'return {ready: false, payload: "probe-payload".repeat(100000)};',
+        },
+      }),
+      true,
+    ),
+  );
+  await checked(engine, run.id, 1);
+  const execution = engine.run(run.id).executions[1];
+  const briefing = engine.continuation.briefing({ id: run.id, limit: 20 });
+  expect(briefing.nextDeadline).toMatchObject({
+    kind: 'poll_timeout',
+    at: execution.timeoutAt,
+  });
+  expect(briefing.deadlines.items).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'poll_check',
+        at: execution.nextCheckAt,
+      }),
+    ]),
+  );
+  expect(briefing.blockers.items[0]).toMatchObject({
+    nextCheckAt: execution.nextCheckAt,
+    timeoutAt: execution.timeoutAt,
+    check: { count: 1 },
+  });
+  expect(
+    engine.store.continuation(run.id).executions[1].check,
+  ).not.toHaveProperty('output');
+  expect(JSON.stringify(briefing)).not.toContain('probe-payload');
+});
+
+it('does not launch a queued probe after synchronous cancellation', async () => {
+  const engine = setup();
+  const marker = join(dir, 'cancelled-probe');
+  const run = start(
+    engine,
+    definition(
+      poll('unused', {
+        check: { kind: 'script', command: `touch '${marker}'; echo true` },
+        path: '',
+        equals: true,
+      }),
+    ),
+  );
+  engine.cancel(run.id);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  expect(engine.run(run.id).status).toBe('cancelled');
+  expect(existsSync(marker)).toBe(false);
+});
+
+it('takes Timeout after repeated Fetch binding failures', async () => {
+  const engine = setup();
+  const run = start(
+    engine,
+    definition(
+      poll('unused', {
+        timeoutMs: 150,
+        check: { kind: 'fetch', url: 'https://example.com/{{input.missing}}' },
+      }),
+      true,
+    ),
+  );
+  await settled(engine, run.id);
+  expect(engine.run(run.id)).toMatchObject({
+    status: 'completed',
+    output: run.input,
+  });
+  expect(engine.run(run.id).executions[1]).toMatchObject({
+    port: 'timeout',
+    check: { count: 1, error: expect.stringContaining('missing') },
+  });
+});
