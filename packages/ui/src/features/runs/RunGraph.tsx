@@ -3,10 +3,11 @@ import { Background, Controls, ReactFlow } from '@xyflow/react';
 import type { WorkflowDefinition } from '@interlock/core';
 import { FlowNode } from '../workflows/FlowNode';
 import { LoopEdge } from '../workflows/LoopEdge';
+import { OrthoEdge } from '../workflows/OrthoEdge';
 import { canvasGraph } from '../workflows/canvasGraph';
 import type { NodeProgress } from './runProgress';
 const nodeTypes = { workflow: FlowNode };
-const edgeTypes = { loop: LoopEdge };
+const edgeTypes = { loop: LoopEdge, ortho: OrthoEdge };
 export function RunGraph({
   definition,
   progress,
