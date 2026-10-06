@@ -14,6 +14,29 @@ import { RunList } from '../features/runs/RunList';
 import { RunInspector } from '../features/runs/RunInspector';
 import { paths } from './paths';
 import { flushSync } from 'react-dom';
+import { PromptLibrary, PromptEditor } from '../features/prompts/Prompts';
+
+function PromptsRoute() {
+  const context = useOutletContext<AppContext>();
+  if (!context.loaded) return <Loading error={context.loadError} />;
+  return <PromptLibrary prompts={context.prompts} act={context.act} />;
+}
+function PromptRoute() {
+  const { promptId } = useParams();
+  const context = useOutletContext<AppContext>();
+  const prompt = context.prompts.find((p) => p.id === promptId);
+  if (!context.loaded) return <Loading error={context.loadError} />;
+  if (!prompt) return <NotFound title="Prompt not found" />;
+  return (
+    <PromptEditor
+      key={prompt.id}
+      prompt={prompt}
+      act={context.act}
+      onDirty={context.onDirty}
+      tick={context.tick}
+    />
+  );
+}
 
 function LibraryRoute() {
   const { workflows, act, loaded, loadError } = useOutletContext<AppContext>();
@@ -50,6 +73,7 @@ function WorkflowRoute() {
       key={workflow.id}
       workflow={workflow}
       workflows={context.workflows}
+      prompts={context.prompts}
       act={context.act}
       onDirty={context.onDirty}
       onSaved={context.onSaved}
@@ -175,6 +199,8 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <Navigate to={paths.workflows} replace /> },
       { path: 'workflows', Component: LibraryRoute },
+      { path: 'prompts', Component: PromptsRoute },
+      { path: 'prompts/:promptId', Component: PromptRoute },
       { path: 'workflows/:workflowId', Component: WorkflowRoute },
       { path: 'runs', Component: RunsRoute },
       { path: 'runs/:runId', Component: RunRoute },

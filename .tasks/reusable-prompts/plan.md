@@ -1,6 +1,6 @@
 # Reusable prompts implementation plan
 
-Behavior and acceptance criteria are defined in [spec.md](spec.md); scope and authorization are in [intent.md](intent.md). Spec review proceeds under existing authorization and the human decision S1. The task branch is `codex/reusable-prompts`; its baseline before planning is `46f7655`.
+Behavior and acceptance criteria are defined in [spec.md](spec.md); scope and authorization are in [intent.md](intent.md). Spec review proceeds under existing authorization and the human decision S1. The task branch is `codex/reusable-prompts`; its baseline before planning is `46f765581b7e605e56052be2f6b74b74cb968630`.
 
 ## Verified repository facts
 
@@ -45,4 +45,37 @@ The SDLC workflow requires fresh-context implementation review. Apply the code-r
 
 ## Results
 
-Implementation and checks pending.
+Implemented prompt contracts/composition in core, revision-preserving persistence in storage, management/capture in runtime, shared server and MCP procedures, portable format-2 prompt dependencies, library and ordered Agent settings, and run inspection. No database migration or package version bump; a pending root patch changeset records the feature.
+
+### Observable checks
+
+| Criteria | Method and result                                                                                                                                                                                                                                                                                                                                   |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC1      | `tests/prompt-editor.test.ts`: dirty refresh/stale save preserve text and original save revision; discard loads latest; clean refresh and successful save stay clean. `tests/prompts.test.ts`: name/content validation, no-op edits, revision history, database reopen. Browser creation/search/edit/save/discard/navigation journey below. Passed. |
+| AC2      | Picker test: consecutive additions clear search, ordering, missing references and preview. Runtime tests: exact composition, raw and stable-ID edits preserve ordered IDs. Browser removal/reorder/apply/save/Raw/reopen below. Passed.                                                                                                             |
+| AC3      | Runtime tests: an immutable published workflow's new run captures an edited prompt, existing run retains its capture. Browser starts two runs of v1 with rev1 then rev2. Passed.                                                                                                                                                                    |
+| AC4      | Runtime tests: later steps, Batch items dispatched later, loop back edges, lease recovery/stale tokens, explicit retry, database reopen, and ordinary/detached child startup independence. Passed.                                                                                                                                                  |
+| AC5      | Runtime and transport tests: full claims and savedPrompts carry composed capture; compact run/work projections omit new bodies. Browser run inspector and actual clipboard handoff below. Passed.                                                                                                                                                   |
+| AC6      | Runtime tests: all published versions and drafts guard deletion; unused deletion retains history; missing references save but block publication/startup. Picker missing reference test and browser guard below. Passed.                                                                                                                             |
+| AC7      | Transfer tests: dependencies/owned children/shared IDs, empty import, idempotence, divergent ID conflict rollback even force, missing prompt rollback, invalid graph rollback, legacy format 1 and old-reader protection via format 2. Passed.                                                                                                      |
+| AC8      | Existing HTTP and stdio transport tests discover prompt tools, required revision/default description metadata, create/read/list/update/stale/delete, author/publish/start/claim/submit, new-run revisions, compact briefing, and export/import. Both passed.                                                                                        |
+| AC9      | Full suite: 44 files / 522 tests passed. Legacy exact task text is asserted; existing context/contracts/script-language/transfer tests passed. After browser-driven UI fixes, 33 affected UI tests (4 prompt editor/picker, 9 routes, 20 Agent settings) passed.                                                                                    |
+
+`pnpm build`, subsequent `pnpm typecheck`, `pnpm test:package`, `pnpm format:check`, and `git diff --check` passed. The build reports existing chunk-size guidance; tests emit existing SQLite/React lifecycle diagnostics. No failed checks or required verification gaps remain.
+
+### Browser evidence
+
+Method: CUA browser controls against a separately started built engine on port 4311 with `/tmp/interlock-prompts-ui-20261006.db`. The user's engine and database were preserved. All content entry used typing or native clipboard paste; ordering/removal/disclosures/navigation/publication/start used their actual controls.
+
+1. AC1: Created Style guide and Review guide with Markdown, searched Style, reopened, typed an unsaved edit, attempted sidebar navigation, kept editing, discarded, and reopened. Expected text preservation/navigation guard and clean saved text; observed each. Edited Style and saved revision 2. Evidence: [editor](evidence/interlock-prompts-editor.jpg), plus stale/poll/save component regression tests.
+2. AC2: Added Style then Review through search; moved Review up, removed Style, added it again, typed task instructions, opened content and combined preview, applied and saved, inspected Raw IDs `[9677b3ae-042e-4ef6-8ad7-6af3ffb140ab, 7a59ad24-ae8e-4a95-be4a-03706013d54a]`, and reopened visual settings. Expected order/content/task persistence; observed it. Evidence: [reopened Agent preview](evidence/interlock-prompts-agent-preview.jpg). Initial check found retained picker search; controlled search clears after selection, then this journey and regression test passed.
+3. AC3/AC5: Published workflow `0044fa5b-070d-4b82-bbb6-a3f1c51a4bef` once as v1. Run `32b47278-5f0d-4b1f-8e57-98002142193a` displayed original Style rev1 and composed instructions. Edited Style, started run `a26c486d-3385-449b-bdcb-0cd1aec4ea8c` from the same v1, observed changed text and rev2, then reopened the first run and observed old text/rev1. Evidence: [original run after edit](evidence/interlock-prompts-original-run.jpg). Clicked Copy instructions for agent and read the actual clipboard: it routes discovery to the existing run and tells the executor to follow claimed prompt/input/context and isolated-session guidance.
+4. AC6: Used-by listed Draft and v1. Delete confirmation and server rejection named Untitled workflow; content and references remained. Evidence: [delete guard](evidence/interlock-prompts-delete-guard.jpg). Initial toast was obscured by the modal; error now renders inside it, and repeated browser check plus component regression passed.
+
+### Documentation and affected MCP audit
+
+Checked README navigation, CONTEXT terminology, architecture/persistence/execution/projections, current limits, new Prompts guide, agent workflow transfer guidance, harness execution guidance, and CLI import help against implementation. The new guide's Agent JSON fields match nodeSchema. No separate prompt CLI group is introduced.
+
+Checked MCP server instructions and shared definition guidance; all five prompt tool descriptions/schemas/defaults/results/errors; create/update/edit workflow schemas and reference guidance; validate/publish startup guards; export/import version and conflict semantics; start/retry capture rules; list_work summary/full and claim work context handoff; get_run full capture; continuation briefing projections. HTTP and stdio discovery/lifecycle tests and package smoke verify the affected flows. This is an affected-flow review, not a comprehensive audit of every unrelated MCP tool.
+
+The repository has no `docs/agents/issue-tracker.md`; the authorized SDLC task's local spec is the originating review source, so no issue tracker setup is needed for this task.

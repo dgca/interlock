@@ -143,7 +143,7 @@ export async function runCommand(argv: string[]) {
           'archive <id>',
           'restore <id>',
           'delete <id> --yes',
-          'import <json|@file> [--force | --revisions JSON] (options apply to bundles)',
+          'import <json|@file> [--force | --revisions JSON] (workflow drafts only; shared prompt conflicts reject import)',
           'export <id>',
           'publish <id> [--cascade]',
           'start <workflow-id> <json|@file> [version]',

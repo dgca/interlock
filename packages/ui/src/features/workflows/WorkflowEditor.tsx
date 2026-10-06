@@ -55,6 +55,7 @@ const zoomKeys = ['Meta', 'Control'];
 export function WorkflowEditor({
   workflow,
   workflows,
+  prompts = [],
   onBack,
   onRun,
   onSaved,
@@ -68,6 +69,7 @@ export function WorkflowEditor({
 }: {
   workflow: Workflow;
   workflows: Workflow[];
+  prompts?: import('@interlock/core').SavedPrompt[];
   onBack: () => void;
   onRun: (workflow: Workflow) => void;
   onSaved: (w: Workflow) => void;
@@ -1087,6 +1089,7 @@ export function WorkflowEditor({
       )}
       {editing && (
         <SettingsDialog
+          prompts={prompts}
           node={editing.node}
           creating={editing.creating}
           parentBatchId={editing.batchId}

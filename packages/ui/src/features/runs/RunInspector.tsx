@@ -169,6 +169,19 @@ export function RunInspector({
           <a href="#workflow-result">View result</a>
         )}
       </div>
+      {!!run.promptSnapshots?.length && (
+        <details className={styles.independent}>
+          <summary>Captured prompts</summary>
+          {run.promptSnapshots.map((prompt) => (
+            <details key={prompt.id}>
+              <summary>
+                {prompt.name} · revision {prompt.revision}
+              </summary>
+              <p className="assignment-prompt">{prompt.content}</p>
+            </details>
+          ))}
+        </details>
+      )}
       {independent.length > 0 && (
         <div className={styles.independent}>
           <p>

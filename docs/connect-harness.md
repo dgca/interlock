@@ -102,7 +102,7 @@ With the workflow selected, ask it to complete the run through Interlock:
 Start Interlock workflow WORKFLOW_ID with the supplied input.
 Use list_work for the root run, including its child runs.
 Claim assignments with your actual capabilities.
-Perform each assignment using its prompt, input, and context policy.
+Perform each assignment using its composed prompt, input, and context policy. Saved prompts are captured for the run; do not reload newer library content to replace assignment instructions.
 Submit JSON matching its output schema.
 Use get_run_briefing to resume and distinguish blockers when no work is available.
 Use get_run_result for selected data and wait_for_run_change with the briefing cursor.
@@ -142,20 +142,27 @@ The server advances timers without a connected agent. For a long delay, report t
 
 Claim an assignment only when ready to perform it. Claiming stops its unclaimed timer, including for manual completion. If the deadline passes before the claim, inspect the existing run and rediscover work. The old assignment may be `timed_out` and its Timeout branch may already be running. A renewed claim has no total execution ceiling; an unclaimed timeout does not enforce a deadline for a person's answer after claiming.
 
+## Saved prompts
+
+Use `list_prompts` for IDs, names, descriptions, and revisions, then `get_prompt` for content and workflow usage. `create_prompt` saves named Markdown instructions. `update_prompt` requires the current revision and updates guidance for all future runs, including published workflows. Stale saves fail; active runs and retries retain captured content. `delete_prompt` rejects any draft or published-version reference.
+
+Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `prompt` task text. Each invoked workflow captures independently at startup; Batch items inherit capture. Full `list_work` and `claim_work` return the composed `prompt` and exact `savedPrompts`. `get_run` includes `promptSnapshots`; compact discovery and briefings omit these bodies. Saved prompts do not grant tools or skills or change the harness system prompt. See [Prompts](prompts.md).
+
 ## MCP tools
 
-| Tools                                                       | Purpose                                                                         |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `list_workflows`, `get_workflow`                            | Find workflows and inspect drafts, contracts, and published version numbers.    |
-| `create_workflow`, `update_workflow`, `publish_workflow`    | Author a draft and publish an immutable version.                                |
-| `start_run`, `get_run`                                      | Start a published version and inspect its execution and descendants.            |
-| `get_run_briefing`, `get_run_result`, `wait_for_run_change` | Resume with bounded snapshots, selected values, and finite scoped change waits. |
-| `list_work`, `claim_work`                                   | Discover available assignments and reserve one with declared capabilities.      |
-| `submit_result`, `fail_work`, `renew_claim`                 | Complete or fail claimed work, or extend its lease.                             |
-| `cancel_run`, `retry_run`                                   | Cancel unfinished work or explicitly retry a failed run.                        |
-| `list_runs`                                                 | Find bounded run summaries by workflow, status, ancestry, and input.            |
-| `export_workflow`, `import_workflows`                       | Transfer workflow drafts, dependencies, and published pins in portable bundles. |
-| `delete_workflow`                                           | Permanently remove an unreferenced workflow and its inactive history.           |
+| Tools                                                                           | Purpose                                                                           |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `list_prompts`, `get_prompt`, `create_prompt`, `update_prompt`, `delete_prompt` | Discover and maintain shared instructions with revision and reference protection. |
+| `list_workflows`, `get_workflow`                                                | Find workflows and inspect drafts, contracts, and published version numbers.      |
+| `create_workflow`, `update_workflow`, `publish_workflow`                        | Author a draft and publish an immutable version.                                  |
+| `start_run`, `get_run`                                                          | Start a published version and inspect its execution and descendants.              |
+| `get_run_briefing`, `get_run_result`, `wait_for_run_change`                     | Resume with bounded snapshots, selected values, and finite scoped change waits.   |
+| `list_work`, `claim_work`                                                       | Discover available assignments and reserve one with declared capabilities.        |
+| `submit_result`, `fail_work`, `renew_claim`                                     | Complete or fail claimed work, or extend its lease.                               |
+| `cancel_run`, `retry_run`                                                       | Cancel unfinished work or explicitly retry a failed run.                          |
+| `list_runs`                                                                     | Find bounded run summaries by workflow, status, ancestry, and input.              |
+| `export_workflow`, `import_workflows`                                           | Transfer workflow drafts, dependencies, and published pins in portable bundles.   |
+| `delete_workflow`                                                               | Permanently remove an unreferenced workflow and its inactive history.             |
 
 `list_work` returns available assignments, not claimed work. An empty list does not mean the execution has completed. Use `get_run_briefing` for its status, claimed assignments, blockers, and detached progress. When given an existing run ID, resume it rather than calling `start_run` again.
 

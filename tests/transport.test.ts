@@ -83,6 +83,121 @@ it.each(['stdio', 'http'])(
       for (const tool of tools) validateContractSchema(tool.inputSchema);
       expect(tools.map((t) => t.name)).toContain('claim_work');
       for (const name of [
+        'list_prompts',
+        'get_prompt',
+        'create_prompt',
+        'update_prompt',
+        'delete_prompt',
+      ])
+        expect(tools.map((t) => t.name)).toContain(name);
+      expect(
+        tools.find((t) => t.name === 'update_prompt')!.inputSchema.required,
+      ).toContain('revision');
+      expect(
+        tools.find((t) => t.name === 'create_prompt')!.inputSchema.properties!
+          .description,
+      ).toMatchObject({ default: '' });
+      const savedPrompt = await call('create_prompt', {
+        name: 'Transport guidance',
+        content: 'Use original guidance',
+      });
+      expect(
+        (await call('list_prompts', {})).find(
+          (p: any) => p.id === savedPrompt.id,
+        ),
+      ).not.toHaveProperty('content');
+      expect(await call('get_prompt', { id: savedPrompt.id })).toMatchObject({
+        revision: 1,
+        content: 'Use original guidance',
+        usage: [],
+      });
+      const promptGraph = blankDefinition();
+      if (promptGraph.nodes[1].kind !== 'agent')
+        throw new Error('Expected Agent');
+      promptGraph.nodes[1].promptIds = [savedPrompt.id];
+      promptGraph.nodes[1].context.mode = 'fresh';
+      const promptWorkflow = await call('create_workflow', {
+        name: 'Transport prompt workflow',
+        definition: promptGraph,
+      });
+      await call('publish_workflow', { id: promptWorkflow.id });
+      const promptRun = await call('start_run', {
+        workflowId: promptWorkflow.id,
+        input: null,
+      });
+      const promptWork = (
+        await call('list_work', { runId: promptRun.run.id })
+      )[0];
+      expect(promptWork.prompt).toContain('Use original guidance');
+      expect(promptWork.executionInstructions).toContain('fresh');
+      expect(promptWork.savedPrompts[0]).toMatchObject({
+        revision: 1,
+        id: savedPrompt.id,
+      });
+      await call('update_prompt', {
+        id: savedPrompt.id,
+        revision: 1,
+        name: savedPrompt.name,
+        content: 'Use revised guidance',
+      });
+      const stalePrompt = await client.callTool({
+        name: 'update_prompt',
+        arguments: {
+          id: savedPrompt.id,
+          revision: 1,
+          name: savedPrompt.name,
+          content: 'Stale instructions',
+        },
+      });
+      expect(stalePrompt.isError).toBe(true);
+      const deletion = await client.callTool({
+        name: 'delete_prompt',
+        arguments: { id: savedPrompt.id },
+      });
+      expect(deletion.isError).toBe(true);
+      const promptClaim = await call('claim_work', {
+        workId: promptWork.id,
+        workerId: 'prompt-transport',
+        freshContext: true,
+      });
+      expect(promptClaim.prompt).toContain('Use original guidance');
+      await call('submit_result', {
+        workId: promptWork.id,
+        token: promptClaim.token,
+        output: null,
+      });
+      const latestRun = await call('start_run', {
+        workflowId: promptWorkflow.id,
+        input: null,
+      });
+      expect(
+        (await call('list_work', { runId: latestRun.run.id }))[0].prompt,
+      ).toContain('Use revised guidance');
+      const captured = await call('get_run', { id: promptRun.run.id });
+      expect(captured.run.promptSnapshots[0].content).toBe(
+        'Use original guidance',
+      );
+      const compact = await call('get_run_briefing', { id: latestRun.run.id });
+      expect(JSON.stringify(compact)).not.toContain('Use revised guidance');
+      const promptBundle = await call('export_workflow', {
+        id: promptWorkflow.id,
+      });
+      expect(promptBundle).toMatchObject({
+        formatVersion: 2,
+        prompts: [expect.objectContaining({ id: savedPrompt.id, revision: 2 })],
+      });
+      expect(
+        (await call('import_workflows', { bundle: promptBundle })).changed,
+      ).toEqual([]);
+      await call('cancel_run', { id: latestRun.run.id });
+      const unusedPrompt = await call('create_prompt', {
+        name: 'Unused',
+        content: 'Unused guidance',
+      });
+      expect(await call('delete_prompt', { id: unusedPrompt.id })).toEqual({
+        id: unusedPrompt.id,
+      });
+      for (const name of [
         'get_run_briefing',
         'wait_for_run_change',
         'get_run_result',

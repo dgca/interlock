@@ -84,6 +84,15 @@ export function WorkPanel({
           <p className="assignment-prompt">{work.executionInstructions}</p>
         )}
         <p className="assignment-prompt">{work.prompt}</p>
+        {!!work.savedPrompts?.length && (
+          <ul>
+            {work.savedPrompts.map((prompt) => (
+              <li key={prompt.id}>
+                {prompt.name} · revision {prompt.revision}
+              </li>
+            ))}
+          </ul>
+        )}
         <JsonEditor label="Context policy" value={work.context} rows={6} />
         <JsonEditor label="Assignment input" value={work.input} rows={6} />
         <JsonEditor

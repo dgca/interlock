@@ -115,6 +115,12 @@ export const nodeSchema = z.discriminatedUnion('kind', [
     ...nodeBase,
     kind: z.literal('agent'),
     prompt: z.string(),
+    promptIds: z
+      .array(z.string().min(1))
+      .optional()
+      .describe(
+        'Ordered saved prompt IDs. Latest content is captured at workflow run startup; Batch items inherit capture, invoked workflows capture independently.',
+      ),
     context: contextPolicySchema.default({}),
     maxAttempts: z.number().int().min(1).max(10).default(2),
     unclaimedTimeoutMs: z.number().int().min(1).max(31_536_000_000).optional(),
@@ -294,6 +300,7 @@ export interface Run {
   executions: NodeExecution[];
   createdAt: string;
   updatedAt: string;
+  promptSnapshots?: import('./prompts.js').PromptSnapshot[];
 }
 export interface RunAncestry {
   workflowId: string;
@@ -309,6 +316,7 @@ export interface WorkRequest {
   nodeId: string;
   label: string;
   prompt: string;
+  savedPrompts?: import('./prompts.js').PromptSnapshot[];
   executionInstructions?: string;
   input: Json;
   context: ContextPolicy;
@@ -450,6 +458,14 @@ export function hasTimeoutRoute(node: WorkflowNode): boolean {
 
 export function validateDefinition(input: unknown): WorkflowDefinition {
   const d = definitionSchema.parse(input);
+  for (const node of d.nodes)
+    if (
+      node.kind === 'agent' &&
+      new Set(node.promptIds).size !== (node.promptIds?.length ?? 0)
+    )
+      throw new InterlockError(
+        `${node.label}: saved prompt IDs must be unique`,
+      );
   const ids = new Set(d.nodes.map((n) => n.id));
   if (ids.size !== d.nodes.length)
     throw new InterlockError('Node IDs must be unique');
@@ -640,3 +656,14 @@ export {
   waitQuerySchema,
   resultQuerySchema,
 } from './continuation.js';
+export {
+  promptContentSchema,
+  savedPromptSchema,
+  promptIds,
+  snapshotPrompt,
+  composePrompt,
+  type SavedPrompt,
+  type PromptSnapshot,
+  type PromptContent,
+  type PromptUsage,
+} from './prompts.js';

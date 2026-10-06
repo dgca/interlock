@@ -121,6 +121,16 @@ A reported failure or expired claim makes work available again until its attempt
 
 Context requirements are a cooperation contract with the executor. Interlock cannot prove that an external harness created a fresh conversation, restrict that harness's other tools, or erase its history. No native MCP sampling callback is required. Work discovery and submission implement the return path.
 
+## Saved prompts
+
+Core defines prompt content, optional Agent `promptIds`, and pure instruction composition. SQLite stores current prompts and immutable revision records in document collections; Run `promptSnapshots` and assignment `savedPrompts` are compatible optional fields requiring no migration. Runtime protects edits with revisions, reports usage across drafts and every published version, and blocks deletion while references exist. Missing references are publication diagnostics; incomplete drafts remain saveable.
+
+Every non-Batch workflow run captures the latest prompts referenced anywhere in its own published graph at startup. Batch items inherit the enclosing capture, including delayed dispatch. Invoked workflows, including detached work, capture independently when they start. Loops, claim recovery, retries, and restart retain that run's captures. Saved prompt sections precede node task instructions. Context policy and contracts retain their meanings. Compact storage projections omit captures and saved instruction bodies.
+
+Prompt-bearing bundles use format version 2, including current shared prompt records from exported drafts and all versions; prompt-free bundles retain version 1. Import preserves IDs, reuses identical local content, and rejects divergent shared content even with force. Revision history and run captures are excluded from workflow bundles.
+
+The Prompts library and editor use the shared Mantine theme and navigation protection. Dirty prompt text retains its original save revision across external refreshes. Agent settings provide searchable ordered prompt selection, content inspection, and a combined preview above Task instructions. Run inspection shows captured content and revisions.
+
 ## Timers
 
 Duration and timestamp Wait nodes persist `resumeAt` on their execution and stay waiting until that deadline. The runtime resolves the deadline once from a duration or an ISO timestamp at an input path. Wait returns its input unchanged and enforces its output contract. Cancellation prevents continuation; restart retains the deadline. The server checks timers on its one-second engine tick and at operations that advance the engine. An overdue timer resumes on the next check, including after downtime.

@@ -3,7 +3,7 @@ import type { Run, NodeExecution, WorkRequest } from '@interlock/core';
 
 export type RunMetadata = Omit<
   Run,
-  'input' | 'output' | 'value' | 'executions'
+  'input' | 'output' | 'value' | 'executions' | 'promptSnapshots'
 > & { lifecycleRunId: string };
 export type ExecutionMetadata = Omit<
   NodeExecution,
@@ -48,7 +48,7 @@ export function continuationState(db: DatabaseSync, id: string) {
     db
       .prepare(
         `${tree}
-    SELECT json_set(json_remove(d.value, '$.input', '$.output', '$.value', '$.executions'), '$.lifecycleRunId', tree.lifecycle) AS value
+    SELECT json_set(json_remove(d.value, '$.input', '$.output', '$.value', '$.executions', '$.promptSnapshots'), '$.lifecycleRunId', tree.lifecycle) AS value
     FROM tree JOIN documents d ON d.collection = 'runs' AND d.id = tree.id ORDER BY d.rowid
   `,
       )
@@ -70,7 +70,7 @@ export function continuationState(db: DatabaseSync, id: string) {
     db
       .prepare(
         `${tree}
-    SELECT json_remove(d.value, '$.input', '$.output', '$.prompt', '$.executionInstructions', '$.outputSchema', '$.token', '$.error', '$.context.instructions') AS value
+    SELECT json_remove(d.value, '$.input', '$.output', '$.prompt', '$.savedPrompts', '$.executionInstructions', '$.outputSchema', '$.token', '$.error', '$.context.instructions') AS value
     FROM documents d JOIN tree ON json_extract(d.value, '$.runId') = tree.id
     WHERE d.collection = 'work' AND json_extract(d.value, '$.status') IN ('available', 'claimed') ORDER BY d.rowid
   `,

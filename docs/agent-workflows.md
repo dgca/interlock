@@ -225,9 +225,9 @@ Nodes with node-output bindings show a **Reads from [label]** indicator for each
 
 ## Export and import portable bundles
 
-`interlock export WORKFLOW_ID` and MCP `export_workflow` export an `interlock-workflows` bundle with `formatVersion: 1`. The library and Workflow settings export the same bundle format. Workflow settings includes local draft edits without saving them.
+`interlock export WORKFLOW_ID` and MCP `export_workflow` export an `interlock-workflows` bundle with `formatVersion: 1` when no saved prompts are referenced, or `formatVersion: 2` when prompts are included. Prompt-bearing bundles require an Interlock version with Prompts support; earlier readers reject version 2. The library and Workflow settings export the same bundle format. Workflow settings includes local draft edits without saving them.
 
-A bundle contains the root workflow, its owned children, owners, and transitive dependencies from drafts and all published versions. Each record includes a stable ID, name, description, ownership, draft, source draft revision, and consecutive published versions. Missing referenced workflows block export. Runs, claim tokens, and archive flags are excluded. Exporting an owned child includes its owner and siblings to preserve ownership.
+A bundle contains the root workflow, its owned children, owners, and transitive dependencies from drafts and all published versions. Each record includes a stable ID, name, description, ownership, draft, source draft revision, and consecutive published versions. Missing referenced workflows or saved prompts block export. Version-2 bundles include one current prompt record per referenced ID, with name, description, revision, and Markdown content. References in all exported drafts and published versions are included. Prompt revision history and historical run captures are excluded. Runs, claim tokens, and archive flags are excluded. Exporting an owned child includes its owner and siblings to preserve ownership.
 
 ```sh
 interlock export WORKFLOW_ID > workflow.json
@@ -243,7 +243,7 @@ interlock import @workflow.json --revisions '{"WORKFLOW_ID":3}'
 interlock import @workflow.json --force
 ```
 
-`force` allows draft and metadata replacement. It cannot change ownership or overwrite an existing published version with different content. If the two engines independently published different definitions under the same ID and version, import rejects the entire bundle. Resolve that divergence explicitly before deploying. Any invalid graph, missing published dependency, stale draft, or version conflict rolls back all bundle changes. Imported drafts can remain incomplete; imported published versions must pass publication validation.
+`force` allows draft and metadata replacement. It cannot change ownership, overwrite an existing published version with different content, or replace divergent shared prompt content. If the two engines independently published different definitions under the same ID and version, import rejects the entire bundle. Resolve that divergence explicitly before deploying. Any invalid graph, missing workflow or prompt dependency, stale draft, prompt conflict, or version conflict rolls back all bundle changes. Existing identical prompt content reuses the local ID and revision; different content under that ID rejects import, even with `force`. Resolve it through an explicit prompt edit before importing. Names are never used to match or merge prompt identities. Imported drafts can remain incomplete; imported published versions must pass publication validation.
 
 UI import accepts bundles and legacy files. Replacements that need a revision map or `force` use CLI or MCP. The shared API exposes `workflows.export`, `workflows.exportDraft` for unsaved editor content, and `workflows.import`.
 

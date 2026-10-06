@@ -4,6 +4,13 @@ import { createClient } from '@interlock/client';
 export function createMcpClient(url?: string) {
   const client = createClient(url);
   return {
+    prompts: {
+      list: client.prompts.list.query,
+      get: client.prompts.get.query,
+      create: client.prompts.create.mutate,
+      update: client.prompts.update.mutate,
+      delete: client.prompts.delete.mutate,
+    },
     workflows: {
       delete: client.workflows.delete.mutate,
       export: client.workflows.export.query,

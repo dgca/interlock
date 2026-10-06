@@ -4,7 +4,7 @@ import { Button, Group, Modal, Notification, Text } from '@mantine/core';
 import { Outlet, useBlocker, useMatch, useNavigate } from 'react-router';
 import { paths } from './routes/paths';
 import { useActionFeedback } from './lib/useActionFeedback';
-import type { Run, Workflow } from '@interlock/core';
+import type { Run, Workflow, SavedPrompt } from '@interlock/core';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { RunDialog } from './features/runs/RunDialog';
 import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
@@ -13,6 +13,7 @@ import type { Action } from './lib/useActionFeedback';
 
 export type AppContext = {
   workflows: Workflow[];
+  prompts: SavedPrompt[];
   runs: Run[];
   loaded: boolean;
   loadError: string;
@@ -26,7 +27,9 @@ export type AppContext = {
 export function App() {
   const navigate = useNavigate();
   const workflowMatch = useMatch('/workflows/:workflowId');
-  const page = useMatch('/runs/*') ? 'runs' : 'workflows';
+  const runMatch = useMatch('/runs/*');
+  const promptMatch = useMatch('/prompts/*');
+  const page = promptMatch ? 'prompts' : runMatch ? 'runs' : 'workflows';
   const [editorDirty, setEditorDirty] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -36,17 +39,20 @@ export function App() {
       editorDirty && currentLocation.pathname !== nextLocation.pathname,
   );
   const [workflows, setWorkflows] = useState<Workflow[]>([]),
+    [prompts, setPrompts] = useState<SavedPrompt[]>([]),
     [runs, setRuns] = useState<Run[]>([]),
     [connected, setConnected] = useState(false),
     [tick, setTick] = useState(0),
     [runDialog, setRunDialog] = useState<Workflow>();
   const refresh = useCallback(async () => {
-    const [w, r] = await Promise.all([
+    const [w, r, p] = await Promise.all([
       api.workflows.list.query(),
       api.runs.list.query(),
+      api.prompts.list.query(),
     ]);
     setWorkflows(w);
     setRuns(r);
+    setPrompts(p);
     setConnected(true);
     setLoaded(true);
     setLoadError('');
@@ -93,6 +99,7 @@ export function App() {
   };
   const context: AppContext = {
     workflows,
+    prompts,
     runs,
     loaded,
     loadError,
@@ -115,7 +122,13 @@ export function App() {
         page={page}
         connected={connected}
         onNavigate={(next) =>
-          void navigate(next === 'runs' ? paths.runs() : paths.workflows)
+          void navigate(
+            next === 'runs'
+              ? paths.runs()
+              : next === 'prompts'
+                ? paths.prompts
+                : paths.workflows,
+          )
         }
       />
       <main className="main">
@@ -149,7 +162,7 @@ export function App() {
         title="Discard unsaved changes?"
         centered
       >
-        <Text>Your workflow has changes that have not been saved.</Text>
+        <Text>You have changes that have not been saved.</Text>
         <Group justify="flex-end" mt="md">
           <Button
             variant="default"

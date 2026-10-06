@@ -28,11 +28,13 @@ import {
   type WorkflowEdge,
   type WorkflowNode,
   type WorkRequest,
+  composePrompt,
 } from '@interlock/core';
 import { freshContextInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 import { Continuation } from './continuation.js';
+import { Prompts } from './prompts.js';
 
 const now = () => new Date().toISOString();
 const terminal = (s: string) =>
@@ -48,6 +50,7 @@ export interface Worker {
 
 export class Engine {
   readonly continuation: Continuation;
+  readonly prompts: Prompts;
   private localJobs = new Map<string, AbortController>();
   private stopped = false;
   private listeners = new Set<() => void>();
@@ -56,6 +59,7 @@ export class Engine {
     private cwd: string,
   ) {
     this.continuation = new Continuation(store);
+    this.prompts = new Prompts(store);
     // A process interruption gives no evidence that local work or remote side effects completed.
     for (const run of store.runs()) {
       const execution = run.executions.at(-1);
@@ -188,6 +192,18 @@ export class Engine {
     if (definition) {
       const workflows = this.store.workflows();
       for (const [i, node] of definition.nodes.entries()) {
+        if (node.kind === 'agent') {
+          for (const [j, promptId] of (node.promptIds ?? []).entries())
+            if (!this.store.get('prompts', promptId))
+              diagnostics.push({
+                severity: 'error',
+                category: 'publication',
+                code: 'missing_prompt',
+                nodeId: node.id,
+                path: `nodes.${i}.promptIds.${j}`,
+                message: `Saved prompt ${promptId} does not exist.`,
+              });
+        }
         if (node.kind !== 'workflow') continue;
         try {
           validateWorkflowReferences(
@@ -509,6 +525,7 @@ export class Engine {
   private publishVersion(id: string) {
     const w = this.workflow(id);
     const definition = validateDefinition(w.draft);
+    this.prompts.capture(definition);
     validateWorkflowReferences(w.id, definition, this.store.workflows());
     for (const n of definition.nodes) {
       if (
@@ -579,6 +596,10 @@ export class Engine {
       executions: [],
       createdAt: time,
       updatedAt: time,
+      promptSnapshots:
+        batchNodeId && parentRunId
+          ? this.run(parentRunId).promptSnapshots
+          : this.prompts.capture(definition),
     };
     this.save(run);
     this.event(run, 'run.started', `Started ${w.name} v${version}`);
@@ -810,13 +831,20 @@ export class Engine {
           this.finish(run, execution, node, execution.input, 'timeout');
           return true;
         }
+        const savedPrompts = (node.promptIds ?? []).map((id) => {
+          const snapshot = run.promptSnapshots?.find((p) => p.id === id);
+          if (!snapshot)
+            throw new InterlockError(`Missing captured prompt ${id}`);
+          return snapshot;
+        });
         const work: WorkRequest = {
           id: randomUUID(),
           runId: run.id,
           executionId: execution.id,
           nodeId: node.id,
           label: node.label,
-          prompt: node.prompt,
+          prompt: composePrompt(node.prompt, savedPrompts),
+          ...(savedPrompts.length ? { savedPrompts } : {}),
           input: execution.input,
           context: node.context,
           outputSchema: node.outputSchema,

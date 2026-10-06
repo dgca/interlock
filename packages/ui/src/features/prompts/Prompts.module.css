@@ -1,0 +1,40 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+a.row:hover {
+  border-color: var(--accent-border);
+}
+.editor {
+  max-width: 900px;
+}
+.fields {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+.usage {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.usage h2 {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0;
+}

@@ -43,6 +43,7 @@ export function SettingsDialog({
   description,
   definition,
   workflows,
+  prompts = [],
   onClose,
   onApply,
   onDelete,
@@ -63,6 +64,7 @@ export function SettingsDialog({
   creating?: boolean;
   parentBatchId?: string;
   workflows: Workflow[];
+  prompts?: import('@interlock/core').SavedPrompt[];
   onClose: () => void;
   onApply: (settings: Settings) => void;
   onDelete?: () => void;
@@ -286,6 +288,7 @@ export function SettingsDialog({
               )}
               {nodeDraft ? (
                 <NodeInspector
+                  prompts={prompts}
                   node={nodeDraft}
                   creating={creating}
                   workflowId={workflowId}
