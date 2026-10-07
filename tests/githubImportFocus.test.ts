@@ -26,13 +26,11 @@ beforeEach(() => {
       disconnect() {}
     },
   );
-  window.matchMedia = vi
-    .fn()
-    .mockImplementation(() => ({
-      matches: false,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }));
+  window.matchMedia = vi.fn().mockImplementation(() => ({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
