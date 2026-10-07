@@ -6,10 +6,7 @@ import {
   validateDefinition,
   type Json,
 } from '@interlock/core';
-import { importWorkflows } from '../packages/runtime/src/transfer';
-import { workflowBundleSchema } from '../packages/core/src/transfer';
 import { seed } from '../packages/server/src/seed';
-import pokemon from '../docs/examples/pokemon-workflows.json';
 
 const engines: Engine[] = [];
 afterEach(() => {
@@ -220,25 +217,4 @@ it('rolls back a failed starter publication and permits a clean retry', () => {
   seed(engine);
   expect(engine.store.workflows()).toHaveLength(1);
   expect(engine.store.workflows()[0].latestVersion).toBe(1);
-});
-
-it('imports the optional Pokémon demos with their published Batch reference intact', () => {
-  const engine = setup();
-  importWorkflows(engine.store, workflowBundleSchema.parse(pokemon));
-  const workflows = engine.store.workflows();
-  expect(workflows.map((w) => w.name).sort()).toEqual([
-    'Build a team roster',
-    'Size up a Pokémon',
-  ]);
-  const roster = workflows.find((w) => w.name === 'Build a team roster')!;
-  const scout = workflows.find((w) => w.name === 'Size up a Pokémon')!;
-  const definition = engine.store.getVersion(roster.id, 1)!.definition;
-  expect(() => validateDefinition(definition)).not.toThrow();
-  expect(definition.nodes.find((n) => n.kind === 'workflow')).toMatchObject({
-    workflowId: scout.id,
-    version: 1,
-    batchId: 'scouting',
-  });
-  expect(engine.store.getVersion(scout.id, 1)).toBeDefined();
-  expect(engine.store.runs()).toEqual([]);
 });

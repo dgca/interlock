@@ -36,11 +36,6 @@ try {
   );
   assert(packed.files.some((file) => file.path === 'dist/cli.js'));
   assert(
-    packed.files.some(
-      (file) => file.path === 'docs/examples/pokemon-workflows.json',
-    ),
-  );
-  assert(
     !packed.files.some(
       (file) =>
         file.path.startsWith('.interlock/') ||

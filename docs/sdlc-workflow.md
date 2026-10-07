@@ -45,8 +45,6 @@ Human decisions pause the workflow. The agent shows the artifact and focused que
 
 Final review checks the complete task diff, observable acceptance evidence, and repository standards at the exact committed candidate. Findings return to implementation. Later review can focus on localized fixes while preserving verified evidence with its original commit; broader changes require a full review. Delivery checks that the branch still matches the reviewed commit.
 
-## Existing libraries and optional examples
+## Existing libraries
 
 Startup seeds the SDLC starter once in a fresh library. Upgrading preserves existing workflows and published versions, including older examples or a customized SDLC. Deleting all workflows does not seed them again. Starter updates apply to new libraries; they do not rewrite your copies or active runs.
-
-To explore node types without a software change, download and import the [Pokémon example bundle](examples/pokemon-workflows.json). It contains **Size up a Pokémon** and **Build a team roster**. Run the former with `{"name":"pikachu"}` or the latter with `{"candidates":[{"name":"pikachu"},{"name":"gengar"},{"name":"togepi"}]}`. These examples use the public PokéAPI and writing assignments. Their import preserves the reusable workflow reference.
