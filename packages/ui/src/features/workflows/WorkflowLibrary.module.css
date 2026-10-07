@@ -144,3 +144,20 @@
   color: var(--text-dim);
   margin-top: 30px;
 }
+
+@media (max-width: 600px) {
+  .header {
+    flex-wrap: wrap;
+  }
+  .header > :global(.actions) {
+    flex-wrap: wrap;
+  }
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-bottom: 10px;
+  }
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
