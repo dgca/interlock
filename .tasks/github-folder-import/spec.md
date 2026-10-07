@@ -25,7 +25,6 @@ A changed URL, cancelled load, or closed dialog invalidates the prior selection.
 - AC9: Relevant native tests, required build and formatting checks pass on the final candidate. Document changed user/API behavior and check affected MCP guidance where applicable. No change weakens existing validation, ownership, prompt-conflict or publication rules.
 - AC10: Final review independently inspects the complete task diff and observable acceptance evidence at the final commit. Record any verification gaps and risks explicitly.
 
-
 ## Decisions, risks, and questions
 
 All criteria trace to the supplied request and shared acceptance checklist. Existing local-file import keeps its current single-file behavior. Remote selections use a strict no-overwrite policy even though the existing portable import API also offers explicit force and draft revision options. This does not remove those existing operations.

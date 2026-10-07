@@ -159,6 +159,10 @@ Bash scripts read JSON from stdin and must write one JSON value to stdout. Write
 
 A thrown error, nonzero exit, timeout, or invalid output fails the script step. Scripts are not retried automatically.
 
+The library **Import** dialog accepts local JSON files and public GitHub folder links. Choose **GitHub folder**, paste an HTTPS `github.com/OWNER/REPO/tree/REF/FOLDER` URL, and select **Find workflows**. Review each workflow's description, source file, and dependencies, then select the workflows and choose **Import selected**. Branch names containing slashes and commit links are supported. Discovery reads direct JSON files only and pins the preview to a commit. Invalid files remain unselectable and do not hide valid workflows.
+
+GitHub selections import together. Any invalid selection or differing existing draft, metadata, ownership, published version, or saved prompt rejects the whole selection without changing the library. Portable bundles retain their IDs and pins; identical portable reimports are no-ops. Legacy files create a new workflow each time. Import saves definitions and prompts without starting runs. Local files remain available under **Local file**. GitHub import supports public repositories only, with at most 50 direct JSON files and 2 MiB per response or file; requests time out after 60 seconds. Private authentication, recursion, and automatic updates are not supported.
+
 Scripts execute with your user account's filesystem, environment, and network access. They are not sandboxed, so review scripts before running imported workflows.
 
 ## Storage and configuration

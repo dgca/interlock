@@ -20,5 +20,4 @@ Fixture README documents the existing import semantics and individual cases. Use
 
 Work only in the assigned disposable repository and temporary application databases. Keep code and task commits local; do not push, create a PR, merge, deploy, publish a package, change the original library workflows, or modify primary main. Store verification observations outside the committed checkout. Finish locally with the exact reviewed commit and truthful evidence. No deliberately injected bugs or failures are part of this ordinary build comparison.
 
-
 The shared acceptance checklist is at /Users/dan/.codex/interlock-comparison-2026-10-07.pZ2oTo/acceptance.md.

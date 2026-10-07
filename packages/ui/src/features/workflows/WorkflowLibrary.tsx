@@ -1,6 +1,6 @@
 import type { Action } from '../../lib/useActionFeedback';
 import { ActionIcon, Menu, Tabs, TextInput } from '@mantine/core';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import {
   ArrowRight,
@@ -18,6 +18,7 @@ import type { Workflow } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { Badge } from '../../components/Badge/Badge';
 import { api, download } from '../../lib/api';
+import { ImportWorkflowDialog } from './ImportWorkflowDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
@@ -33,6 +34,11 @@ export function WorkflowLibrary({
 }) {
   const [query, setQuery] = useState(''),
     [archived, setArchived] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!importing) importTrigger.current?.focus();
+  }, [importing]);
   const [deleting, setDeleting] = useState<Workflow>();
   const file = useRef<HTMLInputElement>(null);
   const visible = workflows.filter(
@@ -49,7 +55,12 @@ export function WorkflowLibrary({
           <p>Create, organize, and run your workflows.</p>
         </div>
         <div className="actions">
-          <Button onClick={() => file.current?.click()}>
+          <Button
+            onClick={(event) => {
+              importTrigger.current = event.currentTarget;
+              setImporting(true);
+            }}
+          >
             <Upload />
             Import
           </Button>
@@ -253,6 +264,16 @@ export function WorkflowLibrary({
           </div>
         </Tabs.Panel>
       </Tabs>
+      {importing && (
+        <ImportWorkflowDialog
+          act={act}
+          onClose={() => setImporting(false)}
+          onLocalFile={() => {
+            setImporting(false);
+            file.current?.click();
+          }}
+        />
+      )}
       {deleting && (
         <DeleteWorkflowDialog
           workflow={deleting}

@@ -19,6 +19,9 @@ import {
 } from '../../runtime/src/transfer.js';
 import { workflowBundleSchema } from '../../core/src/transfer.js';
 
+import { GithubImporter, githubSourceSchema } from './githubImport.js';
+const githubImporter = new GithubImporter();
+
 const t = initTRPC
   .context<{
     engine: Engine;
@@ -66,6 +69,28 @@ export const appRouter = t.router({
       .mutation(({ ctx, input }) => ctx.engine.prompts.delete(input.id)),
   }),
   workflows: t.router({
+    discoverGithub: p
+      .input(z.object({ url: z.string().max(2000) }))
+      .query(({ ctx, input, signal }) =>
+        githubImporter.discover(input.url, ctx.signal ?? signal),
+      ),
+    importGithub: p
+      .input(
+        z
+          .object({
+            source: githubSourceSchema,
+            files: z.array(z.string().min(1).max(255)).min(1).max(50),
+          })
+          .strict(),
+      )
+      .mutation(({ ctx, input, signal }) =>
+        githubImporter.import(
+          ctx.engine,
+          input.source,
+          input.files,
+          ctx.signal ?? signal,
+        ),
+      ),
     export: p
       .input(id)
       .query(({ ctx, input }) => exportWorkflows(ctx.engine.store, input.id)),

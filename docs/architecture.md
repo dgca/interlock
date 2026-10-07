@@ -23,6 +23,8 @@ SQLite stores workflow, version, run, assignment, and event documents. Each sync
 
 The root `@type_of/interlock` package bundles the server, CLI, and MCP code into `dist/cli.js` and copies the built UI into `dist/ui`. Private workspace packages are implementation modules. Changesets versions the root package; CLI, UI, and MCP versions come from `packages/core/src/version.ts`, which reads the root manifest. See [Release Interlock](releases.md).
 
+GitHub folder discovery runs in the server using bounded public GitHub API requests. Core parses existing import documents. Runtime validates each export in an isolated in-memory store and imports the selected set through one storage transaction. Discovery pins a branch to a commit; import re-fetches only selected direct files at that commit and checks current conflicts. This path has no force or revision replacement options. The existing bundle import API retains its explicit replacement controls.
+
 ## Workflow definitions
 
 A workflow has a stable ID, mutable metadata, and an editable draft. Publishing validates graph routes, JSON schemas, and child version references, then creates an immutable version. Draft revisions reject stale edits. Existing runs read their published version, including when the workflow is renamed or its draft changes.
