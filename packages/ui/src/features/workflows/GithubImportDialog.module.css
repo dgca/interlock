@@ -1,0 +1,46 @@
+.body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.source {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+.source > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.identity {
+  color: var(--muted);
+}
+.choice {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+.description {
+  margin: 7px 0 0 26px;
+}
+.description summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.actions > :first-child {
+  margin-right: auto;
+}
+@media (max-width: 600px) {
+  .source {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .actions > :first-child {
+    flex-basis: 100%;
+  }
+}

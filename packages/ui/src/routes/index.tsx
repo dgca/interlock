@@ -39,13 +39,15 @@ function PromptRoute() {
 }
 
 function LibraryRoute() {
-  const { workflows, act, loaded, loadError } = useOutletContext<AppContext>();
+  const { workflows, act, refresh, loaded, loadError } =
+    useOutletContext<AppContext>();
   const navigate = useNavigate();
   if (!loaded) return <Loading error={loadError} />;
   return (
     <WorkflowLibrary
       workflows={workflows}
       act={act}
+      refresh={refresh}
       onOpen={(id) => void navigate(paths.workflow(id))}
     />
   );

@@ -245,7 +245,7 @@ interlock import @workflow.json --force
 
 `force` allows draft and metadata replacement. It cannot change ownership, overwrite an existing published version with different content, or replace divergent shared prompt content. If the two engines independently published different definitions under the same ID and version, import rejects the entire bundle. Resolve that divergence explicitly before deploying. Any invalid graph, missing workflow or prompt dependency, stale draft, prompt conflict, or version conflict rolls back all bundle changes. Existing identical prompt content reuses the local ID and revision; different content under that ID rejects import, even with `force`. Resolve it through an explicit prompt edit before importing. Names are never used to match or merge prompt identities. Imported drafts can remain incomplete; imported published versions must pass publication validation.
 
-UI import accepts bundles and legacy files. Replacements that need a revision map or `force` use CLI or MCP. The shared API exposes `workflows.export`, `workflows.exportDraft` for unsaved editor content, and `workflows.import`.
+UI **Import > Local file** accepts bundles and legacy files. **Import > GitHub folder** discovers public direct-folder files, shows their dependencies, and imports an explicit selection atomically without replacement controls. See [GitHub import](github-import.md) for the separate discovery and selection API contracts. Replacements that need a revision map or `force` use CLI or MCP. The shared API exposes `workflows.export`, `workflows.exportDraft` for unsaved editor content, and `workflows.import`.
 
 ## Archive, restore, or delete
 

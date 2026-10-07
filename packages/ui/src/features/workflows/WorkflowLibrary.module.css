@@ -144,3 +144,14 @@
   color: var(--text-dim);
   margin-top: 30px;
 }
+
+@media (max-width: 600px) {
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-bottom: 10px;
+  }
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

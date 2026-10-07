@@ -8,21 +8,29 @@ export function Modal({
   children,
   className = '',
   size = 550,
+  closeDisabled = false,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   className?: string;
   size?: number;
+  closeDisabled?: boolean;
 }) {
   return (
     <MantineModal
       opened
       title={title}
-      onClose={onClose}
+      onClose={() => {
+        if (!closeDisabled) onClose();
+      }}
       size={size}
       classNames={{ content: className }}
-      closeButtonProps={{ 'aria-label': 'Close dialog' }}
+      closeButtonProps={{
+        'aria-label': 'Close dialog',
+        disabled: closeDisabled,
+      }}
+      closeOnEscape={!closeDisabled}
       closeOnClickOutside={false}
     >
       {children}

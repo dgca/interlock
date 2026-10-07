@@ -114,6 +114,10 @@ Failed executions can be retried from the inspector. Retrying a failed Batch pre
 
 Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library and from each card's menu in **Child workflows**. Inside a workflow, the three-dot menu beside **Run** contains **Workflow settings** and **Delete workflow**. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows block deletion.
 
+### Import from a public GitHub folder
+
+In **Workflows**, choose **Import > GitHub folder**, paste a public repository folder URL, and click **Load workflows**. Select the roots you want and explicitly import them. Portable choices include their workflow and saved-prompt dependencies. The entire selection succeeds together or changes nothing on conflict. Import never starts runs or executes scripts. Identical portable reimports are no-ops; legacy files create new workflows. **Import > Local file** retains local import. See [GitHub import](docs/github-import.md) for an example, supported sources, bounds, and recovery.
+
 ### Waits and unanswered assignments
 
 Add a **Wait** node to pause for a duration or until a timestamp from input. The duration editor accepts milliseconds, seconds, minutes, hours, or days. Wait passes its input through unchanged and stores its deadline in SQLite. Cancel stops the wait; restarting resumes it from the original deadline.

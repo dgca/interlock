@@ -18,6 +18,7 @@ import type { Workflow } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { Badge } from '../../components/Badge/Badge';
 import { api, download } from '../../lib/api';
+import { GithubImportDialog } from './GithubImportDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
@@ -26,14 +27,18 @@ export function WorkflowLibrary({
   workflows,
   onOpen,
   act,
+  refresh,
 }: {
   workflows: Workflow[];
   onOpen: (id: string) => void;
   act: Action;
+  refresh: () => Promise<void>;
 }) {
   const [query, setQuery] = useState(''),
     [archived, setArchived] = useState(false);
   const [deleting, setDeleting] = useState<Workflow>();
+  const [github, setGithub] = useState(false);
+  const importButton = useRef<HTMLButtonElement>(null);
   const file = useRef<HTMLInputElement>(null);
   const visible = workflows.filter(
     (w) =>
@@ -49,10 +54,22 @@ export function WorkflowLibrary({
           <p>Create, organize, and run your workflows.</p>
         </div>
         <div className="actions">
-          <Button onClick={() => file.current?.click()}>
-            <Upload />
-            Import
-          </Button>
+          <Menu position="bottom-end">
+            <Menu.Target>
+              <Button ref={importButton}>
+                <Upload />
+                Import
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item onClick={() => file.current?.click()}>
+                Local file
+              </Menu.Item>
+              <Menu.Item onClick={() => setGithub(true)}>
+                GitHub folder
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
           <Button
             variant="primary"
             onClick={() =>
@@ -253,6 +270,15 @@ export function WorkflowLibrary({
           </div>
         </Tabs.Panel>
       </Tabs>
+      {github && (
+        <GithubImportDialog
+          refresh={refresh}
+          onClose={() => {
+            setGithub(false);
+            requestAnimationFrame(() => importButton.current?.focus());
+          }}
+        />
+      )}
       {deleting && (
         <DeleteWorkflowDialog
           workflow={deleting}

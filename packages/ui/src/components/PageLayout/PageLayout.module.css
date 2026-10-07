@@ -26,3 +26,9 @@
     padding: 0 24px 24px;
   }
 }
+
+@media (max-width: 600px) {
+  .header {
+    flex-wrap: wrap;
+  }
+}

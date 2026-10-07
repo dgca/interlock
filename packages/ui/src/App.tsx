@@ -19,6 +19,7 @@ export type AppContext = {
   loadError: string;
   tick: number;
   act: Action;
+  refresh: () => Promise<void>;
   onDirty: (dirty: boolean) => void;
   onSaved: (workflow: Workflow) => void;
   onRun: (workflow: Workflow) => void;
@@ -105,6 +106,7 @@ export function App() {
     loadError,
     tick,
     act,
+    refresh,
     onDirty: setEditorDirty,
     onSaved: (w) =>
       setWorkflows((all) =>

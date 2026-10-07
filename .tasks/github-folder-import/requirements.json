@@ -1,0 +1,42 @@
+[
+  {
+    "id": "AC1",
+    "text": "Accept pinned commit and slash-branch public GitHub direct-folder URLs with useful identities and dependency metadata."
+  },
+  {
+    "id": "AC2",
+    "text": "Preserve legacy and portable local-file imports; exclude invalid/unrelated/nested files."
+  },
+  {
+    "id": "AC3",
+    "text": "Explicit selection and import only; preserve owned children, pinned versions, and saved prompts."
+  },
+  {
+    "id": "AC4",
+    "text": "Import does not execute scripts or start runs; identical portable imports are no-ops; legacy creates new."
+  },
+  {
+    "id": "AC5",
+    "text": "Validate and commit the entire selection atomically, preserving drafts, versions, ownership, and prompt conflict rules including post-preview conflicts."
+  },
+  {
+    "id": "AC6",
+    "text": "Actionable URL, folder, parse, shape, missing dependency, empty, network, rejection and rate-limit feedback with recovery."
+  },
+  {
+    "id": "AC7",
+    "text": "Latest source controls results and import; clear cancellation and retry behavior."
+  },
+  {
+    "id": "AC8",
+    "text": "Pointer and keyboard journeys with focus recovery and desktop/narrow layouts."
+  },
+  {
+    "id": "AC9",
+    "text": "Relevant tests, build, formatting, documentation and affected MCP audit pass."
+  },
+  {
+    "id": "AC10",
+    "text": "Independent full-diff final review with exact clean commit and evidence gaps."
+  }
+]
