@@ -163,6 +163,8 @@ The library **Import** dialog accepts local JSON files and public GitHub folder 
 
 GitHub selections import together. Any invalid selection or differing existing draft, metadata, ownership, published version, or saved prompt rejects the whole selection without changing the library. Portable bundles retain their IDs and pins; identical portable reimports are no-ops. Legacy files create a new workflow each time. Import saves definitions and prompts without starting runs. Local files remain available under **Local file**. GitHub import supports public repositories only, with at most 50 direct JSON files and 2 MiB per response or file; requests time out after 60 seconds. Private authentication, recursion, and automatic updates are not supported.
 
+Folder metadata uses GitHub's public API; file downloads use raw GitHub URLs pinned to the resolved commit. Rate-limit feedback includes retry timing when GitHub provides it. If an import response is lost, inspect the library before retrying, especially for legacy files: the import may have completed. A confirmed rejection reports **Nothing imported**. A library refresh failure after success does not undo the import.
+
 Scripts execute with your user account's filesystem, environment, and network access. They are not sandboxed, so review scripts before running imported workflows.
 
 ## Storage and configuration

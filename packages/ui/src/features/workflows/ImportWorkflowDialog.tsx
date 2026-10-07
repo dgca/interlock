@@ -73,8 +73,12 @@ export function ImportWorkflowDialog({
             files: selected,
           });
         } catch (error) {
-          setError(errorMessage(error));
-          throw error;
+          const detail = errorMessage(error);
+          const message = detail.startsWith('Nothing imported:')
+            ? detail
+            : `The import result could not be confirmed. Inspect the library before retrying, especially for legacy files. ${detail}`;
+          setError(message);
+          throw new Error(message);
         }
         onClose();
       }, 'Selected workflows imported.');

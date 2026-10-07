@@ -75,6 +75,119 @@ it('resolves slash branches, freezes commit and excludes nested, symlink, unrela
     .mocked(fetcher)
     .mock.calls.filter((c) => String(c[0]).includes('/contents/')))
     expect(new URL(String(call[0])).searchParams.get('ref')).toBe(commit);
+  const downloads = vi
+    .mocked(fetcher)
+    .mock.calls.filter(
+      (call) =>
+        new URL(String(call[0])).hostname === 'raw.githubusercontent.com',
+    );
+  expect(downloads).toHaveLength(3);
+  for (const call of downloads)
+    expect(new URL(String(call[0])).pathname).toMatch(
+      new RegExp(`^/owner/repo/${commit}/workflows/`),
+    );
+  expect(
+    vi
+      .mocked(fetcher)
+      .mock.calls.some((call) =>
+        String(call[0]).includes('/contents/workflows/'),
+      ),
+  ).toBe(false);
+});
+
+it.each(['GitHub rejected', 'Cannot reach GitHub', 'GitHub returned HTTP'])(
+  'keeps valid files discoverable when invalid content includes %s',
+  async (workflowId) => {
+    const definition = blankDefinition();
+    definition.nodes[1] = nodeSchema.parse({
+      id: 'agent',
+      kind: 'workflow',
+      label: 'Missing child',
+      workflowId,
+      version: 1,
+    });
+    const invalid = {
+      format: 'interlock-workflows',
+      formatVersion: 1,
+      rootId: 'root',
+      workflows: [
+        {
+          id: 'root',
+          name: 'Broken',
+          description: '',
+          ownerWorkflowId: null,
+          draft: definition,
+          draftRevision: 1,
+          versions: [],
+        },
+      ],
+    };
+    const result = await new GithubImporter(
+      fixture({
+        'bad.json': invalid,
+        'good.json': legacy,
+      }),
+    ).discover(url);
+    expect(result.items.map((item) => [item.file, item.valid])).toEqual([
+      ['bad.json', false],
+      ['good.json', true],
+    ]);
+    expect(result.items[0].error).toContain(
+      `missing workflow dependency ${workflowId}`,
+    );
+  },
+);
+
+it('keeps malformed workflow diagnostics concise and actionable', async () => {
+  const definition = blankDefinition();
+  const invalid = structuredClone(legacy) as any;
+  invalid.definition = definition;
+  invalid.definition.nodes[1].kind = 'unsupported';
+  const result = await new GithubImporter(
+    fixture({ 'bad.json': invalid }),
+  ).discover(url);
+  expect(result.items[0].valid).toBe(false);
+  expect(result.items[0].error).toBe(
+    'Invalid workflow at definition.nodes.1.kind: Unsupported node kind. Correct the export file.',
+  );
+});
+
+it('stops discovery on actual download transport failures', async () => {
+  const base = fixture();
+  for (const failure of ['http', 'stream']) {
+    const fetcher: typeof fetch = (input, init) => {
+      if (new URL(String(input)).hostname !== 'raw.githubusercontent.com')
+        return base(input, init);
+      return Promise.resolve(
+        failure === 'http'
+          ? new Response('', { status: 503 })
+          : new Response(
+              new ReadableStream({
+                start(controller) {
+                  controller.error(new Error('connection lost'));
+                },
+              }),
+            ),
+      );
+    };
+    await expect(new GithubImporter(fetcher).discover(url)).rejects.toThrow(
+      failure === 'http'
+        ? 'GitHub returned HTTP 503'
+        : 'GitHub response was interrupted',
+    );
+  }
+});
+
+it('shows GitHub retry metadata when rate limited', async () => {
+  const fetcher = vi.fn().mockResolvedValue(
+    new Response('', {
+      status: 429,
+      headers: { 'retry-after': '30' },
+    }),
+  );
+  await expect(new GithubImporter(fetcher).discover(url)).rejects.toThrow(
+    'Retry after 30 seconds',
+  );
 });
 
 it('rejects unsupported URLs, missing folders and public API errors with recovery feedback', async () => {
@@ -196,7 +309,7 @@ it('rejects cross-file and late conflicts with complete workflow and prompt roll
     const before = target.workflows();
     await expect(
       importer.import(b, preview.source, ['legacy.json', 'bundle.json']),
-    ).rejects.toThrow('Published version conflict');
+    ).rejects.toThrow('Nothing imported: Published version conflict');
     expect(target.workflows()).toEqual(before);
     expect(target.list('prompts')).toEqual([]);
     b.update(w.id, { name: 'Changed since preview' });

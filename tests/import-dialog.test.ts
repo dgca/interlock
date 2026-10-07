@@ -103,7 +103,7 @@ async function click(text: string) {
 it('requires explicit selection and import, renders descriptions as text and retains error for retry', async () => {
   calls.discover.mockResolvedValue(preview);
   calls.import
-    .mockRejectedValueOnce(new Error('Late conflict'))
+    .mockRejectedValueOnce(new Error('Nothing imported: Late conflict'))
     .mockResolvedValue({ changed: [] });
   await input('https://github.com/o/r/tree/main/workflows');
   await click('Find workflows');
@@ -121,6 +121,7 @@ it('requires explicit selection and import, renders descriptions as text and ret
   );
   await click('Import selected');
   expect(document.body.textContent).toContain('Late conflict');
+  expect(document.body.textContent).not.toContain('could not be confirmed');
   expect(close).not.toHaveBeenCalled();
   await click('Import selected');
   expect(close).toHaveBeenCalledTimes(1);
@@ -128,6 +129,27 @@ it('requires explicit selection and import, renders descriptions as text and ret
     source,
     files: ['one.json'],
   });
+});
+it('warns to inspect the library before retrying an uncertain import', async () => {
+  calls.discover.mockResolvedValue(preview);
+  calls.import.mockRejectedValue(new Error('Connection lost'));
+  await input('https://github.com/o/r/tree/main/workflows');
+  await click('Find workflows');
+  await act(async () =>
+    (
+      document.querySelector('input[type="checkbox"]')! as HTMLInputElement
+    ).click(),
+  );
+  await click('Import selected');
+  expect(document.body.textContent).toContain(
+    'The import result could not be confirmed',
+  );
+  expect(document.body.textContent).toContain(
+    'Inspect the library before retrying, especially for legacy files',
+  );
+  expect(document.body.textContent).not.toContain('Nothing imported:');
+  expect(close).not.toHaveBeenCalled();
+  expect(calls.import).toHaveBeenCalledTimes(1);
 });
 it('discards slow prior results after source edits, and closing never imports', async () => {
   let resolve!: (value: typeof preview) => void;

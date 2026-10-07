@@ -49,7 +49,7 @@ export function WorkflowLibrary({
   );
   return (
     <div className={layout.page}>
-      <header className={layout.header}>
+      <header className={`${layout.header} ${styles.header}`}>
         <div>
           <h1>Workflows</h1>
           <p>Create, organize, and run your workflows.</p>

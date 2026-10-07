@@ -35,6 +35,18 @@ const encodePath = (path: string) =>
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_FILES = 50;
 
+class GithubTransportError extends InterlockError {}
+
+function importErrorMessage(error: unknown) {
+  if (error instanceof z.ZodError) {
+    const issue = error.issues[0];
+    const reason =
+      issue.path.at(-1) === 'kind' ? 'Unsupported node kind' : issue.message;
+    return `Invalid workflow at ${issue.path.join('.') || 'document'}: ${reason}. Correct the export file.`;
+  }
+  return error instanceof Error ? error.message : 'Cannot read workflow file';
+}
+
 export class GithubImporter {
   constructor(private fetcher: typeof fetch = fetch) {}
   private async request(
@@ -45,19 +57,22 @@ export class GithubImporter {
   ) {
     let response: Response;
     try {
-      response = await this.fetcher(`https://api.github.com${path}`, {
-        signal,
-        redirect: 'error',
-        headers: {
-          Accept: raw
-            ? 'application/vnd.github.raw+json'
-            : 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          'User-Agent': 'Interlock',
+      response = await this.fetcher(
+        `${raw ? 'https://raw.githubusercontent.com' : 'https://api.github.com'}${path}`,
+        {
+          signal,
+          redirect: 'error',
+          headers: {
+            Accept: raw
+              ? 'application/vnd.github.raw+json'
+              : 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+            'User-Agent': 'Interlock',
+          },
         },
-      });
+      );
     } catch (error) {
-      throw new InterlockError(
+      throw new GithubTransportError(
         signal.aborted
           ? 'GitHub request cancelled or timed out. Retry discovery.'
           : `Cannot reach GitHub. Check your connection and retry. ${error instanceof Error ? error.message : ''}`,
@@ -66,11 +81,20 @@ export class GithubImporter {
     if (!response.ok) {
       if (response.status === 404 || (resolvingRef && response.status === 422))
         return undefined;
-      if (response.status === 403 || response.status === 429)
-        throw new InterlockError(
-          'GitHub rejected the request or its public API rate limit was reached. Wait and retry.',
+      if (response.status === 403 || response.status === 429) {
+        const retry = response.headers.get('retry-after');
+        const reset = Number(response.headers.get('x-ratelimit-reset'));
+        const guidance =
+          retry && /^\d+$/.test(retry)
+            ? ` Retry after ${retry} seconds.`
+            : Number.isFinite(reset) && reset > 0
+              ? ` Retry after ${new Date(reset * 1000).toISOString()}.`
+              : '';
+        throw new GithubTransportError(
+          `GitHub rejected the request or its public API rate limit was reached. Wait and retry.${guidance}`,
         );
-      throw new InterlockError(
+      }
+      throw new GithubTransportError(
         `GitHub returned HTTP ${response.status}. Retry discovery.`,
       );
     }
@@ -80,7 +104,7 @@ export class GithubImporter {
       );
     const reader = response.body?.getReader();
     if (!reader)
-      throw new InterlockError(
+      throw new GithubTransportError(
         'GitHub returned an empty response. Retry discovery.',
       );
     const chunks: Uint8Array[] = [];
@@ -96,15 +120,22 @@ export class GithubImporter {
           );
         chunks.push(result.value);
       }
+    } catch (error) {
+      if (error instanceof InterlockError) throw error;
+      throw new GithubTransportError(
+        signal.aborted
+          ? 'GitHub request cancelled or timed out. Retry discovery.'
+          : 'GitHub response was interrupted. Retry discovery.',
+      );
     } finally {
-      await reader.cancel();
+      await reader.cancel().catch(() => {});
     }
     const text = Buffer.concat(chunks).toString('utf8');
     if (raw) return text;
     try {
       return JSON.parse(text);
     } catch {
-      throw new InterlockError(
+      throw new GithubTransportError(
         'GitHub returned an invalid response. Retry discovery.',
       );
     }
@@ -148,7 +179,7 @@ export class GithubImporter {
     if (file.size > MAX_BYTES)
       throw new InterlockError('File exceeds the 2 MiB import limit.');
     const text = await this.request(
-      `/repos/${source.owner}/${source.repo}/contents/${encodePath(file.path)}?ref=${source.commit}`,
+      `/${source.owner}/${source.repo}/${source.commit}/${encodePath(file.path)}`,
       signal,
       true,
     );
@@ -266,14 +297,7 @@ export class GithubImporter {
         });
       } catch (error) {
         if (active.aborted) throw error;
-        const message =
-          error instanceof Error ? error.message : 'Cannot read workflow file';
-        if (
-          /Cannot reach GitHub|GitHub rejected|GitHub returned HTTP/.test(
-            message,
-          )
-        )
-          throw error;
+        if (error instanceof GithubTransportError) throw error;
         items.push({
           file: file.name,
           valid: false as const,
@@ -281,7 +305,7 @@ export class GithubImporter {
           description: '',
           workflows: [],
           prompts: [],
-          error: message,
+          error: importErrorMessage(error),
         });
       }
     }
@@ -293,30 +317,36 @@ export class GithubImporter {
     names: string[],
     signal?: AbortSignal,
   ) {
-    const source = githubSourceSchema.parse(sourceData);
-    if (!names.length || new Set(names).size !== names.length)
-      throw new InterlockError('Select one or more distinct workflow files.');
-    const active = this.scope(signal);
-    const files = await this.directory(source, active);
-    const data = [];
-    for (const name of names) {
-      const file = files.find((item) => item.name === name);
-      if (!file)
-        throw new InterlockError(
-          `Selected file ${name} is not a direct JSON file in this folder. Discover again.`,
-        );
-      const document = await this.read(source, file, active);
-      if (
-        !document ||
-        typeof document !== 'object' ||
-        !('format' in document || 'definition' in document)
-      )
-        throw new InterlockError(
-          `Selected file ${name} is not a workflow export.`,
-        );
-      data.push(document);
+    try {
+      const source = githubSourceSchema.parse(sourceData);
+      if (!names.length || new Set(names).size !== names.length)
+        throw new InterlockError('Select one or more distinct workflow files.');
+      const active = this.scope(signal);
+      const files = await this.directory(source, active);
+      const data = [];
+      for (const name of names) {
+        const file = files.find((item) => item.name === name);
+        if (!file)
+          throw new InterlockError(
+            `Selected file ${name} is not a direct JSON file in this folder. Discover again.`,
+          );
+        const document = await this.read(source, file, active);
+        if (
+          !document ||
+          typeof document !== 'object' ||
+          !('format' in document || 'definition' in document)
+        )
+          throw new InterlockError(
+            `Selected file ${name} is not a workflow export.`,
+          );
+        data.push(document);
+      }
+      active.throwIfAborted();
+      return importSelection(engine, data);
+    } catch (error) {
+      throw new InterlockError(
+        `Nothing imported: ${importErrorMessage(error)}`,
+      );
     }
-    active.throwIfAborted();
-    return importSelection(engine, data);
   }
 }
