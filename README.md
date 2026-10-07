@@ -23,21 +23,25 @@ Keep the terminal running while you use Interlock. Closing the browser does not 
 
 ## Run your first workflow
 
-The initial library includes **Size up a Pokémon** and **Build a team roster**, editable examples that combine a Fetch of the public PokéAPI, a JavaScript Script, a Condition branch, an Agent assignment, and a Batch that runs a workflow once per candidate.
+New libraries include a published **SDLC workflow** for planning, implementing, and reviewing a software change. It creates a task branch, saves planning artifacts, and commits the completed change. It finishes locally by default. Existing libraries are preserved when you upgrade.
+
+Use a coding agent with access to your Git checkout, files, and development commands. The final review requires a fresh session or an isolated subagent without the implementation conversation. Interlock coordinates the work but does not launch that reviewer itself.
 
 1. Select **Connect with MCP** in the sidebar.
 2. Follow the instructions for Codex, Claude, OpenCode, or another MCP client.
 3. Restart or reconnect your client so it can discover the Interlock tools.
-4. Ask your agent:
+4. Open your target Git project in the agent and ask it:
 
    ```text
-   Find the Interlock workflow "Size up a Pokémon" and run it with
-   {"name":"pikachu"}. Complete its assignments, then return the result.
+   Find the Interlock workflow "SDLC workflow" and run it with
+   {"request":"Improve this project's setup instructions and verify the documented commands."}.
+   Complete its assignments, pause for unresolved human decisions, and use
+   a fresh session or isolated subagent for the final review.
    ```
 
 5. Open **Runs → Active** and select the execution to follow its steps. Completed, failed, and cancelled executions appear in **History**.
 
-Your agent needs access to the tools required by the assignment; this example's assignment is a self-contained writing task, so no extra tools are needed. Its tool approval settings still apply.
+Replace the example request with the change you want. The workflow resolves the target repository and artifact directory, follows that repository's instructions, and asks when a consequential decision remains unresolved. Set `reviewPolicy` to `always` to approve each planning artifact, or `createPr` to `true` to request PR delivery. Your agent's tool approval settings still apply. See [Use the SDLC workflow](docs/sdlc-workflow.md) for inputs, executor requirements, and resuming work.
 
 The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by the same process as the UI and engine. Keep that process running. Upgrading and restarting at the same address preserves your agent configuration. The dialog also provides a stdio fallback for clients that need it. See [Connect a harness](docs/connect-harness.md) for configuration and the assignment loop.
 
@@ -55,7 +59,7 @@ Entry → Batch
         └─ Out → Synthesis → Exit
 ```
 
-For input `[3, 4, 5]`, a Script on the item path containing `return input * 2;` produces `[6, 8, 10]` on Out. An Agent can research each item directly on the canvas. The seeded opportunity brief demonstrates a Batch with a reusable Workflow node on its item path.
+For input `[3, 4, 5]`, a Script on the item path containing `return input * 2;` produces `[6, 8, 10]` on Out. An Agent can research each item directly on the canvas.
 
 Leave **List to process** blank to use the complete input, or enter the path to an array such as `response.items`. Batches default to 200 items. Set **Maximum items** to a whole number from 1 through 10,000 to allow a larger list. Oversized input fails before any items start, with the actual count and limit in the error. **Items at a time** controls how many items run at once, from 1 through 50. Choose `all` to receive raw item outputs or fail and cancel unfinished items on an error. Choose `collect` to receive `{runId,status,output,error}` records. Both arrays retain input-item order. See [Batch output](docs/architecture.md#batch-output) for examples and failed-item values. Item paths can contain nested Batches and Workflow nodes, subject to ten nested levels.
 

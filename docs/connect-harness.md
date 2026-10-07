@@ -96,6 +96,8 @@ The development stdio fallback uses absolute paths to the current Node installat
 
 Ask the harness to find a workflow by name or description with `list_workflows`, inspect it with `get_workflow`, and use its ID and input contract. If several workflows match, identify the intended one before starting a run.
 
+Fresh libraries include [SDLC workflow](sdlc-workflow.md). It requires a coding agent with Git and repository access, plus a fresh session or isolated subagent for final review. Interlock coordinates assignments but does not launch that reviewer. Existing libraries retain their workflows when upgraded.
+
 With the workflow selected, ask it to complete the run through Interlock:
 
 ```text
