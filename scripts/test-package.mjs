@@ -36,6 +36,11 @@ try {
   );
   assert(packed.files.some((file) => file.path === 'dist/cli.js'));
   assert(
+    packed.files.some(
+      (file) => file.path === 'docs/examples/pokemon-workflows.json',
+    ),
+  );
+  assert(
     !packed.files.some(
       (file) =>
         file.path.startsWith('.interlock/') ||
@@ -181,7 +186,10 @@ try {
     arguments: {},
   });
   assert(!stdioWorkflows.isError, JSON.stringify(stdioWorkflows));
-  assert(Array.isArray(JSON.parse(stdioWorkflows.content[0].text)));
+  const starters = JSON.parse(stdioWorkflows.content[0].text);
+  assert.equal(starters.length, 1);
+  assert.equal(starters[0].name, 'SDLC workflow');
+  assert.equal(starters[0].latestVersion, 1);
   await client.close();
   client = new Client({ name: 'package-http-smoke', version: '1.0.0' });
   await client.connect(
@@ -193,6 +201,25 @@ try {
     assert(!response.isError, JSON.stringify(response));
     return JSON.parse(response.content[0].text);
   };
+  const starter = await call('get_workflow', { id: starters[0].id });
+  assert.equal(starter.latestVersion, 1);
+  assert.deepEqual(starter.draft.inputSchema.required, ['request']);
+  assert.equal(
+    starter.draft.nodes.find((node) => node.id === 'review').context.mode,
+    'fresh',
+  );
+  const starterRun = await call('start_run', {
+    workflowId: starter.id,
+    input: {
+      request:
+        "Improve this project's setup instructions and verify the documented commands.",
+    },
+  });
+  assert.equal(starterRun.run.version, 1);
+  const starterWork = await call('list_work', { runId: starterRun.run.id });
+  assert.equal(starterWork.length, 1);
+  assert.equal(starterWork[0].nodeId, 'configure');
+  await call('cancel_run', { id: starterRun.run.id });
   const workflow = await call('create_workflow', {
     name: 'Packed install smoke',
     definition: {

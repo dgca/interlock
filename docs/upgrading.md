@@ -12,7 +12,7 @@
 
 4. Start `interlock` with the same `--db` and `--workdir` options you used before.
 
-Interlock checks the database before seeding examples, resuming runs, or accepting requests. If a schema upgrade is needed, it creates a SQLite backup and applies all pending migrations in one transaction. Startup prints the backup path after a successful upgrade. If the backup or migration fails, startup stops with an error. A failed migration rolls back its database changes; its backup path appears in the error.
+Interlock checks the database before seeding a starter, resuming runs, or accepting requests. If a schema upgrade is needed, it creates a SQLite backup and applies all pending migrations in one transaction. Startup prints the backup path after a successful upgrade. If the backup or migration fails, startup stops with an error. A failed migration rolls back its database changes; its backup path appears in the error.
 
 Installed copies default to `~/.interlock/interlock.db`. Development copies use `.interlock/interlock.db` in the checkout. `--db` or `INTERLOCK_DB` can select another file. Backups live beside the selected database in `<database-path>.backups/<timestamp>-v<old>-to-v<new>-<unique>/interlock.db`.
 

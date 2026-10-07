@@ -1,0 +1,667 @@
+{
+  "format": "interlock-workflows",
+  "formatVersion": 1,
+  "rootId": "90096f73-2515-45e2-8a35-30eadc4c9e37",
+  "workflows": [
+    {
+      "id": "90096f73-2515-45e2-8a35-30eadc4c9e37",
+      "name": "Build a team roster",
+      "description": "Scout a list of candidate Pokémon in parallel with the Size up a Pokémon workflow, then turn the scouting sheets into a picked team.",
+      "ownerWorkflowId": null,
+      "draft": {
+        "inputSchema": {
+          "type": "object",
+          "required": ["candidates"],
+          "properties": {
+            "candidates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "outputSchema": {},
+        "nodes": [
+          {
+            "id": "entry",
+            "label": "Candidate list",
+            "position": {
+              "x": 30,
+              "y": 180
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "entry"
+          },
+          {
+            "id": "scouting",
+            "label": "Size up each candidate",
+            "position": {
+              "x": 330,
+              "y": 180
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "batch",
+            "itemsPath": "candidates",
+            "concurrency": 5,
+            "failurePolicy": "collect"
+          },
+          {
+            "id": "scout-workflow",
+            "label": "Size up a Pokémon",
+            "batchId": "scouting",
+            "position": {
+              "x": 130,
+              "y": 160
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "workflow",
+            "workflowId": "a0337558-10f3-4f64-8d28-9aeda4e19f5b",
+            "version": 1
+          },
+          {
+            "id": "selection",
+            "label": "Pick the final six",
+            "position": {
+              "x": 990,
+              "y": 180
+            },
+            "inputSchema": {},
+            "outputSchema": {
+              "type": "object",
+              "required": ["title", "markdown"],
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "markdown": {
+                  "type": "string"
+                }
+              }
+            },
+            "kind": "agent",
+            "prompt": "You are staffing a team roster. The input holds one record per candidate with a run status and either a scouting sheet, a mascot pitch, or an error. Pick up to six candidates, give each a one-line team role grounded in its types and stats, and call out any candidates whose scouting failed. Return {\"title\": string, \"markdown\": string} with the roster as a markdown document.",
+            "context": {
+              "mode": "current",
+              "instructions": "",
+              "tools": [],
+              "skills": []
+            },
+            "maxAttempts": 2
+          },
+          {
+            "id": "exit",
+            "label": "Team roster",
+            "position": {
+              "x": 1300,
+              "y": 180
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "exit"
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "entry",
+            "target": "scouting",
+            "port": "default"
+          },
+          {
+            "id": "item",
+            "source": "scouting",
+            "target": "scout-workflow",
+            "port": "item"
+          },
+          {
+            "id": "item-end",
+            "source": "scout-workflow",
+            "target": "scouting",
+            "port": "default",
+            "targetHandle": "end"
+          },
+          {
+            "id": "e2",
+            "source": "scouting",
+            "target": "selection",
+            "port": "complete"
+          },
+          {
+            "id": "e3",
+            "source": "selection",
+            "target": "exit",
+            "port": "default"
+          }
+        ],
+        "maxSteps": 100
+      },
+      "draftRevision": 1,
+      "versions": [
+        {
+          "version": 1,
+          "definition": {
+            "inputSchema": {
+              "type": "object",
+              "required": ["candidates"],
+              "properties": {
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["name"],
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "outputSchema": {},
+            "nodes": [
+              {
+                "id": "entry",
+                "label": "Candidate list",
+                "position": {
+                  "x": 30,
+                  "y": 180
+                },
+                "inputSchema": {},
+                "outputSchema": {},
+                "kind": "entry"
+              },
+              {
+                "id": "scouting",
+                "label": "Size up each candidate",
+                "position": {
+                  "x": 330,
+                  "y": 180
+                },
+                "inputSchema": {},
+                "outputSchema": {},
+                "kind": "batch",
+                "itemsPath": "candidates",
+                "concurrency": 5,
+                "failurePolicy": "collect"
+              },
+              {
+                "id": "scout-workflow",
+                "label": "Size up a Pokémon",
+                "batchId": "scouting",
+                "position": {
+                  "x": 130,
+                  "y": 160
+                },
+                "inputSchema": {},
+                "outputSchema": {},
+                "kind": "workflow",
+                "workflowId": "a0337558-10f3-4f64-8d28-9aeda4e19f5b",
+                "version": 1
+              },
+              {
+                "id": "selection",
+                "label": "Pick the final six",
+                "position": {
+                  "x": 990,
+                  "y": 180
+                },
+                "inputSchema": {},
+                "outputSchema": {
+                  "type": "object",
+                  "required": ["title", "markdown"],
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "markdown": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "kind": "agent",
+                "prompt": "You are staffing a team roster. The input holds one record per candidate with a run status and either a scouting sheet, a mascot pitch, or an error. Pick up to six candidates, give each a one-line team role grounded in its types and stats, and call out any candidates whose scouting failed. Return {\"title\": string, \"markdown\": string} with the roster as a markdown document.",
+                "context": {
+                  "mode": "current",
+                  "instructions": "",
+                  "tools": [],
+                  "skills": []
+                },
+                "maxAttempts": 2
+              },
+              {
+                "id": "exit",
+                "label": "Team roster",
+                "position": {
+                  "x": 1300,
+                  "y": 180
+                },
+                "inputSchema": {},
+                "outputSchema": {},
+                "kind": "exit"
+              }
+            ],
+            "edges": [
+              {
+                "id": "e1",
+                "source": "entry",
+                "target": "scouting",
+                "port": "default"
+              },
+              {
+                "id": "item",
+                "source": "scouting",
+                "target": "scout-workflow",
+                "port": "item"
+              },
+              {
+                "id": "item-end",
+                "source": "scout-workflow",
+                "target": "scouting",
+                "port": "default",
+                "targetHandle": "end"
+              },
+              {
+                "id": "e2",
+                "source": "scouting",
+                "target": "selection",
+                "port": "complete"
+              },
+              {
+                "id": "e3",
+                "source": "selection",
+                "target": "exit",
+                "port": "default"
+              }
+            ],
+            "maxSteps": 100
+          }
+        }
+      ]
+    },
+    {
+      "id": "a0337558-10f3-4f64-8d28-9aeda4e19f5b",
+      "name": "Size up a Pokémon",
+      "description": "Look a Pokémon up on PokéAPI, compute its stat sheet, then branch: small and adorable ones get an agent-written mascot pitch, the rest keep their raw stats.",
+      "ownerWorkflowId": null,
+      "draft": {
+        "inputSchema": {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "outputSchema": {},
+        "nodes": [
+          {
+            "id": "entry",
+            "label": "Pokémon name",
+            "position": {
+              "x": 40,
+              "y": 200
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "entry"
+          },
+          {
+            "id": "lookup",
+            "label": "Ask PokéAPI",
+            "position": {
+              "x": 300,
+              "y": 200
+            },
+            "inputSchema": {},
+            "outputSchema": {
+              "type": "object",
+              "required": ["status", "headers", "body"],
+              "properties": {
+                "status": {
+                  "type": "integer"
+                },
+                "headers": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "body": {}
+              }
+            },
+            "kind": "fetch",
+            "url": "https://pokeapi.co/api/v2/pokemon/{{input.name}}",
+            "method": "GET",
+            "query": [],
+            "headers": [],
+            "body": {
+              "kind": "none"
+            },
+            "timeoutMs": 30000,
+            "failOnHttpError": true
+          },
+          {
+            "id": "stats",
+            "label": "Pull the fun stats",
+            "position": {
+              "x": 580,
+              "y": 200
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "script",
+            "language": "javascript",
+            "command": "const body = input.body;\nif (!body || typeof body.name !== 'string')\n  throw new Error('PokéAPI did not recognize that name');\nconst stats = {};\nfor (const stat of body.stats ?? []) stats[stat.stat.name] = stat.base_stat;\nreturn {\n  name: body.name,\n  types: (body.types ?? []).map((entry) => entry.type.name),\n  heightM: (body.height ?? 0) / 10,\n  weightKg: (body.weight ?? 0) / 10,\n  smallAndAdorable: (body.height ?? 999) <= 6,\n  stats,\n};",
+            "timeoutMs": 30000
+          },
+          {
+            "id": "cute-check",
+            "label": "Small and adorable?",
+            "position": {
+              "x": 860,
+              "y": 200
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "condition",
+            "path": "smallAndAdorable",
+            "equals": true
+          },
+          {
+            "id": "mascot-pitch",
+            "label": "Write the mascot pitch",
+            "position": {
+              "x": 1140,
+              "y": 90
+            },
+            "inputSchema": {},
+            "outputSchema": {
+              "type": "object",
+              "required": ["name", "pitch", "reasoning"],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "pitch": {
+                  "type": "string"
+                },
+                "reasoning": {
+                  "type": "string"
+                }
+              }
+            },
+            "kind": "agent",
+            "prompt": "Write a delightfully overcommitted mascot pitch for the Pokémon in the input, a scouting sheet with name, types, height, weight, and base stats. One short paragraph that leans into how small and adorable it is while citing one real stat as evidence. Do not invent abilities or moves. Return an object with name, pitch, and reasoning.",
+            "context": {
+              "mode": "current",
+              "instructions": "Stay playful but keep every factual claim grounded in the input scouting sheet.",
+              "tools": [],
+              "skills": []
+            },
+            "maxAttempts": 2
+          },
+          {
+            "id": "exit-pitch",
+            "label": "Mascot pitch",
+            "position": {
+              "x": 1460,
+              "y": 90
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "exit"
+          },
+          {
+            "id": "exit-stats",
+            "label": "Stat sheet",
+            "position": {
+              "x": 1140,
+              "y": 310
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "exit"
+          }
+        ],
+        "edges": [
+          {
+            "id": "e1",
+            "source": "entry",
+            "target": "lookup",
+            "port": "default"
+          },
+          {
+            "id": "e2",
+            "source": "lookup",
+            "target": "stats",
+            "port": "default"
+          },
+          {
+            "id": "e3",
+            "source": "stats",
+            "target": "cute-check",
+            "port": "default"
+          },
+          {
+            "id": "e4",
+            "source": "cute-check",
+            "target": "mascot-pitch",
+            "port": "true"
+          },
+          {
+            "id": "e5",
+            "source": "mascot-pitch",
+            "target": "exit-pitch",
+            "port": "default"
+          },
+          {
+            "id": "e6",
+            "source": "cute-check",
+            "target": "exit-stats",
+            "port": "false"
+          }
+        ],
+        "maxSteps": 100
+      },
+      "draftRevision": 1,
+      "versions": [
+        {
+          "version": 1,
+          "definition": {
+            "inputSchema": {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {},
+            "nodes": [
+              {
+                "id": "entry",
+                "label": "Pokémon name",
+                "position": {
+                  "x": 40,
+                  "y": 200
+                },
+                "inputSchema": {},
+                "outputSchema": {},
+                "kind": "entry"
+              },
+              {
+                "id": "lookup",
+                "label": "Ask PokéAPI",
+                "position": {
+                  "x": 300,
+                  "y": 200
+                },
+                "inputSchema": {},
+                "outputSchema": {
+                  "type": "object",
+                  "required": ["status", "headers", "body"],
+                  "properties": {
+                    "status": {
+                      "type": "integer"
+                    },
+                    "headers": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "body": {}
+                  }
+                },
+                "kind": "fetch",
+                "url": "https://pokeapi.co/api/v2/pokemon/{{input.name}}",
+                "method": "GET",
+                "query": [],
+                "headers": [],
+                "body": {
+                  "kind": "none"
+                },
+                "timeoutMs": 30000,
+                "failOnHttpError": true
+              },
+              {
+                "id": "stats",
+                "label": "Pull the fun stats",
+                "position": {
+                  "x": 580,
+                  "y": 200
+                },
+                "inputSchema": {},
+                "outputSchema": {},
+                "kind": "script",
+                "language": "javascript",
+                "command": "const body = input.body;\nif (!body || typeof body.name !== 'string')\n  throw new Error('PokéAPI did not recognize that name');\nconst stats = {};\nfor (const stat of body.stats ?? []) stats[stat.stat.name] = stat.base_stat;\nreturn {\n  name: body.name,\n  types: (body.types ?? []).map((entry) => entry.type.name),\n  heightM: (body.height ?? 0) / 10,\n  weightKg: (body.weight ?? 0) / 10,\n  smallAndAdorable: (body.height ?? 999) <= 6,\n  stats,\n};",
+                "timeoutMs": 30000
+              },
+              {
+                "id": "cute-check",
+                "label": "Small and adorable?",
+                "position": {
+                  "x": 860,
+                  "y": 200
+                },
+                "inputSchema": {},
+                "outputSchema": {},
+                "kind": "condition",
+                "path": "smallAndAdorable",
+                "equals": true
+              },
+              {
+                "id": "mascot-pitch",
+                "label": "Write the mascot pitch",
+                "position": {
+                  "x": 1140,
+                  "y": 90
+                },
+                "inputSchema": {},
+                "outputSchema": {
+                  "type": "object",
+                  "required": ["name", "pitch", "reasoning"],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "pitch": {
+                      "type": "string"
+                    },
+                    "reasoning": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "kind": "agent",
+                "prompt": "Write a delightfully overcommitted mascot pitch for the Pokémon in the input, a scouting sheet with name, types, height, weight, and base stats. One short paragraph that leans into how small and adorable it is while citing one real stat as evidence. Do not invent abilities or moves. Return an object with name, pitch, and reasoning.",
+                "context": {
+                  "mode": "current",
+                  "instructions": "Stay playful but keep every factual claim grounded in the input scouting sheet.",
+                  "tools": [],
+                  "skills": []
+                },
+                "maxAttempts": 2
+              },
+              {
+                "id": "exit-pitch",
+                "label": "Mascot pitch",
+                "position": {
+                  "x": 1460,
+                  "y": 90
+                },
+                "inputSchema": {},
+                "outputSchema": {},
+                "kind": "exit"
+              },
+              {
+                "id": "exit-stats",
+                "label": "Stat sheet",
+                "position": {
+                  "x": 1140,
+                  "y": 310
+                },
+                "inputSchema": {},
+                "outputSchema": {},
+                "kind": "exit"
+              }
+            ],
+            "edges": [
+              {
+                "id": "e1",
+                "source": "entry",
+                "target": "lookup",
+                "port": "default"
+              },
+              {
+                "id": "e2",
+                "source": "lookup",
+                "target": "stats",
+                "port": "default"
+              },
+              {
+                "id": "e3",
+                "source": "stats",
+                "target": "cute-check",
+                "port": "default"
+              },
+              {
+                "id": "e4",
+                "source": "cute-check",
+                "target": "mascot-pitch",
+                "port": "true"
+              },
+              {
+                "id": "e5",
+                "source": "mascot-pitch",
+                "target": "exit-pitch",
+                "port": "default"
+              },
+              {
+                "id": "e6",
+                "source": "cute-check",
+                "target": "exit-stats",
+                "port": "false"
+              }
+            ],
+            "maxSteps": 100
+          }
+        }
+      ]
+    }
+  ]
+}

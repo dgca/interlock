@@ -9,7 +9,7 @@ Interlock keeps workflow behavior in the runtime so that UI, CLI, and MCP caller
 | `core`    | Domain types, JSON contracts, graph validation                                   |
 | `runtime` | Execution, child scheduling, work claims, context requirements, script lifecycle |
 | `storage` | SQLite persistence and transaction ownership                                     |
-| `server`  | Hono listener, tRPC procedures, run event stream, example seeding                |
+| `server`  | Hono listener, tRPC procedures, run event stream, starter seeding                |
 | `client`  | Typed HTTP client shared by UI, CLI, and MCP                                     |
 | `ui`      | React application, React Flow editor, reusable controls, run inspection          |
 | `cli`     | Installed server entrypoint, MCP bridge startup, JSON commands                   |
@@ -22,6 +22,8 @@ The client imports the server router type only. It does not bundle or instantiat
 SQLite stores workflow, version, run, assignment, and event documents. Each synchronous engine operation uses a transaction. The runtime scans persisted active runs when advancing work. This favors a small local implementation over a distributed scheduler. It is unsuitable for multiple competing server processes or a large run archive without further indexing and scheduling work.
 
 The root `@type_of/interlock` package bundles the server, CLI, and MCP code into `dist/cli.js` and copies the built UI into `dist/ui`. Private workspace packages are implementation modules. Changesets versions the root package; CLI, UI, and MCP versions come from `packages/core/src/version.ts`, which reads the root manifest. See [Release Interlock](releases.md).
+
+Server startup atomically creates and publishes the checked-in SDLC starter as version 1 only for a fresh library, then records a seed marker. Existing libraries receive no starter replacement, and deleting every workflow does not trigger reseeding. The definition is bundled into the installed CLI; it has no dependency on the developer's library or filesystem. See [Use the SDLC workflow](sdlc-workflow.md).
 
 GitHub folder discovery runs in the server using bounded public API requests for metadata and commit-pinned raw GitHub file downloads. Core parses existing import documents. Runtime validates each export in an isolated in-memory store and imports the selected set through one storage transaction. Discovery pins a branch to a commit; import re-fetches only selected direct files at that commit and checks current conflicts. Typed transport failures stop discovery; invalid files produce individual diagnostics without hiding valid choices. Confirmed import rejections carry a `Nothing imported:` prefix. A lost response without that confirmation leaves the mutation result uncertain, so the UI advises inspecting the library before retrying. This path has no force or revision replacement options. The existing bundle import API retains its explicit replacement controls.
 
