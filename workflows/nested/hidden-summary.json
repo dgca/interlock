@@ -1,0 +1,141 @@
+{
+  "name": "Nested summary",
+  "description": "Used to check direct-folder discovery without recursive crawling.",
+  "definition": {
+    "inputSchema": {
+      "type": "object",
+      "required": ["topic"],
+      "properties": {
+        "topic": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "required": ["summary"],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "nodes": [
+      {
+        "id": "entry",
+        "label": "Topic",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "inputSchema": {
+          "type": "object",
+          "required": ["topic"],
+          "properties": {
+            "topic": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "required": ["topic"],
+          "properties": {
+            "topic": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "kind": "entry"
+      },
+      {
+        "id": "work",
+        "label": "Summarize topic",
+        "position": {
+          "x": 300,
+          "y": 0
+        },
+        "inputSchema": {
+          "type": "object",
+          "required": ["topic"],
+          "properties": {
+            "topic": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "required": ["summary"],
+          "properties": {
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "kind": "script",
+        "language": "javascript",
+        "command": "return { summary: 'Nested fixture: ' + input.topic };",
+        "timeoutMs": 1000
+      },
+      {
+        "id": "exit",
+        "label": "Summary",
+        "position": {
+          "x": 600,
+          "y": 0
+        },
+        "inputSchema": {
+          "type": "object",
+          "required": ["summary"],
+          "properties": {
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "required": ["summary"],
+          "properties": {
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "kind": "exit"
+      }
+    ],
+    "edges": [
+      {
+        "id": "entry-work",
+        "source": "entry",
+        "target": "work",
+        "port": "default"
+      },
+      {
+        "id": "work-exit",
+        "source": "work",
+        "target": "exit",
+        "port": "default"
+      }
+    ],
+    "maxSteps": 10
+  }
+}

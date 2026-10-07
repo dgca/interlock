@@ -1,0 +1,303 @@
+{
+  "format": "interlock-workflows",
+  "formatVersion": 1,
+  "rootId": "32b5f7eb-0600-4f51-9ba7-29f6f6761001",
+  "workflows": [
+    {
+      "id": "32b5f7eb-0600-4f51-9ba7-29f6f6761001",
+      "name": "Review checklist alternate",
+      "description": "Individually valid export that conflicts with the published version in 02-review-checklist.json.",
+      "ownerWorkflowId": null,
+      "draft": {
+        "inputSchema": {
+          "type": "object",
+          "required": ["topic"],
+          "properties": {
+            "topic": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "required": ["summary"],
+          "properties": {
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "nodes": [
+          {
+            "id": "entry",
+            "label": "Topic",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "inputSchema": {
+              "type": "object",
+              "required": ["topic"],
+              "properties": {
+                "topic": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["topic"],
+              "properties": {
+                "topic": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "kind": "entry"
+          },
+          {
+            "id": "work",
+            "label": "Summarize topic",
+            "position": {
+              "x": 300,
+              "y": 0
+            },
+            "inputSchema": {
+              "type": "object",
+              "required": ["topic"],
+              "properties": {
+                "topic": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["summary"],
+              "properties": {
+                "summary": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "kind": "agent",
+            "prompt": "This is a sharing fixture. Return a short review checklist for input.topic in the summary field. No repository or network access is required.\nUse numbered checklist items.",
+            "context": {
+              "mode": "current",
+              "instructions": "",
+              "tools": [],
+              "skills": []
+            },
+            "maxAttempts": 2
+          },
+          {
+            "id": "exit",
+            "label": "Summary",
+            "position": {
+              "x": 600,
+              "y": 0
+            },
+            "inputSchema": {
+              "type": "object",
+              "required": ["summary"],
+              "properties": {
+                "summary": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["summary"],
+              "properties": {
+                "summary": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "kind": "exit"
+          }
+        ],
+        "edges": [
+          {
+            "id": "entry-work",
+            "source": "entry",
+            "target": "work",
+            "port": "default"
+          },
+          {
+            "id": "work-exit",
+            "source": "work",
+            "target": "exit",
+            "port": "default"
+          }
+        ],
+        "maxSteps": 10
+      },
+      "draftRevision": 1,
+      "versions": [
+        {
+          "version": 1,
+          "definition": {
+            "inputSchema": {
+              "type": "object",
+              "required": ["topic"],
+              "properties": {
+                "topic": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["summary"],
+              "properties": {
+                "summary": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "nodes": [
+              {
+                "id": "entry",
+                "label": "Topic",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "inputSchema": {
+                  "type": "object",
+                  "required": ["topic"],
+                  "properties": {
+                    "topic": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "outputSchema": {
+                  "type": "object",
+                  "required": ["topic"],
+                  "properties": {
+                    "topic": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "kind": "entry"
+              },
+              {
+                "id": "work",
+                "label": "Summarize topic",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "inputSchema": {
+                  "type": "object",
+                  "required": ["topic"],
+                  "properties": {
+                    "topic": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "outputSchema": {
+                  "type": "object",
+                  "required": ["summary"],
+                  "properties": {
+                    "summary": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "kind": "agent",
+                "prompt": "This is a sharing fixture. Return a short review checklist for input.topic in the summary field. No repository or network access is required.\nUse numbered checklist items.",
+                "context": {
+                  "mode": "current",
+                  "instructions": "",
+                  "tools": [],
+                  "skills": []
+                },
+                "maxAttempts": 2
+              },
+              {
+                "id": "exit",
+                "label": "Summary",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "inputSchema": {
+                  "type": "object",
+                  "required": ["summary"],
+                  "properties": {
+                    "summary": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "outputSchema": {
+                  "type": "object",
+                  "required": ["summary"],
+                  "properties": {
+                    "summary": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "kind": "exit"
+              }
+            ],
+            "edges": [
+              {
+                "id": "entry-work",
+                "source": "entry",
+                "target": "work",
+                "port": "default"
+              },
+              {
+                "id": "work-exit",
+                "source": "work",
+                "target": "exit",
+                "port": "default"
+              }
+            ],
+            "maxSteps": 10
+          }
+        }
+      ]
+    }
+  ]
+}

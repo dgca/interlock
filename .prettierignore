@@ -2,3 +2,5 @@ pnpm-lock.yaml
 node_modules
 dist
 .interlock
+# Deliberately malformed JSON for workflow import error handling.
+workflows/06-invalid-json.json
