@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { ZodError } from 'zod';
 import { InterlockError } from '@interlock/core';
 import {
   parseImportDocument,
@@ -13,6 +14,12 @@ import type { Engine } from '@interlock/runtime';
 const MiB = 1024 * 1024;
 const digest = (text: string) =>
   createHash('sha256').update(text).digest('hex');
+const validationMessage = (e: ZodError) => {
+  const issue = e.issues[0];
+  const reason =
+    issue.path.at(-1) === 'kind' ? 'Unsupported node kind' : issue.message;
+  return `Invalid workflow at ${issue.path.join('.') || 'document'}: ${reason}. Correct the export file.`;
+};
 const detail = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export function parseGithubFolderUrl(value: string) {
   const help =
@@ -315,7 +322,9 @@ export class GithubImports {
               reason:
                 e instanceof SyntaxError
                   ? 'Invalid JSON. Correct the export file.'
-                  : detail(e),
+                  : e instanceof ZodError
+                    ? validationMessage(e)
+                    : detail(e),
             });
           }
         }

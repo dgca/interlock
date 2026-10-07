@@ -168,21 +168,36 @@ it('revalidates drafts, metadata, ownership, versions and prompts against change
     expect(snapshot(store)).toEqual(before);
   }
 });
-it('rolls back all staged workflow, version, prompt and history writes after a natural storage failure seam', () => {
-  const b = bundle(),
-    { store } = setup(),
-    before = snapshot(store);
-  const original = store.put.bind(store);
-  let writes = 0;
-  vi.spyOn(store, 'put').mockImplementation((collection, value) => {
-    if (++writes === 3) throw new Error('Disk write failed');
-    original(collection, value);
-  });
-  expect(() => importSelection(store, [file(legacy), file(b)])).toThrow(
-    'Disk write failed',
-  );
-  expect(snapshot(store)).toEqual(before);
-});
+it.each(['workflows', 'versions', 'prompts', 'promptRevisions'])(
+  'rolls back the full selected import after an application %s write',
+  (failureCollection) => {
+    const b = bundle(),
+      { store } = setup();
+    // Preserve unrelated existing data and retained prompt history while testing all persistence phases.
+    const previous = bundle();
+    importWorkflows(store, previous);
+    const before = snapshot(store),
+      original = store.put.bind(store);
+    let failed = false;
+    const writes: string[] = [];
+    vi.spyOn(store, 'put').mockImplementation((collection, value) => {
+      original(collection, value);
+      writes.push(collection);
+      if (collection === failureCollection && !failed) {
+        failed = true;
+        expect(store.get(collection, value.id)).toEqual(value);
+        throw new Error(`Disk write failed after ${collection}`);
+      }
+    });
+    expect(() => importSelection(store, [file(legacy), file(b)])).toThrow(
+      `Disk write failed after ${failureCollection}`,
+    );
+    expect(failed).toBe(true);
+    if (failureCollection === 'promptRevisions')
+      expect(writes).toContain('prompts');
+    expect(snapshot(store)).toEqual(before);
+  },
+);
 it('preserves archive state and old local replacement and incomplete draft behavior', () => {
   const b = bundle(),
     { store, engine } = setup();
@@ -253,6 +268,17 @@ it('resolves slash branches longest first, excludes nested files and isolates in
       '01.json': JSON.stringify(legacy),
       '02.json': JSON.stringify(b),
       'bad.json': '{',
+      'shape.json': JSON.stringify({
+        ...legacy,
+        definition: {
+          ...blankDefinition(),
+          nodes: [
+            blankDefinition().nodes[0],
+            { id: 'bad', label: 'Bad', kind: 'unsupported' },
+            blankDefinition().nodes[2],
+          ],
+        },
+      }),
       'metadata.json': '{"purpose":"unrelated"}',
       'missing.json': JSON.stringify(missing),
     },
@@ -266,7 +292,13 @@ it('resolves slash branches longest first, excludes nested files and isolates in
   expect(p.source.requestedRef).toBe('codex/branch');
   expect(p.source.resolvedCommit).toBe(sha);
   expect(p.choices).toHaveLength(2);
-  expect(p.diagnostics).toHaveLength(2);
+  expect(p.diagnostics).toHaveLength(3);
+  expect(
+    p.diagnostics.find((d) => d.filename === 'shape.json')!.reason,
+  ).toContain('Unsupported node kind');
+  expect(
+    p.diagnostics.find((d) => d.filename === 'shape.json')!.reason,
+  ).not.toContain('invalid_union_discriminator');
   expect(p.ignoredCount).toBe(1);
   expect(n.calls.some((x) => x.includes('nested'))).toBe(false);
   expect(p.choices[1].prompts).toHaveLength(1);

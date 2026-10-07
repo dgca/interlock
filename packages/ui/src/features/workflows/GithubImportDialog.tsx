@@ -139,6 +139,7 @@ export function GithubImportDialog({
             <div className={styles.source}>
               <TextInput
                 ref={input}
+                data-autofocus
                 label="GitHub folder URL"
                 description="Public repository folders only. Includes direct files."
                 placeholder="https://github.com/owner/repo/tree/main/workflows"
