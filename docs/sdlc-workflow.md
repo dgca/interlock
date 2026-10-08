@@ -25,6 +25,8 @@ Replace the request with your intended change. Only `request` is required. The a
 
 The workflow creates or reuses a task branch under repository conventions. It commits accepted `intent.md`, `spec.md`, and `plan.md` artifacts, followed by the implementation, tests, and affected documentation. It preserves unrelated changes and does not merge or deploy.
 
+For UI changes, the specification includes a brief proposal for the user flow, affected states, layout and actions, keyboard and focus behavior, and narrow-screen behavior. The implementation plan pairs the change's highest-risk failures with direct checks and expected outcomes. It assigns implementation checks to the builder and independent checks to the existing fresh reviewer. These responsibilities use the same planning artifacts and review steps.
+
 ## Choose inputs
 
 | Input          | Behavior                                                                                                                                                                                          |
@@ -43,7 +45,7 @@ Reuse the existing run and recorded task directory when continuing a change. Do 
 
 Human decisions pause the workflow. The agent shows the artifact and focused questions, leaves the decision assignment unclaimed, and continues after your explicit answer. Automatic planning review does not invent human approval.
 
-Final review checks the complete task diff, observable acceptance evidence, and repository standards at the exact committed candidate. Findings return to implementation. Later review can focus on localized fixes while preserving verified evidence with its original commit; broader changes require a full review. Delivery checks that the branch still matches the reviewed commit.
+Final review checks the complete task diff, observable acceptance evidence, and repository standards at the exact committed candidate. The reviewer inspects actual saved proof and checks a relevant boundary independently. Valid proof can be reused after inspection; affected behavior, unreliable proof, material gaps, or suspected failures require further checks. Findings return to implementation. Later review can focus on localized fixes while preserving verified evidence with its original commit; broader changes require a full review. Delivery checks that the branch still matches the reviewed commit.
 
 ## Existing libraries
 
