@@ -25,6 +25,8 @@ Keep the terminal running while you use Interlock. Closing the browser does not 
 
 New libraries include a published **SDLC workflow** for planning, implementing, and reviewing a software change. It creates a task branch, saves planning artifacts, and commits the completed change. It finishes locally by default. Existing libraries are preserved when you upgrade.
 
+For an existing library, import the starter from [workflows/sdlc.json](workflows/sdlc.json). In **Import → GitHub folder**, use `https://github.com/dgca/interlock/tree/main/workflows`, select **SDLC workflow**, and choose **Import selected**. Review the imported draft and publish it before running. See [Import the SDLC starter](docs/sdlc-workflow.md#import-the-starter-into-an-existing-library) for local-file and CLI options.
+
 Use a coding agent with access to your Git checkout, files, and development commands. The final review requires a fresh session or an isolated subagent without the implementation conversation. Interlock coordinates the work but does not launch that reviewer itself.
 
 1. Select **Connect with MCP** in the sidebar.

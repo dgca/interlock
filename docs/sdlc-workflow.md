@@ -50,3 +50,19 @@ Final review checks the complete task diff, observable acceptance evidence, and 
 ## Existing libraries
 
 Startup seeds the SDLC starter once in a fresh library. Upgrading preserves existing workflows and published versions, including older examples or a customized SDLC. Deleting all workflows does not seed them again. Starter updates apply to new libraries; they do not rewrite your copies or active runs.
+
+### Import the starter into an existing library
+
+1. Open **Workflows → Import → GitHub folder**.
+2. Enter `https://github.com/dgca/interlock/tree/main/workflows` and select **Find workflows**.
+3. Select **SDLC workflow** and choose **Import selected**.
+4. Open the imported draft, review its settings, and select **Review & publish**.
+
+Alternatively, download [workflows/sdlc.json](../workflows/sdlc.json) and upload it through **Import → Local file**. From a repository checkout with Interlock running, the CLI accepts the same file:
+
+```sh
+interlock import @workflows/sdlc.json
+interlock publish WORKFLOW_ID
+```
+
+Replace `WORKFLOW_ID` with the ID returned by import. The file contains the starter's name, description, and definition, shared with fresh-install seeding. Each import creates a separate draft with a new ID. It does not replace a customized SDLC, retain someone else's run history, or start a run. Publish the copy to make it runnable.
