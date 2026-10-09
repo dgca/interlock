@@ -1,5 +1,11 @@
 # @type_of/interlock
 
+## 0.1.18
+
+### Patch Changes
+
+- 659adb6: Provide the default SDLC starter in workflows/sdlc.json for existing libraries to import through GitHub, a local file, or the CLI. Fresh installs use the same source, and imports preserve existing workflows.
+
 ## 0.1.17
 
 ### Patch Changes
