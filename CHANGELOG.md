@@ -1,5 +1,13 @@
 # @type_of/interlock
 
+## 0.1.17
+
+### Patch Changes
+
+- dff3944: Update the SDLC starter with brief UI planning, focused checks for consequential failures, and clear verification ownership that reuses trustworthy evidence within the existing review steps. Existing libraries keep their workflows.
+- fa59855: Import selected workflows from public GitHub folders with dependency previews, commit-pinned sources, and atomic conflict rejection. Keep local JSON import available and provide recovery guidance for download failures and uncertain import results.
+- d60b70b: New libraries start with a published SDLC workflow for planning, implementing, and reviewing software changes. Onboarding explains its executor requirements. Existing libraries remain unchanged.
+
 ## 0.1.16
 
 ### Patch Changes
