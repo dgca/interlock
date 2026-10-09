@@ -1,0 +1,1091 @@
+{
+  "format": "interlock-workflows",
+  "formatVersion": 1,
+  "rootId": "interlock-all-nodes-demo",
+  "workflows": [
+    {
+      "id": "interlock-all-nodes-demo",
+      "name": "All nodes (demo)",
+      "description": "Optional node-editor example using a fictional mission briefing. Includes all current node types, both script languages, all Wait modes, Agent timeout, and both Workflow execution modes. Inspect the editors without starting a run.",
+      "ownerWorkflowId": null,
+      "draft": {
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "mission": {
+              "type": "string",
+              "default": "Moon picnic"
+            },
+            "crew": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": ["Ada", "Grace"]
+            },
+            "timing": {
+              "type": "string",
+              "enum": ["duration", "until", "poll"],
+              "default": "duration"
+            },
+            "releaseAt": {
+              "type": "string",
+              "description": "Optional ISO timestamp with timezone for the until route. Omit to use one second from now."
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "required": ["mission", "markdown"],
+          "properties": {
+            "mission": {
+              "type": "string"
+            },
+            "markdown": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "nodes": [
+          {
+            "id": "entry",
+            "label": "Mission settings",
+            "position": {
+              "x": 40,
+              "y": 40
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "entry"
+          },
+          {
+            "id": "prepare",
+            "label": "Prepare mission · JavaScript",
+            "position": {
+              "x": 340,
+              "y": 40
+            },
+            "inputSchema": {},
+            "outputSchema": {
+              "type": "object",
+              "required": ["mission", "crew", "timing", "releaseAt"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "crew": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "timing": {
+                  "type": "string"
+                },
+                "releaseAt": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "kind": "script",
+            "language": "javascript",
+            "command": "return {\n  mission: input.mission ?? 'Moon picnic',\n  crew: input.crew ?? ['Ada', 'Grace'],\n  timing: input.timing ?? 'duration',\n  releaseAt: input.releaseAt ?? new Date(Date.now() + 1000).toISOString(),\n};",
+            "timeoutMs": 1000
+          },
+          {
+            "id": "fetch",
+            "label": "Check briefing page",
+            "position": {
+              "x": 640,
+              "y": 40
+            },
+            "inputSchema": {
+              "type": "object",
+              "required": ["mission", "crew", "timing", "releaseAt"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "crew": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "timing": {
+                  "type": "string"
+                },
+                "releaseAt": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["status", "headers", "body"],
+              "properties": {
+                "status": {
+                  "type": "integer"
+                },
+                "headers": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "body": {}
+              }
+            },
+            "kind": "fetch",
+            "url": "https://example.com/",
+            "method": "GET",
+            "query": [
+              {
+                "name": "mission",
+                "value": {
+                  "kind": "input",
+                  "path": "mission"
+                }
+              }
+            ],
+            "headers": [
+              {
+                "name": "Accept",
+                "value": {
+                  "kind": "fixed",
+                  "value": "text/html"
+                }
+              }
+            ],
+            "body": {
+              "kind": "none"
+            },
+            "timeoutMs": 10000,
+            "failOnHttpError": false
+          },
+          {
+            "id": "condition",
+            "label": "Briefing page available?",
+            "position": {
+              "x": 940,
+              "y": 40
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "condition",
+            "path": "status",
+            "equals": 200
+          },
+          {
+            "id": "switch",
+            "label": "Choose departure timing",
+            "position": {
+              "x": 940,
+              "y": 360
+            },
+            "inputSchema": {
+              "type": "object",
+              "required": ["mission", "crew", "timing", "releaseAt"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "crew": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "timing": {
+                  "type": "string"
+                },
+                "releaseAt": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["mission", "crew", "timing", "releaseAt"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "crew": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "timing": {
+                  "type": "string"
+                },
+                "releaseAt": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "inputBindings": {
+              "mission": {
+                "source": "node",
+                "nodeId": "prepare",
+                "path": "mission"
+              },
+              "crew": {
+                "source": "node",
+                "nodeId": "prepare",
+                "path": "crew"
+              },
+              "timing": {
+                "source": "node",
+                "nodeId": "prepare",
+                "path": "timing"
+              },
+              "releaseAt": {
+                "source": "node",
+                "nodeId": "prepare",
+                "path": "releaseAt"
+              }
+            },
+            "kind": "switch",
+            "path": "timing",
+            "cases": [
+              {
+                "port": "duration",
+                "equals": "duration"
+              },
+              {
+                "port": "timestamp",
+                "equals": "until"
+              }
+            ],
+            "default": "poll"
+          },
+          {
+            "id": "wait-duration",
+            "label": "Pause one second",
+            "position": {
+              "x": 40,
+              "y": 400
+            },
+            "inputSchema": {
+              "type": "object",
+              "required": ["mission", "crew", "timing", "releaseAt"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "crew": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "timing": {
+                  "type": "string"
+                },
+                "releaseAt": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["mission", "crew", "timing", "releaseAt"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "crew": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "timing": {
+                  "type": "string"
+                },
+                "releaseAt": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "kind": "wait",
+            "timing": {
+              "kind": "duration",
+              "ms": 1000
+            }
+          },
+          {
+            "id": "wait-until",
+            "label": "Wait until departure",
+            "position": {
+              "x": 340,
+              "y": 400
+            },
+            "inputSchema": {
+              "type": "object",
+              "required": ["mission", "crew", "timing", "releaseAt"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "crew": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "timing": {
+                  "type": "string"
+                },
+                "releaseAt": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["mission", "crew", "timing", "releaseAt"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "crew": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "timing": {
+                  "type": "string"
+                },
+                "releaseAt": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "kind": "wait",
+            "timing": {
+              "kind": "until",
+              "path": "releaseAt"
+            }
+          },
+          {
+            "id": "wait-poll",
+            "label": "Check launch readiness",
+            "position": {
+              "x": 640,
+              "y": 400
+            },
+            "inputSchema": {
+              "type": "object",
+              "required": ["mission", "crew", "timing", "releaseAt"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "crew": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "timing": {
+                  "type": "string"
+                },
+                "releaseAt": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["mission", "crew", "timing", "releaseAt"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "crew": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "timing": {
+                  "type": "string"
+                },
+                "releaseAt": {
+                  "type": "string"
+                },
+                "ready": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            },
+            "kind": "wait",
+            "timing": {
+              "kind": "poll",
+              "everyMs": 1000,
+              "timeoutMs": 5000,
+              "check": {
+                "kind": "script",
+                "language": "javascript",
+                "command": "return { ready: true };",
+                "timeoutMs": 1000
+              },
+              "path": "ready",
+              "equals": true
+            }
+          },
+          {
+            "id": "crew",
+            "label": "Prepare crew badges",
+            "position": {
+              "x": 40,
+              "y": 800
+            },
+            "inputSchema": {
+              "type": "object",
+              "required": ["crew"],
+              "properties": {
+                "crew": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "badge"],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "badge": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "kind": "batch",
+            "itemsPath": "crew",
+            "concurrency": 2,
+            "maxItems": 20,
+            "failurePolicy": "all"
+          },
+          {
+            "id": "crew-name",
+            "label": "Wrap crew name",
+            "batchId": "crew",
+            "position": {
+              "x": 130,
+              "y": 160
+            },
+            "inputSchema": {
+              "type": "string"
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "kind": "script",
+            "language": "javascript",
+            "command": "return { name: input.trim() || 'Guest' };",
+            "timeoutMs": 1000
+          },
+          {
+            "id": "crew-badge",
+            "label": "Get badge · Wait for result",
+            "batchId": "crew",
+            "position": {
+              "x": 430,
+              "y": 160
+            },
+            "inputSchema": {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["name", "badge"],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "badge": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "kind": "workflow",
+            "mode": "wait",
+            "workflowId": "interlock-all-nodes-demo-crew-badge",
+            "version": 1
+          },
+          {
+            "id": "bash",
+            "label": "Pass badges through · Bash",
+            "position": {
+              "x": 940,
+              "y": 840
+            },
+            "inputSchema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "badge"],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "badge": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "outputSchema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "badge"],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "badge": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "kind": "script",
+            "language": "bash",
+            "command": "# Read one JSON value from stdin and return it unchanged.\ncat",
+            "timeoutMs": 1000
+          },
+          {
+            "id": "dispatch",
+            "label": "Captain badge · Start and continue",
+            "position": {
+              "x": 1240,
+              "y": 840
+            },
+            "inputSchema": {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputSchema": {},
+            "inputBindings": {
+              "name": {
+                "source": "node",
+                "nodeId": "prepare",
+                "path": "mission"
+              }
+            },
+            "kind": "workflow",
+            "mode": "detached",
+            "workflowId": "interlock-all-nodes-demo-crew-badge",
+            "version": 1
+          },
+          {
+            "id": "agent",
+            "label": "Write mission briefing",
+            "position": {
+              "x": 1240,
+              "y": 1160
+            },
+            "inputSchema": {
+              "type": "object",
+              "required": ["mission", "badges", "captainRun"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "badges": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["name", "badge"],
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "badge": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "captainRun": {
+                  "type": "object"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["mission", "markdown"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "markdown": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "inputBindings": {
+              "mission": {
+                "source": "node",
+                "nodeId": "prepare",
+                "path": "mission"
+              },
+              "badges": {
+                "source": "node",
+                "nodeId": "bash",
+                "path": ""
+              },
+              "captainRun": {
+                "source": "node",
+                "nodeId": "dispatch",
+                "path": ""
+              }
+            },
+            "kind": "agent",
+            "prompt": "Write a playful two-sentence briefing for input.mission. Mention each crew badge in input.badges. The captainRun field confirms a separately started helper run; do not claim that it completed from that reference alone. Return exactly {\"mission\": input.mission, \"markdown\": \"your briefing\"}.",
+            "context": {
+              "mode": "current",
+              "instructions": "Use only the supplied fictional mission and crew. No tools or repository changes are needed.",
+              "tools": [],
+              "skills": []
+            },
+            "maxAttempts": 2,
+            "unclaimedTimeoutMs": 15000
+          },
+          {
+            "id": "agent-timeout",
+            "label": "Use automatic briefing",
+            "position": {
+              "x": 940,
+              "y": 1500
+            },
+            "inputSchema": {},
+            "outputSchema": {
+              "type": "object",
+              "required": ["mission", "markdown"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "markdown": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "kind": "script",
+            "language": "javascript",
+            "command": "return { mission: input.mission, markdown: `# ${input.mission}\\n\\nCrew: ${input.badges.map(item => item.name).join(', ') || 'no crew listed'}.\\n\\nNo agent claimed the briefing within 15 seconds, so this automatic briefing was used.` };",
+            "timeoutMs": 1000
+          },
+          {
+            "id": "not-ready",
+            "label": "Report unavailable briefing",
+            "position": {
+              "x": 340,
+              "y": 1500
+            },
+            "inputSchema": {},
+            "outputSchema": {
+              "type": "object",
+              "required": ["mission", "markdown"],
+              "properties": {
+                "mission": {
+                  "type": "string"
+                },
+                "markdown": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "inputBindings": {
+              "mission": {
+                "source": "node",
+                "nodeId": "prepare",
+                "path": "mission"
+              },
+              "status": {
+                "source": "node",
+                "nodeId": "fetch",
+                "path": "status"
+              }
+            },
+            "kind": "script",
+            "language": "javascript",
+            "command": "return { mission: input.mission, markdown: `# ${input.mission}\\n\\nThe briefing page or launch-readiness check did not pass. HTTP status: ${input.status}.` };",
+            "timeoutMs": 1000
+          },
+          {
+            "id": "exit",
+            "label": "Mission briefing",
+            "position": {
+              "x": 1240,
+              "y": 1500
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "exit"
+          }
+        ],
+        "edges": [
+          {
+            "id": "entry-default-prepare",
+            "source": "entry",
+            "target": "prepare",
+            "port": "default"
+          },
+          {
+            "id": "prepare-default-fetch",
+            "source": "prepare",
+            "target": "fetch",
+            "port": "default"
+          },
+          {
+            "id": "fetch-default-condition",
+            "source": "fetch",
+            "target": "condition",
+            "port": "default"
+          },
+          {
+            "id": "condition-true-switch",
+            "source": "condition",
+            "target": "switch",
+            "port": "true"
+          },
+          {
+            "id": "condition-false-not-ready",
+            "source": "condition",
+            "target": "not-ready",
+            "port": "false"
+          },
+          {
+            "id": "switch-duration-wait-duration",
+            "source": "switch",
+            "target": "wait-duration",
+            "port": "duration"
+          },
+          {
+            "id": "switch-timestamp-wait-until",
+            "source": "switch",
+            "target": "wait-until",
+            "port": "timestamp"
+          },
+          {
+            "id": "switch-poll-wait-poll",
+            "source": "switch",
+            "target": "wait-poll",
+            "port": "poll"
+          },
+          {
+            "id": "wait-duration-default-crew",
+            "source": "wait-duration",
+            "target": "crew",
+            "port": "default"
+          },
+          {
+            "id": "wait-until-default-crew",
+            "source": "wait-until",
+            "target": "crew",
+            "port": "default"
+          },
+          {
+            "id": "wait-poll-default-crew",
+            "source": "wait-poll",
+            "target": "crew",
+            "port": "default"
+          },
+          {
+            "id": "wait-poll-timeout-not-ready",
+            "source": "wait-poll",
+            "target": "not-ready",
+            "port": "timeout"
+          },
+          {
+            "id": "crew-item-crew-name",
+            "source": "crew",
+            "target": "crew-name",
+            "port": "item"
+          },
+          {
+            "id": "crew-name-default-crew-badge",
+            "source": "crew-name",
+            "target": "crew-badge",
+            "port": "default"
+          },
+          {
+            "id": "crew-badge-default-crew",
+            "source": "crew-badge",
+            "target": "crew",
+            "port": "default",
+            "targetHandle": "end"
+          },
+          {
+            "id": "crew-complete-bash",
+            "source": "crew",
+            "target": "bash",
+            "port": "complete"
+          },
+          {
+            "id": "bash-default-dispatch",
+            "source": "bash",
+            "target": "dispatch",
+            "port": "default"
+          },
+          {
+            "id": "dispatch-default-agent",
+            "source": "dispatch",
+            "target": "agent",
+            "port": "default"
+          },
+          {
+            "id": "agent-default-exit",
+            "source": "agent",
+            "target": "exit",
+            "port": "default"
+          },
+          {
+            "id": "agent-timeout-agent-timeout",
+            "source": "agent",
+            "target": "agent-timeout",
+            "port": "timeout"
+          },
+          {
+            "id": "agent-timeout-default-exit",
+            "source": "agent-timeout",
+            "target": "exit",
+            "port": "default"
+          },
+          {
+            "id": "not-ready-default-exit",
+            "source": "not-ready",
+            "target": "exit",
+            "port": "default"
+          }
+        ],
+        "maxSteps": 50
+      },
+      "draftRevision": 1,
+      "versions": []
+    },
+    {
+      "id": "interlock-all-nodes-demo-crew-badge",
+      "name": "Format crew badge",
+      "description": "Owned helper for All nodes (demo). Both Workflow examples reference its published version.",
+      "ownerWorkflowId": "interlock-all-nodes-demo",
+      "draft": {
+        "inputSchema": {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "required": ["name", "badge"],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "badge": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "nodes": [
+          {
+            "id": "entry",
+            "label": "Crew member",
+            "position": {
+              "x": 40,
+              "y": 160
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "entry"
+          },
+          {
+            "id": "format",
+            "label": "Format crew badge",
+            "position": {
+              "x": 340,
+              "y": 160
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "script",
+            "language": "javascript",
+            "command": "const name = input.name.trim() || 'Guest';\nreturn { name, badge: `Crew: ${name}` };",
+            "timeoutMs": 1000
+          },
+          {
+            "id": "exit",
+            "label": "Crew badge",
+            "position": {
+              "x": 640,
+              "y": 160
+            },
+            "inputSchema": {},
+            "outputSchema": {},
+            "kind": "exit"
+          }
+        ],
+        "edges": [
+          {
+            "id": "entry-format",
+            "source": "entry",
+            "target": "format",
+            "port": "default"
+          },
+          {
+            "id": "format-exit",
+            "source": "format",
+            "target": "exit",
+            "port": "default"
+          }
+        ],
+        "maxSteps": 100
+      },
+      "draftRevision": 1,
+      "versions": [
+        {
+          "version": 1,
+          "definition": {
+            "inputSchema": {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "outputSchema": {
+              "type": "object",
+              "required": ["name", "badge"],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "badge": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "nodes": [
+              {
+                "id": "entry",
+                "label": "Crew member",
+                "position": {
+                  "x": 40,
+                  "y": 160
+                },
+                "inputSchema": {},
+                "outputSchema": {},
+                "kind": "entry"
+              },
+              {
+                "id": "format",
+                "label": "Format crew badge",
+                "position": {
+                  "x": 340,
+                  "y": 160
+                },
+                "inputSchema": {},
+                "outputSchema": {},
+                "kind": "script",
+                "language": "javascript",
+                "command": "const name = input.name.trim() || 'Guest';\nreturn { name, badge: `Crew: ${name}` };",
+                "timeoutMs": 1000
+              },
+              {
+                "id": "exit",
+                "label": "Crew badge",
+                "position": {
+                  "x": 640,
+                  "y": 160
+                },
+                "inputSchema": {},
+                "outputSchema": {},
+                "kind": "exit"
+              }
+            ],
+            "edges": [
+              {
+                "id": "entry-format",
+                "source": "entry",
+                "target": "format",
+                "port": "default"
+              },
+              {
+                "id": "format-exit",
+                "source": "format",
+                "target": "exit",
+                "port": "default"
+              }
+            ],
+            "maxSteps": 100
+          }
+        }
+      ]
+    }
+  ]
+}
