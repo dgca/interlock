@@ -35,6 +35,7 @@ try {
     ),
   );
   assert(packed.files.some((file) => file.path === 'dist/cli.js'));
+  assert(packed.files.some((file) => file.path === 'workflows/sdlc.json'));
   assert(
     !packed.files.some(
       (file) =>
@@ -215,6 +216,30 @@ try {
   assert.equal(starterWork.length, 1);
   assert.equal(starterWork[0].nodeId, 'configure');
   await call('cancel_run', { id: starterRun.run.id });
+  const starterFile = join(
+    prefix,
+    'lib/node_modules/@type_of/interlock/workflows/sdlc.json',
+  );
+  const importedStarter = JSON.parse(
+    execFileSync(bin, ['import', `@${starterFile}`], {
+      cwd: workdir,
+      env: { ...env, INTERLOCK_URL: url },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }),
+  );
+  assert.notEqual(importedStarter.id, starter.id);
+  assert.equal(importedStarter.latestVersion, 0);
+  assert.deepEqual(importedStarter.draft, starter.draft);
+  const publishedStarter = JSON.parse(
+    execFileSync(bin, ['publish', importedStarter.id], {
+      cwd: workdir,
+      env: { ...env, INTERLOCK_URL: url },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }),
+  );
+  assert.equal(publishedStarter.latestVersion, 1);
   const workflow = await call('create_workflow', {
     name: 'Packed install smoke',
     definition: {

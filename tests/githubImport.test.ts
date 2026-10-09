@@ -8,6 +8,8 @@ import {
   inspectImportDocument,
 } from '../packages/runtime/src/importSelection';
 import { GithubImporter } from '../packages/server/src/githubImport';
+import { seed } from '../packages/server/src/seed';
+import sdlcWorkflow from '../workflows/sdlc.json';
 
 const commit = 'a'.repeat(40);
 const url = 'https://github.com/owner/repo/tree/codex/fixtures/workflows';
@@ -56,6 +58,44 @@ function fixture(entries: Record<string, unknown> = { 'good.json': legacy }) {
     return new Response('', { status: 404 });
   }) as unknown as typeof fetch;
 }
+
+it('discovers and imports the shared SDLC starter without replacing an existing workflow', async () => {
+  const store = new Store(':memory:');
+  const engine = new Engine(store, process.cwd());
+  try {
+    seed(engine);
+    const existing = structuredClone(store.workflows()[0]);
+    const existingVersion = store.getVersion(existing.id, 1);
+    const importer = new GithubImporter(fixture({ 'sdlc.json': sdlcWorkflow }));
+    const preview = await importer.discover(url);
+    expect(preview.items).toMatchObject([
+      {
+        file: 'sdlc.json',
+        valid: true,
+        name: 'SDLC workflow',
+        workflows: [],
+        prompts: [],
+      },
+    ]);
+    const result = await importer.import(engine, preview.source, ['sdlc.json']);
+    expect(result.rootIds).toHaveLength(1);
+    const imported = engine.workflow(result.rootIds[0]);
+    expect(imported.id).not.toBe(existing.id);
+    expect(imported.latestVersion).toBe(0);
+    expect(imported.draft).toEqual(existing.draft);
+    expect(engine.workflow(existing.id)).toEqual(existing);
+    expect(store.getVersion(existing.id, 1)).toEqual(existingVersion);
+    expect(store.runs()).toEqual([]);
+    expect(store.work()).toEqual([]);
+    engine.publish(imported.id);
+    expect(store.getVersion(imported.id, 1)?.definition).toEqual(
+      existingVersion?.definition,
+    );
+  } finally {
+    engine.stop();
+    store.close();
+  }
+});
 
 it('resolves slash branches, freezes commit and excludes nested, symlink, unrelated and invalid files', async () => {
   const fetcher = fixture({

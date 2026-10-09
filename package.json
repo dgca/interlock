@@ -56,7 +56,8 @@
     "README.md",
     "CHANGELOG.md",
     "CONTEXT.md",
-    "docs"
+    "docs",
+    "workflows"
   ],
   "publishConfig": {
     "access": "public"
