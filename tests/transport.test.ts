@@ -82,6 +82,13 @@ it.each(['stdio', 'http'])(
       const tools = (await client.listTools()).tools;
       for (const tool of tools) validateContractSchema(tool.inputSchema);
       expect(tools.map((t) => t.name)).toContain('claim_work');
+      const deletionScope = tools.find(
+        (t) => t.name === 'delete_workflow',
+      )!.description;
+      expect(deletionScope).toContain('Batch item runs and detached runs');
+      expect(deletionScope).toContain(
+        'ancestor runs and the entire run tree remain intact',
+      );
       for (const name of [
         'list_prompts',
         'get_prompt',

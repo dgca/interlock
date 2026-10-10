@@ -232,7 +232,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'delete_workflow',
-    'Permanently delete a workflow, published versions, and associated run trees, assignments, and events. References, active affected runs including detached descendants of completed parents, or owned children block deletion. Prefer archived:true with update_workflow to hide unused work and preserve history.',
+    'Permanently delete a workflow and its published versions, all runs of that workflow and their descendants, including Batch item runs and detached runs, plus their assignments and events. If any run of this workflow has a parent run from another workflow, deletion is blocked: ancestor runs and the entire run tree remain intact. External draft or published references, active affected runs including detached descendants of completed parents, or owned children also block deletion. Prefer archived:true with update_workflow to hide unused work and preserve history.',
     { id: z.string() },
     (input) => client.workflows.delete(input),
   );
