@@ -129,3 +129,90 @@ it.each(['wait', 'batch', 'detached'] as const)(
     expect(store.getVersion(child.id, 1)).toBeDefined();
   },
 );
+
+it.each(['draft', 'latest', 'historical', 'mixed'] as const)(
+  'identifies exact %s references while preserving the target and its history',
+  (scope) => {
+    const child = published('Target');
+    const targetRun = engine.start(child.id, {}).run;
+    engine.cancel(targetRun.id);
+    const definition = blankDefinition();
+    definition.nodes[1] = nodeSchema.parse({
+      id: 'agent',
+      kind: 'workflow',
+      label: 'Target',
+      workflowId: child.id,
+      version: 1,
+    });
+    const parent = engine.create('Caller', '', definition);
+    if (scope !== 'draft') engine.publish(parent.id);
+    if (scope === 'historical' || scope === 'mixed') {
+      engine.publish(parent.id);
+      engine.update(parent.id, {
+        draft: blankDefinition(),
+        draftRevision: parent.draftRevision,
+      });
+      engine.publish(parent.id);
+    }
+    if (scope === 'mixed') {
+      engine.update(parent.id, {
+        draft: definition,
+        draftRevision: engine.workflow(parent.id).draftRevision,
+      });
+      published('Second caller', child.id);
+    }
+    const before = Object.fromEntries(
+      ['workflows', 'versions', 'runs', 'work', 'events'].map((name) => [
+        name,
+        store.list(name),
+      ]),
+    );
+    let error = '';
+    try {
+      engine.deleteWorkflow(child.id);
+    } catch (caught) {
+      error = (caught as Error).message;
+    }
+    expect(error).toContain(`"Caller" (${parent.id})`);
+    expect(error).toContain('archive');
+    if (scope === 'draft' || scope === 'mixed')
+      expect(error).toContain('draft');
+    if (scope === 'latest')
+      expect(error).toContain('published versions v1 (latest)');
+    if (scope === 'historical' || scope === 'mixed') {
+      expect(error).toContain('published versions v1, v2');
+      expect(error).toContain('latest v3 does not reference it');
+    }
+    if (scope === 'mixed') expect(error).toContain('"Second caller"');
+    for (const [name, rows] of Object.entries(before))
+      expect(store.list(name)).toEqual(rows);
+  },
+);
+
+it('uses the same historical-reference diagnostics for owned children', async () => {
+  const parent = engine.create('Owner');
+  const child = engine.create('Owned target', '', blankDefinition(), parent.id);
+  engine.publish(child.id);
+  const definition = blankDefinition();
+  definition.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    kind: 'workflow',
+    label: 'Child',
+    workflowId: child.id,
+    version: 1,
+  });
+  engine.update(parent.id, {
+    draft: definition,
+    draftRevision: parent.draftRevision,
+  });
+  engine.publish(parent.id);
+  engine.update(parent.id, {
+    draft: blankDefinition(),
+    draftRevision: engine.workflow(parent.id).draftRevision,
+  });
+  engine.publish(parent.id);
+  await expect(caller.workflows.delete({ id: child.id })).rejects.toThrow(
+    'published versions v1; latest v2 does not reference it',
+  );
+  expect(engine.workflow(child.id).ownerWorkflowId).toBe(parent.id);
+});

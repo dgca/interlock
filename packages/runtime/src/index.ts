@@ -386,19 +386,46 @@ export class Engine {
         definition.nodes.some(
           (node) => node.kind === 'workflow' && node.workflowId === id,
         );
+      const versions =
+        this.store.list<import('@interlock/core').WorkflowVersion>('versions');
+      const blockers: string[] = [];
+      let hasPublishedReferences = false;
       for (const workflow of this.store.workflows()) {
         if (workflow.id === id) continue;
-        const versions = this.store
-          .list<import('@interlock/core').WorkflowVersion>('versions')
-          .filter((version) => version.workflowId === workflow.id);
-        if (
-          references(workflow.draft) ||
-          versions.some((version) => references(version.definition))
-        )
-          throw new InterlockError(
-            `Cannot delete: "${workflow.name}" references this workflow. Delete the referencing workflow first, or archive this one.`,
+        const referencedVersions = versions
+          .filter(
+            (version) =>
+              version.workflowId === workflow.id &&
+              references(version.definition),
+          )
+          .map((version) => version.version)
+          .sort((a, b) => a - b);
+        const locations: string[] = [];
+        if (references(workflow.draft)) locations.push('draft');
+        if (referencedVersions.length) {
+          hasPublishedReferences = true;
+          locations.push(
+            `published versions ${referencedVersions.map((version) => `v${version}${version === workflow.latestVersion ? ' (latest)' : ''}`).join(', ')}`,
           );
+        }
+        if (!locations.length) continue;
+        const latest =
+          workflow.latestVersion > 0 &&
+          !referencedVersions.includes(workflow.latestVersion)
+            ? `; latest v${workflow.latestVersion} does not reference it`
+            : '';
+        blockers.push(
+          `"${workflow.name}" (${workflow.id}): ${locations.join('; ')}${latest}`,
+        );
       }
+      if (blockers.length)
+        throw new InterlockError(
+          `Cannot delete: referenced by ${blockers.join('; ')}. ${
+            hasPublishedReferences
+              ? 'Published references are immutable. Remove draft references where possible, or archive this workflow to preserve its versions and history.'
+              : 'Remove these draft references first, or archive this workflow to preserve its history.'
+          }`,
+        );
       const runs = this.store.runs();
       const removed = new Set(
         runs.filter((run) => run.workflowId === id).map((run) => run.id),
