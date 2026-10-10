@@ -262,7 +262,7 @@ The build includes TypeScript checks. Tests cover workflow contracts, runtime be
 
 ### Author children through MCP or the CLI
 
-MCP `create_workflow` accepts `ownerWorkflowId`. `list_workflows` accepts an optional `ownerWorkflowId`: omit it for all workflows, set it to `null` for the library, or provide a parent ID for its children. Create and publish the child, then update the parent's draft with a Workflow node that pins the child's version. Include the parent's current `draftRevision` when saving. `list_workflows` and `get_workflow` also return `draftMatchesLatest`: true for a matching published definition, false for unpublished edits, and null before first publication. Draft revisions count saves; version numbers count publications.
+MCP `create_workflow` accepts `ownerWorkflowId`. `list_workflows` returns compact summaries by default. Use `get_workflow` for one full draft or `includeDraft: true` for the previous full listing. Its optional `ownerWorkflowId` filter works as follows: omit it for all workflows, set it to `null` for the library, or provide a parent ID for its children. Create and publish the child, then update the parent's draft with a Workflow node that pins the child's version. Include the parent's current `draftRevision` when saving. `list_workflows` and `get_workflow` also return `draftMatchesLatest`: true for a matching published definition, false for unpublished edits, and null before first publication. Draft revisions count saves; version numbers count publications.
 
 The CLI accepts the same owner field in an import document:
 

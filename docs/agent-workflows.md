@@ -14,6 +14,12 @@ Work summaries also include `workflowId`, optional `parentRunId`, optional `pare
 
 Work summaries omit prompts, inputs, output schemas, and execution instructions. `claim_work` returns the complete assignment. The default `fields: "full"` preserves the existing response. CLI callers can use `interlock work RUN_ID --summary`. The shared API exposes `work.summaries` and `work.list`.
 
+## Discover workflows and read results
+
+MCP `list_workflows` returns compact summaries by default, with `id`, `name`, `description`, `ownerWorkflowId`, `archived`, `latestVersion`, `draftRevision`, `createdAt`, `updatedAt`, and `draftMatchesLatest`. Node definitions, prompts, and contracts are omitted. Use `get_workflow` to read one complete draft or `list_workflows` with `includeDraft: true` for the previous full listing. Owner and archive filters apply to both shapes. Shared HTTP API `workflows.list`, CLI `interlock workflows`, and the editor retain full drafts.
+
+Successful MCP tools return `structuredContent` alongside the existing JSON text. Object results such as `get_workflow`, `export_workflow`, and `get_run` appear directly in `structuredContent`. Array results such as `list_workflows`, `list_prompts`, and `list_work` use `structuredContent.items`; scalar or null results use `structuredContent.value`. These values match the parsed JSON text. Error responses retain `isError` and their text message without success data. No output wrapper changes the JSON text payload.
+
 ## Inspect draft publication state
 
 `list_workflows` and `get_workflow`, through shared API `workflows.list` and `workflows.get`, include `draftMatchesLatest`. It is `true` when the draft structurally equals the latest published definition, `false` when it differs, and `null` when there is no published version. Object key order does not affect equality; array order does. A manually reverted draft can match again. Metadata edits such as renaming do not change definition equality.

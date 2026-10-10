@@ -70,7 +70,15 @@ it.each(['stdio', 'http'])(
       const response = await client.callTool({ name, arguments: args });
       expect(response.isError).not.toBe(true);
       const content = response.content as { type: string; text: string }[];
-      return JSON.parse(content[0].text);
+      const parsed = JSON.parse(content[0].text);
+      expect(response.structuredContent).toEqual(
+        Array.isArray(parsed)
+          ? { items: parsed }
+          : parsed !== null && typeof parsed === 'object'
+            ? parsed
+            : { value: parsed },
+      );
+      return parsed;
     };
     try {
       await client.connect(transport);
@@ -102,7 +110,70 @@ it.each(['stdio', 'http'])(
           (item: any) => item.id === w.id,
         ),
       ).toMatchObject({ draftMatchesLatest: false });
+      const compactBefore = await call('list_workflows', {});
+      expect(compactBefore.every((item: any) => !('draft' in item))).toBe(true);
+      expect(Object.keys(compactBefore[0]).sort()).toEqual(
+        [
+          'id',
+          'name',
+          'description',
+          'ownerWorkflowId',
+          'archived',
+          'latestVersion',
+          'draftRevision',
+          'createdAt',
+          'updatedAt',
+          'draftMatchesLatest',
+        ].sort(),
+      );
+      const compactLength = JSON.stringify(compactBefore).length;
+      const smallDraft = engine.workflow(w.id).draft;
+      const largeDraft = structuredClone(smallDraft);
+      if (largeDraft.nodes[1].kind !== 'agent')
+        throw new Error('Expected agent');
+      largeDraft.nodes[1].prompt = 'Large prompt '.repeat(10000);
+      largeDraft.nodes[1].outputSchema = {
+        type: 'object',
+        description: 'Large schema '.repeat(10000),
+      };
+      for (let i = 0; i < 100; i++)
+        largeDraft.nodes.push(
+          nodeSchema.parse({
+            id: `extra-${i}`,
+            kind: 'agent',
+            label: 'Extra',
+            prompt: 'Extra prompt',
+          }),
+        );
+      engine.update(w.id, {
+        draft: largeDraft,
+        draftRevision: engine.workflow(w.id).draftRevision,
+      });
+      const compactAfter = await call('list_workflows', {
+        includeDraft: false,
+      });
+      expect(JSON.stringify(compactAfter).length).toBe(compactLength);
+      const legacyList = await call('list_workflows', { includeDraft: true });
+      expect(legacyList.find((item: any) => item.id === w.id).draft).toEqual(
+        largeDraft,
+      );
+      expect((await call('get_workflow', { id: w.id })).draft).toEqual(
+        largeDraft,
+      );
+      const api = createClient(url);
+      expect(
+        (await api.workflows.list.query()).find((item) => item.id === w.id)
+          ?.draft,
+      ).toEqual(largeDraft);
+      engine.update(w.id, {
+        draft: smallDraft,
+        draftRevision: engine.workflow(w.id).draftRevision,
+      });
       const tools = (await client.listTools()).tools;
+      expect(
+        tools.find((t) => t.name === 'list_workflows')!.inputSchema.properties!
+          .includeDraft,
+      ).toMatchObject({ default: false });
       for (const tool of tools) validateContractSchema(tool.inputSchema);
       expect(tools.map((t) => t.name)).toContain('claim_work');
       for (const name of [
