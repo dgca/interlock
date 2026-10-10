@@ -141,7 +141,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'list_workflows',
-    'List workflows, drafts, owners, and published versions. Omit ownerWorkflowId for all workflows, use null for the library, or a parent ID for its children.',
+    'List workflows, drafts, owners, and published versions. draftRevision counts draft saves; latestVersion counts publications. draftMatchesLatest is structural equality with the latest published definition, or null when unpublished. Omit ownerWorkflowId for all workflows, use null for the library, or a parent ID for its children.',
     {
       ownerWorkflowId: z.string().nullable().optional(),
       includeArchived: z
@@ -244,7 +244,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'get_workflow',
-    'Inspect one workflow, its draft, draftRevision and input contract. Use edit_workflow with the current revision for small edits, or validate_workflow for read-only preflight.',
+    'Inspect one workflow, its draft and input contract. draftRevision counts draft saves; latestVersion counts publications. draftMatchesLatest is structural equality with the latest published definition, or null when unpublished. Use edit_workflow with the current revision for small edits, or validate_workflow for read-only preflight.',
     { id: z.string() },
     (input) => client.workflows.get(input),
   );

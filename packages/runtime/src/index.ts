@@ -101,6 +101,15 @@ export class Engine {
     if (!w) throw new InterlockError('Workflow not found');
     return { ...w, ownerWorkflowId: w.ownerWorkflowId ?? null };
   }
+  describeWorkflow(workflow: Workflow) {
+    const latest = this.store.getVersion(workflow.id, workflow.latestVersion);
+    return {
+      ...workflow,
+      draftMatchesLatest: latest
+        ? isDeepStrictEqual(workflow.draft, latest.definition)
+        : null,
+    };
+  }
   run(id: string) {
     const run = this.store.get<Run>('runs', id);
     if (!run) throw new InterlockError('Run not found');

@@ -79,6 +79,29 @@ it.each(['stdio', 'http'])(
           (item: { id: string }) => item.id === w.id,
         ),
       ).toBe(true);
+      expect(await call('get_workflow', { id: w.id })).toMatchObject({
+        draftMatchesLatest: true,
+      });
+      expect(
+        (await call('list_workflows', {})).find(
+          (item: any) => item.id === w.id,
+        ),
+      ).toMatchObject({ draftMatchesLatest: true });
+      const draftOnly = await call('create_workflow', { name: 'Draft only' });
+      expect(await call('get_workflow', { id: draftOnly.id })).toMatchObject({
+        draftMatchesLatest: null,
+      });
+      const changed = engine.workflow(w.id).draft;
+      changed.nodes[1].label = 'Edited';
+      engine.update(w.id, { draft: changed, draftRevision: w.draftRevision });
+      expect(await call('get_workflow', { id: w.id })).toMatchObject({
+        draftMatchesLatest: false,
+      });
+      expect(
+        (await call('list_workflows', {})).find(
+          (item: any) => item.id === w.id,
+        ),
+      ).toMatchObject({ draftMatchesLatest: false });
       const tools = (await client.listTools()).tools;
       for (const tool of tools) validateContractSchema(tool.inputSchema);
       expect(tools.map((t) => t.name)).toContain('claim_work');

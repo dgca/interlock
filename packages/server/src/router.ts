@@ -136,9 +136,14 @@ export const appRouter = t.router({
                 (!w.archived &&
                   (!w.ownerWorkflowId ||
                     !ctx.engine.workflow(w.ownerWorkflowId).archived))),
-          ),
+          )
+          .map((workflow) => ctx.engine.describeWorkflow(workflow)),
       ),
-    get: p.input(id).query(({ ctx, input }) => ctx.engine.workflow(input.id)),
+    get: p
+      .input(id)
+      .query(({ ctx, input }) =>
+        ctx.engine.describeWorkflow(ctx.engine.workflow(input.id)),
+      ),
     create: p
       .input(
         z.object({
