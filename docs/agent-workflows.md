@@ -259,6 +259,8 @@ MCP `delete_workflow` and `interlock delete ID --yes` permanently remove the wor
 
 If a run of the workflow has a parent run from another workflow, deletion is blocked. This includes invocation directly, inside a Batch, or in detached mode. Nothing is removed: ancestor runs, child runs, assignments, and events remain intact. External draft or published references, owned children, and active affected runs also block deletion, including active detached descendants of completed parents. Archive is available when references or run ancestry prevent deletion.
 
+Reference errors identify every blocking workflow by name and ID, list the referencing draft and published version numbers, and state when the latest version does not reference the target. Historical published versions still block deletion even after the draft and latest version stop using it. Published references cannot be edited; archive the target to preserve its versions and history. Owned children follow the same reference rules.
+
 ## Dispatch independent workflows
 
 Set a Workflow node to `mode: "detached"` to start its pinned workflow and continue with `{runId, workflowId, version}`. Omit mode or use `wait` to await its result. Input validation precedes dispatch; later child failure does not change the launching step. See [Workflow execution](workflow-execution.md) for the fixed output contract and lifecycle.
