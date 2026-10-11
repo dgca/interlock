@@ -11,3 +11,12 @@ Behavior is defined in [spec.md](spec.md); scope and authorization are in [inten
 Rollback and stale-state checks are the highest risks. Rejected moves must not change drafts, versions or active assignments. The candidate proof must name the exact commit, original base, commands, exits and artifact paths. No checks touch the user's database.
 
 Planning does not identify any unresolved material choice. Preserve already reviewed cleanup behavior and its evidence on the base branch; this PR's diff contains ownership work only.
+
+## Implementation and criterion checks
+
+- AC1 through AC4 are covered by `tests/ownership.test.ts` input validation, complete preview diagnostics, archived/one-level controls, stale owner and new-reference checks, and injected failure after the write. Protected-state comparisons include all workflow, version, deletion identity, run, work, event and prompt collections. Every negative case has a valid adoption/release or cleanup control.
+- AC5 uses actual direct and owner child runs with available work, completes both after adoption and verifies the parent result and ancestry. Foreign draft-save and creation checks reject before changes; release then permits publication.
+- AC6 exports to a fresh store, rejects ordinary/forced ownership replacement, and rejects an original foreign caller restoration after adoption with complete rollback. A release then permits that restoration. Existing import validation covers all retained caller versions.
+- AC7 adds ownership discovery and stale/no-op/release calls to both HTTP and stdio transport journeys. Reviewed README, architecture, current limits, harness and agent-operations guidance against API and runtime behavior, plus CLI import help and transfer contracts. Audited affected MCP list/get, create/update/edit/validate/publish, ownership, cleanup, export/import and direct-run guidance, schemas, defaults and returned fields. This is an affected-flow audit, not an audit of every MCP tool. No CLI move command or UI move controls are added.
+
+No implementation changes to the accepted behavior were required. Required candidate checks and independent review evidence are returned through the SDLC assignments with logs outside the checkout.

@@ -108,7 +108,7 @@ Edit and publish the child with the ordinary editor. Select **Use v1 in [node na
 
 The child editor links back to its owner and retains its own stable URL and Runs tab. Only the owner can reference a child. Children may invoke library workflows but cannot own or reference other children. Ownership has one level; the existing ten-level execution limit still applies.
 
-This authoring flow does not yet support moving existing workflows, finding children from the main library search, or cloning parents with children. Parent clone is disabled, and deletion rejects parents with children. Portable export includes owned children and dependencies. Delete unreferenced children first; published references can block child deletion. Archive the parent to hide it from the active library. Complete lifecycle operations are required before releasing this feature.
+Existing workflows can be adopted, reparented or released through MCP while preserving their IDs, versions and history. See [ownership changes](docs/agent-workflows.md#change-workflow-ownership). The UI does not yet provide move controls, main-library child search, or parent cloning with children. Parent clone is disabled, and deletion rejects parents with children. Portable export includes owned children and dependencies. Delete unreferenced children first; published references can block child deletion. Archive the parent to hide it from the active library. Complete lifecycle operations are required before releasing this feature.
 
 ### Follow an execution
 
@@ -272,7 +272,7 @@ interlock workflows '{"ownerWorkflowId":"PARENT_ID"}'
 interlock workflows '{"ownerWorkflowId":null}'
 ```
 
-An import without an owner remains a library workflow. A draft Workflow node can use `"version": null` until its target is published. A published reference always uses a positive version number.
+Use MCP `preview_workflow_ownership` and `set_workflow_owner` to move an existing workflow. Only the proposed owner may reference it in any draft or retained published version. Explicit old-version cleanup can remove obsolete caller blockers after informed agreement. Release uses `ownerWorkflowId: null`. An import without an owner remains a library workflow. A draft Workflow node can use `"version": null` until its target is published. A published reference always uses a positive version number.
 
 ### Publish a shared workflow and its dependents
 

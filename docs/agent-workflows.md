@@ -79,7 +79,7 @@ This example assumes an existing `research` node, `research-next` edge, and `fin
 
 `set` replaces the entire named field, including nested objects such as `context` or `inputBindings`. `unset` is an array of field names. A field cannot appear in both. Unsetting a required field fails unless the definition schema supplies a default. Unsetting an absent field also fails. Unknown operation, node, edge, or settings fields fail instead of disappearing. JSON Schema contract contents remain unrestricted. Existing scripts with omitted language retain Bash; explicitly unsetting language restores legacy Bash behavior. Defaulted fields, such as maxSteps, reset to their schema default when unset.
 
-Removing a node preserves bindings in surviving nodes. Those bindings become publication blockers until explicitly repaired. Removing or renaming a source port preserves its edges, so reconnect or remove them in the same edit list, or save and repair the incomplete draft later. Batch membership remains explicit through `batchId`; existing publication scope checks apply. Workflow ownership is not editable, and saved references still obey owned-child rules.
+Removing a node preserves bindings in surviving nodes. Those bindings become publication blockers until explicitly repaired. Removing or renaming a source port preserves its edges, so reconnect or remove them in the same edit list, or save and repair the incomplete draft later. Batch membership remains explicit through `batchId`; existing publication scope checks apply. Workflow ownership is not editable through draft edits; use the [dedicated ownership operation](#change-workflow-ownership). Saved references still obey owned-child rules.
 
 The result contains `applied`, `draftRevision`, `changes`, and `diagnostics`. `changes.nodes` and `changes.edges` each contain added, updated, and removed IDs; `changes.settings` lists changed fields. Effective changes increment the draft revision once. Empty or equivalent edits preserve both revision and timestamp. Equality ignores object key order. Rejected edits return `applied: false`, the current revision, empty changes, and diagnostics. Invalid edits identify their zero-based `operationIndex`. A stale revision has code `stale_revision`; reload before retrying.
 
@@ -260,6 +260,30 @@ interlock import @workflow.json --force
 UI import accepts local bundles and legacy files, or direct JSON files discovered from a public GitHub folder URL. GitHub discovery pins the branch or commit to a commit SHA and displays one choice per bundle root with its dependencies. `workflows.discoverGithub` reads and validates files without changing library data. `workflows.importGithub` re-fetches the selected direct files at that SHA and imports the entire selection atomically with no draft replacement options. A late conflict rejects all selected workflows and prompts. GitHub import never starts runs. Existing CLI and MCP bundle import remains a separate operation with its explicit replacement options. Replacements that need a revision map or `force` use CLI or MCP. The shared API exposes `workflows.export`, `workflows.exportDraft` for unsaved editor content, and `workflows.import`.
 
 GitHub metadata uses the public API; file contents use raw GitHub URLs at the pinned commit. The discovery and selection input/output contracts are unchanged. A `workflows.importGithub` server rejection starts with `Nothing imported:` and confirms that the selected set made no changes. If the response is lost without that confirmation, inspect the library before retrying, especially for legacy imports that create new workflows. A UI refresh error after a successful import does not roll back the operation. These GitHub operations are separate from CLI and MCP bundle import; their existing revision and force controls are unchanged.
+
+## Change workflow ownership
+
+Use `preview_workflow_ownership` with an existing `id` and proposed `ownerWorkflowId`. Set the proposed owner to a library workflow ID for adoption or reparenting, or explicit `null` to release a child to the library. The shared API operations are `workflows.previewOwnership` and `workflows.setOwner`. UI move controls and CLI move commands are not provided.
+
+Preview returns `id`, `name`, `currentOwnerWorkflowId`, proposed `ownerWorkflowId`, `unchanged`, `canSetOwner`, and `blockers`. Each blocker includes `kind`, `workflowId`, `name` and `reason`; references also include `nodeId`, `nodeLabel`, and either `draft: true` or `version` with `latest`. All drafts and retained published versions are checked, including archived callers, unresolved draft pins, self-references and Workflow nodes inside Batch. Only the proposed owner may reference an owned child.
+
+A new owner must be an unarchived library workflow different from the target. A workflow with children cannot itself become a child. Archived targets retain their archive flag. Setting the existing owner is a no-op, including an archived existing parent. Release to the library permits future reuse by other callers.
+
+If the preview permits the move, call `set_workflow_owner` with the same target/proposed owner and `expectedOwnerWorkflowId` from that preview. Explicit null is required when the current workflow is in the library. For example:
+
+```json
+{
+  "id": "CHILD_ID",
+  "ownerWorkflowId": "PARENT_ID",
+  "expectedOwnerWorkflowId": null
+}
+```
+
+The mutation rechecks the expected owner and current reference rules inside one transaction. Stale ownership or new blockers reject without changes; preview again before retrying. The response contains `applied` and the workflow record. Effective moves update only `ownerWorkflowId` and `updatedAt`; no-op preserves the timestamp. IDs, drafts, revisions, version numbers, cleanup identities, run history, work, events, and execution ancestry are preserved. Ownership changes do not publish or execute workflows.
+
+Remove foreign current references through draft editing and publication. Historical references remain blockers until the person explicitly selects obsolete caller versions for [version cleanup](version-cleanup.md), including its history-loss acknowledgment. Ownership changes never delete or rewrite those callers. Restoring a deleted foreign caller after adoption fails the usual ownership checks, even when its definition is original.
+
+Export carries the resulting ownership and includes owners/children as usual. Fresh import preserves it. Generic updates, Raw definitions, and imports cannot change an existing workflow's ownership; `force` does not bypass that restriction. Use the dedicated move operation on the destination library when needed.
 
 ## Archive, restore, or delete
 

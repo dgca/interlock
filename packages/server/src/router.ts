@@ -13,6 +13,8 @@ import {
   promptContentSchema,
   versionSelectionSchema,
   versionDeletionSchema,
+  ownershipPreviewSchema,
+  ownershipChangeSchema,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import {
@@ -164,6 +166,12 @@ export const appRouter = t.router({
           input.ownerWorkflowId,
         ),
       ),
+    previewOwnership: p
+      .input(ownershipPreviewSchema)
+      .query(({ ctx, input }) => ctx.engine.ownership.preview(input)),
+    setOwner: p
+      .input(ownershipChangeSchema)
+      .mutation(({ ctx, input }) => ctx.engine.ownership.set(input)),
     edit: p
       .input(
         z

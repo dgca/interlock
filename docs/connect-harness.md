@@ -164,6 +164,7 @@ Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `
 | `cancel_run`, `retry_run`                                                       | Cancel unfinished work or explicitly retry a failed run.                          |
 | `list_runs`                                                                     | Find bounded run summaries by workflow, status, ancestry, and input.              |
 | `export_workflow`, `import_workflows`                                           | Transfer workflow drafts, dependencies, and published pins in portable bundles.   |
+| `preview_workflow_ownership`, `set_workflow_owner`                              | Preview and move existing workflows while preserving identity and history.        |
 | `delete_workflow`                                                               | Permanently remove an unreferenced workflow and its inactive history.             |
 
 `list_work` returns available assignments, not claimed work. An empty list does not mean the execution has completed. Use `get_run_briefing` for its status, claimed assignments, blockers, and detached progress. When given an existing run ID, resume it rather than calling `start_run` again.
@@ -172,7 +173,7 @@ Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `
 
 For authoring, `get_workflow` supplies the current draftRevision, `edit_workflow` applies small ordered edits atomically, and `validate_workflow` reports read-only save, publication, and contract diagnostics. Full-draft replacement remains available. See [editing policies and diagnostic limits](agent-workflows.md#edit-a-draft-atomically).
 
-MCP `update_workflow` accepts `archived` for archive and restore. `delete_workflow` performs guarded permanent deletion. `list_runs` returns bounded, filtered run summaries, including waiting runs. `list_work` accepts `fields: "summary"` for compact discovery, including `workflowId`, optional `parentRunId`, `rootRunId`, and `rootWorkflowId` for executor routing. `claim_work` returns full execution details. `export_workflow` and `import_workflows` transfer portable dependency bundles. See [agent workflow operations](agent-workflows.md) for filters, schema guidance, input bindings, import conflicts, and CLI examples.
+Use `preview_workflow_ownership` and `set_workflow_owner` for adoption, reparenting or release with expected-owner protection. Only the proposed owner may reference a child; retained historical foreign callers require explicit version cleanup. Generic updates and forced imports cannot change ownership. MCP `update_workflow` accepts `archived` for archive and restore. `delete_workflow` performs guarded permanent deletion. `list_runs` returns bounded, filtered run summaries, including waiting runs. `list_work` accepts `fields: "summary"` for compact discovery, including `workflowId`, optional `parentRunId`, `rootRunId`, and `rootWorkflowId` for executor routing. `claim_work` returns full execution details. `export_workflow` and `import_workflows` transfer portable dependency bundles. See [agent workflow operations](agent-workflows.md) for filters, schema guidance, input bindings, import conflicts, and CLI examples.
 
 ## Diagnose a connection
 

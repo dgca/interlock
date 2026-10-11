@@ -12,6 +12,8 @@ export function createMcpClient(url?: string) {
       delete: client.prompts.delete.mutate,
     },
     workflows: {
+      previewOwnership: client.workflows.previewOwnership.query,
+      setOwner: client.workflows.setOwner.mutate,
       versions: client.workflows.versions.query,
       previewVersionDeletion: client.workflows.previewVersionDeletion.query,
       deleteVersions: client.workflows.deleteVersions.mutate,

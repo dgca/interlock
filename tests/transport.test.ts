@@ -170,6 +170,85 @@ it.each(['stdio', 'http'])(
         draftRevision: engine.workflow(w.id).draftRevision,
       });
       const tools = (await client.listTools()).tools;
+      for (const name of ['preview_workflow_ownership', 'set_workflow_owner'])
+        expect(tools.map((t) => t.name)).toContain(name);
+      const ownershipSchema = tools.find(
+        (t) => t.name === 'set_workflow_owner',
+      )!.inputSchema;
+      expect(ownershipSchema.required).toEqual(
+        expect.arrayContaining([
+          'id',
+          'ownerWorkflowId',
+          'expectedOwnerWorkflowId',
+        ]),
+      );
+      expect(() =>
+        assertContract(ownershipSchema, { id: w.id, ownerWorkflowId: null }),
+      ).toThrow();
+      expect(() =>
+        assertContract(ownershipSchema, {
+          id: w.id,
+          ownerWorkflowId: '',
+          expectedOwnerWorkflowId: null,
+        }),
+      ).toThrow();
+      expect(
+        tools.find((t) => t.name === 'update_workflow')!.inputSchema.properties,
+      ).not.toHaveProperty('ownerWorkflowId');
+      const ownershipTarget = await call('create_workflow', {
+        name: 'Ownership target',
+      });
+      const ownershipOwner = await call('create_workflow', {
+        name: 'Ownership owner',
+      });
+      const ownershipPreview = await call('preview_workflow_ownership', {
+        id: ownershipTarget.id,
+        ownerWorkflowId: ownershipOwner.id,
+      });
+      expect(ownershipPreview).toMatchObject({
+        canSetOwner: true,
+        currentOwnerWorkflowId: null,
+        blockers: [],
+      });
+      expect(
+        (await call('get_workflow', { id: ownershipTarget.id }))
+          .ownerWorkflowId,
+      ).toBe(null);
+      const moveArguments = {
+        id: ownershipTarget.id,
+        ownerWorkflowId: ownershipOwner.id,
+        expectedOwnerWorkflowId: null,
+      };
+      expect(await call('set_workflow_owner', moveArguments)).toMatchObject({
+        applied: true,
+        workflow: {
+          id: ownershipTarget.id,
+          ownerWorkflowId: ownershipOwner.id,
+          draftRevision: 1,
+        },
+      });
+      const adopted = await call('get_workflow', { id: ownershipTarget.id });
+      const staleMove = await client.callTool({
+        name: 'set_workflow_owner',
+        arguments: { ...moveArguments, ownerWorkflowId: null },
+      });
+      expect(staleMove.isError).toBe(true);
+      expect(await call('get_workflow', { id: ownershipTarget.id })).toEqual(
+        adopted,
+      );
+      expect(
+        await call('set_workflow_owner', {
+          ...moveArguments,
+          expectedOwnerWorkflowId: ownershipOwner.id,
+        }),
+      ).toMatchObject({ applied: false });
+      expect(
+        await call('set_workflow_owner', {
+          id: ownershipTarget.id,
+          ownerWorkflowId: null,
+          expectedOwnerWorkflowId: ownershipOwner.id,
+        }),
+      ).toMatchObject({ applied: true, workflow: { ownerWorkflowId: null } });
       for (const name of [
         'preview_version_deletion',
         'delete_workflow_versions',
