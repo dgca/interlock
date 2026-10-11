@@ -1,5 +1,16 @@
 # @type_of/interlock
 
+## 0.1.19
+
+### Patch Changes
+
+- 59c573e: Clarify which run trees workflow deletion removes and when child-run ancestry blocks deletion.
+- ec72962: Return compact workflow summaries by default from MCP list_workflows, with includeDraft:true retaining the previous full listing. Add structuredContent alongside existing JSON text for successful MCP tool results.
+- bfcd3d3: Add MCP previews and explicit cleanup of obsolete published workflow versions with protected dependencies, atomic deletion, and informed history loss. Preserve run records after cleanup, support version gaps in export/import, and allow explicit restoration of original definitions from backups.
+- 4f7e0da: Explain blocked workflow deletion with every referencing workflow and its exact draft or published versions, including historical-only references, and recommend archiving to preserve history.
+- 2e8124f: Expose whether workflow drafts match their latest published definitions in API, CLI, and MCP reads.
+- 7802666: Add MCP and shared API operations to adopt, reparent and release existing workflows while preserving IDs, versions and run history. Report foreign draft and retained-version references, and reject stale ownership changes.
+
 ## 0.1.18
 
 ### Patch Changes
