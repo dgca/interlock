@@ -183,15 +183,30 @@ it.each(['stdio', 'http'])(
         ]),
       );
       expect(() =>
-        assertContract(ownershipSchema, { id: w.id, ownerWorkflowId: null }),
+        assertContract(
+          ownershipSchema,
+          { id: w.id, ownerWorkflowId: null },
+          'ownership change',
+        ),
       ).toThrow();
       expect(() =>
-        assertContract(ownershipSchema, {
-          id: w.id,
-          ownerWorkflowId: '',
-          expectedOwnerWorkflowId: null,
-        }),
+        assertContract(
+          ownershipSchema,
+          {
+            id: w.id,
+            ownerWorkflowId: '',
+            expectedOwnerWorkflowId: null,
+          },
+          'ownership change',
+        ),
       ).toThrow();
+      expect(() =>
+        assertContract(
+          ownershipSchema,
+          { id: w.id, ownerWorkflowId: null, expectedOwnerWorkflowId: null },
+          'ownership control',
+        ),
+      ).not.toThrow();
       expect(
         tools.find((t) => t.name === 'update_workflow')!.inputSchema.properties,
       ).not.toHaveProperty('ownerWorkflowId');
