@@ -176,6 +176,13 @@ it.each(['stdio', 'http'])(
       ).toMatchObject({ default: false });
       for (const tool of tools) validateContractSchema(tool.inputSchema);
       expect(tools.map((t) => t.name)).toContain('claim_work');
+      const deletionScope = tools.find(
+        (t) => t.name === 'delete_workflow',
+      )!.description;
+      expect(deletionScope).toContain('Batch item runs and detached runs');
+      expect(deletionScope).toContain(
+        'ancestor runs and the entire run tree remain intact',
+      );
       for (const name of [
         'list_prompts',
         'get_prompt',
@@ -874,6 +881,38 @@ it.each(['stdio', 'http'])(
       await call('update_workflow', { id: disposable.id, archived: false });
       const bundle = await call('export_workflow', { id: disposable.id });
       expect((await call('import_workflows', { bundle })).changed).toEqual([]);
+      const referencedTarget = engine.create('Referenced target');
+      engine.publish(referencedTarget.id);
+      const referenceOwner = engine.create(
+        'Reference owner',
+        '',
+        workflowCall(referencedTarget.id),
+      );
+      engine.publish(referenceOwner.id);
+      engine.update(referenceOwner.id, {
+        draft: blankDefinition(),
+        draftRevision: referenceOwner.draftRevision,
+      });
+      engine.publish(referenceOwner.id);
+      const blockedDeletion = await client.callTool({
+        name: 'delete_workflow',
+        arguments: { id: referencedTarget.id },
+      });
+      expect(blockedDeletion.isError).toBe(true);
+      const blockedContent = blockedDeletion.content as {
+        type: string;
+        text: string;
+      }[];
+      expect(blockedContent[0].text).toContain(
+        `"Reference owner" (${referenceOwner.id})`,
+      );
+      expect(blockedContent[0].text).toContain(
+        'published versions v1; latest v2 does not reference it',
+      );
+      expect(blockedContent[0].text).toContain('archive');
+      expect(
+        tools.find((t) => t.name === 'delete_workflow')!.description,
+      ).toContain('Historical published references remain immutable blockers');
       await call('delete_workflow', { id: disposable.id });
       expect(
         (await call('list_workflows', {})).some(

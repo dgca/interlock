@@ -267,7 +267,11 @@ MCP `update_workflow` accepts `archived: true` or `false`. CLI provides `archive
 
 `list_workflows` includes archived workflows by default. Pass `includeArchived: false` to hide archived workflows and children of archived owners. The owner filter remains independent.
 
-MCP `delete_workflow` and `interlock delete ID --yes` permanently remove the workflow, its versions, and associated run trees, assignments, and events. Active runs, external draft or published references, and owned children block deletion. Archive is available when referenced versions must remain accessible.
+MCP `delete_workflow` and `interlock delete ID --yes` permanently remove the workflow and its published versions, every run of that workflow, and all descendants of those runs. Descendants include Batch item runs and waited or detached Workflow runs, even when they execute another workflow. Their assignments and events are removed too; other workflow records and published versions remain.
+
+If a run of the workflow has a parent run from another workflow, deletion is blocked. This includes invocation directly, inside a Batch, or in detached mode. Nothing is removed: ancestor runs, child runs, assignments, and events remain intact. External draft or published references, owned children, and active affected runs also block deletion, including active detached descendants of completed parents. Archive is available when references or run ancestry prevent deletion.
+
+Reference errors identify every blocking workflow by name and ID, list the referencing draft and published version numbers, and state when the latest version does not reference the target. Historical published versions still block deletion even after the draft and latest version stop using it. Published references cannot be edited; archive the target to preserve its versions and history. Owned children follow the same reference rules.
 
 ## Dispatch independent workflows
 
