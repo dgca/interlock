@@ -36,6 +36,7 @@ import { executeScript } from './scripts.js';
 import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
 import { VersionCleanup } from './versionCleanup.js';
+import { Ownership } from './ownership.js';
 
 const now = () => new Date().toISOString();
 const terminal = (s: string) =>
@@ -53,6 +54,7 @@ export class Engine {
   readonly continuation: Continuation;
   readonly prompts: Prompts;
   readonly versions: VersionCleanup;
+  readonly ownership: Ownership;
   private localJobs = new Map<string, AbortController>();
   private stopped = false;
   private listeners = new Set<() => void>();
@@ -63,6 +65,7 @@ export class Engine {
     this.continuation = new Continuation(store);
     this.prompts = new Prompts(store);
     this.versions = new VersionCleanup(store);
+    this.ownership = new Ownership(store);
     // A process interruption gives no evidence that local work or remote side effects completed.
     for (const run of store.runs()) {
       const execution = run.executions.at(-1);

@@ -660,6 +660,12 @@ export {
   type DeletedWorkflowVersion,
 } from './versionCleanup.js';
 export {
+  ownershipPreviewSchema,
+  ownershipChangeSchema,
+  type OwnershipPreviewInput,
+  type OwnershipChangeInput,
+} from './ownership.js';
+export {
   briefingQuerySchema,
   waitQuerySchema,
   resultQuerySchema,
