@@ -14,6 +14,12 @@ Work summaries also include `workflowId`, optional `parentRunId`, optional `pare
 
 Work summaries omit prompts, inputs, output schemas, and execution instructions. `claim_work` returns the complete assignment. The default `fields: "full"` preserves the existing response. CLI callers can use `interlock work RUN_ID --summary`. The shared API exposes `work.summaries` and `work.list`.
 
+## Inspect draft publication state
+
+`list_workflows` and `get_workflow`, through shared API `workflows.list` and `workflows.get`, include `draftMatchesLatest`. It is `true` when the draft structurally equals the latest published definition, `false` when it differs, and `null` when there is no published version. Object key order does not affect equality; array order does. A manually reverted draft can match again. Metadata edits such as renaming do not change definition equality.
+
+`draftRevision` counts draft saves and `latestVersion` counts publications. Comparing these numbers does not indicate unpublished changes. The field is derived on read without changing stored records, versions, or exports. The editor's publication comparison remains available; a persistent draft-state marker in the editor is a follow-up.
+
 ## Edit a draft atomically
 
 Read `get_workflow` for the current `draftRevision`, then call `edit_workflow` with at most 100 ordered edits. The shared API is `workflows.edit`. All edits apply to a copy before the final draft is validated and saved in one transaction. Stale revisions and save errors reject the whole list. Neither editing nor validation publishes or starts a run.

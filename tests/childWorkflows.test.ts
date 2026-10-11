@@ -57,12 +57,13 @@ it('creates the child and parent reference atomically, retaining unsaved parent 
     1,
   );
   expect(await caller.workflows.list({ ownerWorkflowId: parent.id })).toEqual([
-    result.child,
+    { ...result.child, draftMatchesLatest: null },
   ]);
   expect(await caller.workflows.list()).toHaveLength(2);
-  expect(await caller.workflows.get({ id: result.child.id })).toEqual(
-    result.child,
-  );
+  expect(await caller.workflows.get({ id: result.child.id })).toEqual({
+    ...result.child,
+    draftMatchesLatest: null,
+  });
   expect(() => engine.publish(parent.id)).toThrow('select a version');
 });
 it('rolls back creation for stale drafts and invalid node IDs', () => {
