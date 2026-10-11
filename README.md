@@ -120,7 +120,7 @@ Failed executions can be retried from the inspector. Retrying a failed Batch pre
 
 ### Manage workflows
 
-Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library and from each card's menu in **Child workflows**. Inside a workflow, the three-dot menu beside **Run** contains **Workflow settings** and **Delete workflow**. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows block deletion.
+Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library and from each card's menu in **Child workflows**. Inside a workflow, the three-dot menu beside **Run** contains **Workflow settings** and **Delete workflow**. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows block deletion. Obsolete published callers can be removed through [explicit version cleanup](docs/version-cleanup.md) after a preview and informed agreement. Cleanup keeps run records but removes their graph and retry capability until original definitions are explicitly restored from a backup.
 
 ### Waits and unanswered assignments
 

@@ -10,7 +10,7 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Child workflow**: A workflow owned by one library workflow. Only its owner can invoke it, though it can also be run directly for testing.
 
-**Workflow version**: An immutable published definition of a workflow.
+**Workflow version**: A published definition identified by a permanent version number. Its definition is immutable while retained.
 
 **Draft**: An editable workflow definition that has not been published as a version.
 

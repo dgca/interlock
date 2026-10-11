@@ -8,7 +8,9 @@ import {
   type SavedPrompt,
   promptIds,
   snapshotPrompt,
+  type DeletedWorkflowVersion,
 } from '@interlock/core';
+import { definitionHash } from './versionIdentity.js';
 import {
   workflowBundleSchema,
   type WorkflowBundle,
@@ -30,11 +32,18 @@ export function exportWorkflows(
     if (!w)
       throw new InterlockError(`Cannot export: workflow ${id} does not exist`);
     included.add(id);
-    const versions = Array.from({ length: w.latestVersion }, (_, i) => {
-      const version = store.getVersion(id, i + 1);
-      if (!version) throw new InterlockError(`Missing version ${id}:${i + 1}`);
-      return { version: version.version, definition: version.definition };
-    });
+    const versions = store
+      .listVersions(id)
+      .map(({ version, definition }) => ({ version, definition }));
+    const deletedVersions = store
+      .list<DeletedWorkflowVersion>('deletedVersions')
+      .filter((v) => v.workflowId === id && !store.getVersion(id, v.version))
+      .sort((a, b) => a.version - b.version)
+      .map(({ version, definitionHash, deletedAt }) => ({
+        version,
+        definitionHash,
+        deletedAt,
+      }));
     records.push({
       id,
       name: w.name,
@@ -43,6 +52,7 @@ export function exportWorkflows(
       draft: w.draft,
       draftRevision: w.draftRevision,
       versions,
+      ...(deletedVersions.length ? { deletedVersions } : {}),
     });
     if (w.ownerWorkflowId) include(w.ownerWorkflowId);
     for (const child of workflows.values())
@@ -69,7 +79,11 @@ export function exportWorkflows(
   });
   return {
     format: 'interlock-workflows',
-    formatVersion: prompts.length ? 2 : 1,
+    formatVersion: records.some((w) => w.deletedVersions?.length)
+      ? 3
+      : prompts.length
+        ? 2
+        : 1,
     ...(prompts.length ? { prompts } : {}),
     rootId,
     workflows: records,
@@ -79,7 +93,11 @@ export function exportWorkflows(
 export function importWorkflows(
   store: Store,
   data: WorkflowBundle,
-  options: { force?: boolean; draftRevisions?: Record<string, number> } = {},
+  options: {
+    force?: boolean;
+    draftRevisions?: Record<string, number>;
+    restoreDeletedVersions?: boolean;
+  } = {},
 ) {
   const bundle = workflowBundleSchema.parse(data);
   return store.transaction(() => {
@@ -126,6 +144,9 @@ export function importWorkflows(
         });
     }
     const changed: string[] = [];
+    const skippedVersions: { workflowId: string; version: number }[] = [];
+    const restoredVersions: { workflowId: string; version: number }[] = [];
+    const added = new Set<string>();
     for (const entry of bundle.workflows) {
       for (const definition of [
         entry.draft,
@@ -154,11 +175,37 @@ export function importWorkflows(
         throw new InterlockError(
           `Draft conflict for ${entry.id}. Supply its current draftRevisions entry or use force to replace the draft.`,
         );
+      let previous = 0;
+      for (const deleted of entry.deletedVersions ?? []) {
+        if (
+          deleted.version <= previous ||
+          entry.versions.some((v) => v.version === deleted.version)
+        )
+          throw new InterlockError(
+            `Invalid deleted version identities for ${entry.id}`,
+          );
+        previous = deleted.version;
+        const retained = store.getVersion(entry.id, deleted.version);
+        const local = store.deletedVersion(entry.id, deleted.version);
+        if (
+          (retained &&
+            definitionHash(retained.definition) !== deleted.definitionHash) ||
+          (local && local.definitionHash !== deleted.definitionHash)
+        )
+          throw new InterlockError(
+            `Deleted version identity conflict for ${entry.id}:${deleted.version}`,
+          );
+        // Transfer cleanup decisions without deleting definitions retained locally.
+        if (!retained && !local) {
+          store.recordDeletedVersion({ workflowId: entry.id, ...deleted });
+          added.add(entry.id);
+        }
+      }
       for (let i = 0; i < entry.versions.length; i++) {
         const version = entry.versions[i];
-        if (version.version !== i + 1)
+        if (i > 0 && version.version <= entry.versions[i - 1].version)
           throw new InterlockError(
-            `Versions for ${entry.id} must be consecutive, starting at 1`,
+            `Versions for ${entry.id} must be unique and in increasing order`,
           );
         const published = store.getVersion(entry.id, version.version);
         if (
@@ -168,14 +215,43 @@ export function importWorkflows(
           throw new InterlockError(
             `Published version conflict for ${entry.id}:${version.version}. Published versions cannot be overwritten, even with force.`,
           );
-        if (!published)
+        const deleted = store.deletedVersion(entry.id, version.version);
+        if (
+          deleted &&
+          deleted.definitionHash !== definitionHash(version.definition)
+        )
+          throw new InterlockError(
+            `Deleted version identity conflict for ${entry.id}:${version.version}. Only the original definition can be restored.`,
+          );
+        if (!published && deleted && !options.restoreDeletedVersions) {
+          skippedVersions.push({
+            workflowId: entry.id,
+            version: version.version,
+          });
+          continue;
+        }
+        if (!published) {
           store.version({ workflowId: entry.id, ...version, createdAt: now });
+          added.add(entry.id);
+          if (deleted) {
+            restoredVersions.push({
+              workflowId: entry.id,
+              version: version.version,
+            });
+            store.remove('deletedVersions', `${entry.id}:${version.version}`);
+          }
+        }
       }
       const latestVersion = Math.max(
         existing?.latestVersion ?? 0,
-        entry.versions.length,
+        ...entry.versions.map((v) => v.version),
+        ...(entry.deletedVersions ?? []).map((v) => v.version),
       );
-      if (!sameDraft || latestVersion !== existing?.latestVersion)
+      if (
+        !sameDraft ||
+        latestVersion !== existing?.latestVersion ||
+        added.has(entry.id)
+      )
         changed.push(entry.id);
       const workflow: Workflow = {
         id: entry.id,
@@ -190,7 +266,9 @@ export function importWorkflows(
         latestVersion,
         createdAt: existing?.createdAt ?? now,
         updatedAt:
-          !sameDraft || latestVersion !== existing?.latestVersion
+          !sameDraft ||
+          latestVersion !== existing?.latestVersion ||
+          added.has(entry.id)
             ? now
             : existing.updatedAt,
       };
@@ -204,7 +282,11 @@ export function importWorkflows(
           throw new InterlockError(`Invalid owner for ${entry.id}`);
       }
       validateWorkflowReferences(entry.id, entry.draft, all);
-      for (const version of entry.versions) {
+      if (latestVersionUnavailable(store, entry.id))
+        throw new InterlockError(
+          `Latest published version for ${entry.id} must be retained`,
+        );
+      for (const version of store.listVersions(entry.id)) {
         validateDefinition(version.definition);
         validateWorkflowReferences(entry.id, version.definition, all);
         for (const node of version.definition.nodes)
@@ -221,10 +303,17 @@ export function importWorkflows(
     return {
       rootId: bundle.rootId,
       changed,
+      skippedVersions,
+      restoredVersions,
       workflows: bundle.workflows.map((w) => ({
         id: w.id,
         draftRevision: store.get<Workflow>('workflows', w.id)!.draftRevision,
       })),
     };
   });
+}
+
+function latestVersionUnavailable(store: Store, id: string) {
+  const latest = store.get<Workflow>('workflows', id)!.latestVersion;
+  return latest > 0 && !store.getVersion(id, latest);
 }

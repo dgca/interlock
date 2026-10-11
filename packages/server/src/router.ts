@@ -11,6 +11,8 @@ import {
   waitQuerySchema,
   resultQuerySchema,
   promptContentSchema,
+  versionSelectionSchema,
+  versionDeletionSchema,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import {
@@ -111,6 +113,7 @@ export const appRouter = t.router({
           bundle: workflowBundleSchema,
           force: z.boolean().optional(),
           draftRevisions: z.record(z.number().int().positive()).optional(),
+          restoreDeletedVersions: z.boolean().optional(),
         }),
       )
       .mutation(({ ctx, input }) =>
@@ -231,10 +234,14 @@ export const appRouter = t.router({
       ),
     versions: p.input(id).query(({ ctx, input }) => {
       const w = ctx.engine.workflow(input.id);
-      return Array.from({ length: w.latestVersion }, (_, i) =>
-        ctx.engine.store.getVersion(w.id, i + 1)!,
-      );
+      return ctx.engine.store.listVersions(w.id);
     }),
+    previewVersionDeletion: p
+      .input(versionSelectionSchema)
+      .query(({ ctx, input }) => ctx.engine.versions.preview(input)),
+    deleteVersions: p
+      .input(versionDeletionSchema)
+      .mutation(({ ctx, input }) => ctx.engine.versions.delete(input)),
   }),
   runs: t.router({
     briefing: p

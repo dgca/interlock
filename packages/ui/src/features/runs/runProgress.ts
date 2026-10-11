@@ -38,7 +38,7 @@ const labels: Record<ProgressState, string> = {
 /** Presentation of persisted executions; never guesses an agent's internal progress. */
 export function runProgress(
   run: Run,
-  definition: WorkflowDefinition,
+  definition: WorkflowDefinition | null,
   descendants: Run[],
   work: VisibleWork[],
 ) {
@@ -99,7 +99,7 @@ export function runProgress(
     if (node.batchId === run.batchNodeId) return [run];
     if (!node.batchId) return [];
     if (scopeCache.has(node.batchId)) return scopeCache.get(node.batchId)!;
-    const parent = definition.nodes.find((value) => value.id === node.batchId);
+    const parent = definition?.nodes.find((value) => value.id === node.batchId);
     const owners = parent ? scopes(parent) : [];
     const children = owners.flatMap((owner) =>
       (latest(owner, node.batchId!)?.childRunIds ?? []).flatMap((id) => {
@@ -111,7 +111,7 @@ export function runProgress(
     return children;
   };
   const nodes: Record<string, NodeProgress> = {};
-  for (const node of definition.nodes) {
+  for (const node of definition?.nodes ?? []) {
     const items = scopes(node).map((owner, index) => {
       const execution = latest(owner, node.id);
       return { run: owner, execution, state: stateOf(owner, execution), index };

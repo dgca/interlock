@@ -232,7 +232,7 @@ describe('durable harness execution', () => {
       draftRevision: w.draftRevision,
     });
     engine.publish(id);
-    expect(engine.inspect(run.id).definition.nodes[1]).toMatchObject({
+    expect(engine.inspect(run.id).definition!.nodes[1]).toMatchObject({
       prompt: 'Process the input and return your result as JSON.',
     });
     expect(engine.run(run.id).workflowName).toBe('Test workflow');

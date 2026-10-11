@@ -153,12 +153,12 @@ export class Continuation {
         const definition = this.store.getVersion(
           run.workflowId,
           run.version,
-        )!.definition;
-        const node = definition.nodes.find((n) => n.id === e.nodeId);
+        )?.definition;
+        const node = definition?.nodes.find((n) => n.id === e.nodeId);
         const total =
           node?.kind === 'batch'
             ? this.store.batchSize(run.id, e.id, node.itemsPath)
-            : 0;
+            : null;
         const children = e.childRunIds
           .map((child) => byId.get(child))
           .filter((child) => child !== undefined);
@@ -168,12 +168,16 @@ export class Continuation {
           status: e.status,
           total,
           dispatched: children.length,
-          queued: Math.max(0, total - e.nextItem),
+          queued: total === null ? null : Math.max(0, total - e.nextItem),
+          definitionAvailable: Boolean(definition),
           progress: counts(children.map((child) => child.status)),
         };
       });
     const summaries = state.runs.map((run) => ({
       ...run,
+      definitionAvailable: Boolean(
+        this.store.getVersion(run.workflowId, run.version),
+      ),
       rootRunId: root.rootRunId,
       rootWorkflowId: root.rootWorkflowId,
       result: reference(run.id),

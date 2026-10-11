@@ -131,7 +131,7 @@ Core defines prompt content, optional Agent `promptIds`, and pure instruction co
 
 Every non-Batch workflow run captures the latest prompts referenced anywhere in its own published graph at startup. Batch items inherit the enclosing capture, including delayed dispatch. Invoked workflows, including detached work, capture independently when they start. Loops, claim recovery, retries, and restart retain that run's captures. Saved prompt sections precede node task instructions. Context policy and contracts retain their meanings. Compact storage projections omit captures and saved instruction bodies.
 
-Prompt-bearing bundles use format version 2, including current shared prompt records from exported drafts and all versions; prompt-free bundles retain version 1. Import preserves IDs, reuses identical local content, and rejects divergent shared content even with force. Re-importing a deleted prompt allocates a current revision above retained local history, preserving old revisions and subsequent edits. Truly new IDs retain the bundle revision. Revision history and run captures are excluded from workflow bundles.
+Bundles with deleted version identities use format version 3. Other prompt-bearing bundles use format version 2, including current shared prompt records from exported drafts and all versions; other prompt-free bundles retain version 1. Import preserves IDs, reuses identical local content, and rejects divergent shared content even with force. Re-importing a deleted prompt allocates a current revision above retained local history, preserving old revisions and subsequent edits. Truly new IDs retain the bundle revision. Revision history and run captures are excluded from workflow bundles.
 
 The Prompts library and editor use the shared Mantine theme and navigation protection. Dirty prompt text retains its original save revision across external refreshes. Agent settings provide searchable ordered prompt selection and content inspection above Task instructions. Run inspection shows captured content and revisions.
 
@@ -251,3 +251,11 @@ Run inspection includes descendant runs and assignments without claim tokens. Ba
 ## Fetch execution
 
 Core defines Fetch configuration, validates bindings at publication, and resolves requests through the same pure function used by the UI preview. Runtime sends requests outside storage transactions with an abort controller shared with run cancellation. Resolved requests persist on node executions. HTTP errors retain their response output; explicit retries create a new execution. Pending requests fail on restart because remote side effects are uncertain. See [Fetch requests](fetch.md) for the configuration and response contract.
+
+## Published version cleanup
+
+Core owns cleanup selection and acknowledgment contracts. Storage retains deleted-version identity hashes independently of definitions. Runtime previews exact retained references and transitive dependencies of active runs, fingerprints the reviewed impact, and deletes only explicitly selected definitions in one transaction. Latest versions are protected, so publication counters keep increasing and retained version lists can contain gaps.
+
+Imports preserve cleanup decisions by default and report skipped versions. Explicit restoration accepts only original parsed definitions with valid ownership and published dependencies. Format-3 bundles transfer deletion identities without removed definitions; imports never use that metadata to delete versions retained locally. Existing formats remain supported.
+
+Full inspection returns a null definition and an availability marker after deletion. Run data, events, assignments, captures, and ancestry remain. Briefings tolerate missing Batch graphs with unknown total and queued counts. The UI keeps history and recorded execution details available, replaces the graph with an explanation, and omits retry. Starts and retries needing deleted definitions fail before state changes. See [version cleanup](version-cleanup.md).
