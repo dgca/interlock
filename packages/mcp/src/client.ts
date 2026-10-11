@@ -12,6 +12,9 @@ export function createMcpClient(url?: string) {
       delete: client.prompts.delete.mutate,
     },
     workflows: {
+      versions: client.workflows.versions.query,
+      previewVersionDeletion: client.workflows.previewVersionDeletion.query,
+      deleteVersions: client.workflows.deleteVersions.mutate,
       delete: client.workflows.delete.mutate,
       export: client.workflows.export.query,
       import: client.workflows.import.mutate,

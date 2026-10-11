@@ -89,7 +89,7 @@ export function RunInspector({
     selected?.nodeId ??
     (requestedExecution ? requestedExecution.nodeId : undefined) ??
     run.executions.at(-1)?.nodeId;
-  const node = definition.nodes.find((node) => node.id === nodeId);
+  const node = definition?.nodes.find((node) => node.id === nodeId);
   const nodeProgress = nodeId ? progress.nodes[nodeId] : undefined;
   const owner = selected?.runId
     ? [run, ...descendants].find((owner) => owner.id === selected.runId)
@@ -112,7 +112,9 @@ export function RunInspector({
         })
       : [];
   return (
-    <div className={styles.page}>
+    <div
+      className={`${styles.page} ${!definition ? styles.withoutDefinition : ''}`}
+    >
       <header className={styles.header}>
         <Button variant="ghost" onClick={onBack} aria-label="Back to runs">
           <ArrowLeft />
@@ -130,7 +132,7 @@ export function RunInspector({
               {run.parentMode === 'detached' ? 'Started by' : 'Parent run'}
             </Button>
           )}
-          {run.status === 'failed' && (
+          {run.status === 'failed' && definition && (
             <Button
               onClick={() =>
                 void act(async () => {
@@ -208,14 +210,24 @@ export function RunInspector({
         )}
       <div className={styles.body}>
         <section className={styles.overview}>
-          <div className={styles.graph}>
-            <RunGraph
-              key={run.id}
-              definition={definition}
-              progress={progress.nodes}
-              selected={nodeId}
-              onSelect={(nodeId) => setSelected({ nodeId })}
-            />
+          <div
+            className={`${styles.graph} ${!definition ? styles.unavailableGraph : ''}`}
+          >
+            {definition ? (
+              <RunGraph
+                key={run.id}
+                definition={definition}
+                progress={progress.nodes}
+                selected={nodeId}
+                onSelect={(nodeId) => setSelected({ nodeId })}
+              />
+            ) : (
+              <p className="hint">
+                Published version v{run.version} was removed. Graph inspection
+                and retry are unavailable. Stored results, execution details,
+                events, and child runs remain available.
+              </p>
+            )}
           </div>
           <div className={styles.log}>
             <div className="section-heading">
@@ -305,7 +317,7 @@ export function RunInspector({
         <aside className={styles.detail}>
           <div className="inspector-heading">
             <span className="eyebrow">EXECUTION DETAILS</span>
-            <h2>{node?.label ?? 'Workflow input'}</h2>
+            <h2>{node?.label ?? execution?.label ?? 'Workflow input'}</h2>
           </div>
           <div className="inspector-fields">
             {nodeProgress && (

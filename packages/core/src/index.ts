@@ -652,6 +652,14 @@ export {
 
 export { diagnoseDraft, type DraftDiagnostic } from './draftDiagnostics.js';
 export {
+  versionReferenceSchema,
+  versionSelectionSchema,
+  versionDeletionSchema,
+  deletedVersionSchema,
+  type VersionReference,
+  type DeletedWorkflowVersion,
+} from './versionCleanup.js';
+export {
   briefingQuerySchema,
   waitQuerySchema,
   resultQuerySchema,

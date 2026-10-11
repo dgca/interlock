@@ -35,6 +35,7 @@ import { executeFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
+import { VersionCleanup } from './versionCleanup.js';
 
 const now = () => new Date().toISOString();
 const terminal = (s: string) =>
@@ -51,6 +52,7 @@ export interface Worker {
 export class Engine {
   readonly continuation: Continuation;
   readonly prompts: Prompts;
+  readonly versions: VersionCleanup;
   private localJobs = new Map<string, AbortController>();
   private stopped = false;
   private listeners = new Set<() => void>();
@@ -60,6 +62,7 @@ export class Engine {
   ) {
     this.continuation = new Continuation(store);
     this.prompts = new Prompts(store);
+    this.versions = new VersionCleanup(store);
     // A process interruption gives no evidence that local work or remote side effects completed.
     for (const run of store.runs()) {
       const execution = run.executions.at(-1);
@@ -431,7 +434,7 @@ export class Engine {
         throw new InterlockError(
           `Cannot delete: referenced by ${blockers.join('; ')}. ${
             hasPublishedReferences
-              ? 'Published references are immutable. Remove draft references where possible, or archive this workflow to preserve its versions and history.'
+              ? 'Published references are immutable. Preview explicit old-version cleanup to remove obsolete callers after reviewing history loss. Remove current draft references first, or archive this workflow to preserve its versions and history.'
               : 'Remove these draft references first, or archive this workflow to preserve its history.'
           }`,
         );
@@ -477,6 +480,11 @@ export class Engine {
       >('versions'))
         if (version.workflowId === id)
           this.store.remove('versions', version.id);
+      for (const version of this.store.list<
+        import('@interlock/core').DeletedWorkflowVersion & { id: string }
+      >('deletedVersions'))
+        if (version.workflowId === id)
+          this.store.remove('deletedVersions', version.id);
       this.store.remove('workflows', id);
       return { id };
     });
@@ -598,6 +606,9 @@ export class Engine {
     batchNodeId?: string,
   ): Run {
     const w = this.workflow(workflowId);
+    // Preserve existing dispatch-time failures for invalid nested pins; cleanup
+    // dependencies are rejected before startup so deleted history is not replayed.
+    this.versions.assertRunnable({ workflowId, version }, true);
     const definition = this.definition({ workflowId, version });
     const itemRoute = batchNodeId
       ? definition.edges.find(
@@ -683,7 +694,11 @@ export class Engine {
           const { token, ...visible } = this.describeWork(work);
           return visible;
         }),
-      definition: this.definition(run),
+      definition:
+        this.store.getVersion(run.workflowId, run.version)?.definition ?? null,
+      definitionAvailable: Boolean(
+        this.store.getVersion(run.workflowId, run.version),
+      ),
       work: this.store
         .work()
         .filter((w) => w.runId === id)
@@ -1557,6 +1572,9 @@ export class Engine {
       const run = this.run(id);
       if (run.status !== 'failed')
         throw new InterlockError('Only failed runs can be retried');
+      this.versions.assertRunnable(run);
+      if (run.parentRunId && run.parentMode !== 'detached')
+        this.versions.assertRunnable(this.run(run.parentRunId));
       if (
         run.parentRunId &&
         run.parentMode !== 'detached' &&

@@ -99,6 +99,53 @@ async function click(name: string) {
       .click(),
   );
 }
+it('keeps missing-definition history selectable and omits graph and retry', async () => {
+  detail.definition = null;
+  detail.definitionAvailable = false;
+  detail.run.status = 'failed';
+  detail.run.executions = [
+    {
+      id: 'saved-execution',
+      nodeId: 'old-node',
+      label: 'Recorded step',
+      kind: 'agent',
+      status: 'completed',
+      input: { saved: 'input' },
+      output: { saved: 'output' },
+      childRunIds: [],
+      startedAt: new Date().toISOString(),
+    },
+  ];
+  detail.events = [
+    {
+      id: 'event',
+      message: 'Recorded history event',
+      at: new Date().toISOString(),
+    },
+  ];
+  graph.props = undefined;
+  rpc.work.mockResolvedValue([]);
+  await render();
+  expect(graph.props).toBeUndefined();
+  expect(container.textContent).toContain(
+    'Graph inspection and retry are unavailable',
+  );
+  expect(container.textContent).not.toContain('Retry failed step');
+  const timeline = container.querySelector(
+    'button[class*="step"]',
+  ) as HTMLButtonElement;
+  await act(async () => timeline.click());
+  expect(container.querySelector('aside h2')?.textContent).toBe(
+    'Recorded step',
+  );
+  expect(
+    container.querySelector('[data-json-label="Input"]')?.textContent,
+  ).toContain('saved');
+  expect(
+    container.querySelector('[data-json-label="Output"]')?.textContent,
+  ).toContain('output');
+  expect(container.textContent).toContain('Recorded history event');
+});
 it('shows descendant assignments at the root and copies instructions to continue that existing run', async () => {
   await render();
   expect(rpc.work).toHaveBeenCalledWith({ runId: 'root-run' });

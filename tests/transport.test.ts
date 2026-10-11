@@ -170,6 +170,98 @@ it.each(['stdio', 'http'])(
         draftRevision: engine.workflow(w.id).draftRevision,
       });
       const tools = (await client.listTools()).tools;
+      for (const name of [
+        'preview_version_deletion',
+        'delete_workflow_versions',
+        'list_workflow_versions',
+      ])
+        expect(tools.map((t) => t.name)).toContain(name);
+      expect(
+        tools.find((t) => t.name === 'delete_workflow_versions')!.inputSchema
+          .required,
+      ).toEqual(
+        expect.arrayContaining([
+          'versions',
+          'confirmation',
+          'acknowledgeHistoryLoss',
+        ]),
+      );
+      expect(
+        tools.find((t) => t.name === 'import_workflows')!.inputSchema
+          .properties,
+      ).toHaveProperty('restoreDeletedVersions');
+      const cleanupWorkflow = await call('create_workflow', {
+        name: 'Cleanup transport',
+        definition: blankDefinition(),
+      });
+      await call('publish_workflow', { id: cleanupWorkflow.id });
+      const oldRun = await call('start_run', {
+        workflowId: cleanupWorkflow.id,
+        input: { saved: 'history' },
+      });
+      await call('cancel_run', { id: oldRun.run.id });
+      await call('publish_workflow', { id: cleanupWorkflow.id });
+      const cleanupBackup = await call('export_workflow', {
+        id: cleanupWorkflow.id,
+      });
+      const selection = [{ workflowId: cleanupWorkflow.id, version: 1 }];
+      const cleanupPreview = await call('preview_version_deletion', {
+        versions: selection,
+      });
+      expect(cleanupPreview).toMatchObject({
+        canDelete: true,
+        affectedRuns: [{ runId: oldRun.run.id }],
+      });
+      const unacknowledged = await client.callTool({
+        name: 'delete_workflow_versions',
+        arguments: {
+          versions: selection,
+          confirmation: cleanupPreview.confirmation,
+          acknowledgeHistoryLoss: false,
+        },
+      });
+      expect(unacknowledged.isError).toBe(true);
+      expect(store.getVersion(cleanupWorkflow.id, 1)).toBeDefined();
+      await call('delete_workflow_versions', {
+        versions: selection,
+        confirmation: cleanupPreview.confirmation,
+        acknowledgeHistoryLoss: true,
+      });
+      expect(await call('get_run', { id: oldRun.run.id })).toMatchObject({
+        definitionAvailable: false,
+        definition: null,
+        run: { input: { saved: 'history' } },
+      });
+      expect(
+        (await call('list_workflow_versions', { id: cleanupWorkflow.id })).map(
+          (v: any) => v.version,
+        ),
+      ).toEqual([2]);
+      expect(
+        (await call('export_workflow', { id: cleanupWorkflow.id }))
+          .formatVersion,
+      ).toBe(3);
+      expect(
+        (await call('import_workflows', { bundle: cleanupBackup }))
+          .skippedVersions,
+      ).toEqual(selection);
+      const cleanupUrl = process.env.INTERLOCK_URL;
+      process.env.INTERLOCK_URL = url;
+      try {
+        expect(
+          await runCommand([
+            'import',
+            JSON.stringify(cleanupBackup),
+            '--restore-deleted-versions',
+          ]),
+        ).toMatchObject({ restoredVersions: selection });
+      } finally {
+        if (cleanupUrl === undefined) delete process.env.INTERLOCK_URL;
+        else process.env.INTERLOCK_URL = cleanupUrl;
+      }
+      expect(await call('get_run', { id: oldRun.run.id })).toMatchObject({
+        definitionAvailable: true,
+      });
       expect(
         tools.find((t) => t.name === 'list_workflows')!.inputSchema.properties!
           .includeDraft,
@@ -912,7 +1004,7 @@ it.each(['stdio', 'http'])(
       expect(blockedContent[0].text).toContain('archive');
       expect(
         tools.find((t) => t.name === 'delete_workflow')!.description,
-      ).toContain('Historical published references remain immutable blockers');
+      ).toContain('External draft or retained published references');
       await call('delete_workflow', { id: disposable.id });
       expect(
         (await call('list_workflows', {})).some(

@@ -36,6 +36,34 @@
   background: var(--canvas);
   border-bottom: 1px solid var(--border);
 }
+.unavailableGraph {
+  height: auto;
+  min-height: 0;
+  padding: 20px 24px;
+  overflow-wrap: anywhere;
+}
+.unavailableGraph p {
+  margin: 0;
+}
+@media (max-width: 800px) {
+  .withoutDefinition .header {
+    flex-wrap: wrap;
+  }
+  .withoutDefinition .body {
+    flex-direction: column;
+    overflow: auto;
+  }
+  .withoutDefinition .overview {
+    flex: none;
+    overflow: visible;
+  }
+  .withoutDefinition .detail {
+    width: auto;
+    overflow: visible;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
 .log {
   padding: 24px 30px;
 }

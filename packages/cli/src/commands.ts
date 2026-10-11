@@ -35,11 +35,13 @@ export async function runCommand(argv: string[]) {
           options: {
             force: { type: 'boolean' },
             revisions: { type: 'string' },
+            'restore-deleted-versions': { type: 'boolean' },
           },
         });
         return client.workflows.import.mutate({
           bundle: input,
           force: values.force,
+          restoreDeletedVersions: values['restore-deleted-versions'],
           draftRevisions: values.revisions
             ? await parse(values.revisions)
             : undefined,
@@ -143,7 +145,7 @@ export async function runCommand(argv: string[]) {
           'archive <id>',
           'restore <id>',
           'delete <id> --yes',
-          'import <json|@file> [--force | --revisions JSON] (workflow drafts only; shared prompt conflicts reject import)',
+          'import <json|@file> [--force | --revisions JSON] [--restore-deleted-versions] (force changes drafts only; explicit restoration requires original definitions and valid dependencies/ownership)',
           'export <id>',
           'publish <id> [--cascade]',
           'start <workflow-id> <json|@file> [version]',

@@ -13,6 +13,7 @@ import type {
   WorkflowVersion,
   RunEvent,
   SavedPrompt,
+  DeletedWorkflowVersion,
 } from '@interlock/core';
 
 /** One service owns the database. Each runtime operation commits as one transaction. */
@@ -105,6 +106,30 @@ export class Store {
   }
   getVersion(workflowId: string, version: number) {
     return this.get<WorkflowVersion>('versions', `${workflowId}:${version}`);
+  }
+  listVersions(workflowId?: string) {
+    return this.list<WorkflowVersion>('versions')
+      .filter((v) => workflowId === undefined || v.workflowId === workflowId)
+      .sort(
+        (a, b) =>
+          a.workflowId.localeCompare(b.workflowId) || a.version - b.version,
+      );
+  }
+  deletedVersion(workflowId: string, version: number) {
+    return this.get<DeletedWorkflowVersion>(
+      'deletedVersions',
+      `${workflowId}:${version}`,
+    );
+  }
+  recordDeletedVersion(value: DeletedWorkflowVersion) {
+    this.put('deletedVersions', {
+      ...value,
+      id: `${value.workflowId}:${value.version}`,
+    });
+  }
+  deleteVersion(value: DeletedWorkflowVersion) {
+    this.recordDeletedVersion(value);
+    this.remove('versions', `${value.workflowId}:${value.version}`);
   }
   workflows() {
     return this.list<Workflow>('workflows').map((w) => ({

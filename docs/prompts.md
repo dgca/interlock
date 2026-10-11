@@ -31,7 +31,7 @@ Open the prompt, open **Prompt actions**, select **Delete prompt**, and confirm.
 
 ## Transfer workflows and prompts
 
-Workflow exports include current content for every referenced saved prompt across drafts, published versions, dependencies, and owned children. Prompt-bearing bundles use format version 2 and require a version of Interlock that supports Prompts. Prompt-free bundles keep format version 1.
+Workflow exports include current content for every referenced saved prompt across drafts, published versions, dependencies, and owned children. Prompt-bearing bundles use format version 2 and require a version of Interlock that supports Prompts. Bundles with deleted workflow version identities use format 3, with prompts when needed. Other prompt-free bundles keep format 1.
 
 Import preserves shared IDs. Identical content reuses the local prompt and revision. Different current content under the same ID rejects the entire import, even with the workflow `force` option. Resolve the shared content deliberately through a prompt edit before importing. Workflow bundles exclude prompt revision history and historical run captures. See [portable bundles](agent-workflows.md#export-and-import-portable-bundles).
 

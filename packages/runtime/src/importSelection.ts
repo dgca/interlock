@@ -123,6 +123,12 @@ function combineBundles(
           `Selected files conflict for workflow ${entry.id}`,
         );
       for (const version of entry.versions) {
+        if (
+          previous.deletedVersions?.some((v) => v.version === version.version)
+        )
+          throw new InterlockError(
+            `Selected files conflict for deleted version ${entry.id}:${version.version}`,
+          );
         const existing = previous.versions.find(
           (v) => v.version === version.version,
         );
@@ -136,6 +142,22 @@ function combineBundles(
         if (!existing) previous.versions.push(structuredClone(version));
       }
       previous.versions.sort((a, b) => a.version - b.version);
+      for (const deleted of entry.deletedVersions ?? []) {
+        if (previous.versions.some((v) => v.version === deleted.version))
+          throw new InterlockError(
+            `Selected files conflict for deleted version ${entry.id}:${deleted.version}`,
+          );
+        const existing = previous.deletedVersions?.find(
+          (v) => v.version === deleted.version,
+        );
+        if (existing && existing.definitionHash !== deleted.definitionHash)
+          throw new InterlockError(
+            `Selected files conflict for deleted version identity ${entry.id}:${deleted.version}`,
+          );
+        if (!existing)
+          (previous.deletedVersions ??= []).push(structuredClone(deleted));
+      }
+      previous.deletedVersions?.sort((a, b) => a.version - b.version);
     }
     for (const prompt of document.bundle.prompts ?? []) {
       const previous = prompts.get(prompt.id);
@@ -163,7 +185,13 @@ function combineBundles(
   return rootId
     ? {
         format: 'interlock-workflows',
-        formatVersion: prompts.size ? 2 : 1,
+        formatVersion: [...workflows.values()].some(
+          (w) => w.deletedVersions?.length,
+        )
+          ? 3
+          : prompts.size
+            ? 2
+            : 1,
         rootId,
         workflows: [...workflows.values()],
         ...(prompts.size ? { prompts: [...prompts.values()] } : {}),
@@ -210,6 +238,12 @@ export function importSelection(engine: Engine, data: unknown[]) {
       rootIds.push(created.id);
       changed.push(created.id);
     }
-    return { rootIds, changed };
+    return {
+      rootIds,
+      changed,
+      ...(imported?.skippedVersions.length
+        ? { skippedVersions: imported.skippedVersions }
+        : {}),
+    };
   });
 }

@@ -34,7 +34,7 @@ The MCP descriptions require the executing agent to show the preview and obtain 
 
 ### History UI proposal
 
-Keep the existing run title, navigation, and result panels. Replace only the graph panel with the missing-version explanation. Execution selection uses recorded node labels when graph node metadata is absent. Hide or disable retry with the reason beside the action. Keep child navigation usable. The explanation has no focusable control; existing keyboard and panel behavior remains. On narrow screens, the same explanation fits the existing graph area without a new layout. Loading and error states follow existing run inspection behavior.
+Keep the existing run title, navigation, and result panels. Replace the graph panel with the missing-version explanation. Execution selection uses recorded node labels when graph node metadata is absent. Hide or disable retry with the reason beside the action. Keep child navigation usable. The explanation has no focusable control; existing keyboard and panel behavior remains. On narrow screens, the explanation, timeline, and recorded details stack vertically within the existing inspector. Loading and error states follow existing run inspection behavior.
 
 ## Guidance and compatibility
 

@@ -43,3 +43,13 @@ Verified repository facts: published definitions are document records keyed by w
 Identity records must use parsed definition semantics consistently with import normalization. New transfer metadata must preserve old bundle behavior when no cleanup occurred. Conservative active dependency checks may intentionally defer cleanup until a run finishes. Historical records alone do not authorize a retry after cleanup.
 
 There are no unresolved plan decisions. API naming, hash implementation, and test fixtures are ordinary implementation choices within the accepted specification.
+
+## Implementation findings and verification
+
+The browser check found a zero-width graph column at 390 pixels because the existing details panel had a fixed width. The missing-definition inspector now stacks history and details at narrow widths and uses a compact explanation in place of the graph. This change applies only when its definition is unavailable. The spec's UI proposal records that clarification.
+
+Selected-file import combines portable bundles before importing. That path also needed to preserve format-3 deletion identities and reject contradictory selected backups. It reports skipped versions and keeps the selected-set transaction boundary. Coverage includes both orders of a conflicting cleaned export and pre-cleanup backup.
+
+Builder proof is saved outside the checkout in `/tmp/interlock-version-cleanup-proof/`. Tests cover AC1 through AC9 and AC11 through AC12 in `versionCleanup.test.ts`, transport tests, and existing regression suites. UI tests and the actual browser journey cover AC10. The browser journey selects a completed Batch execution, expands retained events, follows Batch item and Workflow child links, inspects failed-run inputs with retry absent, checks the explanation at 390 pixels, and verifies a retained v2 graph as a control. Desktop and narrow screenshots and fixture run IDs are saved with the proof. No browser errors were observed. The user's database was not used.
+
+Affected guidance checked: README, architecture, limits, prompt bundle guidance, version-cleanup guide, portable import/deletion guidance, CLI import help, and MCP server instructions and affected tool schemas/descriptions. The MCP review covers version listing, cleanup preview/deletion, transfer and restoration, creation/publication/preflight, start, inspection, briefings/results, retry, and workflow deletion. HTTP and stdio discovery tests exercise the new operations and CLI restoration. This is an audit of affected flows, not the complete MCP tool set.
