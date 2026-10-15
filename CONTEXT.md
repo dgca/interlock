@@ -49,3 +49,11 @@ Interlock defines repeatable procedures that agents and people can execute and i
 **Executor**: An agent or person that claims a work request and supplies its result.
 
 **Input or output contract**: The structure and constraints a workflow or node requires of the data it receives or returns.
+
+**Test suite**: A named, revisioned collection of representative input cases and explicit checks for one workflow.
+
+**Workflow comparison**: An experiment that executes baseline and candidate workflow versions on the same captured suite cases and records separate execution, check and quality results.
+
+**Comparison sample**: One baseline or candidate execution of a case at a particular repetition.
+
+**Quality judgment**: A declared reviewer's assessment of a comparison sample against an explicit rubric, distinct from execution status and structural checks.

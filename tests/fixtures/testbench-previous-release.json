@@ -1,0 +1,822 @@
+{
+  "packageVersion": "0.1.18",
+  "schemaVersion": 3,
+  "schema": [
+    "CREATE TABLE migrations (version INTEGER PRIMARY KEY)",
+    "CREATE TABLE documents (\n          collection TEXT NOT NULL, id TEXT NOT NULL, value TEXT NOT NULL,\n          PRIMARY KEY(collection, id)\n        )",
+    "CREATE INDEX runs_created ON documents(json_extract(value, '$.createdAt') DESC) WHERE collection = 'runs'",
+    "CREATE INDEX runs_workflow_created ON documents(json_extract(value, '$.workflowId'), json_extract(value, '$.createdAt') DESC) WHERE collection = 'runs'",
+    "CREATE INDEX runs_status_created ON documents(json_extract(value, '$.status'), json_extract(value, '$.createdAt') DESC) WHERE collection = 'runs'",
+    "CREATE TABLE continuation_sequence (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL)",
+    "CREATE TABLE run_revisions (run_id TEXT PRIMARY KEY, revision INTEGER NOT NULL)",
+    "CREATE INDEX runs_parent ON documents(json_extract(value, '$.parentRunId')) WHERE collection = 'runs'",
+    "CREATE TRIGGER continuation_insert AFTER INSERT ON documents\n          WHEN NEW.collection IN ('runs', 'work') \n          BEGIN\n            UPDATE continuation_sequence SET revision = revision + 1 WHERE id = 1;\n            INSERT INTO run_revisions(run_id, revision)\n              VALUES (CASE WHEN NEW.collection = 'runs' THEN NEW.id ELSE json_extract(NEW.value, '$.runId') END,\n                      (SELECT revision FROM continuation_sequence WHERE id = 1))\n              ON CONFLICT(run_id) DO UPDATE SET revision = excluded.revision;\n            \n          END",
+    "CREATE TRIGGER continuation_update AFTER UPDATE ON documents\n          WHEN NEW.collection IN ('runs', 'work') AND json_remove(OLD.value, '$.updatedAt') != json_remove(NEW.value, '$.updatedAt')\n          BEGIN\n            UPDATE continuation_sequence SET revision = revision + 1 WHERE id = 1;\n            INSERT INTO run_revisions(run_id, revision)\n              VALUES (CASE WHEN NEW.collection = 'runs' THEN NEW.id ELSE json_extract(NEW.value, '$.runId') END,\n                      (SELECT revision FROM continuation_sequence WHERE id = 1))\n              ON CONFLICT(run_id) DO UPDATE SET revision = excluded.revision;\n            \n          END",
+    "CREATE TRIGGER continuation_delete AFTER DELETE ON documents\n          WHEN OLD.collection IN ('runs', 'work') \n          BEGIN\n            UPDATE continuation_sequence SET revision = revision + 1 WHERE id = 1;\n            INSERT INTO run_revisions(run_id, revision)\n              VALUES (CASE WHEN OLD.collection = 'runs' THEN OLD.id ELSE json_extract(OLD.value, '$.runId') END,\n                      (SELECT revision FROM continuation_sequence WHERE id = 1))\n              ON CONFLICT(run_id) DO UPDATE SET revision = excluded.revision;\n            DELETE FROM run_revisions WHERE OLD.collection = 'runs' AND run_id = OLD.id;\n          END"
+  ],
+  "documents": {
+    "workflows": [
+      {
+        "id": "7b413878-e729-429f-81b1-5960aa069a08",
+        "ownerWorkflowId": null,
+        "name": "Published 0.1.18 javascript",
+        "description": "",
+        "archived": false,
+        "draft": {
+          "inputSchema": {},
+          "outputSchema": {},
+          "nodes": [
+            {
+              "id": "entry",
+              "label": "Workflow input",
+              "position": {
+                "x": 60,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "entry"
+            },
+            {
+              "id": "agent",
+              "label": "javascript",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "script",
+              "language": "javascript",
+              "command": "return {previous: input};",
+              "timeoutMs": 30000
+            },
+            {
+              "id": "exit",
+              "label": "Return result",
+              "position": {
+                "x": 680,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "exit"
+            }
+          ],
+          "edges": [
+            {
+              "id": "e1",
+              "source": "entry",
+              "target": "agent",
+              "port": "default"
+            },
+            {
+              "id": "e2",
+              "source": "agent",
+              "target": "exit",
+              "port": "default"
+            }
+          ],
+          "maxSteps": 100
+        },
+        "draftRevision": 1,
+        "latestVersion": 1,
+        "createdAt": "2026-10-15T15:25:05.056Z",
+        "updatedAt": "2026-10-15T15:25:05.063Z"
+      },
+      {
+        "id": "6ff911c0-b18f-47b0-b860-da4f614b1b2c",
+        "ownerWorkflowId": null,
+        "name": "Published 0.1.18 legacy-bash",
+        "description": "",
+        "archived": false,
+        "draft": {
+          "inputSchema": {},
+          "outputSchema": {},
+          "nodes": [
+            {
+              "id": "entry",
+              "label": "Workflow input",
+              "position": {
+                "x": 60,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "entry"
+            },
+            {
+              "id": "agent",
+              "label": "legacy-bash",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "script",
+              "command": "cat",
+              "timeoutMs": 30000
+            },
+            {
+              "id": "exit",
+              "label": "Return result",
+              "position": {
+                "x": 680,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "exit"
+            }
+          ],
+          "edges": [
+            {
+              "id": "e1",
+              "source": "entry",
+              "target": "agent",
+              "port": "default"
+            },
+            {
+              "id": "e2",
+              "source": "agent",
+              "target": "exit",
+              "port": "default"
+            }
+          ],
+          "maxSteps": 100
+        },
+        "draftRevision": 1,
+        "latestVersion": 1,
+        "createdAt": "2026-10-15T15:25:05.099Z",
+        "updatedAt": "2026-10-15T15:25:05.102Z"
+      },
+      {
+        "id": "27aa7b32-4f7e-4780-a9b3-c13865a48c3b",
+        "ownerWorkflowId": null,
+        "name": "Published 0.1.18 agent",
+        "description": "",
+        "archived": false,
+        "draft": {
+          "inputSchema": {},
+          "outputSchema": {},
+          "nodes": [
+            {
+              "id": "entry",
+              "label": "Workflow input",
+              "position": {
+                "x": 60,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "entry"
+            },
+            {
+              "id": "agent",
+              "label": "Agent assignment",
+              "position": {
+                "x": 370,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "agent",
+              "prompt": "Process the input and return your result as JSON.",
+              "context": {
+                "mode": "current",
+                "instructions": "",
+                "tools": [],
+                "skills": []
+              },
+              "maxAttempts": 2
+            },
+            {
+              "id": "exit",
+              "label": "Return result",
+              "position": {
+                "x": 680,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "exit"
+            }
+          ],
+          "edges": [
+            {
+              "id": "e1",
+              "source": "entry",
+              "target": "agent",
+              "port": "default"
+            },
+            {
+              "id": "e2",
+              "source": "agent",
+              "target": "exit",
+              "port": "default"
+            }
+          ],
+          "maxSteps": 100
+        },
+        "draftRevision": 1,
+        "latestVersion": 1,
+        "createdAt": "2026-10-15T15:25:05.137Z",
+        "updatedAt": "2026-10-15T15:25:05.141Z"
+      }
+    ],
+    "versions": [
+      {
+        "workflowId": "7b413878-e729-429f-81b1-5960aa069a08",
+        "version": 1,
+        "definition": {
+          "inputSchema": {},
+          "outputSchema": {},
+          "nodes": [
+            {
+              "id": "entry",
+              "label": "Workflow input",
+              "position": {
+                "x": 60,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "entry"
+            },
+            {
+              "id": "agent",
+              "label": "javascript",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "script",
+              "language": "javascript",
+              "command": "return {previous: input};",
+              "timeoutMs": 30000
+            },
+            {
+              "id": "exit",
+              "label": "Return result",
+              "position": {
+                "x": 680,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "exit"
+            }
+          ],
+          "edges": [
+            {
+              "id": "e1",
+              "source": "entry",
+              "target": "agent",
+              "port": "default"
+            },
+            {
+              "id": "e2",
+              "source": "agent",
+              "target": "exit",
+              "port": "default"
+            }
+          ],
+          "maxSteps": 100
+        },
+        "createdAt": "2026-10-15T15:25:05.063Z",
+        "id": "7b413878-e729-429f-81b1-5960aa069a08:1"
+      },
+      {
+        "workflowId": "6ff911c0-b18f-47b0-b860-da4f614b1b2c",
+        "version": 1,
+        "definition": {
+          "inputSchema": {},
+          "outputSchema": {},
+          "nodes": [
+            {
+              "id": "entry",
+              "label": "Workflow input",
+              "position": {
+                "x": 60,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "entry"
+            },
+            {
+              "id": "agent",
+              "label": "legacy-bash",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "script",
+              "command": "cat",
+              "timeoutMs": 30000
+            },
+            {
+              "id": "exit",
+              "label": "Return result",
+              "position": {
+                "x": 680,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "exit"
+            }
+          ],
+          "edges": [
+            {
+              "id": "e1",
+              "source": "entry",
+              "target": "agent",
+              "port": "default"
+            },
+            {
+              "id": "e2",
+              "source": "agent",
+              "target": "exit",
+              "port": "default"
+            }
+          ],
+          "maxSteps": 100
+        },
+        "createdAt": "2026-10-15T15:25:05.102Z",
+        "id": "6ff911c0-b18f-47b0-b860-da4f614b1b2c:1"
+      },
+      {
+        "workflowId": "27aa7b32-4f7e-4780-a9b3-c13865a48c3b",
+        "version": 1,
+        "definition": {
+          "inputSchema": {},
+          "outputSchema": {},
+          "nodes": [
+            {
+              "id": "entry",
+              "label": "Workflow input",
+              "position": {
+                "x": 60,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "entry"
+            },
+            {
+              "id": "agent",
+              "label": "Agent assignment",
+              "position": {
+                "x": 370,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "agent",
+              "prompt": "Process the input and return your result as JSON.",
+              "context": {
+                "mode": "current",
+                "instructions": "",
+                "tools": [],
+                "skills": []
+              },
+              "maxAttempts": 2
+            },
+            {
+              "id": "exit",
+              "label": "Return result",
+              "position": {
+                "x": 680,
+                "y": 160
+              },
+              "inputSchema": {},
+              "outputSchema": {},
+              "kind": "exit"
+            }
+          ],
+          "edges": [
+            {
+              "id": "e1",
+              "source": "entry",
+              "target": "agent",
+              "port": "default"
+            },
+            {
+              "id": "e2",
+              "source": "agent",
+              "target": "exit",
+              "port": "default"
+            }
+          ],
+          "maxSteps": 100
+        },
+        "createdAt": "2026-10-15T15:25:05.141Z",
+        "id": "27aa7b32-4f7e-4780-a9b3-c13865a48c3b:1"
+      }
+    ],
+    "runs": [
+      {
+        "id": "584c358d-c3f1-48a0-8ea0-66e5a62a45de",
+        "workflowId": "7b413878-e729-429f-81b1-5960aa069a08",
+        "workflowName": "Published 0.1.18 javascript",
+        "version": 1,
+        "status": "completed",
+        "input": {
+          "value": 4
+        },
+        "cursor": "exit",
+        "value": {
+          "previous": {
+            "value": 4
+          }
+        },
+        "executions": [
+          {
+            "id": "b1d746cd-2aa1-4fe7-ba3c-7f4c4188f12d",
+            "nodeId": "entry",
+            "kind": "entry",
+            "label": "Workflow input",
+            "input": {
+              "value": 4
+            },
+            "status": "completed",
+            "startedAt": "2026-10-15T15:25:05.066Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "value": 4
+            },
+            "port": "default",
+            "completedAt": "2026-10-15T15:25:05.067Z"
+          },
+          {
+            "id": "9d79e125-1fc8-4392-a96c-7942e508b0db",
+            "nodeId": "agent",
+            "kind": "script",
+            "label": "javascript",
+            "input": {
+              "value": 4
+            },
+            "status": "completed",
+            "startedAt": "2026-10-15T15:25:05.067Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "previous": {
+                "value": 4
+              }
+            },
+            "port": "default",
+            "completedAt": "2026-10-15T15:25:05.090Z"
+          },
+          {
+            "id": "5d8d4546-0581-4131-9628-117fbd57d365",
+            "nodeId": "exit",
+            "kind": "exit",
+            "label": "Return result",
+            "input": {
+              "previous": {
+                "value": 4
+              }
+            },
+            "status": "completed",
+            "startedAt": "2026-10-15T15:25:05.090Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "previous": {
+                "value": 4
+              }
+            },
+            "port": "default",
+            "completedAt": "2026-10-15T15:25:05.091Z"
+          }
+        ],
+        "createdAt": "2026-10-15T15:25:05.066Z",
+        "updatedAt": "2026-10-15T15:25:05.091Z",
+        "promptSnapshots": [],
+        "output": {
+          "previous": {
+            "value": 4
+          }
+        }
+      },
+      {
+        "id": "d93a93e8-bdd0-4912-914c-bc4d5d6e42da",
+        "workflowId": "6ff911c0-b18f-47b0-b860-da4f614b1b2c",
+        "workflowName": "Published 0.1.18 legacy-bash",
+        "version": 1,
+        "status": "completed",
+        "input": {
+          "value": 4
+        },
+        "cursor": "exit",
+        "value": {
+          "value": 4
+        },
+        "executions": [
+          {
+            "id": "61168a69-8356-4c89-ab91-691f414cfd30",
+            "nodeId": "entry",
+            "kind": "entry",
+            "label": "Workflow input",
+            "input": {
+              "value": 4
+            },
+            "status": "completed",
+            "startedAt": "2026-10-15T15:25:05.106Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "value": 4
+            },
+            "port": "default",
+            "completedAt": "2026-10-15T15:25:05.106Z"
+          },
+          {
+            "id": "de47e0ca-86f6-442c-928a-999445e4bb0b",
+            "nodeId": "agent",
+            "kind": "script",
+            "label": "legacy-bash",
+            "input": {
+              "value": 4
+            },
+            "status": "completed",
+            "startedAt": "2026-10-15T15:25:05.106Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "value": 4
+            },
+            "port": "default",
+            "completedAt": "2026-10-15T15:25:05.111Z"
+          },
+          {
+            "id": "e3975170-e8b9-4079-a4f3-6b2c16cf4316",
+            "nodeId": "exit",
+            "kind": "exit",
+            "label": "Return result",
+            "input": {
+              "value": 4
+            },
+            "status": "completed",
+            "startedAt": "2026-10-15T15:25:05.111Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "value": 4
+            },
+            "port": "default",
+            "completedAt": "2026-10-15T15:25:05.111Z"
+          }
+        ],
+        "createdAt": "2026-10-15T15:25:05.106Z",
+        "updatedAt": "2026-10-15T15:25:05.111Z",
+        "promptSnapshots": [],
+        "output": {
+          "value": 4
+        }
+      },
+      {
+        "id": "2901d976-c239-4ab5-8117-02a15dfb417e",
+        "workflowId": "27aa7b32-4f7e-4780-a9b3-c13865a48c3b",
+        "workflowName": "Published 0.1.18 agent",
+        "version": 1,
+        "status": "waiting",
+        "input": {
+          "value": 4
+        },
+        "cursor": "agent",
+        "value": {
+          "value": 4
+        },
+        "executions": [
+          {
+            "id": "8f4549be-c7fd-4584-9ce6-74365dd4b56a",
+            "nodeId": "entry",
+            "kind": "entry",
+            "label": "Workflow input",
+            "input": {
+              "value": 4
+            },
+            "status": "completed",
+            "startedAt": "2026-10-15T15:25:05.144Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {
+              "value": 4
+            },
+            "port": "default",
+            "completedAt": "2026-10-15T15:25:05.144Z"
+          },
+          {
+            "id": "1ccb7f49-7613-4ecb-bade-1839d300a12c",
+            "nodeId": "agent",
+            "kind": "agent",
+            "label": "Agent assignment",
+            "input": {
+              "value": 4
+            },
+            "status": "waiting",
+            "startedAt": "2026-10-15T15:25:05.144Z",
+            "childRunIds": [],
+            "nextItem": 0
+          }
+        ],
+        "createdAt": "2026-10-15T15:25:05.143Z",
+        "updatedAt": "2026-10-15T15:25:05.144Z",
+        "promptSnapshots": []
+      }
+    ],
+    "events": [
+      {
+        "id": "f203bbf7-d095-4766-8df9-0aa72a02acb5",
+        "runId": "584c358d-c3f1-48a0-8ea0-66e5a62a45de",
+        "type": "run.started",
+        "message": "Started Published 0.1.18 javascript v1",
+        "at": "2026-10-15T15:25:05.066Z"
+      },
+      {
+        "id": "f4526a46-a742-43a5-8a16-51e4309a3ac9",
+        "runId": "584c358d-c3f1-48a0-8ea0-66e5a62a45de",
+        "type": "node.started",
+        "message": "Workflow input",
+        "at": "2026-10-15T15:25:05.066Z"
+      },
+      {
+        "id": "68b66c98-02fd-41ac-840b-1698b59ce6c8",
+        "runId": "584c358d-c3f1-48a0-8ea0-66e5a62a45de",
+        "type": "node.completed",
+        "message": "Workflow input",
+        "at": "2026-10-15T15:25:05.067Z"
+      },
+      {
+        "id": "03f3a611-d285-42d2-a803-fe463e7f3482",
+        "runId": "584c358d-c3f1-48a0-8ea0-66e5a62a45de",
+        "type": "node.started",
+        "message": "javascript",
+        "at": "2026-10-15T15:25:05.067Z"
+      },
+      {
+        "id": "64ae209a-bb41-46bc-986b-0ee5a26e37f0",
+        "runId": "584c358d-c3f1-48a0-8ea0-66e5a62a45de",
+        "type": "node.completed",
+        "message": "javascript",
+        "at": "2026-10-15T15:25:05.090Z"
+      },
+      {
+        "id": "0d0ee5b6-23d8-4ce9-9540-15387b71ea24",
+        "runId": "584c358d-c3f1-48a0-8ea0-66e5a62a45de",
+        "type": "node.started",
+        "message": "Return result",
+        "at": "2026-10-15T15:25:05.090Z"
+      },
+      {
+        "id": "7670fc0c-d2ac-4809-b3c0-6f31d37dc42a",
+        "runId": "584c358d-c3f1-48a0-8ea0-66e5a62a45de",
+        "type": "run.completed",
+        "message": "Workflow completed",
+        "at": "2026-10-15T15:25:05.091Z"
+      },
+      {
+        "id": "fb814dba-d1eb-41ee-8d8d-3303dfba898b",
+        "runId": "584c358d-c3f1-48a0-8ea0-66e5a62a45de",
+        "type": "node.completed",
+        "message": "Return result",
+        "at": "2026-10-15T15:25:05.091Z"
+      },
+      {
+        "id": "9937b5f4-6ed2-4c8f-893b-e5c6e09e8211",
+        "runId": "d93a93e8-bdd0-4912-914c-bc4d5d6e42da",
+        "type": "run.started",
+        "message": "Started Published 0.1.18 legacy-bash v1",
+        "at": "2026-10-15T15:25:05.106Z"
+      },
+      {
+        "id": "94eb11ef-4a6c-4c4a-819a-cd2d61367cf4",
+        "runId": "d93a93e8-bdd0-4912-914c-bc4d5d6e42da",
+        "type": "node.started",
+        "message": "Workflow input",
+        "at": "2026-10-15T15:25:05.106Z"
+      },
+      {
+        "id": "b4ccfc4a-0cb3-4feb-bb93-0db3ba14eb8b",
+        "runId": "d93a93e8-bdd0-4912-914c-bc4d5d6e42da",
+        "type": "node.completed",
+        "message": "Workflow input",
+        "at": "2026-10-15T15:25:05.106Z"
+      },
+      {
+        "id": "7a899c2a-98de-4f06-8977-337dc36ab802",
+        "runId": "d93a93e8-bdd0-4912-914c-bc4d5d6e42da",
+        "type": "node.started",
+        "message": "legacy-bash",
+        "at": "2026-10-15T15:25:05.106Z"
+      },
+      {
+        "id": "a593fa68-d7f8-46f0-b5eb-ba4c7c3af025",
+        "runId": "d93a93e8-bdd0-4912-914c-bc4d5d6e42da",
+        "type": "node.completed",
+        "message": "legacy-bash",
+        "at": "2026-10-15T15:25:05.111Z"
+      },
+      {
+        "id": "0e9ec83c-127a-4af8-a81a-dc8650efe1aa",
+        "runId": "d93a93e8-bdd0-4912-914c-bc4d5d6e42da",
+        "type": "node.started",
+        "message": "Return result",
+        "at": "2026-10-15T15:25:05.111Z"
+      },
+      {
+        "id": "dd74c874-909b-4853-af8c-3c8af7ca3a86",
+        "runId": "d93a93e8-bdd0-4912-914c-bc4d5d6e42da",
+        "type": "run.completed",
+        "message": "Workflow completed",
+        "at": "2026-10-15T15:25:05.111Z"
+      },
+      {
+        "id": "83863b41-5904-47d3-94d4-1d137f14d6a6",
+        "runId": "d93a93e8-bdd0-4912-914c-bc4d5d6e42da",
+        "type": "node.completed",
+        "message": "Return result",
+        "at": "2026-10-15T15:25:05.112Z"
+      },
+      {
+        "id": "049ef779-17bd-4095-bd5c-41f338567c2e",
+        "runId": "2901d976-c239-4ab5-8117-02a15dfb417e",
+        "type": "run.started",
+        "message": "Started Published 0.1.18 agent v1",
+        "at": "2026-10-15T15:25:05.143Z"
+      },
+      {
+        "id": "388785c8-2a5d-43d4-b689-833e04a601d0",
+        "runId": "2901d976-c239-4ab5-8117-02a15dfb417e",
+        "type": "node.started",
+        "message": "Workflow input",
+        "at": "2026-10-15T15:25:05.144Z"
+      },
+      {
+        "id": "d5efd757-0124-4a76-8ff1-44dd67e84f57",
+        "runId": "2901d976-c239-4ab5-8117-02a15dfb417e",
+        "type": "node.completed",
+        "message": "Workflow input",
+        "at": "2026-10-15T15:25:05.144Z"
+      },
+      {
+        "id": "dc71c479-fe0e-41ea-bcb2-ac2be715df11",
+        "runId": "2901d976-c239-4ab5-8117-02a15dfb417e",
+        "type": "node.started",
+        "message": "Agent assignment",
+        "at": "2026-10-15T15:25:05.144Z"
+      },
+      {
+        "id": "43a00a5a-f369-4f3f-bebd-d2d35b7af8d3",
+        "runId": "2901d976-c239-4ab5-8117-02a15dfb417e",
+        "type": "work.available",
+        "message": "Awaiting agent: Agent assignment",
+        "at": "2026-10-15T15:25:05.144Z"
+      },
+      {
+        "id": "1535b412-1fff-45fb-84c6-91edb9000afc",
+        "runId": "2901d976-c239-4ab5-8117-02a15dfb417e",
+        "type": "work.claimed",
+        "message": "Agent assignment claimed by fixture-worker",
+        "at": "2026-10-15T15:25:05.149Z"
+      }
+    ],
+    "work": [
+      {
+        "id": "d892c318-c969-4fa7-9d13-419db763091e",
+        "runId": "2901d976-c239-4ab5-8117-02a15dfb417e",
+        "executionId": "1ccb7f49-7613-4ecb-bade-1839d300a12c",
+        "nodeId": "agent",
+        "label": "Agent assignment",
+        "prompt": "Process the input and return your result as JSON.",
+        "input": {
+          "value": 4
+        },
+        "context": {
+          "mode": "current",
+          "instructions": "",
+          "tools": [],
+          "skills": []
+        },
+        "outputSchema": {},
+        "status": "claimed",
+        "attempt": 1,
+        "maxAttempts": 2,
+        "createdAt": "2026-10-15T15:25:05.144Z",
+        "workerId": "fixture-worker",
+        "token": "testbench-fixture-token",
+        "claimLeaseSeconds": 3600,
+        "leaseUntil": "2999-01-01T00:00:00.000Z"
+      }
+    ]
+  }
+}

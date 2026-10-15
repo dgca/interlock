@@ -154,6 +154,7 @@ Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `
 
 | Tools                                                                           | Purpose                                                                           |
 | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Test-suite and workflow-comparison tools                                        | Save cases and run bounded paired comparisons through the connected executor.     |
 | `list_prompts`, `get_prompt`, `create_prompt`, `update_prompt`, `delete_prompt` | Discover and maintain shared instructions with revision and reference protection. |
 | `list_workflows`, `get_workflow`                                                | Find workflows and inspect drafts, contracts, and published version numbers.      |
 | `create_workflow`, `update_workflow`, `publish_workflow`                        | Author a draft and publish an immutable version.                                  |
@@ -197,3 +198,5 @@ pnpm test
 Transport tests cover HTTP and stdio initialization, tool discovery, work discovery, claims, results, Batch retries, continuation snapshots, targeted reads, and finite waits. They verify cleanup on actual HTTP abort/disconnect and stdio request cancellation. HTTP checks also cover malformed requests, protocol headers, concurrent clients, and local-access restrictions. The package check, `pnpm build && pnpm test:package`, exercises global and npx startup from a local tarball, then submits a persisted claim after a restart using the same HTTP endpoint.
 
 The optional `scripts/codex-smoke.ts` check invokes the installed Codex CLI with a real account and a local text task. It creates a workflow in the running engine and consumes model usage. Its result depends on the client's authentication and tool approval settings; it is separate from the automated transport tests.
+
+Use the [workflow testbench](workflow-testbench.md) for MCP-first saved cases and paired live comparisons. The existing claim/submit loop performs Agent work; starting a comparison does not launch an executor. Reports preserve execution/check/quality distinctions and identify independent detached work.

@@ -38,7 +38,7 @@ export class VersionCleanup {
       })
       .sort((a, b) => key(a).localeCompare(key(b)));
     const blockers: {
-      kind: 'latest' | 'reference' | 'active_run';
+      kind: 'latest' | 'reference' | 'active_run' | 'comparison';
       target: VersionReference;
       workflowId: string;
       name: string;
@@ -90,6 +90,20 @@ export class VersionCleanup {
         references(version.workflowId, version.definition, {
           version: version.version,
         });
+    for (const comparison of this.store.list<
+      import('@interlock/core').WorkflowComparison
+    >('comparisons')) {
+      if (comparison.status !== 'running') continue;
+      for (const pin of comparison.pins)
+        if (selected.has(key(pin)))
+          blockers.push({
+            kind: 'comparison',
+            target: { workflowId: pin.workflowId, version: pin.version },
+            workflowId: comparison.workflowId,
+            name: comparison.suite.name,
+            reason: `Comparison ${comparison.id} still needs ${key(pin)} for queued or active execution. Finish or cancel it before cleanup.`,
+          });
+    }
     const runs = this.store.runs();
     for (const run of runs.filter(active)) {
       for (const ref of this.dependencies(run)) {

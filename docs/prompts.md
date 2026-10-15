@@ -54,3 +54,5 @@ An Agent definition can include:
 ```
 
 Use a real ID returned by the prompt library. Missing IDs block publication and startup, while incomplete drafts remain saveable. Full work discovery and claims include the composed assignment `prompt` and captured `savedPrompts`; `get_run` includes `promptSnapshots`. Summary discovery and run briefings omit instruction bodies. Execute the assignment's captured guidance instead of reloading newer content.
+
+Workflow comparisons capture current saved prompts once when the experiment starts. Matching prompt IDs use that capture across both sides, queued samples, Batch items and invoked workflows. This differs from ordinary runs capturing at each workflow invocation and prevents prompt edits during a comparison from changing later samples. Reports disclose captured revisions; the capture does not reconstruct publication-time prompt history.

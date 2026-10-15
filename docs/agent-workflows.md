@@ -1,5 +1,9 @@
 # Author and operate workflows
 
+## Compare published workflow behavior
+
+Use the [workflow testbench](workflow-testbench.md) to save representative cases, preview exact run counts/pins/current prompt revisions, and execute paired published versions. Resume a comparison through its ID and existing work claims; reuse the same start request ID after uncertain delivery. Keep execution errors, pass/fail/unknown checks and declared quality judgments distinct. Reports are bounded and link ordinary run inspection. Comparison cancellation preserves detached independence unless explicitly selected otherwise. In-flight comparison pins block cleanup/deletion; portable bundles exclude local cases and comparison records.
+
 ## Discover schemas and assignments
 
 MCP `create_workflow.definition` and `update_workflow.draft` expose the workflow object schema, including node fields and edge handles. Incomplete routes remain saveable drafts. Publication validates graph routes and pinned dependencies. For small changes, `edit_workflow` avoids resending the full graph. `validate_workflow` reports read-only diagnostics for the stored draft or a candidate.

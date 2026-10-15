@@ -170,6 +170,183 @@ it.each(['stdio', 'http'])(
         draftRevision: engine.workflow(w.id).draftRevision,
       });
       const tools = (await client.listTools()).tools;
+      const testbenchTools = [
+        'list_test_suites',
+        'get_test_suite',
+        'create_test_suite',
+        'update_test_suite',
+        'preview_workflow_comparison',
+        'start_workflow_comparison',
+        'list_workflow_comparisons',
+        'get_workflow_comparison_report',
+        'cancel_workflow_comparison',
+        'record_comparison_quality',
+      ];
+      for (const name of testbenchTools)
+        expect(tools.map((t) => t.name)).toContain(name);
+      const comparisonSchema = tools.find(
+        (t) => t.name === 'start_workflow_comparison',
+      )!.inputSchema;
+      expect(comparisonSchema.required).toEqual(
+        expect.arrayContaining([
+          'suiteId',
+          'suiteRevision',
+          'baselineVersion',
+          'candidateVersion',
+          'confirmation',
+          'requestId',
+        ]),
+      );
+      expect(() =>
+        assertContract(
+          comparisonSchema,
+          {
+            suiteId: 'suite',
+            suiteRevision: 1,
+            baselineVersion: 1,
+            candidateVersion: 2,
+            confirmation: 'a'.repeat(64),
+            requestId: 'control',
+          },
+          'comparison control',
+        ),
+      ).not.toThrow();
+      expect(() =>
+        assertContract(
+          comparisonSchema,
+          {
+            suiteId: 'suite',
+            suiteRevision: 1,
+            baselineVersion: 1,
+            candidateVersion: 2,
+            confirmation: 'a'.repeat(64),
+            requestId: 'invalid',
+            concurrency: 11,
+          },
+          'comparison bound',
+        ),
+      ).toThrow();
+      const comparisonWorkflow = await call('create_workflow', {
+        name: 'Comparison transport',
+      });
+      await call('publish_workflow', { id: comparisonWorkflow.id });
+      await call('publish_workflow', { id: comparisonWorkflow.id });
+      const suiteContent = {
+        name: 'Transport cases',
+        cases: [
+          {
+            id: 'case',
+            name: 'Case',
+            input: { secretInput: 'private' },
+            assertions: [
+              {
+                kind: 'output',
+                operator: 'equals',
+                path: 'ok',
+                expected: true,
+              },
+            ],
+          },
+        ],
+      };
+      const suite = await call('create_test_suite', {
+        workflowId: comparisonWorkflow.id,
+        content: suiteContent,
+      });
+      expect(
+        (await call('list_test_suites', {})).items.some(
+          (s: any) => s.id === suite.id,
+        ),
+      ).toBe(true);
+      expect(await call('get_test_suite', { id: suite.id })).toMatchObject({
+        revision: 1,
+        cases: [{ id: 'case', input: { secretInput: 'private' } }],
+      });
+      expect(
+        await call('update_test_suite', {
+          id: suite.id,
+          revision: 1,
+          content: suiteContent,
+        }),
+      ).toMatchObject({ revision: 1 });
+      const comparisonSelection = {
+        suiteId: suite.id,
+        suiteRevision: 1,
+        baselineVersion: 1,
+        candidateVersion: 2,
+      };
+      const comparisonPlan = await call(
+        'preview_workflow_comparison',
+        comparisonSelection,
+      );
+      expect(comparisonPlan).toMatchObject({ canStart: true, rootRunCount: 2 });
+      expect(engine.store.runs().some((r) => r.comparison)).toBe(false);
+      const comparisonRequest = {
+        ...comparisonSelection,
+        confirmation: comparisonPlan.confirmation,
+        requestId: `transport-${mode}`,
+      };
+      const comparison = await call(
+        'start_workflow_comparison',
+        comparisonRequest,
+      );
+      expect(
+        (await call('start_workflow_comparison', comparisonRequest)).id,
+      ).toBe(comparison.id);
+      for (const run of engine.store
+        .runs()
+        .filter((r) => r.comparison?.comparisonId === comparison.id)) {
+        const work = (await call('list_work', { runId: run.id }))[0];
+        const claim = await call('claim_work', {
+          workId: work.id,
+          workerId: 'comparison-transport',
+        });
+        await call('submit_result', {
+          workId: work.id,
+          token: claim.token,
+          output: { ok: true, secretOutput: 'private' },
+        });
+      }
+      const comparisonReport = await call('get_workflow_comparison_report', {
+        id: comparison.id,
+        limit: 1,
+      });
+      expect(comparisonReport).toMatchObject({
+        status: 'completed',
+        total: 2,
+        checkCounts: { pass: 2, fail: 0, unknown: 0 },
+      });
+      expect(comparisonReport.samples).toHaveLength(1);
+      expect(JSON.stringify(comparisonReport)).not.toContain('secretInput');
+      expect(JSON.stringify(comparisonReport)).not.toContain('secretOutput');
+      const judgment = await call('record_comparison_quality', {
+        id: comparison.id,
+        sampleId: comparisonReport.samples[0].id,
+        reviewer: 'Transport test',
+        reviewerKind: 'agent',
+        rubric: 'Useful result',
+        score: 4,
+        notes: 'Recorded separately',
+      });
+      expect(judgment).toMatchObject({ reviewerKind: 'agent', score: 4 });
+      expect(
+        (await call('list_workflow_comparisons', {})).items.some(
+          (c: any) => c.id === comparison.id,
+        ),
+      ).toBe(true);
+      const cancelPlan = await call(
+        'preview_workflow_comparison',
+        comparisonSelection,
+      );
+      const cancelComparison = await call('start_workflow_comparison', {
+        ...comparisonSelection,
+        confirmation: cancelPlan.confirmation,
+        requestId: `cancel-${mode}`,
+      });
+      expect(
+        await call('cancel_workflow_comparison', { id: cancelComparison.id }),
+      ).toMatchObject({ status: 'cancelled', activeTrees: 0 });
+
       for (const name of ['preview_workflow_ownership', 'set_workflow_owner'])
         expect(tools.map((t) => t.name)).toContain(name);
       const ownershipSchema = tools.find(

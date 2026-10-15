@@ -169,6 +169,14 @@ The Hono listener exposes Streamable HTTP MCP at `/mcp`, behind the same host, o
 
 The UI uses tRPC requests and server-sent notifications, with periodic refresh as a reconnect fallback. Events and node execution data remain in SQLite. `INTERLOCK_DB` changes the database location. `INTERLOCK_URL` changes the service URL used by CLI and MCP callers.
 
+## Workflow testbench
+
+Core owns suite/case/assertion contracts and pure check evaluation. Runtime coordinates revisioned suites and captured comparisons around ordinary runs. SQLite document collections `testSuites` and `comparisons` preserve snapshots, queued sample IDs, dependency hashes, prompt content, observations and judgments without rewriting existing records or changing schema 3. Optional run `comparison` metadata carries case/side/repetition context through descendants and compact run views.
+
+Start confirms a read-only plan transactionally and deduplicates caller request IDs. The engine pump commits sample run allocation before launching external script/Fetch jobs. Per-comparison/global execution-tree limits include detached descendants. Comparison prompt captures propagate to delayed children and Batch items; ordinary runs retain their capture behavior. Pending pins participate in version cleanup and workflow deletion guards. Guarded workflow deletion removes local suite/comparison records; workflow export does not include experiments.
+
+Shared `testbench` API operations and ten MCP tools expose suite saves, preview/start, discovery/report, cancellation and quality judgments. Reports omit arbitrary values and tokens and enforce pagination plus a byte cap. Existing Runs views show comparison context and counterpart links; no new dashboard or execution adapter is added. See [comparison operations and bounds](workflow-testbench.md).
+
 ## Run continuation
 
 Core defines query contracts; storage projects run, execution, and assignment metadata without loading inputs, outputs (including polling check outputs), prompts, or tokens into the briefing. Schema 3 maintains a global transactional sequence and the latest revision per run through SQLite triggers. Timestamp-only updates do not change revisions. Store notifications wake runtime continuation waits after synchronous writes complete; rolled-back writes cannot change their visible cursor.

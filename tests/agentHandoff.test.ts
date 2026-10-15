@@ -33,6 +33,7 @@ vi.mock('../packages/ui/src/components/JsonEditor/JsonEditor', () => ({
     h('pre', { 'data-json-label': label }, JSON.stringify(value)),
 }));
 let container: HTMLDivElement, root: Root, detail: any;
+const onOpen = vi.fn();
 const onConnect = vi.fn(),
   writeText = vi.fn();
 beforeEach(() => {
@@ -48,6 +49,7 @@ beforeEach(() => {
   });
   writeText.mockReset().mockResolvedValue(undefined);
   onConnect.mockReset();
+  onOpen.mockReset();
   detail = {
     run: {
       id: 'root-run',
@@ -84,7 +86,7 @@ async function render(tick = 0) {
           id: 'root-run',
           tick,
           onBack: vi.fn(),
-          onOpen: vi.fn(),
+          onOpen,
           onConnect,
           act: vi.fn(),
         }),
@@ -278,4 +280,31 @@ it('shows active detached work after parent completion without a parent handoff 
   } finally {
     store.close();
   }
+});
+
+it('shows comparison context and navigates to the counterpart without changing normal run actions', async () => {
+  detail.run.comparison = {
+    comparisonId: 'comparison',
+    suiteId: 'suite',
+    suiteName: 'Evidence checks',
+    suiteRevision: 1,
+    sampleId: 'sample',
+    caseId: 'case',
+    caseName: 'Uncertain request',
+    side: 'baseline',
+    repetition: 2,
+  };
+  detail.counterpartRunId = 'candidate-run';
+  await render();
+  expect(container.textContent).toContain('Evidence checks');
+  expect(container.textContent).toContain('Uncertain request');
+  expect(container.textContent).toContain('Baseline');
+  expect(container.textContent).toContain('Repeat 2');
+  await click('Candidate run');
+  expect(onOpen).toHaveBeenCalledWith('candidate-run');
+  delete detail.run.comparison;
+  delete detail.counterpartRunId;
+  await render(1);
+  expect(container.textContent).not.toContain('Evidence checks');
+  expect(container.textContent).not.toContain('Candidate run');
 });

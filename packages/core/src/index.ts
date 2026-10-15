@@ -282,6 +282,7 @@ export interface PollCheckResult {
   error?: string;
 }
 export interface Run {
+  comparison?: import('./testbench.js').ComparisonRunContext;
   id: string;
   workflowId: string;
   workflowName: string;
@@ -681,3 +682,29 @@ export {
   type PromptContent,
   type PromptUsage,
 } from './prompts.js';
+
+export {
+  testAssertionSchema,
+  testCaseSchema,
+  suiteContentSchema,
+  createSuiteSchema,
+  updateSuiteSchema,
+  comparisonPreviewSchema,
+  comparisonStartSchema,
+  testbenchListSchema,
+  comparisonReportSchema,
+  comparisonCancelSchema,
+  qualityJudgmentSchema,
+  assertionProblems,
+  evaluateAssertions,
+  type TestAssertion,
+  type SuiteContent,
+  type CapturedCase,
+  type TestSuite,
+  type ComparisonRunContext,
+  type CheckResult,
+  type ComparisonSample,
+  type ComparisonPin,
+  type QualityJudgment,
+  type WorkflowComparison,
+} from './testbench.js';
