@@ -89,8 +89,12 @@ export class Testbench {
     const runs = this.store.runs();
     // Retrying within an already active tree consumes no additional tree slot.
     if (this.tree(sample.runId, runs).some(active)) return;
+    const busy = (c: WorkflowComparison) =>
+      c.samples.filter((s) => s.runId && this.tree(s.runId, runs).some(active))
+        .length;
     if (
       comparison.status !== 'running' &&
+      busy(comparison) === 0 &&
       this.store
         .list<WorkflowComparison>('comparisons')
         .filter(
@@ -104,9 +108,6 @@ export class Testbench {
       throw new InterlockError(
         'Four comparisons are already active; retry after one finishes or is cancelled',
       );
-    const busy = (c: WorkflowComparison) =>
-      c.samples.filter((s) => s.runId && this.tree(s.runId, runs).some(active))
-        .length;
     if (busy(comparison) >= comparison.concurrency)
       throw new InterlockError(
         'Comparison concurrency is full. Retry after an execution tree finishes',

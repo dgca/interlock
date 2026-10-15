@@ -793,6 +793,40 @@ it('keeps terminal-comparison retries within the four-active-comparison bound', 
   expect(report(engine, c.id).activeTrees).toBe(1);
 });
 
+it('allows a second failed sample retry within an already reactivated fourth comparison', () => {
+  const { engine, store } = setup(),
+    definition = blankDefinition();
+  (definition.nodes[1] as any).maxAttempts = 1;
+  const c = launch(engine, {
+    workflowId: publish(engine, 'Two retries', definition),
+    concurrency: 2,
+  });
+  const failedIds: string[] = [];
+  for (const work of engine.available()) {
+    const claim = engine.claim(work.id, worker);
+    failedIds.push(claim.runId);
+    engine.reportFailure(claim.id, claim.token!, 'Failure');
+  }
+  expect(report(engine, c.id).status).toBe('completed');
+  const observations = report(engine, c.id).samples.map((s) => s.observation);
+  for (let i = 0; i < 3; i++) launch(engine, { concurrency: 1 });
+  engine.retry(failedIds[0]);
+  expect(report(engine, c.id).activeTrees).toBe(1);
+  engine.retry(failedIds[1]);
+  expect(report(engine, c.id).activeTrees).toBe(2);
+  const activeRoots = store
+    .runs()
+    .filter((r) => r.comparison && ['running', 'waiting'].includes(r.status));
+  expect(activeRoots).toHaveLength(5);
+  expect(new Set(activeRoots.map((r) => r.comparison!.comparisonId)).size).toBe(
+    4,
+  );
+  complete(engine);
+  expect(report(engine, c.id).samples.map((s) => s.observation)).toEqual(
+    observations,
+  );
+});
+
 it('retries a detached child inside its active comparison tree without consuming another slot', () => {
   const { engine, store } = setup(),
     childDefinition = blankDefinition();
