@@ -769,6 +769,30 @@ it.each(['comparison', 'global'] as const)(
   },
 );
 
+it('keeps terminal-comparison retries within the four-active-comparison bound', () => {
+  const { engine, store } = setup(),
+    definition = blankDefinition();
+  (definition.nodes[1] as any).maxAttempts = 1;
+  const c = launch(engine, {
+    workflowId: publish(engine, 'Finished retry', definition),
+    concurrency: 1,
+  });
+  const claim = engine.claim(engine.available()[0].id, worker);
+  engine.reportFailure(claim.id, claim.token!, 'Failure');
+  complete(engine);
+  const others = Array.from({ length: 4 }, () =>
+    launch(engine, { concurrency: 1 }),
+  );
+  const before = state(store);
+  expect(() => engine.retry(claim.runId)).toThrow('Four comparisons');
+  expect(state(store)).toEqual(before);
+  engine.testbench.cancel({ id: others[0].id });
+  engine.pump();
+  engine.retry(claim.runId);
+  expect(engine.run(claim.runId).status).toBe('waiting');
+  expect(report(engine, c.id).activeTrees).toBe(1);
+});
+
 it('retries a detached child inside its active comparison tree without consuming another slot', () => {
   const { engine, store } = setup(),
     childDefinition = blankDefinition();

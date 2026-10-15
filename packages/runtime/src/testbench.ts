@@ -89,6 +89,21 @@ export class Testbench {
     const runs = this.store.runs();
     // Retrying within an already active tree consumes no additional tree slot.
     if (this.tree(sample.runId, runs).some(active)) return;
+    if (
+      comparison.status !== 'running' &&
+      this.store
+        .list<WorkflowComparison>('comparisons')
+        .filter(
+          (c) =>
+            c.status === 'running' ||
+            c.samples.some(
+              (s) => s.runId && this.tree(s.runId, runs).some(active),
+            ),
+        ).length >= 4
+    )
+      throw new InterlockError(
+        'Four comparisons are already active; retry after one finishes or is cancelled',
+      );
     const busy = (c: WorkflowComparison) =>
       c.samples.filter((s) => s.runId && this.tree(s.runId, runs).some(active))
         .length;
