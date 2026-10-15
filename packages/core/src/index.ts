@@ -693,6 +693,7 @@ export {
   comparisonStartSchema,
   testbenchListSchema,
   comparisonReportSchema,
+  comparisonCaseSchema,
   comparisonCancelSchema,
   qualityJudgmentSchema,
   assertionProblems,

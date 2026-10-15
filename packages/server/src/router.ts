@@ -21,6 +21,7 @@ import {
   comparisonStartSchema,
   testbenchListSchema,
   comparisonReportSchema,
+  comparisonCaseSchema,
   comparisonCancelSchema,
   qualityJudgmentSchema,
 } from '@interlock/core';
@@ -84,6 +85,9 @@ export const appRouter = t.router({
     report: p
       .input(comparisonReportSchema)
       .query(({ ctx, input }) => ctx.engine.testbench.report(input)),
+    case: p
+      .input(comparisonCaseSchema)
+      .query(({ ctx, input }) => ctx.engine.testbench.getCase(input)),
     cancel: p.input(comparisonCancelSchema).mutation(({ ctx, input }) => {
       const result = ctx.engine.testbench.cancel(input);
       ctx.engine.pump();

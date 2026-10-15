@@ -129,6 +129,7 @@ export const comparisonReportSchema = z
     judgmentLimit: z.number().int().min(1).max(25).default(10),
   })
   .strict();
+export const comparisonCaseSchema = z.object({ id, caseId: id }).strict();
 export const comparisonCancelSchema = z
   .object({ id, cancelDetached: z.boolean().default(false) })
   .strict();

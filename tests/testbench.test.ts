@@ -729,6 +729,145 @@ it('retains a failed observation after a successful ordinary explicit retry', ()
   expect(report(engine, c.id).samples[0].observation).toEqual(original);
 });
 
+it.each(['comparison', 'global'] as const)(
+  'rejects explicit retries at occupied %s capacity without mutation, then retries after release',
+  (scope) => {
+    const { engine, store } = setup();
+    const definition = blankDefinition();
+    (definition.nodes[1] as any).maxAttempts = 1;
+    const c = launch(engine, {
+      workflowId: publish(engine, 'Retry capacity', definition),
+      concurrency: scope === 'comparison' ? 1 : 10,
+      repetitions: scope === 'comparison' ? 1 : 5,
+    });
+    const claimed = engine.claim(engine.available()[0].id, worker);
+    engine.reportFailure(claimed.id, claimed.token!, 'Failed sample');
+    let other: ReturnType<typeof launch> | undefined;
+    if (scope === 'global') other = launch(engine, { concurrency: 1 });
+    const before = state(store),
+      observation = report(engine, c.id).samples[0].observation;
+    expect(report(engine, c.id).activeTrees).toBe(
+      scope === 'comparison' ? 1 : 9,
+    );
+    expect(() => engine.retry(claimed.runId)).toThrow(
+      scope === 'comparison'
+        ? 'Comparison concurrency is full'
+        : 'Global comparison concurrency is full',
+    );
+    expect(state(store)).toEqual(before);
+    if (other) {
+      engine.testbench.cancel({ id: other.id });
+      engine.pump();
+    } else complete(engine);
+    engine.retry(claimed.runId);
+    expect(report(engine, c.id).activeTrees).toBe(
+      scope === 'comparison' ? 1 : 10,
+    );
+    complete(engine);
+    expect(engine.run(claimed.runId).status).toBe('completed');
+    expect(report(engine, c.id).samples[0].observation).toEqual(observation);
+  },
+);
+
+it('retries a detached child inside its active comparison tree without consuming another slot', () => {
+  const { engine, store } = setup(),
+    childDefinition = blankDefinition();
+  (childDefinition.nodes[1] as any).maxAttempts = 1;
+  const child = publish(engine, 'Detached child', childDefinition),
+    root = publish(
+      engine,
+      'Active parent',
+      workflowCall(child, 'detached', true),
+    );
+  const c = launch(engine, { workflowId: root, concurrency: 1 });
+  const childRun = store.runs().find((r) => r.workflowId === child)!;
+  const work = engine.claim(engine.available(childRun.id)[0].id, worker);
+  engine.reportFailure(work.id, work.token!, 'Child failure');
+  expect(report(engine, c.id).activeTrees).toBe(1);
+  expect(report(engine, c.id).queued).toBe(1);
+  engine.retry(childRun.id);
+  expect(engine.run(childRun.id).status).toBe('waiting');
+  expect(report(engine, c.id).activeTrees).toBe(1);
+  complete(engine);
+  expect(report(engine, c.id).status).toBe('completed');
+});
+
+it('identifies captured assertions after suite edits and exposes large expectations only through explicit case reads', async () => {
+  const { engine, api, store } = setup(),
+    large = 'private-expectation'.repeat(1000);
+  const c = launch(engine, {
+    cases: [
+      {
+        id: 'case',
+        name: 'Original',
+        input: { original: true },
+        qualityGuidance: 'Original rubric',
+        assertions: [
+          { kind: 'output', path: 'score', operator: 'gte', expected: 4 },
+          { kind: 'output', path: 'text', operator: 'equals', expected: large },
+        ],
+      },
+    ],
+  });
+  complete(engine, { score: 2, text: 'short' });
+  engine.testbench.updateSuite({
+    id: c.suite.id,
+    revision: 1,
+    content: content([
+      {
+        id: 'case',
+        name: 'Edited',
+        input: null,
+        assertions: [
+          { kind: 'output', path: 'score', operator: 'gte', expected: 1 },
+        ],
+      },
+    ]),
+  });
+  const result = report(engine, c.id),
+    checks = result.samples[0].observation!.checks;
+  expect(result.suiteRevision).toBe(1);
+  expect(checks[0]).toMatchObject({
+    status: 'fail',
+    assertion: { path: 'score', operator: 'gte', expected: 4 },
+    assertionRef: { comparisonId: c.id, caseId: 'case', index: 0 },
+  });
+  expect(checks[1]).toMatchObject({
+    status: 'fail',
+    expectedOmitted: true,
+    assertion: { path: 'text', operator: 'equals' },
+  });
+  expect(checks[1].assertion).not.toHaveProperty('expected');
+  expect(JSON.stringify(result)).not.toContain(large);
+  expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(262144);
+  const before = state(store);
+  await expect(
+    api.testbench.case({ id: c.id, caseId: 'missing' }),
+  ).rejects.toThrow('case not found');
+  await expect(
+    api.testbench.case({ id: c.id, caseId: 'case', unexpected: true } as any),
+  ).rejects.toThrow();
+  expect(state(store)).toEqual(before);
+  const captured = await api.testbench.case({
+    id: c.id,
+    caseId: checks[1].assertionRef.caseId,
+  });
+  expect(captured).toMatchObject({
+    comparisonId: c.id,
+    suiteRevision: 1,
+    case: {
+      name: 'Original',
+      input: { original: true },
+      qualityGuidance: 'Original rubric',
+      assertions: [{ expected: 4 }, { expected: large }],
+    },
+  });
+  expect(
+    engine.testbench.getSuite(c.suite.id).cases[0].assertions[0],
+  ).toMatchObject({ expected: 1 });
+  expect(state(store)).toEqual(before);
+});
+
 it('caps report bytes with exact pagination across long quality notes', () => {
   const { engine } = setup(),
     c = launch(engine);

@@ -13,6 +13,7 @@ export function createMcpClient(url?: string) {
       start: client.testbench.start.mutate,
       comparisons: client.testbench.comparisons.query,
       report: client.testbench.report.query,
+      case: client.testbench.case.query,
       cancel: client.testbench.cancel.mutate,
       judge: client.testbench.judge.mutate,
     },

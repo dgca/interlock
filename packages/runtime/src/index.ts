@@ -1617,6 +1617,7 @@ export class Engine {
         terminal(this.run(run.parentRunId).status)
       )
         throw new InterlockError('Retry the failed parent run instead');
+      this.testbench.assertRetryCapacity(run);
       if (run.parentRunId && run.parentMode !== 'detached') {
         const parent = this.run(run.parentRunId);
         const execution = parent.executions.at(-1);

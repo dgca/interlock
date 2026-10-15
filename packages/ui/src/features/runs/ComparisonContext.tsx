@@ -8,7 +8,8 @@ export function ComparisonContext({
   if (!comparison) return null;
   return (
     <small className="comparison-context">
-      {comparison.suiteName} · {comparison.caseName} ·{' '}
+      {comparison.suiteName} · Comparison {comparison.comparisonId.slice(0, 8)}{' '}
+      · {comparison.caseName} ·{' '}
       {comparison.side === 'baseline' ? 'Baseline' : 'Candidate'} · Repeat{' '}
       {comparison.repetition}
     </small>

@@ -16,6 +16,7 @@ import {
   comparisonStartSchema,
   testbenchListSchema,
   comparisonReportSchema,
+  comparisonCaseSchema,
   comparisonCancelSchema,
   qualityJudgmentSchema,
   type TestSuite,
@@ -64,6 +65,45 @@ export class Testbench {
     const c = this.store.get<WorkflowComparison>('comparisons', id);
     if (!c) throw new InterlockError('Comparison not found');
     return c;
+  }
+  getCase(input: Input<typeof comparisonCaseSchema>) {
+    const q = comparisonCaseSchema.parse(input),
+      c = this.get(q.id);
+    const testCase = c.suite.cases.find((t) => t.id === q.caseId);
+    if (!testCase) throw new InterlockError('Comparison case not found');
+    return {
+      comparisonId: c.id,
+      suiteId: c.suite.id,
+      suiteRevision: c.suite.revision,
+      case: testCase,
+    };
+  }
+  assertRetryCapacity(run: Run) {
+    if (!run.comparison) return;
+    const comparison = this.get(run.comparison.comparisonId);
+    const sample = comparison.samples.find(
+      (s) => s.id === run.comparison!.sampleId,
+    );
+    if (!sample?.runId)
+      throw new InterlockError('Comparison sample is unavailable');
+    const runs = this.store.runs();
+    // Retrying within an already active tree consumes no additional tree slot.
+    if (this.tree(sample.runId, runs).some(active)) return;
+    const busy = (c: WorkflowComparison) =>
+      c.samples.filter((s) => s.runId && this.tree(s.runId, runs).some(active))
+        .length;
+    if (busy(comparison) >= comparison.concurrency)
+      throw new InterlockError(
+        'Comparison concurrency is full. Retry after an execution tree finishes',
+      );
+    if (
+      this.store
+        .list<WorkflowComparison>('comparisons')
+        .reduce((n, c) => n + busy(c), 0) >= 10
+    )
+      throw new InterlockError(
+        'Global comparison concurrency is full. Retry after an execution tree finishes',
+      );
   }
   listSuites(input: Input<typeof testbenchListSchema>) {
     const q = testbenchListSchema.parse(input);
@@ -442,7 +482,8 @@ export class Testbench {
       }
       if (
         c.status === 'running' &&
-        c.samples.every((s) => Boolean(s.observation))
+        c.samples.every((s) => Boolean(s.observation)) &&
+        !c.samples.some((s) => s.runId && this.tree(s.runId, runs).some(active))
       ) {
         c.status = 'completed';
         updated = true;
@@ -516,7 +557,31 @@ export class Testbench {
         observation: observation
           ? {
               ...observation,
-              checks: checks.slice(q.checkOffset, q.checkOffset + q.checkLimit),
+              checks: checks
+                .slice(q.checkOffset, q.checkOffset + q.checkLimit)
+                .map((check) => {
+                  const assertion = c.suite.cases.find(
+                    (t) => t.id === s.caseId,
+                  )!.assertions[check.index];
+                  const expectedOmitted =
+                    assertion.kind === 'output' &&
+                    assertion.expected !== undefined &&
+                    Buffer.byteLength(JSON.stringify(assertion.expected)) >
+                      1024;
+                  const summary = { ...assertion };
+                  if (summary.kind === 'output' && expectedOmitted)
+                    delete summary.expected;
+                  return {
+                    ...check,
+                    assertion: summary,
+                    expectedOmitted,
+                    assertionRef: {
+                      comparisonId: c.id,
+                      caseId: s.caseId,
+                      index: check.index,
+                    },
+                  };
+                }),
               checkTotal: checks.length,
               checkOffset: q.checkOffset,
               checkCounts: {

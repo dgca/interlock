@@ -19,6 +19,7 @@ import {
   comparisonStartSchema,
   testbenchListSchema,
   comparisonReportSchema,
+  comparisonCaseSchema,
   comparisonCancelSchema,
   qualityJudgmentSchema,
 } from '@interlock/core';
@@ -129,7 +130,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'start_workflow_comparison',
-    'Start a previewed paired live comparison. Rechecks confirmation and suite revision transactionally before creating experiment state. Changes to prompt revisions/pins/suite/eligibility require a new preview. Repeat exactly the same requestId and arguments after a lost response to recover the original comparison; conflicting reuse rejects. Maximum four active comparisons and ten active comparison execution trees globally. Per-comparison concurrency counts root plus active descendants, including detached runs. Captured suite/pins/current prompts persist and are shared across delayed samples; ordinary runs remain unchanged. Returns compact progress, not outputs. Use list_work/claim_work/submit_result to execute available Agent work, and get_workflow_comparison_report to inspect progress/results. No executor launch, replay, publication or promotion occurs.',
+    'Start a previewed paired live comparison. Rechecks confirmation and suite revision transactionally before creating experiment state. Changes to prompt revisions/pins/suite/eligibility require a new preview. Repeat exactly the same requestId and arguments after a lost response to recover the original comparison; conflicting reuse rejects. Maximum four active comparisons and ten active comparison execution trees globally. Per-comparison concurrency counts root plus active descendants, including detached runs. Explicit retries that need a new tree slot reject while per-comparison or global capacity is full; retry after capacity releases. Captured suite/pins/current prompts persist and are shared across delayed samples; ordinary runs remain unchanged. Returns compact progress, not outputs. Use list_work/claim_work/submit_result to execute available Agent work, and get_workflow_comparison_report to inspect progress/results. No executor launch, replay, publication or promotion occurs.',
     comparisonStartSchema.shape,
     (input) => client.testbench.start(input),
   );
@@ -141,9 +142,15 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'get_workflow_comparison_report',
-    'Read compact progress and paged sample/run links, execution failures, pass/fail/unknown check counts, captured dependency and prompt revision references, and separate quality judgments. Defaults: sample limit 10/max25, check limit 5/max10 per sample, judgment limit10/max25; offsets are zero-based. Reports cap JSON at 256 KiB and return nextOffset/nextJudgmentOffset plus truncated when the byte cap shortens a page. Reports omit arbitrary inputs/outputs, prompt bodies and claim tokens. Use get_run_result for selected actual values and get_test_suite for cases. Missing paths fail; missing output/unvisited node or unavailable history yields unknown. Observations are snapshots, so later explicit retries do not rescore them. Completion waits for detached descendants; cancelled roots may leave independent active runs, reported separately. Shape checks never imply semantic quality.',
+    'Read compact progress and paged sample/run links, execution failures, pass/fail/unknown check counts, captured dependency and prompt revision references, and separate quality judgments. Defaults: sample limit 10/max25, check limit 5/max10 per sample, judgment limit10/max25; offsets are zero-based. Reports cap JSON at 256 KiB and return nextOffset/nextJudgmentOffset plus truncated when the byte cap shortens a page. Reports omit arbitrary inputs/outputs, prompt bodies and claim tokens. Each check includes its captured assertion, with expected values over 1 KiB omitted and expectedOmitted set. Use assertionRef with get_comparison_case for the immutable full case, and get_run_result for selected actual values. get_test_suite reads the current editable suite. Missing paths fail; missing output/unvisited node or unavailable history yields unknown. Observations are snapshots, so later explicit retries do not rescore them. Completion waits for detached descendants; cancelled roots may leave independent active runs, reported separately. Shape checks never imply semantic quality.',
     comparisonReportSchema.shape,
     (input) => client.testbench.report(input),
+  );
+  tool(
+    'get_comparison_case',
+    'Read one immutable case captured by a comparison, including original input, assertion expectations, source provenance and quality guidance. Use report assertionRef.comparisonId as id and assertionRef.caseId as caseId. Returns comparisonId, suiteId, suiteRevision and case. Later suite edits do not change this snapshot. Explicit full read, bounded by the 1 MiB suite limit and 64 KiB input limit; case input may contain sensitive data. Does not execute work.',
+    comparisonCaseSchema.shape,
+    (input) => client.testbench.case(input),
   );
   tool(
     'cancel_workflow_comparison',
@@ -429,7 +436,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'retry_run',
-    'Explicitly retry a failed run from its failed step. Inspect the error first: Script and Fetch retries can repeat external side effects. Captured saved prompts retain their original content and revisions on retry. Input bindings resolve again from persisted run inputs and completed node executions. Failed Batch retries preserve completed items. A failed detached child can be retried directly even after its parent ends. Other children with terminal parents require retrying the failed parent instead. Retrying a later parent step does not restart or duplicate already dispatched detached children. Completed and cancelled runs cannot be retried. Deleted required definitions reject retry before any state change; explicitly restore original definitions from a backup first.',
+    'Explicitly retry a failed run from its failed step. Inspect the error first: Script and Fetch retries can repeat external side effects. Captured saved prompts retain their original content and revisions on retry. Input bindings resolve again from persisted run inputs and completed node executions. Failed Batch retries preserve completed items. A failed detached child can be retried directly even after its parent ends. Other children with terminal parents require retrying the failed parent instead. Retrying a later parent step does not restart or duplicate already dispatched detached children. Completed and cancelled runs cannot be retried. Comparison retries needing a new execution-tree slot reject before mutation if per-comparison or global capacity is full; retry after capacity releases. Recorded comparison observations remain unchanged. Deleted required definitions reject retry before any state change; explicitly restore original definitions from a backup first.',
     { id: z.string() },
     (input) => client.runs.retry(input),
   );

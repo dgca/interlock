@@ -284,7 +284,7 @@ it('shows active detached work after parent completion without a parent handoff 
 
 it('shows comparison context and navigates to the counterpart without changing normal run actions', async () => {
   detail.run.comparison = {
-    comparisonId: 'comparison',
+    comparisonId: '12345678-first',
     suiteId: 'suite',
     suiteName: 'Evidence checks',
     suiteRevision: 1,
@@ -297,14 +297,19 @@ it('shows comparison context and navigates to the counterpart without changing n
   detail.counterpartRunId = 'candidate-run';
   await render();
   expect(container.textContent).toContain('Evidence checks');
+  expect(container.textContent).toContain('Comparison 12345678');
   expect(container.textContent).toContain('Uncertain request');
   expect(container.textContent).toContain('Baseline');
   expect(container.textContent).toContain('Repeat 2');
   await click('Candidate run');
   expect(onOpen).toHaveBeenCalledWith('candidate-run');
+  detail.run.comparison.comparisonId = '87654321-second';
+  await render(1);
+  expect(container.textContent).toContain('Comparison 87654321');
+  expect(container.textContent).not.toContain('Comparison 12345678');
   delete detail.run.comparison;
   delete detail.counterpartRunId;
-  await render(1);
+  await render(2);
   expect(container.textContent).not.toContain('Evidence checks');
   expect(container.textContent).not.toContain('Candidate run');
 });

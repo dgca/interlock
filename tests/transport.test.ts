@@ -179,6 +179,7 @@ it.each(['stdio', 'http'])(
         'start_workflow_comparison',
         'list_workflow_comparisons',
         'get_workflow_comparison_report',
+        'get_comparison_case',
         'cancel_workflow_comparison',
         'record_comparison_quality',
       ];
@@ -317,6 +318,32 @@ it.each(['stdio', 'http'])(
         checkCounts: { pass: 2, fail: 0, unknown: 0 },
       });
       expect(comparisonReport.samples).toHaveLength(1);
+      const caseSchema = tools.find(
+        (t) => t.name === 'get_comparison_case',
+      )!.inputSchema;
+      expect(caseSchema.required).toEqual(
+        expect.arrayContaining(['id', 'caseId']),
+      );
+      expect(() =>
+        assertContract(caseSchema, { id: comparison.id }, 'Case lookup'),
+      ).toThrow();
+      expect(comparisonReport.samples[0].observation.checks[0]).toMatchObject({
+        assertion: { path: 'ok', operator: 'equals', expected: true },
+        assertionRef: { comparisonId: comparison.id, caseId: 'case', index: 0 },
+      });
+      expect(
+        await call('get_comparison_case', {
+          id: comparison.id,
+          caseId: 'case',
+        }),
+      ).toMatchObject({
+        suiteRevision: 1,
+        case: {
+          input: { secretInput: 'private' },
+          assertions: [{ expected: true }],
+        },
+      });
+
       expect(JSON.stringify(comparisonReport)).not.toContain('secretInput');
       expect(JSON.stringify(comparisonReport)).not.toContain('secretOutput');
       const judgment = await call('record_comparison_quality', {
