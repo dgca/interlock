@@ -36,6 +36,7 @@ import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 import { PromptPicker } from '../prompts/PromptPicker';
+import styles from './NodeInspector.module.css';
 export function NodeInspector({
   node,
   workflows,
@@ -100,24 +101,12 @@ export function NodeInspector({
             inputSource={hint.source}
           />
         )}
-        {(node.kind === 'script' || node.kind === 'fetch') && (
-          <Switch
-            mb="md"
-            label="Route on failure"
-            aria-label="Route on failure"
-            description="Failed receives the input, error, and any returned output. Disabling removes its connection when changes are applied."
-            checked={node.onFailure === 'route'}
-            onChange={(e) =>
-              patch({
-                onFailure: e.currentTarget.checked ? 'route' : undefined,
-              })
-            }
-          />
-        )}
         {node.kind === 'wait' && (
           <>
             <Input.Wrapper label="Resume" mb="md">
               <SegmentedControl
+                mt={4}
+                className={styles.resume}
                 aria-label="Resume"
                 value={node.timing.kind}
                 data={[
@@ -298,6 +287,7 @@ export function NodeInspector({
             <TextInput
               mb="md"
               label="Maximum attempts"
+              className={styles.number}
               type="number"
               min={1}
               max={10}
@@ -362,6 +352,20 @@ export function NodeInspector({
             />
           </>
         )}
+        {(node.kind === 'script' || node.kind === 'fetch') && (
+          <Switch
+            mb="md"
+            label="Route on failure"
+            aria-label="Route on failure"
+            description="Failed receives the input, error, and any returned output. Disabling removes its connection when changes are applied."
+            checked={node.onFailure === 'route'}
+            onChange={(e) =>
+              patch({
+                onFailure: e.currentTarget.checked ? 'route' : undefined,
+              })
+            }
+          />
+        )}
         {node.kind === 'workflow' && !hideWorkflowTarget && (
           <>
             <NativeSelect
@@ -404,6 +408,7 @@ export function NodeInspector({
             <TextInput
               mb="md"
               label="Pinned version"
+              className={styles.number}
               type="number"
               min={1}
               value={node.version ?? ''}
@@ -466,28 +471,31 @@ export function NodeInspector({
               onChange={(itemsPath) => patch({ itemsPath })}
             />
 
-            <TextInput
-              mb="md"
-              label="Maximum items"
-              description="Reject larger lists before starting any items. Each item has its own step budget."
-              type="number"
-              required
-              min={1}
-              max={MAX_BATCH_ITEMS}
-              value={node.maxItems ?? DEFAULT_BATCH_MAX_ITEMS}
-              onChange={(e) => patch({ maxItems: Number(e.target.value) })}
-            />
-            <TextInput
-              mb="md"
-              label="Items at a time"
-              description="How many item paths can run at once."
-              type="number"
-              min={1}
-              max={50}
-              value={node.concurrency}
-              onChange={(e) => patch({ concurrency: Number(e.target.value) })}
-            />
-
+            <div className={styles.limits}>
+              <TextInput
+                mb="md"
+                label="Maximum items"
+                inputWrapperOrder={['label', 'input', 'description', 'error']}
+                description="Reject larger lists before starting any items. Each item has its own step budget."
+                type="number"
+                required
+                min={1}
+                max={MAX_BATCH_ITEMS}
+                value={node.maxItems ?? DEFAULT_BATCH_MAX_ITEMS}
+                onChange={(e) => patch({ maxItems: Number(e.target.value) })}
+              />
+              <TextInput
+                mb="md"
+                label="Items at a time"
+                inputWrapperOrder={['label', 'input', 'description', 'error']}
+                description="How many item paths can run at once."
+                type="number"
+                min={1}
+                max={50}
+                value={node.concurrency}
+                onChange={(e) => patch({ concurrency: Number(e.target.value) })}
+              />
+            </div>
             <Radio.Group
               mb="md"
               label="When an item fails"
@@ -575,7 +583,7 @@ export function NodeInspector({
           </>
         ) : (
           <>
-            <section aria-label="Input">
+            <section aria-label="Input" className={styles.inputSection}>
               <h3>Input</h3>
               {node.kind !== 'entry' && node.kind !== 'exit' && (
                 <InputBindingsEditor

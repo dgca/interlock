@@ -171,7 +171,9 @@ it('edits a fixed JSON body field as typed text without JSON quotes', async () =
   expect(latest.body.fields[0].value).toEqual({ kind: 'fixed', value: true });
   await act(async () =>
     Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Remove body field 1')!
+      .find(
+        (button) => button.getAttribute('aria-label') === 'Remove body field 1',
+      )!
       .click(),
   );
   expect(
