@@ -36,7 +36,7 @@ export function DurationInput({
         .find((unit) => value >= unit.ms && value % unit.ms === 0)?.ms ?? 1000,
   );
   return (
-    <Group align="flex-end" grow mb="md">
+    <Group align="flex-end" grow mb="md" maw={360} gap="sm" wrap="nowrap">
       <TextInput
         label={label}
         type="number"
