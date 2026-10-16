@@ -8,6 +8,8 @@ import {
   isStartedRunSchema,
   isPollWait,
   hasTimeoutRoute,
+  hasFailureRoute,
+  type FailureCategory,
   blankDefinition,
   definitionSchema,
   InterlockError,
@@ -769,6 +771,54 @@ export class Engine {
     this.save(run);
     this.event(run, 'node.failed', `${execution.label}: ${error}`);
   }
+  private failOperation(
+    run: Run,
+    execution: NodeExecution,
+    node: WorkflowNode,
+    error: string,
+    category: FailureCategory,
+  ) {
+    if (!hasFailureRoute(node)) return this.fail(run, execution, error);
+    const edge = this.definition(run).edges.find(
+      (e) => e.source === node.id && e.port === 'failed',
+    );
+    if (
+      !edge ||
+      (edge.targetHandle === 'end' && edge.target !== run.batchNodeId)
+    )
+      return this.fail(run, execution, `${error}; invalid Failed route`);
+    const value: Json = {
+      input: execution.input,
+      error: {
+        nodeId: node.id,
+        executionId: execution.id,
+        kind: node.kind,
+        category,
+        message: error,
+      },
+      output: execution.output ?? null,
+    };
+    execution.status = 'failed';
+    execution.error = error;
+    execution.port = 'failed';
+    execution.completedAt = now();
+    run.value = value;
+    if (edge.targetHandle === 'end') {
+      run.status = 'completed';
+      run.output = value;
+      this.event(run, 'run.completed', 'Item result returned');
+    } else {
+      run.cursor = edge.target;
+      run.status = 'running';
+    }
+    this.save(run);
+    this.event(run, 'node.failed', `${execution.label}: ${error}`);
+    this.event(
+      run,
+      'node.failure_routed',
+      `${execution.label}: followed Failed`,
+    );
+  }
   private finish(
     run: Run,
     execution: NodeExecution,
@@ -1229,7 +1279,11 @@ export class Engine {
               node.language,
             );
       void job
-        .then((output) => {
+        .then(
+          (output) => ({ ok: true as const, output }),
+          (error) => ({ ok: false as const, error: message(error) }),
+        )
+        .then((result) => {
           if (this.stopped) return;
           this.store.transaction(() => {
             const latest = this.run(run.id);
@@ -1239,13 +1293,44 @@ export class Engine {
             )
               return;
             const current = latest.executions.at(-1)!;
+            if (!result.ok) {
+              this.failOperation(
+                latest,
+                current,
+                node,
+                result.error,
+                'execution',
+              );
+              return;
+            }
+            const output = result.output;
             if (node.kind === 'fetch') {
               current.output = output;
               const status = (output as { status: number }).status;
               if (node.failOnHttpError && (status < 200 || status >= 300)) {
-                this.fail(latest, current, `Fetch returned HTTP ${status}`);
+                this.failOperation(
+                  latest,
+                  current,
+                  node,
+                  `Fetch returned HTTP ${status}`,
+                  'http',
+                );
                 return;
               }
+            }
+            try {
+              // Retain returned data even if its success contract rejects it.
+              if (hasFailureRoute(node)) current.output = output;
+              assertContract(node.outputSchema, output, `${node.label} output`);
+            } catch (error) {
+              this.failOperation(
+                latest,
+                current,
+                node,
+                message(error),
+                'output',
+              );
+              return;
             }
             this.finish(latest, current, node, output);
           });

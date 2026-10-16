@@ -1597,6 +1597,77 @@ it.each(['stdio', 'http'])(
       ).toBe(false);
       expect(createDefinition).toMatchObject({ type: 'object' });
       expect(updateDefinition).toMatchObject({ type: 'object' });
+      const recoveryDefinition = blankDefinition();
+      recoveryDefinition.nodes[1] = nodeSchema.parse({
+        id: 'agent',
+        kind: 'script',
+        label: 'Unavailable',
+        language: 'javascript',
+        command: 'throw new Error("offline");',
+        onFailure: 'route',
+      });
+      recoveryDefinition.edges.push({
+        id: 'failed',
+        source: 'agent',
+        target: 'exit',
+        port: 'failed',
+      });
+      for (const [toolName, parameter] of [
+        ['create_workflow', 'definition'],
+        ['update_workflow', 'draft'],
+        ['validate_workflow', 'definition'],
+      ]) {
+        const schema = tools.find((t) => t.name === toolName)!.inputSchema;
+        const args =
+          toolName === 'create_workflow'
+            ? { name: 'Recovery', [parameter]: recoveryDefinition }
+            : { id: w.id, [parameter]: recoveryDefinition };
+        expect(JSON.stringify(schema)).toContain('onFailure');
+        expect(JSON.stringify(schema)).toContain('executionId');
+        expect(() =>
+          assertContract(schema, jsonSchema.parse(args), 'recovery definition'),
+        ).not.toThrow();
+        const invalid = structuredClone(args);
+        (invalid[parameter] as typeof recoveryDefinition).nodes[1] = {
+          ...recoveryDefinition.nodes[1],
+          onFailure: 'retry',
+        } as any;
+        if (toolName !== 'validate_workflow')
+          expect(() =>
+            assertContract(
+              schema,
+              jsonSchema.parse(invalid),
+              'invalid recovery',
+            ),
+          ).toThrow();
+        else expect((await call(toolName, invalid)).saveable).toBe(false);
+      }
+      const recoveryWorkflow = await call('create_workflow', {
+        name: 'Recovery',
+        definition: recoveryDefinition,
+      });
+      expect(
+        (await call('validate_workflow', { id: recoveryWorkflow.id }))
+          .publishable,
+      ).toBe(true);
+      await call('publish_workflow', { id: recoveryWorkflow.id });
+      const recoveryRun = await call('start_run', {
+        workflowId: recoveryWorkflow.id,
+        input: { topic: 'demo' },
+      });
+      await vi.waitFor(() =>
+        expect(engine.run(recoveryRun.run.id).status).toBe('completed'),
+      );
+      const recoveryHistory = await call('get_run', { id: recoveryRun.run.id });
+      expect(recoveryHistory.run.executions[1]).toMatchObject({
+        status: 'failed',
+        port: 'failed',
+        error: expect.stringContaining('offline'),
+      });
+      expect(recoveryHistory.run.output).toMatchObject({
+        input: { topic: 'demo' },
+        error: { category: 'execution', kind: 'script' },
+      });
       for (const [name, parameter] of [
         ['start_run', 'input'],
         ['submit_result', 'output'],

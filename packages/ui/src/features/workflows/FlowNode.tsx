@@ -25,6 +25,7 @@ import {
 import {
   nodeKindLabel,
   outgoingPorts,
+  hasFailureRoute,
   hasTimeoutRoute,
   STARTED_RUN_SCHEMA,
   type WorkflowNode,
@@ -406,6 +407,22 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
                 top={outputPortTop(n, port)}
               />
             ))
+        ) : hasFailureRoute(n) ? (
+          <>
+            <Port
+              type="source"
+              id="default"
+              label="Out"
+              top={outputPortTop(n, 'default')}
+            />
+            <Port
+              type="source"
+              id="failed"
+              label="Failed"
+              top={outputPortTop(n, 'failed')}
+              color="var(--edge-exception)"
+            />
+          </>
         ) : hasTimeoutRoute(n) ? (
           <>
             <Port

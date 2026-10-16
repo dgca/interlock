@@ -314,7 +314,15 @@ export function evaluateAssertions(
         'unknown',
         `Node ${a.nodeId} visit ${a.visit} did not execute`,
       );
-    if (execution && execution.status !== 'completed')
+    const routedFailure =
+      execution?.status === 'failed' &&
+      (execution.kind === 'script' || execution.kind === 'fetch') &&
+      execution.port === 'failed';
+    if (
+      execution &&
+      execution.status !== 'completed' &&
+      !(a.kind === 'route' && routedFailure)
+    )
       return result('unknown', `Node visit is ${execution.status}`);
     if (a.kind === 'route') {
       if (!execution?.port)

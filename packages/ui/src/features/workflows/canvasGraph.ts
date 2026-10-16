@@ -1,4 +1,5 @@
 import {
+  hasFailureRoute,
   type WorkflowDefinition,
   type WorkflowEdge,
   type WorkflowNode,
@@ -540,8 +541,11 @@ export function canvasGraph(
         : emphasis(edge.id, linkedEdges),
       // Only exception routes carry color; ordinary flow shares --edge.
       style:
-        index.get(edge.source)?.kind === 'agent' &&
-        edge.port === 'timeout' &&
+        ((index.get(edge.source)?.kind === 'agent' &&
+          edge.port === 'timeout') ||
+          (index.has(edge.source) &&
+            hasFailureRoute(index.get(edge.source)!) &&
+            edge.port === 'failed')) &&
         !selectedIds.has(edge.id)
           ? { stroke: 'var(--edge-exception)' }
           : undefined,

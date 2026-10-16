@@ -37,6 +37,8 @@ Response headers use lowercase names. JSON and `+json` content types are parsed 
 
 HTTP errors retain their parsed response in the failed node execution. To branch on a status instead of failing the step, clear **Fail on HTTP errors** and connect a Condition that reads `status`.
 
+Enable **Route on failure**, or set `onFailure: "route"`, to handle rejected HTTP statuses, network errors, timeouts, response parsing errors, and output-contract failures through a **Failed** route. Connect both `default` and `failed`. Recovery receives `{input,error,output}`, including the HTTP response when available. Request binding and resolution errors remain terminal. See [failure routes](failure-routes.md).
+
 ## Cancellation and retries
 
 Fetch has no automatic workflow retries. Cancelling a run aborts its unfinished requests. A service interruption marks an in-flight Fetch as failed rather than resending it on restart. Explicit retry sends the request again. Cancellation and timeout cannot undo a request that the remote server has already processed.
