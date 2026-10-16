@@ -125,6 +125,36 @@ async function click(text: string) {
       .click(),
   );
 }
+
+it.each(['script', 'fetch'])(
+  'removes only the disabled %s Failed route when applying settings',
+  async (kind) => {
+    const config =
+      kind === 'script'
+        ? { kind, command: 'exit 1' }
+        : { kind, url: 'https://example.com' };
+    const node = nodeSchema.parse({
+      id: 'step',
+      label: 'Step',
+      ...config,
+      onFailure: 'route',
+    });
+    const graph = definitionSchema.parse({
+      nodes: [node, { id: 'exit', kind: 'exit', label: 'Exit' }],
+      edges: [
+        { id: 'normal', source: 'step', target: 'exit', port: 'default' },
+        { id: 'failed', source: 'step', target: 'exit', port: 'failed' },
+      ],
+    });
+    const { onApply } = await render({ ...config, onFailure: 'route' }, graph);
+    expect((field('Route on failure') as HTMLInputElement).checked).toBe(true);
+    await act(async () => field('Route on failure').click());
+    await click('Apply changes');
+    const result = onApply.mock.calls[0][0].definition;
+    expect(result.nodes[0].onFailure).toBeUndefined();
+    expect(result.edges.map((e: any) => e.id)).toEqual(['normal']);
+  },
+);
 it.each(
   ['42', 42, false, null, { approved: true }, [1, 'a']].map((equals) => ({
     equals,

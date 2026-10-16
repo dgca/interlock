@@ -1,6 +1,8 @@
 import {
   isPollWait,
   hasTimeoutRoute,
+  hasFailureRoute,
+  FAILURE_ROUTE_SCHEMA,
   type WorkflowDefinition,
   type WorkflowNode,
 } from './index.js';
@@ -170,6 +172,8 @@ export function nodeInputHint(
   };
 
   const output = (source: WorkflowNode, port: string): Contract => {
+    if (hasFailureRoute(source) && port === 'failed')
+      return FAILURE_ROUTE_SCHEMA;
     if (hasTimeoutRoute(source) && port === 'timeout')
       return input(source).schema;
     if (source.kind === 'batch' && port === 'item') {

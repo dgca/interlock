@@ -258,6 +258,8 @@ Run inspection includes descendant runs and assignments without claim tokens. Ba
 
 ## Fetch execution
 
+Script and Fetch nodes can set `onFailure: "route"` to expose `default` and `failed` ports. Only operation outcomes route; input/request validation, step limits, cancellation and server interruption remain terminal. The failed execution retains its error, raw output and `port: "failed"`, while the run continues with the fixed `{input,error,output}` envelope. Core owns that contract and its input hints; runtime owns routing. Existing success contracts apply only to the default route. See [failure routes](failure-routes.md).
+
 Core defines Fetch configuration, validates bindings at publication, and resolves requests through the same pure function used by the UI preview. Runtime sends requests outside storage transactions with an abort controller shared with run cancellation. Resolved requests persist on node executions. HTTP errors retain their response output; explicit retries create a new execution. Pending requests fail on restart because remote side effects are uncertain. See [Fetch requests](fetch.md) for the configuration and response contract.
 
 ## Published version cleanup

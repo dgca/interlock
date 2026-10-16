@@ -425,6 +425,10 @@ export function RunInspector({
             {execution?.port === 'timeout' && (
               <p className="hint">Followed Timeout with the original input.</p>
             )}
+            {(execution?.kind === 'script' || execution?.kind === 'fetch') &&
+              execution.port === 'failed' && (
+                <p className="hint">Followed Failed with error data.</p>
+              )}
             {execution?.check && (
               <>
                 <p className="hint">

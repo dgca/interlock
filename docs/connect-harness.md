@@ -132,6 +132,8 @@ Use `kind: "batch"` for repeated work. Give each direct child a `batchId` matchi
 
 ### Author timers
 
+Script and Fetch nodes can also opt into [failure routing](failure-routes.md) with `onFailure: "route"` and both `default` and `failed` edges. Existing authoring tools expose the same configuration. Recovery receives `{input,error,output}`; failed operations remain visible in a run that may complete successfully. No automatic retry is added.
+
 Use a `wait` node for a durable pause, or set `unclaimedTimeoutMs` on an Agent and connect both its `default` and `timeout` routes. Both create and update tools describe the same timer fields on their definition parameters. See [timer configuration](timers.md) for bounds, defaults, and examples.
 
 Read `get_workflow` before editing. Pass the entire updated definition as `draft` with the current `draftRevision`. Removing `unclaimedTimeoutMs` in JSON does not remove edges automatically; remove its `timeout` edge too. Incomplete routes can be saved, but they block publication. Publish a new version to apply changes to future runs; existing runs keep their original configuration and deadlines.

@@ -100,6 +100,20 @@ export function NodeInspector({
             inputSource={hint.source}
           />
         )}
+        {(node.kind === 'script' || node.kind === 'fetch') && (
+          <Switch
+            mb="md"
+            label="Route on failure"
+            aria-label="Route on failure"
+            description="Failed receives the input, error, and any returned output. Disabling removes its connection when changes are applied."
+            checked={node.onFailure === 'route'}
+            onChange={(e) =>
+              patch({
+                onFailure: e.currentTarget.checked ? 'route' : undefined,
+              })
+            }
+          />
+        )}
         {node.kind === 'wait' && (
           <>
             <Input.Wrapper label="Resume" mb="md">

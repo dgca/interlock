@@ -84,6 +84,8 @@ The four grouped tools require a `request` object with one explicit `action`. Ea
 
 Output assertions use `kind: "output"`, optional root-scope `nodeId`, positive `visit` (default 1), `path` (default empty), and `operator`. `exists` has no expected value. `equals` requires a JSON `expected` value and ignores object key order. `gte` and `lte` require numeric expected and actual values. Paths use Interlock's dot-separated object keys and array indices; an empty path selects the entire value. Route assertions require `kind: "route"`, `nodeId`, positive `visit` and expected `port`.
 
+A Script or Fetch execution that follows its configured Failed route retains status `failed`. Its recorded route can satisfy a route assertion. Output assertions against that failed node remain `unknown`; check the recovery step or run output instead.
+
 Only root-scope checkpoints are supported. Preview rejects unknown nodes, Batch-member selectors and undeclared ports in either definition. Batch/child execution remains supported. A present null passes an existence check. Missing paths on available output fail. Missing output, unvisited node visits, unfinished execution and unavailable history yield `unknown`; unknown never counts as pass. An unequal available output or route fails. Numeric comparison against a non-number fails. Individual reasons and execution errors are bounded to 512 characters in reports.
 
 | Bound                     | Value                                                                                                     |

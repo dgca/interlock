@@ -2,6 +2,8 @@ import {
   definitionSchema,
   isPollWait,
   hasTimeoutRoute,
+  hasFailureRoute,
+  FAILURE_ROUTE_SCHEMA,
   outgoingPorts,
   validateContractSchema,
   validateDefinition,
@@ -383,9 +385,10 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
         source.kind === 'exit'
       )
         return unknownShape();
-      const candidates = outgoingPorts(source).map((port) =>
-        output(source, port),
-      );
+      // Failed operations are not eligible for earlier-node output bindings.
+      const candidates = (
+        hasFailureRoute(source) ? ['default'] : outgoingPorts(source)
+      ).map((port) => output(source, port));
       const first = candidates[0];
       return first &&
         candidates.every(
@@ -431,7 +434,10 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
     if (visiting.has(key) || visiting.size >= 100) return unknownShape();
     visiting.add(key);
     let result: Shape;
-    if (hasTimeoutRoute(node) && port === 'timeout') result = resolved(node);
+    if (hasFailureRoute(node) && port === 'failed')
+      result = shape(FAILURE_ROUTE_SCHEMA);
+    else if (hasTimeoutRoute(node) && port === 'timeout')
+      result = resolved(node);
     else if (node.kind === 'batch' && port === 'item') {
       const list = atPath(resolved(node), node.itemsPath);
       result =

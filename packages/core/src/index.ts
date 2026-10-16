@@ -12,6 +12,7 @@ export {
 import { validateBatchScopes } from './batchScopes.js';
 import { isStartedRunSchema } from './workflowMode.js';
 export { STARTED_RUN_SCHEMA, isStartedRunSchema } from './workflowMode.js';
+export { FAILURE_ROUTE_SCHEMA, type FailureCategory } from './failureRoute.js';
 export { validateBatchScopes } from './batchScopes.js';
 
 export type Json =
@@ -107,6 +108,12 @@ const nodeBase = {
 };
 export const DEFAULT_BATCH_MAX_ITEMS = 200;
 export const MAX_BATCH_ITEMS = 10_000;
+const onFailureSchema = z
+  .enum(['fail', 'route'])
+  .optional()
+  .describe(
+    'Omit or use fail to stop the run. route requires default and failed edges. Failed receives {input, error: {nodeId, executionId, kind: script|fetch, category: execution|http|output, message}, output}. input is the resolved operation input; output is returned JSON or null if unavailable. The success outputSchema does not apply to Failed; its destination validates the envelope. Only operation errors, rejected HTTP statuses and output-contract failures route. Input/request validation, cancellation, step limits and interrupted operations after restart remain terminal. No automatic retry.',
+  );
 
 export const nodeSchema = z.discriminatedUnion('kind', [
   z.object({ ...nodeBase, kind: z.literal('entry') }),
@@ -128,6 +135,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('script'),
+    onFailure: onFailureSchema,
     // Older saved nodes omit language and must continue to run as Bash.
     language: z.enum(['javascript', 'bash']).optional(),
     command: z.string().min(1),
@@ -136,6 +144,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('fetch'),
+    onFailure: onFailureSchema,
     outputSchema: contractSchema.default({
       type: 'object',
       required: ['status', 'headers', 'body'],
@@ -433,11 +442,18 @@ export function outgoingPorts(node: WorkflowNode): WorkflowEdge['port'][] {
       ...(node.default === undefined ? [] : [node.default]),
     ];
   if (node.kind === 'batch') return ['item', 'complete'];
+  if (hasFailureRoute(node)) return ['default', 'failed'];
   if (node.kind === 'agent' && node.unclaimedTimeoutMs !== undefined)
     return ['default', 'timeout'];
   if (isPollWait(node) && node.timing.timeoutMs !== undefined)
     return ['default', 'timeout'];
   return ['default'];
+}
+export function hasFailureRoute(node: WorkflowNode): boolean {
+  return (
+    (node.kind === 'script' || node.kind === 'fetch') &&
+    node.onFailure === 'route'
+  );
 }
 export type PollWaitNode = Extract<WorkflowNode, { kind: 'wait' }> & {
   timing: Extract<
