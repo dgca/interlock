@@ -53,15 +53,16 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   function tool<S extends z.ZodRawShape>(
     name: string,
     description: string,
-    inputSchema: S,
+    inputSchema: S | z.ZodObject<S, 'strict'>,
     fn: (
       input: z.infer<z.ZodObject<S>>,
       signal: AbortSignal,
     ) => Promise<unknown>,
   ) {
-    server.registerTool(
+    const schema: z.ZodRawShape | z.AnyZodObject = inputSchema;
+    server.registerTool<z.ZodRawShape, typeof schema>(
       name,
-      { description, inputSchema: inputSchema as z.ZodRawShape },
+      { description, inputSchema: schema },
       async (input, extra) => {
         try {
           const result = await fn(
@@ -98,7 +99,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   tool(
     'read_test_suites',
     'Read saved local test suites. request.action:list returns compact items and exact total, omitting cases; optional workflowId, limit default 20/max 100. request.action:get with id returns one full suite with current revision, captured input, assertions, optional source provenance and quality guidance. Use that revision for save_test_suite action:update. Suite size is at most 1 MiB, case input 64 KiB. Source deletion does not remove captured input. For the original case used by a past comparison use read_workflow_comparisons action:case. Read-only; never executes work.',
-    testSuiteReadSchema.shape,
+    testSuiteReadSchema,
     ({ request }) => {
       if (request.action === 'list') {
         const { action: _action, ...args } = request;
@@ -110,7 +111,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   tool(
     'save_test_suite',
     'Save a local suite without executing workflows. request.action:create requires workflowId and content; action:update requires id, expected revision and replacement content, never implicitly creates. Suites have 1–25 distinct stable case IDs, names, up to 50 assertions/case and optional quality guidance. Each case supplies exactly one of explicit input or sourceRunId from the same workflow; source capture copies only original input and identity, never work/tokens/history. Assertions check output paths using exists/equals/gte/lte or root-scope nodeId/positive visit/port; nested checkpoints are unsupported. Invalid or stale saves reject atomically. Effective updates increment revision once; no-ops preserve revision/timestamp. Workflow association is immutable and prior comparisons retain their captures. Read current revision with read_test_suites action:get. Omit informational source metadata from read cases when saving explicit inputs. Local suites are excluded from portable bundles.',
-    testSuiteSaveSchema.shape,
+    testSuiteSaveSchema,
     ({ request }) => {
       if (request.action === 'create') {
         const { action: _action, ...args } = request;
@@ -123,19 +124,19 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   tool(
     'preview_workflow_comparison',
     'Read-only plan for two exact published versions of a suite workflow on identical saved inputs. Defaults: repetitions 1, concurrency 2; bounds: repetitions 1–10, concurrency 1–10, at most 100 root runs, 64 transitive version pins and 64 saved prompts totaling 1 MiB. Returns cases/input and assertion hashes, exact rootRunCount, dependency pins/hashes, current prompt revisions/hashes, up to 50 blocker details with exact blockerCount, canStart and confirmation. Root-only output/node visit/route checks are validated for both versions before execution. Real runs use connected Agent executors and may perform Script/Fetch external actions. Nested runs add work beyond rootRunCount. Current prompts are captured for the comparison; this does not reconstruct the library at publication time. Use start_workflow_comparison with confirmation and a unique requestId.',
-    comparisonPreviewSchema.shape,
+    comparisonPreviewSchema,
     (input) => client.testbench.preview(input),
   );
   tool(
     'start_workflow_comparison',
     'Start a previewed paired live comparison. Rechecks confirmation and suite revision transactionally before creating experiment state. Changes to prompt revisions/pins/suite/eligibility require a new preview. Repeat exactly the same requestId and arguments after a lost response to recover the original comparison; conflicting reuse rejects. Maximum four active comparisons and ten active comparison execution trees globally. Per-comparison concurrency counts root plus active descendants, including detached runs. Explicit retries that need a new tree slot reject while per-comparison or global capacity is full, including four active comparisons; retry after capacity releases. Captured suite/pins/current prompts persist and are shared across delayed samples; ordinary runs remain unchanged. Returns compact progress, not outputs. Use list_work/claim_work/submit_result to execute available Agent work, and read_workflow_comparisons action:report to inspect progress/results. No executor launch, replay, publication or promotion occurs.',
-    comparisonStartSchema.shape,
+    comparisonStartSchema,
     (input) => client.testbench.start(input),
   );
   tool(
     'read_workflow_comparisons',
     'Read local comparisons without executing or claiming work. request.action:list returns compact items/exact total with optional workflowId and limit default 20/max 100. Progress includes running/completed/cancelled, observed/queued/activeTrees, activeDetachedCount and bounded independent run IDs. action:report requires id; returns paged sample/run/counterpart links, execution errors, pass/fail/unknown checks, captured pins/prompt revisions and separate quality judgments. Defaults: samples 10/max 25, checks 5/max 10 per sample, judgments 10/max 25; offsets zero-based. JSON cap 256 KiB, nextOffset/nextJudgmentOffset and truncated preserve continuation. Reports omit arbitrary inputs/outputs, prompt bodies and tokens; use get_run_result for selected actual values. Each check identifies its captured assertion and assertionRef. Expected values over 1 KiB set expectedOmitted; action:case with id from assertionRef.comparisonId and caseId returns the immutable full case, input, expectations, source provenance and quality guidance plus comparisonId/suiteId/suiteRevision. Explicit case reads retain the 1 MiB suite/64 KiB input bounds and can contain sensitive input. Later suite edits do not change captures; read_test_suites action:get returns current editable content. Missing paths fail; absent output/unvisited node/unavailable history is unknown. Observations remain snapshots after retries, with current status separate. Completion includes detached trees; cancellation may leave independent work. Shape checks do not establish quality.',
-    comparisonReadSchema.shape,
+    comparisonReadSchema,
     ({ request }) => {
       switch (request.action) {
         case 'list': {
@@ -156,7 +157,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   tool(
     'update_workflow_comparison',
     'Explicitly update an existing comparison; never creates comparisons or publishes/promotes. request.action:cancel with id stops queued starts and cancels active roots using ordinary cancellation. Detached descendants remain independent by default; cancelDetached:true explicitly cancels owned detached descendants too. Read remaining IDs/status before treating work as finished. Does not delete results or affect unrelated runs. action:record_quality appends a judgment for an observed executed sample with id, sampleId, declared reviewer, reviewerKind human/agent, explicit rubric, score 0–5 and optional notes. Prior judgments remain, maximum 1000/comparison. Agent judgments are labeled; declared identity does not prove a person reviewed the result and no evaluator is launched. Execution errors, checks and quality stay distinct. Inspect results with read_workflow_comparisons action:report.',
-    comparisonUpdateSchema.shape,
+    comparisonUpdateSchema,
     ({ request }) => {
       if (request.action === 'cancel') {
         const { action: _action, ...args } = request;

@@ -337,6 +337,21 @@ it.each(['stdio', 'http'])(
       expect(protectedState()).toEqual(beforeReads);
       for (const [name, args] of [
         ['read_test_suites', {}],
+        [
+          'read_test_suites',
+          { request: { action: 'get', id: suite.id }, limit: 1 },
+        ],
+        [
+          'save_test_suite',
+          {
+            request: {
+              action: 'create',
+              workflowId: comparisonWorkflow.id,
+              content: suiteContent,
+            },
+            revision: 999,
+          },
+        ],
         ['read_test_suites', { request: { action: 'get' } }],
         ['read_test_suites', { request: { action: 'list', id: suite.id } }],
         [
@@ -390,6 +405,10 @@ it.each(['stdio', 'http'])(
         candidateVersion: 2,
       };
       const beforePreview = protectedState();
+      await rejectAction('preview_workflow_comparison', {
+        ...comparisonSelection,
+        action: 'start',
+      });
       const comparisonPlan = await call(
         'preview_workflow_comparison',
         comparisonSelection,
@@ -401,6 +420,11 @@ it.each(['stdio', 'http'])(
         confirmation: comparisonPlan.confirmation,
         requestId: `transport-${mode}`,
       };
+      await rejectAction('start_workflow_comparison', {
+        ...comparisonRequest,
+        requestId: `invalid-envelope-${mode}`,
+        action: 'preview',
+      });
       const comparison = await call(
         'start_workflow_comparison',
         comparisonRequest,
@@ -428,6 +452,15 @@ it.each(['stdio', 'http'])(
         notes: 'Recorded separately',
       };
       for (const [name, args] of [
+        [
+          'read_workflow_comparisons',
+          { request: { action: 'report', id: comparison.id }, caseId: 'case' },
+        ],
+        [
+          'update_workflow_comparison',
+          { request: { action: 'cancel', id: comparison.id }, score: 4 },
+        ],
+
         [
           'read_workflow_comparisons',
           { request: { action: 'start', id: comparison.id } },
