@@ -11,3 +11,11 @@ The original user asked for backward compatibility and one PR per addressed issu
 Use `.tasks/workflow-testbench/` in `/Users/dan/.codex/worktrees/issue-103-delete-scope/interlock`. Branch `codex/workflow-testbench` starts from original base `be09383893a6d471dd1b672ba7391e131e281a5f`. SDLC workflow v4 run is `2fef3acd-65a6-4dca-b4db-b622ad0f1d82`. Preserve unrelated research in the original checkout and all user database content. Automated checks use temporary databases and deterministic fake assignments or services.
 
 No intent decisions remain unresolved. Specification must establish exact comparison captures, bounded execution, assertion semantics and detached lifecycle handling without changing ordinary run rules.
+
+## MCP interface refinement
+
+After PR #112 was opened, the user asked, "Could we reduce the number of tools? This does feel excessive". Reduce the number of MCP entry points while preserving the accepted feature and already released unrelated tools. This follow-up updates the same unmerged PR. It does not change shared server operations, persisted data, runtime rules or the Runs UI.
+
+The agent recommends six tools with strict action-specific requests, keeping reads separate from writes and comparison preview separate from execution. An optional question offered retaining all capabilities or also trimming functionality. No capability removal was requested; proceed with the stated retention recommendation while incorporating any later user steering.
+
+The original SDLC run completed. Follow-up v4 run `6e445176-5399-42d6-8850-228a78b6970c` reuses these artifacts and branch, with the same original base. The previously reviewed candidate `b86f00fc2a9afeba8316eae72dadc55f5a9487a2` and review chain remain attributable evidence for unchanged behavior. The eleven proposed tools have not shipped; replacing their registrations needs no legacy aliases.
