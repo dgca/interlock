@@ -3,6 +3,7 @@ import {
   assertContract,
   validateContractSchema,
   jsonSchema,
+  type Json,
 } from '@interlock/core';
 import { batchDefinition } from './fixtures/batch';
 import { switchDefinition } from './fixtures/switch';
@@ -29,6 +30,8 @@ function leaseDeadline(value: unknown): number {
     throw new Error('Expected a claim deadline');
   return Date.parse(value.leaseUntil);
 }
+
+let testbenchDiscovery: unknown;
 
 it.each(['stdio', 'http'])(
   'completes a workflow through MCP %s and the shared HTTP and SQLite interfaces',
@@ -171,20 +174,54 @@ it.each(['stdio', 'http'])(
       });
       const tools = (await client.listTools()).tools;
       const testbenchTools = [
-        'list_test_suites',
-        'get_test_suite',
-        'create_test_suite',
-        'update_test_suite',
+        'read_test_suites',
+        'save_test_suite',
         'preview_workflow_comparison',
         'start_workflow_comparison',
-        'list_workflow_comparisons',
-        'get_workflow_comparison_report',
-        'get_comparison_case',
-        'cancel_workflow_comparison',
-        'record_comparison_quality',
+        'read_workflow_comparisons',
+        'update_workflow_comparison',
       ];
-      for (const name of testbenchTools)
-        expect(tools.map((t) => t.name)).toContain(name);
+      const discovered = tools.filter((t) =>
+        /test_suite|workflow_comparison|comparison_case|comparison_quality/.test(
+          t.name,
+        ),
+      );
+      expect(discovered.map((t) => t.name).sort()).toEqual(
+        [...testbenchTools].sort(),
+      );
+      const contracts = discovered.map(
+        ({ name, description, inputSchema }) => ({
+          name,
+          description,
+          inputSchema,
+        }),
+      );
+      if (testbenchDiscovery) expect(contracts).toEqual(testbenchDiscovery);
+      else testbenchDiscovery = contracts;
+      const protectedState = () =>
+        Object.fromEntries(
+          [
+            'workflows',
+            'versions',
+            'deletedVersions',
+            'runs',
+            'work',
+            'events',
+            'prompts',
+            'promptRevisions',
+            'testSuites',
+            'comparisons',
+          ].map((collection) => [collection, store.list(collection)]),
+        );
+      const rejectAction = async (name: string, args: Record<string, Json>) => {
+        const before = protectedState();
+        const schema = tools.find((t) => t.name === name)!.inputSchema;
+        expect(() => assertContract(schema, args, name)).toThrow();
+        expect((await client.callTool({ name, arguments: args })).isError).toBe(
+          true,
+        );
+        expect(protectedState()).toEqual(before);
+      };
       const comparisonSchema = tools.find(
         (t) => t.name === 'start_workflow_comparison',
       )!.inputSchema;
@@ -250,38 +287,115 @@ it.each(['stdio', 'http'])(
           },
         ],
       };
-      const suite = await call('create_test_suite', {
-        workflowId: comparisonWorkflow.id,
-        content: suiteContent,
-      });
-      expect(
-        (await call('list_test_suites', {})).items.some(
-          (s: any) => s.id === suite.id,
+      const example = JSON.parse(
+        readFileSync('docs/workflow-testbench.md', 'utf8').match(
+          /```json\n([\s\S]*?)\n```/,
+        )![1],
+      );
+      expect(() =>
+        assertContract(
+          tools.find((t) => t.name === 'save_test_suite')!.inputSchema,
+          example,
+          'Documented suite example',
         ),
-      ).toBe(true);
-      expect(await call('get_test_suite', { id: suite.id })).toMatchObject({
+      ).not.toThrow();
+      const suite = await call('save_test_suite', {
+        request: {
+          action: 'create',
+          workflowId: comparisonWorkflow.id,
+          content: suiteContent,
+        },
+      });
+      const beforeReads = protectedState();
+      const suiteList = await call('read_test_suites', {
+        request: { action: 'list', workflowId: comparisonWorkflow.id },
+      });
+      expect(suiteList).toMatchObject({
+        total: 1,
+        items: [{ id: suite.id, caseCount: 1 }],
+      });
+      expect(suiteList.items[0]).not.toHaveProperty('cases');
+      expect(
+        await call('read_test_suites', {
+          request: { action: 'get', id: suite.id },
+        }),
+      ).toMatchObject({
         revision: 1,
         cases: [{ id: 'case', input: { secretInput: 'private' } }],
       });
+      expect(protectedState()).toEqual(beforeReads);
       expect(
-        await call('update_test_suite', {
-          id: suite.id,
-          revision: 1,
-          content: suiteContent,
+        await call('save_test_suite', {
+          request: {
+            action: 'update',
+            id: suite.id,
+            revision: 1,
+            content: suiteContent,
+          },
         }),
       ).toMatchObject({ revision: 1 });
+      expect(protectedState()).toEqual(beforeReads);
+      for (const [name, args] of [
+        ['read_test_suites', {}],
+        ['read_test_suites', { request: { action: 'get' } }],
+        ['read_test_suites', { request: { action: 'list', id: suite.id } }],
+        [
+          'read_test_suites',
+          {
+            request: {
+              action: 'create',
+              workflowId: comparisonWorkflow.id,
+              content: suiteContent,
+            },
+          },
+        ],
+        ['read_test_suites', { request: { action: 'list', limit: 101 } }],
+        [
+          'save_test_suite',
+          {
+            request: {
+              workflowId: comparisonWorkflow.id,
+              content: suiteContent,
+            },
+          },
+        ],
+        [
+          'save_test_suite',
+          {
+            request: { action: 'update', id: suite.id, content: suiteContent },
+          },
+        ],
+        [
+          'save_test_suite',
+          { request: { action: 'update', revision: 1, content: suiteContent } },
+        ],
+        [
+          'save_test_suite',
+          {
+            request: {
+              action: 'create',
+              workflowId: comparisonWorkflow.id,
+              id: suite.id,
+              revision: 1,
+              content: suiteContent,
+            },
+          },
+        ],
+      ] as [string, Record<string, Json>][])
+        await rejectAction(name, args);
       const comparisonSelection = {
         suiteId: suite.id,
         suiteRevision: 1,
         baselineVersion: 1,
         candidateVersion: 2,
       };
+      const beforePreview = protectedState();
       const comparisonPlan = await call(
         'preview_workflow_comparison',
         comparisonSelection,
       );
       expect(comparisonPlan).toMatchObject({ canStart: true, rootRunCount: 2 });
-      expect(engine.store.runs().some((r) => r.comparison)).toBe(false);
+      expect(protectedState()).toEqual(beforePreview);
       const comparisonRequest = {
         ...comparisonSelection,
         confirmation: comparisonPlan.confirmation,
@@ -291,9 +405,78 @@ it.each(['stdio', 'http'])(
         'start_workflow_comparison',
         comparisonRequest,
       );
+      const beforeReplay = protectedState();
       expect(
         (await call('start_workflow_comparison', comparisonRequest)).id,
       ).toBe(comparison.id);
+      expect(protectedState()).toEqual(beforeReplay);
+      const conflicting = await client.callTool({
+        name: 'start_workflow_comparison',
+        arguments: { ...comparisonRequest, concurrency: 1 },
+      });
+      expect(conflicting.isError).toBe(true);
+      expect(protectedState()).toEqual(beforeReplay);
+      const sample = engine.testbench.report({ id: comparison.id }).samples[0];
+      const qualityRequest = {
+        action: 'record_quality',
+        id: comparison.id,
+        sampleId: sample.id,
+        reviewer: 'Transport test',
+        reviewerKind: 'agent',
+        rubric: 'Useful result',
+        score: 4,
+        notes: 'Recorded separately',
+      };
+      for (const [name, args] of [
+        [
+          'read_workflow_comparisons',
+          { request: { action: 'start', id: comparison.id } },
+        ],
+        [
+          'read_workflow_comparisons',
+          { request: { action: 'list', id: comparison.id } },
+        ],
+        [
+          'read_workflow_comparisons',
+          { request: { action: 'report', id: comparison.id, caseId: 'case' } },
+        ],
+        [
+          'read_workflow_comparisons',
+          { request: { action: 'case', id: comparison.id } },
+        ],
+        [
+          'read_workflow_comparisons',
+          {
+            request: {
+              action: 'case',
+              id: comparison.id,
+              caseId: 'case',
+              limit: 1,
+            },
+          },
+        ],
+        [
+          'read_workflow_comparisons',
+          { request: { action: 'report', id: comparison.id, limit: 26 } },
+        ],
+        [
+          'update_workflow_comparison',
+          { request: { action: 'cancel', id: comparison.id, score: 4 } },
+        ],
+        [
+          'update_workflow_comparison',
+          { request: { ...qualityRequest, cancelDetached: true } },
+        ],
+        [
+          'update_workflow_comparison',
+          { request: { ...qualityRequest, score: 6 } },
+        ],
+        [
+          'update_workflow_comparison',
+          { request: { action: 'report', id: comparison.id } },
+        ],
+      ] as [string, Record<string, Json>][])
+        await rejectAction(name, args);
       for (const run of engine.store
         .runs()
         .filter((r) => r.comparison?.comparisonId === comparison.id)) {
@@ -308,9 +491,9 @@ it.each(['stdio', 'http'])(
           output: { ok: true, secretOutput: 'private' },
         });
       }
-      const comparisonReport = await call('get_workflow_comparison_report', {
-        id: comparison.id,
-        limit: 1,
+      const beforeReport = protectedState();
+      const comparisonReport = await call('read_workflow_comparisons', {
+        request: { action: 'report', id: comparison.id, limit: 1 },
       });
       expect(comparisonReport).toMatchObject({
         status: 'completed',
@@ -318,23 +501,13 @@ it.each(['stdio', 'http'])(
         checkCounts: { pass: 2, fail: 0, unknown: 0 },
       });
       expect(comparisonReport.samples).toHaveLength(1);
-      const caseSchema = tools.find(
-        (t) => t.name === 'get_comparison_case',
-      )!.inputSchema;
-      expect(caseSchema.required).toEqual(
-        expect.arrayContaining(['id', 'caseId']),
-      );
-      expect(() =>
-        assertContract(caseSchema, { id: comparison.id }, 'Case lookup'),
-      ).toThrow();
       expect(comparisonReport.samples[0].observation.checks[0]).toMatchObject({
         assertion: { path: 'ok', operator: 'equals', expected: true },
         assertionRef: { comparisonId: comparison.id, caseId: 'case', index: 0 },
       });
       expect(
-        await call('get_comparison_case', {
-          id: comparison.id,
-          caseId: 'case',
+        await call('read_workflow_comparisons', {
+          request: { action: 'case', id: comparison.id, caseId: 'case' },
         }),
       ).toMatchObject({
         suiteRevision: 1,
@@ -343,35 +516,115 @@ it.each(['stdio', 'http'])(
           assertions: [{ expected: true }],
         },
       });
-
+      expect(
+        (
+          await call('read_workflow_comparisons', {
+            request: { action: 'list', workflowId: comparisonWorkflow.id },
+          })
+        ).items,
+      ).toEqual([expect.objectContaining({ id: comparison.id })]);
+      expect(protectedState()).toEqual(beforeReport);
       expect(JSON.stringify(comparisonReport)).not.toContain('secretInput');
       expect(JSON.stringify(comparisonReport)).not.toContain('secretOutput');
-      const judgment = await call('record_comparison_quality', {
-        id: comparison.id,
-        sampleId: comparisonReport.samples[0].id,
-        reviewer: 'Transport test',
-        reviewerKind: 'agent',
-        rubric: 'Useful result',
-        score: 4,
-        notes: 'Recorded separately',
+      const judgment = await call('update_workflow_comparison', {
+        request: qualityRequest,
       });
       expect(judgment).toMatchObject({ reviewerKind: 'agent', score: 4 });
+      const judged = await call('read_workflow_comparisons', {
+        request: { action: 'report', id: comparison.id },
+      });
+      expect(judged).toMatchObject({
+        judgmentCount: 1,
+        judgments: [{ id: judgment.id, rubric: 'Useful result', score: 4 }],
+        checkCounts: { pass: 2, fail: 0, unknown: 0 },
+      });
+      const editedContent = {
+        ...suiteContent,
+        name: 'Edited suite',
+        cases: [
+          {
+            ...suiteContent.cases[0],
+            assertions: [
+              { ...suiteContent.cases[0].assertions[0], expected: false },
+            ],
+          },
+        ],
+      };
       expect(
-        (await call('list_workflow_comparisons', {})).items.some(
-          (c: any) => c.id === comparison.id,
-        ),
+        await call('save_test_suite', {
+          request: {
+            action: 'update',
+            id: suite.id,
+            revision: 1,
+            content: editedContent,
+          },
+        }),
+      ).toMatchObject({ revision: 2 });
+      const beforeHistory = protectedState();
+      expect(
+        await call('read_test_suites', {
+          request: { action: 'get', id: suite.id },
+        }),
+      ).toMatchObject({
+        revision: 2,
+        cases: [{ assertions: [{ expected: false }] }],
+      });
+      expect(
+        await call('read_workflow_comparisons', {
+          request: { action: 'case', id: comparison.id, caseId: 'case' },
+        }),
+      ).toMatchObject({
+        suiteRevision: 1,
+        case: { assertions: [{ expected: true }] },
+      });
+      expect(
+        await call('read_workflow_comparisons', {
+          request: { action: 'report', id: comparison.id },
+        }),
+      ).toMatchObject({
+        suiteRevision: 1,
+        checkCounts: { pass: 2, fail: 0, unknown: 0 },
+      });
+      expect(protectedState()).toEqual(beforeHistory);
+      expect(
+        (
+          await client.callTool({
+            name: 'save_test_suite',
+            arguments: {
+              request: {
+                action: 'update',
+                id: suite.id,
+                revision: 1,
+                content: suiteContent,
+              },
+            },
+          })
+        ).isError,
       ).toBe(true);
+      expect(protectedState()).toEqual(beforeHistory);
+      expect(
+        (
+          await client.callTool({
+            name: 'preview_workflow_comparison',
+            arguments: comparisonSelection,
+          })
+        ).isError,
+      ).toBe(true);
+      expect(protectedState()).toEqual(beforeHistory);
+      const cancelSelection = { ...comparisonSelection, suiteRevision: 2 };
       const cancelPlan = await call(
         'preview_workflow_comparison',
-        comparisonSelection,
+        cancelSelection,
       );
       const cancelComparison = await call('start_workflow_comparison', {
-        ...comparisonSelection,
+        ...cancelSelection,
         confirmation: cancelPlan.confirmation,
         requestId: `cancel-${mode}`,
       });
       expect(
-        await call('cancel_workflow_comparison', { id: cancelComparison.id }),
+        await call('update_workflow_comparison', {
+          request: { action: 'cancel', id: cancelComparison.id },
+        }),
       ).toMatchObject({ status: 'cancelled', activeTrees: 0 });
 
       for (const name of ['preview_workflow_ownership', 'set_workflow_owner'])

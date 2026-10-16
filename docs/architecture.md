@@ -175,7 +175,7 @@ Core owns suite/case/assertion contracts and pure check evaluation. Runtime coor
 
 Start confirms a read-only plan transactionally and deduplicates caller request IDs. The engine pump commits sample run allocation before launching external script/Fetch jobs. Per-comparison/global execution-tree limits include detached descendants. Comparison prompt captures propagate to delayed children and Batch items; ordinary runs retain their capture behavior. Pending pins participate in version cleanup and workflow deletion guards. Guarded workflow deletion removes local suite/comparison records; workflow export does not include experiments.
 
-Shared `testbench` API operations and eleven MCP tools expose suite saves, preview/start, discovery/report, captured-case reads, cancellation and quality judgments. Explicit comparison retries obey per-comparison and global execution-tree capacity before changing state. Reports omit arbitrary values and tokens and enforce pagination plus a byte cap. Existing Runs views show comparison context and counterpart links; no new dashboard or execution adapter is added. See [comparison operations and bounds](workflow-testbench.md).
+Shared `testbench` API operations and six MCP tools expose suite saves, preview/start, discovery/report, captured-case reads, cancellation and quality judgments. Explicit comparison retries obey per-comparison and global execution-tree capacity before changing state. Reports omit arbitrary values and tokens and enforce pagination plus a byte cap. Existing Runs views show comparison context and counterpart links; no new dashboard or execution adapter is added. See [comparison operations and bounds](workflow-testbench.md).
 
 ## Run continuation
 

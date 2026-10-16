@@ -144,6 +144,40 @@ export const qualityJudgmentSchema = z
     notes: z.string().max(4000).default(''),
   })
   .strict();
+// MCP groups related operations while retaining each shared server contract.
+export const testSuiteReadSchema = z
+  .object({
+    request: z.discriminatedUnion('action', [
+      testbenchListSchema.extend({ action: z.literal('list') }),
+      z.object({ action: z.literal('get'), id }).strict(),
+    ]),
+  })
+  .strict();
+export const testSuiteSaveSchema = z
+  .object({
+    request: z.discriminatedUnion('action', [
+      createSuiteSchema.extend({ action: z.literal('create') }),
+      updateSuiteSchema.extend({ action: z.literal('update') }),
+    ]),
+  })
+  .strict();
+export const comparisonReadSchema = z
+  .object({
+    request: z.discriminatedUnion('action', [
+      testbenchListSchema.extend({ action: z.literal('list') }),
+      comparisonReportSchema.extend({ action: z.literal('report') }),
+      comparisonCaseSchema.extend({ action: z.literal('case') }),
+    ]),
+  })
+  .strict();
+export const comparisonUpdateSchema = z
+  .object({
+    request: z.discriminatedUnion('action', [
+      comparisonCancelSchema.extend({ action: z.literal('cancel') }),
+      qualityJudgmentSchema.extend({ action: z.literal('record_quality') }),
+    ]),
+  })
+  .strict();
 export type TestAssertion = z.infer<typeof testAssertionSchema>;
 export type SuiteContent = z.infer<typeof suiteContentSchema>;
 export type CapturedCase = Omit<
