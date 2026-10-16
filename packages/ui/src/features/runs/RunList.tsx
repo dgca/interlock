@@ -3,6 +3,7 @@ import type { Run } from '@interlock/core';
 import { ArrowUpRight, Activity } from 'lucide-react';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 import { Badge } from '../../components/Badge/Badge';
+import { ComparisonContext } from './ComparisonContext';
 export function RunList({
   runs,
   onOpen,
@@ -69,6 +70,7 @@ export function RunList({
                     <small>
                       v{r.version} · {r.id.slice(0, 8)}
                     </small>
+                    <ComparisonContext comparison={r.comparison} />
                     {r.parentMode === 'detached' && (
                       <small>
                         Started independently · from{' '}

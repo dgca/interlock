@@ -29,6 +29,7 @@ import {
   type WorkflowNode,
   type WorkRequest,
   composePrompt,
+  promptIds,
 } from '@interlock/core';
 import { freshContextInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
@@ -37,6 +38,7 @@ import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
 import { VersionCleanup } from './versionCleanup.js';
 import { Ownership } from './ownership.js';
+import { Testbench } from './testbench.js';
 
 const now = () => new Date().toISOString();
 const terminal = (s: string) =>
@@ -55,6 +57,7 @@ export class Engine {
   readonly prompts: Prompts;
   readonly versions: VersionCleanup;
   readonly ownership: Ownership;
+  readonly testbench: Testbench;
   private localJobs = new Map<string, AbortController>();
   private stopped = false;
   private listeners = new Set<() => void>();
@@ -66,6 +69,18 @@ export class Engine {
     this.prompts = new Prompts(store);
     this.versions = new VersionCleanup(store);
     this.ownership = new Ownership(store);
+    this.testbench = new Testbench(store, {
+      create: (workflowId, version, input, comparison) =>
+        this.newRun(
+          workflowId,
+          version,
+          input,
+          undefined,
+          undefined,
+          comparison,
+        ),
+      cancel: (id) => this.cancelTree(id),
+    });
     // A process interruption gives no evidence that local work or remote side effects completed.
     for (const run of store.runs()) {
       const execution = run.executions.at(-1);
@@ -393,6 +408,7 @@ export class Engine {
   deleteWorkflow(id: string) {
     const result = this.store.transaction(() => {
       this.workflow(id);
+      this.testbench.assertDeletable(id);
       if (this.store.workflows().some((w) => w.ownerWorkflowId === id))
         throw new InterlockError(
           'Delete the children first. Parent deletion with children is not available yet.',
@@ -488,6 +504,7 @@ export class Engine {
       >('deletedVersions'))
         if (version.workflowId === id)
           this.store.remove('deletedVersions', version.id);
+      this.testbench.deleteWorkflow(id);
       this.store.remove('workflows', id);
       return { id };
     });
@@ -607,6 +624,7 @@ export class Engine {
     input: Json,
     parentRunId?: string,
     batchNodeId?: string,
+    comparison?: import('@interlock/core').ComparisonRunContext,
   ): Run {
     const w = this.workflow(workflowId);
     // Preserve existing dispatch-time failures for invalid nested pins; cleanup
@@ -629,8 +647,13 @@ export class Engine {
         throw new InterlockError('Nested workflow depth exceeded 10');
       parent = this.run(parent).parentRunId;
     }
+    comparison ??= parentRunId ? this.run(parentRunId).comparison : undefined;
+    const capturedPrompts = comparison
+      ? this.testbench.promptsFor(comparison)
+      : undefined;
     const time = now();
     const run: Run = {
+      ...(comparison ? { comparison } : {}),
       id: randomUUID(),
       workflowId,
       workflowName: w.name,
@@ -649,7 +672,16 @@ export class Engine {
       promptSnapshots:
         batchNodeId && parentRunId
           ? this.run(parentRunId).promptSnapshots
-          : this.prompts.capture(definition),
+          : capturedPrompts
+            ? promptIds(definition).map((id) => {
+                const prompt = capturedPrompts.find((p) => p.id === id);
+                if (!prompt)
+                  throw new InterlockError(
+                    `Comparison prompt capture ${id} is missing`,
+                  );
+                return prompt;
+              })
+            : this.prompts.capture(definition),
     };
     this.save(run);
     this.event(run, 'run.started', `Started ${w.name} v${version}`);
@@ -687,6 +719,7 @@ export class Engine {
     }
     return {
       run,
+      counterpartRunId: this.testbench.counterpart(run),
       descendants: allRuns.filter(
         (child) => child.id !== id && ids.has(child.id),
       ),
@@ -1158,7 +1191,7 @@ export class Engine {
       let changed = true,
         rounds = 0;
       while (changed && rounds++ < 2000) {
-        changed = false;
+        changed = this.testbench.advance();
         // Earlier advances can cancel or resume descendants in this same pass.
         for (const { id } of this.store.runs())
           if (this.advance(this.run(id))) changed = true;
@@ -1584,6 +1617,7 @@ export class Engine {
         terminal(this.run(run.parentRunId).status)
       )
         throw new InterlockError('Retry the failed parent run instead');
+      this.testbench.assertRetryCapacity(run);
       if (run.parentRunId && run.parentMode !== 'detached') {
         const parent = this.run(run.parentRunId);
         const execution = parent.executions.at(-1);

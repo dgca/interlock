@@ -19,6 +19,7 @@ import { detachedBoundary } from './runScope';
 import { AgentHandoff } from './AgentHandoff';
 import { WorkPanel } from './WorkPanel';
 import styles from './RunInspector.module.css';
+import { ComparisonContext } from './ComparisonContext';
 type Detail = Awaited<ReturnType<typeof api.runs.get.query>> & {
   availableWork: Awaited<ReturnType<typeof api.work.list.query>>;
 };
@@ -113,7 +114,7 @@ export function RunInspector({
       : [];
   return (
     <div
-      className={`${styles.page} ${!definition ? styles.withoutDefinition : ''}`}
+      className={`${styles.page} ${!definition ? styles.withoutDefinition : ''} ${run.comparison ? styles.comparison : ''}`}
     >
       <header className={styles.header}>
         <Button variant="ghost" onClick={onBack} aria-label="Back to runs">
@@ -122,9 +123,18 @@ export function RunInspector({
         <div>
           <span className="eyebrow">RUN INSPECTOR · V{run.version}</span>
           <h2>{run.workflowName}</h2>
+          <ComparisonContext comparison={run.comparison} />
         </div>
         <Badge status={progress.runStates[run.id] ?? run.status} />
         <div className="actions">
+          {data.counterpartRunId && (
+            <Button onClick={() => onOpen(data.counterpartRunId!)}>
+              {run.comparison?.side === 'baseline'
+                ? 'Candidate run'
+                : 'Baseline run'}
+              <ArrowUpRight />
+            </Button>
+          )}
           {run.parentRunId && (
             <Button
               onClick={() => onOpen(run.parentRunId!, run.parentExecutionId)}

@@ -98,6 +98,10 @@ Hold **Z** and drag from empty canvas space to draw a zoom rectangle. Release th
 
 The **Tidy** icon sits below **Fit View** in the canvas controls and runs your last chosen layout in one click. The gear beneath it opens **Tidy mode**, where you can choose **Dagre** or **ELK**. The choice is remembered in this browser across workflows and sessions; Dagre is the initial default. Choosing a mode leaves the layout unchanged until you click Tidy. ELK loads its layout engine on first use and keeps branch handles in order. Use either to arrange the whole workflow from left to right, including nested Batch contents, and fit it into view. Tidy uses expanded Batch sizes so groups have room when reopened. It accounts for output handle positions to reduce avoidable branch crossings. Complex graphs and loops may still have crossings. It changes only positions and can be undone in one step. Save the draft to keep the arrangement. Imported and agent-authored positions remain as supplied until you tidy them.
 
+### Compare workflow behavior
+
+Use the MCP [workflow testbench](docs/workflow-testbench.md) to save representative cases, preview and execute two published versions, and inspect separate execution, assertion and quality results. Existing Runs views label each comparison, case, baseline/candidate side and repetition, with counterpart navigation. These are real runs using connected executors and normal Script/Fetch actions. Comparison configuration stays in MCP; publication remains separate.
+
 ### Create a child workflow
 
 Use child workflows for helpers that belong to one parent. The main library shows library workflows only. Open a parent's **Child workflows** tab to find its helpers, including children not connected to a node.

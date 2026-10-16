@@ -332,3 +332,8 @@ summary {
 .react-flow__attribution a {
   color: var(--text-dim) !important;
 }
+
+.run-row .comparison-context {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

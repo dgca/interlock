@@ -24,7 +24,7 @@ export async function runCommand(argv: string[]) {
     case 'delete':
       if (args.length !== 2 || args[1] !== '--yes')
         throw new Error(
-          'Usage: delete <id> --yes. Permanently removes the workflow and its history. Use archive to preserve history.',
+          'Usage: delete <id> --yes. Permanently removes the workflow, its history and local test suites/comparisons. Use archive to preserve history.',
         );
       return client.workflows.delete.mutate({ id: args[0] });
     case 'import': {

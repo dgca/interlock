@@ -228,3 +228,21 @@
 .detail :global(.inspector-fields) {
   padding-top: 8px;
 }
+
+.comparison .header {
+  flex-wrap: wrap;
+}
+.comparison .header > div:not(:global(.actions)) {
+  min-width: 0;
+}
+.comparison :global(.comparison-context) {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  margin-top: 4px;
+}
+.comparison .header :global(.actions) {
+  flex-wrap: wrap;
+  max-width: 100%;
+  min-width: 0;
+}

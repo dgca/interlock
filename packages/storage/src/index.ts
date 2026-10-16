@@ -204,6 +204,7 @@ export class Store {
       | 'input'
       | 'parentRunId'
       | 'batchNodeId'
+      | 'comparison'
     > &
       RunAncestry)[] = [];
     for (const row of rows) {
@@ -233,6 +234,7 @@ export class Store {
         input,
         parentRunId,
         batchNodeId,
+        comparison,
       } = run;
       result.push({
         ...this.runAncestry(id, ancestry),
@@ -247,6 +249,7 @@ export class Store {
         input,
         parentRunId,
         batchNodeId,
+        ...(comparison ? { comparison } : {}),
       });
       if (result.length === query.limit) break;
     }

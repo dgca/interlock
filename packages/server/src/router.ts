@@ -15,6 +15,15 @@ import {
   versionDeletionSchema,
   ownershipPreviewSchema,
   ownershipChangeSchema,
+  createSuiteSchema,
+  updateSuiteSchema,
+  comparisonPreviewSchema,
+  comparisonStartSchema,
+  testbenchListSchema,
+  comparisonReportSchema,
+  comparisonCaseSchema,
+  comparisonCancelSchema,
+  qualityJudgmentSchema,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import {
@@ -48,6 +57,45 @@ export const appRouter = t.router({
   connection: p.query(({ ctx }) => {
     const config = ctx.connection ?? developmentConnection();
     return { ...config, mcpUrl: new URL('/mcp', config.engineUrl).href };
+  }),
+  testbench: t.router({
+    suites: p
+      .input(testbenchListSchema)
+      .query(({ ctx, input }) => ctx.engine.testbench.listSuites(input)),
+    suite: p
+      .input(id)
+      .query(({ ctx, input }) => ctx.engine.testbench.getSuite(input.id)),
+    createSuite: p
+      .input(createSuiteSchema)
+      .mutation(({ ctx, input }) => ctx.engine.testbench.createSuite(input)),
+    updateSuite: p
+      .input(updateSuiteSchema)
+      .mutation(({ ctx, input }) => ctx.engine.testbench.updateSuite(input)),
+    preview: p
+      .input(comparisonPreviewSchema)
+      .query(({ ctx, input }) => ctx.engine.testbench.preview(input)),
+    start: p.input(comparisonStartSchema).mutation(({ ctx, input }) => {
+      const comparison = ctx.engine.testbench.start(input);
+      ctx.engine.pump();
+      return ctx.engine.testbench.progress(comparison.id);
+    }),
+    comparisons: p
+      .input(testbenchListSchema)
+      .query(({ ctx, input }) => ctx.engine.testbench.list(input)),
+    report: p
+      .input(comparisonReportSchema)
+      .query(({ ctx, input }) => ctx.engine.testbench.report(input)),
+    case: p
+      .input(comparisonCaseSchema)
+      .query(({ ctx, input }) => ctx.engine.testbench.getCase(input)),
+    cancel: p.input(comparisonCancelSchema).mutation(({ ctx, input }) => {
+      const result = ctx.engine.testbench.cancel(input);
+      ctx.engine.pump();
+      return ctx.engine.testbench.progress(result.id);
+    }),
+    judge: p
+      .input(qualityJudgmentSchema)
+      .mutation(({ ctx, input }) => ctx.engine.testbench.judge(input)),
   }),
   prompts: t.router({
     list: p.query(({ ctx }) => ctx.engine.prompts.list()),
