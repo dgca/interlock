@@ -1,5 +1,11 @@
 # @type_of/interlock
 
+## 0.1.20
+
+### Patch Changes
+
+- f19a8dc: Add opt-in compact responses to MCP start_run and submit_result with detail: "summary". Responses include lifecycle-scoped next work and wait cursors without repeating workflow definitions or execution payloads. Keep existing full defaults and document compact agent execution, including child and detached runs.
+
 ## 0.1.19
 
 ### Patch Changes
