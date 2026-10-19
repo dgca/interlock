@@ -20,6 +20,33 @@ Work summaries also include `workflowId`, optional `parentRunId`, optional `pare
 
 Work summaries omit prompts, inputs, output schemas, and execution instructions. `claim_work` returns the complete assignment. The default `fields: "full"` preserves the existing response. CLI callers can use `interlock work RUN_ID --summary`. The shared API exposes `work.summaries` and `work.list`.
 
+## Continue with compact mutation responses
+
+Use `detail: "summary"` with `start_run` and `submit_result` to avoid repeating workflow definitions and accumulated execution payloads. Both tools keep full inspection as their default. Explicit `detail: "full"` gives the same legacy response. `claim_work` remains complete, and `list_work` keeps its existing default; request `fields: "summary"` for discovery.
+
+For example, start with `{"workflowId":"WORKFLOW_ID","input":{},"detail":"summary"}` using input that matches the workflow contract. After claiming an assignment, submit `{"workId":"WORK_ID","token":"CLAIM_TOKEN","output":{},"detail":"summary"}` using output that matches that assignment's contract.
+
+Summary responses contain:
+
+| Field                  | Meaning                                                                                                                                                                                                                                |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ok`                   | The operation was accepted. Subsequent workflow execution can still fail.                                                                                                                                                              |
+| `runId`, `runStatus`   | Continuation lifecycle and its current status.                                                                                                                                                                                         |
+| `workId`, `workRunId`  | Submission only: accepted assignment and its immediate owning run.                                                                                                                                                                     |
+| `cursor`               | Opaque continuation cursor for the returned `runId`.                                                                                                                                                                                   |
+| `nextWork`             | `{items, total, truncated}` for available work in the continuation run and all descendants, including detached work. Items include ancestry, `lifecycleRunId`, context mode, required tools/skills, attempts and applicable deadlines. |
+| `next`, `nextDeadline` | Existing briefing guidance and earliest active deadline, or null. Use a briefing for blockers and failure details.                                                                                                                     |
+
+At startup, `runId` is the new run. After submission, it is the outermost ordinary ancestor of `workRunId`, stopping at the nearest detached boundary. Completing a waited child or Batch item can therefore return work unlocked in its parent or siblings. Detached submissions continue their independent lifecycle. `rootRunId` in work items describes ancestry, not a cancellation boundary.
+
+Use `wait_for_run_change` with `id` equal to the returned `runId` and the returned `cursor`. Status, available work, guidance and cursor come from one post-mutation snapshot. Empty `nextWork.items` does not prove completion. A completed parent may still have detached work; inspect `runStatus` and each item's `lifecycleRunId` before continuing independent work.
+
+`limit` defaults to 20 and accepts integers 1 through 100. It bounds `nextWork.items` in summary mode; full mode ignores a valid limit. Totals remain exact. When `truncated` is true, call `list_work` with the continuation run ID and `fields: "summary"` for all available work. This bounds record counts, not arbitrary label or capability-name lengths. Definitions, execution history, prompts, context instructions, input/output values and claim tokens are absent from summary responses.
+
+An identical submission can be retried with the same token. It does not repeat the transition, but returns current progress in the selected mode. Later work or a server restart can change the response and cursor. Different output under an accepted submission still rejects. Validation errors retain the existing MCP error shape.
+
+`get_run` remains full inspection; `get_run_result` reads selected values. The shared API adds `runs.startSummary` and `work.submitSummary`, accepting the corresponding mutation arguments and optional `limit`. Existing `runs.start`, `work.submit`, UI and CLI responses stay unchanged. `start_run`, `submit_result`, and `list_work` advertise output field schemas over both MCP transports; mode-specific required fields are listed above. Full responses from `fail_work`, `retry_run`, and `cancel_run` remain unchanged.
+
 ## Discover workflows and read results
 
 MCP `list_workflows` returns compact summaries by default, with `id`, `name`, `description`, `ownerWorkflowId`, `archived`, `latestVersion`, `draftRevision`, `createdAt`, `updatedAt`, and `draftMatchesLatest`. Node definitions, prompts, and contracts are omitted. Use `get_workflow` to read one complete draft or `list_workflows` with `includeDraft: true` for the previous full listing. Owner and archive filters apply to both shapes. Shared HTTP API `workflows.list`, CLI `interlock workflows`, and the editor retain full drafts.

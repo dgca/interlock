@@ -32,6 +32,7 @@ import {
   type WorkRequest,
   composePrompt,
   promptIds,
+  continuationLimitSchema,
 } from '@interlock/core';
 import { freshContextInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
@@ -690,6 +691,14 @@ export class Engine {
     return run;
   }
   start(workflowId: string, input: Json, version?: number) {
+    return this.inspect(this.startRun(workflowId, input, version));
+  }
+  startSummary(workflowId: string, input: Json, version?: number, limit = 20) {
+    const bounded = continuationLimitSchema.parse(limit);
+    const id = this.startRun(workflowId, input, version);
+    return this.continuation.summary(id, bounded);
+  }
+  private startRun(workflowId: string, input: Json, version?: number) {
     const w = this.workflow(workflowId);
     if (
       w.archived ||
@@ -700,7 +709,7 @@ export class Engine {
       this.newRun(workflowId, version ?? w.latestVersion, input),
     );
     this.pump();
-    return this.inspect(run.id);
+    return run.id;
   }
   inspect(id: string) {
     const run = this.run(id);
@@ -1482,13 +1491,19 @@ export class Engine {
   }
   private describeWork(work: WorkRequest): WorkRequest {
     if (work.context.mode !== 'fresh') return work;
-    let root = this.run(work.runId);
-    while (root.parentRunId && root.parentMode !== 'detached')
-      root = this.run(root.parentRunId);
     return {
       ...work,
-      executionInstructions: freshContextInstructions(root.id, work.id),
+      executionInstructions: freshContextInstructions(
+        this.lifecycleRunId(work.runId),
+        work.id,
+      ),
     };
+  }
+  private lifecycleRunId(id: string) {
+    let run = this.run(id);
+    while (run.parentRunId && run.parentMode !== 'detached')
+      run = this.run(run.parentRunId);
+    return run.id;
   }
   available(runId?: string) {
     this.pump();
@@ -1575,6 +1590,18 @@ export class Engine {
     });
   }
   submit(id: string, token: string, output: Json) {
+    return this.inspect(this.submitWork(id, token, output));
+  }
+  submitSummary(id: string, token: string, output: Json, limit = 20) {
+    const bounded = continuationLimitSchema.parse(limit);
+    const workRunId = this.submitWork(id, token, output);
+    return {
+      ...this.continuation.summary(this.lifecycleRunId(workRunId), bounded),
+      workId: id,
+      workRunId,
+    };
+  }
+  private submitWork(id: string, token: string, output: Json) {
     const runId = this.store.transaction(() => {
       const work = this.owned(id, token);
       if (work.status === 'completed') {
@@ -1595,7 +1622,7 @@ export class Engine {
       return run.id;
     });
     this.pump();
-    return this.inspect(runId);
+    return runId;
   }
   private releaseFailure(work: WorkRequest, error: string) {
     work.error = error;

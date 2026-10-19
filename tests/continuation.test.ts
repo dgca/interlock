@@ -47,6 +47,17 @@ const result = (engine: Engine, id: string, options = {}) =>
     ...options,
   });
 const flush = () => Promise.resolve();
+
+function publishSummary(
+  engine: Engine,
+  definition = blankDefinition(),
+  input: any = null,
+  limit = 20,
+) {
+  const workflow = engine.create('Compact mutation', '', definition);
+  engine.publish(workflow.id);
+  return engine.startSummary(workflow.id, input, undefined, limit);
+}
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime('2026-10-02T12:00:00Z');
@@ -431,4 +442,271 @@ it('identifies running local execution separately from agent and timer waits', (
     claimed: { total: 0 },
     blockers: { items: [{ reason: 'executing' }] },
   });
+});
+
+it('returns compact mutations without constructing inspection and preserves full API types', async () => {
+  const engine = setup();
+  const inspect = vi.spyOn(engine, 'inspect');
+  const summary = publishSummary(engine);
+  expect(inspect).not.toHaveBeenCalled();
+  const claim = engine.claim(summary.nextWork.items[0].id, worker);
+  const completed = engine.submitSummary(claim.id, claim.token!, {
+    answer: 42,
+  });
+  expect(inspect).not.toHaveBeenCalled();
+  expect(completed).toMatchObject({
+    ok: true,
+    workId: claim.id,
+    workRunId: summary.runId,
+    runId: summary.runId,
+    runStatus: 'completed',
+    nextWork: { items: [], total: 0, truncated: false },
+    next: 'inspect_result',
+    nextDeadline: null,
+  });
+  expect(
+    await wait(engine, completed.runId, completed.cursor, 0),
+  ).toMatchObject({
+    reset: false,
+    changed: false,
+    timedOut: true,
+  });
+  const caller = appRouter.createCaller({ engine });
+  const full = await caller.work.submit({
+    workId: claim.id,
+    token: claim.token!,
+    output: { answer: 42 },
+  });
+  expect(full.run.id).toBe(summary.runId);
+  expect(full.definition).not.toBeNull();
+  expect(full.run.output).toEqual({ answer: 42 });
+});
+
+it('continues a waited child at its parent and exposes the newly unlocked parent assignment', () => {
+  const engine = setup();
+  const child = engine.create('Child', '', blankDefinition());
+  engine.publish(child.id);
+  const started = publishSummary(engine, workflowCall(child.id, 'wait', true));
+  const work = started.nextWork.items[0];
+  expect(work.runId).not.toBe(started.runId);
+  const claim = engine.claim(work.id, worker);
+  const continued = engine.submitSummary(work.id, claim.token!, null);
+  expect(continued).toMatchObject({
+    runId: started.runId,
+    workRunId: work.runId,
+    runStatus: 'waiting',
+  });
+  expect(continued.nextWork.items).toMatchObject([
+    { runId: started.runId, nodeId: 'after' },
+  ]);
+});
+
+it('caps Batch discovery with exact totals and includes work dispatched after an item completes', async () => {
+  const engine = setup();
+  const started = publishSummary(
+    engine,
+    batchDefinition(itemAgent(), { concurrency: 3 }),
+    [1, 2, 3, 4],
+    1,
+  );
+  expect(started.nextWork).toMatchObject({ total: 3, truncated: true });
+  expect(started.nextWork.items).toHaveLength(1);
+  const [first, second] = engine.available(started.runId);
+  const claim = engine.claim(first.id, worker);
+  const continued = engine.submitSummary(first.id, claim.token!, 10, 1);
+  expect(continued.runId).toBe(started.runId);
+  expect(continued.workRunId).toBe(first.runId);
+  expect(continued.nextWork).toMatchObject({
+    total: 3,
+    truncated: true,
+    items: [{ id: second.id }],
+  });
+  const now = briefing(engine, continued.runId, 1);
+  expect(continued.nextWork).toEqual(now.available);
+  expect(continued.cursor).toBe(now.cursor);
+  expect(
+    await wait(engine, continued.runId, continued.cursor, 0),
+  ).toMatchObject({ reset: false, changed: false });
+});
+
+it('keeps detached work discoverable after parent completion and stops submission scope at the detached boundary', () => {
+  const engine = setup();
+  const child = engine.create('Detached batch', '', batchDefinition());
+  engine.publish(child.id);
+  const started = publishSummary(
+    engine,
+    workflowCall(child.id, 'detached'),
+    [1, 2, 3],
+  );
+  expect(started.runStatus).toBe('completed');
+  const work = started.nextWork.items[0];
+  expect(work.rootRunId).toBe(started.runId);
+  expect(work.lifecycleRunId).not.toBe(started.runId);
+  expect(work.lifecycleRunId).not.toBe(work.runId);
+  const claim = engine.claim(work.id, worker);
+  const continued = engine.submitSummary(work.id, claim.token!, 10);
+  expect(continued).toMatchObject({
+    runId: work.lifecycleRunId,
+    workRunId: work.runId,
+    runStatus: 'waiting',
+  });
+  expect(
+    continued.nextWork.items.every(
+      (w) => w.lifecycleRunId === work.lifecycleRunId,
+    ),
+  ).toBe(true);
+  expect(
+    continued.nextWork.items.every((w) => w.rootRunId === started.runId),
+  ).toBe(true);
+});
+
+it('reports timer waits and downstream failure as accepted submissions without available work', () => {
+  const engine = setup();
+  for (const kind of ['wait', 'switch'] as const) {
+    const definition = blankDefinition();
+    definition.nodes.splice(
+      2,
+      0,
+      nodeSchema.parse(
+        kind === 'wait'
+          ? {
+              id: 'after',
+              label: 'Pause',
+              kind,
+              timing: { kind: 'duration', ms: 1000 },
+            }
+          : {
+              id: 'after',
+              label: 'No match',
+              kind,
+              path: 'route',
+              cases: [{ port: 'known', equals: 'known' }],
+            },
+      ),
+    );
+    definition.edges[1].target = 'after';
+    definition.edges.push({
+      id: 'out',
+      source: 'after',
+      target: 'exit',
+      port: kind === 'wait' ? 'default' : 'known',
+    });
+    const started = publishSummary(engine, definition);
+    const claim = engine.claim(started.nextWork.items[0].id, worker);
+    const continued = engine.submitSummary(claim.id, claim.token!, {
+      route: 'missing',
+    });
+    expect(continued.ok).toBe(true);
+    expect(continued.nextWork.items).toEqual([]);
+    expect(continued.runStatus).toBe(kind === 'wait' ? 'waiting' : 'failed');
+    expect(continued.next).toBe(
+      kind === 'wait' ? 'wait_for_change' : 'inspect_failure',
+    );
+    if (kind === 'wait') expect(continued.nextDeadline?.kind).toBe('wait');
+  }
+});
+
+it('replays accepted work with current lifecycle state and rejects conflicting output', async () => {
+  const engine = setup();
+  const started = publishSummary(engine, batchDefinition(), [1, 2]);
+  const [first, second] = started.nextWork.items.map((w) =>
+    engine.claim(w.id, worker),
+  );
+  const waiting = engine.submitSummary(first.id, first.token!, 1);
+  expect(waiting.next).toBe('wait_for_worker');
+  engine.submitSummary(second.id, second.token!, 2);
+  const before = engine.inspect(started.runId);
+  const replay = engine.submitSummary(first.id, first.token!, 1);
+  expect(replay.runStatus).toBe('completed');
+  expect(replay.cursor).not.toBe(waiting.cursor);
+  expect(engine.inspect(started.runId)).toEqual(before);
+  expect(() => engine.submitSummary(first.id, first.token!, 3)).toThrow(
+    'different result',
+  );
+  const restarted = new Engine(engine.store, process.cwd());
+  engines.push(restarted);
+  const recovered = restarted.submitSummary(first.id, first.token!, 1);
+  expect(recovered.cursor).not.toBe(replay.cursor);
+  expect(await wait(restarted, replay.runId, replay.cursor, 0)).toMatchObject({
+    reset: true,
+  });
+});
+
+it('rejects bad compact limits before any mutation with valid controls', async () => {
+  const engine = setup();
+  const workflow = engine.create('Options', '', blankDefinition());
+  engine.publish(workflow.id);
+  const caller = appRouter.createCaller({ engine });
+  const before = engine.store.runs();
+  await expect(
+    caller.runs.startSummary({
+      workflowId: workflow.id,
+      input: null,
+      limit: 0,
+    }),
+  ).rejects.toThrow();
+  expect(() =>
+    engine.startSummary(workflow.id, null, undefined, 101),
+  ).toThrow();
+  expect(engine.store.runs()).toEqual(before);
+  const started = await caller.runs.startSummary({
+    workflowId: workflow.id,
+    input: null,
+    limit: 1,
+  });
+  const claim = engine.claim(started.nextWork.items[0].id, worker);
+  const protectedState = engine.inspect(started.runId);
+  await expect(
+    caller.work.submitSummary({
+      workId: claim.id,
+      token: claim.token!,
+      output: null,
+      limit: -1,
+    }),
+  ).rejects.toThrow();
+  expect(() =>
+    engine.submitSummary(claim.id, claim.token!, null, 1.5),
+  ).toThrow();
+  expect(engine.inspect(started.runId)).toEqual(protectedState);
+  const completed = await caller.work.submitSummary({
+    workId: claim.id,
+    token: claim.token!,
+    output: null,
+  });
+  expect(completed.runStatus).toBe('completed');
+});
+
+it('retains fresh-context requirements while omitting arbitrarily large instruction and result bodies', () => {
+  const engine = setup();
+  const definition = blankDefinition();
+  const agent = definition.nodes[1];
+  if (agent.kind !== 'agent') throw new Error('Expected agent');
+  agent.context = {
+    mode: 'fresh',
+    tools: ['read'],
+    skills: ['review'],
+    instructions: 'secret-body'.repeat(10000),
+  };
+  const started = publishSummary(engine, definition, {
+    body: 'secret-body'.repeat(10000),
+  });
+  expect(started.nextWork.items[0].context).toEqual({
+    mode: 'fresh',
+    tools: ['read'],
+    skills: ['review'],
+  });
+  expect(JSON.stringify(started)).not.toContain('secret-body');
+  expect(() => engine.claim(started.nextWork.items[0].id, worker)).toThrow(
+    'fresh context',
+  );
+  const claim = engine.claim(started.nextWork.items[0].id, {
+    ...worker,
+    freshContext: true,
+    tools: ['read'],
+    skills: ['review'],
+  });
+  expect(claim.context.instructions).toContain('secret-body');
+  expect(engine.submitSummary(claim.id, claim.token!, null).runStatus).toBe(
+    'completed',
+  );
 });
