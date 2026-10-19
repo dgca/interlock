@@ -10,6 +10,7 @@ import {
   briefingQuerySchema,
   waitQuerySchema,
   resultQuerySchema,
+  mutationSummarySchema,
 } from '@interlock/core';
 import type {
   BriefingQuery,
@@ -40,6 +41,19 @@ export class Continuation {
     this.stopped.abort(
       new InterlockError('Engine stopped; reconnect for a new snapshot'),
     );
+  }
+
+  summary(id: string, limit: number) {
+    const snapshot = this.briefing({ id, limit });
+    return mutationSummarySchema.parse({
+      ok: true,
+      runId: snapshot.run.id,
+      runStatus: snapshot.run.status,
+      cursor: snapshot.cursor,
+      nextWork: snapshot.available,
+      next: snapshot.next,
+      nextDeadline: snapshot.nextDeadline,
+    });
   }
 
   briefing(query: BriefingQuery) {

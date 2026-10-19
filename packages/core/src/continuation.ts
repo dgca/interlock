@@ -22,7 +22,7 @@ export const waitQuerySchema = briefingQuerySchema.extend({
     .string()
     .max(2048)
     .describe(
-      'Opaque cursor from the preceding briefing or wait for this run. Invalid or restarted cursors recover with reset:true.',
+      'Opaque cursor from a briefing, wait, or summary-mode mutation for this runId. Invalid or restarted cursors recover with reset:true.',
     ),
   timeoutMs: z
     .number()
@@ -67,3 +67,80 @@ export const resultQuerySchema = z.object({
 export type BriefingQuery = z.infer<typeof briefingQuerySchema>;
 export type WaitQuery = z.infer<typeof waitQuerySchema>;
 export type ResultQuery = z.infer<typeof resultQuerySchema>;
+
+export const continuationLimitSchema = briefingQuerySchema.shape.limit;
+export const mutationDetailSchema = z
+  .enum(['full', 'summary'])
+  .default('full')
+  .describe(
+    'Use summary for compact continuation without definitions or execution payloads. Omission and full preserve the original inspection response.',
+  );
+export const continuationWorkSchema = z.object({
+  id: z.string(),
+  runId: z.string(),
+  executionId: z.string(),
+  workflowId: z.string(),
+  parentRunId: z.string().optional(),
+  parentMode: z.literal('detached').optional(),
+  rootRunId: z.string(),
+  rootWorkflowId: z.string(),
+  lifecycleRunId: z.string(),
+  nodeId: z.string(),
+  label: z.string(),
+  status: z.literal('available'),
+  context: z.object({
+    mode: z.enum(['current', 'fresh']),
+    tools: z.array(z.string()),
+    skills: z.array(z.string()),
+  }),
+  attempt: z.number().int().nonnegative(),
+  maxAttempts: z.number().int().positive(),
+  workerId: z.string().optional(),
+  leaseUntil: z.string().optional(),
+  availableUntil: z.string().optional(),
+});
+export const mutationSummarySchema = z.object({
+  ok: z.literal(true),
+  runId: z
+    .string()
+    .describe(
+      'Continuation lifecycle ID. Use with the returned cursor for wait_for_run_change.',
+    ),
+  runStatus: z.enum(['running', 'waiting', 'completed', 'failed', 'cancelled']),
+  cursor: z.string(),
+  nextWork: z.object({
+    items: z.array(continuationWorkSchema).max(100),
+    total: z.number().int().nonnegative(),
+    truncated: z.boolean(),
+  }),
+  next: z.enum([
+    'claim_work',
+    'wait_for_worker',
+    'wait_for_change',
+    'inspect_failure',
+    'inspect_result',
+  ]),
+  nextDeadline: z
+    .object({
+      runId: z.string(),
+      executionId: z.string().optional(),
+      workId: z.string().optional(),
+      kind: z.enum([
+        'wait',
+        'poll_check',
+        'poll_timeout',
+        'unclaimed',
+        'claim_lease',
+      ]),
+      at: z.string(),
+    })
+    .nullable(),
+});
+export const submissionSummarySchema = mutationSummarySchema.extend({
+  workId: z.string(),
+  workRunId: z
+    .string()
+    .describe(
+      'Run owning the submitted assignment. May differ from the continuation runId.',
+    ),
+});

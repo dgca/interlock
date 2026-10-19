@@ -101,10 +101,10 @@ Fresh libraries include [SDLC workflow](sdlc-workflow.md). It requires a coding 
 With the workflow selected, ask it to complete the run through Interlock:
 
 ```text
-Start Interlock workflow WORKFLOW_ID with the supplied input.
-Use list_work for the root run, including its child runs.
+Start Interlock workflow WORKFLOW_ID with the supplied input and detail: "summary".
+Use nextWork for available assignments, or list_work with fields: "summary" for the root run and its descendants.
 Claim assignments with your actual capabilities.
-Perform each assignment using its composed prompt, input, and context policy. Saved prompts are captured for the run; do not reload newer library content to replace assignment instructions.
+Perform each assignment using its composed prompt, input, and context policy. Saved prompts are captured for the run; do not reload newer library content to replace assignment instructions. Submit results with detail: "summary" and use the returned runId and cursor for continuation.
 Submit JSON matching its output schema.
 Use get_run_briefing to resume and distinguish blockers when no work is available.
 Use get_run_result for selected data and wait_for_run_change with the briefing cursor.
@@ -116,7 +116,7 @@ Continue until the root run completes, fails, or is cancelled.
 
 Starting a run in the UI does not launch an agent. When assignments are available, the run inspector shows **Waiting for an agent**, including work inside Batches and nested workflows. Use **Copy instructions for agent** and paste the instructions into your connected agent conversation. The instructions include the existing run ID. **Connect an agent** opens the connection configuration; connecting alone does not pick up assignments.
 
-`start_run` returns a persisted run. `list_work` includes descendants of the requested run, including Agent assignments in Batch item paths and nested Batches. Item run inspection resolves the published graph and identifies the owning Batch through `batchNodeId`. A claim returns its token and expiry. Keep the token for `submit_result`, `renew_claim`, or `fail_work`. Use `get_run_briefing` to distinguish completion, claimed work, scripts, Fetch requests, timers, and independent detached lifecycles. Read one input/output path with `get_run_result`; retain `get_run` for full inspection.
+`start_run` returns full inspection by default. Request `detail: "summary"` on both `start_run` and `submit_result` for compact continuation. Submission returns the owning lifecycle as `runId` and the assignment's immediate run as `workRunId`; ordinary child completion can unlock parent or sibling work. Pair the returned `runId` with its `cursor` for waits. See [compact mutation fields and limits](agent-workflows.md#continue-with-compact-mutation-responses). `list_work` includes descendants of the requested run, including Agent assignments in Batch item paths and nested Batches. Item run inspection resolves the published graph and identifies the owning Batch through `batchNodeId`. A claim returns its token and expiry. Keep the token for `submit_result`, `renew_claim`, or `fail_work`. Use `get_run_briefing` to distinguish completion, claimed work, scripts, Fetch requests, timers, and independent detached lifecycles. Read one input/output path with `get_run_result`; retain `get_run` for full inspection.
 
 If execution will exceed the lease, call `renew_claim` before it expires. Claims default to 300 seconds and accept `leaseSeconds` from 10 through 3600. An omitted renewal duration reuses the original claim duration; older stored claims without that duration fall back to 300 seconds. An explicit override affects only that renewal and can shorten the lease. See [claim renewal](agent-workflows.md#renew-claims) for CLI examples and compatibility details. If a submission loses its response, submit the identical result again using the same token. If a claim has expired, inspect the run and discover available work again. The assignment may already have timed out or exhausted its attempts. Do not submit through another worker's claim.
 

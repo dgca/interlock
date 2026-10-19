@@ -24,6 +24,7 @@ import {
   comparisonCaseSchema,
   comparisonCancelSchema,
   qualityJudgmentSchema,
+  continuationLimitSchema,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import {
@@ -300,6 +301,23 @@ export const appRouter = t.router({
       .mutation(({ ctx, input }) => ctx.engine.versions.delete(input)),
   }),
   runs: t.router({
+    startSummary: p
+      .input(
+        z.object({
+          workflowId: z.string(),
+          version: z.number().int().positive().optional(),
+          input: jsonSchema,
+          limit: continuationLimitSchema,
+        }),
+      )
+      .mutation(({ ctx, input }) =>
+        ctx.engine.startSummary(
+          input.workflowId,
+          input.input,
+          input.version,
+          input.limit,
+        ),
+      ),
     briefing: p
       .input(briefingQuerySchema)
       .query(({ ctx, input }) => ctx.engine.continuation.briefing(input)),
@@ -338,6 +356,18 @@ export const appRouter = t.router({
     retry: p.input(id).mutation(({ ctx, input }) => ctx.engine.retry(input.id)),
   }),
   work: t.router({
+    submitSummary: p
+      .input(
+        claim.extend({ output: jsonSchema, limit: continuationLimitSchema }),
+      )
+      .mutation(({ ctx, input }) =>
+        ctx.engine.submitSummary(
+          input.workId,
+          input.token,
+          input.output,
+          input.limit,
+        ),
+      ),
     summaries: p
       .input(z.object({ runId: z.string().optional() }).default({}))
       .query(({ ctx, input }) => ctx.engine.workSummaries(input.runId)),

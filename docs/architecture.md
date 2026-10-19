@@ -252,6 +252,10 @@ Node settings group input configuration in one Input section. Source defaults to
 
 Entry and Exit settings display a shared Input / Output contract backed by the workflow input or output schema. Editing it updates Workflow settings too. Existing additional node constraints remain visible and enforced. Batch settings show an array input when List to process is blank and no narrower contract is set. A named path allows an enclosing object; the selected value must still be an array at execution.
 
+## Compact mutation continuation
+
+MCP `start_run` and `submit_result` can select `detail: "summary"`. Shared API `runs.startSummary` and `work.submitSummary` reuse the existing runtime mutation and scheduler path, then project one continuation briefing without constructing full inspection. The existing full API responses remain unchanged. Submission scope follows ordinary parents to the nearest detached boundary or root, matching fresh-context handoffs; `workRunId` retains the assignment's immediate run. The compact cursor and available-work list share that scope and snapshot. See [response fields and limits](agent-workflows.md#continue-with-compact-mutation-responses).
+
 ## Live run inspection
 
 The run inspector shows a live summary above the published graph. Unclaimed Agent assignments show Waiting for an agent; claimed assignments show Agent working. A claimed assignment indicates ownership, not reported internal progress. Running, waiting, completed, failed, and unstarted steps have distinct canvas indicators.
