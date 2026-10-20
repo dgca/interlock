@@ -467,3 +467,31 @@ it('preserves configured leases on reopen and rejects fractional or out-of-bound
   await click('Apply changes');
   expect(onApply.mock.calls[0][0].definition.nodes[0].leaseSeconds).toBe(10);
 });
+
+it('configures a separate expiry budget and rejects invalid counts', async () => {
+  const { onApply } = await render({ kind: 'agent', prompt: 'Work' });
+  await act(async () =>
+    (field('Separate lease expiry budget') as HTMLInputElement).click(),
+  );
+  expect(field('Maximum lease expiries').value).toBe('3');
+  expect(field('Maximum failures').value).toBe('2');
+  for (const value of ['0', '11', '1.5']) {
+    await fill('Maximum lease expiries', value);
+    await click('Apply changes');
+    expect(onApply).not.toHaveBeenCalled();
+  }
+  await fill('Maximum lease expiries', '4');
+  await click('Apply changes');
+  expect(onApply.mock.lastCall![0].definition.nodes[0]).toMatchObject({
+    maxLeaseExpiries: 4,
+    maxAttempts: 2,
+  });
+  await act(async () =>
+    (field('Separate lease expiry budget') as HTMLInputElement).click(),
+  );
+  await click('Apply changes');
+  expect(
+    onApply.mock.lastCall![0].definition.nodes[0].maxLeaseExpiries,
+  ).toBeUndefined();
+  expect(field('Maximum attempts')).toBeDefined();
+});

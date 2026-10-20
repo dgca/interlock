@@ -18,6 +18,7 @@ import {
   validateDefinition,
   applyWorkflowEdits,
   diagnoseDraft,
+  summarizeDiagnostics,
   draftChanges,
   type DraftDiagnostic,
   validateWorkflowReferences,
@@ -42,6 +43,9 @@ import { Prompts } from './prompts.js';
 import { VersionCleanup } from './versionCleanup.js';
 import { Ownership } from './ownership.js';
 import { Testbench } from './testbench.js';
+import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
+
+class ExpiredClaimError extends InterlockError {}
 
 const now = () => new Date().toISOString();
 const terminal = (s: string) =>
@@ -132,6 +136,18 @@ export class Engine {
       draftMatchesLatest: latest
         ? isDeepStrictEqual(workflow.draft, latest.definition)
         : null,
+    };
+  }
+  authoringSummary(workflow: Workflow) {
+    const { id, draftRevision, latestVersion, draftMatchesLatest, archived } =
+      this.describeWorkflow(workflow);
+    return {
+      ok: true as const,
+      id,
+      draftRevision,
+      latestVersion,
+      draftMatchesLatest,
+      archived,
     };
   }
   run(id: string) {
@@ -269,15 +285,26 @@ export class Engine {
       }
     }
   }
-  editDraft(id: string, draftRevision: number, edits: unknown) {
+  editDraft(
+    id: string,
+    draftRevision: number,
+    edits: unknown,
+    diagnosticsMode: 'all' | 'summary' = 'all',
+  ) {
     return this.store.transaction(() => {
       const w = this.workflow(id);
+      const before =
+        diagnosticsMode === 'summary' ? this.validateDraft(id).diagnostics : [];
+      const project = (diagnostics: DraftDiagnostic[]) =>
+        diagnosticsMode === 'summary'
+          ? summarizeDiagnostics(before, diagnostics)
+          : { diagnostics };
       const unchanged = draftChanges(w.draft, w.draft);
       const failure = (diagnostics: DraftDiagnostic[]) => ({
         applied: false,
         draftRevision: w.draftRevision,
         changes: unchanged,
-        diagnostics,
+        ...project(diagnostics),
       });
       if (draftRevision !== w.draftRevision)
         return failure([
@@ -338,7 +365,7 @@ export class Engine {
         applied: true,
         draftRevision: w.draftRevision,
         changes,
-        diagnostics: validation.diagnostics,
+        ...project(validation.diagnostics),
       };
     });
   }
@@ -997,6 +1024,13 @@ export class Engine {
           status: 'available',
           attempt: 0,
           maxAttempts: node.maxAttempts,
+          ...(node.maxLeaseExpiries === undefined
+            ? {}
+            : {
+                maxLeaseExpiries: node.maxLeaseExpiries,
+                failureCount: 0,
+                leaseExpiryCount: 0,
+              }),
           leaseSeconds: node.leaseSeconds,
           availableUntil:
             node.unclaimedTimeoutMs === undefined
@@ -1246,16 +1280,15 @@ export class Engine {
           work.status === 'claimed' &&
           Date.parse(work.leaseUntil!) <= Date.now()
         ) {
-          this.event(
-            this.run(work.runId),
-            'work.lease_expired',
-            `${work.label} (${work.id}): claim expired at ${work.leaseUntil} on attempt ${work.attempt}/${work.maxAttempts}. ` +
-              (work.attempt < work.maxAttempts
-                ? 'Another attempt is available; inspect the run and reclaim available work. '
-                : 'No attempts remain; inspect the run before explicitly retrying the failed step. ') +
-              'Renew before expiry or choose a longer claim lease.',
-          );
-          this.releaseFailure(work, 'Worker lease expired');
+          work.expiredClaims = [
+            ...(work.expiredClaims ?? []),
+            {
+              tokenHash: claimTokenHash(work.token!),
+              expiredAt: work.leaseUntil!,
+              attempt: work.attempt,
+            },
+          ];
+          this.releaseFailure(work, 'Worker lease expired', 'expiry');
         }
       let changed = true,
         rounds = 0;
@@ -1500,6 +1533,8 @@ export class Engine {
       });
   }
   private describeWork(work: WorkRequest): WorkRequest {
+    const { expiredClaims: _receipts, ...visible } = work;
+    work = visible;
     if (work.context.mode !== 'fresh') return work;
     return {
       ...work,
@@ -1539,6 +1574,9 @@ export class Engine {
       context: work.context,
       attempt: work.attempt,
       maxAttempts: work.maxAttempts,
+      maxLeaseExpiries: work.maxLeaseExpiries,
+      failureCount: work.failureCount,
+      leaseExpiryCount: work.leaseExpiryCount,
       leaseSeconds: work.leaseSeconds,
       availableUntil: work.availableUntil,
     }));
@@ -1582,22 +1620,49 @@ export class Engine {
   private owned(id: string, token: string) {
     const work = this.store.get<WorkRequest>('work', id);
     if (!work || work.token !== token)
-      throw new InterlockError('Claim token does not match');
+      throw new InterlockError(
+        (work &&
+          expiredClaimMessage(work, token, this.run(work.runId).status)) ||
+          'Claim token does not match',
+      );
     if (work.status === 'completed') return work;
-    if (work.status !== 'claimed' || Date.parse(work.leaseUntil!) <= Date.now())
-      throw new InterlockError('Claim expired or no longer active');
+    if (work.status !== 'claimed')
+      throw new InterlockError('Claim no longer active');
+    if (Date.parse(work.leaseUntil!) <= Date.now())
+      throw new ExpiredClaimError('Claim expired');
     return work;
   }
+  private withClaim<T>(
+    id: string,
+    token: string,
+    action: (work: WorkRequest) => T,
+  ): T {
+    this.pump();
+    try {
+      return this.store.transaction(() => action(this.owned(id, token)));
+    } catch (error) {
+      // The deadline can cross between the initial pump and the ownership check.
+      // Process that expiry after rollback so its receipt and budget survive rejection.
+      if (error instanceof ExpiredClaimError) {
+        this.pump();
+        const work = this.store.get<WorkRequest>('work', id)!;
+        throw new InterlockError(
+          expiredClaimMessage(work, token, this.run(work.runId).status) ??
+            error.message,
+        );
+      }
+      throw error;
+    }
+  }
   renew(id: string, token: string, leaseSeconds?: number) {
-    return this.store.transaction(() => {
-      const work = this.owned(id, token);
+    return this.withClaim(id, token, (work) => {
       if (work.status !== 'claimed')
         throw new InterlockError('Work already completed');
       work.leaseUntil = new Date(
         Date.now() + (leaseSeconds ?? work.claimLeaseSeconds ?? 300) * 1000,
       ).toISOString();
       this.store.put('work', work);
-      return work;
+      return this.describeWork(work);
     });
   }
   submit(id: string, token: string, output: Json) {
@@ -1613,8 +1678,7 @@ export class Engine {
     };
   }
   private submitWork(id: string, token: string, output: Json) {
-    const runId = this.store.transaction(() => {
-      const work = this.owned(id, token);
+    const runId = this.withClaim(id, token, (work) => {
       if (work.status === 'completed') {
         if (!isDeepStrictEqual(work.output, output))
           throw new InterlockError('A different result was already accepted');
@@ -1635,12 +1699,39 @@ export class Engine {
     this.pump();
     return runId;
   }
-  private releaseFailure(work: WorkRequest, error: string) {
+  private releaseFailure(
+    work: WorkRequest,
+    error: string,
+    reason: 'failure' | 'expiry' = 'failure',
+  ) {
+    if (work.maxLeaseExpiries !== undefined) {
+      if (reason === 'expiry')
+        work.leaseExpiryCount = (work.leaseExpiryCount ?? 0) + 1;
+      else work.failureCount = (work.failureCount ?? 0) + 1;
+    }
+    const exhausted =
+      work.maxLeaseExpiries === undefined
+        ? work.attempt >= work.maxAttempts
+        : (work.failureCount ?? 0) >= work.maxAttempts ||
+          (work.leaseExpiryCount ?? 0) >= work.maxLeaseExpiries;
+    if (reason === 'expiry') {
+      this.event(
+        this.run(work.runId),
+        'work.lease_expired',
+        `${work.label} (${work.id}): claim expired at ${work.leaseUntil} on ${leaseCounts(work)}. ` +
+          (exhausted
+            ? 'No attempts remain under the configured budget; inspect the run before explicitly retrying the failed step. '
+            : 'Another attempt is available; inspect the run and reclaim available work. ') +
+          'Renew before expiry or choose a longer claim lease.',
+      );
+      if (exhausted && work.maxLeaseExpiries !== undefined)
+        error = 'Lease expiry budget exhausted';
+    }
     work.error = error;
     work.token = undefined;
     work.leaseUntil = undefined;
     const run = this.run(work.runId);
-    if (work.attempt >= work.maxAttempts) {
+    if (exhausted) {
       work.status = 'failed';
       this.fail(
         run,
@@ -1659,8 +1750,7 @@ export class Engine {
     this.store.put('work', work);
   }
   reportFailure(id: string, token: string, error: string) {
-    const runId = this.store.transaction(() => {
-      const work = this.owned(id, token);
+    const runId = this.withClaim(id, token, (work) => {
       if (work.status === 'completed')
         throw new InterlockError('Work already completed');
       this.releaseFailure(work, error);

@@ -130,6 +130,15 @@ export const nodeSchema = z.discriminatedUnion('kind', [
       ),
     context: contextPolicySchema.default({}),
     maxAttempts: z.number().int().min(1).max(10).default(2),
+    maxLeaseExpiries: z
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .optional()
+      .describe(
+        'Separate lease-expiry budget. When set, maxAttempts limits explicit failures and this budget limits expiries. Reaching either limit fails the run. Omission uses maxAttempts for both failures and expiries.',
+      ),
     leaseSeconds: z
       .number()
       .int()
@@ -137,7 +146,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
       .max(3600)
       .optional()
       .describe(
-        'Claim duration in seconds. An explicit claim override wins; omission uses this published node setting, then 300 seconds. Workers must renew before expiry. Expiry consumes an attempt.',
+        'Claim duration in seconds. An explicit claim override wins; omission uses this published node setting, then 300 seconds. Workers must renew before expiry. Expiry consumes the separate maxLeaseExpiries budget when configured, otherwise the combined maxAttempts budget.',
       ),
     unclaimedTimeoutMs: z.number().int().min(1).max(31_536_000_000).optional(),
   }),
@@ -350,6 +359,11 @@ export interface WorkRequest {
   availableUntil?: string;
   attempt: number;
   maxAttempts: number;
+  maxLeaseExpiries?: number;
+  failureCount?: number;
+  leaseExpiryCount?: number;
+  // Internal diagnostic receipts, excluded from external work responses.
+  expiredClaims?: { tokenHash: string; expiredAt: string; attempt: number }[];
   workerId?: string;
   token?: string;
   leaseUntil?: string;
@@ -746,3 +760,7 @@ export {
   type QualityJudgment,
   type WorkflowComparison,
 } from './testbench.js';
+
+export * from './authoring.js';
+
+export { nextCallSchema, withNextCall } from './continuation.js';

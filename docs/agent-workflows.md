@@ -10,7 +10,19 @@ Agent nodes can set `leaseSeconds` to a whole number from 10 through 3600. A cla
 
 `list_work` and continuation summaries include the optional configured `leaseSeconds`. `claim_work` returns the effective `claimLeaseSeconds` and ISO `leaseUntil`. Renew before that deadline. Omitting `leaseSeconds` from `renew_claim` reuses the original effective duration; an explicit renewal override applies only once. Claims without `claimLeaseSeconds` use 300 seconds for omitted renewals. Renewal does not impose a total execution deadline.
 
-An expired claim consumes an attempt and records `work.lease_expired`, including its assignment ID, deadline and attempt count. The token cannot renew or submit a late result. Inspect the existing run: reclaim available work with a new token, or inspect side effects before explicitly retrying an exhausted failed step. Reported failures and expirations share `maxAttempts`; an unclaimed timeout is a separate deadline to pick up work.
+Each expired claim records `work.lease_expired` with its assignment ID, deadline, counts, and recovery guidance. By default, reported failures and expiries share `maxAttempts`. To separate them, set Agent `maxLeaseExpiries` to an integer from 1 through 10, or enable **Separate lease expiry budget** in Agent settings. With that setting, `maxAttempts` limits explicit failures and `maxLeaseExpiries` limits expiries. Reaching either count fails the run. For example, `maxAttempts: 2, maxLeaseExpiries: 3` permits recovery after two expiries but fails on the third, or on the second explicit failure.
+
+`attempt` counts successful claims and never decreases. Separate-policy assignments expose `failureCount`, `leaseExpiryCount`, and `maxLeaseExpiries` in claims, discovery, and continuation summaries. Policy and counters persist across restarts. Policy comes from the run's published definition; editing a draft does not change active work. An unclaimed timeout remains a separate deadline to pick up work.
+
+Expired tokens cannot renew or submit results. Recognized expired-token errors distinguish an available assignment, a later claim, terminal work, and exhausted budgets. When the assignment is available, call `claim_work` with your actual context and capabilities, then use its new token. Availability can change before that call. Preserve code and evidence saved outside Interlock, and check whether the assignment and result are still applicable before resubmitting. Reclaiming does not make repeated external side effects safe. Inspect the run before explicitly retrying an exhausted failed step. Unknown tokens and tokens whose expiry history was not recorded return an invalid-token error.
+
+## Request compact authoring responses
+
+Pass `detail: "summary"` to `create_workflow`, `update_workflow`, and `publish_workflow` to receive `ok`, `id`, `draftRevision`, `latestVersion`, `draftMatchesLatest`, and `archived` without the definition. Use the returned revision for the next edit. `draftMatchesLatest` is null before first publication. Publication returns the committed version number; cascade summaries describe the requested workflow. Archive and restore use `update_workflow.archived` with the same detail option.
+
+Omitting `detail`, or passing `full`, returns the full workflow record and draft. Use `get_workflow` when you need the current definition. Imports already return compact IDs, revisions, and change lists. The shared API exposes `workflows.createSummary`, `updateSummary`, and `publishSummary`; the full operations keep their response shapes.
+
+HTTP and stdio tool discovery includes object-root output schemas for these authoring mutations, `edit_workflow`, `claim_work`, `start_run`, `submit_result`, and `list_work`. A client may omit schemas in its own display; inspect raw `tools/list` when diagnosing discovery.
 
 ## Discover schemas and assignments
 
@@ -135,6 +147,8 @@ The result contains `applied`, `draftRevision`, `changes`, and `diagnostics`. `c
 
 ## Validate without saving
 
+Pass `diagnostics: "summary"` to `edit_workflow` to return every error and every new or changed warning across the graph, plus up to five samples of unchanged warnings. `diagnosticSummary` reports `total`, `returned`, `omitted`, `unchangedWarnings`, and `counts` grouped by severity and code. Counts include every error and deduplicate only exact warnings. Distinct node, edge, and field locations remain distinct. Stable node/edge identity prevents index shifts from making warnings appear new. Whole-graph validation still runs. Omitting the option, or passing `all`, returns the full diagnostic list. The sample limit does not cap arbitrary message lengths or the number of new warnings and errors.
+
 Call `validate_workflow` with an `id` to inspect its stored draft, or include a candidate `definition`. The shared API is `workflows.validate`. The result contains the stored `draftRevision`, `saveable`, `publishable`, and diagnostics. Candidate validation never saves the candidate. These calls do not create a version or a run. Full replacement remains available through `update_workflow`.
 
 Each diagnostic has `severity`, `category`, stable `code`, property `path`, and `message`, plus relevant `nodeId`, `edgeId`, or `operationIndex`. Paths use definition array positions and field names, while IDs locate the graph object. Contract-warning paths describe the expected value beneath its contract field; literal property names with dots, empty strings, or other special characters use brackets and JSON quotes. Binding source paths retain their documented dot-separated syntax. Categories have separate consequences:
@@ -201,6 +215,25 @@ SQLite stores one latest revision per retained run and one global sequence. Revi
 Restart, malformed, foreign-run, and future cursors return a fresh snapshot immediately with `changed:true`, `reset:true`, and `timedOut:false`. Continue with that cursor. Reset does not mean completion. A valid older cursor in the same incarnation returns a changed snapshot without reset. Missing or deleted runs error.
 
 Concurrent waiters are independent. Subscription precedes snapshot generation, so an intervening change cannot be lost. No database transaction stays open while waiting. Request cancellation, disconnect, and engine shutdown release listeners and timers. Shared API clients can pass an AbortSignal; Stdio MCP request cancellation releases the proxied wait. HTTP MCP releases waits when the actual HTTP request is aborted or disconnected. Some MCP clients cancel only their local promise and send a separate notification while leaving the POST active. The stateless endpoint cannot safely correlate that notification across clients; such waits end at their finite deadline. The stdio bridge gives each wait its own HTTP request, so another operation can complete or be cancelled independently. HTTP MCP remains stateless JSON request/response, with no transport session or standalone notification stream.
+
+## Drive a run from the CLI
+
+The CLI uses the same running server as MCP. Set `INTERLOCK_URL` when the server is not at `http://127.0.0.1:4310`. Start once, retain its `runId`, and continue that run:
+
+```sh
+interlock start WORKFLOW_ID @input.json --summary
+interlock work RUN_ID --summary
+interlock claim WORK_ID worker-name --lease 1800
+# Execute the returned prompt and input; save the JSON result in result.json.
+interlock renew WORK_ID TOKEN
+interlock submit WORK_ID TOKEN @result.json --summary
+```
+
+Repeat discovery, claim, execution, and submission for subsequent assignments. Renew before the claim deadline during long work. Inspect each summary's `runStatus` and `nextWork`; an empty list alone does not mean completion. For pending work, rediscover the existing run later. Use `interlock run RUN_ID` when full inspection or final output is needed. Detached descendants can remain active after the requested lifecycle finishes; inspect their own run IDs.
+
+Start accepts an optional positional version before or after `--summary`. Submit and start omit definitions and historical payloads only when `--summary` is present. Their summaries include the same `nextCall` suggestions as MCP; these are MCP tool names and arguments, not executed shell commands.
+
+Use `claim WORK_ID worker-name --fresh` only from a fresh session or isolated executor. The flag attests isolation; it does not create it. Claim also accepts an options JSON object or `@file` after the worker ID, including `tools`, `skills`, `freshContext`, and `leaseSeconds`. Explicit `--fresh` and `--lease` flags override the corresponding JSON values. Lease seconds must be an integer from 10 through 3600.
 
 ## Renew claims
 
