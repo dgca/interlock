@@ -294,11 +294,18 @@ export function NodeInspector({
             />
             <p className="hint">
               Workers can override this duration and must renew before it
-              expires. Expiry consumes an attempt.
+              expires.{' '}
+              {node.maxLeaseExpiries === undefined
+                ? 'Expiry consumes an attempt.'
+                : 'Expiry consumes the separate expiry budget.'}
             </p>
             <TextInput
               mb="md"
-              label="Maximum attempts"
+              label={
+                node.maxLeaseExpiries === undefined
+                  ? 'Maximum attempts'
+                  : 'Maximum failures'
+              }
               className={styles.number}
               type="number"
               min={1}
@@ -306,6 +313,37 @@ export function NodeInspector({
               value={node.maxAttempts}
               onChange={(e) => patch({ maxAttempts: Number(e.target.value) })}
             />
+            <Switch
+              mb="md"
+              label="Separate lease expiry budget"
+              checked={node.maxLeaseExpiries !== undefined}
+              onChange={(e) =>
+                patch({
+                  maxLeaseExpiries: e.currentTarget.checked ? 3 : undefined,
+                })
+              }
+            />
+            {node.maxLeaseExpiries !== undefined && (
+              <>
+                <TextInput
+                  mb="md"
+                  label="Maximum lease expiries"
+                  className={styles.number}
+                  type="number"
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={node.maxLeaseExpiries}
+                  onChange={(e) =>
+                    patch({ maxLeaseExpiries: Number(e.target.value) })
+                  }
+                />
+                <p className="hint">
+                  Reaching either budget fails the run. After an expiry, reclaim
+                  available work with a new token before submitting.
+                </p>
+              </>
+            )}
           </>
         )}
         {node.kind === 'script' && (

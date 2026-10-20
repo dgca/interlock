@@ -277,7 +277,7 @@ it('reports each expiration once while preserving attempts and token rejection',
     expect(second.token).not.toBe(claim.token);
     expect(second.claimLeaseSeconds).toBe(60);
     expect(() => engine.submit(claim.id, claim.token!, {})).toThrow(
-      'Claim token',
+      'reclaimed after this claim expired',
     );
     vi.advanceTimersByTime(60000);
     engine.pump();

@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { createClient } from '@interlock/client';
 import { parseArgs } from 'node:util';
+import { withNextCall } from '@interlock/core';
 const parse = async (value: string | undefined) => {
   if (value === undefined) throw new Error('Missing JSON argument');
   return JSON.parse(
@@ -60,12 +61,26 @@ export async function runCommand(argv: string[]) {
         id: args[0],
         cascade: args.includes('--cascade'),
       });
-    case 'start':
-      return client.runs.start.mutate({
-        workflowId: args[0],
-        input: await parse(args[1]),
-        version: args[2] ? Number(args[2]) : undefined,
+    case 'start': {
+      const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: { summary: { type: 'boolean' } },
       });
+      if (positionals.length < 2 || positionals.length > 3)
+        throw new Error(
+          'Usage: start <workflow-id> <json|@file> [version] [--summary]',
+        );
+      const input = {
+        workflowId: positionals[0],
+        input: await parse(positionals[1]),
+        version:
+          positionals[2] === undefined ? undefined : Number(positionals[2]),
+      };
+      return values.summary
+        ? withNextCall(await client.runs.startSummary.mutate(input))
+        : client.runs.start.mutate(input);
+    }
     case 'runs': {
       if (!args.length) return client.runs.list.query();
       const { values } = parseArgs({
@@ -109,18 +124,45 @@ export async function runCommand(argv: string[]) {
             runId: args.find((arg) => arg !== '--summary'),
           })
         : client.work.list.query({ runId: args[0] });
-    case 'claim':
+    case 'claim': {
+      const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: { fresh: { type: 'boolean' }, lease: { type: 'string' } },
+      });
+      if (positionals.length < 1 || positionals.length > 3)
+        throw new Error(
+          'Usage: claim <work-id> [worker-id] [options-json|@file] [--fresh] [--lease seconds]',
+        );
       return client.work.claim.mutate({
-        workId: args[0],
-        workerId: args[1] ?? 'cli',
-        ...(args[2] ? await parse(args[2]) : {}),
+        workId: positionals[0],
+        workerId: positionals[1] ?? 'cli',
+        ...(positionals[2] ? await parse(positionals[2]) : {}),
+        ...(values.fresh === undefined ? {} : { freshContext: values.fresh }),
+        ...(values.lease === undefined
+          ? {}
+          : { leaseSeconds: Number(values.lease) }),
       });
-    case 'submit':
-      return client.work.submit.mutate({
-        workId: args[0],
-        token: args[1],
-        output: await parse(args[2]),
+    }
+    case 'submit': {
+      const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: { summary: { type: 'boolean' } },
       });
+      if (positionals.length !== 3)
+        throw new Error(
+          'Usage: submit <work-id> <token> <json|@file> [--summary]',
+        );
+      const input = {
+        workId: positionals[0],
+        token: positionals[1],
+        output: await parse(positionals[2]),
+      };
+      return values.summary
+        ? withNextCall(await client.work.submitSummary.mutate(input))
+        : client.work.submit.mutate(input);
+    }
     case 'fail':
       return client.work.fail.mutate({
         workId: args[0],
@@ -148,12 +190,12 @@ export async function runCommand(argv: string[]) {
           'import <json|@file> [--force | --revisions JSON] [--restore-deleted-versions] (force changes drafts only; explicit restoration requires original definitions and valid dependencies/ownership)',
           'export <id>',
           'publish <id> [--cascade]',
-          'start <workflow-id> <json|@file> [version]',
+          'start <workflow-id> <json|@file> [version] [--summary]',
           'runs [--workflow ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
           'work [run-id] [--summary]',
-          'claim <work-id> [worker-id] [options-json: {"leaseSeconds":1800,"freshContext":false,"tools":[],"skills":[]}]',
-          'submit <work-id> <token> <json|@file>',
+          'claim <work-id> [worker-id] [options-json: {"leaseSeconds":1800,"freshContext":false,"tools":[],"skills":[]}] [--fresh] [--lease seconds] (flags override options JSON; --fresh attests an isolated context)',
+          'submit <work-id> <token> <json|@file> [--summary]',
           'fail <work-id> <token> <error>',
           'renew <work-id> <token> [options-json: {"leaseSeconds":3600}]',
           'cancel <run-id>',

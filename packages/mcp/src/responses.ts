@@ -3,9 +3,12 @@ import {
   mutationSummarySchema,
   submissionSummarySchema,
   mutationDetailSchema,
-  briefingQuerySchema,
-  resultQuerySchema,
-  waitQuerySchema,
+  nextCallSchema,
+  authoringSummarySchema,
+  draftDiagnosticSchema,
+  diagnosticSummarySchema,
+  jsonSchema,
+  contextPolicySchema,
 } from '@interlock/core';
 
 export const mcpMutationDetailSchema = mutationDetailSchema
@@ -14,54 +17,7 @@ export const mcpMutationDetailSchema = mutationDetailSchema
     'summary (default) returns run status, bounded next work, a wait cursor and suggested next call. full includes the workflow definition, execution history and input/output payloads. Read selected values with get_run_result, or inspect an existing run with get_run instead of starting it again.',
   );
 
-const nextCallSchema = z
-  .discriminatedUnion('tool', [
-    z.object({
-      tool: z.literal('get_run_result'),
-      arguments: resultQuerySchema.pick({ id: true }),
-    }),
-    z.object({
-      tool: z.literal('get_run_briefing'),
-      arguments: briefingQuerySchema.pick({ id: true }),
-    }),
-    z.object({
-      tool: z.literal('wait_for_run_change'),
-      arguments: waitQuerySchema.pick({ id: true, cursor: true }),
-    }),
-  ])
-  .nullable()
-  .describe(
-    'Suggested read-only call, not an executed action. null when next is claim_work: choose from nextWork and claim with your own workerId and actual capabilities. A completed run can still have independent detached work. Result reads use the default byte limit; select a narrower path if the value exceeds it.',
-  );
-
-export function withNextCall<T extends z.infer<typeof mutationSummarySchema>>(
-  summary: T,
-): T & { nextCall: z.infer<typeof nextCallSchema> } {
-  const id = summary.runId;
-  let nextCall: z.infer<typeof nextCallSchema> = null;
-  switch (summary.next) {
-    case 'inspect_result':
-      nextCall = {
-        tool:
-          summary.runStatus === 'completed'
-            ? 'get_run_result'
-            : 'get_run_briefing',
-        arguments: { id },
-      };
-      break;
-    case 'inspect_failure':
-      nextCall = { tool: 'get_run_briefing', arguments: { id } };
-      break;
-    case 'wait_for_worker':
-    case 'wait_for_change':
-      nextCall = {
-        tool: 'wait_for_run_change',
-        arguments: { id, cursor: summary.cursor },
-      };
-      break;
-  }
-  return { ...summary, nextCall };
-}
+export { withNextCall } from '@interlock/core';
 
 // SDK v1 requires an object root, so discovery describes both modes' fields.
 // Required compact fields are validated by the runtime's complete summary schema.
@@ -119,6 +75,9 @@ export const workListResponseSchema = z
           }),
           attempt: z.number().int().nonnegative(),
           maxAttempts: z.number().int().positive(),
+          maxLeaseExpiries: z.number().int().min(1).max(10).optional(),
+          failureCount: z.number().int().nonnegative().optional(),
+          leaseExpiryCount: z.number().int().nonnegative().optional(),
           leaseSeconds: z
             .number()
             .int()
@@ -136,3 +95,63 @@ export const workListResponseSchema = z
   .describe(
     'Structured wrapper for the JSON text array. summary (default) items include identity, run ancestry, label, context requirements, attempts and any unclaimed deadline. full items also include the composed prompt, captured saved prompts, input and output contract.',
   );
+
+export const authoringDetailSchema = z
+  .enum(['full', 'summary'])
+  .default('full')
+  .describe(
+    'Use summary for an acknowledgment with id, draftRevision, latestVersion, draftMatchesLatest and archived, without a definition. full (default) returns the workflow record and draft. Read get_workflow when you need the full definition.',
+  );
+export const authoringResponseSchema = z
+  .object({
+    ...authoringSummarySchema.omit({ ok: true, draftMatchesLatest: true })
+      .shape,
+    ok: z.literal(true).optional(),
+    draftMatchesLatest: z.boolean().nullable().optional(),
+    draft: z.record(z.unknown()).optional(),
+  })
+  .passthrough()
+  .describe(
+    'Summary requires ok and draftMatchesLatest; full includes draft and workflow metadata.',
+  );
+const changeIds = z.object({
+  added: z.array(z.string()),
+  updated: z.array(z.string()),
+  removed: z.array(z.string()),
+});
+export const editResponseSchema = z.object({
+  applied: z.boolean(),
+  draftRevision: z.number().int().positive(),
+  changes: z.object({
+    nodes: changeIds,
+    edges: changeIds,
+    settings: z.array(z.string()),
+  }),
+  diagnostics: z.array(draftDiagnosticSchema),
+  diagnosticSummary: diagnosticSummarySchema.optional(),
+});
+export const claimResponseSchema = z
+  .object({
+    id: z.string(),
+    runId: z.string(),
+    executionId: z.string(),
+    nodeId: z.string(),
+    label: z.string(),
+    status: z.literal('claimed'),
+    token: z.string(),
+    workerId: z.string(),
+    leaseUntil: z.string(),
+    claimLeaseSeconds: z.number().int().min(10).max(3600),
+    leaseSeconds: z.number().int().min(10).max(3600).optional(),
+    attempt: z.number().int().positive(),
+    maxAttempts: z.number().int().positive(),
+    maxLeaseExpiries: z.number().int().min(1).max(10).optional(),
+    failureCount: z.number().int().nonnegative().optional(),
+    leaseExpiryCount: z.number().int().nonnegative().optional(),
+    prompt: z.string(),
+    input: jsonSchema,
+    outputSchema: z.record(z.unknown()),
+    context: contextPolicySchema,
+    executionInstructions: z.string().optional(),
+  })
+  .passthrough();

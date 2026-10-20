@@ -73,7 +73,7 @@ In the editor, choose **When a check passes**, pick Script or Fetch, set **Check
 
 Set **Claim lease** in Agent settings, or `leaseSeconds` in the node definition, to a whole number from 10 through 3600 seconds. An explicit claim duration overrides this published setting; when both are omitted the duration is 300 seconds. Workers must renew before `leaseUntil`. Omitted renewals reuse the original effective claim duration. Longer leases give workers more time but delay recovery from abandoned claims.
 
-Expiry consumes an attempt and records `work.lease_expired`. Inspect the run before reclaiming available work or explicitly retrying a failed step; external work may already have happened. Expired tokens cannot renew or submit a result. See [claim duration and expiry](agent-workflows.md#claim-duration-and-expiry).
+Expiry records `work.lease_expired` and consumes the separate `maxLeaseExpiries` budget when configured, otherwise the combined `maxAttempts` budget. Inspect the run before reclaiming available work or explicitly retrying a failed step; external work may already have happened. Expired tokens cannot renew or submit a result. See [claim duration and expiry](agent-workflows.md#claim-duration-and-expiry).
 
 ## Unclaimed Agent timeouts
 
@@ -110,7 +110,7 @@ A timed Agent requires two outgoing edges:
 
 The editor labels these handles **Result** and **Timeout**. Result carries the submitted answer and enforces the Agent output contract. Timeout carries the original input, without applying the answer contract; the destination's input contract still applies. The timeout execution completes successfully and records `port: "timeout"`. Its assignment becomes `timed_out` and is no longer claimable.
 
-The deadline starts when work becomes available and appears as `availableUntil` on the assignment. Claiming stops the timer. If a failed or expired claim can be retried, a new full unclaimed interval starts when the assignment becomes available again. An exhausted attempt limit fails the run instead. Renewal does not have a total execution ceiling. Claiming for manual completion also stops the timer, so this is a deadline to pick up work, not a deadline to submit an answer. If the timeout wins a claim race, the claim fails. The old assignment cannot accept a late reply; inspect the existing run to find its current work.
+The deadline starts when work becomes available and appears as `availableUntil` on the assignment. Claiming stops the timer. If a failed or expired claim can be retried, a new full unclaimed interval starts when the assignment becomes available again. An exhausted failure or expiry budget fails the run instead. Renewal does not have a total execution ceiling. Claiming for manual completion also stops the timer, so this is a deadline to pick up work, not a deadline to submit an answer. If the timeout wins a claim race, the claim fails. The old assignment cannot accept a late reply; inspect the existing run to find its current work.
 
 Drafts may omit routes. Publication requires both Agent routes when `unclaimedTimeoutMs` is set and rejects a `timeout` edge when it is absent. Removing the setting in Raw JSON or through MCP does not remove its edge automatically.
 

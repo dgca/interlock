@@ -53,6 +53,19 @@ const p = t.procedure.use(async ({ next }) => {
   }
 });
 const id = z.object({ id: z.string() });
+const createWorkflowInput = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().default(''),
+  definition: definitionSchema.optional(),
+  ownerWorkflowId: z.string().min(1).nullable().optional(),
+});
+const updateWorkflowInput = id.extend({
+  name: z.string().trim().min(1).max(120).optional(),
+  description: z.string().optional(),
+  archived: z.boolean().optional(),
+  draft: definitionSchema.optional(),
+  draftRevision: z.number().int().optional(),
+});
 const claim = z.object({ workId: z.string(), token: z.string() });
 export const appRouter = t.router({
   connection: p.query(({ ctx }) => {
@@ -198,15 +211,32 @@ export const appRouter = t.router({
       .query(({ ctx, input }) =>
         ctx.engine.describeWorkflow(ctx.engine.workflow(input.id)),
       ),
+    createSummary: p
+      .input(createWorkflowInput)
+      .mutation(({ ctx, input }) =>
+        ctx.engine.authoringSummary(
+          ctx.engine.create(
+            input.name,
+            input.description,
+            input.definition,
+            input.ownerWorkflowId,
+          ),
+        ),
+      ),
+    updateSummary: p
+      .input(updateWorkflowInput)
+      .mutation(({ ctx, input }) =>
+        ctx.engine.authoringSummary(ctx.engine.update(input.id, input)),
+      ),
+    publishSummary: p
+      .input(id.extend({ cascade: z.boolean().optional() }))
+      .mutation(({ ctx, input }) =>
+        ctx.engine.authoringSummary(
+          ctx.engine.publish(input.id, input.cascade),
+        ),
+      ),
     create: p
-      .input(
-        z.object({
-          name: z.string().trim().min(1).max(120),
-          description: z.string().default(''),
-          definition: definitionSchema.optional(),
-          ownerWorkflowId: z.string().min(1).nullable().optional(),
-        }),
-      )
+      .input(createWorkflowInput)
       .mutation(({ ctx, input }) =>
         ctx.engine.create(
           input.name,
@@ -228,11 +258,17 @@ export const appRouter = t.router({
             id: z.string(),
             draftRevision: z.number().int().positive(),
             edits: workflowEditsSchema,
+            diagnostics: z.enum(['all', 'summary']).default('all'),
           })
           .strict(),
       )
       .mutation(({ ctx, input }) =>
-        ctx.engine.editDraft(input.id, input.draftRevision, input.edits),
+        ctx.engine.editDraft(
+          input.id,
+          input.draftRevision,
+          input.edits,
+          input.diagnostics,
+        ),
       ),
     validate: p
       .input(
@@ -270,15 +306,7 @@ export const appRouter = t.router({
       )
       .mutation(({ ctx, input }) => ctx.engine.useChildVersion(input)),
     update: p
-      .input(
-        id.extend({
-          name: z.string().trim().min(1).max(120).optional(),
-          description: z.string().optional(),
-          archived: z.boolean().optional(),
-          draft: definitionSchema.optional(),
-          draftRevision: z.number().int().optional(),
-        }),
-      )
+      .input(updateWorkflowInput)
       .mutation(({ ctx, input }) => ctx.engine.update(input.id, input)),
     delete: p
       .input(id)

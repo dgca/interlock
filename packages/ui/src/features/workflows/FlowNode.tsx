@@ -184,7 +184,7 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
       : n.kind === 'agent'
         ? n.unclaimedTimeoutMs !== undefined
           ? `Unclaimed timeout · ${formatDuration(n.unclaimedTimeoutMs)}`
-          : `${n.context.mode === 'fresh' ? 'Fresh' : 'Current'} context · ${n.maxAttempts} attempts`
+          : `${n.context.mode === 'fresh' ? 'Fresh' : 'Current'} context · ${n.maxAttempts} ${n.maxLeaseExpiries === undefined ? 'attempts' : `failures · ${n.maxLeaseExpiries} expiries`}`
         : n.kind === 'workflow'
           ? `${data.targetName ?? 'Workflow'} · ${n.version === null ? 'Not published' : `v${n.version}`}`
           : n.kind === 'fetch'

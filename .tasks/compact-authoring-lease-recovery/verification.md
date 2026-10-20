@@ -1,0 +1,20 @@
+# Build evidence
+
+Baseline and scope are recorded in [intent.md](intent.md). Checks below apply to the implementation committed with this document. Evidence paths are local temporary files; automated regression tests remain in the repository.
+
+- AC1–AC3: `tests/compact-authoring.test.ts` passes over HTTP and stdio. A synthetic 27-node definition produces 390,066 bytes of full publication text versus 159 bytes of summary text and 134 bytes of structured summary. Tests validate discovered object-root schemas, full/default compatibility, IDs/revisions/publication status, archive/restore, cascade dependent pins, compact imports, invalid modes and stale writes. The work laptop's exact workflow was unavailable; the size fixture is synthetic.
+- AC2: the same suite verifies bounded samples of existing warnings, all errors on rejection, a new downstream warning from an upstream edit, stable-node index changes, and exact deduplicated counts. `tests/workflowEdits.test.ts` retains full atomic-edit validation coverage. Compact diagnostics do not impose a byte cap or suppress newly introduced warnings.
+- AC4: a temporary HTTP server exercises actual CLI start/submit summaries, full defaults, positional version and file JSON, fresh-context enforcement, explicit flags over JSON options, and invalid flags/lease bounds. Suggested next calls reuse the same core projection as MCP. Full package smoke confirms bundled CLI startup.
+- AC5–AC6: `tests/lease-recovery.test.ts` and `tests/leases.test.ts` pass. Cases include independent exhaustion, mixed failures/expiries, monotonic claims, exact expiry, restart, pinned policy, timeout/cancellation, completed replay, unknown tokens, receipts excluded from public work, and A-expiry/B-claim/B-expiry/A-submit rejection. An additional clock-crossing test advances time between pump and ownership check; rejection still persists the expiry and permits a valid replacement claim. Tests use temporary or in-memory databases.
+- AC7: `tests/nodeEditorUx.test.ts` verifies control enable/disable, default 3, invalid bounds, and saved values. Actual browser check on the isolated server at port 52927: created a temporary workflow, opened Agent settings, enabled the budget, typed 0 with native keyboard input and confirmed Apply did not close/save, typed 4, applied and saved, reloaded and reopened to verify 4, then disabled and saved. The saved definition omits `maxLeaseExpiries`. Evidence: `/tmp/interlock-authoring-ui.S0pSPy/budget-enabled.png` and `disabled-workflow.json`. The screenshot uses the same UI source as this commit; the later runtime-only clock-crossing fix does not affect that journey. Temporary server and browser tab were stopped/closed. User databases were not used for tests.
+- AC8: audited README, agent-workflows, architecture, connect-harness, timers, current scope, upgrade/release guidance, CLI command help, and the affected MCP flow: schema/definition guidance, create/update/edit/validate/publish/import, start/list/claim/submit/renew/fail, briefing/inspection/retry/cancel. Added explicit compact-mode guidance and corrected combined-budget-only claims. Unrelated MCP tools were not comprehensively audited. The root patch changeset remains pending.
+
+## Commands
+
+- `pnpm test`: 670 tests passed in 55 files. `/tmp/interlock-authoring-tests.log`.
+- `pnpm build`: passed TypeScript, UI and bundled build. `/tmp/interlock-authoring-build.log`.
+- `pnpm test:package`: passed packed global and npx installs, CLI, UI assets, HTTP/stdio MCP, persistence/restart and JavaScript execution. `/tmp/interlock-authoring-package.log`.
+- `pnpm format:check`: passed. `/tmp/interlock-authoring-format.log`.
+- Focused transport checks: `/tmp/interlock-authoring-transports.log`; final full suite includes the latest runtime clock-crossing fix.
+
+Existing build chunk-size and test-environment warnings remain. No changed defaults, late-token acceptance, release, or merge. Independent review is the next SDLC stage.

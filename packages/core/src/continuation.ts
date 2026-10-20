@@ -73,7 +73,7 @@ export const mutationDetailSchema = z
   .enum(['full', 'summary'])
   .default('full')
   .describe(
-    'Use summary for compact continuation without definitions or execution payloads. Omission and full preserve the original inspection response.',
+    'Use summary for compact continuation without definitions or execution payloads. full includes the workflow definition, execution history, and input/output payloads.',
   );
 export const continuationWorkSchema = z.object({
   id: z.string(),
@@ -95,6 +95,9 @@ export const continuationWorkSchema = z.object({
   }),
   attempt: z.number().int().nonnegative(),
   maxAttempts: z.number().int().positive(),
+  maxLeaseExpiries: z.number().int().min(1).max(10).optional(),
+  failureCount: z.number().int().nonnegative().optional(),
+  leaseExpiryCount: z.number().int().nonnegative().optional(),
   workerId: z.string().optional(),
   leaseSeconds: z
     .number()
@@ -153,3 +156,52 @@ export const submissionSummarySchema = mutationSummarySchema.extend({
       'Run owning the submitted assignment. May differ from the continuation runId.',
     ),
 });
+
+export const nextCallSchema = z
+  .discriminatedUnion('tool', [
+    z.object({
+      tool: z.literal('get_run_result'),
+      arguments: resultQuerySchema.pick({ id: true }),
+    }),
+    z.object({
+      tool: z.literal('get_run_briefing'),
+      arguments: briefingQuerySchema.pick({ id: true }),
+    }),
+    z.object({
+      tool: z.literal('wait_for_run_change'),
+      arguments: waitQuerySchema.pick({ id: true, cursor: true }),
+    }),
+  ])
+  .nullable()
+  .describe(
+    'Suggested read-only call, not an executed action. null when next is claim_work: choose from nextWork and claim with your own workerId and actual capabilities. A completed run can still have independent detached work. Result reads use the default byte limit; select a narrower path if the value exceeds it.',
+  );
+
+export function withNextCall<T extends z.infer<typeof mutationSummarySchema>>(
+  summary: T,
+): T & { nextCall: z.infer<typeof nextCallSchema> } {
+  const id = summary.runId;
+  let nextCall: z.infer<typeof nextCallSchema> = null;
+  switch (summary.next) {
+    case 'inspect_result':
+      nextCall = {
+        tool:
+          summary.runStatus === 'completed'
+            ? 'get_run_result'
+            : 'get_run_briefing',
+        arguments: { id },
+      };
+      break;
+    case 'inspect_failure':
+      nextCall = { tool: 'get_run_briefing', arguments: { id } };
+      break;
+    case 'wait_for_worker':
+    case 'wait_for_change':
+      nextCall = {
+        tool: 'wait_for_run_change',
+        arguments: { id, cursor: summary.cursor },
+      };
+      break;
+  }
+  return { ...summary, nextCall };
+}
