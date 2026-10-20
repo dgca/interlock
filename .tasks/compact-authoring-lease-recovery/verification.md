@@ -34,3 +34,18 @@ Revision checks:
 - `pnpm format:check`: passed. `/tmp/interlock-authoring-revision-format.log`.
 
 The revised committed candidate requires independent review before local completion.
+
+## PR diagnostic correction
+
+The final PR review of `2179f444d661a493af5fb4181753134756241fea` reproduced a separate AC2 defect: summary diagnostics merged duplicate-ID errors at different array locations. The regression tests failed before the fix over both HTTP and stdio, losing one node location and one edge location. A repeated-error test also confirmed an incorrect count. Red evidence: `/tmp/interlock-diagnostic-errors-red.log`.
+
+Summary projection now retains every error with its original path. Only exact warning repeats are deduplicated. Array-index normalization applies to warning comparison across edits. Tests assert identical full/summary error lists, four duplicate-ID error locations and the matching count, unchanged workflow state, preserved repeated errors, distinct warning paths, and existing sampling/index-shift behavior. The focused authoring/edit tests passed 59 checks before adding two additional warning-path cases. Evidence: `/tmp/interlock-diagnostic-errors-tests.log`.
+
+Final correction checks:
+
+- `pnpm test`: 672 tests passed in 55 files. `/tmp/interlock-diagnostic-errors-full-tests.log`.
+- `pnpm build`: passed. `/tmp/interlock-diagnostic-errors-build.log`.
+- `pnpm test:package`: passed. `/tmp/interlock-diagnostic-errors-package.log`.
+- `pnpm format:check`: passed. `/tmp/interlock-diagnostic-errors-format.log`.
+
+Reviewed README, the agent authoring guide, CLI help, and MCP edit/validate guidance and output schemas for this correction. Clarified count semantics in the guide and edit tool descriptions; response fields and defaults are unchanged. HTTP and stdio discovery and responses pass in the full suite. Existing lease and UI evidence remains applicable because those implementations are unchanged. Independent review of the correction follows before PR update.

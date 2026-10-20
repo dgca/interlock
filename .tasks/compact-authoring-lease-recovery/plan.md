@@ -27,3 +27,7 @@ The SDLC review assignment requires an isolated fresh-context reviewer. Review t
 ## Review revision
 
 Finding `5d68a6eaa000-cli-negative-json` exposed a compatibility gap in AC4: strict option parsing rejected negative numeric JSON inputs and results. Separate valid negative JSON numbers from options before parsing the boolean summary flag. Retain strict option validation, positional ordering, and the `--` separator. Exercise start → claim → submit for negative integers, zero, fractions and exponents in full and summary modes, with flags before and after positionals. Verify unknown short/long flags and invalid boolean values still reject. Rerun the affected CLI/transport suite and required repository checks. Other implementation and UI behavior is unchanged; retain earlier evidence with its original commit.
+
+## PR diagnostic correction
+
+The final PR review at `2179f444d661a493af5fb4181753134756241fea` found that summary mode merged distinct errors for duplicate node and edge IDs. The user authorized fixing this AC2 defect. Preserve every error with its original path and count. Deduplicate only exact warning repeats, and normalize array indexes only when comparing warnings across edits. Cover duplicate node and edge locations through HTTP and stdio, repeated errors, distinct warning paths, and existing warning sampling/index-shift behavior. Clarify count semantics in the agent guide and affected MCP guidance. Verify the correction and independently review it before pushing to PR #127. No runtime, lease, or UI behavior changes are needed.

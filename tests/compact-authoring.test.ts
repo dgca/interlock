@@ -7,6 +7,7 @@ import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import {
   assertContract,
+  blankDefinition,
   definitionSchema,
   summarizeDiagnostics,
   type DraftDiagnostic,
@@ -249,6 +250,48 @@ it.each(['http', 'stdio'])(
       });
       expect(invalid.isError).toBe(true);
       expect(engine.workflow(id)).toEqual(state);
+      const duplicateDraft = blankDefinition();
+      duplicateDraft.nodes.push(
+        { ...duplicateDraft.nodes[1] },
+        { ...duplicateDraft.nodes[1] },
+      );
+      duplicateDraft.edges.push(
+        { ...duplicateDraft.edges[0] },
+        { ...duplicateDraft.edges[0] },
+      );
+      const duplicate = engine.create('Duplicate IDs', '', duplicateDraft);
+      const duplicateArgs = {
+        id: duplicate.id,
+        draftRevision: duplicate.draftRevision,
+        edits: [],
+      };
+      const fullErrors = (
+        await call('edit_workflow', duplicateArgs)
+      ).data.diagnostics.filter((d: DraftDiagnostic) => d.severity === 'error');
+      expect(
+        fullErrors
+          .filter((d: DraftDiagnostic) => d.code === 'duplicate_id')
+          .map((d: DraftDiagnostic) => d.path),
+      ).toEqual(['nodes.3.id', 'nodes.4.id', 'edges.2.id', 'edges.3.id']);
+      const summarized = await call('edit_workflow', {
+        ...duplicateArgs,
+        diagnostics: 'summary',
+      });
+      expect(
+        summarized.data.diagnostics.filter(
+          (d: DraftDiagnostic) => d.severity === 'error',
+        ),
+      ).toEqual(fullErrors);
+      expect(summarized.data.diagnosticSummary.counts).toContainEqual({
+        severity: 'error',
+        code: 'duplicate_id',
+        count: 4,
+      });
+      expect(summarized.data.diagnosticSummary.total).toBe(
+        summarized.data.diagnosticSummary.returned +
+          summarized.data.diagnosticSummary.omitted,
+      );
+      expect(engine.workflow(duplicate.id)).toEqual(duplicate);
       const run = engine.start(id, {}).run;
       const work = engine.available(run.id)[0];
       expect(
@@ -323,15 +366,55 @@ it('deduplicates unchanged warning samples by stable location without losing err
     path: 'edges',
     message: 'Broken',
   };
-  const result = summarizeDiagnostics(before, [...after, after[0], error]);
+  const result = summarizeDiagnostics(before, [
+    ...after,
+    after[0],
+    error,
+    error,
+  ]);
   expect(result.diagnosticSummary).toMatchObject({
-    total: 9,
-    returned: 6,
+    total: 10,
+    returned: 7,
     omitted: 3,
     unchangedWarnings: 8,
   });
-  expect(result.diagnostics[0]).toEqual(error);
+  expect(result.diagnostics.filter((d) => d.severity === 'error')).toEqual([
+    error,
+    error,
+  ]);
+  expect(result.diagnosticSummary.counts).toContainEqual({
+    severity: 'error',
+    code: 'broken',
+    count: 2,
+  });
 });
+
+it.each(['nodes', 'edges'])(
+  'preserves distinct %s warning paths while removing exact repeats',
+  (kind) => {
+    const first: DraftDiagnostic = {
+      severity: 'warning',
+      category: 'contract',
+      code: 'unknown',
+      message: 'Unknown',
+      path: `${kind}.1.inputSchema`,
+      ...(kind === 'nodes' ? { nodeId: 'same' } : { edgeId: 'same' }),
+    };
+    const second = { ...first, path: `${kind}.2.inputSchema` };
+    const result = summarizeDiagnostics(
+      [first, second],
+      [first, second, first],
+    );
+    expect(result.diagnostics).toEqual([first, second]);
+    expect(result.diagnosticSummary).toEqual({
+      total: 2,
+      returned: 2,
+      omitted: 0,
+      unchangedWarnings: 2,
+      counts: [{ severity: 'warning', code: 'unknown', count: 2 }],
+    });
+  },
+);
 
 it('supports CLI summary continuations and fresh/lease flags without changing defaults', async () => {
   const store = new Store(':memory:'),

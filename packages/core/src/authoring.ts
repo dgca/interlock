@@ -34,13 +34,13 @@ export const diagnosticSummarySchema = z.object({
   ),
 });
 
-function identity(d: DraftDiagnostic) {
-  // Stable IDs identify graph members even when removals shift array indexes.
-  const path = d.nodeId
-    ? d.path.replace(/^nodes\.\d+(?=\.|$)/, 'nodes')
-    : d.edgeId
-      ? d.path.replace(/^edges\.\d+(?=\.|$)/, 'edges')
-      : d.path;
+function warningIdentity(d: DraftDiagnostic, ignoreArrayIndex = false) {
+  let path = d.path;
+  // Compare warnings across edits by stable ID, but deduplicate exact paths.
+  if (ignoreArrayIndex) {
+    if (d.nodeId) path = path.replace(/^nodes\.\d+(?=\.|$)/, 'nodes');
+    else if (d.edgeId) path = path.replace(/^edges\.\d+(?=\.|$)/, 'edges');
+  }
   return JSON.stringify([
     d.severity,
     d.category,
@@ -57,22 +57,33 @@ export function summarizeDiagnostics(
   before: DraftDiagnostic[],
   after: DraftDiagnostic[],
 ) {
-  const existing = new Set(before.map(identity));
-  const unique = [...new Map(after.map((d) => [identity(d), d])).values()];
-  const unchanged = unique.filter(
-    (d) => d.severity === 'warning' && existing.has(identity(d)),
+  const existing = new Set(
+    before
+      .filter((d) => d.severity === 'warning')
+      .map((d) => warningIdentity(d, true)),
   );
+  const errors = after.filter((d) => d.severity === 'error');
+  const warnings = [
+    ...new Map(
+      after
+        .filter((d) => d.severity === 'warning')
+        .map((d) => [warningIdentity(d), d]),
+    ).values(),
+  ];
+  const isUnchanged = (d: DraftDiagnostic) =>
+    existing.has(warningIdentity(d, true));
+  const unchanged = warnings.filter(isUnchanged);
+  const all = [...errors, ...warnings];
   const diagnostics = [
-    ...unique.filter(
-      (d) => d.severity === 'error' || !existing.has(identity(d)),
-    ),
+    ...errors,
+    ...warnings.filter((d) => !isUnchanged(d)),
     ...unchanged.slice(0, 5),
   ];
   const counts = new Map<
     string,
     { severity: 'error' | 'warning'; code: string; count: number }
   >();
-  for (const d of unique) {
+  for (const d of all) {
     const key = JSON.stringify([d.severity, d.code]);
     const count = counts.get(key) ?? {
       severity: d.severity,
@@ -85,9 +96,9 @@ export function summarizeDiagnostics(
   return {
     diagnostics,
     diagnosticSummary: {
-      total: unique.length,
+      total: all.length,
       returned: diagnostics.length,
-      omitted: unique.length - diagnostics.length,
+      omitted: all.length - diagnostics.length,
       unchangedWarnings: unchanged.length,
       counts: [...counts.values()],
     },
