@@ -180,6 +180,14 @@ For compact authoring, pass `detail: "summary"` to create/update/publish and `di
 
 Use `preview_workflow_ownership` and `set_workflow_owner` for adoption, reparenting or release with expected-owner protection. Only the proposed owner may reference a child; retained historical foreign callers require explicit version cleanup. Generic updates and forced imports cannot change ownership. MCP `update_workflow` accepts `archived` for archive and restore. `delete_workflow` performs guarded permanent deletion. `list_runs` returns bounded, filtered run summaries, including waiting runs. `list_work` defaults to `fields: "summary"` for compact discovery, including `workflowId`, optional `parentRunId`, `rootRunId`, and `rootWorkflowId` for executor routing. `claim_work` returns full execution details. `export_workflow` and `import_workflows` transfer portable dependency bundles. See [agent workflow operations](agent-workflows.md) for filters, schema guidance, input bindings, import conflicts, and CLI examples.
 
+## Manual claims in the UI
+
+The run view can claim unrestricted current-context assignments for manual completion. Claim credentials stay in page memory, with only the work ID, token, worker ID, attempt, and lease deadline retained. Assignment bodies and credentials are not written to web storage. Startup removes recognizable Interlock claim records left in session storage by earlier versions.
+
+Navigation within Interlock preserves an active claim. Reloading or closing the page loses the token, including when upgrading from a version that saved claims in session storage. Continue in the original page if it is still open. Otherwise, wait until the lease expires and reclaim only if the assignment becomes available. Expiry consumes the separate lease-expiry budget when configured, otherwise the combined attempt budget; exhausting either applicable budget fails the run. Inspect a failed run before explicitly retrying it.
+
+Renew before the lease ends. The UI removes credentials at expiry, after successful submission, or when it observes that the assignment ended or changed owners or attempts. Expiry cleanup also runs while another view is open. Invalid results and transient request failures retain an unexpired claim for correction or retry. This page-memory behavior applies to the manual UI; MCP and CLI executors continue to manage their own tokens.
+
 ## Diagnose a connection
 
 Check the service first:
