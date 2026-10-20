@@ -8,7 +8,6 @@ import { Store } from '@interlock/storage';
 import { batchDefinition } from './fixtures/batch';
 import { blankDefinition } from '@interlock/core';
 import { workflowCall } from './fixtures/detached';
-import { UiFeaturesContext } from '../packages/ui/src/lib/uiFeatures';
 import { AgentHandoff } from '../packages/ui/src/features/runs/AgentHandoff';
 import { RunInspector } from '../packages/ui/src/features/runs/RunInspector';
 const graph = vi.hoisted(() => ({ props: undefined as any }));
@@ -319,15 +318,7 @@ it('shows comparison context and navigates to the counterpart without changing n
 it('keeps the copy handoff while omitting disabled connection controls and guidance', async () => {
   await act(async () =>
     root.render(
-      h(
-        MantineProvider,
-        {},
-        h(
-          UiFeaturesContext.Provider,
-          { value: { localFileImport: false, connectAgent: false } },
-          h(AgentHandoff, { runId: 'embedded-run', onConnect }),
-        ),
-      ),
+      h(MantineProvider, {}, h(AgentHandoff, { runId: 'embedded-run' })),
     ),
   );
   expect(container.textContent).not.toContain('Connect an agent');

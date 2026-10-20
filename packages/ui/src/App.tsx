@@ -23,7 +23,7 @@ export type AppContext = {
   onDirty: (dirty: boolean) => void;
   onSaved: (workflow: Workflow) => void;
   onRun: (workflow: Workflow) => void;
-  onConnect: () => void;
+  onConnect?: () => void;
 };
 export function App() {
   const features = useUiFeatures();
@@ -115,16 +115,12 @@ export function App() {
           : [...all, w],
       ),
     onRun: setRunDialog,
-    onConnect: () => {
-      if (features.connectAgent) setConnectDialog(true);
-    },
+    onConnect: features.connectAgent ? () => setConnectDialog(true) : undefined,
   };
   return (
     <div className="app">
       <Sidebar
-        onConnect={() => {
-          if (features.connectAgent) setConnectDialog(true);
-        }}
+        onConnect={context.onConnect}
         page={page}
         connected={connected}
         onNavigate={(next) =>

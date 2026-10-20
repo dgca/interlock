@@ -210,7 +210,7 @@ Vite and the built server serve the app for direct page requests. A future host 
 
 ## UI components
 
-The UI resolves host and URL feature settings once in `main.tsx`, before creating the browser router. A React context supplies the immutable feature snapshot to connection controls and imports. Paste JSON and local-file imports share the same JSON dispatch to the existing workflow create and bundle import operations. See [embedded UI configuration](embedded-ui.md).
+The UI resolves host and URL feature settings once in `main.tsx`, before creating the browser router. A React context supplies the immutable feature snapshot to App and WorkflowLibrary. These owners pass optional callbacks to child components; an absent callback hides its action and related guidance. Paste JSON and local-file imports share the same JSON dispatch to the existing workflow create and bundle import operations. See [embedded UI configuration](embedded-ui.md).
 
 Mantine provides dialogs, form controls, tabs, menus, and status badges. The shared theme in `packages/ui/src/theme/theme.ts` defines the dark palette and component defaults. Canvas colors reference those tokens through CSS variables. CSS Modules handle product layouts and React Flow nodes.
 

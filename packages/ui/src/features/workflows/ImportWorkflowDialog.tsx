@@ -1,4 +1,3 @@
-import { useUiFeatures } from '../../lib/uiFeatures';
 import { useEffect, useRef, useState } from 'react';
 import {
   Checkbox,
@@ -23,11 +22,10 @@ export function ImportWorkflowDialog({
   act,
 }: {
   onClose: () => void;
-  onLocalFile: () => void;
+  onLocalFile?: () => void;
   onImported?: (id: string) => void;
   act: Action;
 }) {
-  const features = useUiFeatures();
   const [json, setJson] = useState('');
   const [source, setSource] = useState('github');
   const [url, setUrl] = useState('');
@@ -136,9 +134,7 @@ export function ImportWorkflowDialog({
             disabled={busy}
             data={[
               { value: 'github', label: 'GitHub folder' },
-              ...(features.localFileImport
-                ? [{ value: 'local', label: 'Local file' }]
-                : []),
+              ...(onLocalFile ? [{ value: 'local', label: 'Local file' }] : []),
               { value: 'paste', label: 'Paste JSON' },
             ]}
             onChange={(value) => {

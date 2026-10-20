@@ -265,10 +265,14 @@ export function WorkflowLibrary({
           act={act}
           onImported={onOpen}
           onClose={() => setImporting(false)}
-          onLocalFile={() => {
-            setImporting(false);
-            file.current?.click();
-          }}
+          onLocalFile={
+            features.localFileImport
+              ? () => {
+                  setImporting(false);
+                  file.current?.click();
+                }
+              : undefined
+          }
         />
       )}
       {deleting && (
