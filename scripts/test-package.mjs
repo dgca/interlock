@@ -211,11 +211,11 @@ try {
         "Improve this project's setup instructions and verify the documented commands.",
     },
   });
-  assert.equal(starterRun.run.version, 1);
-  const starterWork = await call('list_work', { runId: starterRun.run.id });
+  assert.equal(starterRun.runStatus, 'waiting');
+  const starterWork = await call('list_work', { runId: starterRun.runId });
   assert.equal(starterWork.length, 1);
   assert.equal(starterWork[0].nodeId, 'configure');
-  await call('cancel_run', { id: starterRun.run.id });
+  await call('cancel_run', { id: starterRun.runId });
   const starterFile = join(
     prefix,
     'lib/node_modules/@type_of/interlock/workflows/sdlc.json',
@@ -279,7 +279,7 @@ try {
   });
   let result;
   for (let attempt = 0; attempt < 100; attempt++) {
-    result = await call('get_run', { id: started.run.id });
+    result = await call('get_run', { id: started.runId });
     if (result.run.status === 'completed' || result.run.status === 'failed')
       break;
     await delay(100);
@@ -297,15 +297,15 @@ try {
     workflowId: agentWorkflow.id,
     input: 21,
   });
-  const [work] = await call('list_work', { runId: agentRun.run.id });
+  const [work] = await call('list_work', { runId: agentRun.runId });
   const [summary] = JSON.parse(
-    execFileSync(bin, ['work', agentRun.run.id, '--summary'], {
+    execFileSync(bin, ['work', agentRun.runId, '--summary'], {
       cwd: workdir,
       env: { ...env, INTERLOCK_URL: url },
       encoding: 'utf8',
     }),
   );
-  assert.equal(summary.rootRunId, agentRun.run.id);
+  assert.equal(summary.rootRunId, agentRun.runId);
   assert.equal(summary.rootWorkflowId, agentWorkflow.id);
   assert.equal(summary.workflowId, agentWorkflow.id);
   const claim = await call('claim_work', {
@@ -348,8 +348,20 @@ try {
     token: claim.token,
     output: 42,
   });
-  assert.equal(submitted.run.status, 'completed');
-  assert.equal(submitted.run.output, 42);
+  assert.equal(submitted.runStatus, 'completed');
+  assert.equal(submitted.nextCall.tool, 'get_run_result');
+  const finalResult = await call(
+    submitted.nextCall.tool,
+    submitted.nextCall.arguments,
+  );
+  assert.equal(finalResult.value, 42);
+  const fullReplay = await call('submit_result', {
+    workId: work.id,
+    token: claim.token,
+    output: 42,
+    detail: 'full',
+  });
+  assert.equal(fullReplay.run.output, 42);
   await client.close();
   client = new Client({ name: 'package-http-reconnect', version: '1.0.0' });
   await client.connect(
@@ -360,7 +372,7 @@ try {
     (await call('list_workflows')).some((item) => item.id === agentWorkflow.id),
   );
   assert.equal(
-    (await call('get_run', { id: started.run.id })).run.output.number,
+    (await call('get_run', { id: started.runId })).run.output.number,
     42,
   );
   console.log(
