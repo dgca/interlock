@@ -423,3 +423,47 @@ it('preserves a valid subsecond polling deadline when settings are applied uncha
   expect(onApply).toHaveBeenCalled();
   expect(onApply.mock.lastCall![0].definition.nodes[0]).toEqual(node);
 });
+
+it('shows the fallback lease without adding it and applies a configured duration', async () => {
+  const { onApply } = await render({ kind: 'agent', prompt: 'Work' });
+  expect(field('Claim lease').value).toBe('5');
+  expect(field('Claim lease unit').value).toBe('60000');
+  expect(
+    Array.from((field('Claim lease unit') as HTMLSelectElement).options).map(
+      (o) => o.text,
+    ),
+  ).toEqual(['Seconds', 'Minutes', 'Hours']);
+  await fill('Maximum attempts', '3');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0]).not.toHaveProperty(
+    'leaseSeconds',
+  );
+  onApply.mockClear();
+  await fill('Claim lease', '30');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0]).toMatchObject({
+    leaseSeconds: 1800,
+    maxAttempts: 3,
+  });
+});
+
+it('preserves configured leases on reopen and rejects fractional or out-of-bound seconds', async () => {
+  const { onApply } = await render({
+    kind: 'agent',
+    prompt: 'Work',
+    leaseSeconds: 1800,
+  });
+  expect(field('Claim lease').value).toBe('30');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].leaseSeconds).toBe(1800);
+  onApply.mockClear();
+  await select('Claim lease unit', '1000');
+  for (const value of ['9', '3601', '10.5']) {
+    await fill('Claim lease', value);
+    await click('Apply changes');
+    expect(onApply).not.toHaveBeenCalled();
+  }
+  await fill('Claim lease', '10');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].leaseSeconds).toBe(10);
+});

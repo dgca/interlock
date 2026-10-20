@@ -4,6 +4,14 @@
 
 Use the [workflow testbench](workflow-testbench.md) to save representative cases, preview exact run counts/pins/current prompt revisions, and execute paired published versions. Resume a comparison through its ID and existing work claims; reuse the same start request ID after uncertain delivery. Keep execution errors, pass/fail/unknown checks and declared quality judgments distinct. Reports are bounded and link ordinary run inspection. Comparison cancellation preserves detached independence unless explicitly selected otherwise. In-flight comparison pins block cleanup/deletion; portable bundles exclude local cases and comparison records.
 
+## Claim duration and expiry
+
+Agent nodes can set `leaseSeconds` to a whole number from 10 through 3600. A claim uses the caller's explicit `leaseSeconds`, otherwise the node setting from the run's published version, otherwise 300 seconds. For example, an Agent with `"leaseSeconds": 1800` gives workers a 30-minute claim when they omit an override. Longer leases delay recovery when a worker disappears.
+
+`list_work` and continuation summaries include the optional configured `leaseSeconds`. `claim_work` returns the effective `claimLeaseSeconds` and ISO `leaseUntil`. Renew before that deadline. Omitting `leaseSeconds` from `renew_claim` reuses the original effective duration; an explicit renewal override applies only once. Claims without `claimLeaseSeconds` use 300 seconds for omitted renewals. Renewal does not impose a total execution deadline.
+
+An expired claim consumes an attempt and records `work.lease_expired`, including its assignment ID, deadline and attempt count. The token cannot renew or submit a late result. Inspect the existing run: reclaim available work with a new token, or inspect side effects before explicitly retrying an exhausted failed step. Reported failures and expirations share `maxAttempts`; an unclaimed timeout is a separate deadline to pick up work.
+
 ## Discover schemas and assignments
 
 MCP `create_workflow.definition` and `update_workflow.draft` expose the workflow object schema, including node fields and edge handles. Incomplete routes remain saveable drafts. Publication validates graph routes and pinned dependencies. For small changes, `edit_workflow` avoids resending the full graph. `validate_workflow` reports read-only diagnostics for the stored draft or a candidate.
@@ -14,7 +22,7 @@ Script and Fetch support `onFailure: "route"` with `default` and `failed` edges 
 
 Agent `context.mode` accepts `current` or `fresh`. An executor satisfies `fresh` with a new session or an isolated subagent without inherited conversation history. `isolated` is not a mode value. Declare only tools, skills, and isolation that the executor provides.
 
-`list_work` defaults to `fields: "summary"` for discovery. Summaries include assignment ID, run ID, node ID, label, status, context requirements, attempt counts, and any unclaimed deadline.
+`list_work` defaults to `fields: "summary"` for discovery. Summaries include assignment ID, run ID, node ID, label, status, context requirements, attempt counts, optional configured `leaseSeconds`, and any unclaimed deadline.
 
 Work summaries also include `workflowId`, optional `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, and `rootWorkflowId`. `workflowId` identifies the immediate run's workflow. `rootWorkflowId` identifies the outermost workflow so a dispatcher can select an executor without fetching run history. Root runs omit `parentRunId` and use their own run and workflow IDs as root IDs. Ancestry follows execution, independently of workflow ownership.
 
@@ -196,9 +204,9 @@ Concurrent waiters are independent. Subscription precedes snapshot generation, s
 
 ## Renew claims
 
-Claims accept `leaseSeconds` from 10 through 3600, defaulting to 300. Renew before `leaseUntil` expires. Renewal sets the deadline to the current time plus the requested duration.
+Claims follow the [duration precedence](#claim-duration-and-expiry). Renew before `leaseUntil` expires. Renewal sets the deadline to the current time plus the requested duration.
 
-Omitting `leaseSeconds` reuses the duration established by the current claim, persisted as `claimLeaseSeconds`. Older stored claims without that field retain the 300-second fallback. An explicit override applies only to that renewal and can shorten the remaining lease. A new claim establishes a new duration. Expired, cancelled, or completed claims cannot be renewed.
+Omitting `leaseSeconds` reuses the duration established by the current claim, persisted as `claimLeaseSeconds`. Claims without that field use 300 seconds. An explicit override applies only to that renewal and can shorten the remaining lease. A new claim establishes a new duration. Expired, cancelled, or completed claims cannot be renewed.
 
 ```sh
 interlock claim WORK_ID executor '{"leaseSeconds":3600}'
@@ -208,7 +216,7 @@ interlock renew WORK_ID TOKEN '{"leaseSeconds":600}'
 
 The CLI accepts options JSON or `@filename` as the third `renew` argument. MCP `renew_claim` and the shared API `work.renew` use the same optional `leaseSeconds` field.
 
-Compatibility: omitted renewals previously reset every claim to 300 seconds. Callers that depend on that behavior must now pass `leaseSeconds: 300` explicitly. An abandoned long claim can therefore take longer to become available again.
+Pass `leaseSeconds: 300` explicitly when a renewal should grant five minutes regardless of the original claim duration. An abandoned long claim takes longer to become available again.
 
 ## Find runs
 

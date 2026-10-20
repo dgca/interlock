@@ -202,3 +202,7 @@ Transport tests cover HTTP and stdio initialization, tool discovery, work discov
 The optional `scripts/codex-smoke.ts` check invokes the installed Codex CLI with a real account and a local text task. It creates a workflow in the running engine and consumes model usage. Its result depends on the client's authentication and tool approval settings; it is separate from the automated transport tests.
 
 Use the [workflow testbench](workflow-testbench.md) for MCP-first saved cases and paired live comparisons. The existing claim/submit loop performs Agent work; starting a comparison does not launch an executor. Reports preserve execution/check/quality distinctions and identify independent detached work.
+
+## Claim leases
+
+A claim uses an explicit `leaseSeconds` override, otherwise the published Agent node setting, otherwise 300 seconds. Values must be whole seconds from 10 through 3600. Use the returned `leaseUntil` to renew before expiry; omitted renewal durations reuse `claimLeaseSeconds`. Expiry consumes an attempt and rejects late results. See [claim duration and recovery](agent-workflows.md#claim-duration-and-expiry).

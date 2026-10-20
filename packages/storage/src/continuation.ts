@@ -29,6 +29,7 @@ export type WorkMetadata = Pick<
   | 'attempt'
   | 'maxAttempts'
   | 'workerId'
+  | 'leaseSeconds'
   | 'leaseUntil'
   | 'availableUntil'
 > & { context: Pick<WorkRequest['context'], 'mode' | 'tools' | 'skills'> };
