@@ -5,14 +5,20 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
-import { definitionSchema, assertContract } from '@interlock/core';
+import {
+  definitionSchema,
+  assertContract,
+  blankDefinition,
+  nodeSchema,
+} from '@interlock/core';
 import { createApp } from '../packages/server/src/app';
 import { batchDefinition } from './fixtures/batch';
+import { workflowCall } from './fixtures/detached';
 
 let discoveredContracts: unknown;
 
 it.each(['http', 'stdio'])(
-  'keeps opted-in mutation responses small through MCP %s as history grows',
+  'keeps default mutation responses small through MCP %s as history grows',
   async (mode) => {
     const store = new Store(':memory:');
     const engine = new Engine(store, process.cwd());
@@ -56,14 +62,14 @@ it.each(['http', 'stdio'])(
         expect(
           tools.find((t) => t.name === name)?.inputSchema.properties,
         ).toMatchObject({
-          detail: { default: 'full', enum: ['full', 'summary'] },
+          detail: { default: 'summary', enum: ['full', 'summary'] },
           limit: { default: 20, minimum: 1, maximum: 100 },
         });
       }
       expect(
         tools.find((t) => t.name === 'list_work')?.inputSchema.properties
           ?.fields,
-      ).toMatchObject({ default: 'full' });
+      ).toMatchObject({ default: 'summary' });
       const nodes = [
         { id: 'entry', label: 'Input', kind: 'entry' },
         ...Array.from({ length: 32 }, (_, i) => ({
@@ -134,11 +140,11 @@ it.each(['http', 'stdio'])(
       let response = await call('start_run', {
         workflowId: workflow.id,
         input: payload,
-        detail: 'summary',
       });
       compact(response);
       const startBytes = Buffer.byteLength(response.text);
       const runId = response.data.runId;
+      expect(response.data.nextCall).toBeNull();
       const unchanged = await call('wait_for_run_change', {
         id: runId,
         cursor: response.data.cursor,
@@ -155,12 +161,14 @@ it.each(['http', 'stdio'])(
           ...(fields ? { fields } : {}),
         });
         expect(listed.data.items).toHaveLength(1);
-        if (fields === 'summary')
+        if (fields !== 'full')
           expect(listed.data.items[0].prompt).toBeUndefined();
-        else
+        else {
           expect(listed.data.items[0].prompt).toContain(
             'prompt-payload-marker',
           );
+          expect(listed.data.items).toEqual(engine.available(runId));
+        }
       }
       for (let i = 0; i < 4; i++) {
         const workId = response.data.nextWork.items[0].id;
@@ -190,7 +198,6 @@ it.each(['http', 'stdio'])(
           workId,
           token: claim.data.token,
           output: payload,
-          detail: 'summary',
         });
         compact(response);
         expect(response.data.runId).toBe(runId);
@@ -207,17 +214,16 @@ it.each(['http', 'stdio'])(
           output: null,
           detail: 'summary',
         });
-        // Legacy replay keeps the original immediate-run inspection in both full modes.
-        for (const detail of [undefined, 'full']) {
-          const legacy = await call('submit_result', {
-            workId,
-            token: claim.data.token,
-            output: payload,
-            ...(detail ? { detail } : {}),
-          });
-          expect(legacy.data.run.id).toBe(runId);
-          expect(legacy.data.definition.nodes).toHaveLength(34);
-        }
+        // Explicit full replay keeps the immediate-run inspection payload.
+        const legacy = await call('submit_result', {
+          workId,
+          token: claim.data.token,
+          output: payload,
+          detail: 'full',
+        });
+        expect(legacy.data.run.id).toBe(runId);
+        expect(legacy.data.definition.nodes).toHaveLength(34);
+        expect(legacy.data).toEqual(engine.inspect(runId));
       }
       const full = await call('get_run', { id: runId });
       expect(Buffer.byteLength(full.text)).toBeGreaterThan(500_000);
@@ -225,15 +231,14 @@ it.each(['http', 'stdio'])(
       console.info(
         `${mode}: summary start ${startBytes} B, submit ${Buffer.byteLength(response.text)} B, full after four submissions ${Buffer.byteLength(full.text)} B`,
       );
-      for (const detail of [undefined, 'full']) {
-        const legacy = await call('start_run', {
-          workflowId: workflow.id,
-          input: null,
-          ...(detail ? { detail } : {}),
-        });
-        expect(legacy.data.run.status).toBe('waiting');
-        expect(legacy.data.definition.nodes).toHaveLength(34);
-      }
+      const legacy = await call('start_run', {
+        workflowId: workflow.id,
+        input: null,
+        detail: 'full',
+      });
+      expect(legacy.data.run.status).toBe('waiting');
+      expect(legacy.data.definition.nodes).toHaveLength(34);
+      expect(legacy.data).toEqual(engine.inspect(legacy.data.run.id));
       const batch = engine.create(
         'Transport batch',
         '',
@@ -243,7 +248,6 @@ it.each(['http', 'stdio'])(
       const parallel = await call('start_run', {
         workflowId: batch.id,
         input: [1, 2, 3, 4],
-        detail: 'summary',
         limit: 1,
       });
       expect(parallel.data.nextWork).toMatchObject({
@@ -259,7 +263,6 @@ it.each(['http', 'stdio'])(
         workId: work.id,
         token: claim.data.token,
         output: 10,
-        detail: 'summary',
         limit: 1,
       });
       expect(continued.data).toMatchObject({
@@ -275,6 +278,168 @@ it.each(['http', 'stdio'])(
         timeoutMs: 0,
       });
       expect(waited.data).toMatchObject({ changed: false, reset: false });
+
+      const startSmall = async (
+        definition = blankDefinition(),
+        input: unknown = null,
+        options: Record<string, unknown> = {},
+      ) => {
+        const workflow = engine.create('Suggested calls', '', definition);
+        engine.publish(workflow.id);
+        return call('start_run', {
+          workflowId: workflow.id,
+          input,
+          ...options,
+        });
+      };
+      const follow = async (summary: any) => {
+        const { tool, arguments: args } = summary.nextCall;
+        assertContract(
+          tools.find((t) => t.name === tool)!.inputSchema,
+          args,
+          'nextCall arguments',
+        );
+        return call(tool, args);
+      };
+
+      // The final persisted result can differ from the last Agent submission.
+      const transformed = blankDefinition();
+      transformed.nodes.splice(
+        2,
+        0,
+        nodeSchema.parse({
+          id: 'double',
+          kind: 'script',
+          label: 'Double',
+          language: 'javascript',
+          command: 'return input * 2;',
+        }),
+      );
+      transformed.edges[1].target = 'double';
+      transformed.edges.push({
+        id: 'double-exit',
+        source: 'double',
+        target: 'exit',
+        port: 'default',
+      });
+      const started = await startSmall(transformed, 1, { detail: 'summary' });
+      const assignment = started.data.nextWork.items[0];
+      const owned = await call('claim_work', {
+        workId: assignment.id,
+        workerId: 'result-reader',
+      });
+      const submission = {
+        workId: assignment.id,
+        token: owned.data.token,
+        output: 21,
+      };
+      await call('submit_result', submission);
+      await expect
+        .poll(() => store.get<any>('runs', started.data.runId)?.status)
+        .toBe('completed');
+      const done = await call('submit_result', submission);
+      expect(done.data).toMatchObject({
+        runStatus: 'completed',
+        next: 'inspect_result',
+        nextCall: {
+          tool: 'get_run_result',
+          arguments: { id: started.data.runId },
+        },
+      });
+      expect((await follow(done.data)).data.value).toBe(42);
+      expect(
+        (await call('submit_result', { ...submission, detail: 'summary' }))
+          .data,
+      ).toEqual(done.data);
+
+      // Replaying an accepted submission observes claimed work, cancellation and failure.
+      for (const terminal of ['cancelled', 'failed'] as const) {
+        const pair = await startSmall(batchDefinition(), [1, 2]);
+        const [first, second] = pair.data.nextWork.items;
+        const one = await call('claim_work', {
+          workId: first.id,
+          workerId: 'first',
+        });
+        const args = { workId: first.id, token: one.data.token, output: 10 };
+        await call('submit_result', args);
+        const two = await call('claim_work', {
+          workId: second.id,
+          workerId: 'second',
+        });
+        const pending = await call('submit_result', args);
+        expect(pending.data).toMatchObject({
+          next: 'wait_for_worker',
+          nextCall: {
+            tool: 'wait_for_run_change',
+            arguments: { id: pair.data.runId, cursor: pending.data.cursor },
+          },
+        });
+        const change = follow(pending.data);
+        if (terminal === 'cancelled') engine.cancel(pair.data.runId);
+        else engine.reportFailure(second.id, two.data.token, 'Worker failed');
+        expect((await change).data).toMatchObject({
+          changed: true,
+          run: { status: terminal },
+        });
+        const ended = await call('submit_result', args);
+        expect(ended.data.nextCall).toEqual({
+          tool: 'get_run_briefing',
+          arguments: { id: pair.data.runId },
+        });
+        const inspected = await follow(ended.data);
+        expect(inspected.data.run.status).toBe(terminal);
+        if (terminal === 'failed')
+          expect(inspected.data.failures.total).toBeGreaterThan(0);
+      }
+
+      const timer = blankDefinition();
+      timer.nodes[1] = nodeSchema.parse({
+        id: 'agent',
+        kind: 'wait',
+        label: 'Wait',
+        timing: { kind: 'duration', ms: 60000 },
+      });
+      const waiting = await startSmall(timer);
+      expect(waiting.data).toMatchObject({
+        next: 'wait_for_change',
+        nextCall: {
+          tool: 'wait_for_run_change',
+          arguments: { id: waiting.data.runId, cursor: waiting.data.cursor },
+        },
+      });
+      const timerChange = follow(waiting.data);
+      engine.cancel(waiting.data.runId);
+      expect((await timerChange).data.run.status).toBe('cancelled');
+
+      const child = engine.create(
+        'Independent executor',
+        '',
+        blankDefinition(),
+      );
+      engine.publish(child.id);
+      const detached = await startSmall(workflowCall(child.id, 'detached'));
+      expect(detached.data).toMatchObject({
+        runStatus: 'completed',
+        next: 'claim_work',
+        nextCall: null,
+      });
+      const independent = detached.data.nextWork.items[0];
+      expect(independent.lifecycleRunId).not.toBe(detached.data.runId);
+      const independentClaim = await call('claim_work', {
+        workId: independent.id,
+        workerId: 'independent',
+      });
+      const independentDone = await call('submit_result', {
+        workId: independent.id,
+        token: independentClaim.data.token,
+        output: 'child result',
+      });
+      expect(independentDone.data.nextCall.arguments.id).toBe(
+        independent.lifecycleRunId,
+      );
+      expect((await follow(independentDone.data)).data.value).toBe(
+        'child result',
+      );
     } finally {
       await client.close();
       engine.stop();

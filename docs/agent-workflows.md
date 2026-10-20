@@ -14,17 +14,17 @@ Script and Fetch support `onFailure: "route"` with `default` and `failed` edges 
 
 Agent `context.mode` accepts `current` or `fresh`. An executor satisfies `fresh` with a new session or an isolated subagent without inherited conversation history. `isolated` is not a mode value. Declare only tools, skills, and isolation that the executor provides.
 
-For polling, call `list_work` with `fields: "summary"`. Summaries include assignment ID, run ID, node ID, label, status, context requirements, attempt counts, and any unclaimed deadline.
+`list_work` defaults to `fields: "summary"` for discovery. Summaries include assignment ID, run ID, node ID, label, status, context requirements, attempt counts, and any unclaimed deadline.
 
 Work summaries also include `workflowId`, optional `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, and `rootWorkflowId`. `workflowId` identifies the immediate run's workflow. `rootWorkflowId` identifies the outermost workflow so a dispatcher can select an executor without fetching run history. Root runs omit `parentRunId` and use their own run and workflow IDs as root IDs. Ancestry follows execution, independently of workflow ownership.
 
-Work summaries omit prompts, inputs, output schemas, and execution instructions. `claim_work` returns the complete assignment. The default `fields: "full"` preserves the existing response. CLI callers can use `interlock work RUN_ID --summary`. The shared API exposes `work.summaries` and `work.list`.
+Work summaries omit prompts, inputs, output schemas, and execution instructions. `claim_work` returns the complete assignment. Use `fields: "full"` to inspect complete assignments before claiming. CLI callers can use `interlock work RUN_ID --summary`. The shared API exposes `work.summaries` and `work.list`.
 
 ## Continue with compact mutation responses
 
-Use `detail: "summary"` with `start_run` and `submit_result` to avoid repeating workflow definitions and accumulated execution payloads. Both tools keep full inspection as their default. Explicit `detail: "full"` gives the same legacy response. `claim_work` remains complete, and `list_work` keeps its existing default; request `fields: "summary"` for discovery.
+`start_run` and `submit_result` default to `detail: "summary"`. They return run status and continuation guidance without workflow definitions or accumulated execution payloads. Explicit `detail: "full"` includes the definition, execution history, input/output payloads, and assignments. `list_work` defaults to summaries; `claim_work` returns the complete assignment.
 
-For example, start with `{"workflowId":"WORKFLOW_ID","input":{},"detail":"summary"}` using input that matches the workflow contract. After claiming an assignment, submit `{"workId":"WORK_ID","token":"CLAIM_TOKEN","output":{},"detail":"summary"}` using output that matches that assignment's contract.
+For example, start with `{"workflowId":"WORKFLOW_ID","input":{}}` using input that matches the workflow contract. After claiming an assignment, submit `{"workId":"WORK_ID","token":"CLAIM_TOKEN","output":{}}` using output that matches that assignment's contract.
 
 Summary responses contain:
 
@@ -35,7 +35,8 @@ Summary responses contain:
 | `workId`, `workRunId`  | Submission only: accepted assignment and its immediate owning run.                                                                                                                                                                     |
 | `cursor`               | Opaque continuation cursor for the returned `runId`.                                                                                                                                                                                   |
 | `nextWork`             | `{items, total, truncated}` for available work in the continuation run and all descendants, including detached work. Items include ancestry, `lifecycleRunId`, context mode, required tools/skills, attempts and applicable deadlines. |
-| `next`, `nextDeadline` | Existing briefing guidance and earliest active deadline, or null. Use a briefing for blockers and failure details.                                                                                                                     |
+| `next`, `nextDeadline` | Suggested action and earliest active deadline, or null. Use a briefing for blockers and failure details.                                                                                                                               |
+| `nextCall`             | Suggested read-only MCP call as `{tool, arguments}`, or null when `next` is `claim_work`.                                                                                                                                              |
 
 At startup, `runId` is the new run. After submission, it is the outermost ordinary ancestor of `workRunId`, stopping at the nearest detached boundary. Completing a waited child or Batch item can therefore return work unlocked in its parent or siblings. Detached submissions continue their independent lifecycle. `rootRunId` in work items describes ancestry, not a cancellation boundary.
 
@@ -45,7 +46,15 @@ Use `wait_for_run_change` with `id` equal to the returned `runId` and the return
 
 An identical submission can be retried with the same token. It does not repeat the transition, but returns current progress in the selected mode. Later work or a server restart can change the response and cursor. Different output under an accepted submission still rejects. Validation errors retain the existing MCP error shape.
 
-`get_run` remains full inspection; `get_run_result` reads selected values. The shared API adds `runs.startSummary` and `work.submitSummary`, accepting the corresponding mutation arguments and optional `limit`. Existing `runs.start`, `work.submit`, UI and CLI responses stay unchanged. `start_run`, `submit_result`, and `list_work` advertise output field schemas over both MCP transports; mode-specific required fields are listed above. Full responses from `fail_work`, `retry_run`, and `cancel_run` remain unchanged.
+`get_run` provides full inspection of an existing run. Do not repeat `start_run` to inspect it: that creates another run. `get_run_result` reads selected values. The shared API exposes `runs.startSummary` and `work.submitSummary`, accepting the corresponding mutation arguments and optional `limit`. These return runtime summaries; MCP adds `nextCall`. `runs.start`, `work.submit`, UI, and CLI return full responses. `start_run`, `submit_result`, and `list_work` advertise output field schemas over both MCP transports; mode-specific required fields are listed above. `fail_work`, `retry_run`, and `cancel_run` return full inspection.
+
+`nextCall` suggests `get_run_result` for a completed result, `get_run_briefing` for failure or cancellation, or `wait_for_run_change` for claimed work and pending execution. Wait suggestions pair the snapshot's run ID and cursor and use the tool's finite wait default. Suggestions are read-only and do not execute automatically. The field is present on compact start/submission responses, not on briefing or wait responses.
+
+When `nextCall` is null, choose an assignment from `nextWork` and call `claim_work` with your worker ID and actual capabilities. Fulfill fresh-context requirements in the executor that claims the work. If discovery is truncated, use `list_work` for the remaining assignments. A completed parent can still suggest continuing independent detached work; inspect each assignment's lifecycle before acting.
+
+After completion, read the persisted output with `get_run_result` before reporting the workflow's answer. Downstream steps can transform the last submitted value. Result reads default to 64 KiB; if the value exceeds that limit, select a narrower `path` or an explicit `maxBytes` up to 256 KiB. Use the briefing's `next` field after a wait to choose between claiming work, waiting, inspecting failures, and reading results.
+
+For consumers upgrading from 0.1, see [MCP response defaults in 0.2](upgrading.md#mcp-response-defaults-in-02).
 
 ## Discover workflows and read results
 

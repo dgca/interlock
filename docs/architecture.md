@@ -254,7 +254,7 @@ Entry and Exit settings display a shared Input / Output contract backed by the w
 
 ## Compact mutation continuation
 
-MCP `start_run` and `submit_result` can select `detail: "summary"`. Shared API `runs.startSummary` and `work.submitSummary` reuse the existing runtime mutation and scheduler path, then project one continuation briefing without constructing full inspection. The existing full API responses remain unchanged. Submission scope follows ordinary parents to the nearest detached boundary or root, matching fresh-context handoffs; `workRunId` retains the assignment's immediate run. The compact cursor and available-work list share that scope and snapshot. See [response fields and limits](agent-workflows.md#continue-with-compact-mutation-responses).
+MCP `start_run` and `submit_result` default to `detail: "summary"`; `list_work` defaults to `fields: "summary"`. The MCP adapter adds a suggested read-only `nextCall` to mutation summaries and owns these response defaults. Runtime summaries contain no MCP tool names. Shared API `runs.startSummary` and `work.submitSummary` reuse the existing runtime mutation and scheduler path, then project one continuation briefing without constructing full inspection. The existing full API responses remain unchanged. Submission scope follows ordinary parents to the nearest detached boundary or root, matching fresh-context handoffs; `workRunId` retains the assignment's immediate run. The compact cursor and available-work list share that scope and snapshot. See [response fields and limits](agent-workflows.md#continue-with-compact-mutation-responses).
 
 ## Live run inspection
 

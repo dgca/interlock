@@ -1,5 +1,23 @@
 # Upgrade Interlock
 
+## MCP response defaults in 0.2
+
+Interlock 0.2 changes the default responses of three MCP tools. In 0.1, omitted options return full inspection or assignments. In 0.2, omitted options return summaries. Execution rules, stored workflows, UI responses, and CLI responses are unchanged.
+
+| Tool            | Preserve full responses | Summary response                                                                                  |
+| --------------- | ----------------------- | ------------------------------------------------------------------------------------------------- |
+| `start_run`     | Add `detail: "full"`    | `runId`, `runStatus`, cursor, bounded next work, and suggested next call                          |
+| `submit_result` | Add `detail: "full"`    | Continuation fields plus `workId` and `workRunId`                                                 |
+| `list_work`     | Add `fields: "full"`    | Assignment identity, labels, ancestry, context requirements, attempts, and any unclaimed deadline |
+
+Explicit full options are supported in 0.1.20 and 0.2, so consumers that parse full responses can add them before upgrading. `claim_work` returns the complete assignment in both versions.
+
+To use summary defaults, replace reads of `response.run.id` and `response.run.status` with `response.runId` and `response.runStatus`. For submission, `runId` identifies the continuation lifecycle; `workRunId` identifies the immediate assignment run. Ordinary children continue at their outermost ordinary ancestor, while detached work stops at its nearest detached ancestor.
+
+Read final output with `get_run_result` and failure details with `get_run_briefing`. `nextCall` provides a suggested read-only call, or null when claiming requires your own identity and capabilities. Use `get_run` for full inspection of an existing run. Do not repeat `start_run` to obtain more detail because it creates another run. See the [summary execution flow](agent-workflows.md#continue-with-compact-mutation-responses).
+
+Update saved scripts and agent instructions, restart the upgraded server, and refresh the client's discovered tools if it caches descriptions or schemas. No database migration is needed for this response change.
+
 ## Install an update
 
 1. Stop the running Interlock server with Ctrl+C. Close any other server using the same database.

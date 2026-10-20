@@ -513,12 +513,15 @@ it.each(['stdio', 'http'])(
       for (const run of engine.store
         .runs()
         .filter((r) => r.comparison?.comparisonId === comparison.id)) {
-        const work = (await call('list_work', { runId: run.id }))[0];
+        const work = (
+          await call('list_work', { fields: 'full', runId: run.id })
+        )[0];
         const claim = await call('claim_work', {
           workId: work.id,
           workerId: 'comparison-transport',
         });
         await call('submit_result', {
+          detail: 'full',
           workId: work.id,
           token: claim.token,
           output: { ok: true, secretOutput: 'private' },
@@ -780,6 +783,7 @@ it.each(['stdio', 'http'])(
       });
       await call('publish_workflow', { id: cleanupWorkflow.id });
       const oldRun = await call('start_run', {
+        detail: 'full',
         workflowId: cleanupWorkflow.id,
         input: { saved: 'history' },
       });
@@ -899,11 +903,12 @@ it.each(['stdio', 'http'])(
       });
       await call('publish_workflow', { id: promptWorkflow.id });
       const promptRun = await call('start_run', {
+        detail: 'full',
         workflowId: promptWorkflow.id,
         input: null,
       });
       const promptWork = (
-        await call('list_work', { runId: promptRun.run.id })
+        await call('list_work', { fields: 'full', runId: promptRun.run.id })
       )[0];
       expect(promptWork.prompt).toContain('Use original guidance');
       expect(promptWork.executionInstructions).toContain('fresh');
@@ -939,16 +944,20 @@ it.each(['stdio', 'http'])(
       });
       expect(promptClaim.prompt).toContain('Use original guidance');
       await call('submit_result', {
+        detail: 'full',
         workId: promptWork.id,
         token: promptClaim.token,
         output: null,
       });
       const latestRun = await call('start_run', {
+        detail: 'full',
         workflowId: promptWorkflow.id,
         input: null,
       });
       expect(
-        (await call('list_work', { runId: latestRun.run.id }))[0].prompt,
+        (
+          await call('list_work', { fields: 'full', runId: latestRun.run.id })
+        )[0].prompt,
       ).toContain('Use revised guidance');
       const captured = await call('get_run', { id: promptRun.run.id });
       expect(captured.run.promptSnapshots[0].content).toBe(
@@ -1083,6 +1092,7 @@ it.each(['stdio', 'http'])(
         continuationClaim.token,
       );
       await call('submit_result', {
+        detail: 'full',
         workId: continuationClaim.id,
         token: continuationClaim.token,
         output: { done: true },
@@ -1295,6 +1305,7 @@ it.each(['stdio', 'http'])(
         });
         await call('publish_workflow', { id: switchWorkflow.id });
         const switchRun = await call('start_run', {
+          detail: 'full',
           workflowId: switchWorkflow.id,
           input: { next: { workflow: 'ticket' } },
         });
@@ -1306,6 +1317,7 @@ it.each(['stdio', 'http'])(
           output: { next: { workflow: 'ticket' } },
         });
         const unmatched = await call('start_run', {
+          detail: 'full',
           workflowId: switchWorkflow.id,
           input: { next: { workflow: 'unknown' } },
         });
@@ -1359,6 +1371,7 @@ it.each(['stdio', 'http'])(
         });
         await call('publish_workflow', { id: parent.id });
         const started = await call('start_run', {
+          detail: 'full',
           workflowId: parent.id,
           input: { hello: 'world' },
         });
@@ -1392,18 +1405,22 @@ it.each(['stdio', 'http'])(
             'failed',
           );
           await call('retry_run', { id: childId });
-          const retryWork = (await call('list_work', { runId: childId }))[0];
+          const retryWork = (
+            await call('list_work', { fields: 'full', runId: childId })
+          )[0];
           const retryClaim = await call('claim_work', {
             workId: retryWork.id,
             workerId: 'retry',
           });
           await call('submit_result', {
+            detail: 'full',
             workId: retryWork.id,
             token: retryClaim.token,
             output: 'done',
           });
         } else {
           await call('submit_result', {
+            detail: 'full',
             workId: assignment.id,
             token: claim.token,
             output: 'done',
@@ -1420,6 +1437,7 @@ it.each(['stdio', 'http'])(
           (await call('get_workflow', { id: parent.id })).draft.nodes[1].mode,
         ).toBe(executionMode);
         const active = await call('start_run', {
+          detail: 'full',
           workflowId: parent.id,
           input: null,
         });
@@ -1493,20 +1511,28 @@ it.each(['stdio', 'http'])(
       });
       await call('publish_workflow', { id: boundWorkflow.id });
       const boundRun = await call('start_run', {
+        detail: 'full',
         workflowId: boundWorkflow.id,
         input: {},
       });
-      const [firstWork] = await call('list_work', { runId: boundRun.run.id });
+      const [firstWork] = await call('list_work', {
+        fields: 'full',
+        runId: boundRun.run.id,
+      });
       const firstClaim = await call('claim_work', {
         workId: firstWork.id,
         workerId: 'bindings',
       });
       await call('submit_result', {
+        detail: 'full',
         workId: firstWork.id,
         token: firstClaim.token,
         output: { retained: 42 },
       });
-      const [nextWork] = await call('list_work', { runId: boundRun.run.id });
+      const [nextWork] = await call('list_work', {
+        fields: 'full',
+        runId: boundRun.run.id,
+      });
       expect(nextWork.input).toEqual({ previous: { retained: 42 } });
       expect(
         (await call('get_run', { id: boundRun.run.id })).run.executions.at(-1)
@@ -1530,10 +1556,12 @@ it.each(['stdio', 'http'])(
           ),
         ).not.toThrow();
         const roundTrip = await call('start_run', {
+          detail: 'full',
           workflowId: w.id,
           input: value,
         });
         const [assignment] = await call('list_work', {
+          fields: 'full',
           runId: roundTrip.run.id,
         });
         const claim = await call('claim_work', {
@@ -1541,6 +1569,7 @@ it.each(['stdio', 'http'])(
           workerId: 'json-values',
         });
         const completed = await call('submit_result', {
+          detail: 'full',
           workId: assignment.id,
           token: claim.token,
           output: value,
@@ -1652,6 +1681,7 @@ it.each(['stdio', 'http'])(
       ).toBe(true);
       await call('publish_workflow', { id: recoveryWorkflow.id });
       const recoveryRun = await call('start_run', {
+        detail: 'full',
         workflowId: recoveryWorkflow.id,
         input: { topic: 'demo' },
       });
@@ -1711,12 +1741,14 @@ it.each(['stdio', 'http'])(
         await call('publish_workflow', { id: timerWorkflow.id });
         const input = { dueAt: '2000-01-01T00:00:00Z' };
         const timerRun = await call('start_run', {
+          detail: 'full',
           workflowId: timerWorkflow.id,
           input,
         });
         const timerState = await call('get_run', { id: timerRun.run.id });
         if (example.kind === 'agent') {
           const assignments = await call('list_work', {
+            fields: 'full',
             runId: timerRun.run.id,
           });
           expect(assignments[0].availableUntil).toBeDefined();
@@ -1757,9 +1789,9 @@ it.each(['stdio', 'http'])(
               ),
             ).toBe(true);
           }
-          expect(await call('list_work', { runId: timerRun.run.id })).toEqual(
-            [],
-          );
+          expect(
+            await call('list_work', { fields: 'full', runId: timerRun.run.id }),
+          ).toEqual([]);
           expect(
             (await call('cancel_run', { id: timerRun.run.id })).run.status,
           ).toBe('cancelled');
@@ -1788,19 +1820,24 @@ it.each(['stdio', 'http'])(
       ).toBe(250);
       await call('publish_workflow', { id: batchDraft.id });
       const backlog = await call('start_run', {
+        detail: 'full',
         workflowId: batchDraft.id,
         input: Array.from({ length: 207 }, (_, i) => i),
       });
       expect(backlog.run.status).toBe('waiting');
-      expect(await call('list_work', { runId: backlog.run.id })).toHaveLength(
-        3,
-      );
+      expect(
+        await call('list_work', { fields: 'full', runId: backlog.run.id }),
+      ).toHaveLength(3);
       await call('cancel_run', { id: backlog.run.id });
       const started = await call('start_run', {
+        detail: 'full',
         workflowId: w.id,
         input: { number: 21 },
       });
-      const work = await call('list_work', { runId: started.run.id });
+      const work = await call('list_work', {
+        fields: 'full',
+        runId: started.run.id,
+      });
       expect(
         await call('list_runs', {
           workflowId: w.id,
@@ -1888,6 +1925,7 @@ it.each(['stdio', 'http'])(
         ).toBe(true);
       }
       const result = await call('submit_result', {
+        detail: 'full',
         workId: claim.id,
         token: claim.token,
         output: { number: 42 },
@@ -1918,6 +1956,7 @@ it.each(['stdio', 'http'])(
       await call('publish_workflow', { id: w.id, cascade: true });
       expect(engine.workflow(dependent.id).latestVersion).toBe(2);
       const dependentRun = await call('start_run', {
+        detail: 'full',
         workflowId: dependent.id,
         input: {},
       });
@@ -1949,10 +1988,14 @@ it.each(['stdio', 'http'])(
       });
       await call('publish_workflow', { id: workflow.id });
       const root = await call('start_run', {
+        detail: 'full',
         workflowId: workflow.id,
         input: [3, 4],
       });
-      const items = await call('list_work', { runId: root.run.id });
+      const items = await call('list_work', {
+        fields: 'full',
+        runId: root.run.id,
+      });
       expect(items.map((item: any) => item.input)).toEqual([3, 4]);
       const previousUrl = process.env.INTERLOCK_URL;
       process.env.INTERLOCK_URL = url;
@@ -1998,6 +2041,7 @@ it.each(['stdio', 'http'])(
           workerId: 'batch-mcp',
         });
         await call('submit_result', {
+          detail: 'full',
           workId: item.id,
           token: claimed.token,
           output: item.input * 2,
@@ -2007,10 +2051,14 @@ it.each(['stdio', 'http'])(
         6, 8,
       ]);
       const failed = await call('start_run', {
+        detail: 'full',
         workflowId: workflow.id,
         input: [5],
       });
-      const [assignment] = await call('list_work', { runId: failed.run.id });
+      const [assignment] = await call('list_work', {
+        fields: 'full',
+        runId: failed.run.id,
+      });
       const failedClaim = await call('claim_work', {
         workId: assignment.id,
         workerId: 'retry-test',
@@ -2024,12 +2072,16 @@ it.each(['stdio', 'http'])(
         'failed',
       );
       await call('retry_run', { id: failed.run.id });
-      const [retried] = await call('list_work', { runId: failed.run.id });
+      const [retried] = await call('list_work', {
+        fields: 'full',
+        runId: failed.run.id,
+      });
       const retriedClaim = await call('claim_work', {
         workId: retried.id,
         workerId: 'retry-test',
       });
       await call('submit_result', {
+        detail: 'full',
         workId: retried.id,
         token: retriedClaim.token,
         output: 10,
