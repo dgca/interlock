@@ -122,6 +122,8 @@ Open **Runs** to find active executions and past results. The live view shows st
 
 Starting a workflow in the UI does not launch an agent. When an assignment is ready, select **Copy instructions for agent** and paste the instructions into a connected agent conversation. The instructions resume the existing execution. **Waiting for an agent** means work is available; **Agent working** means an executor has claimed it.
 
+Manual completion of unrestricted current-context assignments keeps claim credentials in page memory. Navigation within Interlock preserves the claim, but reloading or closing the page loses its token. An active lease must expire before the assignment can be reclaimed, and expiry consumes its configured recovery budget. See [manual claims](docs/connect-harness.md#manual-claims-in-the-ui).
+
 Failed executions can be retried from the inspector. Retrying a failed Batch preserves successful items. Retrying Script or Fetch steps can repeat external side effects.
 
 ### Manage workflows

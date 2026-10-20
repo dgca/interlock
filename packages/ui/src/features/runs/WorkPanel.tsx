@@ -1,10 +1,11 @@
 import { Textarea } from '@mantine/core';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import { Bot, Copy } from 'lucide-react';
 import { Button } from '../../components/Button/Button';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 import { api, errorMessage } from '../../lib/api';
 import type { WorkRequest } from '@interlock/core';
+import { manualClaims } from './manualClaims';
 export function WorkPanel({
   work,
   onRefresh,
@@ -12,27 +13,22 @@ export function WorkPanel({
   work: Omit<WorkRequest, 'token'>;
   onRefresh: () => void;
 }) {
-  const [claim, setClaim] = useState<WorkRequest>(() => {
-      try {
-        return (
-          JSON.parse(sessionStorage.getItem(`claim:${work.id}`) ?? 'null') ??
-          undefined
-        );
-      } catch {
-        return undefined;
-      }
-    }),
-    [output, setOutput] = useState('{}'),
+  const stored = useSyncExternalStore(manualClaims.subscribe, () =>
+    manualClaims.get(work.id),
+  );
+  const claim =
+    stored &&
+    work.status === 'claimed' &&
+    stored.attempt === work.attempt &&
+    stored.workerId === work.workerId
+      ? stored
+      : undefined;
+  const [output, setOutput] = useState('{}'),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (claim)
-      sessionStorage.setItem(`claim:${work.id}`, JSON.stringify(claim));
-  }, [claim, work.id]);
-  useEffect(() => {
-    if (['completed', 'failed', 'cancelled', 'timed_out'].includes(work.status))
-      sessionStorage.removeItem(`claim:${work.id}`);
-  }, [work.id, work.status]);
+    manualClaims.observe(work);
+  }, [work, stored]);
   const perform = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError('');
@@ -41,6 +37,7 @@ export function WorkPanel({
       onRefresh();
     } catch (e) {
       setError(errorMessage(e));
+      onRefresh();
     } finally {
       setBusy(false);
     }
@@ -60,6 +57,14 @@ export function WorkPanel({
               ? 'Nobody claimed this assignment before its deadline. The run followed Timeout with the original input.'
               : `Assignment ${work.status}.`}
       </p>
+      {work.status === 'claimed' && work.workerId === 'manual-ui' && !claim && (
+        <p className="hint">
+          This page does not hold the claim token. Continue in the page that
+          claimed this assignment, or wait for the lease to expire. Reclaim it
+          only when it becomes available; expiry consumes the configured
+          recovery budget and may fail the run.
+        </p>
+      )}
       {work.status === 'available' && work.availableUntil && (
         <p className="hint">
           Timeout at {new Date(work.availableUntil).toLocaleString()} if nobody
@@ -109,7 +114,7 @@ export function WorkPanel({
             disabled={busy}
             onClick={() =>
               void perform(async () =>
-                setClaim(
+                manualClaims.remember(
                   await api.work.claim.mutate({
                     workId: work.id,
                     workerId: 'manual-ui',
@@ -132,6 +137,11 @@ export function WorkPanel({
         )}
       {claim && work.status === 'claimed' && (
         <>
+          <p className="hint">
+            You can navigate within Interlock while keeping this claim.
+            Reloading or closing this page loses the token; the lease remains
+            active until it expires.
+          </p>
           <Textarea
             mb="md"
             label="Result JSON"
@@ -145,11 +155,13 @@ export function WorkPanel({
             <Button
               disabled={busy}
               onClick={() =>
-                void perform(() =>
-                  api.work.renew.mutate({
-                    workId: work.id,
-                    token: claim.token!,
-                  }),
+                void perform(async () =>
+                  manualClaims.remember(
+                    await api.work.renew.mutate({
+                      workId: work.id,
+                      token: manualClaims.token(work.id),
+                    }),
+                  ),
                 )
               }
             >
@@ -159,13 +171,14 @@ export function WorkPanel({
               variant="primary"
               disabled={busy}
               onClick={() =>
-                void perform(() =>
-                  api.work.submit.mutate({
+                void perform(async () => {
+                  await api.work.submit.mutate({
                     workId: work.id,
-                    token: claim.token!,
+                    token: manualClaims.token(work.id),
                     output: JSON.parse(output),
-                  }),
-                )
+                  });
+                  manualClaims.forget(work.id);
+                })
               }
             >
               Submit result
