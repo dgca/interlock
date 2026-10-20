@@ -1,5 +1,19 @@
 # @type_of/interlock
 
+## 0.2.0
+
+### Minor Changes
+
+- d3ca30b: Default MCP start_run and submit_result to summary responses and list_work to summary assignments. This is a breaking response-shape change: consumers that need workflow definitions, execution history, or complete unclaimed assignments must pass detail: "full" or fields: "full". Explicit full responses and complete claim_work assignments remain supported. UI, CLI, and shared full API responses are unchanged.
+
+  Compact mutation responses include a suggested read-only nextCall for result retrieval, failure inspection, or waiting. Tool guidance describes current response contents and directs agents to read persisted final results. See docs/upgrading.md for the 0.2 migration steps.
+
+### Patch Changes
+
+- 4a812e0: Configure Agent claim durations per node in workflow definitions and the editor. Explicit worker overrides take precedence, and omitted renewals retain the effective claim duration. Claims without a configured duration use five minutes.
+
+  Report expired claims with a distinct event containing the deadline, attempt count, and recovery guidance. Expiry continues to consume an attempt and reject late tokens.
+
 ## 0.1.20
 
 ### Patch Changes
