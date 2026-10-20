@@ -119,6 +119,15 @@ export const workListResponseSchema = z
           }),
           attempt: z.number().int().nonnegative(),
           maxAttempts: z.number().int().positive(),
+          leaseSeconds: z
+            .number()
+            .int()
+            .min(10)
+            .max(3600)
+            .optional()
+            .describe(
+              'Configured Agent claim duration. A claim override wins; omission here means 300 seconds.',
+            ),
           availableUntil: z.string().optional(),
         })
         .passthrough(),

@@ -21,12 +21,14 @@ export function DurationInput({
   value,
   min = 0,
   max = 31_536_000_000,
+  step,
   onChange,
 }: {
   label: string;
   value: number;
   min?: number;
   max?: number;
+  step?: number;
   onChange: (ms: number) => void;
 }) {
   const [unit, setUnit] = useState(
@@ -43,7 +45,9 @@ export function DurationInput({
         required
         min={min / unit}
         max={max / unit}
-        step="any"
+        // Fractional steps such as 1/60 lose precision in native validation.
+        // The node schema validates whole seconds when larger units are used.
+        step={step !== undefined && step % unit === 0 ? step / unit : 'any'}
         value={value / unit}
         onChange={(e) => onChange(Number(e.target.value) * unit)}
       />
@@ -57,7 +61,7 @@ export function DurationInput({
           setUnit(next);
         }}
         data={units
-          .filter((unit) => unit.ms <= max)
+          .filter((unit) => unit.ms <= max && unit.ms >= (step ?? 1))
           .map((unit) => ({
             value: String(unit.ms),
             label: unit.label,

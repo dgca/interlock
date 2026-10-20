@@ -85,6 +85,7 @@ export class Continuation {
       attempt: work.attempt,
       maxAttempts: work.maxAttempts,
       workerId: work.workerId,
+      leaseSeconds: work.leaseSeconds,
       leaseUntil: work.leaseUntil,
       availableUntil: work.availableUntil,
     }));

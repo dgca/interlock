@@ -96,6 +96,15 @@ export const continuationWorkSchema = z.object({
   attempt: z.number().int().nonnegative(),
   maxAttempts: z.number().int().positive(),
   workerId: z.string().optional(),
+  leaseSeconds: z
+    .number()
+    .int()
+    .min(10)
+    .max(3600)
+    .optional()
+    .describe(
+      'Configured Agent claim duration. A claim override wins; omission here means 300 seconds.',
+    ),
   leaseUntil: z.string().optional(),
   availableUntil: z.string().optional(),
 });

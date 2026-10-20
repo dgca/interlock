@@ -382,7 +382,7 @@ export const appRouter = t.router({
           freshContext: z.boolean().default(false),
           tools: z.array(z.string()).default([]),
           skills: z.array(z.string()).default([]),
-          leaseSeconds: z.number().int().min(10).max(3600).default(300),
+          leaseSeconds: z.number().int().min(10).max(3600).optional(),
         }),
       )
       .mutation(({ ctx, input }) =>

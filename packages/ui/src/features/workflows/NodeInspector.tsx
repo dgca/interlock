@@ -284,6 +284,18 @@ export function NodeInspector({
                 </p>
               </>
             )}
+            <DurationInput
+              label="Claim lease"
+              value={(node.leaseSeconds ?? 300) * 1000}
+              min={10_000}
+              max={3_600_000}
+              step={1000}
+              onChange={(ms) => patch({ leaseSeconds: ms / 1000 })}
+            />
+            <p className="hint">
+              Workers can override this duration and must renew before it
+              expires. Expiry consumes an attempt.
+            </p>
             <TextInput
               mb="md"
               label="Maximum attempts"

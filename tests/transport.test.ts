@@ -1243,6 +1243,84 @@ it.each(['stdio', 'http'])(
           }),
         ]),
       );
+      const claimSchema = tools.find(
+        (t) => t.name === 'claim_work',
+      )!.inputSchema;
+      expect(claimSchema.required).not.toContain('leaseSeconds');
+      expect(claimSchema.properties!.leaseSeconds).not.toHaveProperty(
+        'default',
+      );
+      expect(claimSchema.properties!.leaseSeconds).toMatchObject({
+        minimum: 10,
+        maximum: 3600,
+      });
+      const leaseDefinition = blankDefinition();
+      leaseDefinition.nodes[1] = nodeSchema.parse({
+        ...leaseDefinition.nodes[1],
+        leaseSeconds: 1800,
+      });
+      const leaseWorkflow = await call('create_workflow', {
+        name: 'Node lease',
+        definition: leaseDefinition,
+      });
+      expect(leaseWorkflow.draft.nodes[1].leaseSeconds).toBe(1800);
+      await call('publish_workflow', { id: leaseWorkflow.id });
+      const leaseRun = await call('start_run', {
+        workflowId: leaseWorkflow.id,
+        input: {},
+      });
+      expect(leaseRun.nextWork.items[0].leaseSeconds).toBe(1800);
+      const [leaseWork] = await call('list_work', { runId: leaseRun.runId });
+      expect(leaseWork.leaseSeconds).toBe(1800);
+      for (const duration of [9, 3601, 10.5]) {
+        expect(
+          (
+            await client.callTool({
+              name: 'claim_work',
+              arguments: {
+                workId: leaseWork.id,
+                workerId: 'invalid',
+                leaseSeconds: duration,
+              },
+            })
+          ).isError,
+        ).toBe(true);
+      }
+      const configuredClaim = await call('claim_work', {
+        workId: leaseWork.id,
+        workerId: 'configured',
+      });
+      expect(configuredClaim.claimLeaseSeconds).toBe(1800);
+      expect(leaseDeadline(configuredClaim) - Date.now()).toBeGreaterThan(
+        1790000,
+      );
+      const configuredRenewal = await call('renew_claim', {
+        workId: leaseWork.id,
+        token: configuredClaim.token,
+      });
+      expect(leaseDeadline(configuredRenewal)).toBeGreaterThanOrEqual(
+        leaseDeadline(configuredClaim),
+      );
+      await call('submit_result', {
+        workId: leaseWork.id,
+        token: configuredClaim.token,
+        output: {},
+      });
+      const overrideRun = await call('start_run', {
+        workflowId: leaseWorkflow.id,
+        input: {},
+      });
+      const overrideClaim = await call('claim_work', {
+        workId: overrideRun.nextWork.items[0].id,
+        workerId: 'override',
+        leaseSeconds: 60,
+      });
+      expect(overrideClaim.claimLeaseSeconds).toBe(60);
+      await call('submit_result', {
+        workId: overrideClaim.id,
+        token: overrideClaim.token,
+        output: {},
+      });
       const renewalSchema = tools.find(
         (t) => t.name === 'renew_claim',
       )!.inputSchema;
@@ -1258,6 +1336,8 @@ it.each(['stdio', 'http'])(
         .inputSchema.properties!.definition as { description: string };
       const updateDefinition = tools.find((t) => t.name === 'update_workflow')!
         .inputSchema.properties!.draft as { description: string };
+      expect(createDefinition.description).toContain('leaseSeconds');
+      expect(client.getInstructions()).toContain('work.lease_expired');
       expect(createDefinition.description).toContain('unclaimedTimeoutMs');
       expect(createDefinition.description).toContain('31536000000');
       expect(createDefinition.description).toContain('maxItems');

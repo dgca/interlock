@@ -997,6 +997,7 @@ export class Engine {
           status: 'available',
           attempt: 0,
           maxAttempts: node.maxAttempts,
+          leaseSeconds: node.leaseSeconds,
           availableUntil:
             node.unclaimedTimeoutMs === undefined
               ? undefined
@@ -1245,6 +1246,15 @@ export class Engine {
           work.status === 'claimed' &&
           Date.parse(work.leaseUntil!) <= Date.now()
         ) {
+          this.event(
+            this.run(work.runId),
+            'work.lease_expired',
+            `${work.label} (${work.id}): claim expired at ${work.leaseUntil} on attempt ${work.attempt}/${work.maxAttempts}. ` +
+              (work.attempt < work.maxAttempts
+                ? 'Another attempt is available; inspect the run and reclaim available work. '
+                : 'No attempts remain; inspect the run before explicitly retrying the failed step. ') +
+              'Renew before expiry or choose a longer claim lease.',
+          );
           this.releaseFailure(work, 'Worker lease expired');
         }
       let changed = true,
@@ -1529,10 +1539,11 @@ export class Engine {
       context: work.context,
       attempt: work.attempt,
       maxAttempts: work.maxAttempts,
+      leaseSeconds: work.leaseSeconds,
       availableUntil: work.availableUntil,
     }));
   }
-  claim(workId: string, worker: Worker, leaseSeconds = 300) {
+  claim(workId: string, worker: Worker, leaseSeconds?: number) {
     this.pump();
     return this.store.transaction(() => {
       const work = this.store.get<WorkRequest>('work', workId);
@@ -1555,9 +1566,9 @@ export class Engine {
       work.attempt++;
       work.workerId = worker.workerId;
       work.token = randomUUID();
-      work.claimLeaseSeconds = leaseSeconds;
+      work.claimLeaseSeconds = leaseSeconds ?? work.leaseSeconds ?? 300;
       work.leaseUntil = new Date(
-        Date.now() + leaseSeconds * 1000,
+        Date.now() + work.claimLeaseSeconds * 1000,
       ).toISOString();
       this.store.put('work', work);
       this.event(

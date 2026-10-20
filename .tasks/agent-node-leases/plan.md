@@ -1,0 +1,19 @@
+# Implementation plan
+
+Use [intent](intent.md) for scope and [spec](spec.md) for requirements.
+
+1. **Core and persistence (AC1, AC2, AC5).** Add the optional Agent field to the core schema and WorkRequest metadata. Copy it when creating work from the pinned definition. Include it in work/continuation projections and response schemas. The document store needs no migration. Verify schema bounds, editing/export/import, absent-field compatibility, and snapshot preservation.
+2. **Runtime and interfaces (AC2–AC5).** Resolve precedence in runtime claim; remove eager 300 defaults from router and MCP inputs. Retain existing renewal behavior. Emit one expiry event before releasing an expired claim; describe the actual persisted deadline rather than assuming the original duration still applies after an explicit renewal. Verify explicit/default precedence, restart, retry, expiration, stale submission/renewal, completed replay, and failure versus expiration events.
+3. **Editor and guidance (AC5, AC6).** Reuse DurationInput with an optional millisecond step that restricts the lease control to whole seconds and appropriate units without altering other duration controls. Add the control before Maximum attempts. Audit MCP server instructions and authoring/create/update/edit/import/validate, discovery, claim, renew, submit, failure, retry, and inspection flows; update affected README, architecture, harness, agent-authoring, timer and limit guidance plus CLI help where needed. Check HTTP and stdio discovery and execution contracts.
+4. **Build evidence (AC1–AC7; build owner).** Extend lease/runtime, transport, and editor tests. Use temporary SQLite files and controlled clocks for negative expiry and restart cases, paired with successful valid claims/submissions. Run relevant tests, full suite, pnpm build, pnpm test:package, and pnpm format:check. Add a patch changeset. Record results in verification.md.
+5. **Browser journey (AC6; build owner).** Launch the candidate against a separate temporary database. Open an Agent's settings, see five minutes, set 30 minutes, apply/save, reopen, inspect raw definition for 1800 seconds, publish, and verify a claim without an override receives 1800 seconds. Check labels/focus and narrow layout through actual controls. Use existing UI tests for invalid values and omission preservation.
+6. **Independent review and delivery (AC7).** Commit the candidate. Fresh Spec reviewer claims the SDLC review assignment and verifies every criterion plus an independent invalid-boundary check with a valid control. A separate Standards reviewer checks the complete diff against repository guidance. Assess findings, fix justified issues, rerun affected checks, and re-review as needed. PreparePr owns push, PR creation, attachment, CI checks, and terminal SDLC completion.
+
+## Main risks and checks
+
+- A transport default masks the node default: exercise omitted claims through both HTTP and stdio, and inspect tools/list optionality.
+- Draft changes or restart affect existing work: create a run, change/publish the node setting, reopen its database, and claim both its pending and subsequent assignments. Expect its pinned value throughout; a new run gets the new value.
+- Expiration permits stale writes or double counts: advance exactly to the deadline, reject submit/renew, pump twice, and assert one event, unchanged attempt accounting, and a new token on reclaim. Test exhausted and retryable cases; worker failures must not emit expiration events.
+- Editor units lose precision or change other settings: use step=1000 only for leases; retain DurationInput's existing behavior elsewhere. Validate bounds and whole seconds through the actual Agent form, and preserve omission on unrelated changes.
+
+No unresolved human decisions. Existing authorization permits this additive scope and reviewPolicy is auto.

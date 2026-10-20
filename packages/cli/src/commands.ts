@@ -152,7 +152,7 @@ export async function runCommand(argv: string[]) {
           'runs [--workflow ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
           'work [run-id] [--summary]',
-          'claim <work-id> [worker-id] [capabilities-json]',
+          'claim <work-id> [worker-id] [options-json: {"leaseSeconds":1800,"freshContext":false,"tools":[],"skills":[]}]',
           'submit <work-id> <token> <json|@file>',
           'fail <work-id> <token> <error>',
           'renew <work-id> <token> [options-json: {"leaseSeconds":3600}]',

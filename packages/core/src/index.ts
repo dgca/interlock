@@ -130,6 +130,15 @@ export const nodeSchema = z.discriminatedUnion('kind', [
       ),
     context: contextPolicySchema.default({}),
     maxAttempts: z.number().int().min(1).max(10).default(2),
+    leaseSeconds: z
+      .number()
+      .int()
+      .min(10)
+      .max(3600)
+      .optional()
+      .describe(
+        'Claim duration in seconds. An explicit claim override wins; omission uses this published node setting, then 300 seconds. Workers must renew before expiry. Expiry consumes an attempt.',
+      ),
     unclaimedTimeoutMs: z.number().int().min(1).max(31_536_000_000).optional(),
   }),
   z.object({
@@ -344,6 +353,8 @@ export interface WorkRequest {
   workerId?: string;
   token?: string;
   leaseUntil?: string;
+  // Optional default captured from the published Agent node.
+  leaseSeconds?: number;
   // Duration established by the current claim, reused by omitted renewals.
   claimLeaseSeconds?: number;
   output?: Json;

@@ -69,6 +69,12 @@ A Wait can also wait for something slow outside Interlock: an environment bootst
 
 In the editor, choose **When a check passes**, pick Script or Fetch, set **Check every**, the **Check output field**, and the value to continue on, and optionally **Give up after a deadline**. Disabling the deadline or switching to a duration or timestamp Wait removes the outgoing Timeout connection when changes are applied; the destination node remains. Raw JSON and MCP edits must remove that edge explicitly. The run inspector shows the next check time and the latest check result.
 
+## Claimed Agent leases
+
+Set **Claim lease** in Agent settings, or `leaseSeconds` in the node definition, to a whole number from 10 through 3600 seconds. An explicit claim duration overrides this published setting; when both are omitted the duration is 300 seconds. Workers must renew before `leaseUntil`. Omitted renewals reuse the original effective claim duration. Longer leases give workers more time but delay recovery from abandoned claims.
+
+Expiry consumes an attempt and records `work.lease_expired`. Inspect the run before reclaiming available work or explicitly retrying a failed step; external work may already have happened. Expired tokens cannot renew or submit a result. See [claim duration and expiry](agent-workflows.md#claim-duration-and-expiry).
+
 ## Unclaimed Agent timeouts
 
 `unclaimedTimeoutMs` is an optional integer and ranges from one millisecond through 365 days. Omitting it preserves indefinite waiting for a claim.
