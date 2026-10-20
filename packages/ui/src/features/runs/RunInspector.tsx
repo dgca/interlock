@@ -46,7 +46,7 @@ export function RunInspector({
   onOpen: (id: string, executionId?: string) => void;
   initialExecutionId?: string;
   act: Action;
-  onConnect: () => void;
+  onConnect?: () => void;
 }) {
   const [data, setData] = useState<Detail>(),
     [error, setError] = useState(''),

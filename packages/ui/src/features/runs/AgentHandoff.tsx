@@ -9,7 +9,7 @@ export function AgentHandoff({
   onConnect,
 }: {
   runId: string;
-  onConnect: () => void;
+  onConnect?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
@@ -39,15 +39,16 @@ export function AgentHandoff({
     >
       <p>
         Interlock has prepared an assignment. Ask your connected agent to
-        continue this run. Connecting an agent does not automatically pick up
-        work.
+        continue this run.
+        {onConnect &&
+          ' Connecting an agent does not automatically pick up work.'}
       </p>
       <div className="actions">
         <Button onClick={() => void copy()}>
           <Copy />
           {copied ? 'Instructions copied' : 'Copy instructions for agent'}
         </Button>
-        <Button onClick={onConnect}>Connect an agent</Button>
+        {onConnect && <Button onClick={onConnect}>Connect an agent</Button>}
       </div>
       {error && (
         <p role="alert" className="error-text">

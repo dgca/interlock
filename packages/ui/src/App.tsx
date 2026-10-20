@@ -1,3 +1,4 @@
+import { useUiFeatures } from './lib/uiFeatures';
 import { useCallback, useEffect, useState } from 'react';
 import { Check, AlertCircle } from 'lucide-react';
 import { Button, Group, Modal, Notification, Text } from '@mantine/core';
@@ -22,9 +23,10 @@ export type AppContext = {
   onDirty: (dirty: boolean) => void;
   onSaved: (workflow: Workflow) => void;
   onRun: (workflow: Workflow) => void;
-  onConnect: () => void;
+  onConnect?: () => void;
 };
 export function App() {
+  const features = useUiFeatures();
   const navigate = useNavigate();
   const workflowMatch = useMatch('/workflows/:workflowId');
   const runMatch = useMatch('/runs/*');
@@ -113,12 +115,12 @@ export function App() {
           : [...all, w],
       ),
     onRun: setRunDialog,
-    onConnect: () => setConnectDialog(true),
+    onConnect: features.connectAgent ? () => setConnectDialog(true) : undefined,
   };
   return (
     <div className="app">
       <Sidebar
-        onConnect={() => setConnectDialog(true)}
+        onConnect={context.onConnect}
         page={page}
         connected={connected}
         onNavigate={(next) =>
@@ -183,7 +185,7 @@ export function App() {
           </Button>
         </Group>
       </Modal>
-      {connectDialog && (
+      {features.connectAgent && connectDialog && (
         <ConnectDialog onClose={() => setConnectDialog(false)} />
       )}{' '}
       {runDialog && (

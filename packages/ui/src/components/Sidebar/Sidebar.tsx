@@ -10,7 +10,7 @@ export function Sidebar({
   page: 'workflows' | 'runs' | 'prompts';
   onNavigate: (page: 'workflows' | 'runs' | 'prompts') => void;
   connected: boolean;
-  onConnect: () => void;
+  onConnect?: () => void;
 }) {
   return (
     <aside className={styles.sidebar}>
@@ -36,11 +36,13 @@ export function Sidebar({
           </button>
         ))}
       </nav>
-      <div className={styles.note}>
-        <button className={styles.connect} onClick={onConnect}>
-          Connect with MCP <ArrowUpRight size={12} />
-        </button>
-      </div>
+      {onConnect && (
+        <div className={styles.note}>
+          <button className={styles.connect} onClick={onConnect}>
+            Connect with MCP <ArrowUpRight size={12} />
+          </button>
+        </div>
+      )}
       <footer>
         <i className={connected ? styles.online : styles.offline} />
         <div>
