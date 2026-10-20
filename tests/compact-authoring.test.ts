@@ -423,12 +423,76 @@ it('supports CLI summary continuations and fresh/lease flags without changing de
     expect(await runCommand(['start', w.id, '{}'])).toHaveProperty(
       'definition',
     );
+    for (const json of ['-1', '-0', '-0.25', '-2e3', '-3.5E-2']) {
+      for (const flags of [[], ['--summary']]) {
+        const numericStart = (await runCommand([
+          'start',
+          ...flags,
+          w.id,
+          json,
+          '1',
+        ])) as any;
+        const runId = numericStart.runId ?? numericStart.run.id;
+        // JSON transport normalizes negative zero to zero.
+        const expected = JSON.parse(JSON.stringify(JSON.parse(json)));
+        expect(engine.inspect(runId).run.input).toBe(expected);
+        const numericWork = engine.available(runId)[0];
+        const numericClaim = (await runCommand([
+          'claim',
+          numericWork.id,
+          '--fresh',
+        ])) as any;
+        const numericDone = (await runCommand([
+          'submit',
+          numericClaim.id,
+          numericClaim.token,
+          json,
+          ...flags,
+        ])) as any;
+        expect(numericDone.runStatus ?? numericDone.run.status).toBe(
+          'completed',
+        );
+        expect(engine.inspect(runId).run.output).toBe(expected);
+        if (flags.length) {
+          expect(numericStart).not.toHaveProperty('definition');
+          expect(numericDone).not.toHaveProperty('definition');
+        } else {
+          expect(numericStart).toHaveProperty('definition');
+          expect(numericDone).toHaveProperty('definition');
+        }
+      }
+    }
+    const separated = (await runCommand([
+      'start',
+      w.id,
+      '--summary',
+      '--',
+      '-1',
+      '1',
+    ])) as any;
+    const separatedClaim = (await runCommand([
+      'claim',
+      separated.nextWork.items[0].id,
+      '--fresh',
+    ])) as any;
+    expect(
+      await runCommand([
+        'submit',
+        '--summary',
+        separatedClaim.id,
+        separatedClaim.token,
+        '--',
+        '-1',
+      ]),
+    ).toMatchObject({ runStatus: 'completed' });
     for (const cmd of [
-      ['start', w.id, '{}'],
-      ['submit', claim.id, claim.token, '{}'],
+      ['start', w.id, '-1'],
+      ['submit', claim.id, claim.token, '-1'],
       ['claim', claim.id],
-    ])
-      await expect(runCommand([...cmd, '--unknown'])).rejects.toThrow();
+    ]) {
+      for (const flag of ['--unknown', '-x', '--summary=true'])
+        await expect(runCommand([...cmd, flag])).rejects.toThrow();
+    }
   } finally {
     if (previous === undefined) delete process.env.INTERLOCK_URL;
     else process.env.INTERLOCK_URL = previous;

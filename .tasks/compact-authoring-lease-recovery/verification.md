@@ -17,4 +17,20 @@ Baseline and scope are recorded in [intent.md](intent.md). Checks below apply to
 - `pnpm format:check`: passed. `/tmp/interlock-authoring-format.log`.
 - Focused transport checks: `/tmp/interlock-authoring-transports.log`; final full suite includes the latest runtime clock-crossing fix.
 
-Existing build chunk-size and test-environment warnings remain. No changed defaults, late-token acceptance, release, or merge. Independent review is the next SDLC stage.
+Existing build chunk-size and test-environment warnings remain. No changed defaults, late-token acceptance, release, or merge.
+
+## Independent review and revision
+
+The full fresh-context review of `5d68a6eaa000b6de31230c3785c0de886b2392c9` verified AC1–AC3 and AC5–AC8, and found one AC4 compatibility regression: `5d68a6eaa000-cli-negative-json`. The reviewer independently reproduced rejection of negative JSON inputs/results and exercised the maximum separate budgets through 19 claims, restart, ten hashed expiry receipts, exhaustion, stale-token rejection, receipt privacy, and explicit retry resetting counters. Review and independent boundary evidence: `/tmp/interlock-authoring-review.json`, `/tmp/interlock-authoring-independent-cli.log`, and `/tmp/interlock-authoring-independent-boundary.log`.
+
+The revision separates negative JSON number positionals from strict summary-option parsing. The actual CLI test now completes start → claim → submit for `-1`, `-0`, `-0.25`, `-2e3`, and `-3.5E-2` in both full and summary modes, checking persisted inputs and outputs. It also covers flag placement, the `--` separator, unknown short/long flags, and invalid boolean values. AC4 regression coverage passes against a temporary HTTP server. No API, runtime, MCP, UI, or documented behavior changed in this revision; the prior review and UI evidence remain applicable at their original commit.
+
+Revision checks:
+
+- `pnpm exec vitest run tests/compact-authoring.test.ts`: 5 tests passed, including HTTP/stdio and the expanded CLI journey. `/tmp/interlock-authoring-revision-cli.log`.
+- `pnpm test`: 670 tests passed in 55 files. `/tmp/interlock-authoring-revision-tests.log`.
+- `pnpm build`: passed. `/tmp/interlock-authoring-revision-build.log`.
+- `pnpm test:package`: passed packed global and npx installs, CLI, UI assets, HTTP/stdio, restart and persistence. `/tmp/interlock-authoring-revision-package.log`.
+- `pnpm format:check`: passed. `/tmp/interlock-authoring-revision-format.log`.
+
+The revised committed candidate requires independent review before local completion.

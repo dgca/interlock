@@ -23,3 +23,7 @@ Use temporary databases for automated checks. Build owns targeted tests, `pnpm t
 ## Independent review and completion
 
 The SDLC review assignment requires an isolated fresh-context reviewer. Review the full committed diff against AC1–AC8 and repository standards. Inspect saved evidence and independently exercise a lease-recovery boundary. Findings must identify locations and stable IDs; fix worthwhile findings and re-review the changed commit. PreparePr verifies the exact reviewed HEAD and finishes locally, as configured. No PR creation, merge, or release in this run.
+
+## Review revision
+
+Finding `5d68a6eaa000-cli-negative-json` exposed a compatibility gap in AC4: strict option parsing rejected negative numeric JSON inputs and results. Separate valid negative JSON numbers from options before parsing the boolean summary flag. Retain strict option validation, positional ordering, and the `--` separator. Exercise start → claim → submit for negative integers, zero, fractions and exponents in full and summary modes, with flags before and after positionals. Verify unknown short/long flags and invalid boolean values still reject. Rerun the affected CLI/transport suite and required repository checks. Other implementation and UI behavior is unchanged; retain earlier evidence with its original commit.

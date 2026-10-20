@@ -8,6 +8,29 @@ const parse = async (value: string | undefined) => {
     value.startsWith('@') ? await readFile(value.slice(1), 'utf8') : value,
   );
 };
+function parseSummaryArgs(args: string[]) {
+  const optionArgs: string[] = [];
+  const positionals: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--') {
+      positionals.push(...args.slice(i + 1));
+      break;
+    }
+    // Negative JSON numbers are positional values, not short options.
+    if (
+      arg.startsWith('-') &&
+      !/^-(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(arg.trim())
+    )
+      optionArgs.push(arg);
+    else positionals.push(arg);
+  }
+  const { values } = parseArgs({
+    args: optionArgs,
+    options: { summary: { type: 'boolean' } },
+  });
+  return { values, positionals };
+}
 export async function runCommand(argv: string[]) {
   const client = createClient(process.env.INTERLOCK_URL);
   const [command, ...args] = argv;
@@ -62,11 +85,7 @@ export async function runCommand(argv: string[]) {
         cascade: args.includes('--cascade'),
       });
     case 'start': {
-      const { values, positionals } = parseArgs({
-        args,
-        allowPositionals: true,
-        options: { summary: { type: 'boolean' } },
-      });
+      const { values, positionals } = parseSummaryArgs(args);
       if (positionals.length < 2 || positionals.length > 3)
         throw new Error(
           'Usage: start <workflow-id> <json|@file> [version] [--summary]',
@@ -145,11 +164,7 @@ export async function runCommand(argv: string[]) {
       });
     }
     case 'submit': {
-      const { values, positionals } = parseArgs({
-        args,
-        allowPositionals: true,
-        options: { summary: { type: 'boolean' } },
-      });
+      const { values, positionals } = parseSummaryArgs(args);
       if (positionals.length !== 3)
         throw new Error(
           'Usage: submit <work-id> <token> <json|@file> [--summary]',
