@@ -1,3 +1,4 @@
+import { useUiFeatures } from '../../lib/uiFeatures';
 import { useEffect, useRef, useState } from 'react';
 import {
   Checkbox,
@@ -5,23 +6,29 @@ import {
   Stack,
   Text,
   TextInput,
+  Textarea,
 } from '@mantine/core';
 import { Modal } from '../../components/Modal/Modal';
 import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import type { Action } from '../../lib/useActionFeedback';
 import styles from './ImportWorkflowDialog.module.css';
+import { importWorkflowJson } from './importWorkflowJson';
 
 type Preview = Awaited<ReturnType<typeof api.workflows.discoverGithub.query>>;
 export function ImportWorkflowDialog({
   onClose,
   onLocalFile,
+  onImported,
   act,
 }: {
   onClose: () => void;
   onLocalFile: () => void;
+  onImported?: (id: string) => void;
   act: Action;
 }) {
+  const features = useUiFeatures();
+  const [json, setJson] = useState('');
   const [source, setSource] = useState('github');
   const [url, setUrl] = useState('');
   const [preview, setPreview] = useState<Preview>();
@@ -88,6 +95,28 @@ export function ImportWorkflowDialog({
       setBusy(false);
     }
   };
+  const importPasted = async () => {
+    if (importing.current || !json.trim()) return;
+    importing.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      await act(async () => {
+        let id: string;
+        try {
+          id = await importWorkflowJson(json);
+        } catch (error) {
+          setError(errorMessage(error));
+          throw error;
+        }
+        onClose();
+        onImported?.(id);
+      }, 'Workflow imported.');
+    } finally {
+      importing.current = false;
+      setBusy(false);
+    }
+  };
   return (
     <Modal
       title="Import workflows"
@@ -107,14 +136,31 @@ export function ImportWorkflowDialog({
             disabled={busy}
             data={[
               { value: 'github', label: 'GitHub folder' },
-              { value: 'local', label: 'Local file' },
+              ...(features.localFileImport
+                ? [{ value: 'local', label: 'Local file' }]
+                : []),
+              { value: 'paste', label: 'Paste JSON' },
             ]}
             onChange={(value) => {
               reset();
               setSource(value);
             }}
           />
-          {source === 'local' ? (
+          {source === 'paste' ? (
+            <Textarea
+              label="Workflow JSON"
+              description="Paste a legacy workflow or a portable bundle with its dependencies."
+              rows={12}
+              value={json}
+              disabled={busy}
+              spellCheck={false}
+              styles={{ input: { fontFamily: 'var(--mono)' } }}
+              onChange={(event) => {
+                setJson(event.currentTarget.value);
+                setError('');
+              }}
+            />
+          ) : source === 'local' ? (
             <Text size="sm">
               Choose a legacy workflow JSON file or a portable bundle with its
               dependencies.
@@ -153,11 +199,6 @@ export function ImportWorkflowDialog({
                   </div>
                 </Stack>
               </form>
-              {error && (
-                <Text role="alert" c="red" size="sm">
-                  {error}
-                </Text>
-              )}
               {loading && (
                 <Text role="status" size="sm">
                   Reading direct JSON files from GitHub…
@@ -263,6 +304,11 @@ export function ImportWorkflowDialog({
               )}
             </>
           )}
+          {error && (
+            <Text role="alert" c="red" size="sm">
+              {error}
+            </Text>
+          )}
         </Stack>
       </div>
       <footer className={styles.footer}>
@@ -275,7 +321,15 @@ export function ImportWorkflowDialog({
         >
           Cancel
         </Button>
-        {source === 'local' ? (
+        {source === 'paste' ? (
+          <Button
+            variant="primary"
+            disabled={busy || !json.trim()}
+            onClick={() => void importPasted()}
+          >
+            {busy ? 'Importing…' : 'Import JSON'}
+          </Button>
+        ) : source === 'local' ? (
           <Button variant="primary" onClick={onLocalFile}>
             Choose JSON file
           </Button>

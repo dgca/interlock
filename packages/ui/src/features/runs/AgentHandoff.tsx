@@ -1,3 +1,4 @@
+import { useUiFeatures } from '../../lib/uiFeatures';
 import { Alert } from '@mantine/core';
 import { useState } from 'react';
 import { Bot, Copy } from 'lucide-react';
@@ -11,6 +12,7 @@ export function AgentHandoff({
   runId: string;
   onConnect: () => void;
 }) {
+  const features = useUiFeatures();
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const copy = async () => {
@@ -39,15 +41,18 @@ export function AgentHandoff({
     >
       <p>
         Interlock has prepared an assignment. Ask your connected agent to
-        continue this run. Connecting an agent does not automatically pick up
-        work.
+        continue this run.
+        {features.connectAgent &&
+          ' Connecting an agent does not automatically pick up work.'}
       </p>
       <div className="actions">
         <Button onClick={() => void copy()}>
           <Copy />
           {copied ? 'Instructions copied' : 'Copy instructions for agent'}
         </Button>
-        <Button onClick={onConnect}>Connect an agent</Button>
+        {features.connectAgent && (
+          <Button onClick={onConnect}>Connect an agent</Button>
+        )}
       </div>
       {error && (
         <p role="alert" className="error-text">

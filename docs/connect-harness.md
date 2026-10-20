@@ -15,6 +15,8 @@ npx -y @type_of/interlock@latest
 
 Keep this process running and open [Interlock](http://127.0.0.1:4310). **Connect with MCP**, also available through **Connect an agent** in a run, provides the endpoint URL and client configuration.
 
+An embedded host can hide these connection controls through [UI configuration](embedded-ui.md). Copyable run instructions remain available.
+
 Use Streamable HTTP at `http://127.0.0.1:4310/mcp`. The UI, engine, and MCP tools run in the same process and package version. After upgrading, restart Interlock at the same address and reconnect your client if needed. Keep the existing URL configuration; no separate bridge installation is needed.
 
 For a custom port, copy the URL from the connection dialog. These instructions apply to clients running on the same computer as Interlock. The service listens on loopback without authentication and must not be exposed through a public tunnel.

@@ -1,3 +1,4 @@
+import { useUiFeatures } from '../../lib/uiFeatures';
 import type { Action } from '../../lib/useActionFeedback';
 import { ActionIcon, Menu, Tabs, TextInput } from '@mantine/core';
 import { useEffect, useRef, useState } from 'react';
@@ -18,6 +19,7 @@ import type { Workflow } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { Badge } from '../../components/Badge/Badge';
 import { api, download } from '../../lib/api';
+import { importWorkflowJson } from './importWorkflowJson';
 import { ImportWorkflowDialog } from './ImportWorkflowDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { paths } from '../../routes/paths';
@@ -32,6 +34,7 @@ export function WorkflowLibrary({
   onOpen: (id: string) => void;
   act: Action;
 }) {
+  const features = useUiFeatures();
   const [query, setQuery] = useState(''),
     [archived, setArchived] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -80,29 +83,22 @@ export function WorkflowLibrary({
           </Button>
         </div>
       </header>
-      <input
-        ref={file}
-        type="file"
-        accept="application/json,.json"
-        hidden
-        onChange={(e) => {
-          const selected = e.target.files?.[0];
-          if (selected)
-            void act(async () => {
-              const data = JSON.parse(await selected.text());
-              if (data.format === 'interlock-workflows') {
-                const result = await api.workflows.import.mutate({
-                  bundle: data,
-                });
-                onOpen(result.rootId);
-                return;
-              }
-              const w = await api.workflows.create.mutate(data);
-              onOpen(w.id);
-            }, 'Workflow imported.');
-          e.target.value = '';
-        }}
-      />
+      {features.localFileImport && (
+        <input
+          ref={file}
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={(e) => {
+            const selected = e.target.files?.[0];
+            if (selected)
+              void act(async () => {
+                onOpen(await importWorkflowJson(await selected.text()));
+              }, 'Workflow imported.');
+            e.target.value = '';
+          }}
+        />
+      )}
       <Tabs
         value={archived ? 'archived' : 'active'}
         onChange={(value) => setArchived(value === 'archived')}
@@ -267,6 +263,7 @@ export function WorkflowLibrary({
       {importing && (
         <ImportWorkflowDialog
           act={act}
+          onImported={onOpen}
           onClose={() => setImporting(false)}
           onLocalFile={() => {
             setImporting(false);
@@ -283,8 +280,9 @@ export function WorkflowLibrary({
         />
       )}
       <div className={styles.caption}>
-        Workflows run on your local engine. Connect a harness to pick up agent
-        assignments.
+        Workflows run on your local engine.
+        {features.connectAgent &&
+          ' Connect a harness to pick up agent assignments.'}
       </div>
     </div>
   );

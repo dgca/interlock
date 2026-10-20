@@ -1,3 +1,4 @@
+import { useUiFeatures } from '../../lib/uiFeatures';
 import { GitBranch, Activity, ArrowUpRight, FileText } from 'lucide-react';
 import { VERSION } from '../../../../core/src/version';
 import styles from './Sidebar.module.css';
@@ -12,6 +13,7 @@ export function Sidebar({
   connected: boolean;
   onConnect: () => void;
 }) {
+  const features = useUiFeatures();
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}>
@@ -36,11 +38,13 @@ export function Sidebar({
           </button>
         ))}
       </nav>
-      <div className={styles.note}>
-        <button className={styles.connect} onClick={onConnect}>
-          Connect with MCP <ArrowUpRight size={12} />
-        </button>
-      </div>
+      {features.connectAgent && (
+        <div className={styles.note}>
+          <button className={styles.connect} onClick={onConnect}>
+            Connect with MCP <ArrowUpRight size={12} />
+          </button>
+        </div>
+      )}
       <footer>
         <i className={connected ? styles.online : styles.offline} />
         <div>
