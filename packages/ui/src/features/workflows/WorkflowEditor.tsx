@@ -4,6 +4,7 @@ import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react';
 import { ActionIcon, Menu, Tabs } from '@mantine/core';
+import { useMergedRef, useResizeObserver } from '@mantine/hooks';
 import {
   ReactFlow,
   Background,
@@ -101,6 +102,11 @@ export function WorkflowEditor({
     };
   }, []);
   const editorRef = useRef<HTMLDivElement>(null);
+  const [measureEditor, { width: editorWidth }] =
+    useResizeObserver<HTMLDivElement>();
+  const editorRootRef = useMergedRef(editorRef, measureEditor);
+  const compactHeader = editorWidth > 0 && editorWidth < 700;
+  const iconOnlyHeader = editorWidth > 0 && editorWidth < 480;
   const flowRef = useRef<ReactFlowInstance<CanvasNode> | null>(null);
   const fitAfterTidy = useRef(false);
   const [arranging, setArranging] = useState(false);
@@ -490,7 +496,13 @@ export function WorkflowEditor({
       ],
     }));
   return (
-    <div ref={editorRef} className={styles.editor} inert={navigationPending}>
+    <div
+      ref={editorRootRef}
+      className={styles.editor}
+      data-compact={compactHeader || undefined}
+      data-icon-only={iconOnlyHeader || undefined}
+      inert={navigationPending}
+    >
       <header className={styles.header}>
         <Button
           variant="ghost"
@@ -505,6 +517,7 @@ export function WorkflowEditor({
               <>
                 <button
                   className={styles.ownerLink}
+                  title={owner.name}
                   onClick={() => onOpenWorkflow?.(owner.id)}
                 >
                   {owner.name}
@@ -515,54 +528,73 @@ export function WorkflowEditor({
               'WORKFLOW'
             )}
           </span>
-          <strong>{name}</strong>
+          <strong title={name}>{name}</strong>
         </div>
-        <span className={styles.saved}>
+        <span
+          className={styles.saved}
+          hidden={editorWidth > 0 && editorWidth < 1000}
+        >
           {dirty
             ? 'Unsaved changes'
             : `Draft saved · ${workflow.latestVersion ? `v${workflow.latestVersion} published` : 'unpublished'}`}
         </span>
-        <div className="actions">
+        <div className={styles.headerActions}>
           {section === 'editor' && (
             <>
-              <Button
-                variant="ghost"
-                disabled={!canUndo}
-                aria-label="Undo"
-                onClick={() => travel('undo')}
-                title={
-                  rawEdited
-                    ? 'Save or discard raw changes before undoing workflow edits'
-                    : 'Undo (Ctrl/Command+Z)'
-                }
-              >
-                <Undo2 />
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={!canRedo}
-                aria-label="Redo"
-                onClick={() => travel('redo')}
-                title={
-                  rawEdited
-                    ? 'Save or discard raw changes before redoing workflow edits'
-                    : 'Redo (Ctrl/Command+Shift+Z)'
-                }
-              >
-                <Redo2 />
-              </Button>
+              {!compactHeader && (
+                <>
+                  <Button
+                    variant="ghost"
+                    disabled={!canUndo}
+                    aria-label="Undo"
+                    onClick={() => travel('undo')}
+                    title={
+                      rawEdited
+                        ? 'Save or discard raw changes before undoing workflow edits'
+                        : 'Undo (Ctrl/Command+Z)'
+                    }
+                  >
+                    <Undo2 />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    disabled={!canRedo}
+                    aria-label="Redo"
+                    onClick={() => travel('redo')}
+                    title={
+                      rawEdited
+                        ? 'Save or discard raw changes before redoing workflow edits'
+                        : 'Redo (Ctrl/Command+Shift+Z)'
+                    }
+                  >
+                    <Redo2 />
+                  </Button>
+                </>
+              )}
               {view === 'visual' && (
                 <Button
+                  className={styles.headerAction}
+                  aria-label={pending === 'save' ? 'Saving…' : 'Save draft'}
+                  title={pending === 'save' ? 'Saving…' : 'Save draft'}
                   onClick={() => perform('save', save)}
                   disabled={
                     !dirty || rawInvalid || remoteChanged || Boolean(pending)
                   }
                 >
                   <Save />
-                  {pending === 'save' ? 'Saving…' : 'Save draft'}
+                  <span>
+                    {pending === 'save'
+                      ? 'Saving…'
+                      : compactHeader
+                        ? 'Save'
+                        : 'Save draft'}
+                  </span>
                 </Button>
               )}
               <Button
+                className={styles.headerAction}
+                aria-label="Review & publish"
+                title="Review & publish"
                 disabled={
                   rawInvalid ||
                   Boolean(rawResult?.publishError) ||
@@ -579,11 +611,14 @@ export function WorkflowEditor({
                 }
               >
                 <Upload />
-                Review &amp; publish
+                <span>{compactHeader ? 'Publish' : 'Review & publish'}</span>
               </Button>
             </>
           )}
           <Button
+            className={styles.headerAction}
+            aria-label={`Run v${workflow.latestVersion || '—'}`}
+            title={`Run v${workflow.latestVersion || '—'}`}
             variant="primary"
             disabled={
               !workflow.latestVersion ||
@@ -594,7 +629,7 @@ export function WorkflowEditor({
             onClick={() => onRun(workflow)}
           >
             <Play />
-            Run v{workflow.latestVersion || '—'}
+            <span>Run v{workflow.latestVersion || '—'}</span>
           </Button>
           <Menu position="bottom-end" width={190}>
             <Menu.Target>
@@ -608,6 +643,35 @@ export function WorkflowEditor({
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
+              {section === 'editor' && compactHeader && (
+                <>
+                  <Menu.Item
+                    leftSection={<Undo2 size={14} />}
+                    disabled={!canUndo}
+                    title={
+                      rawEdited
+                        ? 'Save or discard raw changes before undoing workflow edits'
+                        : 'Undo (Ctrl/Command+Z)'
+                    }
+                    onClick={() => travel('undo')}
+                  >
+                    Undo
+                  </Menu.Item>
+                  <Menu.Item
+                    leftSection={<Redo2 size={14} />}
+                    disabled={!canRedo}
+                    title={
+                      rawEdited
+                        ? 'Save or discard raw changes before redoing workflow edits'
+                        : 'Redo (Ctrl/Command+Shift+Z)'
+                    }
+                    onClick={() => travel('redo')}
+                  >
+                    Redo
+                  </Menu.Item>
+                  <Menu.Divider />
+                </>
+              )}
               <Menu.Item
                 leftSection={<Settings2 size={14} />}
                 disabled={rawEdited}
