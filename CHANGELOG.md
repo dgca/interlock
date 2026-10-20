@@ -1,5 +1,17 @@
 # @type_of/interlock
 
+## 0.2.1
+
+### Patch Changes
+
+- 5d68a6e: Add opt-in compact workflow authoring responses and edit diagnostics that retain errors and new warnings while summarizing unchanged warnings. Expose authoring and claim output schemas over HTTP and stdio. Add CLI start/submit `--summary` and claim `--fresh`/`--lease` options.
+
+  Add an optional per-Agent lease-expiry budget, separate from reported failures, with persisted counters and recovery guidance for expired claims. Configure it in Agent settings or definitions. Existing response defaults and combined attempt budgets remain unchanged; expired tokens still require reclaiming available work before submission.
+
+- 1cbd968: Keep workflow editor controls visible in narrow windows and embedded panels. Shorten action labels as space decreases, move Undo and Redo into the actions menu, and use named icon buttons at the smallest widths.
+- 2856126: Add startup host and URL settings to hide local-file import and agent connection controls in embedded UIs. Add Paste JSON import for legacy workflows and portable bundles.
+- 4cde6e0: Keep manual claim tokens in page memory instead of session storage, and remove legacy stored claims. Preserve claims across navigation, clear expired credentials, and explain recovery when reloading loses an active claim.
+
 ## 0.2.0
 
 ### Minor Changes
