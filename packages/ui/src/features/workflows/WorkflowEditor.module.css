@@ -2,6 +2,9 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  min-width: 0;
+  overflow: hidden;
+  container: workflow-editor / inline-size;
 }
 .header {
   height: 82px;
@@ -17,22 +20,52 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-width: 130px;
+  min-width: 0;
+  flex: 1;
 }
 .title > span {
   font-size: 8px;
   letter-spacing: 1.5px;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .title strong {
   font-size: 13px;
   font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.header > button {
+  flex-shrink: 0;
+}
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.editor[data-compact] .header {
+  padding-inline: 12px;
+  gap: 8px;
+}
+.editor[data-compact] .headerActions {
+  gap: 5px;
+}
+.editor[data-icon-only] .headerAction {
+  width: 30px;
+  padding-inline: 0;
+}
+.editor[data-icon-only] .headerAction :global(.mantine-Button-label) > span {
+  display: none;
 }
 .saved {
   font-size: 9px;
   color: var(--muted);
-  margin-left: auto;
   margin-right: 10px;
+  flex-shrink: 0;
 }
 .body {
   display: flex;
@@ -44,6 +77,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
 .subnav {
   flex-shrink: 0;
@@ -261,21 +295,22 @@
 .nodeHeading i.failed {
   background: #e89481;
 }
-@media (max-width: 1150px) {
-  .saved {
-    display: none;
-  }
-  .header {
-    gap: 5px;
-  }
-  .header :global(.actions) {
-    margin-left: auto;
-  }
+@container workflow-editor (max-width: 700px) {
   .canvasToolbar {
     left: 10px;
+    right: 10px;
+    width: max-content;
+    max-width: calc(100% - 20px);
+    flex-wrap: wrap;
   }
   .canvasToolbar button {
     font-size: 10px;
+  }
+  .rawActions {
+    flex-wrap: wrap;
+  }
+  .rawActions > span {
+    flex-basis: 100%;
   }
 }
 

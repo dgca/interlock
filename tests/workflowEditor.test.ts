@@ -265,6 +265,54 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+it('moves history into the menu at narrow editor widths and preserves undo, redo, and raw-edit guards', async () => {
+  let reportWidth: (width: number) => void;
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private callback: ResizeObserverCallback) {}
+      observe(element: HTMLElement) {
+        if (!element.querySelector('header')) return;
+        reportWidth = (width) =>
+          this.callback(
+            [{ contentRect: { width, height: 850 } } as ResizeObserverEntry],
+            this as unknown as ResizeObserver,
+          );
+      }
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  const resize = async (width: number) => {
+    await act(async () => {
+      reportWidth(width);
+      await new Promise(requestAnimationFrame);
+    });
+  };
+  await render();
+  await click('Workflow settings');
+  await click('Apply local edit');
+  await resize(525);
+  expect(button('Undo')).toBeUndefined();
+  expect(button('Save draft').textContent).toBe('Save');
+  await click('Workflow actions');
+  expect(button('Undo').getAttribute('role')).toBe('menuitem');
+  await click('Undo');
+  expect(button('Save draft').disabled).toBe(true);
+  await click('Workflow actions');
+  await click('Redo');
+  expect(button('Save draft').disabled).toBe(false);
+  await click('Raw');
+  await act(async () => rawEditor.props.onChange('{'));
+  await click('Workflow actions');
+  expect(button('Undo').disabled).toBe(true);
+  expect(button('Redo').disabled).toBe(true);
+  await click('Workflow actions');
+  await resize(1100);
+  expect(button('Undo').getAttribute('role')).not.toBe('menuitem');
+  expect(button('Undo').disabled).toBe(true);
+});
+
 it('keeps multiple nodes selected through a move without saving selection as draft data', async () => {
   await render();
   const ids = canvas.props.nodes.map((node: any) => node.id);
