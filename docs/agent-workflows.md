@@ -151,6 +151,8 @@ Pass `diagnostics: "summary"` to `edit_workflow` to return every error and every
 
 Call `validate_workflow` with an `id` to inspect its stored draft, or include a candidate `definition`. The shared API is `workflows.validate`. The result contains the stored `draftRevision`, `saveable`, `publishable`, and diagnostics. Candidate validation never saves the candidate. These calls do not create a version or a run. Full replacement remains available through `update_workflow`.
 
+Validation requests have a 2 MiB UTF-8 body limit, including the transport envelope. The shared client sends validation queries in POST bodies so large candidates do not exceed HTTP URL limits. Existing GET callers remain supported. Oversized requests report the body limit without saving anything. Reduce the request size, or omit `definition` to validate an already saved draft.
+
 Each diagnostic has `severity`, `category`, stable `code`, property `path`, and `message`, plus relevant `nodeId`, `edgeId`, or `operationIndex`. Paths use definition array positions and field names, while IDs locate the graph object. Contract-warning paths describe the expected value beneath its contract field; literal property names with dots, empty strings, or other special characters use brackets and JSON quotes. Binding source paths retain their documented dot-separated syntax. Categories have separate consequences:
 
 - `save` errors reject edits, including invalid structure, unknown fields, and child ownership conflicts.

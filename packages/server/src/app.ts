@@ -10,7 +10,19 @@ import type { ConnectionConfig } from './connection.js';
 
 export function createApp(engine: Engine, connection?: ConnectionConfig) {
   const app = new Hono();
-  app.use('*', bodyLimit({ maxSize: 2 * 1024 * 1024 }));
+  app.use(
+    '*',
+    bodyLimit({
+      maxSize: 2 * 1024 * 1024,
+      onError: (c) =>
+        c.text(
+          'Request body exceeds the 2 MiB limit. Reduce the request size.',
+          413,
+          // Do not reuse a socket while the adapter drains the rejected body.
+          { 'Keep-Alive': 'timeout=0' },
+        ),
+    }),
+  );
   app.use('*', async (c, next) => {
     const host = new URL(c.req.url).hostname;
     if (!['127.0.0.1', 'localhost', '[::1]'].includes(host))
@@ -63,6 +75,8 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
       endpoint: '/trpc',
       req: c.req.raw,
       router: appRouter,
+      // Keep the query contract and legacy GET callers while accepting large bodies.
+      allowMethodOverride: c.req.path === '/trpc/workflows.validate',
       createContext: () => ({ engine, connection, signal: c.req.raw.signal }),
     }),
   );

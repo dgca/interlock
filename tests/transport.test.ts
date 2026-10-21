@@ -1136,6 +1136,9 @@ it.each(['stdio', 'http'])(
       expect(
         tools.find((t) => t.name === 'validate_workflow')!.description,
       ).toContain('unknown');
+      expect(
+        tools.find((t) => t.name === 'validate_workflow')!.description,
+      ).toContain('2 MiB');
       expect(client.getInstructions()).toContain('edit_workflow');
       const editTarget = await call('create_workflow', {
         name: 'Atomic transport edit',
@@ -1211,6 +1214,48 @@ it.each(['stdio', 'http'])(
         }),
       ).toMatchObject({ applied: true, draftRevision: edited.draftRevision });
       const candidate = { ...persisted.draft, edges: [] };
+      const largeCandidate = structuredClone(persisted.draft);
+      largeCandidate.nodes.find(
+        (node: { id: string }) => node.id === 'agent',
+      ).prompt = 'Large candidate '.repeat(40_000);
+      expect(
+        await call('validate_workflow', {
+          id: editTarget.id,
+          definition: largeCandidate,
+        }),
+      ).toMatchObject({ saveable: true, publishable: true });
+      expect(
+        await call('validate_workflow', {
+          id: editTarget.id,
+          definition: { ...largeCandidate, edges: [] },
+        }),
+      ).toMatchObject({ saveable: true, publishable: false });
+      expect(
+        await call('validate_workflow', {
+          id: editTarget.id,
+          definition: { ...largeCandidate, unexpected: true },
+        }),
+      ).toMatchObject({ saveable: false });
+      largeCandidate.nodes.find(
+        (node: { id: string }) => node.id === 'agent',
+      ).prompt = 'x'.repeat(2 * 1024 * 1024);
+      const oversized = client.callTool({
+        name: 'validate_workflow',
+        arguments: {
+          id: editTarget.id,
+          definition: largeCandidate,
+        },
+      });
+      if (mode === 'http') {
+        await expect(oversized).rejects.toThrow('2 MiB limit');
+      } else {
+        expect(await oversized).toMatchObject({
+          isError: true,
+          content: [
+            { type: 'text', text: expect.stringContaining('2 MiB limit') },
+          ],
+        });
+      }
       expect(
         await call('validate_workflow', {
           id: editTarget.id,
