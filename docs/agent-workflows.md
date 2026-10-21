@@ -395,3 +395,9 @@ Reference errors identify every blocking workflow by name and ID, list the refer
 Set a Workflow node to `mode: "detached"` to start its pinned workflow and continue with `{runId, workflowId, version}`. Omit mode or use `wait` to await its result. Input validation precedes dispatch; later child failure does not change the launching step. See [Workflow execution](workflow-execution.md) for the fixed output contract and lifecycle.
 
 `list_work` includes detached descendants, even when their parent is terminal. Root IDs describe ancestry. To operate independent work, use its own run ID. `list_runs` with `rootOnly: true` excludes detached runs, so omit that filter when finding active independent work. Cancellation stops at detached relationships. Retry failed detached runs directly; retrying a later parent step does not duplicate dispatches.
+
+## Context continuity
+
+Agent definitions can set `context.continuityGroup` with current context. Grouped assignment summaries, full assignments, briefings, and compact mutation `nextWork` items expose `continuity`: the run-local group, revision, expected executor/session identity (or null before first claim), and optional checkpoint reference. `claim_work` accepts `session: {executorId, sessionId}`; grouped claims require it. `renew_claim`, `submit_result`, and `fail_work` retain their token-based contracts. Failure, expiry, and `retry_run` preserve the group binding.
+
+Use `get_context_group` for bounded claim/handoff history and `handoff_context_group` for revision-checked replacement. CLI equivalents are `context-group` and `handoff-context`; shared API operations are `runs.contextGroup` and `runs.handoffContext`. Workflow authoring, edits, and imports preserve the optional field; publication rejects fresh context combined with a group. Ungrouped definitions and responses retain their existing behavior. See [context continuity](context-continuity.md) for complete scope, bounds, and examples.

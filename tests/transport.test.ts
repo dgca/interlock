@@ -2413,6 +2413,125 @@ it.each(['stdio', 'http'])(
         else process.env.INTERLOCK_URL = budgetUrl;
       }
       await call('cancel_run', { id: budgetStart.runId });
+      const groupedDefinition = blankDefinition();
+      const groupedNode = groupedDefinition.nodes[1];
+      if (groupedNode.kind !== 'agent') throw new Error('Expected Agent');
+      groupedNode.context.continuityGroup = 'author';
+      const grouped = await call('create_workflow', {
+        name: 'Grouped author',
+        definition: groupedDefinition,
+      });
+      await call('publish_workflow', { id: grouped.id });
+      const groupedRun = await call('start_run', {
+        workflowId: grouped.id,
+        input: {},
+      });
+      const groupedWork = groupedRun.nextWork.items[0];
+      expect(groupedWork.context.continuityGroup).toBe('author');
+      expect(groupedWork.continuity).toMatchObject({
+        revision: 0,
+        session: null,
+      });
+      const session = { executorId: 'transport', sessionId: 'author' };
+      const replacement = { ...session, sessionId: 'replacement' };
+      const claimWithoutSession = await client.callTool({
+        name: 'claim_work',
+        arguments: { workId: groupedWork.id, workerId: 'test' },
+      });
+      expect(claimWithoutSession.isError).toBe(true);
+      const groupedClaim = await call('claim_work', {
+        workId: groupedWork.id,
+        workerId: 'test',
+        session,
+      });
+      expect(groupedClaim.continuity).toMatchObject({ revision: 1, session });
+      const handoff = {
+        runId: groupedRun.runId,
+        group: 'author',
+        expectedRevision: 1,
+        session: replacement,
+        actor: 'test',
+        reason: 'Session lost',
+        checkpointRef: 'checkpoint.md',
+      };
+      expect(
+        (
+          await client.callTool({
+            name: 'handoff_context_group',
+            arguments: handoff,
+          })
+        ).isError,
+      ).toBe(true);
+      await call('fail_work', {
+        workId: groupedWork.id,
+        token: groupedClaim.token,
+        error: 'Session lost',
+      });
+      expect(await call('handoff_context_group', handoff)).toMatchObject({
+        revision: 2,
+        applied: true,
+      });
+      expect(await call('handoff_context_group', handoff)).toMatchObject({
+        revision: 2,
+        applied: false,
+      });
+      const discovery = await call('list_work', { runId: groupedRun.runId });
+      expect(discovery[0].continuity).toMatchObject({
+        session: replacement,
+        checkpointRef: 'checkpoint.md',
+      });
+      expect(
+        (await call('get_run_briefing', { id: groupedRun.runId })).available
+          .items[0].continuity.session,
+      ).toEqual(replacement);
+      const history = await call('get_context_group', {
+        runId: groupedRun.runId,
+        group: 'author',
+        limit: 1,
+      });
+      expect(history).toMatchObject({ total: 2, nextOffset: 1 });
+      expect(history.history[0].kind).toBe('claim');
+      const priorUrl = process.env.INTERLOCK_URL;
+      process.env.INTERLOCK_URL = url;
+      try {
+        expect(
+          await runCommand([
+            'context-group',
+            groupedRun.runId,
+            'author',
+            '{"offset":1,"limit":1}',
+          ]),
+        ).toMatchObject({
+          total: 2,
+          history: [expect.objectContaining({ kind: 'handoff' })],
+        });
+        expect(
+          await runCommand(['handoff-context', JSON.stringify(handoff)]),
+        ).toMatchObject({ applied: false });
+        const claimed = (await runCommand([
+          'claim',
+          groupedWork.id,
+          'cli',
+          JSON.stringify({ session: replacement }),
+        ])) as any;
+        expect(claimed.continuity.session).toEqual(replacement);
+        await call('submit_result', {
+          workId: claimed.id,
+          token: claimed.token,
+          output: {},
+        });
+      } finally {
+        if (priorUrl === undefined) delete process.env.INTERLOCK_URL;
+        else process.env.INTERLOCK_URL = priorUrl;
+      }
+      for (const name of ['get_context_group', 'handoff_context_group'])
+        expect(tools.some((t) => t.name === name)).toBe(true);
+      expect(
+        tools.find((t) => t.name === 'claim_work')?.inputSchema.properties,
+      ).toHaveProperty('session');
+      console.log(
+        `${mode}: ${tools.length} MCP tools, ${Buffer.byteLength(JSON.stringify(tools))} B definitions`,
+      );
       const invalidRetry = await client.callTool({
         name: 'retry_run',
         arguments: { id: failed.run.id },

@@ -163,6 +163,8 @@ it('shows descendant assignments at the root and copies instructions to continue
     ),
   );
   expect(writeText.mock.calls[0][0]).toContain('including child runs');
+  expect(writeText.mock.calls[0][0]).toContain('resume continuity.session');
+  expect(writeText.mock.calls[0][0]).toContain('handoff_context_group');
   for (const tool of [
     'get_run_briefing',
     'get_run_result',

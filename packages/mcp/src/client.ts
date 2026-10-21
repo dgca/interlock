@@ -46,6 +46,8 @@ export function createMcpClient(url?: string) {
     },
     runs: {
       budget: client.runs.budget.query,
+      contextGroup: client.runs.contextGroup.query,
+      handoffContext: client.runs.handoffContext.mutate,
       setBudget: client.runs.setBudget.mutate,
       usage: client.runs.usage.query,
       startSummary: client.runs.startSummary.mutate,

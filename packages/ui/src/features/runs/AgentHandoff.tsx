@@ -22,6 +22,7 @@ export function AgentHandoff({
           `Resume with get_run_briefing and use list_work with runId "${runId}" to find available assignments, including child runs. ` +
           'Use get_run_result for selected inputs or outputs; use get_run for full inspection. When blocked, use wait_for_run_change with the briefing cursor for a finite wait, and recover explicitly from cursor reset after restart. ' +
           "Claim assignments using your actual capabilities. Follow each assignment's prompt, input, context policy, and output schema, then submit JSON with its claim token. " +
+          'For context.continuityGroup, resume continuity.session and declare session:{executorId,sessionId} when claiming. If unbound, choose a session; if replacing it, use handoff_context_group with a reason and checkpoint reference after the active claim ends. Groups are local to each assignment run. ' +
           'Follow executionInstructions when present, including isolation and user handoff guidance for fresh-context assignments. Do not claim fresh context in an existing conversation. Renew claims before they expire. ' +
           'Continue until this run completes, fails, or is cancelled. Detached descendants may remain active afterward; report their run IDs and continue independent work by its own run ID. If another worker has claimed an assignment, do not take over its claim. Report any blocker.',
       );

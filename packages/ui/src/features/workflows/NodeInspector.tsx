@@ -206,6 +206,22 @@ export function NodeInspector({
               Interlock cannot erase a caller's conversation.
             </p>
 
+            <TextInput
+              mb="md"
+              label="Continuity group"
+              description="Optional session binding within this run. Requires current context; child runs have separate groups."
+              maxLength={128}
+              value={node.context.continuityGroup ?? ''}
+              onChange={(e) =>
+                patch({
+                  context: {
+                    ...node.context,
+                    continuityGroup: e.target.value || undefined,
+                  },
+                })
+              }
+            />
+
             <Textarea
               mb="md"
               label="Context instructions"

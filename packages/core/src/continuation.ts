@@ -1,3 +1,7 @@
+import {
+  continuitySchema,
+  continuityGroupSchema,
+} from './contextContinuity.js';
 import { z } from 'zod';
 
 export const briefingQuerySchema = z.object({
@@ -88,7 +92,9 @@ export const continuationWorkSchema = z.object({
   nodeId: z.string(),
   label: z.string(),
   status: z.literal('available'),
+  continuity: continuitySchema.optional(),
   context: z.object({
+    continuityGroup: continuityGroupSchema.optional(),
     mode: z.enum(['current', 'fresh']),
     tools: z.array(z.string()),
     skills: z.array(z.string()),
