@@ -2,6 +2,7 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { developmentConnection, type ConnectionConfig } from './connection.js';
 import {
+  simulationRequestSchema,
   contextGroupQuerySchema,
   contextHandoffSchema,
   sessionIdentitySchema,
@@ -98,6 +99,9 @@ export const appRouter = t.router({
     return { ...config, mcpUrl: new URL('/mcp', config.engineUrl).href };
   }),
   testbench: t.router({
+    simulation: p
+      .input(simulationRequestSchema)
+      .mutation(({ ctx, input }) => ctx.engine.simulations.request(input)),
     suites: p
       .input(testbenchListSchema)
       .query(({ ctx, input }) => ctx.engine.testbench.listSuites(input)),

@@ -2654,6 +2654,126 @@ it.each(['stdio', 'http'])(
         true,
       );
       expect(engine.available(sizeRun.id)[0].attempt).toBe(0);
+      const simulationWorkflow = engine.create(
+        'Simulation transport',
+        '',
+        blankDefinition(),
+      );
+      engine.publish(simulationWorkflow.id);
+      const simulationSuite = await call('save_test_suite', {
+        request: {
+          action: 'create',
+          workflowId: simulationWorkflow.id,
+          content: {
+            name: 'Simulation transport',
+            cases: [
+              {
+                id: 'case',
+                name: 'Case',
+                input: {},
+                fixtures: [
+                  {
+                    nodeId: 'agent',
+                    kind: 'agent',
+                    output: { simulated: true },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      });
+      const simulationRequest = {
+        action: 'run',
+        suiteId: simulationSuite.id,
+        suiteRevision: simulationSuite.revision,
+        caseId: 'case',
+        version: 1,
+        requestId: `simulation-${mode}`,
+      };
+      await call('workflow_simulation', { request: simulationRequest });
+      let simulationReport: any;
+      for (let i = 0; i < 50; i++) {
+        simulationReport = await call('workflow_simulation', {
+          request: { action: 'get', id: simulationRequest.requestId, limit: 1 },
+        });
+        if (simulationReport.state !== 'running') break;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      expect(simulationReport).toMatchObject({
+        mode: 'simulation',
+        state: 'passed',
+        substitutionCount: 1,
+      });
+      expect(
+        await call('workflow_simulation', {
+          request: { action: 'capture', id: simulationRequest.requestId },
+        }),
+      ).toMatchObject({ result: { simulated: true } });
+      expect(
+        await call('workflow_simulation', {
+          request: { action: 'list', workflowId: simulationWorkflow.id },
+        }),
+      ).toMatchObject({ total: 1 });
+      expect(
+        await call('workflow_simulation', {
+          request: { action: 'cancel', id: simulationRequest.requestId },
+        }),
+      ).toMatchObject({ state: 'passed' });
+      const simUrl = process.env.INTERLOCK_URL;
+      process.env.INTERLOCK_URL = url;
+      try {
+        expect(
+          await runCommand([
+            'simulation',
+            JSON.stringify({
+              action: 'get',
+              id: simulationRequest.requestId,
+              limit: 1,
+            }),
+          ]),
+        ).toEqual(simulationReport);
+        expect(
+          await runCommand([
+            'test-suite',
+            JSON.stringify({ action: 'get', id: simulationSuite.id }),
+          ]),
+        ).toMatchObject({
+          cases: [{ fixtures: [{ output: { simulated: true } }] }],
+        });
+        const cliSuite = (await runCommand([
+          'test-suite',
+          JSON.stringify({
+            action: 'create',
+            workflowId: simulationWorkflow.id,
+            content: {
+              name: 'CLI suite',
+              cases: [{ id: 'case', name: 'CLI', input: {}, fixtures: [] }],
+            },
+          }),
+        ])) as any;
+        expect(
+          await runCommand([
+            'test-suite',
+            JSON.stringify({
+              action: 'update',
+              id: cliSuite.id,
+              revision: cliSuite.revision,
+              content: {
+                name: 'Updated',
+                cases: [{ id: 'case', name: 'CLI', input: {}, fixtures: [] }],
+              },
+            }),
+          ]),
+        ).toMatchObject({ revision: 2 });
+      } finally {
+        if (simUrl === undefined) delete process.env.INTERLOCK_URL;
+        else process.env.INTERLOCK_URL = simUrl;
+      }
+      expect(
+        tools.find((t) => t.name === 'workflow_simulation')?.inputSchema
+          .required,
+      ).toEqual(['request']);
       const invalidRetry = await client.callTool({
         name: 'retry_run',
         arguments: { id: failed.run.id },

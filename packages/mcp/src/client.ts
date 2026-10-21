@@ -5,6 +5,7 @@ export function createMcpClient(url?: string) {
   const client = createClient(url);
   return {
     testbench: {
+      simulation: client.testbench.simulation.mutate,
       suites: client.testbench.suites.query,
       suite: client.testbench.suite.query,
       createSuite: client.testbench.createSuite.mutate,
