@@ -45,6 +45,7 @@ export function createMcpClient(url?: string) {
       publish: client.workflows.publish.mutate,
     },
     runs: {
+      usage: client.runs.usage.query,
       startSummary: client.runs.startSummary.mutate,
       briefing: client.runs.briefing.query,
       wait: client.runs.wait.query,
@@ -56,6 +57,7 @@ export function createMcpClient(url?: string) {
       cancel: client.runs.cancel.mutate,
     },
     work: {
+      reportUsage: client.work.reportUsage.mutate,
       submitSummary: client.work.submitSummary.mutate,
       summaries: client.work.summaries.query,
       list: client.work.list.query,

@@ -2004,6 +2004,86 @@ it.each(['stdio', 'http'])(
         workerId: 'mcp-test',
         leaseSeconds: 3600,
       });
+      for (const name of ['report_usage', 'get_run_usage'])
+        expect(tools.map((tool) => tool.name)).toContain(name);
+      expect(
+        tools.find((tool) => tool.name === 'report_usage')!.inputSchema
+          .required,
+      ).toEqual(
+        expect.arrayContaining(['workId', 'attempt', 'token', 'snapshot']),
+      );
+      expect(
+        tools.find((tool) => tool.name === 'get_run_usage')!.description,
+      ).toContain('detached');
+      expect(client.getInstructions()).toContain('report_usage');
+      const usageInput = {
+        workId: claim.id,
+        attempt: claim.attempt,
+        token: claim.token,
+        snapshot: {
+          sequence: 1,
+          models: [
+            {
+              provider: 'test',
+              model: 'transport',
+              inputTokens: 100,
+              outputTokens: 20,
+            },
+          ],
+        },
+      };
+      const usageResponses = await Promise.all([
+        call('report_usage', usageInput),
+        call('report_usage', usageInput),
+      ]);
+      expect(
+        usageResponses.filter((response) => response.applied),
+      ).toHaveLength(1);
+      const usage = await call('get_run_usage', {
+        runId: claim.runId,
+        groupBy: 'attempt',
+      });
+      expect(usage.totals).toMatchObject({
+        reportedAttempts: 1,
+        tokens: { inputTokens: { value: 100, coverage: 'partial' } },
+      });
+      expect(JSON.stringify(usage)).not.toContain(claim.token);
+      expect(JSON.stringify(usage)).not.toContain('tokenHash');
+      expect(await call('get_run_usage', { runId: claim.runId })).toEqual(
+        await createClient(url).runs.usage.query({ runId: claim.runId }),
+      );
+      expect(
+        (
+          await client.callTool({
+            name: 'report_usage',
+            arguments: { ...usageInput, token: 'wrong' },
+          })
+        ).isError,
+      ).toBe(true);
+      const usageUrl = process.env.INTERLOCK_URL;
+      process.env.INTERLOCK_URL = url;
+      try {
+        expect(
+          await runCommand([
+            'report-usage',
+            JSON.stringify({
+              ...usageInput,
+              snapshot: { ...usageInput.snapshot, sequence: 2, final: true },
+            }),
+          ]),
+        ).toMatchObject({ applied: true });
+        expect(
+          await runCommand(['usage', claim.runId, '{"groupBy":"worker"}']),
+        ).toMatchObject({
+          groupBy: 'worker',
+          totals: {
+            tokens: { inputTokens: { value: 100, coverage: 'complete' } },
+          },
+        });
+      } finally {
+        if (usageUrl === undefined) delete process.env.INTERLOCK_URL;
+        else process.env.INTERLOCK_URL = usageUrl;
+      }
       const renewed = await call('renew_claim', {
         workId: claim.id,
         token: claim.token,

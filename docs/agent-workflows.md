@@ -1,5 +1,9 @@
 # Author and operate workflows
 
+## Report executor usage
+
+For executor-supplied token counts and costs, use `report_usage` and `get_run_usage`. [Usage reporting](usage-reporting.md) defines cumulative snapshots, attempt identity, delayed reports, descendant scope, and coverage. A successful assignment does not imply complete usage data.
+
 ## Compare published workflow behavior
 
 Use the [workflow testbench](workflow-testbench.md) to save representative cases, preview exact run counts/pins/current prompt revisions, and execute paired published versions. Resume a comparison through its ID and existing work claims; reuse the same start request ID after uncertain delivery. Keep execution errors, pass/fail/unknown checks and declared quality judgments distinct. Reports are bounded and link ordinary run inspection. Comparison cancellation preserves detached independence unless explicitly selected otherwise. In-flight comparison pins block cleanup/deletion; portable bundles exclude local cases and comparison records.

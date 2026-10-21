@@ -29,6 +29,9 @@ vi.mock('../packages/ui/src/features/runs/RunGraph', () => ({
 vi.mock('../packages/ui/src/features/runs/WorkPanel', () => ({
   WorkPanel: () => null,
 }));
+vi.mock('../packages/ui/src/features/runs/RunUsage', () => ({
+  RunUsage: () => null,
+}));
 vi.mock('../packages/ui/src/components/JsonEditor/JsonEditor', () => ({
   JsonEditor: ({ label, value }: any) =>
     h('pre', { 'data-json-label': label }, JSON.stringify(value)),

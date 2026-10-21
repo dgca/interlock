@@ -159,6 +159,10 @@ Scripts have time and output limits. Cancellation kills their process group. Shu
 
 Script execution happens outside database transactions. Agent claims and result submission remain available while scripts run. Completed script results are committed before advancing dependent steps.
 
+## Usage reporting
+
+Usage contracts and aggregation live in `core`; `runtime` captures each claim and its outcome and accepts cumulative executor reports. The existing document store persists separate `usageAttempts` records with internal claim-token hashes. Reports can arrive after an attempt ends without restoring execution privileges. Summaries explicitly select one run or all descendants, retain unknown legacy history, and paginate attribution without truncating totals. Accepted updates emit `work.usage_reported` events for UI refresh; usage-only updates do not advance continuation cursors. See [usage reporting](usage-reporting.md).
+
 ## Local interfaces
 
 The service binds to loopback and rejects unexpected request hosts and browser origins. It is a single-user local service without authentication. Local processes can invoke its interfaces. It must not be exposed through a public tunnel.

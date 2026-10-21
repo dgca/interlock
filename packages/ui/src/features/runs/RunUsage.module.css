@@ -1,0 +1,22 @@
+.panel {
+  padding: 14px 23px;
+  border-bottom: 1px solid var(--border);
+}
+.panel summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.tableWrap {
+  overflow-x: auto;
+}
+.tableWrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.tableWrap th,
+.tableWrap td {
+  padding: 8px 12px 8px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
