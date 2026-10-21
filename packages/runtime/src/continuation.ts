@@ -53,6 +53,9 @@ export class Continuation {
       nextWork: snapshot.available,
       next: snapshot.next,
       nextDeadline: snapshot.nextDeadline,
+      ...(snapshot.budgetBlocked.total
+        ? { budgetBlocked: snapshot.budgetBlocked }
+        : {}),
     });
   }
 
@@ -91,6 +94,7 @@ export class Continuation {
       leaseSeconds: work.leaseSeconds,
       leaseUntil: work.leaseUntil,
       availableUntil: work.availableUntil,
+      budgetBlocked: work.budgetBlocked,
     }));
     const deadlines = [
       ...state.executions
@@ -144,19 +148,24 @@ export class Continuation {
             ? 'failure'
             : assignment?.status === 'claimed'
               ? 'claimed_work'
-              : assignment
-                ? 'available_work'
-                : execution?.kind === 'wait'
-                  ? 'wait'
-                  : execution?.kind === 'batch' ||
-                      execution?.kind === 'workflow'
-                    ? 'children'
-                    : 'executing';
+              : assignment?.budgetBlocked
+                ? 'budget_blocked'
+                : assignment
+                  ? 'available_work'
+                  : execution?.kind === 'wait'
+                    ? 'wait'
+                    : execution?.kind === 'batch' ||
+                        execution?.kind === 'workflow'
+                      ? 'children'
+                      : 'executing';
         return {
           ...reference(run.id, execution?.id),
           lifecycleRunId: run.lifecycleRunId,
           reason,
           workId: assignment?.id,
+          ...(assignment?.budgetBlocked
+            ? { budgetRunIds: assignment.budgetBlocked.runIds }
+            : {}),
           error: run.error,
           resumeAt: execution?.resumeAt,
           nextCheckAt: execution?.nextCheckAt,
@@ -243,7 +252,17 @@ export class Continuation {
         limit,
       ),
       available: bounded(
-        work.filter((w) => w.status === 'available'),
+        work.filter((w) => w.status === 'available' && !w.budgetBlocked),
+        limit,
+      ),
+      budgetBlocked: bounded(
+        work
+          .filter((w) => w.status === 'available' && w.budgetBlocked)
+          .map((w) => ({
+            workId: w.id,
+            runId: w.runId,
+            budgetRunIds: w.budgetBlocked!.runIds,
+          })),
         limit,
       ),
       claimed: bounded(
@@ -268,13 +287,15 @@ export class Continuation {
       next:
         requested.status === 'failed'
           ? 'inspect_failure'
-          : work.some((w) => w.status === 'available')
+          : work.some((w) => w.status === 'available' && !w.budgetBlocked)
             ? 'claim_work'
-            : work.some((w) => w.status === 'claimed')
-              ? 'wait_for_worker'
-              : ['completed', 'cancelled'].includes(requested.status)
-                ? 'inspect_result'
-                : 'wait_for_change',
+            : work.some((w) => w.budgetBlocked)
+              ? 'adjust_budget'
+              : work.some((w) => w.status === 'claimed')
+                ? 'wait_for_worker'
+                : ['completed', 'cancelled'].includes(requested.status)
+                  ? 'inspect_result'
+                  : 'wait_for_change',
     };
   }
 

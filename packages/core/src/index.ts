@@ -1,5 +1,6 @@
 import { z } from 'zod';
 export * from './usage.js';
+export * from './budgets.js';
 import Ajv from 'ajv';
 import { validateFetch, type FetchRequest } from './fetch.js';
 export {
@@ -310,6 +311,7 @@ export interface PollCheckResult {
   error?: string;
 }
 export interface Run {
+  budgetRevision?: number;
   comparison?: import('./testbench.js').ComparisonRunContext;
   id: string;
   workflowId: string;
@@ -339,6 +341,7 @@ export interface RunAncestry {
   rootWorkflowId: string;
 }
 export interface WorkRequest {
+  budgetBlocked?: import('./budgets.js').BudgetBlock;
   id: string;
   runId: string;
   executionId: string;

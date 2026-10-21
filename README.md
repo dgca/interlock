@@ -225,7 +225,7 @@ Replace `WORKFLOW_ID` with an ID from `interlock workflows` and `RUN_ID` with th
 
 Executor scripts can use `interlock work --summary` to route assignments by `rootWorkflowId`. `interlock renew WORK_ID TOKEN` reuses the original claim duration; add `'{"leaseSeconds":300}'` to request a specific duration. See [assignment discovery and claim renewal](docs/agent-workflows.md) for fields, bounds, and compatibility details.
 
-Executors can report measured token usage and costs for each claim attempt. The run inspector, `interlock usage`, and MCP expose totals and attribution with unknown or partial coverage when data is missing. See [usage reporting](docs/usage-reporting.md).
+Executors can report measured token usage and costs for each claim attempt. The run inspector, `interlock usage`, and MCP expose totals and attribution with unknown or partial coverage when data is missing. See [usage reporting](docs/usage-reporting.md). Optional [run budgets](docs/run-budgets.md) gate new Agent claims by attempt count or reported usage.
 
 JSON arguments also accept `@filename`, such as `interlock start WORKFLOW_ID @input.json`. Run `interlock commands` for the full command list or `interlock --help` for server options.
 

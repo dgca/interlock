@@ -1,0 +1,13 @@
+# Run budgets
+
+Issue #134. Add an optional budget at run startup or through a revision-checked update. Existing runs remain unrestricted. A budget selects `run`, `lifecycle` (ordinary descendants, stopping at detached boundaries), or `tree` (all descendants, including detached). Nested budgets all apply. Scope never changes cancellation semantics.
+
+Limits cover claim attempts, input tokens, output tokens, and reported cost in one explicit currency. Each limit has a maximum and optional absolute warning threshold. Reaching a maximum blocks new claims. Claim counts include every successful reservation, including failed, expired, and explicitly retried work. All limits use retained history, including when a budget is added or adjusted later. Updates replace policy, require the current revision, and never reset usage; null disables the policy while retaining its revision.
+
+Reported limits require an explicit unknown-usage policy: allow incomplete telemetry with warnings, or block until all relevant attempts have final figures. No attempts means zero consumption. A partial sum reaching the threshold blocks under either policy. Unavailable or differently denominated cost remains unknown; currencies are never converted. Reported limits can overshoot because already claimed work continues and telemetry arrives late. Claim count is the deterministic fallback.
+
+Persist policies in a new document collection and budget-blocked markers on available assignments. Check all applicable limits inside the claim transaction. Refresh markers on usage reports, claims, policy updates, and scheduling. Pause unclaimed timeout countdowns while budget-blocked, then restore the remaining duration when every applicable gate clears. Renewal, submission, usage reports, and ordinary cancellation retain their existing rules. Scripts, Fetch, and already claimed agents are not stopped by the gate.
+
+Keep budget status distinct from run lifecycle status. Hide blocked work from discovery and continuation next-work lists; expose bounded budget blockers and an adjustment next action. Read details on demand through a budget endpoint; use one mutation for adjustment/resume or disabling. Offer the same contracts through MCP and CLI, with optional startup configuration. The existing run UI identifies blocked manual assignments.
+
+Test admission races, exact thresholds and warnings, missing/partial reports, multiple currencies, failed/expired/retried claims, restart and legacy history, nested and detached scopes, timeout suspension, stale updates, adjustment/resumption, cancellation, and API/MCP/CLI parity. Use temporary databases and no paid workers.

@@ -135,27 +135,7 @@ export class Usage {
       if (runIds.has(attempt.runId)) this.store.remove(collection, attempt.id);
   }
 
-  read(input: UsageQuery) {
-    const query = usageQuerySchema.parse(input);
-    const runs = this.store.runs();
-    if (!runs.some((run) => run.id === query.runId))
-      throw new InterlockError('Run not found');
-    const scope = new Set([query.runId]);
-    if (query.includeDescendants) {
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const run of runs)
-          if (
-            run.parentRunId &&
-            scope.has(run.parentRunId) &&
-            !scope.has(run.id)
-          ) {
-            scope.add(run.id);
-            changed = true;
-          }
-      }
-    }
+  attemptsForRuns(scope: Set<string>) {
     const receipts = new Map(
       this.store
         .list<UsageAttempt>(collection)
@@ -184,6 +164,31 @@ export class Usage {
           },
         );
       }
+    return attempts;
+  }
+
+  read(input: UsageQuery) {
+    const query = usageQuerySchema.parse(input);
+    const runs = this.store.runs();
+    if (!runs.some((run) => run.id === query.runId))
+      throw new InterlockError('Run not found');
+    const scope = new Set([query.runId]);
+    if (query.includeDescendants) {
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const run of runs)
+          if (
+            run.parentRunId &&
+            scope.has(run.parentRunId) &&
+            !scope.has(run.id)
+          ) {
+            scope.add(run.id);
+            changed = true;
+          }
+      }
+    }
+    const attempts = this.attemptsForRuns(scope);
     const groups = new Map<string, UsageAttempt[]>();
     for (const attempt of attempts) {
       const groupKey =

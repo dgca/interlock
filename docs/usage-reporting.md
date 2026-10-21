@@ -1,6 +1,6 @@
 # Executor usage reporting
 
-Interlock records usage supplied by external executors. It does not read provider accounts, infer token counts from prompts, calculate prices, or enforce spending limits. Existing executors can continue without reporting usage. Missing figures appear as unknown, including for completed runs.
+Interlock records usage supplied by external executors. It does not read provider accounts, infer token counts from prompts, or calculate prices. Optional [run budgets](run-budgets.md) can gate new Agent claims using these reports. Existing executors can continue without reporting usage. Missing figures appear as unknown, including for completed runs.
 
 ## Report a claim attempt
 
@@ -43,7 +43,7 @@ A newer snapshot cannot remove a model, omit or decrease a known count, or remov
 
 Reports do not renew leases, submit results, or change run status. A retained token can report its original attempt after completion, failure, expiry, or cancellation, including after another worker claims the assignment. That token still cannot renew an expired claim or submit an assignment result. New claims capture internal token hashes for this purpose; inspection never returns them. Keep claim credentials private.
 
-An acknowledgment contains `workId`, `attempt`, `sequence`, and `applied`. Each accepted update is transactional and records a `work.usage_reported` event. Usage-only changes refresh the UI through the event stream but do not change run-continuation cursors.
+An acknowledgment contains `workId`, `attempt`, `sequence`, and `applied`. Each accepted update is transactional and records a `work.usage_reported` event. Usage-only changes refresh the UI through the event stream. When a report changes budget admission, assignment updates also advance run-continuation cursors.
 
 ## Inspect totals and attribution
 

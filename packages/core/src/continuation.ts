@@ -127,11 +127,27 @@ export const mutationSummarySchema = z.object({
   }),
   next: z.enum([
     'claim_work',
+    'adjust_budget',
     'wait_for_worker',
     'wait_for_change',
     'inspect_failure',
     'inspect_result',
   ]),
+  budgetBlocked: z
+    .object({
+      items: z
+        .array(
+          z.object({
+            workId: z.string(),
+            runId: z.string(),
+            budgetRunIds: z.array(z.string()),
+          }),
+        )
+        .max(100),
+      total: z.number().int().nonnegative(),
+      truncated: z.boolean(),
+    })
+    .optional(),
   nextDeadline: z
     .object({
       runId: z.string(),
@@ -192,6 +208,7 @@ export function withNextCall<T extends z.infer<typeof mutationSummarySchema>>(
         arguments: { id },
       };
       break;
+    case 'adjust_budget':
     case 'inspect_failure':
       nextCall = { tool: 'get_run_briefing', arguments: { id } };
       break;

@@ -35,6 +35,7 @@ export type WorkMetadata = Pick<
   | 'leaseSeconds'
   | 'leaseUntil'
   | 'availableUntil'
+  | 'budgetBlocked'
 > & { context: Pick<WorkRequest['context'], 'mode' | 'tools' | 'skills'> };
 
 const tree = `WITH RECURSIVE tree(id, lifecycle) AS (

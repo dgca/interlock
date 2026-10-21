@@ -126,6 +126,10 @@ A fresh-context assignment includes `executionInstructions` for a fresh session 
 
 Detached Workflow nodes can leave independent work active after the requested parent finishes. Inspect and report those run IDs; continue their assignments by their own run IDs. Global discovery still returns their work. Fresh-session instructions target the nearest detached run, while root identity fields retain the original ancestry. Cancelling a parent does not cancel detached work. See [Workflow execution](workflow-execution.md).
 
+## Manage run budgets
+
+Optional [run budgets](run-budgets.md) stop new Agent claims when limits are reached. Use `get_run_budget` to inspect policy and usage, and `set_run_budget` for an authorized adjustment. `next:adjust_budget` and budget blockers identify recoverable gates; already claimed work can finish. Keep detached scope and incomplete-report policy explicit.
+
 ## Report executor usage
 
 Executors that have measured usage can call `report_usage` with the claim's work ID, attempt number, token, and a cumulative snapshot. Reporting is optional and does not renew the lease. `get_run_usage` reads bounded totals and attribution. Keep missing figures unknown; do not estimate account usage from workflow outputs. See [usage reporting](usage-reporting.md) for reporting after an attempt ends and for CLI examples.
