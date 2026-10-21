@@ -20,6 +20,7 @@ import { AgentHandoff } from './AgentHandoff';
 import { WorkPanel } from './WorkPanel';
 import styles from './RunInspector.module.css';
 import { ComparisonContext } from './ComparisonContext';
+import { RunUsage } from './RunUsage';
 type Detail = Awaited<ReturnType<typeof api.runs.get.query>> & {
   availableWork: Awaited<ReturnType<typeof api.work.list.query>>;
 };
@@ -220,6 +221,7 @@ export function RunInspector({
         )}
       <div className={styles.body}>
         <section className={styles.overview}>
+          <RunUsage id={id} tick={tick} />
           <div
             className={`${styles.graph} ${!definition ? styles.unavailableGraph : ''}`}
           >

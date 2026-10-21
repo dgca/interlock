@@ -137,6 +137,18 @@ export async function runCommand(argv: string[]) {
     }
     case 'run':
       return client.runs.get.query({ id: args[0] });
+    case 'usage': {
+      if (!args[0])
+        throw new Error('Usage: usage <run-id> [options-json|@file]');
+      return client.runs.usage.query({
+        ...(args[1] ? await parse(args[1]) : {}),
+        runId: args[0],
+      });
+    }
+    case 'report-usage':
+      if (args.length !== 1)
+        throw new Error('Usage: report-usage <json|@file>');
+      return client.work.reportUsage.mutate(await parse(args[0]));
     case 'work':
       return args.includes('--summary')
         ? client.work.summaries.query({
@@ -208,6 +220,8 @@ export async function runCommand(argv: string[]) {
           'start <workflow-id> <json|@file> [version] [--summary]',
           'runs [--workflow ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
+          'usage <run-id> [options-json|@file: {"includeDescendants":true,"groupBy":"attempt","limit":20,"offset":0}]',
+          'report-usage <json|@file: {"workId":"...","attempt":1,"token":"...","snapshot":{"sequence":1,"final":true,"models":[{"provider":"...","model":"...","inputTokens":100,"outputTokens":20}]}}] (cumulative executor reports; missing values remain unknown)',
           'work [run-id] [--summary]',
           'claim <work-id> [worker-id] [options-json: {"leaseSeconds":1800,"freshContext":false,"tools":[],"skills":[]}] [--fresh] [--lease seconds] (flags override options JSON; --fresh attests an isolated context)',
           'submit <work-id> <token> <json|@file> [--summary]',

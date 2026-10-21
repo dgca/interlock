@@ -43,6 +43,7 @@ import { Prompts } from './prompts.js';
 import { VersionCleanup } from './versionCleanup.js';
 import { Ownership } from './ownership.js';
 import { Testbench } from './testbench.js';
+import { Usage } from './usage.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
 
 class ExpiredClaimError extends InterlockError {}
@@ -65,6 +66,7 @@ export class Engine {
   readonly versions: VersionCleanup;
   readonly ownership: Ownership;
   readonly testbench: Testbench;
+  readonly usage: Usage;
   private localJobs = new Map<string, AbortController>();
   private stopped = false;
   private listeners = new Set<() => void>();
@@ -76,6 +78,13 @@ export class Engine {
     this.prompts = new Prompts(store);
     this.versions = new VersionCleanup(store);
     this.ownership = new Ownership(store);
+    this.usage = new Usage(store, (runId) =>
+      this.event(
+        this.run(runId),
+        'work.usage_reported',
+        'Executor usage updated',
+      ),
+    );
     this.testbench = new Testbench(store, {
       create: (workflowId, version, input, comparison) =>
         this.newRun(
@@ -519,6 +528,7 @@ export class Engine {
         );
       for (const work of this.store.work())
         if (removed.has(work.runId)) this.store.remove('work', work.id);
+      this.usage.removeRuns(removed);
       for (const event of this.store.list<import('@interlock/core').RunEvent>(
         'events',
       ))
@@ -1614,6 +1624,7 @@ export class Engine {
         'work.claimed',
         `${work.label} claimed by ${worker.workerId}`,
       );
+      this.usage.claimed(work);
       return this.describeWork(work);
     });
   }
@@ -1691,6 +1702,7 @@ export class Engine {
         (n) => n.id === work.nodeId,
       )!;
       this.finish(run, execution, node, output);
+      this.usage.ended(work, 'completed');
       work.status = 'completed';
       work.output = output;
       this.store.put('work', work);
@@ -1704,6 +1716,7 @@ export class Engine {
     error: string,
     reason: 'failure' | 'expiry' = 'failure',
   ) {
+    this.usage.ended(work, reason === 'expiry' ? 'expired' : 'failed');
     if (work.maxLeaseExpiries !== undefined) {
       if (reason === 'expiry')
         work.leaseExpiryCount = (work.leaseExpiryCount ?? 0) + 1;
@@ -1776,6 +1789,7 @@ export class Engine {
       .filter(
         (w) => w.runId === id && ['available', 'claimed'].includes(w.status),
       )) {
+      this.usage.ended(work, 'cancelled');
       work.status = 'cancelled';
       work.token = undefined;
       this.store.put('work', work);

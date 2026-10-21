@@ -126,6 +126,10 @@ A fresh-context assignment includes `executionInstructions` for a fresh session 
 
 Detached Workflow nodes can leave independent work active after the requested parent finishes. Inspect and report those run IDs; continue their assignments by their own run IDs. Global discovery still returns their work. Fresh-session instructions target the nearest detached run, while root identity fields retain the original ancestry. Cancelling a parent does not cancel detached work. See [Workflow execution](workflow-execution.md).
 
+## Report executor usage
+
+Executors that have measured usage can call `report_usage` with the claim's work ID, attempt number, token, and a cumulative snapshot. Reporting is optional and does not renew the lease. `get_run_usage` reads bounded totals and attribution. Keep missing figures unknown; do not estimate account usage from workflow outputs. See [usage reporting](usage-reporting.md) for reporting after an attempt ends and for CLI examples.
+
 ## Author definitions through MCP
 
 Use `create_workflow` with a definition containing flat `nodes` and `edges` arrays. `update_workflow` accepts that definition as `draft`, together with the current `draftRevision` from `get_workflow`. Pass the definition itself, not an exported workflow record. Incomplete drafts can be saved; `publish_workflow` validates the complete graph. Set `cascade: true` to advance and republish transitive dependents, including archived workflows. Unpublished dependent definition edits, dependency cycles, or validation failures reject the entire cascade. Existing runs retain their published pins. See [cascade publication](../README.md#publish-a-shared-workflow-and-its-dependents) for scope and draft behavior.

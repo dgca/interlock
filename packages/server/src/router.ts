@@ -25,6 +25,8 @@ import {
   comparisonCancelSchema,
   qualityJudgmentSchema,
   continuationLimitSchema,
+  reportUsageSchema,
+  usageQuerySchema,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import {
@@ -329,6 +331,9 @@ export const appRouter = t.router({
       .mutation(({ ctx, input }) => ctx.engine.versions.delete(input)),
   }),
   runs: t.router({
+    usage: p
+      .input(usageQuerySchema)
+      .query(({ ctx, input }) => ctx.engine.usage.read(input)),
     startSummary: p
       .input(
         z.object({
@@ -384,6 +389,9 @@ export const appRouter = t.router({
     retry: p.input(id).mutation(({ ctx, input }) => ctx.engine.retry(input.id)),
   }),
   work: t.router({
+    reportUsage: p
+      .input(reportUsageSchema)
+      .mutation(({ ctx, input }) => ctx.engine.usage.report(input)),
     submitSummary: p
       .input(
         claim.extend({ output: jsonSchema, limit: continuationLimitSchema }),
