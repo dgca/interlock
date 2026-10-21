@@ -233,6 +233,8 @@ JSON arguments also accept `@filename`, such as `interlock start WORKFLOW_ID @in
 
 Interlock is a local, single-user application. It does not call model APIs or launch agent sessions itself. Agent steps need a connected executor or manual submission; script steps run in the engine.
 
+Agent nodes can opt into [context continuity groups](docs/context-continuity.md) to declare a shared session within a run, with recorded handoffs when the session must change.
+
 A connected executor supplies the tools, skills, and context isolation requested by a workflow. Interlock checks the executor's declared capabilities but does not install or provide them.
 
 See [Scope and limits](docs/v1.md) for execution limits and unsupported features.

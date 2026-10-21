@@ -105,6 +105,19 @@ export function diagnoseDraft(input: unknown): {
     add('entry_count', 'nodes', 'A workflow needs exactly one entry.');
   if (!d.nodes.some((n) => n.kind === 'exit'))
     add('missing_exit', 'nodes', 'A workflow needs an exit.');
+  d.nodes.forEach((node, i) => {
+    if (
+      node.kind === 'agent' &&
+      node.context.mode === 'fresh' &&
+      node.context.continuityGroup
+    )
+      add(
+        'fresh_continuity_group',
+        `nodes.${i}.context.continuityGroup`,
+        `${node.label}: fresh context cannot use a continuity group`,
+        { nodeId: node.id },
+      );
+  });
   const contracts: [string, Record<string, unknown>, string?][] = [
     ['inputSchema', d.inputSchema],
     ['outputSchema', d.outputSchema],

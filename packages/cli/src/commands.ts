@@ -149,6 +149,20 @@ export async function runCommand(argv: string[]) {
     }
     case 'run':
       return client.runs.get.query({ id: args[0] });
+    case 'context-group':
+      if (args.length < 2 || args.length > 3)
+        throw new Error(
+          'Usage: context-group <run-id> <group> [options-json|@file]',
+        );
+      return client.runs.contextGroup.query({
+        ...(args[2] ? await parse(args[2]) : {}),
+        runId: args[0],
+        group: args[1],
+      });
+    case 'handoff-context':
+      if (args.length !== 1)
+        throw new Error('Usage: handoff-context <json|@file>');
+      return client.runs.handoffContext.mutate(await parse(args[0]));
     case 'budget':
       if (args.length !== 1) throw new Error('Usage: budget <run-id>');
       return client.runs.budget.query({ runId: args[0] });
@@ -238,12 +252,14 @@ export async function runCommand(argv: string[]) {
           'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file]',
           'runs [--workflow ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
+          'context-group <run-id> <group> [options-json|@file] (binding and history; offset, limit)',
+          'handoff-context <json|@file> (runId, group, expectedRevision, session, actor, reason, checkpointRef)',
           'budget <run-id> (local revision/policy and governing budget status)',
           'set-budget <json|@file> (runId, expectedRevision, budget; null disables local policy)',
           'usage <run-id> [options-json|@file: {"includeDescendants":true,"groupBy":"attempt","limit":20,"offset":0}]',
           'report-usage <json|@file: {"workId":"...","attempt":1,"token":"...","snapshot":{"sequence":1,"final":true,"models":[{"provider":"...","model":"...","inputTokens":100,"outputTokens":20}]}}] (cumulative executor reports; missing values remain unknown)',
           'work [run-id] [--summary]',
-          'claim <work-id> [worker-id] [options-json: {"leaseSeconds":1800,"freshContext":false,"tools":[],"skills":[]}] [--fresh] [--lease seconds] (flags override options JSON; --fresh attests an isolated context)',
+          'claim <work-id> [worker-id] [options-json: {"leaseSeconds":1800,"freshContext":false,"tools":[],"skills":[]}] [--fresh] [--lease seconds] (flags override options JSON; --fresh attests an isolated context; grouped work also requires session: {executorId,sessionId} in options)',
           'submit <work-id> <token> <json|@file> [--summary]',
           'fail <work-id> <token> <error>',
           'renew <work-id> <token> [options-json: {"leaseSeconds":3600}]',

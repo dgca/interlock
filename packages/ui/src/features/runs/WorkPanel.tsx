@@ -113,6 +113,7 @@ export function WorkPanel({
       {work.status === 'available' &&
         !work.budgetBlocked &&
         work.context.mode === 'current' &&
+        !work.context.continuityGroup &&
         !work.context.tools.length &&
         !work.context.skills.length && (
           <Button
@@ -131,7 +132,17 @@ export function WorkPanel({
             Claim for manual completion
           </Button>
         )}
+      {work.context.continuityGroup && (
+        <p className="hint">
+          Continuity group: {work.context.continuityGroup}.{' '}
+          {work.continuity?.session
+            ? `Expected session: ${work.continuity.session.executorId} / ${work.continuity.session.sessionId}.`
+            : 'The first executor claim binds a session.'}{' '}
+          The manual UI cannot claim grouped work.
+        </p>
+      )}
       {work.status === 'available' &&
+        !work.context.continuityGroup &&
         (work.context.mode === 'fresh' ||
           work.context.tools.length > 0 ||
           work.context.skills.length > 0) && (

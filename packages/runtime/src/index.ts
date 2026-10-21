@@ -36,6 +36,8 @@ import {
   continuationLimitSchema,
   budgetPolicySchema,
   type BudgetPolicy,
+  type ContextHandoffInput,
+  type SessionIdentity,
 } from '@interlock/core';
 import { freshContextInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
@@ -47,6 +49,7 @@ import { Ownership } from './ownership.js';
 import { Testbench } from './testbench.js';
 import { Usage } from './usage.js';
 import { Budgets } from './budgets.js';
+import { ContextContinuityGroups } from './contextContinuity.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
 
 class ExpiredClaimError extends InterlockError {}
@@ -57,6 +60,7 @@ const terminal = (s: string) =>
 const message = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 export interface Worker {
+  session?: SessionIdentity;
   workerId: string;
   freshContext: boolean;
   tools: string[];
@@ -71,6 +75,7 @@ export class Engine {
   readonly testbench: Testbench;
   readonly usage: Usage;
   readonly budgets: Budgets;
+  readonly contextGroups: ContextContinuityGroups;
   private localJobs = new Map<string, AbortController>();
   private stopped = false;
   private listeners = new Set<() => void>();
@@ -97,6 +102,13 @@ export class Engine {
         blocked
           ? 'Agent claims blocked by budget'
           : 'Budget updated; claim eligibility rechecked',
+      ),
+    );
+    this.contextGroups = new ContextContinuityGroups(store, (runId) =>
+      this.event(
+        this.run(runId),
+        'context.updated',
+        'Context continuity binding updated',
       ),
     );
     this.testbench = new Testbench(store, {
@@ -544,6 +556,7 @@ export class Engine {
         if (removed.has(work.runId)) this.store.remove('work', work.id);
       this.usage.removeRuns(removed);
       this.budgets.removeRuns(removed);
+      this.contextGroups.removeRuns(removed);
       for (const event of this.store.list<import('@interlock/core').RunEvent>(
         'events',
       ))
@@ -1071,6 +1084,14 @@ export class Engine {
           ...(savedPrompts.length ? { savedPrompts } : {}),
           input: execution.input,
           context: node.context,
+          ...(node.context.continuityGroup
+            ? {
+                continuity: this.contextGroups.describe(
+                  run.id,
+                  node.context.continuityGroup,
+                ),
+              }
+            : {}),
           outputSchema: node.outputSchema,
           status: 'available',
           attempt: 0,
@@ -1628,6 +1649,7 @@ export class Engine {
       label: work.label,
       status: work.status,
       context: work.context,
+      ...(work.continuity ? { continuity: work.continuity } : {}),
       attempt: work.attempt,
       maxAttempts: work.maxAttempts,
       maxLeaseExpiries: work.maxLeaseExpiries,
@@ -1636,6 +1658,10 @@ export class Engine {
       leaseSeconds: work.leaseSeconds,
       availableUntil: work.availableUntil,
     }));
+  }
+  handoffContext(input: ContextHandoffInput) {
+    this.pump();
+    return this.contextGroups.handoff(input);
   }
   claim(workId: string, worker: Worker, leaseSeconds?: number) {
     this.pump();
@@ -1660,6 +1686,7 @@ export class Engine {
       work.availableUntil = undefined;
       work.attempt++;
       work.workerId = worker.workerId;
+      this.contextGroups.claimed(work, worker.session);
       work.token = randomUUID();
       work.claimLeaseSeconds = leaseSeconds ?? work.leaseSeconds ?? 300;
       work.leaseUntil = new Date(

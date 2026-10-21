@@ -1,6 +1,8 @@
 import { z } from 'zod';
 export * from './usage.js';
 export * from './budgets.js';
+export * from './contextContinuity.js';
+import { continuityGroupSchema } from './contextContinuity.js';
 import Ajv from 'ajv';
 import { validateFetch, type FetchRequest } from './fetch.js';
 export {
@@ -31,6 +33,7 @@ export const jsonSchema: z.ZodType<Json> = z.lazy(() =>
 );
 export const contractSchema = z.record(z.unknown());
 export const contextPolicySchema = z.object({
+  continuityGroup: continuityGroupSchema.optional(),
   mode: z.enum(['current', 'fresh']).default('current'),
   instructions: z.string().default(''),
   tools: z.array(z.string()).default([]),
@@ -311,6 +314,7 @@ export interface PollCheckResult {
   error?: string;
 }
 export interface Run {
+  contextRevision?: number;
   budgetRevision?: number;
   comparison?: import('./testbench.js').ComparisonRunContext;
   id: string;
@@ -341,6 +345,7 @@ export interface RunAncestry {
   rootWorkflowId: string;
 }
 export interface WorkRequest {
+  continuity?: import('./contextContinuity.js').ContextContinuity;
   budgetBlocked?: import('./budgets.js').BudgetBlock;
   id: string;
   runId: string;
@@ -504,6 +509,15 @@ export function hasTimeoutRoute(node: WorkflowNode): boolean {
 
 export function validateDefinition(input: unknown): WorkflowDefinition {
   const d = definitionSchema.parse(input);
+  for (const node of d.nodes)
+    if (
+      node.kind === 'agent' &&
+      node.context.mode === 'fresh' &&
+      node.context.continuityGroup
+    )
+      throw new InterlockError(
+        `${node.label}: fresh context cannot use a continuity group`,
+      );
   for (const node of d.nodes)
     if (
       node.kind === 'agent' &&

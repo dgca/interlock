@@ -201,3 +201,33 @@ it('explains a budget block and hides manual claiming until the gate clears', as
   await render();
   expect(container.textContent).toContain('Claim for manual completion');
 });
+
+it('routes grouped work to an external executor and displays the expected session', async () => {
+  const definition = blankDefinition();
+  const agent = definition.nodes[1];
+  if (agent.kind !== 'agent') throw new Error('Expected Agent');
+  agent.context.continuityGroup = 'author';
+  const workflow = engine.create('Grouped', '', definition);
+  engine.publish(workflow.id);
+  const run = engine.start(workflow.id, {}).run;
+  [work] = engine.available(run.id);
+  await render();
+  expect(container.textContent).toContain(
+    'first executor claim binds a session',
+  );
+  expect(container.textContent).not.toContain('Claim for manual completion');
+  const claimed = engine.claim(work.id, {
+    workerId: 'test',
+    freshContext: false,
+    tools: [],
+    skills: [],
+    session: { executorId: 'harness', sessionId: 'author-1' },
+  });
+  engine.reportFailure(claimed.id, claimed.token!, 'retry');
+  [work] = engine.available(run.id);
+  await render();
+  expect(container.textContent).toContain(
+    'Expected session: harness / author-1',
+  );
+  expect(container.textContent).not.toContain('Claim for manual completion');
+});

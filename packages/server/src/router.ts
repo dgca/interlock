@@ -2,6 +2,9 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { developmentConnection, type ConnectionConfig } from './connection.js';
 import {
+  contextGroupQuerySchema,
+  contextHandoffSchema,
+  sessionIdentitySchema,
   definitionSchema,
   workflowEditsSchema,
   jsonSchema,
@@ -333,6 +336,12 @@ export const appRouter = t.router({
       .mutation(({ ctx, input }) => ctx.engine.versions.delete(input)),
   }),
   runs: t.router({
+    contextGroup: p
+      .input(contextGroupQuerySchema)
+      .query(({ ctx, input }) => ctx.engine.contextGroups.read(input)),
+    handoffContext: p
+      .input(contextHandoffSchema)
+      .mutation(({ ctx, input }) => ctx.engine.handoffContext(input)),
     budget: p
       .input(z.object({ runId: z.string().min(1) }))
       .query(({ ctx, input }) => ctx.engine.budgets.read(input.runId)),
@@ -431,6 +440,7 @@ export const appRouter = t.router({
         z.object({
           workId: z.string(),
           workerId: z.string().min(1),
+          session: sessionIdentitySchema.optional(),
           freshContext: z.boolean().default(false),
           tools: z.array(z.string()).default([]),
           skills: z.array(z.string()).default([]),

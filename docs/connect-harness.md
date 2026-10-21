@@ -105,7 +105,7 @@ With the workflow selected, ask it to complete the run through Interlock:
 ```text
 Start Interlock workflow WORKFLOW_ID with the supplied input. The response defaults to summary.
 Use nextWork for available assignments, or list_work with fields: "summary" for the root run and its descendants.
-Claim assignments with your actual capabilities.
+Claim assignments with your actual capabilities. For context.continuityGroup, resume continuity.session and declare session:{executorId,sessionId}. Choose a session if unbound; replace an unavailable session through handoff_context_group with a reason and checkpoint reference after its active claim ends. Groups are local to each assignment run.
 Perform each assignment using its composed prompt, input, and context policy. Saved prompts are captured for the run; do not reload newer library content to replace assignment instructions. Submit results and use the returned runId and cursor for continuation. nextCall suggests a read-only call; null means choose work and claim with your actual identity and capabilities.
 Submit JSON matching its output schema.
 Use get_run_briefing to resume and distinguish blockers when no work is available.
@@ -190,7 +190,7 @@ Use `preview_workflow_ownership` and `set_workflow_owner` for adoption, reparent
 
 ## Manual claims in the UI
 
-The run view can claim unrestricted current-context assignments for manual completion. Claim credentials stay in page memory, with only the work ID, token, worker ID, attempt, and lease deadline retained. Assignment bodies and credentials are not written to web storage. Startup removes recognizable Interlock claim records left in session storage by earlier versions.
+The run view can claim unrestricted current-context assignments for manual completion. Grouped assignments require an external executor session declaration and cannot be claimed manually. Claim credentials stay in page memory, with only the work ID, token, worker ID, attempt, and lease deadline retained. Assignment bodies and credentials are not written to web storage. Startup removes recognizable Interlock claim records left in session storage by earlier versions.
 
 Navigation within Interlock preserves an active claim. Reloading or closing the page loses the token, including when upgrading from a version that saved claims in session storage. Continue in the original page if it is still open. Otherwise, wait until the lease expires and reclaim only if the assignment becomes available. Expiry consumes the separate lease-expiry budget when configured, otherwise the combined attempt budget; exhausting either applicable budget fails the run. Inspect a failed run before explicitly retrying it.
 
@@ -220,3 +220,9 @@ Transport tests cover HTTP and stdio initialization, tool discovery, work discov
 The optional `scripts/codex-smoke.ts` check invokes the installed Codex CLI with a real account and a local text task. It creates a workflow in the running engine and consumes model usage. Its result depends on the client's authentication and tool approval settings; it is separate from the automated transport tests.
 
 Use the [workflow testbench](workflow-testbench.md) for MCP-first saved cases and paired live comparisons. The existing claim/submit loop performs Agent work; starting a comparison does not launch an executor. Reports preserve execution/check/quality distinctions and identify independent detached work.
+
+## Resume grouped Agent sessions
+
+When an assignment declares `context.continuityGroup`, use its `continuity.session` to route it to the expected harness session. Include `{executorId, sessionId}` as `session` in the claim. The first claim binds an unbound group. Later claims reject another identity until an explicit handoff records a reason and checkpoint reference. Use `get_context_group` to inspect history and `handoff_context_group` to replace an unavailable session after its active claim ends. The harness must restore the checkpoint; Interlock does not read it.
+
+Groups are local to the assignment's run, including when work is discovered from a parent briefing. Child workflows and Batch items have independent bindings. Fresh reviewers stay outside the author group. These checks enforce declarations, not actual session creation or isolation. See [context continuity](context-continuity.md) for examples and recovery rules.

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import {
+  continuitySchema,
+  continuityGroupSchema,
   mutationSummarySchema,
   submissionSummarySchema,
   mutationDetailSchema,
@@ -67,7 +69,9 @@ export const workListResponseSchema = z
           nodeId: z.string(),
           label: z.string(),
           status: z.literal('available'),
+          continuity: continuitySchema.optional(),
           context: z.object({
+            continuityGroup: continuityGroupSchema.optional(),
             mode: z.enum(['current', 'fresh']),
             tools: z.array(z.string()),
             skills: z.array(z.string()),
@@ -152,6 +156,7 @@ export const claimResponseSchema = z
     input: jsonSchema,
     outputSchema: z.record(z.unknown()),
     context: contextPolicySchema,
+    continuity: continuitySchema.optional(),
     executionInstructions: z.string().optional(),
   })
   .passthrough();

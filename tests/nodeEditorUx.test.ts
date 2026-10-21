@@ -495,3 +495,29 @@ it('configures a separate expiry budget and rejects invalid counts', async () =>
   ).toBeUndefined();
   expect(field('Maximum attempts')).toBeDefined();
 });
+
+it('edits and clears an Agent continuity group without changing context mode', async () => {
+  const { onApply } = await render({
+    kind: 'agent',
+    prompt: 'Implement',
+    context: { mode: 'current' },
+  });
+  await fill('Continuity group', 'author');
+  await click('Apply changes');
+  expect(
+    onApply.mock.calls[0][0].definition.nodes.find((n: any) => n.id === 'step')
+      .context,
+  ).toMatchObject({ mode: 'current', continuityGroup: 'author' });
+  const next = await render({
+    kind: 'agent',
+    prompt: 'Implement',
+    context: { mode: 'current', continuityGroup: 'author' },
+  });
+  await fill('Continuity group', '');
+  await click('Apply changes');
+  expect(
+    next.onApply.mock.calls[0][0].definition.nodes.find(
+      (n: any) => n.id === 'step',
+    ).context.continuityGroup,
+  ).toBeUndefined();
+});
