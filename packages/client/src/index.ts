@@ -10,7 +10,8 @@ export function createClient(url = 'http://127.0.0.1:4310') {
     links: [
       splitLink({
         // Candidate definitions can exceed the HTTP request-line limit.
-        condition: (operation) => operation.path === 'workflows.validate',
+        condition: (operation) =>
+          ['workflows.validate', 'work.preflight'].includes(operation.path),
         true: httpLink({
           url: `${url}/trpc`,
           methodOverride: 'POST',
@@ -31,3 +32,5 @@ export function createClient(url = 'http://127.0.0.1:4310') {
     ],
   });
 }
+
+export { TRPCClientError } from '@trpc/client';

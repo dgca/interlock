@@ -8,7 +8,7 @@ import {
 import { batchDefinition } from './fixtures/batch';
 import { switchDefinition } from './fixtures/switch';
 import { workflowCall } from './fixtures/detached';
-import { runCommand } from '../packages/cli/src/commands';
+import { runCommand, commandError } from '../packages/cli/src/commands';
 import { it, expect, vi } from 'vitest';
 import { serve } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -2532,6 +2532,87 @@ it.each(['stdio', 'http'])(
       console.log(
         `${mode}: ${tools.length} MCP tools, ${Buffer.byteLength(JSON.stringify(tools))} B definitions`,
       );
+      const checkDefinition = blankDefinition();
+      checkDefinition.nodes[1].outputSchema = {
+        type: 'object',
+        required: ['answer'],
+        properties: { answer: { type: 'integer' } },
+      };
+      const checkWorkflow = engine.create(
+        'Preflight transport',
+        '',
+        checkDefinition,
+      );
+      engine.publish(checkWorkflow.id);
+      const checkRun = await call('start_run', {
+        workflowId: checkWorkflow.id,
+        input: {},
+      });
+      const checkClaim = await call('claim_work', {
+        workId: checkRun.nextWork.items[0].id,
+        workerId: 'test',
+      });
+      const invalidCandidate = {
+        workId: checkClaim.id,
+        token: checkClaim.token,
+        output: { answer: 'private-candidate', large: 'x'.repeat(200000) },
+      };
+      const checked = await call('preflight_result', invalidCandidate);
+      expect(checked).toMatchObject({
+        code: 'invalid_result',
+        claimUsable: true,
+        accepted: false,
+        nextAction: 'correct_result',
+      });
+      expect(JSON.stringify(checked)).not.toContain('private-candidate');
+      const rejected = await client.callTool({
+        name: 'submit_result',
+        arguments: invalidCandidate,
+      });
+      expect(rejected.isError).toBe(true);
+      expect(rejected.structuredContent).toEqual({ resultCheck: checked });
+      expect(await api.work.preflight.query(invalidCandidate)).toEqual(checked);
+      const checkUrl = process.env.INTERLOCK_URL;
+      process.env.INTERLOCK_URL = url;
+      try {
+        expect(
+          await runCommand([
+            'preflight',
+            checkClaim.id,
+            checkClaim.token,
+            JSON.stringify(invalidCandidate.output),
+          ]),
+        ).toEqual(checked);
+        try {
+          await runCommand([
+            'submit',
+            checkClaim.id,
+            checkClaim.token,
+            JSON.stringify(invalidCandidate.output),
+          ]);
+          throw new Error('accepted');
+        } catch (error) {
+          expect(JSON.parse(commandError(error)).resultCheck).toEqual(checked);
+        }
+      } finally {
+        if (checkUrl === undefined) delete process.env.INTERLOCK_URL;
+        else process.env.INTERLOCK_URL = checkUrl;
+      }
+      await call('submit_result', {
+        ...invalidCandidate,
+        output: { answer: 42 },
+      });
+      expect(
+        (
+          await call('preflight_result', {
+            ...invalidCandidate,
+            output: { answer: 42 },
+          })
+        ).code,
+      ).toBe('already_accepted');
+      expect(
+        tools.find((t) => t.name === 'preflight_result')?.inputSchema.required,
+      ).toEqual(expect.arrayContaining(['workId', 'token', 'output']));
       const invalidRetry = await client.callTool({
         name: 'retry_run',
         arguments: { id: failed.run.id },

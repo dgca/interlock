@@ -1,9 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { TRPCClientError } from '@interlock/client';
 import {
   contextGroupQuerySchema,
   contextHandoffSchema,
   sessionIdentitySchema,
+  ResultRejection,
+  resultCheckSchema,
   definitionSchema,
   jsonSchema,
   runQuerySchema,
@@ -112,8 +115,18 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
             ],
           };
         } catch (error) {
+          const resultCheck =
+            error instanceof TRPCClientError
+              ? error.data?.resultCheck
+              : error instanceof ResultRejection
+                ? error.resultCheck
+                : error instanceof Error &&
+                    error.cause instanceof ResultRejection
+                  ? error.cause.resultCheck
+                  : undefined;
           return {
             isError: true,
+            ...(resultCheck ? { structuredContent: { resultCheck } } : {}),
             content: [
               {
                 type: 'text' as const,
@@ -580,8 +593,15 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     claimResponseSchema,
   );
   tool(
+    'preflight_result',
+    'Read-only check of a candidate against the captured assignment contract and current claim. No acceptance, lease renewal, timer processing, or graph advance. Returns bounded field/rule diagnostics without candidate values. A passing check does not reserve acceptance; submit_result rechecks live state. Identical completed results report already_accepted.',
+    { workId: z.string(), token: z.string(), output: jsonSchema },
+    (input) => client.work.preflight(input),
+    resultCheckSchema,
+  );
+  tool(
     'submit_result',
-    'Summary nextWork excludes budget-blocked assignments; next:adjust_budget identifies recoverable budget blocks. Usage is reported separately with report_usage, before or after completion; submitting a result does not imply complete usage telemetry. Submit JSON matching the claimed output schema. Returns summary by default: ok (accepted, not necessarily workflow success), workId, workRunId, continuation runId/runStatus, cursor, nextWork, next, nextDeadline and nextCall. Explicit detail:"full" returns inspection of the immediate work-owning run, including definition, execution history and input/output payloads. Read the final workflow output with get_run_result; downstream steps can transform the submitted value. nextCall suggests a read-only result, briefing or wait call; null means choose work and claim with your actual identity and capabilities. Continuation scope climbs ordinary parents and stops at the nearest detached boundary; nextWork includes all descendants of that scope and their lifecycle/context requirements. Use returned runId with cursor for wait_for_run_change. Empty nextWork is not proof of completion; inspect runStatus, next and get_run_briefing. Repeat identical submissions safely after connection failures, including after completion: response shape follows detail and values reflect current state, not a frozen replay. Different results and stale, cancelled or expired active claims reject. Timeout routes use original input; do not fabricate results.',
+    'Use preflight_result to check a candidate without submitting. Rejections expose resultCheck with code, claimUsable, nextAction, and bounded diagnostics; accepted:false means this call accepted nothing. Correct invalid_result while the claim is usable; inspect work for expired/replaced/cancelled claims. Summary nextWork excludes budget-blocked assignments; next:adjust_budget identifies recoverable budget blocks. Usage is reported separately with report_usage, before or after completion; submitting a result does not imply complete usage telemetry. Submit JSON matching the claimed output schema. Returns summary by default: ok (accepted, not necessarily workflow success), workId, workRunId, continuation runId/runStatus, cursor, nextWork, next, nextDeadline and nextCall. Explicit detail:"full" returns inspection of the immediate work-owning run, including definition, execution history and input/output payloads. Read the final workflow output with get_run_result; downstream steps can transform the submitted value. nextCall suggests a read-only result, briefing or wait call; null means choose work and claim with your actual identity and capabilities. Continuation scope climbs ordinary parents and stops at the nearest detached boundary; nextWork includes all descendants of that scope and their lifecycle/context requirements. Use returned runId with cursor for wait_for_run_change. Empty nextWork is not proof of completion; inspect runStatus, next and get_run_briefing. Repeat identical submissions safely after connection failures, including after completion: response shape follows detail and values reflect current state, not a frozen replay. Different results and stale, cancelled or expired active claims reject. Timeout routes use original input; do not fabricate results.',
     {
       detail: mcpMutationDetailSchema,
       limit: continuationLimitSchema.describe(

@@ -109,10 +109,18 @@ it.each(['http', 'stdio'])(
           );
         return { data: response.structuredContent as any, text };
       };
-      const reject = async (name: string, args: Record<string, unknown>) => {
+      const reject = async (
+        name: string,
+        args: Record<string, unknown>,
+        code?: string,
+      ) => {
         const response = await client.callTool({ name, arguments: args });
         expect(response.isError).toBe(true);
-        expect(response.structuredContent).toBeUndefined();
+        if (code)
+          expect(response.structuredContent).toMatchObject({
+            resultCheck: { code, accepted: false },
+          });
+        else expect(response.structuredContent).toBeUndefined();
       };
       const beforeInvalidStart = store.runs();
       for (const options of [
@@ -208,12 +216,16 @@ it.each(['http', 'stdio'])(
           detail: 'summary',
         });
         expect(replay.data).toEqual(response.data);
-        await reject('submit_result', {
-          workId,
-          token: claim.data.token,
-          output: null,
-          detail: 'summary',
-        });
+        await reject(
+          'submit_result',
+          {
+            workId,
+            token: claim.data.token,
+            output: null,
+            detail: 'summary',
+          },
+          'completed_conflict',
+        );
         // Explicit full replay keeps the immediate-run inspection payload.
         const legacy = await call('submit_result', {
           workId,

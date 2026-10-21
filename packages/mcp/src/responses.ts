@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   continuitySchema,
   continuityGroupSchema,
+  resultCheckSchema,
   mutationSummarySchema,
   submissionSummarySchema,
   mutationDetailSchema,
@@ -53,10 +54,11 @@ export const submitResponseSchema = z
   .object({
     ...inspectionFields,
     ...submissionSummarySchema.partial().shape,
+    resultCheck: resultCheckSchema.optional(),
     nextCall: nextCallSchema.optional(),
   })
   .describe(
-    'summary (default) requires ok, runId, runStatus, cursor, nextWork, next, nextDeadline, nextCall, workId and workRunId. runId identifies the continuation lifecycle; workRunId identifies the assignment run. full returns the work-owning run inspection with definition, executions, input/output payloads, work and events.',
+    'Errors return isError:true and structured resultCheck instead of success fields. summary (default) requires ok, runId, runStatus, cursor, nextWork, next, nextDeadline, nextCall, workId and workRunId. runId identifies the continuation lifecycle; workRunId identifies the assignment run. full returns the work-owning run inspection with definition, executions, input/output payloads, work and events.',
   );
 
 export const workListResponseSchema = z

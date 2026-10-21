@@ -61,6 +61,7 @@ export function createMcpClient(url?: string) {
       cancel: client.runs.cancel.mutate,
     },
     work: {
+      preflight: client.work.preflight.query,
       reportUsage: client.work.reportUsage.mutate,
       submitSummary: client.work.submitSummary.mutate,
       summaries: client.work.summaries.query,
