@@ -2,9 +2,11 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { developmentConnection, type ConnectionConfig } from './connection.js';
 import {
+  simulationRequestSchema,
   contextGroupQuerySchema,
   contextHandoffSchema,
   sessionIdentitySchema,
+  assignmentSizeQuerySchema,
   definitionSchema,
   workflowEditsSchema,
   jsonSchema,
@@ -97,6 +99,9 @@ export const appRouter = t.router({
     return { ...config, mcpUrl: new URL('/mcp', config.engineUrl).href };
   }),
   testbench: t.router({
+    simulation: p
+      .input(simulationRequestSchema)
+      .mutation(({ ctx, input }) => ctx.engine.simulations.request(input)),
     suites: p
       .input(testbenchListSchema)
       .query(({ ctx, input }) => ctx.engine.testbench.listSuites(input)),
@@ -431,6 +436,9 @@ export const appRouter = t.router({
     retry: p.input(id).mutation(({ ctx, input }) => ctx.engine.retry(input.id)),
   }),
   work: t.router({
+    size: p
+      .input(assignmentSizeQuerySchema)
+      .query(({ ctx, input }) => ctx.engine.assignmentSizes.read(input)),
     reportUsage: p
       .input(reportUsageSchema)
       .mutation(({ ctx, input }) => ctx.engine.usage.report(input)),

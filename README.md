@@ -104,6 +104,8 @@ The **Tidy** icon sits below **Fit View** in the canvas controls and runs your l
 
 Use the MCP [workflow testbench](docs/workflow-testbench.md) to save representative cases, preview and execute two published versions, and inspect separate execution, assertion and quality results. Existing Runs views label each comparison, case, baseline/candidate side and repetition, with counterpart navigation. These are real runs using connected executors and normal Script/Fetch actions. Comparison configuration stays in MCP; publication remains separate.
 
+Use [fixture simulation](docs/workflow-simulation.md) to test supported flat graphs with saved Agent, Script and Fetch outcomes without model calls or external effects. Simulated reports stay separate from live comparisons. Author cases with `interlock test-suite` and run or inspect them with `interlock simulation` or the grouped MCP tool.
+
 ### Create a child workflow
 
 Use child workflows for helpers that belong to one parent. The main library shows library workflows only. Open a parent's **Child workflows** tab to find its helpers, including children not connected to a node.
@@ -310,3 +312,5 @@ Dependent drafts must match their latest published definitions. Publish or disca
 Existing versions and runs retain their exact pins. New runs use the new versions by default; starting an explicit older version still uses its original dependencies. Contracts are checked during execution, so test changed child behavior before cascading it to callers.
 
 Agent executors can [check candidate results before submission](docs/result-preflight.md) without renewing claims or advancing runs. Submission rechecks live state and returns bounded correction diagnostics when a result is rejected.
+
+[Assignment size diagnostics](docs/assignment-size.md) show UTF-8 byte contributions and advisory warnings before claims. Agent previews accept sample inputs and upstream outputs, with unresolved values marked unknown. Payload values are omitted from reports.

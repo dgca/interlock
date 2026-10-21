@@ -1,7 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { createClient, TRPCClientError } from '@interlock/client';
 import { parseArgs } from 'node:util';
-import { withNextCall } from '@interlock/core';
+import {
+  withNextCall,
+  testSuiteSaveSchema,
+  testSuiteReadSchema,
+} from '@interlock/core';
 const parse = async (value: string | undefined) => {
   if (value === undefined) throw new Error('Missing JSON argument');
   return JSON.parse(
@@ -43,6 +47,33 @@ export async function runCommand(argv: string[]) {
   const client = createClient(process.env.INTERLOCK_URL);
   const [command, ...args] = argv;
   switch (command) {
+    case 'simulation':
+      if (args.length !== 1) throw new Error('Usage: simulation <json|@file>');
+      return client.testbench.simulation.mutate(await parse(args[0]));
+    case 'test-suite': {
+      if (args.length !== 1) throw new Error('Usage: test-suite <json|@file>');
+      const request = await parse(args[0]);
+      if (request.action === 'create' || request.action === 'update') {
+        const q = testSuiteSaveSchema.parse({ request }).request;
+        return q.action === 'create'
+          ? client.testbench.createSuite.mutate({
+              workflowId: q.workflowId,
+              content: q.content,
+            })
+          : client.testbench.updateSuite.mutate({
+              id: q.id,
+              revision: q.revision,
+              content: q.content,
+            });
+      }
+      const q = testSuiteReadSchema.parse({ request }).request;
+      return q.action === 'get'
+        ? client.testbench.suite.query({ id: q.id })
+        : client.testbench.suites.query({
+            workflowId: q.workflowId,
+            limit: q.limit,
+          });
+    }
     case 'workflows':
       return client.workflows.list.query(
         args[0] ? await parse(args[0]) : undefined,
@@ -56,7 +87,7 @@ export async function runCommand(argv: string[]) {
     case 'delete':
       if (args.length !== 2 || args[1] !== '--yes')
         throw new Error(
-          'Usage: delete <id> --yes. Permanently removes the workflow, its history and local test suites/comparisons. Use archive to preserve history.',
+          'Usage: delete <id> --yes. Permanently removes the workflow, its history and local test suites/comparisons/simulations. Use archive to preserve history.',
         );
       return client.workflows.delete.mutate({ id: args[0] });
     case 'import': {
@@ -181,6 +212,10 @@ export async function runCommand(argv: string[]) {
       if (args.length !== 1)
         throw new Error('Usage: report-usage <json|@file>');
       return client.work.reportUsage.mutate(await parse(args[0]));
+    case 'assignment-size':
+      if (args.length !== 1)
+        throw new Error('Usage: assignment-size <json|@file>');
+      return client.work.size.query(await parse(args[0]));
     case 'work':
       return args.includes('--summary')
         ? client.work.summaries.query({
@@ -266,6 +301,9 @@ export async function runCommand(argv: string[]) {
           'set-budget <json|@file> (runId, expectedRevision, budget; null disables local policy)',
           'usage <run-id> [options-json|@file: {"includeDescendants":true,"groupBy":"attempt","limit":20,"offset":0}]',
           'report-usage <json|@file: {"workId":"...","attempt":1,"token":"...","snapshot":{"sequence":1,"final":true,"models":[{"provider":"...","model":"...","inputTokens":100,"outputTokens":20}]}}] (cumulative executor reports; missing values remain unknown)',
+          'simulation <json|@file> (action: run/get/list/capture/cancel; fixture-only, no external effects)',
+          'test-suite <json|@file> (action: create/update/get/list; saved cases with optional simulation fixtures)',
+          'assignment-size <json|@file> (workId, or workflowId/nodeId with sample; optional warningBytes)',
           'work [run-id] [--summary]',
           'claim <work-id> [worker-id] [options-json: {"leaseSeconds":1800,"freshContext":false,"tools":[],"skills":[]}] [--fresh] [--lease seconds] (flags override options JSON; --fresh attests an isolated context; grouped work also requires session: {executorId,sessionId} in options)',
           'preflight <work-id> <token> <json|@file> (read-only result and claim check)',

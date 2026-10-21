@@ -79,6 +79,7 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
       allowMethodOverride: [
         '/trpc/workflows.validate',
         '/trpc/work.preflight',
+        '/trpc/work.size',
       ].includes(c.req.path),
       createContext: () => ({ engine, connection, signal: c.req.raw.signal }),
     }),

@@ -175,13 +175,15 @@ Installed copies use `~/.interlock/interlock.db`; development uses `.interlock/i
 
 The Hono listener exposes Streamable HTTP MCP at `/mcp`, behind the same host, origin, and 2 MiB request-body restrictions as the other APIs. Each POST creates an MCP server and SDK transport, calls the shared server router, returns JSON, and closes the transport. There are no transport sessions or server-initiated notifications; GET and DELETE return 405. Runs and claims remain in SQLite across requests and restarts. The endpoint URL stays stable across upgrades at the same address, for both global and npx startup.
 
-The shared client sends `workflows.validate` and `work.preflight` as individual POST queries to avoid request-line limits on candidate definitions and results. The server accepts POST for these queries while retaining legacy GET and batched GET validation. The operation remains read-only. Requests above the body limit receive HTTP 413 with the limit and a request-size correction message.
+The shared client sends `workflows.validate`, `work.preflight`, and `work.size` as individual POST queries to avoid request-line limits on candidate definitions, results, and preview samples. The server accepts POST for these queries while retaining legacy GET and batched GET validation. The operation remains read-only. Requests above the body limit receive HTTP 413 with the limit and a request-size correction message.
 
 `interlock mcp` remains a stdio bridge to an already running engine. The connection dialog defaults to HTTP and provides a stdio fallback: checkout paths in development, the portable CLI command for installed copies, and optional absolute paths derived from the installed runtime.
 
 The UI uses tRPC requests and server-sent notifications, with periodic refresh as a reconnect fallback. Events and node execution data remain in SQLite. `INTERLOCK_DB` changes the database location. `INTERLOCK_URL` changes the service URL used by CLI and MCP callers.
 
 ## Workflow testbench
+
+Fixture simulations use `testbench.simulation` and one grouped MCP tool. The runtime captures a published version and case revision, then drives a private in-memory Engine with a mandatory Script/Fetch substitution provider and synthetic Agent claims. Live execution retains the original executors. Workflow/Batch/Wait nodes and Agent timers reject before simulation. Separate `workflowSimulations` documents hold captures, receipts, checks and compact traces; they never enter live runs, work or usage collections. Startup marks unfinished reports interrupted. Active simulations block workflow deletion until cleanup; deletion removes their history. No database format conversion is required. See [simulation scope and operations](workflow-simulation.md).
 
 Core owns suite/case/assertion contracts and pure check evaluation. Runtime coordinates revisioned suites and captured comparisons around ordinary runs. SQLite document collections `testSuites` and `comparisons` preserve snapshots, queued sample IDs, dependency hashes, prompt content, observations and judgments without rewriting existing records or changing schema 3. Optional run `comparison` metadata carries case/side/repetition context through descendants and compact run views.
 
@@ -291,3 +293,5 @@ Core owns cleanup selection and acknowledgment contracts. Storage retains delete
 Imports preserve cleanup decisions by default and report skipped versions. Explicit restoration accepts only original parsed definitions with valid ownership and published dependencies. Format-3 bundles transfer deletion identities without removed definitions; imports never use that metadata to delete versions retained locally. Existing formats remain supported.
 
 Full inspection returns a null definition and an availability marker after deletion. Run data, events, assignments, captures, and ancestry remain. Briefings tolerate missing Batch graphs with unknown total and queued counts. The UI keeps history and recorded execution details available, replaces the graph with an explanation, and omits retry. Starts and retries needing deleted definitions fail before state changes. See [version cleanup](version-cleanup.md).
+
+Runtime assignment-size inspection reads captured assignments or resolves explicit preview fixtures against a draft or published Agent definition. Core measures compact JSON component values in UTF-8 bytes, with bounded field/repetition diagnostics. Unknown preview components stay unknown. This operation does not pump or write. See [assignment size](assignment-size.md).

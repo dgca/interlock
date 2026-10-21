@@ -1,7 +1,9 @@
+export * from './simulation.js';
 import { z } from 'zod';
 export * from './usage.js';
 export * from './budgets.js';
 export * from './resultValidation.js';
+export * from './assignmentSize.js';
 export * from './contextContinuity.js';
 import { continuityGroupSchema } from './contextContinuity.js';
 import Ajv from 'ajv';
