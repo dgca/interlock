@@ -2613,6 +2613,47 @@ it.each(['stdio', 'http'])(
       expect(
         tools.find((t) => t.name === 'preflight_result')?.inputSchema.required,
       ).toEqual(expect.arrayContaining(['workId', 'token', 'output']));
+      const sizeDefinition = blankDefinition();
+      const sizeWorkflow = engine.create('Size transport', '', sizeDefinition);
+      engine.publish(sizeWorkflow.id);
+      const sizeRun = engine.start(sizeWorkflow.id, {
+        privatePayload: '🌿'.repeat(50000),
+      }).run;
+      const sizeWork = engine.available(sizeRun.id)[0];
+      const sizeReport = await call('inspect_assignment_size', {
+        workId: sizeWork.id,
+        warningBytes: 1000,
+      });
+      expect(sizeReport.warnings).toContain('large_assignment');
+      expect(sizeReport.totalBytes).toBeGreaterThan(200000);
+      expect(JSON.stringify(sizeReport).length).toBeLessThan(3000);
+      expect(JSON.stringify(sizeReport)).not.toContain('🌿');
+      const previewQuery = {
+        workflowId: sizeWorkflow.id,
+        nodeId: 'agent',
+        version: 1,
+        sample: { input: sizeWork.input },
+        warningBytes: 1000,
+      };
+      const previewSize = await call('inspect_assignment_size', previewQuery);
+      expect(previewSize.components.input.bytes).toBe(
+        sizeReport.components.input.bytes,
+      );
+      expect(await api.work.size.query(previewQuery)).toEqual(previewSize);
+      const sizeUrl = process.env.INTERLOCK_URL;
+      process.env.INTERLOCK_URL = url;
+      try {
+        expect(
+          await runCommand(['assignment-size', JSON.stringify(previewQuery)]),
+        ).toEqual(previewSize);
+      } finally {
+        if (sizeUrl === undefined) delete process.env.INTERLOCK_URL;
+        else process.env.INTERLOCK_URL = sizeUrl;
+      }
+      expect(tools.some((t) => t.name === 'inspect_assignment_size')).toBe(
+        true,
+      );
+      expect(engine.available(sizeRun.id)[0].attempt).toBe(0);
       const invalidRetry = await client.callTool({
         name: 'retry_run',
         arguments: { id: failed.run.id },

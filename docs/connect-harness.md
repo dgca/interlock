@@ -228,3 +228,5 @@ When an assignment declares `context.continuityGroup`, use its `continuity.sessi
 Groups are local to the assignment's run, including when work is discovered from a parent briefing. Child workflows and Batch items have independent bindings. Fresh reviewers stay outside the author group. These checks enforce declarations, not actual session creation or isolation. See [context continuity](context-continuity.md) for examples and recovery rules.
 
 Agent executors can [check candidate results before submission](result-preflight.md) without renewing claims or advancing runs. Submission rechecks live state and returns bounded correction diagnostics when a result is rejected.
+
+[Assignment size diagnostics](assignment-size.md) show UTF-8 byte contributions and advisory warnings before claims. Agent previews accept sample inputs and upstream outputs, with unresolved values marked unknown. Payload values are omitted from reports.
