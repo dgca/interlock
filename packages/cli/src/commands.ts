@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { createClient } from '@interlock/client';
+import { createClient, TRPCClientError } from '@interlock/client';
 import { parseArgs } from 'node:util';
 import { withNextCall } from '@interlock/core';
 const parse = async (value: string | undefined) => {
@@ -207,6 +207,14 @@ export async function runCommand(argv: string[]) {
           : { leaseSeconds: Number(values.lease) }),
       });
     }
+    case 'preflight':
+      if (args.length !== 3)
+        throw new Error('Usage: preflight <work-id> <token> <json|@file>');
+      return client.work.preflight.query({
+        workId: args[0],
+        token: args[1],
+        output: await parse(args[2]),
+      });
     case 'submit': {
       const { values, positionals } = parseSummaryArgs(args);
       if (positionals.length !== 3)
@@ -260,6 +268,7 @@ export async function runCommand(argv: string[]) {
           'report-usage <json|@file: {"workId":"...","attempt":1,"token":"...","snapshot":{"sequence":1,"final":true,"models":[{"provider":"...","model":"...","inputTokens":100,"outputTokens":20}]}}] (cumulative executor reports; missing values remain unknown)',
           'work [run-id] [--summary]',
           'claim <work-id> [worker-id] [options-json: {"leaseSeconds":1800,"freshContext":false,"tools":[],"skills":[]}] [--fresh] [--lease seconds] (flags override options JSON; --fresh attests an isolated context; grouped work also requires session: {executorId,sessionId} in options)',
+          'preflight <work-id> <token> <json|@file> (read-only result and claim check)',
           'submit <work-id> <token> <json|@file> [--summary]',
           'fail <work-id> <token> <error>',
           'renew <work-id> <token> [options-json: {"leaseSeconds":3600}]',
@@ -268,4 +277,16 @@ export async function runCommand(argv: string[]) {
         ],
       };
   }
+}
+
+export function commandError(error: unknown) {
+  return error instanceof TRPCClientError && error.data?.resultCheck
+    ? JSON.stringify(
+        { message: error.message, resultCheck: error.data.resultCheck },
+        null,
+        2,
+      )
+    : error instanceof Error
+      ? error.message
+      : String(error);
 }

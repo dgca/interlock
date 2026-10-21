@@ -10,6 +10,7 @@ import {
   jsonSchema,
   runQuerySchema,
   InterlockError,
+  ResultRejection,
   briefingQuerySchema,
   waitQuerySchema,
   resultQuerySchema,
@@ -49,13 +50,29 @@ const t = initTRPC
     connection?: ConnectionConfig;
     signal?: AbortSignal;
   }>()
-  .create();
+  .create({
+    errorFormatter({ shape, error }) {
+      return {
+        ...shape,
+        data: {
+          ...shape.data,
+          ...(error.cause instanceof ResultRejection
+            ? { resultCheck: error.cause.resultCheck }
+            : {}),
+        },
+      };
+    },
+  });
 const p = t.procedure.use(async ({ next }) => {
   try {
     return await next();
   } catch (error) {
     if (error instanceof InterlockError)
-      throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: error.message,
+        cause: error,
+      });
     throw error;
   }
 });
@@ -458,6 +475,11 @@ export const appRouter = t.router({
       )
       .mutation(({ ctx, input }) =>
         ctx.engine.renew(input.workId, input.token, input.leaseSeconds),
+      ),
+    preflight: p
+      .input(claim.extend({ output: jsonSchema }))
+      .query(({ ctx, input }) =>
+        ctx.engine.preflightResult(input.workId, input.token, input.output),
       ),
     submit: p
       .input(claim.extend({ output: jsonSchema }))

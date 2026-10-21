@@ -308,3 +308,5 @@ The cascade follows references in each workflow's latest published definition, i
 Dependent drafts must match their latest published definitions. Publish or discard any definition edits before cascading. A dependency cycle or any validation failure rejects the whole operation, including publication of the requested workflow. Successful cascades update dependent drafts and their revisions, so an editor holding an older draft must reload before saving.
 
 Existing versions and runs retain their exact pins. New runs use the new versions by default; starting an explicit older version still uses its original dependencies. Contracts are checked during execution, so test changed child behavior before cascading it to callers.
+
+Agent executors can [check candidate results before submission](docs/result-preflight.md) without renewing claims or advancing runs. Submission rechecks live state and returns bounded correction diagnostics when a result is rejected.

@@ -9,7 +9,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { startServer } from '../../server/src/start.js';
 import { createMcpServer } from '../../mcp/src/server.js';
 import { VERSION } from '../../core/src/version.js';
-import { runCommand } from './commands.js';
+import { runCommand, commandError } from './commands.js';
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -115,6 +115,6 @@ Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL`);
 }
 
 main().catch((error) => {
-  console.error(error.message);
+  console.error(commandError(error));
   process.exitCode = 1;
 });

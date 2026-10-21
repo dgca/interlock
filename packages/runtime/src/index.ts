@@ -3,6 +3,9 @@ import { isDeepStrictEqual } from 'node:util';
 import { Store } from '@interlock/storage';
 import {
   assertContract,
+  checkResultContract,
+  ResultRejection,
+  type ResultCheck,
   DEFAULT_BATCH_MAX_ITEMS,
   STARTED_RUN_SCHEMA,
   isStartedRunSchema,
@@ -1751,6 +1754,56 @@ export class Engine {
       return this.describeWork(work);
     });
   }
+  /** Read-only: do not pump, renew, or process expired claims. */
+  preflightResult(id: string, token: string, output: Json): ResultCheck {
+    const work = this.store.get<WorkRequest>('work', id);
+    const report = (
+      code: ResultCheck['code'],
+      claimUsable = false,
+    ): ResultCheck => ({
+      code,
+      accepted: false,
+      alreadyAccepted: code === 'already_accepted',
+      claimUsable,
+      canSubmit: code === 'ready' || code === 'already_accepted',
+      nextAction:
+        code === 'ready'
+          ? 'submit'
+          : code === 'invalid_result'
+            ? 'correct_result'
+            : code === 'already_accepted' || code === 'completed_conflict'
+              ? 'read_result'
+              : 'inspect_work',
+      diagnostics: { items: [], total: 0, truncated: false },
+    });
+    if (!work) return report('not_found');
+    if (work.status === 'cancelled') return report('cancelled');
+    if (work.token !== token) {
+      const expired = work.expiredClaims?.some(
+        (receipt) => receipt.tokenHash === claimTokenHash(token),
+      );
+      return report(
+        expired
+          ? work.status === 'claimed'
+            ? 'replaced'
+            : 'expired'
+          : 'invalid_claim',
+      );
+    }
+    if (work.status === 'completed')
+      return report(
+        isDeepStrictEqual(work.output, output)
+          ? 'already_accepted'
+          : 'completed_conflict',
+      );
+    if (work.status !== 'claimed') return report('inactive');
+    if (Date.parse(work.leaseUntil!) <= Date.now()) return report('expired');
+    const diagnostics = checkResultContract(work.outputSchema, output);
+    return {
+      ...report(diagnostics.total ? 'invalid_result' : 'ready', true),
+      diagnostics,
+    };
+  }
   submit(id: string, token: string, output: Json) {
     return this.inspect(this.submitWork(id, token, output));
   }
@@ -1763,26 +1816,50 @@ export class Engine {
       workRunId,
     };
   }
+  private resultRejection(id: string, token: string, check: ResultCheck) {
+    const work = this.store.get<WorkRequest>('work', id);
+    return new ResultRejection(
+      check,
+      (work && expiredClaimMessage(work, token, this.run(work.runId).status)) ||
+        '',
+    );
+  }
   private submitWork(id: string, token: string, output: Json) {
-    const runId = this.withClaim(id, token, (work) => {
-      if (work.status === 'completed') {
-        if (!isDeepStrictEqual(work.output, output))
-          throw new InterlockError('A different result was already accepted');
-        return work.runId;
+    this.pump();
+    let runId: string;
+    try {
+      runId = this.store.transaction(() => {
+        const check = this.preflightResult(id, token, output);
+        if (!check.canSubmit) throw this.resultRejection(id, token, check);
+        const work = this.store.get<WorkRequest>('work', id)!;
+        if (work.status === 'completed') return work.runId;
+        const run = this.run(work.runId),
+          execution = run.executions.find((e) => e.id === work.executionId)!;
+        const node = this.definition(run).nodes.find(
+          (n) => n.id === work.nodeId,
+        )!;
+        this.finish(run, execution, node, output);
+        this.usage.ended(work, 'completed');
+        work.status = 'completed';
+        work.output = output;
+        this.store.put('work', work);
+        return run.id;
+      });
+    } catch (error) {
+      if (
+        error instanceof ResultRejection &&
+        error.resultCheck.code === 'expired'
+      ) {
+        // The lease can cross its deadline after the initial pump. Recover outside rollback.
+        this.pump();
+        throw this.resultRejection(
+          id,
+          token,
+          this.preflightResult(id, token, output),
+        );
       }
-      assertContract(work.outputSchema, output, 'Agent result');
-      const run = this.run(work.runId),
-        execution = run.executions.find((e) => e.id === work.executionId)!;
-      const node = this.definition(run).nodes.find(
-        (n) => n.id === work.nodeId,
-      )!;
-      this.finish(run, execution, node, output);
-      this.usage.ended(work, 'completed');
-      work.status = 'completed';
-      work.output = output;
-      this.store.put('work', work);
-      return run.id;
-    });
+      throw error;
+    }
     this.pump();
     return runId;
   }

@@ -76,7 +76,10 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
       req: c.req.raw,
       router: appRouter,
       // Keep the query contract and legacy GET callers while accepting large bodies.
-      allowMethodOverride: c.req.path === '/trpc/workflows.validate',
+      allowMethodOverride: [
+        '/trpc/workflows.validate',
+        '/trpc/work.preflight',
+      ].includes(c.req.path),
       createContext: () => ({ engine, connection, signal: c.req.raw.signal }),
     }),
   );

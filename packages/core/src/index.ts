@@ -1,6 +1,7 @@
 import { z } from 'zod';
 export * from './usage.js';
 export * from './budgets.js';
+export * from './resultValidation.js';
 export * from './contextContinuity.js';
 import { continuityGroupSchema } from './contextContinuity.js';
 import Ajv from 'ajv';
@@ -392,6 +393,16 @@ export interface RunEvent {
   at: string;
 }
 export class InterlockError extends Error {}
+export class ResultRejection extends InterlockError {
+  constructor(
+    readonly resultCheck: import('./resultValidation.js').ResultCheck,
+    detail = '',
+  ) {
+    super(
+      `Agent result rejected (${resultCheck.code}). No result accepted by this call. ${resultCheck.code === 'completed_conflict' ? 'A different result was already accepted. ' : resultCheck.code === 'invalid_claim' ? 'Claim token does not match. ' : ''}Claim ${resultCheck.claimUsable ? 'remains usable' : 'is not usable'}. Next: ${resultCheck.nextAction}. ${resultCheck.diagnostics.items.map((d) => `${d.path || '/'}: ${d.message}`).join(' ')} ${detail.slice(0, 2048)}`,
+    );
+  }
+}
 const ajv = new Ajv({ allErrors: true, strict: false });
 export function validateContractSchema(schema: Record<string, unknown>) {
   contractSchema.parse(schema);
