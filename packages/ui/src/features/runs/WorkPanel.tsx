@@ -50,7 +50,9 @@ export function WorkPanel({
       </div>
       <p className="hint">
         {work.status === 'available'
-          ? 'Waiting for an agent to pick up this assignment.'
+          ? work.budgetBlocked
+            ? 'Budget blocked. Adjust the governing run budget through MCP or the CLI to resume claims.'
+            : 'Waiting for an agent to pick up this assignment.'
           : work.status === 'claimed'
             ? `Claimed by ${work.workerId}. Lease ends ${new Date(work.leaseUntil!).toLocaleTimeString()}.`
             : work.status === 'timed_out'
@@ -65,12 +67,14 @@ export function WorkPanel({
           recovery budget and may fail the run.
         </p>
       )}
-      {work.status === 'available' && work.availableUntil && (
-        <p className="hint">
-          Timeout at {new Date(work.availableUntil).toLocaleString()} if nobody
-          claims it.
-        </p>
-      )}
+      {work.status === 'available' &&
+        !work.budgetBlocked &&
+        work.availableUntil && (
+          <p className="hint">
+            Timeout at {new Date(work.availableUntil).toLocaleString()} if
+            nobody claims it.
+          </p>
+        )}
       <div className="actions">
         <Button
           onClick={() =>
@@ -107,6 +111,7 @@ export function WorkPanel({
         />
       </details>
       {work.status === 'available' &&
+        !work.budgetBlocked &&
         work.context.mode === 'current' &&
         !work.context.tools.length &&
         !work.context.skills.length && (

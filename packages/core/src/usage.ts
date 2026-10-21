@@ -107,7 +107,10 @@ export interface UsageMetric {
 export function modelKey(model: Pick<ModelUsage, 'provider' | 'model'>) {
   return JSON.stringify([model.provider, model.model]);
 }
-function metric(values: (number | undefined)[], final: boolean): UsageMetric {
+export function summarizeUsageMetric(
+  values: (number | undefined)[],
+  final: boolean,
+): UsageMetric {
   const known = values.filter((n): n is number => n !== undefined);
   const sum = known.reduce((total, n) => total + BigInt(n), 0n);
   const overflow = sum > BigInt(Number.MAX_SAFE_INTEGER);
@@ -139,7 +142,7 @@ export function summarizeUsage(attempts: UsageAttempt[]) {
   const tokens = Object.fromEntries(
     tokenFields.map((field) => [
       field,
-      metric(
+      summarizeUsageMetric(
         models.map((model) => model?.[field]),
         final,
       ),
@@ -153,7 +156,7 @@ export function summarizeUsage(attempts: UsageAttempt[]) {
   const costs = currencies.map((currency) => ({
     currency,
     // Known costs in other currencies are neither missing nor converted.
-    amountMicros: metric(
+    amountMicros: summarizeUsageMetric(
       models
         .filter((model) => !model?.cost || model.cost.currency === currency)
         .map((model) => model?.cost?.amountMicros),

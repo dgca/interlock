@@ -2294,6 +2294,125 @@ it.each(['stdio', 'http'])(
       expect((await call('get_run', { id: failed.run.id })).run.output).toEqual(
         [10],
       );
+      // Budgets use the same discovery and operations over HTTP and stdio.
+      for (const name of ['get_run_budget', 'set_run_budget'])
+        expect(tools.map((t) => t.name)).toContain(name);
+      expect(
+        tools.find((t) => t.name === 'set_run_budget')!.inputSchema.required,
+      ).toEqual(
+        expect.arrayContaining(['runId', 'expectedRevision', 'budget']),
+      );
+      expect(
+        tools.find((t) => t.name === 'start_run')!.inputSchema.properties,
+      ).toHaveProperty('budget');
+      const budgetWorkflow = engine.create(
+        'Budget transport',
+        '',
+        batchDefinition(),
+      );
+      engine.publish(budgetWorkflow.id);
+      const budgetPolicy = {
+        scope: 'tree',
+        unknownUsage: 'allow',
+        limits: { claims: { max: 0 } },
+      };
+      const budgetStart = await call('start_run', {
+        workflowId: budgetWorkflow.id,
+        input: [1, 2],
+        budget: budgetPolicy,
+      });
+      expect(budgetStart).toMatchObject({
+        next: 'adjust_budget',
+        nextWork: { total: 0 },
+        budgetBlocked: { total: 2 },
+        nextCall: { tool: 'get_run_briefing' },
+      });
+      expect(
+        await call('get_run_budget', { runId: budgetStart.runId }),
+      ).toEqual(
+        await createClient(url).runs.budget.query({ runId: budgetStart.runId }),
+      );
+      expect(
+        await call('list_work', { runId: budgetStart.runId }),
+      ).toHaveLength(0);
+      const blockedWork = (await call('get_run', { id: budgetStart.runId }))
+        .descendantWork;
+      expect(
+        (
+          await client.callTool({
+            name: 'claim_work',
+            arguments: { workId: blockedWork[0].id, workerId: 'budget' },
+          })
+        ).isError,
+      ).toBe(true);
+      await call('set_run_budget', {
+        runId: budgetStart.runId,
+        expectedRevision: 1,
+        budget: { ...budgetPolicy, limits: { claims: { max: 1 } } },
+      });
+      const admissions = await Promise.all(
+        blockedWork.map((w: any) =>
+          client.callTool({
+            name: 'claim_work',
+            arguments: { workId: w.id, workerId: 'budget' },
+          }),
+        ),
+      );
+      expect(admissions.filter((r: any) => !r.isError)).toHaveLength(1);
+      expect(
+        (await call('get_run_budget', { runId: budgetStart.runId }))
+          .governing[0],
+      ).toMatchObject({ state: 'blocked', attempts: 1 });
+      const budgetUrl = process.env.INTERLOCK_URL;
+      process.env.INTERLOCK_URL = url;
+      try {
+        expect(await runCommand(['budget', budgetStart.runId])).toMatchObject({
+          revision: 2,
+        });
+        await runCommand([
+          'set-budget',
+          JSON.stringify({
+            runId: budgetStart.runId,
+            expectedRevision: 2,
+            budget: null,
+          }),
+        ]);
+        expect(
+          await call('list_work', { runId: budgetStart.runId }),
+        ).toHaveLength(1);
+        expect(
+          (
+            await client.callTool({
+              name: 'set_run_budget',
+              arguments: {
+                runId: budgetStart.runId,
+                expectedRevision: 2,
+                budget: budgetPolicy,
+              },
+            })
+          ).isError,
+        ).toBe(true);
+        const cliWorkflow = engine.create('Budget CLI', '', blankDefinition());
+        engine.publish(cliWorkflow.id);
+        const cliStart: any = await runCommand([
+          'start',
+          cliWorkflow.id,
+          '-1',
+          '--summary',
+          '--budget',
+          JSON.stringify(budgetPolicy),
+        ]);
+        expect(cliStart).toMatchObject({
+          next: 'adjust_budget',
+          nextWork: { total: 0 },
+        });
+        expect(engine.run(cliStart.runId).input).toBe(-1);
+        await call('cancel_run', { id: cliStart.runId });
+      } finally {
+        if (budgetUrl === undefined) delete process.env.INTERLOCK_URL;
+        else process.env.INTERLOCK_URL = budgetUrl;
+      }
+      await call('cancel_run', { id: budgetStart.runId });
       const invalidRetry = await client.callTool({
         name: 'retry_run',
         arguments: { id: failed.run.id },

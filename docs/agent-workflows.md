@@ -1,5 +1,9 @@
 # Author and operate workflows
 
+## Manage run budgets
+
+Optional [run budgets](run-budgets.md) stop new Agent claims when limits are reached. Use `get_run_budget` to inspect policy and usage, and `set_run_budget` for an authorized adjustment. `next:adjust_budget` and budget blockers identify recoverable gates; already claimed work can finish. Keep detached scope and incomplete-report policy explicit.
+
 ## Report executor usage
 
 For executor-supplied token counts and costs, use `report_usage` and `get_run_usage`. [Usage reporting](usage-reporting.md) defines cumulative snapshots, attempt identity, delayed reports, descendant scope, and coverage. A successful assignment does not imply complete usage data.

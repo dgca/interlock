@@ -8,7 +8,7 @@ const parse = async (value: string | undefined) => {
     value.startsWith('@') ? await readFile(value.slice(1), 'utf8') : value,
   );
 };
-function parseSummaryArgs(args: string[]) {
+function parseSummaryArgs(args: string[], withBudget = false) {
   const optionArgs: string[] = [];
   const positionals: string[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -16,6 +16,11 @@ function parseSummaryArgs(args: string[]) {
     if (arg === '--') {
       positionals.push(...args.slice(i + 1));
       break;
+    }
+    if (withBudget && arg === '--budget') {
+      optionArgs.push(arg);
+      if (i + 1 < args.length) optionArgs.push(args[++i]);
+      continue;
     }
     // Negative JSON numbers are positional values, not short options.
     if (
@@ -27,7 +32,10 @@ function parseSummaryArgs(args: string[]) {
   }
   const { values } = parseArgs({
     args: optionArgs,
-    options: { summary: { type: 'boolean' } },
+    options: {
+      summary: { type: 'boolean' },
+      ...(withBudget ? { budget: { type: 'string' as const } } : {}),
+    },
   });
   return { values, positionals };
 }
@@ -85,12 +93,16 @@ export async function runCommand(argv: string[]) {
         cascade: args.includes('--cascade'),
       });
     case 'start': {
-      const { values, positionals } = parseSummaryArgs(args);
+      const { values, positionals } = parseSummaryArgs(args, true);
       if (positionals.length < 2 || positionals.length > 3)
         throw new Error(
-          'Usage: start <workflow-id> <json|@file> [version] [--summary]',
+          'Usage: start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file]',
         );
       const input = {
+        budget:
+          typeof values.budget === 'string'
+            ? await parse(values.budget)
+            : undefined,
         workflowId: positionals[0],
         input: await parse(positionals[1]),
         version:
@@ -137,6 +149,12 @@ export async function runCommand(argv: string[]) {
     }
     case 'run':
       return client.runs.get.query({ id: args[0] });
+    case 'budget':
+      if (args.length !== 1) throw new Error('Usage: budget <run-id>');
+      return client.runs.budget.query({ runId: args[0] });
+    case 'set-budget':
+      if (args.length !== 1) throw new Error('Usage: set-budget <json|@file>');
+      return client.runs.setBudget.mutate(await parse(args[0]));
     case 'usage': {
       if (!args[0])
         throw new Error('Usage: usage <run-id> [options-json|@file]');
@@ -217,9 +235,11 @@ export async function runCommand(argv: string[]) {
           'import <json|@file> [--force | --revisions JSON] [--restore-deleted-versions] (force changes drafts only; explicit restoration requires original definitions and valid dependencies/ownership)',
           'export <id>',
           'publish <id> [--cascade]',
-          'start <workflow-id> <json|@file> [version] [--summary]',
+          'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file]',
           'runs [--workflow ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
+          'budget <run-id> (local revision/policy and governing budget status)',
+          'set-budget <json|@file> (runId, expectedRevision, budget; null disables local policy)',
           'usage <run-id> [options-json|@file: {"includeDescendants":true,"groupBy":"attempt","limit":20,"offset":0}]',
           'report-usage <json|@file: {"workId":"...","attempt":1,"token":"...","snapshot":{"sequence":1,"final":true,"models":[{"provider":"...","model":"...","inputTokens":100,"outputTokens":20}]}}] (cumulative executor reports; missing values remain unknown)',
           'work [run-id] [--summary]',

@@ -34,6 +34,8 @@ import {
   composePrompt,
   promptIds,
   continuationLimitSchema,
+  budgetPolicySchema,
+  type BudgetPolicy,
 } from '@interlock/core';
 import { freshContextInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
@@ -44,6 +46,7 @@ import { VersionCleanup } from './versionCleanup.js';
 import { Ownership } from './ownership.js';
 import { Testbench } from './testbench.js';
 import { Usage } from './usage.js';
+import { Budgets } from './budgets.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
 
 class ExpiredClaimError extends InterlockError {}
@@ -67,6 +70,7 @@ export class Engine {
   readonly ownership: Ownership;
   readonly testbench: Testbench;
   readonly usage: Usage;
+  readonly budgets: Budgets;
   private localJobs = new Map<string, AbortController>();
   private stopped = false;
   private listeners = new Set<() => void>();
@@ -78,11 +82,21 @@ export class Engine {
     this.prompts = new Prompts(store);
     this.versions = new VersionCleanup(store);
     this.ownership = new Ownership(store);
-    this.usage = new Usage(store, (runId) =>
+    this.usage = new Usage(store, (runId) => {
+      this.budgets.refresh();
       this.event(
         this.run(runId),
         'work.usage_reported',
         'Executor usage updated',
+      );
+    });
+    this.budgets = new Budgets(store, this.usage, (runId, blocked) =>
+      this.event(
+        this.run(runId),
+        'run.budget_updated',
+        blocked
+          ? 'Agent claims blocked by budget'
+          : 'Budget updated; claim eligibility rechecked',
       ),
     );
     this.testbench = new Testbench(store, {
@@ -529,6 +543,7 @@ export class Engine {
       for (const work of this.store.work())
         if (removed.has(work.runId)) this.store.remove('work', work.id);
       this.usage.removeRuns(removed);
+      this.budgets.removeRuns(removed);
       for (const event of this.store.list<import('@interlock/core').RunEvent>(
         'events',
       ))
@@ -727,24 +742,49 @@ export class Engine {
     this.event(run, 'run.started', `Started ${w.name} v${version}`);
     return run;
   }
-  start(workflowId: string, input: Json, version?: number) {
-    return this.inspect(this.startRun(workflowId, input, version));
+  start(
+    workflowId: string,
+    input: Json,
+    version?: number,
+    budget?: BudgetPolicy,
+  ) {
+    return this.inspect(this.startRun(workflowId, input, version, budget));
   }
-  startSummary(workflowId: string, input: Json, version?: number, limit = 20) {
+  startSummary(
+    workflowId: string,
+    input: Json,
+    version?: number,
+    limit = 20,
+    budget?: BudgetPolicy,
+  ) {
     const bounded = continuationLimitSchema.parse(limit);
-    const id = this.startRun(workflowId, input, version);
+    const id = this.startRun(workflowId, input, version, budget);
     return this.continuation.summary(id, bounded);
   }
-  private startRun(workflowId: string, input: Json, version?: number) {
+  private startRun(
+    workflowId: string,
+    input: Json,
+    version?: number,
+    budget?: BudgetPolicy,
+  ) {
     const w = this.workflow(workflowId);
     if (
       w.archived ||
       (w.ownerWorkflowId && this.workflow(w.ownerWorkflowId).archived)
     )
       throw new InterlockError('Restore this workflow before starting it');
-    const run = this.store.transaction(() =>
-      this.newRun(workflowId, version ?? w.latestVersion, input),
-    );
+    const policy =
+      budget === undefined ? undefined : budgetPolicySchema.parse(budget);
+    const run = this.store.transaction(() => {
+      const run = this.newRun(workflowId, version ?? w.latestVersion, input);
+      if (policy)
+        this.budgets.set({
+          runId: run.id,
+          expectedRevision: 0,
+          budget: policy,
+        });
+      return run;
+    });
     this.pump();
     return run.id;
   }
@@ -1000,6 +1040,7 @@ export class Engine {
                 w.executionId === execution!.id && w.status === 'available',
             );
           if (
+            work?.budgetBlocked ||
             !work?.availableUntil ||
             Date.parse(work.availableUntil) > Date.now()
           )
@@ -1049,6 +1090,7 @@ export class Engine {
           createdAt: now(),
         };
         this.store.put('work', work);
+        this.budgets.refresh();
         execution.status = 'waiting';
         run.status = 'waiting';
         this.save(run);
@@ -1285,6 +1327,7 @@ export class Engine {
   pump() {
     if (this.stopped) return;
     this.store.transaction(() => {
+      this.budgets.refresh();
       for (const work of this.store.work())
         if (
           work.status === 'claimed' &&
@@ -1303,6 +1346,7 @@ export class Engine {
       let changed = true,
         rounds = 0;
       while (changed && rounds++ < 2000) {
+        this.budgets.refresh();
         changed = this.testbench.advance();
         // Earlier advances can cancel or resume descendants in this same pass.
         for (const { id } of this.store.runs())
@@ -1569,7 +1613,9 @@ export class Engine {
     };
     return this.store
       .work()
-      .filter((w) => w.status === 'available' && within(w.runId))
+      .filter(
+        (w) => w.status === 'available' && !w.budgetBlocked && within(w.runId),
+      )
       .map((work) => this.describeWork(work));
   }
   workSummaries(runId?: string) {
@@ -1609,6 +1655,7 @@ export class Engine {
         throw new InterlockError(
           `Missing capabilities: ${[...missingTools, ...missingSkills].join(', ')}`,
         );
+      this.budgets.assertClaim(work.runId);
       work.status = 'claimed';
       work.availableUntil = undefined;
       work.attempt++;
@@ -1625,6 +1672,7 @@ export class Engine {
         `${work.label} claimed by ${worker.workerId}`,
       );
       this.usage.claimed(work);
+      this.budgets.refresh();
       return this.describeWork(work);
     });
   }

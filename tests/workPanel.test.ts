@@ -180,3 +180,24 @@ it('explains a manual claim with no token in this page instead of reclaiming it'
   );
   expect(container.textContent).not.toContain('Claim for manual completion');
 });
+
+it('explains a budget block and hides manual claiming until the gate clears', async () => {
+  engine.budgets.set({
+    runId: work.runId,
+    expectedRevision: 0,
+    budget: {
+      scope: 'run',
+      unknownUsage: 'allow',
+      limits: { claims: { max: 0 } },
+    },
+  });
+  work = engine.inspect(work.runId).work[0];
+  await render();
+  expect(container.textContent).toContain('Budget blocked');
+  expect(container.textContent).not.toContain('Claim for manual completion');
+  expect(rpc.claim).not.toHaveBeenCalled();
+  engine.budgets.set({ runId: work.runId, expectedRevision: 1, budget: null });
+  work = engine.inspect(work.runId).work[0];
+  await render();
+  expect(container.textContent).toContain('Claim for manual completion');
+});
