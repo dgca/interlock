@@ -165,6 +165,8 @@ Installed copies use `~/.interlock/interlock.db`; development uses `.interlock/i
 
 The Hono listener exposes Streamable HTTP MCP at `/mcp`, behind the same host, origin, and 2 MiB request-body restrictions as the other APIs. Each POST creates an MCP server and SDK transport, calls the shared server router, returns JSON, and closes the transport. There are no transport sessions or server-initiated notifications; GET and DELETE return 405. Runs and claims remain in SQLite across requests and restarts. The endpoint URL stays stable across upgrades at the same address, for both global and npx startup.
 
+The shared client sends `workflows.validate` as an individual POST query to avoid request-line limits on candidate definitions. The server accepts POST for this query while retaining legacy GET and batched GET validation. The operation remains read-only. Requests above the body limit receive HTTP 413 with the limit and a request-size correction message.
+
 `interlock mcp` remains a stdio bridge to an already running engine. The connection dialog defaults to HTTP and provides a stdio fallback: checkout paths in development, the portable CLI command for installed copies, and optional absolute paths derived from the installed runtime.
 
 The UI uses tRPC requests and server-sent notifications, with periodic refresh as a reconnect fallback. Events and node execution data remain in SQLite. `INTERLOCK_DB` changes the database location. `INTERLOCK_URL` changes the service URL used by CLI and MCP callers.
