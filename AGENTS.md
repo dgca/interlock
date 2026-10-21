@@ -32,9 +32,13 @@ After changes that could affect documented behavior or agent usage, check README
 
 Review the full affected MCP workflow, including existing tools that interact with the changed behavior. Check server instructions, tool descriptions, parameter schemas and descriptions, defaults, bounds, returned fields, and error and lifecycle guidance against the shared server API. Keep guidance consistent across tools that accept the same data or participate in the same operation.
 
+Treat MCP context as a limited resource. Keep server instructions focused on cross-tool behavior and tool descriptions focused on selection and correct use. Prefer bounded summaries and on-demand detail for large responses. Remove redundant guidance while preserving contract and lifecycle rules that agents need to act correctly. Justify added tools, discovery text, and response volume in the PR's MCP impact section.
+
 Verify documented commands and examples against their implementations. When MCP definitions change, check what clients discover over both HTTP and stdio with the transport tests. State which docs and MCP flows were checked and any remaining gaps; describe a review as comprehensive only when the entire MCP tool set was audited.
 
 Keep changeset summaries focused on user-visible changes since the latest published release, omitting intermediate designs that never shipped.
+
+When opening or updating a PR, use the [PR template](.github/pull_request_template.md), including when supplying the body through the CLI. Remove its optional MCP impact section when unaffected.
 
 ## Work locally
 
