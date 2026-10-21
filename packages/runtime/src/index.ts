@@ -52,6 +52,7 @@ import { Ownership } from './ownership.js';
 import { Testbench } from './testbench.js';
 import { Usage } from './usage.js';
 import { Budgets } from './budgets.js';
+import { AssignmentSizes } from './assignmentSize.js';
 import { ContextContinuityGroups } from './contextContinuity.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
 
@@ -78,6 +79,7 @@ export class Engine {
   readonly testbench: Testbench;
   readonly usage: Usage;
   readonly budgets: Budgets;
+  readonly assignmentSizes: AssignmentSizes;
   readonly contextGroups: ContextContinuityGroups;
   private localJobs = new Map<string, AbortController>();
   private stopped = false;
@@ -88,6 +90,9 @@ export class Engine {
   ) {
     this.continuation = new Continuation(store);
     this.prompts = new Prompts(store);
+    this.assignmentSizes = new AssignmentSizes(store, this.prompts, (work) =>
+      this.describeWork(work),
+    );
     this.versions = new VersionCleanup(store);
     this.ownership = new Ownership(store);
     this.usage = new Usage(store, (runId) => {

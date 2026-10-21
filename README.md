@@ -310,3 +310,5 @@ Dependent drafts must match their latest published definitions. Publish or disca
 Existing versions and runs retain their exact pins. New runs use the new versions by default; starting an explicit older version still uses its original dependencies. Contracts are checked during execution, so test changed child behavior before cascading it to callers.
 
 Agent executors can [check candidate results before submission](docs/result-preflight.md) without renewing claims or advancing runs. Submission rechecks live state and returns bounded correction diagnostics when a result is rejected.
+
+[Assignment size diagnostics](docs/assignment-size.md) show UTF-8 byte contributions and advisory warnings before claims. Agent previews accept sample inputs and upstream outputs, with unresolved values marked unknown. Payload values are omitted from reports.

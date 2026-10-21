@@ -181,6 +181,10 @@ export async function runCommand(argv: string[]) {
       if (args.length !== 1)
         throw new Error('Usage: report-usage <json|@file>');
       return client.work.reportUsage.mutate(await parse(args[0]));
+    case 'assignment-size':
+      if (args.length !== 1)
+        throw new Error('Usage: assignment-size <json|@file>');
+      return client.work.size.query(await parse(args[0]));
     case 'work':
       return args.includes('--summary')
         ? client.work.summaries.query({
@@ -266,6 +270,7 @@ export async function runCommand(argv: string[]) {
           'set-budget <json|@file> (runId, expectedRevision, budget; null disables local policy)',
           'usage <run-id> [options-json|@file: {"includeDescendants":true,"groupBy":"attempt","limit":20,"offset":0}]',
           'report-usage <json|@file: {"workId":"...","attempt":1,"token":"...","snapshot":{"sequence":1,"final":true,"models":[{"provider":"...","model":"...","inputTokens":100,"outputTokens":20}]}}] (cumulative executor reports; missing values remain unknown)',
+          'assignment-size <json|@file> (workId, or workflowId/nodeId with sample; optional warningBytes)',
           'work [run-id] [--summary]',
           'claim <work-id> [worker-id] [options-json: {"leaseSeconds":1800,"freshContext":false,"tools":[],"skills":[]}] [--fresh] [--lease seconds] (flags override options JSON; --fresh attests an isolated context; grouped work also requires session: {executorId,sessionId} in options)',
           'preflight <work-id> <token> <json|@file> (read-only result and claim check)',

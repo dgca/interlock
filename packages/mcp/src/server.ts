@@ -7,6 +7,7 @@ import {
   sessionIdentitySchema,
   ResultRejection,
   resultCheckSchema,
+  assignmentSizeQuerySchema,
   definitionSchema,
   jsonSchema,
   runQuerySchema,
@@ -568,6 +569,12 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     'Replace a bound session using its current revision, declared actor, reason, and checkpoint reference. Active group claims must finish, fail, or expire first; inspect side effects before retrying. Completed/cancelled runs reject. Latest identical retry is a no-op; stale or conflicting revisions reject. Does not claim work or reset budgets. The harness must restore context from the checkpoint.',
     contextHandoffSchema.shape,
     (input) => client.runs.handoffContext(input),
+  );
+  tool(
+    'inspect_assignment_size',
+    'Read-only UTF-8 JSON size breakdown without payload values. Choose workId for a captured assignment, or workflowId+nodeId for a draft preview; version selects a published pin. Preview sample provides incoming input, runInput/rootInput/itemInput and latest same-scope node outputs. Missing sources stay unknown. warningBytes defaults to 100000 and is advisory. Counts prompt, context, input, output schema, execution instructions and saved prompt metadata, excluding envelope/identity fields. No token or billing estimate; no claim or truncation.',
+    assignmentSizeQuerySchema.shape,
+    (input) => client.work.size(input),
   );
   tool(
     'claim_work',

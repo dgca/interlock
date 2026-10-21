@@ -5,6 +5,7 @@ import {
   contextGroupQuerySchema,
   contextHandoffSchema,
   sessionIdentitySchema,
+  assignmentSizeQuerySchema,
   definitionSchema,
   workflowEditsSchema,
   jsonSchema,
@@ -431,6 +432,9 @@ export const appRouter = t.router({
     retry: p.input(id).mutation(({ ctx, input }) => ctx.engine.retry(input.id)),
   }),
   work: t.router({
+    size: p
+      .input(assignmentSizeQuerySchema)
+      .query(({ ctx, input }) => ctx.engine.assignmentSizes.read(input)),
     reportUsage: p
       .input(reportUsageSchema)
       .mutation(({ ctx, input }) => ctx.engine.usage.report(input)),

@@ -403,3 +403,5 @@ Agent definitions can set `context.continuityGroup` with current context. Groupe
 Use `get_context_group` for bounded claim/handoff history and `handoff_context_group` for revision-checked replacement. CLI equivalents are `context-group` and `handoff-context`; shared API operations are `runs.contextGroup` and `runs.handoffContext`. Workflow authoring, edits, and imports preserve the optional field; publication rejects fresh context combined with a group. Ungrouped definitions and responses retain their existing behavior. See [context continuity](context-continuity.md) for complete scope, bounds, and examples.
 
 Agent executors can [check candidate results before submission](result-preflight.md) without renewing claims or advancing runs. Submission rechecks live state and returns bounded correction diagnostics when a result is rejected.
+
+[Assignment size diagnostics](assignment-size.md) show UTF-8 byte contributions and advisory warnings before claims. Agent previews accept sample inputs and upstream outputs, with unresolved values marked unknown. Payload values are omitted from reports.
