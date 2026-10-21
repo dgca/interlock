@@ -50,6 +50,7 @@ import { Prompts } from './prompts.js';
 import { VersionCleanup } from './versionCleanup.js';
 import { Ownership } from './ownership.js';
 import { Testbench } from './testbench.js';
+import { Simulations } from './simulation.js';
 import { Usage } from './usage.js';
 import { Budgets } from './budgets.js';
 import { AssignmentSizes } from './assignmentSize.js';
@@ -77,6 +78,7 @@ export class Engine {
   readonly versions: VersionCleanup;
   readonly ownership: Ownership;
   readonly testbench: Testbench;
+  readonly simulations: Simulations;
   readonly usage: Usage;
   readonly budgets: Budgets;
   readonly assignmentSizes: AssignmentSizes;
@@ -87,7 +89,14 @@ export class Engine {
   constructor(
     readonly store: Store,
     private cwd: string,
+    private options: {
+      substituteOperation?: (
+        node: Extract<WorkflowNode, { kind: 'script' | 'fetch' }>,
+        execution: NodeExecution,
+      ) => Promise<Json>;
+    } = {},
   ) {
+    this.simulations = new Simulations(store, cwd);
     this.continuation = new Continuation(store);
     this.prompts = new Prompts(store);
     this.assignmentSizes = new AssignmentSizes(store, this.prompts, (work) =>
@@ -482,6 +491,7 @@ export class Engine {
     const result = this.store.transaction(() => {
       this.workflow(id);
       this.testbench.assertDeletable(id);
+      this.simulations.assertDeletable(id);
       if (this.store.workflows().some((w) => w.ownerWorkflowId === id))
         throw new InterlockError(
           'Delete the children first. Parent deletion with children is not available yet.',
@@ -581,6 +591,7 @@ export class Engine {
         if (version.workflowId === id)
           this.store.remove('deletedVersions', version.id);
       this.testbench.deleteWorkflow(id);
+      this.simulations.deleteWorkflow(id);
       this.store.remove('workflows', id);
       return { id };
     });
@@ -1349,6 +1360,7 @@ export class Engine {
     }
   }
   stop() {
+    this.simulations.stop();
     this.continuation.stop();
     this.stopped = true;
     for (const controller of this.localJobs.values()) controller.abort();
@@ -1402,8 +1414,9 @@ export class Engine {
       if (node.kind !== 'script' && node.kind !== 'fetch') continue;
       const controller = new AbortController();
       this.localJobs.set(execution.id, controller);
-      const job =
-        node.kind === 'fetch'
+      const job = this.options.substituteOperation
+        ? this.options.substituteOperation(node, execution)
+        : node.kind === 'fetch'
           ? executeFetch(execution.request!, node.timeoutMs, controller.signal)
           : executeScript(
               node.command,

@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { TRPCClientError } from '@interlock/client';
 import {
+  simulationToolSchema,
   contextGroupQuerySchema,
   contextHandoffSchema,
   sessionIdentitySchema,
@@ -140,8 +141,14 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     );
   }
   tool(
+    'workflow_simulation',
+    'Simulate one published workflow version with ordered saved case fixtures; no model calls, scripts or network effects. request.action:run requires suiteId, suiteRevision, caseId, version and unique requestId; identical retries recover the same report. Returns immediately; poll action:get with id, offset and limit (default 20/max 100). Reports are simulated contract/routing evidence, never prompt, script or implementation quality or live comparison baselines. Supports flat Entry/Exit/Agent/Script/Fetch/Condition/Switch graphs only; Workflow, Batch, Wait and Agent timeouts reject before execution. Every Agent result and Script/Fetch outcome requires the next matching fixture; repeated visits and retries consume ordered entries. Expected Agent contract rejection preserves its claim for a correcting fixture. Published step limits apply; four active simulations maximum. action:list filters workflowId with offset/limit. action:capture returns full immutable definition/case/current saved prompts and final output, potentially sensitive. Default reads omit payloads and paginate substitutions, executions, assertions and unsupported reasons independently using the same offset/limit and separate nextOffset values. action:cancel stops simulation; restart/shutdown marks unfinished reports interrupted. Rerun with a new requestId after cancellation/interruption. Simulation history is local and removed with its workflow.',
+    simulationToolSchema,
+    ({ request }) => client.testbench.simulation(request),
+  );
+  tool(
     'read_test_suites',
-    'Read saved local test suites. request.action:list returns compact items and exact total, omitting cases; optional workflowId, limit default 20/max 100. request.action:get with id returns one full suite with current revision, captured input, assertions, optional source provenance and quality guidance. Use that revision for save_test_suite action:update. Suite size is at most 1 MiB, case input 64 KiB. Source deletion does not remove captured input. For the original case used by a past comparison use read_workflow_comparisons action:case. Read-only; never executes work.',
+    'Read saved local test suites. request.action:list returns compact items and exact total, omitting cases; optional workflowId, limit default 20/max 100. request.action:get with id returns one full suite with current revision, captured input, assertions, optional ordered simulation fixtures, source provenance and quality guidance. Use that revision for save_test_suite action:update. Suite size is at most 1 MiB, case input 64 KiB. Source deletion does not remove captured input. For the original case used by a past comparison use read_workflow_comparisons action:case. Read-only; never executes work.',
     testSuiteReadSchema,
     ({ request }) => {
       if (request.action === 'list') {
@@ -153,7 +160,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'save_test_suite',
-    'Save a local suite without executing workflows. request.action:create requires workflowId and content; action:update requires id, expected revision and replacement content, never implicitly creates. Suites have 1–25 distinct stable case IDs, names, up to 50 assertions/case and optional quality guidance. Each case supplies exactly one of explicit input or sourceRunId from the same workflow; source capture copies only original input and identity, never work/tokens/history. Assertions check output paths using exists/equals/gte/lte or root-scope nodeId/positive visit/port; nested checkpoints are unsupported. Invalid or stale saves reject atomically. Effective updates increment revision once; no-ops preserve revision/timestamp. Workflow association is immutable and prior comparisons retain their captures. Read current revision with read_test_suites action:get. Omit informational source metadata from read cases when saving explicit inputs. Local suites are excluded from portable bundles.',
+    'Save a local suite without executing workflows. request.action:create requires workflowId and content; action:update requires id, expected revision and replacement content, never implicitly creates. Optional case fixtures (max 1000) are ordered {nodeId,kind:agent|script|fetch,output|error,expectRejection?} substitutions for workflow_simulation only; live comparisons ignore them and execute normally. Supply exactly one output or error. expectRejection requires Agent output; Fetch output is {status:100–599,headers:string record,body:JSON}. Suites have 1–25 distinct stable case IDs, names, up to 50 assertions/case and optional quality guidance. Each case supplies exactly one of explicit input or sourceRunId from the same workflow; source capture copies only original input and identity, never work/tokens/history. Assertions check output paths using exists/equals/gte/lte or root-scope nodeId/positive visit/port; nested checkpoints are unsupported. Invalid or stale saves reject atomically. Effective updates increment revision once; no-ops preserve revision/timestamp. Workflow association is immutable and prior comparisons retain their captures. Read current revision with read_test_suites action:get. Omit informational source metadata from read cases when saving explicit inputs. Local suites are excluded from portable bundles.',
     testSuiteSaveSchema,
     ({ request }) => {
       if (request.action === 'create') {
@@ -477,7 +484,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'delete_workflow',
-    'Permanently delete a workflow and its retained published versions and cleanup identities, all runs of that workflow and their descendants, including Batch item runs and detached runs, plus their assignments and events, and local test suites/comparisons for this workflow. Queued/active comparison pins block deletion until finished or cancelled. If any run of this workflow has a parent run from another workflow, deletion is blocked: ancestor runs and the entire run tree remain intact. External draft or retained published references, active affected runs including detached descendants of completed parents, or owned children also block deletion. Reference errors list every blocking workflow with its ID and exact draft/version locations, and state when its latest version does not reference the target. preview_version_deletion can identify explicit cleanup of obsolete caller versions after informed agreement; current drafts/latest and active execution stay protected. Owned children follow the same rules. Prefer archived:true with update_workflow to hide unused work and preserve history.',
+    'Permanently delete a workflow and its retained published versions and cleanup identities, all runs of that workflow and their descendants, including Batch item runs and detached runs, plus their assignments and events, and local test suites/comparisons/simulations for this workflow. Active simulations block deletion until cleanup finishes. Queued/active comparison pins block deletion until finished or cancelled. If any run of this workflow has a parent run from another workflow, deletion is blocked: ancestor runs and the entire run tree remain intact. External draft or retained published references, active affected runs including detached descendants of completed parents, or owned children also block deletion. Reference errors list every blocking workflow with its ID and exact draft/version locations, and state when its latest version does not reference the target. preview_version_deletion can identify explicit cleanup of obsolete caller versions after informed agreement; current drafts/latest and active execution stay protected. Owned children follow the same rules. Prefer archived:true with update_workflow to hide unused work and preserve history.',
     { id: z.string() },
     (input) => client.workflows.delete(input),
   );

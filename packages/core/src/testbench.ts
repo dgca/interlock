@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { simulationFixtureSchema } from './simulation.js';
 import {
   jsonSchema,
   readPath,
@@ -57,6 +58,7 @@ export const testCaseSchema = z
     name,
     input: z.lazy(() => jsonSchema).optional(),
     sourceRunId: id.optional(),
+    fixtures: z.array(simulationFixtureSchema).max(1000).optional(),
     assertions: z.array(testAssertionSchema).max(50).default([]),
     qualityGuidance: z.string().max(4000).default(''),
   })

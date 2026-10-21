@@ -230,3 +230,5 @@ Groups are local to the assignment's run, including when work is discovered from
 Agent executors can [check candidate results before submission](result-preflight.md) without renewing claims or advancing runs. Submission rechecks live state and returns bounded correction diagnostics when a result is rejected.
 
 [Assignment size diagnostics](assignment-size.md) show UTF-8 byte contributions and advisory warnings before claims. Agent previews accept sample inputs and upstream outputs, with unresolved values marked unknown. Payload values are omitted from reports.
+
+Use `workflow_simulation` for [fixture-only contract and route checks](workflow-simulation.md). Save ordered fixtures with `save_test_suite`, start one pinned version and case revision, then poll its report. No executor is launched or required. Live comparisons ignore fixtures and still execute real work.
