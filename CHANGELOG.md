@@ -1,5 +1,17 @@
 # @type_of/interlock
 
+## 0.2.2
+
+### Patch Changes
+
+- 7bde566: Add assignment size previews and diagnostics for large prompts, inputs, and contracts.
+- fa8aa84: Add declared Agent context continuity groups and auditable session handoffs.
+- 9504b28: Add executor-reported model usage, per-attempt attribution, and run summaries across the UI, CLI, and MCP.
+- 5293df6: Fix validation of large workflow candidates without requiring a draft save, and explain the 2 MiB request limit when validation requests are too large.
+- 393a7f3: Add Agent result preflight and structured diagnostics for correcting rejected submissions.
+- 11e4556: Add opt-in run budgets that gate new Agent claims and preserve completed work.
+- eb774ab: Add fixture-based testbench simulations for workflow contracts and routes without model calls.
+
 ## 0.2.1
 
 ### Patch Changes
