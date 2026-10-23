@@ -1,5 +1,5 @@
-import type { WorkflowEdge, WorkflowNode } from '@interlock/core';
-import { outputPortTop } from './portLayout';
+import type { WorkflowEdge, WorkflowNode } from '../index.js';
+import { outputPortTop } from './portLayout.js';
 
 type Size = (node: WorkflowNode) => { width: number; height: number };
 type Route = { source: WorkflowNode; target: WorkflowNode; port: string };

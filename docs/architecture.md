@@ -270,6 +270,10 @@ Node settings group input configuration in one Input section. Source defaults to
 
 Entry and Exit settings display a shared Input / Output contract backed by the workflow input or output schema. Editing it updates Workflow settings too. Existing additional node constraints remain visible and enforced. Batch settings show an array input when List to process is blank and no narrower contract is set. A named path allows an enclosing object; the selected value must still be an array at execution.
 
+## Draft authoring layout
+
+`@interlock/core/layout` holds the DOM-free Dagre layout, shared geometry, handle positions, and placement helpers used by the editor. The runtime can apply `layout: "tidy"` during draft create/update/edit. Parsing, save validation, revision checks, layout, and persistence remain in the same authoring operation; update/edit writes use the existing storage transaction. Layout changes positions only and never touches retained versions or runs. ELK stays lazy-loaded in the browser. See [authoring layout](authoring-layout.md).
+
 ## Compact mutation continuation
 
 MCP `start_run` and `submit_result` default to `detail: "summary"`; `list_work` defaults to `fields: "summary"`. The MCP adapter adds a suggested read-only `nextCall` to mutation summaries and owns these response defaults. Runtime summaries contain no MCP tool names. Shared API `runs.startSummary` and `work.submitSummary` reuse the existing runtime mutation and scheduler path, then project one continuation briefing without constructing full inspection. The existing full API responses remain unchanged. Submission scope follows ordinary parents to the nearest detached boundary or root, matching fresh-context handoffs; `workRunId` retains the assignment's immediate run. The compact cursor and available-work list share that scope and snapshot. See [response fields and limits](agent-workflows.md#continue-with-compact-mutation-responses).

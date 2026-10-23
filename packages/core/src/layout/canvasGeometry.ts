@@ -1,5 +1,5 @@
-import type { WorkflowDefinition, WorkflowNode } from '@interlock/core';
-import { bindingNodeIds } from './inputBindings';
+import type { WorkflowDefinition, WorkflowNode } from '../index.js';
+import { bindingNodeIds } from './inputBindings.js';
 
 export const NODE_SIZE = { width: 220, height: 116 };
 export const BATCH_SIZE = { width: 520, height: 340 };

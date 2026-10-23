@@ -130,6 +130,10 @@ Detached Workflow nodes can leave independent work active after the requested pa
 
 Optional [run budgets](run-budgets.md) stop new Agent claims when limits are reached. Use `get_run_budget` to inspect policy and usage, and `set_run_budget` for an authorized adjustment. `next:adjust_budget` and budget blockers identify recoverable gates; already claimed work can finish. Keep detached scope and incomplete-report policy explicit.
 
+## Arrange authored drafts
+
+When authoring a new workflow or changing its graph, you can request `layout: "tidy"` on create/update/edit to save an arranged draft. It uses the editor's Dagre layout. Omit it to retain positions on text-only edits; update/edit still require the current draft revision. See [authoring layout](authoring-layout.md).
+
 ## Report executor usage
 
 Agent assignments may include an advisory `context.tier`: `max`, `balanced`, or `fast`. Discovery exposes it before claiming. Map it to your available models while preserving required continuity and fresh isolation. Optional claim `modelSelection` records your declared tier, provider, and model independently of measured usage. See [model tiers](model-tiers.md) for the contract and current-conversation behavior.

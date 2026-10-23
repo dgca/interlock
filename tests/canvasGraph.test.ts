@@ -523,8 +523,7 @@ it('shows each binding source once, retains missing references, and sizes nodes 
 });
 
 it('separates successful and timeout handles for polling Waits', async () => {
-  const { outputPortTop } =
-    await import('../packages/ui/src/features/workflows/portLayout');
+  const { outputPortTop } = await import('@interlock/core/layout');
   const { nodeSchema } = await import('@interlock/core');
   const node = nodeSchema.parse({
     id: 'poll',

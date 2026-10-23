@@ -9,9 +9,9 @@ import type { Edge } from '@xyflow/react';
 import type { CanvasNode } from './FlowNode';
 import type { LoopEdgeData } from './LoopEdge';
 import type { OrthoEdgeData } from './OrthoEdge';
-import { CANVAS_GAP, canvasGeometry } from './canvasGeometry';
+import { CANVAS_GAP, canvasGeometry } from '@interlock/core/layout';
 import { bindingNodeIds, bindingNodes } from './inputBindings';
-import { outputPortTop } from './portLayout';
+import { outputPortTop } from '@interlock/core/layout';
 import styles from './WorkflowEditor.module.css';
 
 type Options = {

@@ -15,7 +15,7 @@ import {
   CANVAS_GAP,
   bindingsHeight,
   canvasGeometry,
-} from './canvasGeometry';
+} from '@interlock/core/layout';
 
 const layered = {
   'elk.algorithm': 'layered',

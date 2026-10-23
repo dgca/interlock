@@ -9,6 +9,7 @@ import {
   modelSelectionSchema,
   assignmentSizeQuerySchema,
   definitionSchema,
+  draftLayoutSchema,
   workflowEditsSchema,
   jsonSchema,
   runQuerySchema,
@@ -81,12 +82,14 @@ const p = t.procedure.use(async ({ next }) => {
 });
 const id = z.object({ id: z.string() });
 const createWorkflowInput = z.object({
+  layout: draftLayoutSchema.optional(),
   name: z.string().trim().min(1).max(120),
   description: z.string().default(''),
   definition: definitionSchema.optional(),
   ownerWorkflowId: z.string().min(1).nullable().optional(),
 });
 const updateWorkflowInput = id.extend({
+  layout: draftLayoutSchema.optional(),
   name: z.string().trim().min(1).max(120).optional(),
   description: z.string().optional(),
   archived: z.boolean().optional(),
@@ -250,6 +253,7 @@ export const appRouter = t.router({
             input.description,
             input.definition,
             input.ownerWorkflowId,
+            input.layout,
           ),
         ),
       ),
@@ -273,6 +277,7 @@ export const appRouter = t.router({
           input.description,
           input.definition,
           input.ownerWorkflowId,
+          input.layout,
         ),
       ),
     previewOwnership: p
@@ -289,6 +294,7 @@ export const appRouter = t.router({
             draftRevision: z.number().int().positive(),
             edits: workflowEditsSchema,
             diagnostics: z.enum(['all', 'summary']).default('all'),
+            layout: draftLayoutSchema.optional(),
           })
           .strict(),
       )
@@ -298,6 +304,7 @@ export const appRouter = t.router({
           input.draftRevision,
           input.edits,
           input.diagnostics,
+          input.layout,
         ),
       ),
     validate: p

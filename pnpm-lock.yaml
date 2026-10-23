@@ -89,6 +89,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@dagrejs/dagre':
+        specifier: ^3.1.1
+        version: 3.1.1
       ajv:
         specifier: ^8.17.1
         version: 8.20.0
@@ -152,9 +155,6 @@ importers:
 
   packages/ui:
     dependencies:
-      '@dagrejs/dagre':
-        specifier: ^3.1.1
-        version: 3.1.1
       '@interlock/client':
         specifier: workspace:*
         version: link:../client

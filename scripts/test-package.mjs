@@ -242,6 +242,7 @@ try {
   assert.equal(publishedStarter.latestVersion, 1);
   const workflow = await call('create_workflow', {
     name: 'Packed install smoke',
+    layout: 'tidy',
     definition: {
       nodes: [
         {
@@ -272,6 +273,49 @@ try {
       ],
     },
   });
+  assert.deepEqual(workflow.draft.nodes[0].position, { x: 60, y: 160 });
+  const cliTidy = JSON.parse(
+    execFileSync(
+      bin,
+      [
+        'update',
+        workflow.id,
+        JSON.stringify({
+          draftRevision: workflow.draftRevision,
+          layout: 'tidy',
+        }),
+      ],
+      {
+        cwd: workdir,
+        env: { ...env, INTERLOCK_URL: url },
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    ),
+  );
+  assert.equal(cliTidy.draftRevision, workflow.draftRevision + 1);
+  const cliEdit = JSON.parse(
+    execFileSync(
+      bin,
+      [
+        'edit',
+        workflow.id,
+        JSON.stringify({
+          draftRevision: cliTidy.draftRevision,
+          edits: [],
+          layout: 'tidy',
+        }),
+      ],
+      {
+        cwd: workdir,
+        env: { ...env, INTERLOCK_URL: url },
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    ),
+  );
+  assert.equal(cliEdit.applied, true);
+  assert.equal(cliEdit.draftRevision, cliTidy.draftRevision);
   await call('publish_workflow', { id: workflow.id });
   const started = await call('start_run', {
     workflowId: workflow.id,
