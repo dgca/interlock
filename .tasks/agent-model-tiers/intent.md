@@ -5,6 +5,8 @@
 Source: https://github.com/dgca/interlock/issues/153 and the user's instruction, "Kk, let's implement tiers for now."
 The user selected the published SDLC workflow in this chat. Run: `73b9045d-5d47-4615-968a-b9de7e945117`, workflow version 4, review policy `auto`, local completion.
 
+After local completion, the user approved the "No preference" label and explicitly requested a PR in this chat. That follow-up authorizes PR creation for the existing task branch.
+
 The user asked whether tiers apply to both Context settings. The proposed behavior keeps tiers advisory for both current and fresh execution, with required continuity and isolation taking precedence. The preceding recommendation included portable tiers and attempt provenance, and deferred reviewer independence.
 
 ## Problem and outcome

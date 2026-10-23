@@ -7,7 +7,7 @@ Agent `context.tier` is an optional capability preference. The executor maps the
 | `max`      | The executor's strongest available capability |
 | `balanced` | A balance of capability and speed             |
 | `fast`     | Speed                                         |
-| Omitted    | Executor default                              |
+| Omitted    | No preference; executor uses its default      |
 
 Tiers do not guarantee a price, latency, reasoning effort, or result quality. Interlock does not choose, launch, or verify models. It accepts claims without model declarations or with a declared tier different from the request.
 
@@ -15,7 +15,7 @@ Tiers do not guarantee a price, latency, reasoning effort, or result quality. In
 
 Both `current` and `fresh` context support tiers. Required continuity and isolation take precedence. A tier cannot replace a bound session or make an existing conversation fresh. If a current session cannot change models, the executor preserves that session. Fresh executors can use the preference when creating an isolated session.
 
-The Agent settings **Model tier** control offers **Executor default**, **Max**, **Balanced**, and **Fast**. Choosing **Executor default** removes the field. Workflow authoring, raw editing, publication, and portable transfer retain declared tiers. Unknown tier values reject during definition parsing. Existing definitions retain their behavior when the field is absent.
+The Agent settings **Model tier** control offers **No preference**, **Max**, **Balanced**, and **Fast**. Choosing **No preference** removes the field. Workflow authoring, raw editing, publication, and portable transfer retain declared tiers. Unknown tier values reject during definition parsing. Existing definitions retain their behavior when the field is absent.
 
 Full assignments, `list_work` summaries, run briefings, compact start/submit responses, and claim results expose `context.tier` when set. Dispatchers can read the preference before reserving work. Assignment-size previews include the context field.
 

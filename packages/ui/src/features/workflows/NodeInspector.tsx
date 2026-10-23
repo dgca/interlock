@@ -228,7 +228,7 @@ export function NodeInspector({
               description="Executor preference for either Context setting. Required session continuity and isolation take precedence."
               value={node.context.tier ?? ''}
               data={[
-                { value: '', label: 'Executor default' },
+                { value: '', label: 'No preference' },
                 { value: 'max', label: 'Max' },
                 { value: 'balanced', label: 'Balanced' },
                 { value: 'fast', label: 'Fast' },

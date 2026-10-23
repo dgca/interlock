@@ -167,7 +167,7 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
                             <>
                               <td>
                                 {group.requestedTier === null
-                                  ? 'Executor default'
+                                  ? 'No preference'
                                   : (group.requestedTier ?? 'Unknown')}
                               </td>
                               <td>
