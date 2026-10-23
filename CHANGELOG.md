@@ -1,5 +1,11 @@
 # @type_of/interlock
 
+## 0.2.4
+
+### Patch Changes
+
+- a4e2300: Let workflow authoring request the editor's Dagre Tidy layout during create, update, and stable-ID edits. Add CLI update and edit commands with revision-protected layout support, while preserving supplied positions when no layout is requested.
+
 ## 0.2.3
 
 ### Patch Changes
