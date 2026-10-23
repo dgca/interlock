@@ -14,7 +14,9 @@ export function tidyWorkflow(
     for (const node of members) if (node.kind === 'batch') arrange(node.id);
     if (!members.length) return;
     const { size } = canvasGeometry(result);
-    const graph = new graphlib.Graph({ multigraph: true });
+    // Dagre only supplies node positions. A single edge per directed pair avoids
+    // its parallel-edge intersection failures; original routes remain untouched.
+    const graph = new graphlib.Graph();
     graph.setGraph({
       rankdir: 'LR',
       ranksep: CANVAS_GAP,
@@ -31,7 +33,7 @@ export function tidyWorkflow(
         ids.has(edge.target) &&
         edge.source !== edge.target
       )
-        graph.setEdge(edge.source, edge.target, {}, edge.id);
+        graph.setEdge(edge.source, edge.target, {});
     }
     layout(graph);
     const left = parentId ? BATCH_INSET.left : 60;

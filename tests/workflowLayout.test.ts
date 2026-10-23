@@ -17,6 +17,7 @@ import {
   tidyWorkflowElk,
 } from '../packages/ui/src/features/workflows/workflowLayoutElk';
 import { nestedBatches } from './fixtures/batch';
+import parallelEdges from './fixtures/parallelEdges.json';
 
 function assertClear(definition: WorkflowDefinition) {
   const nodes = canvasGraph(definition).nodes;
@@ -57,6 +58,27 @@ const semantics = (definition: WorkflowDefinition) => ({
   ...definition,
   nodes: definition.nodes.map(({ position, ...node }) => node),
 });
+
+it.each(['reported', 'minimal'])(
+  'tidies the %s parallel-edge regression without changing routes',
+  (fixture) => {
+    const definition = definitionSchema.parse(parallelEdges);
+    if (fixture === 'minimal') {
+      definition.nodes = definition.nodes.filter((node) =>
+        ['n17', 'n18', 'n21'].includes(node.id),
+      );
+      definition.edges = definition.edges.filter((edge) =>
+        ['e31', 'e32', 'e38'].includes(edge.id),
+      );
+    }
+    const before = structuredClone(definition);
+    const tidy = tidyWorkflow(definition);
+    assertClear(tidy);
+    expect(semantics(tidy)).toEqual(semantics(before));
+    expect(definition).toEqual(before);
+    expect(tidyWorkflow(tidy)).toEqual(tidy);
+  },
+);
 
 function forkDefinition() {
   const ports = ['investigate', 'ticket', 'assets', 'fallback'];

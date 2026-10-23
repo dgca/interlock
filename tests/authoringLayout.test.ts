@@ -13,6 +13,7 @@ import {
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { nestedBatches } from './fixtures/batch';
+import parallelEdges from './fixtures/parallelEdges.json';
 import { appRouter } from '../packages/server/src/router';
 
 const opened: { store: Store; engine: Engine }[] = [];
@@ -38,6 +39,51 @@ function stacked() {
   for (const n of d.nodes) n.position = { x: 0, y: 0 };
   return d;
 }
+
+it.each(['create', 'update', 'edit'])(
+  'saves the parallel-edge regression with Tidy through %s',
+  async (operation) => {
+    const { engine, api } = setup();
+    const definition = definitionSchema.parse(parallelEdges);
+    let saved;
+    if (operation === 'create') {
+      saved = await api.workflows.create({
+        name: 'Parallel routes',
+        definition,
+        layout: 'tidy',
+      });
+      expect(saved.draftRevision).toBe(1);
+    } else {
+      const original = engine.create('Parallel routes', '', definition);
+      if (operation === 'update') {
+        saved = await api.workflows.update({
+          id: original.id,
+          draftRevision: original.draftRevision,
+          layout: 'tidy',
+        });
+      } else {
+        const result = await api.workflows.edit({
+          id: original.id,
+          draftRevision: original.draftRevision,
+          edits: [],
+          layout: 'tidy',
+        });
+        expect(result.applied).toBe(true);
+        saved = engine.workflow(original.id);
+      }
+      expect(saved.draftRevision).toBe(original.draftRevision + 1);
+    }
+    expect(saved.draft).toEqual(tidyWorkflow(definition));
+    expect(semantics(saved.draft)).toEqual(semantics(definition));
+    expect(saved.draft.edges).toHaveLength(50);
+    expect(
+      saved.draft.nodes.every(
+        (node) =>
+          Number.isFinite(node.position.x) && Number.isFinite(node.position.y),
+      ),
+    ).toBe(true);
+  },
+);
 
 it.each([stacked, () => nestedBatches(3)])(
   'shares editor geometry and Dagre layout without changing workflow semantics',
