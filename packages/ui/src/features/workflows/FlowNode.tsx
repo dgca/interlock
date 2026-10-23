@@ -33,7 +33,7 @@ import {
 import styles from './WorkflowEditor.module.css';
 import { formatDuration } from './DurationInput';
 import { conditionColors } from './conditionColors';
-import { outputPortTop } from './portLayout';
+import { outputPortTop } from '@interlock/core/layout';
 export type CanvasNode = Node<{
   node: WorkflowNode;
   status?: string;

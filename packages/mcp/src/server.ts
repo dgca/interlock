@@ -11,6 +11,7 @@ import {
   resultCheckSchema,
   assignmentSizeQuerySchema,
   definitionSchema,
+  draftLayoutSchema,
   jsonSchema,
   runQuerySchema,
   workflowEditsSchema,
@@ -389,6 +390,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
       detail: authoringDetailSchema,
       description: z.string().optional(),
       definition: definitionSchema.describe(definitionGuide).optional(),
+      layout: draftLayoutSchema.optional(),
       ownerWorkflowId: z.string().nullable().optional(),
     },
     ({ detail, ...input }) =>
@@ -399,12 +401,13 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'update_workflow',
-    'Update workflow metadata or replace the entire draft definition. Use edit_workflow for small stable-ID edits or validate_workflow for read-only diagnostics. Read get_workflow first and include its current draftRevision when changing the draft. The draft parameter uses the same definition format as create_workflow. Incomplete routes can be saved; this does not publish or change existing runs. Ownership is excluded; use preview_workflow_ownership and set_workflow_owner for moves. Request detail:"summary" for IDs/revisions/status without the definition, including archive/restore. full is the default.',
+    'Update workflow metadata or replace the entire draft definition. Use edit_workflow for small stable-ID edits or validate_workflow for read-only diagnostics. Read get_workflow first and include its current draftRevision when changing the draft or requesting layout. layout without draft arranges the stored draft. The draft parameter uses the same definition format as create_workflow. Incomplete routes can be saved; this does not publish or change existing runs. Ownership is excluded; use preview_workflow_ownership and set_workflow_owner for moves. Request detail:"summary" for IDs/revisions/status without the definition, including archive/restore. full is the default.',
     {
       id: z.string(),
       name: z.string().optional(),
       description: z.string().optional(),
       draft: definitionSchema.describe(definitionGuide).optional(),
+      layout: draftLayoutSchema.optional(),
       archived: z
         .boolean()
         .optional()
@@ -422,7 +425,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'edit_workflow',
-    'Apply up to 100 ordered stable-ID draft edits atomically. Read get_workflow for draftRevision. A stale revision or invalid edit rejects all edits. Returns applied, draftRevision, changes {nodes/edges: added, updated, removed IDs; settings: changed fields}, and diagnostics {severity, category, code, path, message, optional nodeId, edgeId, operationIndex}. Operation indexes are zero-based. No-op edits preserve revision and timestamp; effective changes increment once. Updates shallowly replace fields; unset removes optional fields. Removing a node recursively removes Batch descendants and incident edges. Surviving node bindings and edges after source-port changes are preserved and must be explicitly repaired. Save errors block edits; publication blockers and conservative contract warnings allow incomplete drafts. Added scripts default to JavaScript, existing omitted language retains Bash. Ownership, metadata, published versions, and existing runs are untouched. Does not publish or start a run. Request diagnostics:"summary" for all errors and new/changed warnings across the graph, plus at most five unchanged warnings and exact counts in diagnosticSummary. Counts include every error and deduplicate only exact warnings. all is the default. Counts and samples do not cap arbitrary diagnostic text or newly introduced diagnostics.',
+    'Apply up to 100 ordered stable-ID draft edits atomically. Read get_workflow for draftRevision. A stale revision or invalid edit rejects all edits. Returns applied, draftRevision, changes {nodes/edges: added, updated, removed IDs; settings: changed fields}, and diagnostics {severity, category, code, path, message, optional nodeId, edgeId, operationIndex}. Operation indexes are zero-based. Layout runs after edits and moved nodes appear in changes. No-op requests with unchanged edits and layout preserve revision and timestamp; effective changes increment once. Updates shallowly replace fields; unset removes optional fields. Removing a node recursively removes Batch descendants and incident edges. Surviving node bindings and edges after source-port changes are preserved and must be explicitly repaired. Save errors block edits; publication blockers and conservative contract warnings allow incomplete drafts. Added scripts default to JavaScript, existing omitted language retains Bash. Ownership, metadata, published versions, and existing runs are untouched. Does not publish or start a run. Request diagnostics:"summary" for all errors and new/changed warnings across the graph, plus at most five unchanged warnings and exact counts in diagnosticSummary. Counts include every error and deduplicate only exact warnings. all is the default. Counts and samples do not cap arbitrary diagnostic text or newly introduced diagnostics.',
     {
       id: z.string(),
       draftRevision: z.number().int().positive(),
@@ -435,6 +438,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
       edits: workflowEditsSchema.describe(
         workflowEditsSchema.description + ' ' + definitionGuide,
       ),
+      layout: draftLayoutSchema.optional(),
     },
     (input) => client.workflows.edit(input),
     editResponseSchema,

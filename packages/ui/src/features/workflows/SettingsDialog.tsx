@@ -28,7 +28,7 @@ import { workflowTargets } from './workflowTargets';
 import { NodeInspector } from './NodeInspector';
 import { nodeDescriptions } from './nodeDescriptions';
 import { api, download } from '../../lib/api';
-import { newNodePosition, separateNodes } from './workflowLayout';
+import { newNodePosition, separateNodes } from '@interlock/core/layout';
 import styles from './SettingsDialog.module.css';
 
 export type Settings = {

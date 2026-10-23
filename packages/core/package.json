@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./layout": "./src/layout/index.ts"
   },
   "dependencies": {
     "zod": "^3.25.76",
-    "ajv": "^8.17.1"
+    "ajv": "^8.17.1",
+    "@dagrejs/dagre": "^3.1.1"
   }
 }

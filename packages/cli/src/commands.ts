@@ -80,6 +80,20 @@ export async function runCommand(argv: string[]) {
       );
     case 'workflow':
       return client.workflows.get.query({ id: args[0] });
+    case 'update':
+      if (args.length !== 2)
+        throw new Error('Usage: update <workflow-id> <json|@file>');
+      return client.workflows.update.mutate({
+        ...(await parse(args[1])),
+        id: args[0],
+      });
+    case 'edit':
+      if (args.length !== 2)
+        throw new Error('Usage: edit <workflow-id> <json|@file>');
+      return client.workflows.edit.mutate({
+        ...(await parse(args[1])),
+        id: args[0],
+      });
     case 'archive':
       return client.workflows.update.mutate({ id: args[0], archived: true });
     case 'restore':
@@ -286,6 +300,8 @@ export async function runCommand(argv: string[]) {
         usage: [
           'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
           'workflow <id>',
+          'update <workflow-id> <json|@file> (metadata or draft replacement; layout:"tidy" arranges with Dagre; draft/layout changes require draftRevision)',
+          'edit <workflow-id> <json|@file> (draftRevision and edits required; optional layout:"tidy"; atomic stable-ID edits)',
           'archive <id>',
           'restore <id>',
           'delete <id> --yes',

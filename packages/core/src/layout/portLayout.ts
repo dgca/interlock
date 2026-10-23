@@ -3,7 +3,7 @@ import {
   hasFailureRoute,
   outgoingPorts,
   type WorkflowNode,
-} from '@interlock/core';
+} from '../index.js';
 
 /** Share source handle positions between rendering and crossing reduction. */
 export function outputPortTop(

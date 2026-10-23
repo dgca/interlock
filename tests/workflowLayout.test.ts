@@ -6,15 +6,12 @@ import {
   type WorkflowDefinition,
 } from '@interlock/core';
 import { canvasGraph } from '../packages/ui/src/features/workflows/canvasGraph';
-import {
-  BATCH_INSET,
-  CANVAS_GAP,
-} from '../packages/ui/src/features/workflows/canvasGeometry';
+import { BATCH_INSET, CANVAS_GAP } from '@interlock/core/layout';
 import {
   newNodePosition,
   separateNodes,
   tidyWorkflow,
-} from '../packages/ui/src/features/workflows/workflowLayout';
+} from '@interlock/core/layout';
 import {
   elkGraph,
   tidyWorkflowElk,

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { Store } from '@interlock/storage';
+import { tidyWorkflow } from '@interlock/core/layout';
 import {
   assertContract,
   checkResultContract,
@@ -43,6 +44,8 @@ import {
   type SessionIdentity,
   type ModelSelection,
   modelSelectionSchema,
+  draftLayoutSchema,
+  type DraftLayout,
 } from '@interlock/core';
 import { freshContextInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
@@ -210,11 +213,18 @@ export class Engine {
     if (!run) throw new InterlockError('Run not found');
     return run;
   }
+  private arrangeDraft(definition: WorkflowDefinition, layout?: DraftLayout) {
+    const parsed = definitionSchema.parse(definition);
+    if (layout === undefined) return parsed;
+    draftLayoutSchema.parse(layout);
+    return definitionSchema.parse(tidyWorkflow(parsed));
+  }
   create(
     name: string,
     description = '',
     definition = blankDefinition(),
     ownerWorkflowId: string | null = null,
+    layout?: DraftLayout,
   ): Workflow {
     if (ownerWorkflowId) {
       const owner = this.workflow(ownerWorkflowId);
@@ -230,7 +240,7 @@ export class Engine {
       name,
       description,
       archived: false,
-      draft: definitionSchema.parse(definition),
+      draft: this.arrangeDraft(definition, layout),
       draftRevision: 1,
       latestVersion: 0,
       createdAt: time,
@@ -252,19 +262,23 @@ export class Engine {
       archived?: boolean;
       draft?: WorkflowDefinition;
       draftRevision?: number;
+      layout?: DraftLayout;
     },
   ) {
     return this.store.transaction(() => {
       const w = this.workflow(id);
-      if (patch.draft && patch.draftRevision !== w.draftRevision)
+      if (
+        (patch.draft || patch.layout !== undefined) &&
+        patch.draftRevision !== w.draftRevision
+      )
         throw new InterlockError(
           'Draft changed elsewhere. Reload before saving.',
         );
       if (patch.name !== undefined) w.name = patch.name;
       if (patch.description !== undefined) w.description = patch.description;
       if (patch.archived !== undefined) w.archived = patch.archived;
-      if (patch.draft) {
-        w.draft = definitionSchema.parse(patch.draft);
+      if (patch.draft || patch.layout !== undefined) {
+        w.draft = this.arrangeDraft(patch.draft ?? w.draft, patch.layout);
         validateWorkflowReferences(w.id, w.draft, this.store.workflows());
         w.draftRevision++;
       }
@@ -345,6 +359,7 @@ export class Engine {
     draftRevision: number,
     edits: unknown,
     diagnosticsMode: 'all' | 'summary' = 'all',
+    layout?: DraftLayout,
   ) {
     return this.store.transaction(() => {
       const w = this.workflow(id);
@@ -405,6 +420,7 @@ export class Engine {
         }
         return failure(validation.diagnostics);
       }
+      result.definition = this.arrangeDraft(result.definition, layout);
       const changes = draftChanges(w.draft, result.definition);
       const changed =
         changes.settings.length > 0 ||

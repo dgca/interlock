@@ -6,6 +6,7 @@ export * from './resultValidation.js';
 export * from './assignmentSize.js';
 export * from './contextContinuity.js';
 export * from './modelTiers.js';
+export * from './authoringLayout.js';
 import { modelTierSchema } from './modelTiers.js';
 import { continuityGroupSchema } from './contextContinuity.js';
 import Ajv from 'ajv';

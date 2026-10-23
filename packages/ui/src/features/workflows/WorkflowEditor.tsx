@@ -46,7 +46,7 @@ import { OrthoEdge } from './OrthoEdge';
 import { canvasGraph, withoutNodes } from './canvasGraph';
 import { useWorkflowHistory } from './useWorkflowHistory';
 import { useBoxZoom } from './useBoxZoom';
-import { tidyWorkflow } from './workflowLayout';
+import { tidyWorkflow } from '@interlock/core/layout';
 import { tidyWorkflowElk } from './workflowLayoutElk';
 import { TidyControl } from './TidyControl';
 import { api } from '../../lib/api';

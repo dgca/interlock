@@ -137,6 +137,8 @@ Read `get_workflow` for the current `draftRevision`, then call `edit_workflow` w
 
 This example assumes an existing `research` node, `research-next` edge, and `finish` node. IDs identify stored objects, independently of labels and array positions.
 
+For new graphs or structural changes, add top-level `layout: "tidy"` to `create_workflow`, `update_workflow`, or `edit_workflow`. It applies the editor's Dagre layout in the same save. Omit it to preserve positions, especially for text-only edits. Updates require the current `draftRevision`, including layout-only updates without a replacement draft. Edit responses include moved nodes in `changes`; unchanged edits and layout preserve the revision. See [authoring layout](authoring-layout.md) for shared API and CLI examples.
+
 | Operation         | Fields                                 | Behavior                                                                                       |
 | ----------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `add_node`        | `node`                                 | Add a definition-format node with a new ID. Added scripts default to `language: "javascript"`. |
