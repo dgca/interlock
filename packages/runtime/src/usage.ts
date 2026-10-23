@@ -64,6 +64,14 @@ export class Usage {
       workerId: work.workerId ?? null,
       attempt: work.attempt,
       claimedAt,
+      ...(claimedAt !== null
+        ? {
+            requestedTier: work.context.tier ?? null,
+            ...(work.modelSelection
+              ? { modelSelection: work.modelSelection }
+              : {}),
+          }
+        : {}),
       outcome:
         work.status === 'claimed' ||
         work.status === 'completed' ||
@@ -238,6 +246,10 @@ export class Usage {
                   endedAt: first.endedAt ?? null,
                   reportedAt: first.reportedAt ?? null,
                   snapshot: first.snapshot ?? null,
+                  ...(first.requestedTier !== undefined
+                    ? { requestedTier: first.requestedTier }
+                    : {}),
+                  modelSelection: first.modelSelection ?? null,
                 }
               : {}),
             totals: summarizeUsage(group),

@@ -276,6 +276,8 @@ MCP `start_run` and `submit_result` default to `detail: "summary"`; `list_work` 
 
 ## Live run inspection
 
+Optional Agent `context.tier` is captured with assignments and retained in compact discovery and continuation. Core defines the fixed vocabulary and optional claim `modelSelection`; runtime captures requested and declared selection on each new usage-attempt receipt. Usage model reports remain separate. No model is selected or verified by Interlock. See [model tiers](model-tiers.md).
+
 The run inspector shows a live summary above the published graph. Unclaimed Agent assignments show Waiting for an agent; claimed assignments show Agent working. A claimed assignment indicates ownership, not reported internal progress. Running, waiting, completed, failed, and unstarted steps have distinct canvas indicators.
 
 Run inspection includes descendant runs and assignments without claim tokens. Batch groups show finished, running, waiting, failed, and queued item counts. Member steps aggregate their item executions; selecting an item displays only that item's input, output, error, and assignment. Referenced Workflow runs remain separate graphs. The latest execution of each step supplies its canvas state, while the timeline retains previous attempts. Live updates preserve explicit step/item selections and the canvas viewport. Completed runs link to their final output.

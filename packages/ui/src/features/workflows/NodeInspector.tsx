@@ -222,6 +222,27 @@ export function NodeInspector({
               }
             />
 
+            <NativeSelect
+              mb="md"
+              label="Model tier"
+              description="Executor preference for either Context setting. Required session continuity and isolation take precedence."
+              value={node.context.tier ?? ''}
+              data={[
+                { value: '', label: 'Executor default' },
+                { value: 'max', label: 'Max' },
+                { value: 'balanced', label: 'Balanced' },
+                { value: 'fast', label: 'Fast' },
+              ]}
+              onChange={(event) => {
+                const { tier: _tier, ...context } = node.context;
+                patch({
+                  context: event.currentTarget.value
+                    ? { ...context, tier: event.currentTarget.value }
+                    : context,
+                });
+              }}
+            />
+
             <Textarea
               mb="md"
               label="Context instructions"

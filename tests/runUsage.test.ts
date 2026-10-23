@@ -108,3 +108,56 @@ it('reports read errors and never formats overflow as zero', async () => {
     usageMetricText({ value: null, coverage: 'partial', overflow: true }),
   ).toBe('Too large to total');
 });
+
+it('separates requested tiers, declared selections and usage-reported models', async () => {
+  const work = engine.available(id)[0];
+  work.context.tier = 'max';
+  store.put('work', work);
+  const claimed = engine.claim(work.id, {
+    workerId: 'author',
+    freshContext: false,
+    tools: [],
+    skills: [],
+    modelSelection: {
+      tier: 'fast',
+      provider: 'declared-provider',
+      model: 'declared-model',
+    },
+  });
+  await render();
+  await act(async () => {
+    container.querySelector('summary')!.click();
+    const select = container.querySelector('select')!;
+    select.value = 'attempt';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(query).toHaveBeenLastCalledWith(
+    expect.objectContaining({ groupBy: 'attempt' }),
+  );
+  const cells = () =>
+    Array.from(container.querySelectorAll('tbody td')).map(
+      (td) => td.textContent,
+    );
+  expect(cells()).toEqual(
+    expect.arrayContaining([
+      'max',
+      'Tier: fast; provider: declared-provider; model: declared-model',
+      'Unknown',
+    ]),
+  );
+  expect(container.textContent).toContain('Input tokens: Unknown');
+  engine.usage.report({
+    workId: claimed.id,
+    attempt: 1,
+    token: claimed.token!,
+    snapshot: {
+      sequence: 1,
+      models: [{ provider: 'used-provider', model: 'used-model' }],
+    },
+  });
+  await render(1);
+  expect(cells()).toContain('used-provider / used-model');
+  expect(cells()).toContain(
+    'Tier: fast; provider: declared-provider; model: declared-model',
+  );
+});

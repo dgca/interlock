@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ModelTier, ModelSelection } from './modelTiers.js';
 
 const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const positive = count.refine((n) => n > 0, 'Must be positive');
@@ -84,6 +85,9 @@ export type UsageOutcome =
   'claimed' | 'completed' | 'failed' | 'expired' | 'cancelled' | 'unknown';
 /** Internal persisted receipt. Never return tokenHash through inspection. */
 export interface UsageAttempt {
+  // null means captured executor default; omission means unknown legacy data.
+  requestedTier?: ModelTier | null;
+  modelSelection?: ModelSelection;
   id: string;
   workId: string;
   runId: string;

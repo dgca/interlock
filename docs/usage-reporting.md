@@ -53,6 +53,8 @@ MCP `get_run_usage` and the shared API `runs.usage` require `runId`. The default
 
 Groups default to 20 records and cap at 100. `offset` ranges from 0 through 1,000,000. Use `nextOffset` for the next page; null means the last page. `totalGroups` counts every group. `totals` always covers the entire selected scope, regardless of pagination.
 
+Attempt groups also expose `requestedTier` and `modelSelection` from claim time. `requestedTier:null` means a captured executor default; an omitted field means unavailable legacy attribution. `modelSelection:null` means no executor declaration. A declaration is not evidence of model execution and does not populate `snapshot` or token totals. The UI's **Usage and model attribution** section offers **Claim attempt** grouping to compare these fields with separately usage-reported model identities. See [model tiers](model-tiers.md).
+
 Token metrics return `value`, `coverage`, and `overflow`. Coverage is `unknown` when no figures are available, `partial` when some are missing or any attempt has a non-final report, and `complete` when all scoped attempts and models supply final figures for that metric. A partial value is the sum of reported figures, not an estimate of missing usage. No claim attempts also produces unknown metrics, with `attempts:0`.
 
 Costs remain separated by currency. `amountMicros` has the same metric structure, and `costCoverage` describes coverage across all scoped models and attempts. The API never adds currencies together. Aggregates above the safe-integer range return `value:null`, `overflow:true`, and partial coverage rather than an imprecise number.

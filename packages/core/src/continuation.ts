@@ -3,6 +3,7 @@ import {
   continuityGroupSchema,
 } from './contextContinuity.js';
 import { z } from 'zod';
+import { modelTierSchema } from './modelTiers.js';
 
 export const briefingQuerySchema = z.object({
   id: z
@@ -94,6 +95,7 @@ export const continuationWorkSchema = z.object({
   status: z.literal('available'),
   continuity: continuitySchema.optional(),
   context: z.object({
+    tier: modelTierSchema.optional(),
     continuityGroup: continuityGroupSchema.optional(),
     mode: z.enum(['current', 'fresh']),
     tools: z.array(z.string()),

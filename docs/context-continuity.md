@@ -51,4 +51,6 @@ Bindings and history persist in the local database and are removed with run hist
 
 ## Enforcement boundary
 
+Optional [model tiers](model-tiers.md) apply to both current and fresh context. A tier never replaces a bound session or triggers a handoff. If a session cannot change models, preserve its continuity and report the selection you can provide. Claims accept a different declared tier or no model declaration.
+
 Interlock checks declarations and records handoffs. It does not create sessions, authenticate the declared actor or executor, inspect conversation history, or prove continuity or fresh-review isolation. The external harness owns those responsibilities. A group name alone does not cause an executor to resume a session.

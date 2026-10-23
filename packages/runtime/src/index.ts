@@ -41,6 +41,8 @@ import {
   type BudgetPolicy,
   type ContextHandoffInput,
   type SessionIdentity,
+  type ModelSelection,
+  modelSelectionSchema,
 } from '@interlock/core';
 import { freshContextInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
@@ -65,6 +67,7 @@ const terminal = (s: string) =>
 const message = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 export interface Worker {
+  modelSelection?: ModelSelection;
   session?: SessionIdentity;
   workerId: string;
   freshContext: boolean;
@@ -1685,6 +1688,10 @@ export class Engine {
     return this.contextGroups.handoff(input);
   }
   claim(workId: string, worker: Worker, leaseSeconds?: number) {
+    const modelSelection =
+      worker.modelSelection === undefined
+        ? undefined
+        : modelSelectionSchema.parse(worker.modelSelection);
     this.pump();
     return this.store.transaction(() => {
       const work = this.store.get<WorkRequest>('work', workId);
@@ -1707,6 +1714,7 @@ export class Engine {
       work.availableUntil = undefined;
       work.attempt++;
       work.workerId = worker.workerId;
+      work.modelSelection = modelSelection;
       this.contextGroups.claimed(work, worker.session);
       work.token = randomUUID();
       work.claimLeaseSeconds = leaseSeconds ?? work.leaseSeconds ?? 300;

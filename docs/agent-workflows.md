@@ -245,6 +245,10 @@ Start accepts an optional positional version before or after `--summary`. Submit
 
 Use `claim WORK_ID worker-name --fresh` only from a fresh session or isolated executor. The flag attests isolation; it does not create it. Claim also accepts an options JSON object or `@file` after the worker ID, including `tools`, `skills`, `freshContext`, and `leaseSeconds`. Explicit `--fresh` and `--lease` flags override the corresponding JSON values. Lease seconds must be an integer from 10 through 3600.
 
+## Model tier preference
+
+Optional Agent `context.tier` is visible before claims in work discovery, briefings, and compact continuation. It applies to current and fresh context without changing admission or session rules. Claim options also accept `modelSelection` with optional `tier`, `provider`, and `model` fields. Declare at least one known value when supplying the object. Inspect declarations separately from measured models with `get_run_usage` and `groupBy:"attempt"`. See [model tiers](model-tiers.md).
+
 ## Renew claims
 
 Claims follow the [duration precedence](#claim-duration-and-expiry). Renew before `leaseUntil` expires. Renewal sets the deadline to the current time plus the requested duration.

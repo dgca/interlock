@@ -40,7 +40,7 @@ export type WorkMetadata = Pick<
 > & {
   context: Pick<
     WorkRequest['context'],
-    'mode' | 'tools' | 'skills' | 'continuityGroup'
+    'mode' | 'tools' | 'skills' | 'continuityGroup' | 'tier'
   >;
 };
 
