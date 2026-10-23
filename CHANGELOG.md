@@ -1,5 +1,11 @@
 # @type_of/interlock
 
+## 0.2.5
+
+### Patch Changes
+
+- 7a19872: Fix Dagre Tidy failures on workflows with parallel routes, including loops. Preserve all workflow edges and ports when arranging drafts in the editor or through authoring calls.
+
 ## 0.2.4
 
 ### Patch Changes
