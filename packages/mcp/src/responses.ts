@@ -12,6 +12,8 @@ import {
   diagnosticSummarySchema,
   jsonSchema,
   contextPolicySchema,
+  modelTierSchema,
+  modelSelectionSchema,
 } from '@interlock/core';
 
 export const mcpMutationDetailSchema = mutationDetailSchema
@@ -73,6 +75,7 @@ export const workListResponseSchema = z
           status: z.literal('available'),
           continuity: continuitySchema.optional(),
           context: z.object({
+            tier: modelTierSchema.optional(),
             continuityGroup: continuityGroupSchema.optional(),
             mode: z.enum(['current', 'fresh']),
             tools: z.array(z.string()),
@@ -158,6 +161,7 @@ export const claimResponseSchema = z
     input: jsonSchema,
     outputSchema: z.record(z.unknown()),
     context: contextPolicySchema,
+    modelSelection: modelSelectionSchema.optional(),
     continuity: continuitySchema.optional(),
     executionInstructions: z.string().optional(),
   })

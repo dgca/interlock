@@ -70,6 +70,22 @@ it.each(['http', 'stdio'])(
         tools.find((t) => t.name === 'list_work')?.inputSchema.properties
           ?.fields,
       ).toMatchObject({ default: 'summary' });
+      expect(
+        tools.find((t) => t.name === 'claim_work')?.inputSchema.properties
+          ?.modelSelection,
+      ).toMatchObject({
+        properties: {
+          tier: { enum: ['max', 'balanced', 'fast'] },
+          provider: { minLength: 1, maxLength: 200 },
+          model: { minLength: 1, maxLength: 200 },
+        },
+        additionalProperties: false,
+      });
+      for (const name of ['create_workflow', 'update_workflow']) {
+        expect(
+          JSON.stringify(tools.find((t) => t.name === name)?.inputSchema),
+        ).toContain('"max","balanced","fast"');
+      }
       const nodes = [
         { id: 'entry', label: 'Input', kind: 'entry' },
         ...Array.from({ length: 32 }, (_, i) => ({
@@ -77,7 +93,10 @@ it.each(['http', 'stdio'])(
           label: `Stage ${i}`,
           kind: 'agent',
           prompt: 'prompt-payload-marker'.repeat(1000),
-          context: { instructions: 'context-payload-marker'.repeat(1000) },
+          context: {
+            tier: 'fast',
+            instructions: 'context-payload-marker'.repeat(1000),
+          },
         })),
         { id: 'exit', label: 'Output', kind: 'exit' },
       ];
@@ -152,6 +171,11 @@ it.each(['http', 'stdio'])(
       compact(response);
       const startBytes = Buffer.byteLength(response.text);
       const runId = response.data.runId;
+      expect(response.data.nextWork.items[0].context.tier).toBe('fast');
+      expect(
+        (await call('get_run_briefing', { id: runId })).data.available.items[0]
+          .context.tier,
+      ).toBe('fast');
       expect(response.data.nextCall).toBeNull();
       const unchanged = await call('wait_for_run_change', {
         id: runId,
@@ -169,6 +193,7 @@ it.each(['http', 'stdio'])(
           ...(fields ? { fields } : {}),
         });
         expect(listed.data.items).toHaveLength(1);
+        expect(listed.data.items[0].context.tier).toBe('fast');
         if (fields !== 'full')
           expect(listed.data.items[0].prompt).toBeUndefined();
         else {
@@ -183,8 +208,33 @@ it.each(['http', 'stdio'])(
         const claim = await call('claim_work', {
           workId,
           workerId: 'regression',
+          modelSelection: {
+            tier: 'balanced',
+            provider: 'declared',
+            model: 'chosen',
+          },
         });
         expect(claim.data.prompt).toContain('prompt-payload-marker');
+        expect(claim.data.context.tier).toBe('fast');
+        expect(claim.data.modelSelection).toMatchObject({
+          tier: 'balanced',
+          provider: 'declared',
+          model: 'chosen',
+        });
+        const attribution = (
+          await call('get_run_usage', { runId, groupBy: 'attempt' })
+        ).data;
+        expect(
+          attribution.groups.find((g: any) => g.workId === workId),
+        ).toMatchObject({
+          requestedTier: 'fast',
+          modelSelection: {
+            tier: 'balanced',
+            provider: 'declared',
+            model: 'chosen',
+          },
+          snapshot: null,
+        });
         if (i === 0) {
           const protectedState = engine.inspect(runId);
           await reject('submit_result', {
@@ -208,6 +258,7 @@ it.each(['http', 'stdio'])(
           output: payload,
         });
         compact(response);
+        expect(response.data.nextWork.items[0].context.tier).toBe('fast');
         expect(response.data.runId).toBe(runId);
         const replay = await call('submit_result', {
           workId,

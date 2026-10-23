@@ -132,6 +132,8 @@ Optional [run budgets](run-budgets.md) stop new Agent claims when limits are rea
 
 ## Report executor usage
 
+Agent assignments may include an advisory `context.tier`: `max`, `balanced`, or `fast`. Discovery exposes it before claiming. Map it to your available models while preserving required continuity and fresh isolation. Optional claim `modelSelection` records your declared tier, provider, and model independently of measured usage. See [model tiers](model-tiers.md) for the contract and current-conversation behavior.
+
 Executors that have measured usage can call `report_usage` with the claim's work ID, attempt number, token, and a cumulative snapshot. Reporting is optional and does not renew the lease. `get_run_usage` reads bounded totals and attribution. Keep missing figures unknown; do not estimate account usage from workflow outputs. See [usage reporting](usage-reporting.md) for reporting after an attempt ends and for CLI examples.
 
 ## Author definitions through MCP

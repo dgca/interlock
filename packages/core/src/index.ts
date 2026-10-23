@@ -5,6 +5,8 @@ export * from './budgets.js';
 export * from './resultValidation.js';
 export * from './assignmentSize.js';
 export * from './contextContinuity.js';
+export * from './modelTiers.js';
+import { modelTierSchema } from './modelTiers.js';
 import { continuityGroupSchema } from './contextContinuity.js';
 import Ajv from 'ajv';
 import { validateFetch, type FetchRequest } from './fetch.js';
@@ -36,6 +38,7 @@ export const jsonSchema: z.ZodType<Json> = z.lazy(() =>
 );
 export const contractSchema = z.record(z.unknown());
 export const contextPolicySchema = z.object({
+  tier: modelTierSchema.optional(),
   continuityGroup: continuityGroupSchema.optional(),
   mode: z.enum(['current', 'fresh']).default('current'),
   instructions: z.string().default(''),
@@ -348,6 +351,7 @@ export interface RunAncestry {
   rootWorkflowId: string;
 }
 export interface WorkRequest {
+  modelSelection?: import('./modelTiers.js').ModelSelection;
   continuity?: import('./contextContinuity.js').ContextContinuity;
   budgetBlocked?: import('./budgets.js').BudgetBlock;
   id: string;

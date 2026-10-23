@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Checkbox, Group, Stack, Text } from '@mantine/core';
+import { Checkbox, Group, NativeSelect, Stack, Text } from '@mantine/core';
 import type { UsageMetric } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
 import { Button } from '../../components/Button/Button';
@@ -18,11 +18,13 @@ export function usageMetricText(metric: UsageMetric, scale = 1) {
 export function RunUsage({ id, tick }: { id: string; tick: number }) {
   const [includeDescendants, setIncludeDescendants] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [groupBy, setGroupBy] = useState<'node' | 'attempt'>('node');
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [data, setData] = useState<Report>();
   const [error, setError] = useState('');
   useEffect(() => {
     setOffset(0);
-  }, [id, includeDescendants]);
+  }, [id, includeDescendants, groupBy]);
   useEffect(() => {
     let active = true;
     setError('');
@@ -32,7 +34,7 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
         includeDescendants,
         offset,
         limit: 20,
-        groupBy: 'node',
+        groupBy,
       })
       .then((value) => {
         if (active) setData(value);
@@ -43,10 +45,11 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
     return () => {
       active = false;
     };
-  }, [id, tick, includeDescendants, offset]);
+  }, [id, tick, includeDescendants, offset, groupBy]);
   const report =
     data?.runId === id &&
     data.includeDescendants === includeDescendants &&
+    data.groupBy === groupBy &&
     data.offset === offset
       ? data
       : undefined;
@@ -107,14 +110,39 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
               </Text>
             )}
             {!!report.groups.length && (
-              <details>
-                <summary>Usage by node</summary>
+              <details
+                open={detailsOpen}
+                onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
+              >
+                <summary>Usage and model attribution</summary>
+                <NativeSelect
+                  label="Group usage by"
+                  value={groupBy}
+                  data={[
+                    { value: 'node', label: 'Node' },
+                    { value: 'attempt', label: 'Claim attempt' },
+                  ]}
+                  onChange={(event) =>
+                    setGroupBy(event.currentTarget.value as 'node' | 'attempt')
+                  }
+                  mt="xs"
+                  mb="xs"
+                />
                 <div className={styles.tableWrap}>
                   <table>
                     <thead>
                       <tr>
                         <th>Node</th>
-                        <th>Attempts</th>
+                        <th>
+                          {groupBy === 'attempt' ? 'Attempt' : 'Attempts'}
+                        </th>
+                        {groupBy === 'attempt' && (
+                          <>
+                            <th>Requested tier</th>
+                            <th>Declared selection</th>
+                            <th>Usage-reported models</th>
+                          </>
+                        )}
                         <th>Input tokens</th>
                         <th>Output tokens</th>
                       </tr>
@@ -130,7 +158,33 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
                               </Text>
                             )}
                           </td>
-                          <td>{group.totals.attempts}</td>
+                          <td>
+                            {groupBy === 'attempt'
+                              ? group.attempt
+                              : group.totals.attempts}
+                          </td>
+                          {groupBy === 'attempt' && (
+                            <>
+                              <td>
+                                {group.requestedTier === null
+                                  ? 'No preference'
+                                  : (group.requestedTier ?? 'Unknown')}
+                              </td>
+                              <td>
+                                {group.modelSelection
+                                  ? `Tier: ${group.modelSelection.tier ?? 'Unknown'}; provider: ${group.modelSelection.provider ?? 'Unknown'}; model: ${group.modelSelection.model ?? 'Unknown'}`
+                                  : 'Unknown'}
+                              </td>
+                              <td>
+                                {group.snapshot?.models
+                                  .map(
+                                    (model) =>
+                                      `${model.provider} / ${model.model}`,
+                                  )
+                                  .join(', ') ?? 'Unknown'}
+                              </td>
+                            </>
+                          )}
                           <td>
                             {usageMetricText(group.totals.tokens.inputTokens)}
                           </td>
@@ -148,7 +202,7 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
                       disabled={offset === 0}
                       onClick={() => setOffset(Math.max(0, offset - 20))}
                     >
-                      Previous nodes
+                      Previous {groupBy === 'node' ? 'nodes' : 'attempts'}
                     </Button>
                     <Text size="xs">
                       {offset + 1}–{offset + report.groups.length} of{' '}
@@ -158,7 +212,7 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
                       disabled={report.nextOffset === null}
                       onClick={() => setOffset(report.nextOffset!)}
                     >
-                      Next nodes
+                      Next {groupBy === 'node' ? 'nodes' : 'attempts'}
                     </Button>
                   </Group>
                 )}

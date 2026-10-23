@@ -126,6 +126,32 @@ async function click(text: string) {
   );
 }
 
+it.each(['current', 'fresh'])(
+  'saves and clears an advisory tier with %s context',
+  async (mode) => {
+    const { onApply } = await render({
+      kind: 'agent',
+      prompt: 'Work',
+      context: {
+        mode,
+        continuityGroup: mode === 'current' ? 'author' : undefined,
+      },
+    });
+    expect(field('Model tier').value).toBe('');
+    await select('Model tier', 'fast');
+    await click('Apply changes');
+    const node = onApply.mock.calls[0][0].definition.nodes[0];
+    expect(node.context).toMatchObject({ mode, tier: 'fast' });
+    const reopened = await render(node);
+    expect(field('Model tier').value).toBe('fast');
+    await select('Model tier', '');
+    await click('Apply changes');
+    expect(
+      reopened.onApply.mock.calls[0][0].definition.nodes[0].context,
+    ).not.toHaveProperty('tier');
+  },
+);
+
 it.each(['script', 'fetch'])(
   'removes only the disabled %s Failed route when applying settings',
   async (kind) => {
