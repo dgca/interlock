@@ -60,4 +60,4 @@ interlock edit WORKFLOW_ID '{"draftRevision":4,"edits":[],"layout":"tidy"}'
 
 Only `"tidy"` is accepted, and it always uses Dagre. ELK remains available in the editor. Incremental placement of missing positions and read-only layout preview are outside this increment.
 
-Layout changes positions only. It does not publish, change retained versions or runs, alter graph execution rules, or repair invalid routes. The request is not a workflow setting and is not saved or exported in the definition. Dagre computes on the local server; large graphs add work to the draft save.
+Layout changes positions only and preserves every edge and port, including parallel routes between the same nodes. It does not publish, change retained versions or runs, alter graph execution rules, or repair invalid routes. The request is not a workflow setting and is not saved or exported in the definition. Dagre computes on the local server; large graphs add work to the draft save.

@@ -3,8 +3,13 @@ import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
-import { blankDefinition, type Workflow } from '@interlock/core';
+import {
+  blankDefinition,
+  definitionSchema,
+  type Workflow,
+} from '@interlock/core';
 import { batchDefinition, nestedBatches } from './fixtures/batch';
+import parallelEdges from './fixtures/parallelEdges.json';
 import { WorkflowEditor } from '../packages/ui/src/features/workflows/WorkflowEditor';
 
 const canvas = vi.hoisted(() => ({ props: undefined as any }));
@@ -903,36 +908,42 @@ it('handles Ctrl/Command+Z and Shift+Z without capturing text editing or modal s
   );
 });
 
-it('tidies the whole workflow as one undoable action without rewriting graph semantics', async () => {
-  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-    callback(0);
-    return 1;
-  });
-  vi.stubGlobal('cancelAnimationFrame', vi.fn());
-  try {
-    workflow.draft = nestedBatches(2);
-    await render();
-    const original = positions();
-    await tidy('Dagre');
-    const arranged = positions();
-    expect(arranged).not.toEqual(original);
-    expect(button('Save draft').disabled).toBe(false);
-    await tidy('Dagre');
-    await click('Undo');
-    expect(positions()).toEqual(original);
-    expect(button('Undo').disabled).toBe(true);
-    await click('Redo');
-    expect(positions()).toEqual(arranged);
-    await click('Save draft');
-    const savedDraft = rpc.update.mock.calls[0][0].draft;
-    expect(savedDraft.edges).toEqual(workflow.draft.edges);
-    expect(savedDraft.nodes.map(({ position, ...node }: any) => node)).toEqual(
-      workflow.draft.nodes.map(({ position, ...node }) => node),
-    );
-  } finally {
-    vi.unstubAllGlobals();
-  }
-});
+it.each(['nested Batches', 'parallel routes'])(
+  'tidies %s as one undoable action without rewriting graph semantics',
+  async (fixture) => {
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    try {
+      workflow.draft =
+        fixture === 'nested Batches'
+          ? nestedBatches(2)
+          : definitionSchema.parse(parallelEdges);
+      await render();
+      const original = positions();
+      await tidy('Dagre');
+      const arranged = positions();
+      expect(arranged).not.toEqual(original);
+      expect(button('Save draft').disabled).toBe(false);
+      await tidy('Dagre');
+      await click('Undo');
+      expect(positions()).toEqual(original);
+      expect(button('Undo').disabled).toBe(true);
+      await click('Redo');
+      expect(positions()).toEqual(arranged);
+      await click('Save draft');
+      const savedDraft = rpc.update.mock.calls[0][0].draft;
+      expect(savedDraft.edges).toEqual(workflow.draft.edges);
+      expect(
+        savedDraft.nodes.map(({ position, ...node }: any) => node),
+      ).toEqual(workflow.draft.nodes.map(({ position, ...node }) => node));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  },
+);
 
 it('applies the ELK layout as one undoable action and reports failures', async () => {
   workflow.draft = nestedBatches(2);
