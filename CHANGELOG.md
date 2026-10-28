@@ -1,5 +1,11 @@
 # @type_of/interlock
 
+## 0.2.6
+
+### Patch Changes
+
+- a071f17: Match run graph navigation to the workflow editor, including scroll panning, modifier-scroll zoom, Space-drag panning, and Z area zoom. Run graphs remain read-only.
+
 ## 0.2.5
 
 ### Patch Changes
