@@ -1,5 +1,12 @@
 # @type_of/interlock
 
+## 0.2.7
+
+### Patch Changes
+
+- a376a67: Hold Agent assignments for external blockers and explicitly resume with a fresh claim, preserving recovery allowances and durable blocked intervals.
+- 5ec38b8: Check Agent results against required output paths and captured input values before accepting them, with correction diagnostics and editor controls.
+
 ## 0.2.6
 
 ### Patch Changes
