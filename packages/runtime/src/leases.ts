@@ -6,7 +6,9 @@ export const claimTokenHash = (token: string) =>
 
 export function leaseCounts(work: WorkRequest) {
   return work.maxLeaseExpiries === undefined
-    ? `attempt ${work.attempt}/${work.maxAttempts}`
+    ? work.heldClaimCount
+      ? `claim ${work.attempt}, failure/expiry allowance ${work.attempt - work.heldClaimCount}/${work.maxAttempts}`
+      : `attempt ${work.attempt}/${work.maxAttempts}`
     : `claim ${work.attempt}, failures ${work.failureCount ?? 0}/${work.maxAttempts}, expiries ${work.leaseExpiryCount ?? 0}/${work.maxLeaseExpiries}`;
 }
 

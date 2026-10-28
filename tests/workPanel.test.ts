@@ -9,6 +9,7 @@ import { blankDefinition, type WorkRequest } from '@interlock/core';
 import { WorkPanel } from '../packages/ui/src/features/runs/WorkPanel';
 
 const rpc = vi.hoisted(() => ({
+  hold: vi.fn(),
   claim: vi.fn(),
   renew: vi.fn(),
   submit: vi.fn(),
@@ -69,6 +70,9 @@ beforeEach(async () => {
   engine.publish(workflow.id);
   const { run } = engine.start(workflow.id, {});
   [work] = engine.available(run.id);
+  rpc.hold
+    .mockReset()
+    .mockImplementation(async (request) => engine.manageWorkHold(request));
   rpc.claim
     .mockReset()
     .mockImplementation(async () =>
@@ -230,4 +234,36 @@ it('routes grouped work to an external executor and displays the expected sessio
     'Expected session: harness / author-1',
   );
   expect(container.textContent).not.toContain('Claim for manual completion');
+});
+
+it('shows a durable blocker and resumes without retaining the old manual claim', async () => {
+  await click('Claim for manual completion');
+  const claimed = store.get<WorkRequest>('work', work.id)!;
+  engine.manageWorkHold({
+    action: 'hold',
+    workId: work.id,
+    expectedAttempt: claimed.attempt,
+    expectedRevision: 0,
+    actor: 'coordinator',
+    category: 'provider_limit',
+    reason: 'Provider unavailable',
+    checkpointRef: 'checkpoint-v1',
+  });
+  vi.advanceTimersByTime(1000);
+  work = engine.inspect(work.runId).work[0];
+  await render();
+  expect(container.textContent).toContain('Provider unavailable');
+  expect(container.textContent).toContain('checkpoint-v1');
+  expect(container.textContent).toContain('Declared holds: 1.0s');
+  expect(container.textContent).not.toContain('Submit result');
+  await click('Resume assignment');
+  expect(rpc.hold).toHaveBeenCalledWith({
+    action: 'resume',
+    workId: work.id,
+    expectedAttempt: 1,
+    expectedRevision: 1,
+    actor: 'manual-ui',
+  });
+  expect(container.textContent).toContain('Claim for manual completion');
+  expect(container.textContent).not.toContain('Submit result');
 });

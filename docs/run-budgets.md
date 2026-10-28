@@ -34,7 +34,7 @@ Choose at least one limit. Each maximum and warning threshold is a nonnegative s
 
 Every applicable ancestor and local budget must permit a claim. Disabling a child budget cannot bypass an ancestor's gate. A tree budget continues to govern detached work after the parent ends. Scope does not change cancellation: cancelling a parent still preserves detached runs. Cancel an independent run explicitly when needed.
 
-All successful claims count, including failed work, lease expiries, and explicit retries. Counters include retained history from before the policy was installed. Changing limits or scope re-evaluates that history; it never starts a fresh allowance. Failed claim requests consume nothing.
+All successful claims count, including failed work, lease expiries, claims released by external holds, and explicit retries. Counters include retained history from before the policy was installed. Changing limits or scope re-evaluates that history; it never starts a fresh allowance. Failed claim requests consume nothing.
 
 ## Handle incomplete reports
 
@@ -91,3 +91,5 @@ interlock cancel RUN_ID
 Policies use the additive `runBudgets` document collection; blocked assignments use an optional `budgetBlocked` field. A run records its local `budgetRevision` so policy changes advance continuation cursors. No database schema migration is needed. Old runs without policies retain their behavior. Legacy attempts count toward claim limits, while unavailable historical usage stays unknown. Policies and consumption survive restart and retry; deleting their run history removes the policies too. Portable workflow bundles exclude run budgets.
 
 Reported usage that changes admission updates assignment markers and continuation cursors. Usage-only updates without an admission change retain the existing cursor behavior. Budget adjustments also wake continuation readers. Budget records describe local dispatch policy, not an authorization boundary or account balance.
+
+[External holds](work-holds.md) are separate from budget gates. Resume never resets usage or changes a governing policy. Held attempts may still report usage with their retained attempt token, without restoring claim authority.

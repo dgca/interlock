@@ -240,3 +240,5 @@ Agent executors can [check candidate results before submission](result-preflight
 Use `workflow_simulation` for [fixture-only contract and route checks](workflow-simulation.md). Save ordered fixtures with `save_test_suite`, start one pinned version and case revision, then poll its report. No executor is launched or required. Live comparisons ignore fixtures and still execute real work.
 
 Full assignments may include resultRules. Satisfy these checks against captured input; preflight and submission return bounded rule diagnostics without accepting invalid results. See [result checks](result-preflight.md#check-results-against-assignment-input).
+
+Use [external holds](work-holds.md) for a recoverable provider or infrastructure blocker. Stop external activity cooperatively, declare the checkpoint, and resume with a fresh claim. Interlock does not suspend the executor process.

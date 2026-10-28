@@ -12,13 +12,13 @@ The check also reads the current claim state. It does not accept a result, renew
 
 `accepted` is always `false` because the check accepts no new result. `alreadyAccepted` identifies an identical result accepted earlier. `claimUsable` describes the live claim at check time. `canSubmit` permits either a new valid submission or an identical completed replay.
 
-| Code                                                                         | Next action                                                                                    |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `ready`                                                                      | Submit before the lease expires.                                                               |
-| `invalid_result`                                                             | Correct the listed fields, then check or submit again while the claim is usable.               |
-| `already_accepted`                                                           | Read the result. Repeating the identical submission is safe.                                   |
-| `completed_conflict`                                                         | Read the accepted result. A different result cannot replace it.                                |
-| `expired`, `replaced`, `cancelled`, `inactive`, `invalid_claim`, `not_found` | Inspect the existing run and assignment before attempting recovery. Never reuse a stale token. |
+| Code                                                                                 | Next action                                                                                    |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `ready`                                                                              | Submit before the lease expires.                                                               |
+| `invalid_result`                                                                     | Correct the listed fields, then check or submit again while the claim is usable.               |
+| `already_accepted`                                                                   | Read the result. Repeating the identical submission is safe.                                   |
+| `completed_conflict`                                                                 | Read the accepted result. A different result cannot replace it.                                |
+| `held`, `expired`, `replaced`, `cancelled`, `inactive`, `invalid_claim`, `not_found` | Inspect the existing run and assignment before attempting recovery. Never reuse a stale token. |
 
 Known expired-token receipts distinguish an expired claim from one replaced by a later active claim. Unknown tokens report `invalid_claim`. Receipt retention is bounded by existing lease-recovery rules. Cancelled work reports `cancelled` even after token invalidation.
 
@@ -53,3 +53,5 @@ Agent nodes accept up to 32 optional `resultRules`. Rules are captured with the 
 Paths use the existing dot-separated keys and array indices. Blank paths or `$` select the whole value; `$.field` is also accepted. Paths have a 256-character limit and exclude prototype-related keys. Rule IDs have 1–64 characters after trimming and must be unique at publication. Definitions with duplicate IDs or paths excluded by supported closed contracts can be saved as drafts, but cannot publish. Complex schemas remain runtime checks rather than static proofs.
 
 Preflight and submission share the evaluator. A failed rule returns `invalid_result`, retains a usable claim for correction, and does not dispatch downstream work. Diagnostics add `ruleId` and, for equality checks, `inputPath`. They retain the ten-item limit and never return compared values. A later publication or prompt edit cannot change existing captured rules or input. No rules preserves existing behavior. These checks validate structural obligations, not whether evidence or software claims are true.
+
+Held work reports `held` with no usable claim. [Resume explicitly](work-holds.md), inspect external side effects, and obtain a fresh claim before submitting. A pre-hold token cannot regain result authority.

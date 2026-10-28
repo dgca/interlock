@@ -4,6 +4,7 @@ export * from './usage.js';
 export * from './budgets.js';
 export * from './resultValidation.js';
 export * from './resultRules.js';
+export * from './workHolds.js';
 import { resultRulesSchema, resultRuleProblems } from './resultRules.js';
 export * from './assignmentSize.js';
 export * from './contextContinuity.js';
@@ -355,6 +356,14 @@ export interface RunAncestry {
   rootWorkflowId: string;
 }
 export interface WorkRequest {
+  hold?: import('./workHolds.js').WorkHold;
+  holdRevision?: number;
+  endedAt?: string;
+  heldClaimCount?: number;
+  // Internal idempotency fingerprint, never exposed to executors.
+  holdReceipt?: string;
+  // Derived bounded inspection only, not stored with the assignment.
+  holdHistory?: import('./workHolds.js').WorkHoldHistory;
   resultRules?: import('./resultRules.js').ResultRule[];
   modelSelection?: import('./modelTiers.js').ModelSelection;
   continuity?: import('./contextContinuity.js').ContextContinuity;
@@ -372,6 +381,7 @@ export interface WorkRequest {
   outputSchema: Record<string, unknown>;
   status:
     | 'available'
+    | 'held'
     | 'claimed'
     | 'completed'
     | 'failed'
