@@ -53,6 +53,7 @@ export class Continuation {
       nextWork: snapshot.available,
       next: snapshot.next,
       nextDeadline: snapshot.nextDeadline,
+      ...(snapshot.held.total ? { heldWork: snapshot.held } : {}),
       ...(snapshot.budgetBlocked.total
         ? { budgetBlocked: snapshot.budgetBlocked }
         : {}),
@@ -96,6 +97,17 @@ export class Continuation {
       leaseUntil: work.leaseUntil,
       availableUntil: work.availableUntil,
       budgetBlocked: work.budgetBlocked,
+      ...(work.holdRevision ? { holdRevision: work.holdRevision } : {}),
+      ...(work.heldClaimCount ? { heldClaimCount: work.heldClaimCount } : {}),
+      ...(work.hold
+        ? {
+            hold: {
+              revision: work.hold.revision,
+              category: work.hold.category,
+              heldAt: work.hold.heldAt,
+            },
+          }
+        : {}),
     }));
     const deadlines = [
       ...state.executions
@@ -147,23 +159,26 @@ export class Continuation {
         const reason =
           run.status === 'failed'
             ? 'failure'
-            : assignment?.status === 'claimed'
-              ? 'claimed_work'
-              : assignment?.budgetBlocked
-                ? 'budget_blocked'
-                : assignment
-                  ? 'available_work'
-                  : execution?.kind === 'wait'
-                    ? 'wait'
-                    : execution?.kind === 'batch' ||
-                        execution?.kind === 'workflow'
-                      ? 'children'
-                      : 'executing';
+            : assignment?.status === 'held'
+              ? 'external_hold'
+              : assignment?.status === 'claimed'
+                ? 'claimed_work'
+                : assignment?.budgetBlocked
+                  ? 'budget_blocked'
+                  : assignment
+                    ? 'available_work'
+                    : execution?.kind === 'wait'
+                      ? 'wait'
+                      : execution?.kind === 'batch' ||
+                          execution?.kind === 'workflow'
+                        ? 'children'
+                        : 'executing';
         return {
           ...reference(run.id, execution?.id),
           lifecycleRunId: run.lifecycleRunId,
           reason,
           workId: assignment?.id,
+          ...(assignment?.hold ? { hold: assignment.hold } : {}),
           ...(assignment?.budgetBlocked
             ? { budgetRunIds: assignment.budgetBlocked.runIds }
             : {}),
@@ -266,6 +281,20 @@ export class Continuation {
           })),
         limit,
       ),
+      held: bounded(
+        work
+          .filter((w) => w.status === 'held')
+          .map((w) => ({
+            workId: w.id,
+            runId: w.runId,
+            lifecycleRunId: w.lifecycleRunId,
+            attempt: w.attempt,
+            holdRevision: w.holdRevision!,
+            category: w.hold!.category,
+            heldAt: w.hold!.heldAt,
+          })),
+        limit,
+      ),
       claimed: bounded(
         work.filter((w) => w.status === 'claimed'),
         limit,
@@ -290,13 +319,15 @@ export class Continuation {
           ? 'inspect_failure'
           : work.some((w) => w.status === 'available' && !w.budgetBlocked)
             ? 'claim_work'
-            : work.some((w) => w.budgetBlocked)
+            : work.some((w) => w.status === 'available' && w.budgetBlocked)
               ? 'adjust_budget'
               : work.some((w) => w.status === 'claimed')
                 ? 'wait_for_worker'
-                : ['completed', 'cancelled'].includes(requested.status)
-                  ? 'inspect_result'
-                  : 'wait_for_change',
+                : work.some((w) => w.status === 'held')
+                  ? 'inspect_hold'
+                  : ['completed', 'cancelled'].includes(requested.status)
+                    ? 'inspect_result'
+                    : 'wait_for_change',
     };
   }
 

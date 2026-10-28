@@ -123,7 +123,15 @@ export function runProgress(
     if (node.kind === 'agent' && !node.batchId && state === 'running')
       label = 'Agent working';
     if (node.kind === 'agent' && state === 'waiting')
-      label = node.batchId ? label : 'Waiting for an agent';
+      label = node.batchId
+        ? label
+        : work.some(
+              (assignment) =>
+                assignment.executionId === items[0]?.execution?.id &&
+                assignment.status === 'held',
+            )
+          ? 'Held for external blocker'
+          : 'Waiting for an agent';
     if (node.kind === 'wait' && state === 'waiting' && !node.batchId)
       label = 'Waiting for timer';
     if (
@@ -197,6 +205,15 @@ export function runProgress(
   );
   if (title === 'Waiting' && activeAssignments.length)
     title = 'Waiting for an agent';
+  if (
+    title === 'Waiting' &&
+    work.some(
+      (assignment) =>
+        assignment.status === 'held' &&
+        !detachedBoundary(assignment.runId, run.id, runs),
+    )
+  )
+    title = 'Held for external blocker';
   if (!['completed', 'cancelled'].includes(run.status) && current)
     title += ` · ${current.label}`;
   return {

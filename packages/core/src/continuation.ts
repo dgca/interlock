@@ -106,6 +106,8 @@ export const continuationWorkSchema = z.object({
   maxLeaseExpiries: z.number().int().min(1).max(10).optional(),
   failureCount: z.number().int().nonnegative().optional(),
   leaseExpiryCount: z.number().int().nonnegative().optional(),
+  holdRevision: z.number().int().nonnegative().optional(),
+  heldClaimCount: z.number().int().nonnegative().optional(),
   workerId: z.string().optional(),
   leaseSeconds: z
     .number()
@@ -118,6 +120,23 @@ export const continuationWorkSchema = z.object({
     ),
   leaseUntil: z.string().optional(),
   availableUntil: z.string().optional(),
+});
+export const heldWorkSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        workId: z.string(),
+        runId: z.string(),
+        lifecycleRunId: z.string(),
+        attempt: z.number().int(),
+        holdRevision: z.number().int(),
+        category: z.string(),
+        heldAt: z.string(),
+      }),
+    )
+    .max(100),
+  total: z.number().int().nonnegative(),
+  truncated: z.boolean(),
 });
 export const mutationSummarySchema = z.object({
   ok: z.literal(true),
@@ -136,11 +155,13 @@ export const mutationSummarySchema = z.object({
   next: z.enum([
     'claim_work',
     'adjust_budget',
+    'inspect_hold',
     'wait_for_worker',
     'wait_for_change',
     'inspect_failure',
     'inspect_result',
   ]),
+  heldWork: heldWorkSchema.optional(),
   budgetBlocked: z
     .object({
       items: z
@@ -216,6 +237,7 @@ export function withNextCall<T extends z.infer<typeof mutationSummarySchema>>(
         arguments: { id },
       };
       break;
+    case 'inspect_hold':
     case 'adjust_budget':
     case 'inspect_failure':
       nextCall = { tool: 'get_run_briefing', arguments: { id } };

@@ -322,3 +322,5 @@ Agent executors can [check candidate results before submission](docs/result-pref
 [Assignment size diagnostics](docs/assignment-size.md) show UTF-8 byte contributions and advisory warnings before claims. Agent previews accept sample inputs and upstream outputs, with unresolved values marked unknown. Payload values are omitted from reports.
 
 Agent result checks can require output paths or compare them with captured assignment input before acceptance. See [result checks](docs/result-preflight.md#check-results-against-assignment-input).
+
+Agent assignments can [hold for external blockers](docs/work-holds.md) and resume with a fresh claim, without consuming failure or expiry allowances. Run inspection separates wall time from declared hold intervals.

@@ -88,6 +88,8 @@ export const workListResponseSchema = z
           maxLeaseExpiries: z.number().int().min(1).max(10).optional(),
           failureCount: z.number().int().nonnegative().optional(),
           leaseExpiryCount: z.number().int().nonnegative().optional(),
+          holdRevision: z.number().int().nonnegative().optional(),
+          heldClaimCount: z.number().int().nonnegative().optional(),
           leaseSeconds: z
             .number()
             .int()
@@ -158,6 +160,8 @@ export const claimResponseSchema = z
     maxLeaseExpiries: z.number().int().min(1).max(10).optional(),
     failureCount: z.number().int().nonnegative().optional(),
     leaseExpiryCount: z.number().int().nonnegative().optional(),
+    holdRevision: z.number().int().nonnegative().optional(),
+    heldClaimCount: z.number().int().nonnegative().optional(),
     prompt: z.string(),
     input: jsonSchema,
     outputSchema: z.record(z.unknown()),

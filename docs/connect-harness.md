@@ -180,13 +180,14 @@ Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `
 | `get_run_briefing`, `get_run_result`, `wait_for_run_change`                     | Resume with bounded snapshots, selected values, and finite scoped change waits.   |
 | `list_work`, `claim_work`                                                       | Discover available assignments and reserve one with declared capabilities.        |
 | `submit_result`, `fail_work`, `renew_claim`                                     | Complete or fail claimed work, or extend its lease.                               |
+| `manage_work_hold`                                                              | Hold/resume one assignment or read its bounded external-blocker history.          |
 | `cancel_run`, `retry_run`                                                       | Cancel unfinished work or explicitly retry a failed run.                          |
 | `list_runs`                                                                     | Find bounded run summaries by workflow, status, ancestry, and input.              |
 | `export_workflow`, `import_workflows`                                           | Transfer workflow drafts, dependencies, and published pins in portable bundles.   |
 | `preview_workflow_ownership`, `set_workflow_owner`                              | Preview and move existing workflows while preserving identity and history.        |
 | `delete_workflow`                                                               | Permanently remove an unreferenced workflow and its inactive history.             |
 
-`list_work` returns available assignments, not claimed work. An empty list does not mean the execution has completed. Use `get_run_briefing` for its status, claimed assignments, blockers, and detached progress. When given an existing run ID, resume it rather than calling `start_run` again.
+`list_work` returns available assignments, excluding claimed, held and budget-blocked work. An empty list does not mean the execution has completed. Use `get_run_briefing` for its status, claimed assignments, blockers, and detached progress. When given an existing run ID, resume it rather than calling `start_run` again.
 
 `retry_run` retries the failed step of a failed run. Inspect its error first, since Script and Fetch retries can repeat external side effects. Failed Batch retries preserve successful items. Retry a failed parent when an ordinary child belongs to a terminal parent. Failed detached children can be retried directly after their parent ends. Completed and cancelled runs cannot be retried. The CLI equivalent is `interlock retry RUN_ID`.
 
@@ -240,3 +241,5 @@ Agent executors can [check candidate results before submission](result-preflight
 Use `workflow_simulation` for [fixture-only contract and route checks](workflow-simulation.md). Save ordered fixtures with `save_test_suite`, start one pinned version and case revision, then poll its report. No executor is launched or required. Live comparisons ignore fixtures and still execute real work.
 
 Full assignments may include resultRules. Satisfy these checks against captured input; preflight and submission return bounded rule diagnostics without accepting invalid results. See [result checks](result-preflight.md#check-results-against-assignment-input).
+
+Use [external holds](work-holds.md) for a recoverable provider or infrastructure blocker. Stop external activity cooperatively, declare the checkpoint, and resume with a fresh claim. Interlock does not suspend the executor process.

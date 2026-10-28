@@ -82,7 +82,13 @@ export type UsageSnapshot = z.infer<typeof usageSnapshotSchema>;
 export type UsageReportInput = z.input<typeof reportUsageSchema>;
 export type UsageQuery = z.input<typeof usageQuerySchema>;
 export type UsageOutcome =
-  'claimed' | 'completed' | 'failed' | 'expired' | 'cancelled' | 'unknown';
+  | 'claimed'
+  | 'completed'
+  | 'failed'
+  | 'expired'
+  | 'cancelled'
+  | 'held'
+  | 'unknown';
 /** Internal persisted receipt. Never return tokenHash through inspection. */
 export interface UsageAttempt {
   // null means captured executor default; omission means unknown legacy data.
@@ -136,6 +142,7 @@ export function summarizeUsage(attempts: UsageAttempt[]) {
     attempts.length > 0 && attempts.every((attempt) => attempt.snapshot?.final);
   const outcomes: Record<UsageOutcome, number> = {
     claimed: 0,
+    held: 0,
     completed: 0,
     failed: 0,
     expired: 0,

@@ -37,6 +37,9 @@ export type WorkMetadata = Pick<
   | 'availableUntil'
   | 'budgetBlocked'
   | 'continuity'
+  | 'hold'
+  | 'holdRevision'
+  | 'heldClaimCount'
 > & {
   context: Pick<
     WorkRequest['context'],
@@ -81,9 +84,9 @@ export function continuationState(db: DatabaseSync, id: string) {
     db
       .prepare(
         `${tree}
-    SELECT json_remove(d.value, '$.input', '$.output', '$.prompt', '$.savedPrompts', '$.executionInstructions', '$.outputSchema', '$.token', '$.expiredClaims', '$.error', '$.context.instructions') AS value
+    SELECT json_remove(d.value, '$.input', '$.output', '$.prompt', '$.savedPrompts', '$.executionInstructions', '$.outputSchema', '$.token', '$.expiredClaims', '$.holdReceipt', '$.resultRules', '$.hold.reason', '$.hold.checkpointRef', '$.error', '$.context.instructions') AS value
     FROM documents d JOIN tree ON json_extract(d.value, '$.runId') = tree.id
-    WHERE d.collection = 'work' AND json_extract(d.value, '$.status') IN ('available', 'claimed') ORDER BY d.rowid
+    WHERE d.collection = 'work' AND json_extract(d.value, '$.status') IN ('available', 'claimed', 'held') ORDER BY d.rowid
   `,
       )
       .all(id),
