@@ -68,7 +68,8 @@ export function useBoxZoom(enabled: boolean) {
         event.repeat ||
         event.defaultPrevented ||
         event.key.toLowerCase() !== 'z' ||
-        isTextInput(event.target)
+        isTextInput(event.target) ||
+        document.querySelector('[role="dialog"], dialog[open]')
       )
         return;
       event.preventDefault();

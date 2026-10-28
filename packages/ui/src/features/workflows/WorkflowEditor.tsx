@@ -46,6 +46,8 @@ import { OrthoEdge } from './OrthoEdge';
 import { canvasGraph, withoutNodes } from './canvasGraph';
 import { useWorkflowHistory } from './useWorkflowHistory';
 import { useBoxZoom } from './useBoxZoom';
+import { canvasNavigation, CanvasZoomBox } from './CanvasNavigation';
+import navigationStyles from './CanvasNavigation.module.css';
 import { tidyWorkflow } from '@interlock/core/layout';
 import { tidyWorkflowElk } from './workflowLayoutElk';
 import { TidyControl } from './TidyControl';
@@ -53,7 +55,6 @@ import { api } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
 const nodeTypes = { workflow: FlowNode };
 const edgeTypes = { loop: LoopEdge, ortho: OrthoEdge };
-const zoomKeys = ['Meta', 'Control'];
 export function WorkflowEditor({
   workflow,
   workflows,
@@ -775,7 +776,7 @@ export function WorkflowEditor({
           <div
             ref={boxZoom.containerRef}
             {...boxZoom.handlers}
-            className={`${styles.canvasWrap} ${boxZoom.active ? styles.boxZoomReady : ''}`}
+            className={`${styles.canvasWrap} ${navigationStyles.viewport} ${boxZoom.active ? navigationStyles.boxZoomReady : ''}`}
           >
             <div className={styles.canvasToolbar}>
               <div
@@ -999,18 +1000,12 @@ export function WorkflowEditor({
                     setSelected(new Set([n.id]));
                     setEditing({ node: n.data.node });
                   }}
-                  panOnScroll={!boxZoom.active}
-                  zoomOnScroll={!boxZoom.active}
-                  zoomOnPinch={!boxZoom.active}
-                  zoomActivationKeyCode={zoomKeys}
+                  {...canvasNavigation(boxZoom.active)}
                   selectionOnDrag={!boxZoom.active}
                   selectionKeyCode={boxZoom.active ? null : 'Shift'}
-                  panActivationKeyCode={boxZoom.active ? null : 'Space'}
                   nodesDraggable={!boxZoom.active}
                   nodesConnectable={!boxZoom.active}
                   elementsSelectable={!boxZoom.active}
-                  panOnDrag={boxZoom.active ? false : [1]}
-                  zoomOnDoubleClick={false}
                   elevateEdgesOnSelect
                   onPaneClick={() => setSelected(new Set())}
                   onNodeMouseEnter={(_, n) => setHovered(n.id)}
@@ -1019,10 +1014,6 @@ export function WorkflowEditor({
                       current === n.id ? undefined : current,
                     )
                   }
-                  fitView
-                  fitViewOptions={{ padding: 0.22 }}
-                  minZoom={0.25}
-                  maxZoom={1.5}
                   colorMode="dark"
                   deleteKeyCode={
                     editing || boxZoom.active ? null : ['Backspace', 'Delete']
@@ -1046,18 +1037,7 @@ export function WorkflowEditor({
                     maskColor="#141418bb"
                   />
                 </ReactFlow>
-                {boxZoom.box && (
-                  <div
-                    aria-hidden="true"
-                    className={styles.zoomBox}
-                    style={{
-                      left: boxZoom.box.x,
-                      top: boxZoom.box.y,
-                      width: boxZoom.box.width,
-                      height: boxZoom.box.height,
-                    }}
-                  />
-                )}
+                <CanvasZoomBox box={boxZoom.box} />
                 <div className={styles.canvasFooter}>
                   <span>
                     {draft.nodes.length} nodes <b>·</b> {draft.edges.length}{' '}
