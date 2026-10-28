@@ -31,3 +31,9 @@ Proof is saved outside the checkout at `/tmp/interlock-runs-controls-proof/` so 
 - Documentation/API review: README and architecture now describe shared run/editor navigation. Checked current limits, CLI help implementation and MCP server definitions for navigation guidance and affected operations. No execution or API behavior changes; no MCP definition or transport changes require transport tests. This was a focused affected-flow check, not a comprehensive MCP audit. Package startup and versioning are unchanged, so package smoke was not required.
 
 No scope changes or unresolved human decisions arose. The implementation shares viewport settings and rectangle styling while leaving authoring behavior in the editor. The shared area-zoom hook additionally ignores open dialogs, matching its documented shortcut rules.
+
+## Review correction
+
+The fresh review verified AC1–AC4 at a071f17a2c28350fa9ea194545297ddb2004d9ea and found one documentation ambiguity, `a071f17-doc-selection-scope`. Clarified in architecture.md that empty-canvas node selection belongs to the editor. The complete correction changes documentation and this verification record only, so earlier code and browser evidence remains applicable at its original commit.
+
+The reviewer additionally exercised Z-release cancellation, restoration of ordinary panning, focus preservation, four-pixel drags, and Z inside an actual editor settings dialog. Saved evidence: `/tmp/interlock-runs-controls-proof/review-boundary.js`, `review-boundary.log`, and `review-dialog.png`. The revision runs formatting and diff checks; no implementation behavior changed.
