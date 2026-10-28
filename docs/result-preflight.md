@@ -1,6 +1,6 @@
 # Check an Agent result before submission
 
-Use MCP `preflight_result`, API `work.preflight`, or the CLI to check a candidate against its assignment's captured output contract:
+Use MCP `preflight_result`, API `work.preflight`, or the CLI to check a candidate against its assignment's captured output contract and optional result rules:
 
 ```sh
 interlock preflight WORK_ID TOKEN @candidate.json
@@ -29,3 +29,27 @@ Known expired-token receipts distinguish an expired claim from one replaced by a
 Submission success responses are unchanged. A rejected submission still fails, with structured `resultCheck` data in the API error, MCP error content, and CLI JSON error on stderr. The CLI exits nonzero. `accepted: false` means that call accepted no result; it does not erase any previously accepted result. Invalid contract results leave a live claim usable for correction. Expired, replaced, or cancelled claims require recovery instead.
 
 CLI preflight prints the report and exits successfully when the check itself completes, including when `canSubmit` is false. Automation must inspect the report. API preflight uses a POST query through the shared client, avoiding URL limits for large candidates. The 2 MiB HTTP body limit includes the transport envelope.
+
+## Check results against assignment input
+
+Agent nodes accept up to 32 optional `resultRules`. Rules are captured with the assignment and published definition. Full assignments and claims include them; compact discovery omits them. In Agent settings, use **Result checks** to add or remove checks.
+
+```json
+{
+  "resultRules": [
+    {
+      "id": "revision",
+      "kind": "equalsInput",
+      "outputPath": "candidate",
+      "inputPath": "candidate"
+    },
+    { "id": "evidence", "kind": "exists", "outputPath": "evidence.0" }
+  ]
+}
+```
+
+`exists` requires the output path to exist. JSON null counts as present. `equalsInput` requires both paths to exist and compares JSON structurally, without type coercion. Objects ignore property order; arrays retain item order. Two missing paths fail. Input paths select the assignment's captured resolved input after bindings, within its own run or Batch item scope.
+
+Paths use the existing dot-separated keys and array indices. Blank paths or `$` select the whole value; `$.field` is also accepted. Paths have a 256-character limit and exclude prototype-related keys. Rule IDs have 1–64 characters after trimming and must be unique at publication. Definitions with duplicate IDs or paths excluded by supported closed contracts can be saved as drafts, but cannot publish. Complex schemas remain runtime checks rather than static proofs.
+
+Preflight and submission share the evaluator. A failed rule returns `invalid_result`, retains a usable claim for correction, and does not dispatch downstream work. Diagnostics add `ruleId` and, for equality checks, `inputPath`. They retain the ten-item limit and never return compared values. A later publication or prompt edit cannot change existing captured rules or input. No rules preserves existing behavior. These checks validate structural obligations, not whether evidence or software claims are true.

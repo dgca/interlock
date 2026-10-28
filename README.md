@@ -320,3 +320,5 @@ Existing versions and runs retain their exact pins. New runs use the new version
 Agent executors can [check candidate results before submission](docs/result-preflight.md) without renewing claims or advancing runs. Submission rechecks live state and returns bounded correction diagnostics when a result is rejected.
 
 [Assignment size diagnostics](docs/assignment-size.md) show UTF-8 byte contributions and advisory warnings before claims. Agent previews accept sample inputs and upstream outputs, with unresolved values marked unknown. Payload values are omitted from reports.
+
+Agent result checks can require output paths or compare them with captured assignment input before acceptance. See [result checks](docs/result-preflight.md#check-results-against-assignment-input).

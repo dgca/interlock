@@ -1,5 +1,7 @@
 import Ajv from 'ajv';
 import { z } from 'zod';
+import { checkResultRules, type ResultRule } from './resultRules.js';
+import type { Json } from './index.js';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 const clip = (value: string, max = 256) =>
@@ -12,6 +14,8 @@ export const resultDiagnosticSchema = z.object({
   rule: z.string().max(65),
   message: z.string().max(256),
   pathTruncated: z.boolean(),
+  ruleId: z.string().max(64).optional(),
+  inputPath: z.string().max(256).optional(),
 });
 export type ResultDiagnostic = z.infer<typeof resultDiagnosticSchema>;
 export function checkResultContract(
@@ -59,6 +63,21 @@ export function checkResultContract(
     items,
     total: errors.length,
     truncated: errors.length > items.length,
+  };
+}
+export function checkAgentResult(
+  schema: Record<string, unknown>,
+  rules: ResultRule[] | undefined,
+  input: Json,
+  output: Json,
+) {
+  const contract = checkResultContract(schema, output);
+  const failures = checkResultRules(rules, input, output);
+  const total = contract.total + failures.length;
+  return {
+    items: [...contract.items, ...failures].slice(0, 10),
+    total,
+    truncated: total > 10,
   };
 }
 export const resultCheckSchema = z.object({

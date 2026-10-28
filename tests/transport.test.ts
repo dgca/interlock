@@ -2538,19 +2538,50 @@ it.each(['stdio', 'http'])(
         required: ['answer'],
         properties: { answer: { type: 'integer' } },
       };
-      const checkWorkflow = engine.create(
-        'Preflight transport',
-        '',
-        checkDefinition,
-      );
-      engine.publish(checkWorkflow.id);
+      const ruleAgent = checkDefinition.nodes.find((n) => n.kind === 'agent')!;
+      ruleAgent.resultRules = [
+        {
+          id: 'answer',
+          kind: 'equalsInput',
+          outputPath: 'answer',
+          inputPath: 'expected',
+        },
+      ];
+      const checkWorkflow = await call('create_workflow', {
+        name: 'Preflight transport',
+        definition: checkDefinition,
+      });
+      expect(
+        checkWorkflow.draft.nodes.find((n: any) => n.kind === 'agent')
+          .resultRules,
+      ).toEqual(ruleAgent.resultRules);
+      await call('publish_workflow', { id: checkWorkflow.id });
       const checkRun = await call('start_run', {
         workflowId: checkWorkflow.id,
-        input: {},
+        input: { expected: 42 },
       });
       const checkClaim = await call('claim_work', {
         workId: checkRun.nextWork.items[0].id,
         workerId: 'test',
+      });
+      expect(checkClaim.resultRules).toEqual(ruleAgent.resultRules);
+      const wrongValue = {
+        workId: checkClaim.id,
+        token: checkClaim.token,
+        output: { answer: 41 },
+      };
+      const ruleCheck = await call('preflight_result', wrongValue);
+      expect(ruleCheck).toMatchObject({
+        code: 'invalid_result',
+        diagnostics: { items: [{ ruleId: 'answer', inputPath: 'expected' }] },
+      });
+      const wrongSubmission = await client.callTool({
+        name: 'submit_result',
+        arguments: wrongValue,
+      });
+      expect(wrongSubmission.isError).toBe(true);
+      expect(wrongSubmission.structuredContent).toEqual({
+        resultCheck: ruleCheck,
       });
       const invalidCandidate = {
         workId: checkClaim.id,

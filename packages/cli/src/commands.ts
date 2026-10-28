@@ -322,7 +322,7 @@ export async function runCommand(argv: string[]) {
           'assignment-size <json|@file> (workId, or workflowId/nodeId with sample; optional warningBytes)',
           'work [run-id] [--summary]',
           'claim <work-id> [worker-id] [options-json: {"leaseSeconds":1800,"freshContext":false,"tools":[],"skills":[]}] [--fresh] [--lease seconds] (flags override options JSON; --fresh attests an isolated context; grouped work also requires session: {executorId,sessionId} in options; optional modelSelection: {tier,provider,model} declares a selection, not usage)',
-          'preflight <work-id> <token> <json|@file> (read-only result and claim check)',
+          'preflight <work-id> <token> <json|@file> (read-only captured output contract, result rules and claim check)',
           'submit <work-id> <token> <json|@file> [--summary]',
           'fail <work-id> <token> <error>',
           'renew <work-id> <token> [options-json: {"leaseSeconds":3600}]',

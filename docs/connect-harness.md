@@ -238,3 +238,5 @@ Agent executors can [check candidate results before submission](result-preflight
 [Assignment size diagnostics](assignment-size.md) show UTF-8 byte contributions and advisory warnings before claims. Agent previews accept sample inputs and upstream outputs, with unresolved values marked unknown. Payload values are omitted from reports.
 
 Use `workflow_simulation` for [fixture-only contract and route checks](workflow-simulation.md). Save ordered fixtures with `save_test_suite`, start one pinned version and case revision, then poll its report. No executor is launched or required. Live comparisons ignore fixtures and still execute real work.
+
+Full assignments may include resultRules. Satisfy these checks against captured input; preflight and submission return bounded rule diagnostics without accepting invalid results. See [result checks](result-preflight.md#check-results-against-assignment-input).
