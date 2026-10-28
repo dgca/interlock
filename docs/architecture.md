@@ -129,6 +129,8 @@ Optional Agent `context.continuityGroup` binds a declared `{executorId, sessionI
 
 Context requirements are a cooperation contract with the executor. Interlock cannot prove that an external harness created a fresh conversation, restrict that harness's other tools, or erase its history. No native MCP sampling callback is required. Work discovery and submission implement the return path.
 
+Core defines bounded Agent resultRules and structural evaluation. Runtime captures rules with assignments and checks them against captured resolved input through the shared preflight/submission evaluator before completing work. Rejected results retain a valid claim for correction. See [result checks](result-preflight.md#check-results-against-assignment-input).
+
 ## Saved prompts
 
 Core defines prompt content, optional Agent `promptIds`, and pure instruction composition. SQLite stores current prompts and immutable revision records in document collections; Run `promptSnapshots` and assignment `savedPrompts` are compatible optional fields requiring no migration. Runtime protects edits with revisions, reports usage across drafts and every published version, and blocks deletion while references exist. Missing references are publication diagnostics; incomplete drafts remain saveable.

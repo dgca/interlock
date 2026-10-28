@@ -24,6 +24,7 @@ import {
   type PollCheck,
 } from '@interlock/core';
 import { workflowTargets } from './workflowTargets';
+import { ResultRulesEditor } from './ResultRulesEditor';
 import { DurationInput } from './DurationInput';
 import { InputBindingsEditor } from './InputBindingsEditor';
 import { InputPathInput } from './InputPathInput';
@@ -740,6 +741,12 @@ export function NodeInspector({
               onChange={(outputSchema) => patch({ outputSchema })}
             />
           </>
+        )}
+        {node.kind === 'agent' && (
+          <ResultRulesEditor
+            value={node.resultRules}
+            onChange={(resultRules) => patch({ resultRules })}
+          />
         )}
         {onDelete && node.kind !== 'entry' && node.kind !== 'exit' && (
           <Button variant="danger" onClick={onDelete}>

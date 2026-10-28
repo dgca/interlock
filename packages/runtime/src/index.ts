@@ -4,7 +4,7 @@ import { Store } from '@interlock/storage';
 import { tidyWorkflow } from '@interlock/core/layout';
 import {
   assertContract,
-  checkResultContract,
+  checkAgentResult,
   ResultRejection,
   type ResultCheck,
   DEFAULT_BATCH_MAX_ITEMS,
@@ -1131,6 +1131,7 @@ export class Engine {
               }
             : {}),
           outputSchema: node.outputSchema,
+          ...(node.resultRules ? { resultRules: node.resultRules } : {}),
           status: 'available',
           attempt: 0,
           maxAttempts: node.maxAttempts,
@@ -1840,7 +1841,12 @@ export class Engine {
       );
     if (work.status !== 'claimed') return report('inactive');
     if (Date.parse(work.leaseUntil!) <= Date.now()) return report('expired');
-    const diagnostics = checkResultContract(work.outputSchema, output);
+    const diagnostics = checkAgentResult(
+      work.outputSchema,
+      work.resultRules,
+      work.input,
+      output,
+    );
     return {
       ...report(diagnostics.total ? 'invalid_result' : 'ready', true),
       diagnostics,

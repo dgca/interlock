@@ -547,3 +547,34 @@ it('edits and clears an Agent continuity group without changing context mode', a
     ).context.continuityGroup,
   ).toBeUndefined();
 });
+
+it('adds, edits, reopens and removes captured-input result checks', async () => {
+  const { onApply } = await render({ kind: 'agent', prompt: 'Work' });
+  await click('Add result check');
+  await fill('Check ID', 'candidate');
+  await fill('Output path', 'revision');
+  await fill('Captured input path', 'candidate.revision');
+  await click('Apply changes');
+  const saved = onApply.mock.calls[0][0].definition.nodes[0];
+  expect(saved.resultRules).toEqual([
+    {
+      id: 'candidate',
+      kind: 'equalsInput',
+      outputPath: 'revision',
+      inputPath: 'candidate.revision',
+    },
+  ]);
+  const reopened = await render(saved);
+  expect(field('Captured input path').value).toBe('candidate.revision');
+  await select('Check', 'exists');
+  await click('Apply changes');
+  expect(
+    reopened.onApply.mock.calls[0][0].definition.nodes[0].resultRules,
+  ).toEqual([{ id: 'candidate', kind: 'exists', outputPath: 'revision' }]);
+  const again = await render(saved);
+  await click('Remove check');
+  await click('Apply changes');
+  expect(
+    again.onApply.mock.calls[0][0].definition.nodes[0].resultRules,
+  ).toBeUndefined();
+});

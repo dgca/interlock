@@ -3,6 +3,8 @@ import { z } from 'zod';
 export * from './usage.js';
 export * from './budgets.js';
 export * from './resultValidation.js';
+export * from './resultRules.js';
+import { resultRulesSchema, resultRuleProblems } from './resultRules.js';
 export * from './assignmentSize.js';
 export * from './contextContinuity.js';
 export * from './modelTiers.js';
@@ -133,6 +135,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('agent'),
+    resultRules: resultRulesSchema.optional(),
     prompt: z.string(),
     promptIds: z
       .array(z.string().min(1))
@@ -352,6 +355,7 @@ export interface RunAncestry {
   rootWorkflowId: string;
 }
 export interface WorkRequest {
+  resultRules?: import('./resultRules.js').ResultRule[];
   modelSelection?: import('./modelTiers.js').ModelSelection;
   continuity?: import('./contextContinuity.js').ContextContinuity;
   budgetBlocked?: import('./budgets.js').BudgetBlock;
@@ -544,6 +548,16 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       throw new InterlockError(
         `${node.label}: saved prompt IDs must be unique`,
       );
+  for (const node of d.nodes) {
+    if (node.kind !== 'agent') continue;
+    const problems = resultRuleProblems(
+      node.resultRules,
+      node.inputSchema,
+      node.outputSchema,
+    );
+    if (problems.length)
+      throw new InterlockError(`${node.label}: ${problems.join('; ')}`);
+  }
   const ids = new Set(d.nodes.map((n) => n.id));
   if (ids.size !== d.nodes.length)
     throw new InterlockError('Node IDs must be unique');

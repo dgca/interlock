@@ -43,6 +43,9 @@ export class AssignmentSizes {
             context: known(work.context),
             input: known(work.input),
             outputSchema: known(work.outputSchema),
+            ...(work.resultRules
+              ? { resultRules: known(work.resultRules) }
+              : {}),
             executionInstructions: work.executionInstructions
               ? known(work.executionInstructions)
               : absent,
@@ -152,6 +155,7 @@ export class AssignmentSizes {
         context: known(node.context),
         input: resolved === undefined ? unknown : known(resolved),
         outputSchema: known(node.outputSchema),
+        ...(node.resultRules ? { resultRules: known(node.resultRules) } : {}),
         executionInstructions: node.context.mode === 'fresh' ? unknown : absent,
         savedPrompts: !promptKnown
           ? unknown
