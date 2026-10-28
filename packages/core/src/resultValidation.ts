@@ -82,6 +82,7 @@ export function checkAgentResult(
 }
 export const resultCheckSchema = z.object({
   code: z.enum([
+    'held',
     'ready',
     'invalid_result',
     'already_accepted',

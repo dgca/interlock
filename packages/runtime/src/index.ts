@@ -4,6 +4,9 @@ import { Store } from '@interlock/storage';
 import { tidyWorkflow } from '@interlock/core/layout';
 import {
   assertContract,
+  workHoldRequestSchema,
+  HoldDeadlineError,
+  type WorkHoldRequest,
   checkAgentResult,
   ResultRejection,
   type ResultCheck,
@@ -58,6 +61,7 @@ import { Testbench } from './testbench.js';
 import { Simulations } from './simulation.js';
 import { Usage } from './usage.js';
 import { Budgets } from './budgets.js';
+import { WorkHolds } from './workHolds.js';
 import { AssignmentSizes } from './assignmentSize.js';
 import { ContextContinuityGroups } from './contextContinuity.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
@@ -88,6 +92,7 @@ export class Engine {
   readonly usage: Usage;
   readonly budgets: Budgets;
   readonly assignmentSizes: AssignmentSizes;
+  readonly holds: WorkHolds;
   readonly contextGroups: ContextContinuityGroups;
   private localJobs = new Map<string, AbortController>();
   private stopped = false;
@@ -104,6 +109,17 @@ export class Engine {
   ) {
     this.simulations = new Simulations(store, cwd);
     this.continuation = new Continuation(store);
+    this.holds = new WorkHolds(
+      store,
+      (work, outcome) => this.usage.ended(work, outcome),
+      (work) => {
+        const node = this.definition(this.run(work.runId)).nodes.find(
+          (n) => n.id === work.nodeId,
+        );
+        return node?.kind === 'agent' ? node.unclaimedTimeoutMs : undefined;
+      },
+      (runId, type, message) => this.event(this.run(runId), type, message),
+    );
     this.prompts = new Prompts(store);
     this.assignmentSizes = new AssignmentSizes(store, this.prompts, (work) =>
       this.describeWork(work),
@@ -592,6 +608,7 @@ export class Engine {
       for (const work of this.store.work())
         if (removed.has(work.runId)) this.store.remove('work', work.id);
       this.usage.removeRuns(removed);
+      this.holds.removeRuns(removed);
       this.budgets.removeRuns(removed);
       this.contextGroups.removeRuns(removed);
       for (const event of this.store.list<import('@interlock/core').RunEvent>(
@@ -867,7 +884,12 @@ export class Engine {
         .filter((work) => ids.has(work.runId))
         .map((work) => {
           const { token, ...visible } = this.describeWork(work);
-          return visible;
+          return {
+            ...visible,
+            ...(work.holdRevision
+              ? { holdHistory: this.holds.history(work.id) }
+              : {}),
+          };
         }),
       definition:
         this.store.getVersion(run.workflowId, run.version)?.definition ?? null,
@@ -879,7 +901,12 @@ export class Engine {
         .filter((w) => w.runId === id)
         .map((work) => {
           const { token, ...visible } = this.describeWork(work);
-          return visible;
+          return {
+            ...visible,
+            ...(work.holdRevision
+              ? { holdHistory: this.holds.history(work.id) }
+              : {}),
+          };
         }),
       events: this.store.events(id),
       children: this.store.runs().filter((r) => r.parentRunId === id),
@@ -1649,7 +1676,11 @@ export class Engine {
       });
   }
   private describeWork(work: WorkRequest): WorkRequest {
-    const { expiredClaims: _receipts, ...visible } = work;
+    const {
+      expiredClaims: _receipts,
+      holdReceipt: _holdReceipt,
+      ...visible
+    } = work;
     work = visible;
     if (work.context.mode !== 'fresh') return work;
     return {
@@ -1696,9 +1727,30 @@ export class Engine {
       maxLeaseExpiries: work.maxLeaseExpiries,
       failureCount: work.failureCount,
       leaseExpiryCount: work.leaseExpiryCount,
+      ...(work.holdRevision ? { holdRevision: work.holdRevision } : {}),
+      ...(work.heldClaimCount ? { heldClaimCount: work.heldClaimCount } : {}),
       leaseSeconds: work.leaseSeconds,
       availableUntil: work.availableUntil,
     }));
+  }
+  manageWorkHold(input: WorkHoldRequest) {
+    const q = workHoldRequestSchema.parse(input);
+    if (q.action === 'history')
+      return this.holds.history(q.workId, q.offset, q.limit);
+    this.pump();
+    try {
+      return this.store.transaction(() => {
+        const result = this.holds.change(q);
+        this.budgets.refresh();
+        return result;
+      });
+    } catch (error) {
+      if (error instanceof HoldDeadlineError) {
+        this.pump();
+        throw new InterlockError(error.message);
+      }
+      throw error;
+    }
   }
   handoffContext(input: ContextHandoffInput) {
     this.pump();
@@ -1821,6 +1873,7 @@ export class Engine {
     });
     if (!work) return report('not_found');
     if (work.status === 'cancelled') return report('cancelled');
+    if (work.status === 'held') return report('held');
     if (work.token !== token) {
       const expired = work.expiredClaims?.some(
         (receipt) => receipt.tokenHash === claimTokenHash(token),
@@ -1924,7 +1977,7 @@ export class Engine {
     }
     const exhausted =
       work.maxLeaseExpiries === undefined
-        ? work.attempt >= work.maxAttempts
+        ? work.attempt - (work.heldClaimCount ?? 0) >= work.maxAttempts
         : (work.failureCount ?? 0) >= work.maxAttempts ||
           (work.leaseExpiryCount ?? 0) >= work.maxLeaseExpiries;
     if (reason === 'expiry') {
@@ -1987,10 +2040,13 @@ export class Engine {
     for (const work of this.store
       .work()
       .filter(
-        (w) => w.runId === id && ['available', 'claimed'].includes(w.status),
+        (w) =>
+          w.runId === id && ['available', 'claimed', 'held'].includes(w.status),
       )) {
       this.usage.ended(work, 'cancelled');
+      this.holds.close(work, now(), 'run cancellation', 'cancelled');
       work.status = 'cancelled';
+      work.endedAt = now();
       work.token = undefined;
       this.store.put('work', work);
     }

@@ -53,12 +53,54 @@ export function WorkPanel({
           ? work.budgetBlocked
             ? 'Budget blocked. Adjust the governing run budget through MCP or the CLI to resume claims.'
             : 'Waiting for an agent to pick up this assignment.'
-          : work.status === 'claimed'
-            ? `Claimed by ${work.workerId}. Lease ends ${new Date(work.leaseUntil!).toLocaleTimeString()}.`
-            : work.status === 'timed_out'
-              ? 'Nobody claimed this assignment before its deadline. The run followed Timeout with the original input.'
-              : `Assignment ${work.status}.`}
+          : work.status === 'held'
+            ? 'Held for an external blocker. Resume explicitly, then obtain a fresh claim.'
+            : work.status === 'claimed'
+              ? `Claimed by ${work.workerId}. Lease ends ${new Date(work.leaseUntil!).toLocaleTimeString()}.`
+              : work.status === 'timed_out'
+                ? 'Nobody claimed this assignment before its deadline. The run followed Timeout with the original input.'
+                : `Assignment ${work.status}.`}
       </p>
+      {work.hold && (
+        <div style={{ overflowWrap: 'anywhere' }}>
+          <p>
+            <strong>{work.hold.category.replaceAll('_', ' ')}</strong> · held
+            since {new Date(work.hold.heldAt).toLocaleString()}
+          </p>
+          <p>{work.hold.reason}</p>
+          <p>
+            Checkpoint: <code>{work.hold.checkpointRef}</code>
+          </p>
+        </div>
+      )}
+      {work.holdHistory && work.holdHistory.total > 0 && (
+        <details style={{ overflowWrap: 'anywhere' }}>
+          <summary>External holds · {work.holdHistory.total}</summary>
+          <p className="hint">
+            Wall time: {(work.holdHistory.wallMs / 1000).toFixed(1)}s · Declared
+            holds: {(work.holdHistory.declaredHeldMs / 1000).toFixed(1)}s · Time
+            excluding holds:{' '}
+            {(work.holdHistory.elapsedExcludingHoldsMs / 1000).toFixed(1)}s
+          </p>
+          <ul>
+            {work.holdHistory.items.map((hold) => (
+              <li key={hold.id}>
+                {hold.category.replaceAll('_', ' ')} ·{' '}
+                {new Date(hold.heldAt).toLocaleString()} ·{' '}
+                {hold.endedAt
+                  ? `${hold.endReason} ${new Date(hold.endedAt).toLocaleString()}`
+                  : 'Still held'}
+              </li>
+            ))}
+          </ul>
+          {work.holdHistory.nextOffset !== null && (
+            <p className="hint">
+              Older intervals are available through manage_work_hold history or
+              the work-hold CLI command.
+            </p>
+          )}
+        </details>
+      )}
       {work.status === 'claimed' && work.workerId === 'manual-ui' && !claim && (
         <p className="hint">
           This page does not hold the claim token. Continue in the page that
@@ -76,6 +118,24 @@ export function WorkPanel({
           </p>
         )}
       <div className="actions">
+        {work.status === 'held' && (
+          <Button
+            disabled={busy}
+            onClick={() =>
+              void perform(() =>
+                api.work.hold.mutate({
+                  action: 'resume',
+                  workId: work.id,
+                  expectedAttempt: work.attempt,
+                  expectedRevision: work.holdRevision ?? 0,
+                  actor: 'manual-ui',
+                }),
+              )
+            }
+          >
+            Resume assignment
+          </Button>
+        )}
         <Button
           onClick={() =>
             void navigator.clipboard

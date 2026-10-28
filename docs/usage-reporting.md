@@ -49,7 +49,7 @@ An acknowledgment contains `workId`, `attempt`, `sequence`, and `applied`. Each 
 
 MCP `get_run_usage` and the shared API `runs.usage` require `runId`. The default scope is that run alone. Set `includeDescendants:true` to include all descendants, including Batch item runs and detached runs, exactly once. The response reports `includedRuns` and `includedDetachedRuns`. Inclusion in a usage total does not change cancellation or lifetime rules.
 
-`groupBy` accepts `run`, `node`, `worker`, or `attempt`. The default is `node`; node groups are scoped by run so reused node IDs do not collide. Attempt groups include model snapshots, source attribution, timestamps, and the recorded outcome. Outcomes distinguish claimed, completed, failed, expired, cancelled, and unknown attempts.
+`groupBy` accepts `run`, `node`, `worker`, or `attempt`. The default is `node`; node groups are scoped by run so reused node IDs do not collide. Attempt groups include model snapshots, source attribution, timestamps, and the recorded outcome. Outcomes distinguish claimed, completed, failed, expired, cancelled, held, and unknown attempts. Held attempts retain measured usage and count toward claim budgets, without consuming failure or lease-expiry allowances.
 
 Groups default to 20 records and cap at 100. `offset` ranges from 0 through 1,000,000. Use `nextOffset` for the next page; null means the last page. `totalGroups` counts every group. `totals` always covers the entire selected scope, regardless of pagination.
 

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { developmentConnection, type ConnectionConfig } from './connection.js';
 import {
   simulationRequestSchema,
+  workHoldRequestSchema,
   contextGroupQuerySchema,
   contextHandoffSchema,
   sessionIdentitySchema,
@@ -444,6 +445,9 @@ export const appRouter = t.router({
     retry: p.input(id).mutation(({ ctx, input }) => ctx.engine.retry(input.id)),
   }),
   work: t.router({
+    hold: p
+      .input(workHoldRequestSchema)
+      .mutation(({ ctx, input }) => ctx.engine.manageWorkHold(input)),
     size: p
       .input(assignmentSizeQuerySchema)
       .query(({ ctx, input }) => ctx.engine.assignmentSizes.read(input)),
