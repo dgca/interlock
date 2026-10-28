@@ -5,6 +5,9 @@ import { FlowNode } from '../workflows/FlowNode';
 import { LoopEdge } from '../workflows/LoopEdge';
 import { OrthoEdge } from '../workflows/OrthoEdge';
 import { canvasGraph } from '../workflows/canvasGraph';
+import { canvasNavigation, CanvasZoomBox } from '../workflows/CanvasNavigation';
+import { useBoxZoom } from '../workflows/useBoxZoom';
+import styles from '../workflows/CanvasNavigation.module.css';
 import type { NodeProgress } from './runProgress';
 const nodeTypes = { workflow: FlowNode };
 const edgeTypes = { loop: LoopEdge, ortho: OrthoEdge };
@@ -20,6 +23,7 @@ export function RunGraph({
   onSelect: (nodeId: string) => void;
 }) {
   const [hovered, setHovered] = useState<string>();
+  const boxZoom = useBoxZoom(true);
   const graph = useMemo(() => {
     const graph = canvasGraph(definition, { selected, hovered });
     return {
@@ -31,26 +35,33 @@ export function RunGraph({
     };
   }, [definition, progress, selected, hovered]);
   return (
-    <ReactFlow
-      nodes={graph.nodes}
-      edges={graph.edges}
-      nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
-      nodesDraggable={false}
-      nodesConnectable={false}
-      elementsSelectable={false}
-      panOnDrag={[0, 1]}
-      onNodeClick={(_, node) => onSelect(node.id)}
-      onNodeMouseEnter={(_, node) => setHovered(node.id)}
-      onNodeMouseLeave={(_, node) =>
-        setHovered((current) => (current === node.id ? undefined : current))
-      }
-      fitView
-      minZoom={0.1}
-      colorMode="dark"
+    <div
+      ref={boxZoom.containerRef}
+      {...boxZoom.handlers}
+      className={`${styles.viewport} ${styles.runViewport} ${boxZoom.active ? styles.boxZoomReady : ''}`}
     >
-      <Background color="var(--canvas-dot)" gap={22} />
-      <Controls showInteractive={false} />
-    </ReactFlow>
+      <ReactFlow
+        {...canvasNavigation(boxZoom.active)}
+        onInit={boxZoom.onInit}
+        nodes={graph.nodes}
+        edges={graph.edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
+        deleteKeyCode={null}
+        onNodeClick={(_, node) => onSelect(node.id)}
+        onNodeMouseEnter={(_, node) => setHovered(node.id)}
+        onNodeMouseLeave={(_, node) =>
+          setHovered((current) => (current === node.id ? undefined : current))
+        }
+        colorMode="dark"
+      >
+        <Background color="var(--canvas-dot)" gap={22} />
+        <Controls showInteractive={false} />
+      </ReactFlow>
+      <CanvasZoomBox box={boxZoom.box} />
+    </div>
   );
 }
