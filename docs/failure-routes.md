@@ -1,6 +1,6 @@
-# Script and Fetch failure routes
+# Handle failed operations
 
-Script and Fetch nodes stop their run on failure by default. Set `onFailure: "route"` and connect both `default` and `failed` edges to handle an operation failure inside the workflow. In the editor, enable **Route on failure** and connect **Failed** to a recovery step. No additional MCP tool is needed.
+Script, Fetch and waited Workflow nodes stop their run on failure by default. Set `onFailure: "route"` and connect both `default` and `failed` edges to handle an operation failure inside the workflow. In the editor, enable **Route on failure** and connect **Failed** to a recovery step. No additional MCP tool is needed.
 
 ```json
 {
@@ -13,7 +13,7 @@ Script and Fetch nodes stop their run on failure by default. Set `onFailure: "ro
 }
 ```
 
-The default route receives the ordinary successful output. Failed receives this fixed envelope:
+The default route receives the ordinary successful output. For Script and Fetch, Failed receives this fixed envelope:
 
 ```json
 {
@@ -49,4 +49,51 @@ Inside a Batch, both routes must stay in the item scope and reach End. Routing d
 
 Incomplete routes remain saveable but block publication. Disabling the editor switch removes its Failed connection when settings are applied. With Raw JSON or MCP edits, remove the `failed` edge explicitly when removing `onFailure: "route"`. Publish a new version to change future runs; existing versions retain their behavior.
 
-This option applies only to Script and Fetch nodes. Agent attempts and claim correction, Workflow calls, detached runs, and polling Wait checks retain their existing behavior. Automatic retry, backoff, and broader failure-route support remain outside this increment.
+## Waited Workflow calls
+
+Workflow nodes with `mode:"wait"`, or with mode omitted, can use the same `onFailure:"route"` setting and `default` and `failed` edges:
+
+```json
+{
+  "id": "research",
+  "kind": "workflow",
+  "label": "Research",
+  "workflowId": "CHILD_WORKFLOW_ID",
+  "version": 1,
+  "onFailure": "route"
+}
+```
+
+A failed child follows Failed with category `child`. A child that completes but returns a value rejected by the calling node's output contract follows Failed with category `output`. The child's own status and history remain unchanged. The failure value adds references to the retained child:
+
+```json
+{
+  "input": { "topic": "demo" },
+  "error": {
+    "nodeId": "research",
+    "executionId": "caller-execution-id",
+    "kind": "workflow",
+    "category": "child",
+    "message": "Child run child-run-id: research failed",
+    "child": {
+      "runId": "child-run-id",
+      "workflowId": "CHILD_WORKFLOW_ID",
+      "version": 1,
+      "executionId": "child-execution-id"
+    }
+  },
+  "output": null
+}
+```
+
+`input` is the resolved original call input after bindings. `error.child.executionId` is the child's last execution ID, or null if unavailable. Use `get_run` or targeted result reads to inspect that child. History, prompts and work tokens are not copied into the failure value. For category `output`, `output` contains the rejected successful child result, which is also retained on the caller execution. For category `child`, it is null.
+
+Caller input or binding errors, invalid target workflow input, invalid pins/configuration, caller step limits and persistence errors stay terminal. Target input is validated before allocating a route-enabled child. After valid dispatch, a failed child is a routable outcome regardless of its internal cause, including its own contract/step-limit failure or a Script/Fetch interruption recorded at restart. Handling that outcome never replays the child's external effects.
+
+Parent cancellation and independently cancelled children never follow Failed. Detached calls cannot enable failure routing; a route flag blocks publication. The editor clears the policy and Failed connection when applying detached mode. Switching back before Apply restores the waited policy. Raw/API edits must remove the obsolete flag and edge explicitly.
+
+A child whose failure was handled cannot be retried independently, even while its parent waits for a recovery Agent. Its inspection includes `handledFailure:{runId,executionId}` identifying the caller; the UI links its parent and omits the invalid retry action. Retry the current failed recovery step through its owning run. That retry retains the handled child and does not invoke it again. A deliberate later loop visit creates a separate child, and still consumes the caller's step budget. Failed routes inside Batch item paths stay within the group and may return through End; recovered items count as completed under both `all` and `collect`.
+
+Route-enabled allocation and caller links commit together, and routing uses a savepoint. A persistence failure rolls back allocation or recovery and stops the caller. An engine restart observes committed child outcomes and does not route an already-handled call again.
+
+Agent attempts and claim correction, detached runs, and polling Wait checks retain their existing behavior. Automatic retry, backoff, and executor fallback remain outside this feature.

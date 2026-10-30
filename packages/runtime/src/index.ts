@@ -878,6 +878,7 @@ export class Engine {
   }
   inspect(id: string) {
     const run = this.run(id);
+    const handledFailure = this.handledWorkflowFailure(run);
     const allRuns = this.store.runs();
     const ids = new Set([id]);
     let changed = true;
@@ -896,6 +897,7 @@ export class Engine {
     const chain = this.chains.read(run);
     return {
       run,
+      ...(handledFailure ? { handledFailure } : {}),
       ...(chain
         ? {
             chain: {
@@ -949,6 +951,22 @@ export class Engine {
       throw new InterlockError('Published workflow version not found');
     return snapshot.definition;
   }
+  private handledWorkflowFailure(run: Run) {
+    if (
+      run.status !== 'failed' ||
+      !run.parentRunId ||
+      run.parentMode === 'detached'
+    )
+      return undefined;
+    const parent = this.run(run.parentRunId);
+    const caller = parent.executions.find(
+      (execution) =>
+        execution.kind === 'workflow' &&
+        execution.port === 'failed' &&
+        execution.childRunIds.includes(run.id),
+    );
+    return caller ? { runId: parent.id, executionId: caller.id } : undefined;
+  }
   private fail(run: Run, execution: NodeExecution, error: string) {
     for (const id of execution.childRunIds)
       if (
@@ -970,6 +988,7 @@ export class Engine {
     node: WorkflowNode,
     error: string,
     category: FailureCategory,
+    child?: Run,
   ) {
     if (!hasFailureRoute(node)) return this.fail(run, execution, error);
     const edge = this.definition(run).edges.find(
@@ -988,6 +1007,16 @@ export class Engine {
         kind: node.kind,
         category,
         message: error,
+        ...(child
+          ? {
+              child: {
+                runId: child.id,
+                workflowId: child.workflowId,
+                version: child.version,
+                executionId: child.executions.at(-1)?.id ?? null,
+              },
+            }
+          : {}),
       },
       output: execution.output ?? null,
     };
@@ -1011,6 +1040,22 @@ export class Engine {
       'node.failure_routed',
       `${execution.label}: followed Failed`,
     );
+  }
+  private failWorkflow(
+    run: Run,
+    node: Extract<WorkflowNode, { kind: 'workflow' }>,
+    child: Run,
+    error: string,
+    category: 'child' | 'output',
+  ) {
+    // A failed write must not leave a routed port or value in the terminal
+    // failure path. The child and caller history remain independently inspectable.
+    this.store.transaction(() => {
+      const routed = structuredClone(run),
+        execution = routed.executions.at(-1)!;
+      if (category === 'output') execution.output = child.output;
+      this.failOperation(routed, execution, node, error, category, child);
+    });
   }
   private finish(
     run: Run,
@@ -1372,6 +1417,20 @@ export class Engine {
               !execution!.retryChildRunIds?.includes(c.id),
           );
           if (failed) {
+            if (
+              node.kind === 'workflow' &&
+              hasFailureRoute(node) &&
+              failed.status === 'failed'
+            ) {
+              this.failWorkflow(
+                run,
+                node,
+                failed,
+                `Child run ${failed.id}: ${failed.error ?? 'failed'}`,
+                'child',
+              );
+              return true;
+            }
             for (const child of children)
               if (!terminal(child.status)) this.cancelTree(child.id);
             throw new InterlockError(
@@ -1392,19 +1451,51 @@ export class Engine {
           active < concurrency &&
           !execution.retryChildRunIds?.length
         ) {
-          const child = this.newRun(
-            node.kind === 'batch' ? run.workflowId : node.workflowId,
-            node.kind === 'batch' ? run.version : this.pinnedVersion(node),
-            value[execution.nextItem],
-            run.id,
-            node.kind === 'batch' ? node.id : undefined,
-          );
-          if (node.kind === 'batch') {
-            child.workflowName = `${node.label} · item ${execution.nextItem + 1}`;
-            this.save(child);
+          if (node.kind === 'workflow' && hasFailureRoute(node))
+            assertContract(
+              this.definition({
+                workflowId: node.workflowId,
+                version: this.pinnedVersion(node),
+              }).inputSchema,
+              execution.input,
+              `${node.label}: workflow input`,
+            );
+          if (node.kind === 'workflow' && hasFailureRoute(node)) {
+            // Dispatch configuration and persistence failures are terminal, not
+            // child outcomes. Commit allocation and its caller link together.
+            const dispatched = this.store.transaction(() => {
+              const copy = structuredClone(run),
+                step = copy.executions.at(-1)!;
+              const child = this.newRun(
+                node.workflowId,
+                this.pinnedVersion(node),
+                step.input,
+                run.id,
+              );
+              step.childRunIds.push(child.id);
+              step.nextItem++;
+              step.status = 'waiting';
+              copy.status = 'waiting';
+              this.save(copy);
+              return copy;
+            });
+            Object.assign(run, dispatched);
+            execution = run.executions.at(-1)!;
+          } else {
+            const child = this.newRun(
+              node.kind === 'batch' ? run.workflowId : node.workflowId,
+              node.kind === 'batch' ? run.version : this.pinnedVersion(node),
+              value[execution.nextItem],
+              run.id,
+              node.kind === 'batch' ? node.id : undefined,
+            );
+            if (node.kind === 'batch') {
+              child.workflowName = `${node.label} · item ${execution.nextItem + 1}`;
+              this.save(child);
+            }
+            execution.childRunIds.push(child.id);
+            execution.nextItem++;
           }
-          execution.childRunIds.push(child.id);
-          execution.nextItem++;
           active++;
           changed = true;
         }
@@ -1425,6 +1516,20 @@ export class Engine {
                     error: c.error ?? null,
                   }))
                 : children.map((c) => c.output!);
+          if (node.kind === 'workflow' && hasFailureRoute(node)) {
+            try {
+              assertContract(node.outputSchema, output, `${node.label} output`);
+            } catch (error) {
+              this.failWorkflow(
+                run,
+                node,
+                children[0],
+                message(error),
+                'output',
+              );
+              return true;
+            }
+          }
           this.finish(
             run,
             execution,
@@ -2175,6 +2280,10 @@ export class Engine {
       if (run.status !== 'failed')
         throw new InterlockError('Only failed runs can be retried');
       this.chains.assertRetry(run);
+      if (this.handledWorkflowFailure(run))
+        throw new InterlockError(
+          'This child failure was handled by its Workflow Failed route; inspect the parent recovery instead of retrying the child',
+        );
       this.versions.assertRunnable(run);
       if (run.parentRunId && run.parentMode !== 'detached')
         this.versions.assertRunnable(this.run(run.parentRunId));

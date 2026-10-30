@@ -21,4 +21,38 @@ export const FAILURE_ROUTE_SCHEMA = {
   additionalProperties: false,
 };
 
-export type FailureCategory = 'execution' | 'http' | 'output';
+export type FailureCategory = 'execution' | 'http' | 'output' | 'child';
+
+/** Waited Workflow failures reference their retained child rather than copying its history. */
+export const WORKFLOW_FAILURE_ROUTE_SCHEMA = {
+  ...FAILURE_ROUTE_SCHEMA,
+  properties: {
+    ...FAILURE_ROUTE_SCHEMA.properties,
+    error: {
+      ...FAILURE_ROUTE_SCHEMA.properties.error,
+      required: [...FAILURE_ROUTE_SCHEMA.properties.error.required, 'child'],
+      properties: {
+        ...FAILURE_ROUTE_SCHEMA.properties.error.properties,
+        kind: { type: 'string', enum: ['workflow'] },
+        category: { type: 'string', enum: ['child', 'output'] },
+        child: {
+          type: 'object',
+          required: ['runId', 'workflowId', 'version', 'executionId'],
+          properties: {
+            runId: { type: 'string' },
+            workflowId: { type: 'string' },
+            version: { type: 'integer', minimum: 1 },
+            executionId: { type: ['string', 'null'] },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+  },
+};
+
+export function failureRouteContract(kind: string) {
+  return kind === 'workflow'
+    ? WORKFLOW_FAILURE_ROUTE_SCHEMA
+    : FAILURE_ROUTE_SCHEMA;
+}

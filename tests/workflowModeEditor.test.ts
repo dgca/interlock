@@ -34,10 +34,22 @@ afterEach(async () => {
   container.remove();
   vi.unstubAllGlobals();
 });
-async function render(mode?: 'wait' | 'detached', batchId?: string) {
+async function render(
+  mode?: 'wait' | 'detached',
+  batchId?: string,
+  onFailure?: 'route' | 'fail',
+) {
   const definition = workflowCall('child', mode);
   const node = definition.nodes[1];
   node.batchId = batchId;
+  if (node.kind === 'workflow') node.onFailure = onFailure;
+  if (onFailure === 'route')
+    definition.edges.push({
+      id: 'failed',
+      source: node.id,
+      target: 'exit',
+      port: 'failed',
+    });
   node.outputSchema =
     mode === 'detached'
       ? structuredClone(STARTED_RUN_SCHEMA)
@@ -113,4 +125,52 @@ it('keeps saved detached mode selected and starts with Any when switching back',
   await choose('wait');
   await apply();
   expect(onApply.mock.calls[0][0].definition.nodes[1].outputSchema).toEqual({});
+});
+
+it('removes failure routing and its edge when switching to detached mode', async () => {
+  const { onApply } = await render(undefined, undefined, 'route');
+  expect(
+    container.querySelector<HTMLInputElement>(
+      'input[aria-label="Route on failure"]',
+    )!.checked,
+  ).toBe(true);
+  await choose('detached');
+  expect(
+    container.querySelector('input[aria-label="Route on failure"]'),
+  ).toBeNull();
+  await apply();
+  const d = onApply.mock.calls[0][0].definition;
+  expect(d.nodes[1].onFailure).toBeUndefined();
+  expect(d.edges.some((edge: any) => edge.port === 'failed')).toBe(false);
+});
+
+it('restores the waited failure route when toggling modes before Apply', async () => {
+  const { onApply } = await render(undefined, undefined, 'route');
+  await choose('detached');
+  await choose('wait');
+  await apply();
+  expect(onApply.mock.calls[0][0].definition.nodes[1].onFailure).toBe('route');
+  expect(
+    onApply.mock.calls[0][0].definition.edges.some(
+      (edge: any) => edge.port === 'failed',
+    ),
+  ).toBe(true);
+});
+
+it('removes the failed edge when disabling Workflow failure routing', async () => {
+  const { onApply } = await render(undefined, undefined, 'route');
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>('input[aria-label="Route on failure"]')!
+      .click(),
+  );
+  await apply();
+  expect(
+    onApply.mock.calls[0][0].definition.nodes[1].onFailure,
+  ).toBeUndefined();
+  expect(
+    onApply.mock.calls[0][0].definition.edges.some(
+      (edge: any) => edge.port === 'failed',
+    ),
+  ).toBe(false);
 });

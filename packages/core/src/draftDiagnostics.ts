@@ -3,7 +3,7 @@ import {
   isPollWait,
   hasTimeoutRoute,
   hasFailureRoute,
-  FAILURE_ROUTE_SCHEMA,
+  failureRouteContract,
   outgoingPorts,
   validateContractSchema,
   validateDefinition,
@@ -448,7 +448,7 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
     visiting.add(key);
     let result: Shape;
     if (hasFailureRoute(node) && port === 'failed')
-      result = shape(FAILURE_ROUTE_SCHEMA);
+      result = shape(failureRouteContract(node.kind));
     else if (hasTimeoutRoute(node) && port === 'timeout')
       result = resolved(node);
     else if (node.kind === 'batch' && port === 'item') {

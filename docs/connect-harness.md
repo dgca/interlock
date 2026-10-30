@@ -148,7 +148,7 @@ Use `kind: "batch"` for repeated work. Give each direct child a `batchId` matchi
 
 ### Author timers
 
-Script and Fetch nodes can also opt into [failure routing](failure-routes.md) with `onFailure: "route"` and both `default` and `failed` edges. Existing authoring tools expose the same configuration. Recovery receives `{input,error,output}`; failed operations remain visible in a run that may complete successfully. No automatic retry is added.
+Script, Fetch and waited Workflow nodes can also opt into [failure routing](failure-routes.md) with `onFailure: "route"` and both `default` and `failed` edges. Existing authoring tools expose the same configuration. Recovery receives `{input,error,output}`; failed operations remain visible in a run that may complete successfully. Workflow recovery includes retained child references; cancellation never routes, and handled children cannot be retried independently. No automatic retry is added.
 
 Use a `wait` node for a durable pause, or set `unclaimedTimeoutMs` on an Agent and connect both its `default` and `timeout` routes. Both create and update tools describe the same timer fields on their definition parameters. See [timer configuration](timers.md) for bounds, defaults, and examples.
 
@@ -189,7 +189,7 @@ Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `
 
 `list_work` returns available assignments, excluding claimed, held and budget-blocked work. An empty list does not mean the execution has completed. Use `get_run_briefing` for its status, claimed assignments, blockers, and detached progress. When given an existing run ID, resume it rather than calling `start_run` again.
 
-`retry_run` retries the failed step of a failed run. Inspect its error first, since Script and Fetch retries can repeat external side effects. Failed Batch retries preserve successful items. Retry a failed parent when an ordinary child belongs to a terminal parent. Failed detached children can be retried directly after their parent ends. Completed and cancelled runs cannot be retried. The CLI equivalent is `interlock retry RUN_ID`.
+`retry_run` retries the failed step of a failed run. Inspect its error first, since Script and Fetch retries can repeat external side effects. Failed Batch retries preserve successful items. Retry a failed parent when an ordinary child belongs to a terminal parent. Failed detached children can be retried directly after their parent ends. A child already handled through a Workflow Failed route cannot be retried independently; inspect the current parent recovery. Completed and cancelled runs cannot be retried. The CLI equivalent is `interlock retry RUN_ID`.
 
 For compact authoring, pass `detail: "summary"` to create/update/publish and `diagnostics: "summary"` to edit. These are explicit options; authoring defaults remain full. For authoring, `get_workflow` supplies the current draftRevision, `edit_workflow` applies small ordered edits atomically, and `validate_workflow` reports read-only save, publication, and contract diagnostics. Full-draft replacement remains available. See [editing policies and diagnostic limits](agent-workflows.md#edit-a-draft-atomically).
 

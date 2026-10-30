@@ -11,6 +11,9 @@ export function WorkflowModeEditor({
   onChange: (node: WorkflowStep) => void;
 }) {
   const waitOutput = useRef(node.mode === 'detached' ? {} : node.outputSchema);
+  const waitOnFailure = useRef(
+    node.mode === 'detached' ? undefined : node.onFailure,
+  );
   return (
     <>
       <Radio.Group
@@ -20,10 +23,14 @@ export function WorkflowModeEditor({
         value={node.mode ?? 'wait'}
         onChange={(mode) => {
           if (mode !== 'wait' && mode !== 'detached') return;
-          if (node.mode !== 'detached') waitOutput.current = node.outputSchema;
+          if (node.mode !== 'detached') {
+            waitOutput.current = node.outputSchema;
+            waitOnFailure.current = node.onFailure;
+          }
           onChange({
             ...node,
             mode,
+            onFailure: mode === 'detached' ? undefined : waitOnFailure.current,
             outputSchema:
               mode === 'detached'
                 ? structuredClone(STARTED_RUN_SCHEMA)

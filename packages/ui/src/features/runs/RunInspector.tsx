@@ -170,7 +170,7 @@ export function RunInspector({
               {run.parentMode === 'detached' ? 'Started by' : 'Parent run'}
             </Button>
           )}
-          {run.status === 'failed' && definition && (
+          {run.status === 'failed' && definition && !data.handledFailure && (
             <Button
               onClick={() =>
                 void act(async () => {
@@ -210,6 +210,9 @@ export function RunInspector({
           <span>
             Chain run {run.chain.index} · {data.chain.maxRuns} run limit
           </span>
+        )}
+        {data.handledFailure && (
+          <span>Failure handled by parent recovery.</span>
         )}
         {progress.detail && <span>{progress.detail}</span>}
         {run.status === 'completed' && !run.chain?.nextRunId && (
@@ -461,7 +464,9 @@ export function RunInspector({
             {execution?.port === 'timeout' && (
               <p className="hint">Followed Timeout with the original input.</p>
             )}
-            {(execution?.kind === 'script' || execution?.kind === 'fetch') &&
+            {(execution?.kind === 'script' ||
+              execution?.kind === 'fetch' ||
+              execution?.kind === 'workflow') &&
               execution.port === 'failed' && (
                 <p className="hint">Followed Failed with error data.</p>
               )}
