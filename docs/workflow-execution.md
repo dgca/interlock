@@ -22,6 +22,12 @@ Wait for result is the default, including for older definitions that omit `mode`
 
 Replace the workflow ID and version with an existing published version. Connect the node's ordinary Out handle to its next step. Input bindings, ownership rules, pinned-version selection, portable bundles, and cascade publication work in both modes.
 
+## Recover a waited failure
+
+Wait for result can opt into `onFailure:"route"` with default and failed edges. A failed child or a successful result rejected by the caller's output contract sends `{input,error,output}` through Failed, including `error.child` run/version/execution references. The child remains inspectable. Cancellation, caller input/dispatch errors and persistence failures stay terminal. Defaults remain unchanged; detached calls cannot route failures. See [Workflow failure routes](failure-routes.md#waited-workflow-calls).
+
+An already-handled failed child cannot be retried independently while recovery proceeds. Retry a later failed recovery step through its owning run. That retry does not replay the child.
+
 ## Started run output
 
 Start and continue returns the new run's identity:

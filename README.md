@@ -55,7 +55,7 @@ Select **New workflow** to create a draft. Use **Add node** to choose each step'
 
 Available nodes include entry and exit, Agent, Script, Fetch, Wait, Condition, Switch, Workflow, and Batch. A Workflow node invokes a pinned published workflow once. It defaults to **Wait for result**. Choose **Start and continue** to return a run reference immediately while the invoked workflow runs independently, even after parent cancellation. See [Workflow execution](docs/workflow-execution.md). A Batch repeats a visible path for each item and collects the results in input order.
 
-Script and Fetch settings offer **Route on failure** to send structured error data through a **Failed** connector. Existing nodes still stop the run by default. See [failure routes](docs/failure-routes.md) for the error contract and limits.
+Script, Fetch and waited Workflow settings offer **Route on failure** to send structured error data through a **Failed** connector. Existing nodes still stop the run by default. See [failure routes](docs/failure-routes.md) for the error contract and limits.
 
 Add a **Batch** and configure its items path and concurrency. Use **Add step** inside the group to create an Agent, Script, or other ordinary node. The first step connects to **Start** automatically. Connect additional steps within the group; connect the last step on every branch to **End**. Connect **Out** to the next step or Exit. The output route receives the ordered results after all items finish. Group members remain visible on the main canvas. Collapse hides them temporarily; moving the group moves its members.
 

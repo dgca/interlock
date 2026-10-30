@@ -491,6 +491,73 @@ try {
     (await call('get_run', { id: chainSubmit.chain.nextRunId })).run.status,
     'cancelled',
   );
+  const recoveryChild = await call('create_workflow', {
+    name: 'Packaged failure child',
+    definition: {
+      nodes: [
+        { id: 'entry', kind: 'entry', label: 'Input' },
+        {
+          id: 'agent',
+          kind: 'agent',
+          label: 'Work',
+          prompt: 'Work',
+          maxAttempts: 1,
+        },
+        { id: 'exit', kind: 'exit', label: 'Result' },
+      ],
+      edges: [
+        { id: 'in', source: 'entry', target: 'agent' },
+        { id: 'out', source: 'agent', target: 'exit' },
+      ],
+    },
+  });
+  await call('publish_workflow', { id: recoveryChild.id });
+  const recoveryParent = await call('create_workflow', {
+    name: 'Packaged failure recovery',
+    definition: {
+      nodes: [
+        { id: 'entry', kind: 'entry', label: 'Input' },
+        {
+          id: 'call',
+          kind: 'workflow',
+          label: 'Call',
+          workflowId: recoveryChild.id,
+          version: 1,
+          onFailure: 'route',
+        },
+        { id: 'exit', kind: 'exit', label: 'Result' },
+      ],
+      edges: [
+        { id: 'in', source: 'entry', target: 'call' },
+        { id: 'out', source: 'call', target: 'exit' },
+        { id: 'failed', source: 'call', target: 'exit', port: 'failed' },
+      ],
+    },
+  });
+  await call('publish_workflow', { id: recoveryParent.id });
+  const recoveryRun = await call('start_run', {
+    workflowId: recoveryParent.id,
+    input: { topic: 'smoke' },
+  });
+  const recoveryWork = await call('claim_work', {
+    workId: recoveryRun.nextWork.items[0].id,
+    workerId: 'package-test',
+  });
+  execFileSync(
+    bin,
+    ['fail', recoveryWork.id, recoveryWork.token, 'Measured test failure'],
+    usageOptions,
+  );
+  const recovered = JSON.parse(
+    execFileSync(bin, ['run', recoveryRun.runId], usageOptions),
+  );
+  assert.equal(recovered.run.status, 'completed');
+  assert.equal(recovered.run.output.error.category, 'child');
+  assert.equal(recovered.run.output.error.child.runId, recoveryWork.runId);
+  assert.equal(
+    (await call('get_run', { id: recoveryWork.runId })).handledFailure.runId,
+    recoveryRun.runId,
+  );
   const finalResult = await call(
     submitted.nextCall.tool,
     submitted.nextCall.arguments,

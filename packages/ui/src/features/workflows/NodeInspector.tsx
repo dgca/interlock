@@ -441,12 +441,18 @@ export function NodeInspector({
             />
           </>
         )}
-        {(node.kind === 'script' || node.kind === 'fetch') && (
+        {(node.kind === 'script' ||
+          node.kind === 'fetch' ||
+          (node.kind === 'workflow' && node.mode !== 'detached')) && (
           <Switch
             mb="md"
             label="Route on failure"
             aria-label="Route on failure"
-            description="Failed receives the input, error, and any returned output. Disabling removes its connection when changes are applied."
+            description={
+              node.kind === 'workflow'
+                ? 'Failed receives input, error and child references. Cancellation stays terminal. Disabling removes its connection when applied.'
+                : 'Failed receives the input, error, and any returned output. Disabling removes its connection when changes are applied.'
+            }
             checked={node.onFailure === 'route'}
             onChange={(e) =>
               patch({

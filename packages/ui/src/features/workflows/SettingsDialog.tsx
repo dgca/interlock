@@ -170,7 +170,8 @@ export function SettingsDialog({
                         !hasTimeoutRoute(parsed)) ||
                         (e.port === 'failed' &&
                           (parsed.kind === 'script' ||
-                            parsed.kind === 'fetch') &&
+                            parsed.kind === 'fetch' ||
+                            parsed.kind === 'workflow') &&
                           !hasFailureRoute(parsed)) ||
                         (parsed.kind === 'switch' &&
                           !outgoingPorts(parsed).includes(e.port)))

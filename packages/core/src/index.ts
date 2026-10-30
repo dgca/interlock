@@ -27,7 +27,12 @@ export {
 import { validateBatchScopes } from './batchScopes.js';
 import { isStartedRunSchema } from './workflowMode.js';
 export { STARTED_RUN_SCHEMA, isStartedRunSchema } from './workflowMode.js';
-export { FAILURE_ROUTE_SCHEMA, type FailureCategory } from './failureRoute.js';
+export {
+  FAILURE_ROUTE_SCHEMA,
+  WORKFLOW_FAILURE_ROUTE_SCHEMA,
+  failureRouteContract,
+  type FailureCategory,
+} from './failureRoute.js';
 export { validateBatchScopes } from './batchScopes.js';
 
 export type Json =
@@ -242,6 +247,9 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('workflow'),
+    onFailure: onFailureSchema.describe(
+      'Waited calls only: route requires default and failed edges. Failed receives {input,error:{nodeId,executionId,kind:workflow,category:child|output,message,child:{runId,workflowId,version,executionId}},output}. Child failure or rejected successful output routes; caller input/dispatch errors, cancellation and persistence errors stay terminal. No automatic retry.',
+    ),
     mode: z.enum(['wait', 'detached']).optional(),
     workflowId: z.string().min(1),
     version: z.number().int().positive().nullable(),
@@ -529,7 +537,9 @@ export function outgoingPorts(node: WorkflowNode): WorkflowEdge['port'][] {
 }
 export function hasFailureRoute(node: WorkflowNode): boolean {
   return (
-    (node.kind === 'script' || node.kind === 'fetch') &&
+    (node.kind === 'script' ||
+      node.kind === 'fetch' ||
+      (node.kind === 'workflow' && node.mode !== 'detached')) &&
     node.onFailure === 'route'
   );
 }
@@ -637,6 +647,14 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
           `${node.label}: node binding must reference a node in the same execution scope`,
         );
     }
+    if (
+      node.kind === 'workflow' &&
+      node.mode === 'detached' &&
+      node.onFailure === 'route'
+    )
+      throw new InterlockError(
+        `${node.label}: detached Workflow calls cannot route child failures`,
+      );
     if (node.kind === 'workflow' && node.version === null)
       throw new InterlockError(
         `${node.label}: publish the referenced workflow and select a version first`,

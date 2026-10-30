@@ -34,6 +34,9 @@ const inspectionFields = {
     .passthrough()
     .optional(),
   counterpartRunId: z.string().optional(),
+  handledFailure: z
+    .object({ runId: z.string(), executionId: z.string() })
+    .optional(),
   descendants: z.array(z.record(z.unknown())).optional(),
   descendantWork: z.array(z.record(z.unknown())).optional(),
   definition: z.record(z.unknown()).nullable().optional(),
