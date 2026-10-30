@@ -52,6 +52,7 @@ export class Continuation {
       cursor: snapshot.cursor,
       nextWork: snapshot.available,
       next: snapshot.next,
+      ...(snapshot.run.chain ? { chain: snapshot.run.chain } : {}),
       nextDeadline: snapshot.nextDeadline,
       ...(snapshot.held.total ? { heldWork: snapshot.held } : {}),
       ...(snapshot.budgetBlocked.total
@@ -314,8 +315,9 @@ export class Continuation {
       deadlines: bounded(deadlines, limit),
       nextDeadline: deadlines[0] ?? null,
       recentResults: bounded(results, limit),
-      next:
-        requested.status === 'failed'
+      next: requested.chain?.nextRunId
+        ? 'continue_as_new'
+        : requested.status === 'failed'
           ? 'inspect_failure'
           : work.some((w) => w.status === 'available' && !w.budgetBlocked)
             ? 'claim_work'

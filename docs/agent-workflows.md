@@ -420,3 +420,11 @@ Use [fixture simulation](workflow-simulation.md) to check contracts and routes b
 [External holds](work-holds.md) suspend one Agent assignment without consuming its failure or expiry allowance. Held work is absent from `list_work`. Briefings expose a bounded `held` list with work/run/lifecycle IDs, category, server timestamp, attempt and hold revision; `blockers` use `external_hold`. Reasons, checkpoints, payloads and claim tokens are omitted. When holds need attention, `next` is `inspect_hold`. Available work, budget gates and active claims can take precedence.
 
 Compact mutation responses add `heldWork` only when needed. Their existing `nextCall` suggests a briefing for `inspect_hold`. Full inspection includes current blocker details and up to twenty recent historical intervals per affected assignment. Use `manage_work_hold` with `action:history` for older intervals, default twenty and maximum one hundred per page. Holds on detached runs retain their independent lifecycle IDs.
+
+## Continue recurring work as new
+
+A standalone workflow can opt into [continue as new](continue-as-new.md) on Exit with `continueAsNew:{maxRuns:100}`. The Exit checkpoint must match workflow inputSchema. Successors retain the published version and original prompt capture, with fresh step history and run-local input/session scopes. All budget scopes count the chain; a later policy cannot reset earlier consumption.
+
+Briefings and compact mutations include chain links. On `next:continue_as_new`, follow `nextCall` to `chain.nextRunId` instead of treating the completed predecessor as a final result. Its Exit execution stores the checkpoint; final run output is available only from a normal Exit. Existing briefings and finite waits remain scoped to one run and its children.
+
+Use `list_runs` with `chainRootRunId` for bounded discovery, `get_run` for latest chain state, `get_run_usage` with `includeChain:true` for chain usage, and `cancel_run` with `scope:"chain"` to stop it from any member. Default cancellation remains per run. Detached descendants keep running independently. No new MCP tool is required.

@@ -26,13 +26,15 @@ Choose at least one limit. Each maximum and warning threshold is a nonnegative s
 
 `scope` is required:
 
-| Scope       | Assignments counted and gated                                                             |
-| ----------- | ----------------------------------------------------------------------------------------- |
-| `run`       | This run only                                                                             |
-| `lifecycle` | This run and ordinary descendants, including Batch items; stop at every detached boundary |
-| `tree`      | This run and all descendants, including detached runs and their descendants               |
+| Scope       | Assignments counted and gated                                                                 |
+| ----------- | --------------------------------------------------------------------------------------------- |
+| `run`       | This run and its continue-as-new chain members                                                |
+| `lifecycle` | Chain members and ordinary descendants, including Batch items; stop at detached relationships |
+| `tree`      | Chain members and all descendants, including detached runs and their descendants              |
 
-Every applicable ancestor and local budget must permit a claim. Disabling a child budget cannot bypass an ancestor's gate. A tree budget continues to govern detached work after the parent ends. Scope does not change cancellation: cancelling a parent still preserves detached runs. Cancel an independent run explicitly when needed.
+For [continue-as-new chains](continue-as-new.md), every scope includes the complete chain containing its anchor run. Policies installed on later members count earlier retained claims too. Successors never receive a fresh allowance.
+
+Every applicable ancestor, chain-member and local budget must permit a claim. Disabling a child budget cannot bypass an ancestor's gate. A tree budget continues to govern detached work after the parent ends. Scope does not change cancellation: cancelling a parent still preserves detached runs. Cancel an independent run explicitly when needed.
 
 All successful claims count, including failed work, lease expiries, claims released by external holds, and explicit retries. Counters include retained history from before the policy was installed. Changing limits or scope re-evaluates that history; it never starts a fresh allowance. Failed claim requests consume nothing.
 

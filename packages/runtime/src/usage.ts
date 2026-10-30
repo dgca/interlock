@@ -215,6 +215,11 @@ export class Usage {
     if (!runs.some((run) => run.id === query.runId))
       throw new InterlockError('Run not found');
     const scope = new Set([query.runId]);
+    const requested = runs.find((run) => run.id === query.runId)!;
+    if (query.includeChain && requested.chain)
+      for (const run of runs)
+        if (run.chain?.rootRunId === requested.chain.rootRunId)
+          scope.add(run.id);
     if (query.includeDescendants) {
       let changed = true;
       while (changed) {
@@ -249,6 +254,7 @@ export class Usage {
     return {
       runId: query.runId,
       includeDescendants: query.includeDescendants,
+      includeChain: query.includeChain,
       includeReports: query.includeReports,
       includedRuns: scope.size,
       includedDetachedRuns: runs.filter(

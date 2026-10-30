@@ -97,6 +97,8 @@ Costs remain separated by currency. `amountMicros` has the same metric structure
 
 The run inspector displays input/output totals, costs, reporting coverage, and paginated node attribution. **Claim attempt** grouping shows the selected usage source. **Include child runs, including detached** selects the broader scope explicitly.
 
+For [continue-as-new chains](continue-as-new.md), set `includeChain:true` to include all members of the requested run's chain. This defaults to false. `includeDescendants:true` then adds descendants of every selected member, including detached runs, exactly once. The response echoes `includeChain`; pagination still bounds groups rather than totals.
+
 ## Use the CLI
 
 Save the report payload in a private file and submit it with:

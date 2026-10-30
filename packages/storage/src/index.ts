@@ -140,6 +140,14 @@ export class Store {
   runs() {
     return this.list<Run>('runs');
   }
+  activeRuns(): Run[] {
+    return this.db
+      .prepare(
+        "SELECT value FROM documents WHERE collection = 'runs' AND json_extract(value, '$.status') IN ('running', 'waiting') ORDER BY rowid",
+      )
+      .all()
+      .map((row) => JSON.parse(row.value as string));
+  }
   runAncestry(id: string, cache = new Map<string, RunAncestry>()): RunAncestry {
     const cached = cache.get(id);
     if (cached) return cached;
@@ -179,6 +187,10 @@ export class Store {
       filters.push("json_extract(value, '$.workflowId') = ?");
       parameters.push(query.workflowId);
     }
+    if (query.chainRootRunId !== undefined) {
+      filters.push("json_extract(value, '$.chain.rootRunId') = ?");
+      parameters.push(query.chainRootRunId);
+    }
     if (query.status !== undefined) {
       filters.push("json_extract(value, '$.status') = ?");
       parameters.push(query.status);
@@ -205,6 +217,7 @@ export class Store {
       | 'parentRunId'
       | 'batchNodeId'
       | 'comparison'
+      | 'chain'
     > &
       RunAncestry)[] = [];
     for (const row of rows) {
@@ -250,6 +263,7 @@ export class Store {
         parentRunId,
         batchNodeId,
         ...(comparison ? { comparison } : {}),
+        ...(run.chain ? { chain: run.chain } : {}),
       });
       if (result.length === query.limit) break;
     }

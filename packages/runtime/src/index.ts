@@ -60,6 +60,7 @@ import { Ownership } from './ownership.js';
 import { Testbench } from './testbench.js';
 import { Simulations } from './simulation.js';
 import { Usage } from './usage.js';
+import { RunChains } from './runChains.js';
 import { Budgets } from './budgets.js';
 import { WorkHolds } from './workHolds.js';
 import { AssignmentSizes } from './assignmentSize.js';
@@ -90,6 +91,7 @@ export class Engine {
   readonly testbench: Testbench;
   readonly simulations: Simulations;
   readonly usage: Usage;
+  private readonly chains: RunChains;
   readonly budgets: Budgets;
   readonly assignmentSizes: AssignmentSizes;
   readonly holds: WorkHolds;
@@ -108,6 +110,7 @@ export class Engine {
     } = {},
   ) {
     this.simulations = new Simulations(store, cwd);
+    this.chains = new RunChains(store);
     this.continuation = new Continuation(store);
     this.holds = new WorkHolds(
       store,
@@ -608,6 +611,7 @@ export class Engine {
       for (const work of this.store.work())
         if (removed.has(work.runId)) this.store.remove('work', work.id);
       this.usage.removeRuns(removed);
+      this.chains.removeRuns(removed);
       this.holds.removeRuns(removed);
       this.budgets.removeRuns(removed);
       this.contextGroups.removeRuns(removed);
@@ -748,12 +752,20 @@ export class Engine {
     parentRunId?: string,
     batchNodeId?: string,
     comparison?: import('@interlock/core').ComparisonRunContext,
+    continuedFrom?: Run,
   ): Run {
     const w = this.workflow(workflowId);
     // Preserve existing dispatch-time failures for invalid nested pins; cleanup
     // dependencies are rejected before startup so deleted history is not replayed.
     this.versions.assertRunnable({ workflowId, version }, true);
     const definition = this.definition({ workflowId, version });
+    const rollover = definition.nodes.find(
+      (n) => n.kind === 'exit' && n.continueAsNew,
+    );
+    if (rollover && ((parentRunId && !batchNodeId) || comparison))
+      throw new InterlockError(
+        'Continue-as-new workflows require standalone runs; nested and comparison execution are unsupported',
+      );
     const itemRoute = batchNodeId
       ? definition.edges.find(
           (e) => e.source === batchNodeId && e.port === 'item',
@@ -792,8 +804,9 @@ export class Engine {
       executions: [],
       createdAt: time,
       updatedAt: time,
-      promptSnapshots:
-        batchNodeId && parentRunId
+      promptSnapshots: continuedFrom
+        ? continuedFrom.promptSnapshots
+        : batchNodeId && parentRunId
           ? this.run(parentRunId).promptSnapshots
           : capturedPrompts
             ? promptIds(definition).map((id) => {
@@ -806,6 +819,13 @@ export class Engine {
               })
             : this.prompts.capture(definition),
     };
+    if (
+      !parentRunId &&
+      !continuedFrom &&
+      rollover?.kind === 'exit' &&
+      rollover.continueAsNew
+    )
+      this.chains.start(run, rollover.continueAsNew.maxRuns);
     this.save(run);
     this.event(run, 'run.started', `Started ${w.name} v${version}`);
     return run;
@@ -873,8 +893,17 @@ export class Engine {
           changed = true;
         }
     }
+    const chain = this.chains.read(run);
     return {
       run,
+      ...(chain
+        ? {
+            chain: {
+              ...chain,
+              latestStatus: this.run(chain.latestRunId).status,
+            },
+          }
+        : {}),
       counterpartRunId: this.testbench.counterpart(run),
       descendants: allRuns.filter(
         (child) => child.id !== id && ids.has(child.id),
@@ -1008,12 +1037,51 @@ export class Engine {
         output,
         `${node.label} output`,
       );
-    if (node.kind === 'exit')
+    if (node.kind === 'exit' && !node.continueAsNew)
       assertContract(
         this.definition(run).outputSchema,
         output,
         'Workflow output',
       );
+    if (node.kind === 'exit' && node.continueAsNew) {
+      // A nested savepoint prevents a committed orphan if either write fails.
+      // Copies keep rollback IDs out of the engine's failure path.
+      this.store.transaction(() => {
+        const previous = structuredClone(run);
+        assertContract(
+          this.definition(previous).inputSchema,
+          output,
+          'Successor workflow input',
+        );
+        const successor = this.chains.next(previous, () =>
+          this.newRun(
+            previous.workflowId,
+            previous.version,
+            output,
+            undefined,
+            undefined,
+            undefined,
+            previous,
+          ),
+        );
+        const step = previous.executions.at(-1)!;
+        step.output = output;
+        step.port = port;
+        step.status = 'completed';
+        step.completedAt = now();
+        previous.value = output;
+        previous.status = 'completed';
+        // A continuing Exit produces a checkpoint, not a final workflow result.
+        this.save(previous);
+        this.event(
+          previous,
+          'run.continued',
+          `Continued as run ${successor.id}`,
+        );
+        this.event(previous, 'node.completed', step.label);
+      });
+      return;
+    }
     execution.output = output;
     execution.port = port;
     execution.status = 'completed';
@@ -1431,17 +1499,28 @@ export class Engine {
           ];
           this.releaseFailure(work, 'Worker lease expired', 'expiry');
         }
+      const continuedChains = new Set<string>();
       let changed = true,
         rounds = 0;
       while (changed && rounds++ < 2000) {
         this.budgets.refresh();
         changed = this.testbench.advance();
         // Earlier advances can cancel or resume descendants in this same pass.
-        for (const { id } of this.store.runs())
-          if (this.advance(this.run(id))) changed = true;
+        for (const { id } of this.store.activeRuns()) {
+          const candidate = this.run(id);
+          if (candidate.chain && continuedChains.has(candidate.chain.rootRunId))
+            continue;
+          const before = this.chains.read(candidate)?.latestRunId;
+          if (this.advance(candidate)) changed = true;
+          if (
+            candidate.chain &&
+            this.chains.read(candidate)?.latestRunId !== before
+          )
+            continuedChains.add(candidate.chain.rootRunId);
+        }
       }
     });
-    for (const run of this.store.runs()) {
+    for (const run of this.store.activeRuns()) {
       const execution = run.executions.at(-1);
       if (!execution || this.localJobs.has(execution.id)) continue;
       if (execution.kind === 'wait') {
@@ -2053,8 +2132,12 @@ export class Engine {
     this.save(run);
     this.event(run, 'run.cancelled', 'Run cancelled');
   }
-  cancel(id: string) {
-    this.store.transaction(() => this.cancelTree(id));
+  cancel(id: string, scope: 'run' | 'chain' = 'run') {
+    this.store.transaction(() =>
+      this.cancelTree(
+        scope === 'chain' ? this.chains.cancel(this.run(id)) : id,
+      ),
+    );
     this.pump();
     return this.inspect(id);
   }
@@ -2091,6 +2174,7 @@ export class Engine {
       const run = this.run(id);
       if (run.status !== 'failed')
         throw new InterlockError('Only failed runs can be retried');
+      this.chains.assertRetry(run);
       this.versions.assertRunnable(run);
       if (run.parentRunId && run.parentMode !== 'detached')
         this.versions.assertRunnable(this.run(run.parentRunId));

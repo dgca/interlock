@@ -434,6 +434,63 @@ try {
   );
   assert.equal(usage.totals.tokens.inputTokens.value, 100);
   assert.equal(usage.groups[0].source, 'observer');
+  const recurring = await call('create_workflow', {
+    name: 'Packaged continuation',
+    definition: {
+      nodes: [
+        { id: 'entry', kind: 'entry', label: 'Input' },
+        { id: 'agent', kind: 'agent', label: 'Work', prompt: 'Use checkpoint' },
+        {
+          id: 'exit',
+          kind: 'exit',
+          label: 'Continue',
+          continueAsNew: { maxRuns: 2 },
+        },
+      ],
+      edges: [
+        { id: 'in', source: 'entry', target: 'agent' },
+        { id: 'out', source: 'agent', target: 'exit' },
+      ],
+    },
+  });
+  await call('publish_workflow', { id: recurring.id });
+  const chainStart = await call('start_run', {
+    workflowId: recurring.id,
+    input: {},
+    budget: {
+      scope: 'run',
+      unknownUsage: 'allow',
+      limits: { claims: { max: 1 } },
+    },
+  });
+  const chainClaim = await call('claim_work', {
+    workId: chainStart.nextWork.items[0].id,
+    workerId: 'package-test',
+  });
+  const chainSubmit = await call('submit_result', {
+    workId: chainClaim.id,
+    token: chainClaim.token,
+    output: { cursor: 1 },
+  });
+  assert.equal(chainSubmit.next, 'continue_as_new');
+  assert.equal(chainSubmit.nextCall.arguments.id, chainSubmit.chain.nextRunId);
+  const chainMembers = JSON.parse(
+    execFileSync(bin, ['runs', '--chain', chainStart.runId], usageOptions),
+  );
+  assert.equal(chainMembers.length, 2);
+  const chainBudget = JSON.parse(
+    execFileSync(bin, ['budget', chainSubmit.chain.nextRunId], usageOptions),
+  );
+  assert.equal(chainBudget.governing[0].attempts, 1);
+  assert.equal(chainBudget.governing[0].state, 'blocked');
+  const cancelledChain = JSON.parse(
+    execFileSync(bin, ['cancel', chainStart.runId, '--chain'], usageOptions),
+  );
+  assert(cancelledChain.chain.cancelledAt);
+  assert.equal(
+    (await call('get_run', { id: chainSubmit.chain.nextRunId })).run.status,
+    'cancelled',
+  );
   const finalResult = await call(
     submitted.nextCall.tool,
     submitted.nextCall.arguments,

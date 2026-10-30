@@ -14,6 +14,7 @@ import {
   workflowEditsSchema,
   jsonSchema,
   runQuerySchema,
+  cancelRunSchema,
   InterlockError,
   ResultRejection,
   briefingQuerySchema,
@@ -440,8 +441,8 @@ export const appRouter = t.router({
         ),
       ),
     cancel: p
-      .input(id)
-      .mutation(({ ctx, input }) => ctx.engine.cancel(input.id)),
+      .input(cancelRunSchema)
+      .mutation(({ ctx, input }) => ctx.engine.cancel(input.id, input.scope)),
     retry: p.input(id).mutation(({ ctx, input }) => ctx.engine.retry(input.id)),
   }),
   work: t.router({

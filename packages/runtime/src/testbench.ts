@@ -240,6 +240,12 @@ export class Testbench {
       const snapshot = this.store.getVersion(workflowId, version);
       if (!snapshot)
         throw new InterlockError(`Published dependency ${id} is unavailable`);
+      if (
+        snapshot.definition.nodes.some(
+          (node) => node.kind === 'exit' && node.continueAsNew,
+        )
+      )
+        blockers.push(`Continue as new is unsupported in comparisons: ${id}`);
       pins.set(id, {
         workflowId,
         version,

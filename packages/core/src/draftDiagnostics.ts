@@ -616,7 +616,12 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
     )
       compare(resolved(node), node.outputSchema, node, `${base}.outputSchema`);
     if (node.kind === 'exit')
-      compare(resolved(node), d.outputSchema, node, 'outputSchema');
+      compare(
+        resolved(node),
+        node.continueAsNew ? d.inputSchema : d.outputSchema,
+        node,
+        node.continueAsNew ? 'inputSchema' : 'outputSchema',
+      );
     if (node.kind === 'batch') {
       const list = atPath(resolved(node), node.itemsPath);
       if (list.state === 'missing')

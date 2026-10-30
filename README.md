@@ -154,6 +154,8 @@ Workflow-level routes can loop back to an upstream node other than Entry. The sa
 
 `maxSteps` allows 2 through 1000 steps per run and defaults to 100. Entry, Exit, and every node visit count, including explicit retries that create a new execution. A Batch counts once in its parent; each item has its own budget. For example, 200 items with three steps each fit a three-step item budget, with a separate three-step parent path of Entry → Batch → Exit. The independent Batch `maxItems` limit defaults to 200.
 
+Standalone recurring Agent workflows can use an Exit with `continueAsNew:{maxRuns:100}` to pass a checkpoint into the same published version with fresh step history. The chain retains captured prompts and budget consumption. Inspect lineage and stop it from any member. See [continue as new](docs/continue-as-new.md).
+
 ### Resume an agent run
 
 Use MCP `get_run_briefing` with the existing run ID for current progress, available and claimed work, blockers, Batch counts, deadlines, and result references. Detached trees have independent lifecycle counts, including after the requested run finishes. Use `get_run_result` to read one input or output path, and `wait_for_run_change` with the returned cursor to wait for a scoped change. Waits default to 30 seconds and stop after at most 60 seconds. These reads do not claim or execute work.

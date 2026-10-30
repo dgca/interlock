@@ -113,7 +113,7 @@ Use get_run_result for selected data and final outputs, and wait_for_run_change 
 Use get_run for full inspection of the existing run. Do not start another run to inspect it.
 For a long timer wait, report the deadline and resume this same run later.
 Do not poll continuously or submit a made-up result to end a wait.
-Continue until the root run completes, fails, or is cancelled.
+If next is continue_as_new, follow nextCall into the successor and continue the same chain. Otherwise continue until the root run completes, fails, or is cancelled.
 ```
 
 Starting a run in the UI does not launch an agent. When assignments are available, the run inspector shows **Waiting for an agent**, including work inside Batches and nested workflows. Use **Copy instructions for agent** and paste the instructions into your connected agent conversation. The instructions include the existing run ID. **Connect an agent** opens the connection configuration; connecting alone does not pick up assignments.
@@ -194,6 +194,8 @@ Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `
 For compact authoring, pass `detail: "summary"` to create/update/publish and `diagnostics: "summary"` to edit. These are explicit options; authoring defaults remain full. For authoring, `get_workflow` supplies the current draftRevision, `edit_workflow` applies small ordered edits atomically, and `validate_workflow` reports read-only save, publication, and contract diagnostics. Full-draft replacement remains available. See [editing policies and diagnostic limits](agent-workflows.md#edit-a-draft-atomically).
 
 Use `preview_workflow_ownership` and `set_workflow_owner` for adoption, reparenting or release with expected-owner protection. Only the proposed owner may reference a child; retained historical foreign callers require explicit version cleanup. Generic updates and forced imports cannot change ownership. MCP `update_workflow` accepts `archived` for archive and restore. `delete_workflow` performs guarded permanent deletion. `list_runs` returns bounded, filtered run summaries, including waiting runs. `list_work` defaults to `fields: "summary"` for compact discovery, including `workflowId`, optional `parentRunId`, `rootRunId`, and `rootWorkflowId` for executor routing. `claim_work` returns full execution details. `export_workflow` and `import_workflows` transfer portable dependency bundles. See [agent workflow operations](agent-workflows.md) for filters, schema guidance, input bindings, import conflicts, and CLI examples.
+
+For bounded recurring Agent work, [continue as new](continue-as-new.md) passes checkpoints through standalone successor runs. Follow `next:continue_as_new` and its suggested successor briefing even when the predecessor completed. Chain budgets and prompt captures persist. `cancel_run` with `scope:"chain"` stops the latest successor from any member; per-run cancellation remains the default.
 
 ## Manual claims in the UI
 

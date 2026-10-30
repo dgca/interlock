@@ -165,6 +165,7 @@ export async function runCommand(argv: string[]) {
           workflow: { type: 'string' },
           status: { type: 'string' },
           'root-only': { type: 'boolean' },
+          chain: { type: 'string' },
           limit: { type: 'string' },
           'input-path': { type: 'string' },
           equals: { type: 'string' },
@@ -179,6 +180,7 @@ export async function runCommand(argv: string[]) {
       return client.runs.find.query(
         runQuerySchema.parse({
           workflowId: values.workflow,
+          chainRootRunId: values.chain,
           status: values.status,
           rootOnly: values['root-only'],
           limit: values.limit === undefined ? undefined : Number(values.limit),
@@ -294,8 +296,18 @@ export async function runCommand(argv: string[]) {
         workId: args[0],
         token: args[1],
       });
-    case 'cancel':
-      return client.runs.cancel.mutate({ id: args[0] });
+    case 'cancel': {
+      if (
+        args.length < 1 ||
+        args.length > 2 ||
+        (args[1] !== undefined && args[1] !== '--chain')
+      )
+        throw new Error('Usage: cancel <run-id> [--chain]');
+      return client.runs.cancel.mutate({
+        id: args[0],
+        scope: args[1] === '--chain' ? 'chain' : 'run',
+      });
+    }
     case 'retry':
       return client.runs.retry.mutate({ id: args[0] });
     default:
@@ -312,13 +324,13 @@ export async function runCommand(argv: string[]) {
           'export <id>',
           'publish <id> [--cascade]',
           'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file]',
-          'runs [--workflow ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
+          'runs [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
           'context-group <run-id> <group> [options-json|@file] (binding and history; offset, limit)',
           'handoff-context <json|@file> (runId, group, expectedRevision, session, actor, reason, checkpointRef)',
           'budget <run-id> (local revision/policy and governing budget status)',
           'set-budget <json|@file> (runId, expectedRevision, budget; null disables local policy)',
-          'usage <run-id> [options-json|@file: {"includeDescendants":true,"groupBy":"attempt","includeReports":true,"limit":20,"offset":0}]',
+          'usage <run-id> [options-json|@file: {"includeDescendants":true,"includeChain":true,"groupBy":"attempt","includeReports":true,"limit":20,"offset":0}]',
           'report-usage <json|@file: {"workId":"...","attempt":1,"token":"...","snapshot":{"sequence":1,"final":true,"models":[{"provider":"...","model":"...","inputTokens":100,"outputTokens":20}]}}] (executor is default and requires token; source:observer omits token and requires an ended attempt; observer takes precedence in totals and budgets; cumulative per source, missing values remain unknown)',
           'simulation <json|@file> (action: run/get/list/capture/cancel; fixture-only, no external effects)',
           'test-suite <json|@file> (action: create/update/get/list; saved cases with optional simulation fixtures)',
@@ -330,7 +342,7 @@ export async function runCommand(argv: string[]) {
           'submit <work-id> <token> <json|@file> [--summary]',
           'fail <work-id> <token> <error>',
           'renew <work-id> <token> [options-json: {"leaseSeconds":3600}]',
-          'cancel <run-id>',
+          'cancel <run-id> [--chain] (stop the latest successor from any chain member; detached descendants remain independent)',
           'retry <run-id>',
         ],
       };

@@ -196,7 +196,9 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
                 : n.kind === 'entry'
                   ? 'Workflow input'
                   : n.kind === 'exit'
-                    ? 'Return workflow result'
+                    ? n.continueAsNew
+                      ? `Continue as new · ${n.continueAsNew.maxRuns} run limit`
+                      : 'Return workflow result'
                     : undefined;
   const progressClass = data.progress
     ? styles[`run_${data.progress.state}`]

@@ -21,7 +21,16 @@ export class Budgets {
   ) {}
 
   private scope(id: string, policy: BudgetPolicy, runs: Run[]) {
-    const scope = new Set([id]);
+    const anchor = runs.find((run) => run.id === id);
+    // A rollover renews step history, never a budget allowance. Even a policy
+    // installed on a later member counts the chain's retained earlier claims.
+    const scope = new Set(
+      anchor?.chain
+        ? runs
+            .filter((run) => run.chain?.rootRunId === anchor.chain!.rootRunId)
+            .map((run) => run.id)
+        : [id],
+    );
     if (policy.scope === 'run') return scope;
     let changed = true;
     while (changed) {

@@ -184,7 +184,9 @@ export function canvasGraph(
         node.kind === 'entry'
           ? definition.inputSchema
           : node.kind === 'exit'
-            ? definition.outputSchema
+            ? node.continueAsNew
+              ? definition.inputSchema
+              : definition.outputSchema
             : undefined,
       collapsed: options.collapsed?.has(node.id),
       status: options.status?.(node.id),

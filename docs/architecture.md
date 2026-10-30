@@ -153,6 +153,14 @@ Agent nodes optionally specify `unclaimedTimeoutMs`. Available work carries a pe
 
 Timers create no sleeping processes and consume no steps while waiting. They work inside Batch item paths and referenced workflows with ordinary cancellation and collection. See [timer configuration](timers.md) for JSON examples and limits.
 
+## Continue-as-new chains
+
+Continuing Exits are terminal checkpoints in standalone runs. Core defines the optional Exit configuration, common finite maxRuns and lineage contracts; runtime owns chain creation and cancellation. Storage persists optional run links and additive runChains records. A nested savepoint commits predecessor completion, checkpoint execution output, successor allocation, reciprocal links and the latest pointer together. Invalid input or failed persistence leaves no successor. A continuing Exit validates the workflow input contract instead of final output; only normal Exits produce run output.
+
+Successors preserve the immutable version and first prompt capture but reset run-local input and continuity scope. The chain relationship does not consume child ancestry depth. Budget scopes include all members before following ordinary/detached descendants. Existing per-run cancellation remains unchanged; explicit chain cancellation stops the latest member and prevents retry or rollover, preserving detached lifecycles. Comparisons, simulation and nested Workflow invocation reject continuing definitions.
+
+The engine yields after one rollover per chain per pump and reads only active run documents for execution. This avoids deserializing completed execution histories every tick, while SQLite scans and retained usage/budget aggregation still grow with archive size. See [continue as new](continue-as-new.md) for bounds and operations.
+
 ## Scripts and interruptions
 
 Scripts run in JavaScript or Bash child processes. New nodes default to JavaScript; definitions without a `language` field retain Bash behavior.
