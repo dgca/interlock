@@ -3,6 +3,7 @@ import {
   InterlockError,
   modelKey,
   reportUsageSchema,
+  selectedUsageReport,
   summarizeUsage,
   tokenFields,
   usageQuerySchema,
@@ -93,7 +94,8 @@ export class Usage {
     this.store.put(collection, { ...receipt, outcome, endedAt: now() });
   }
   report(input: UsageReportInput) {
-    const { workId, attempt, token, snapshot } = reportUsageSchema.parse(input);
+    const { workId, attempt, source, token, snapshot } =
+      reportUsageSchema.parse(input);
     snapshot.models.sort((a, b) =>
       modelKey(a) < modelKey(b) ? -1 : modelKey(a) > modelKey(b) ? 1 : 0,
     );
@@ -103,14 +105,34 @@ export class Usage {
       const id = key(workId, attempt);
       const receipt =
         this.store.get<UsageAttempt>(collection, id) ??
-        (work.attempt === attempt && work.token === token
+        (source === 'executor' &&
+        work.attempt === attempt &&
+        work.token === token
           ? this.receipt(work, null)
           : undefined);
-      if (!receipt?.tokenHash || receipt.tokenHash !== claimTokenHash(token))
+      if (source === 'observer') {
+        if (
+          !receipt?.endedAt ||
+          receipt.outcome === 'claimed' ||
+          receipt.outcome === 'unknown'
+        )
+          throw new InterlockError(
+            'Observer usage requires a retained ended attempt',
+          );
+      } else if (
+        !receipt?.tokenHash ||
+        receipt.tokenHash !== claimTokenHash(token!)
+      )
         throw new InterlockError(
           'Usage claim token does not match this attempt',
         );
-      const previous = receipt.snapshot;
+      // An observer cannot invent historical attempts. Executor legacy fallback
+      // remains token-protected, and source streams never share sequences.
+      if (!receipt) throw new InterlockError('Usage attempt not found');
+      const previous =
+        source === 'observer'
+          ? receipt.observerReport?.snapshot
+          : receipt.snapshot;
       if (previous) {
         if (snapshot.sequence === previous.sequence) {
           if (!isDeepStrictEqual(snapshot, previous))
@@ -120,6 +142,7 @@ export class Usage {
           return {
             workId,
             attempt,
+            source,
             sequence: snapshot.sequence,
             applied: false,
           };
@@ -132,9 +155,20 @@ export class Usage {
           throw new InterlockError('Final usage cannot be changed');
         assertCumulative(previous, snapshot);
       }
-      this.store.put(collection, { ...receipt, snapshot, reportedAt: now() });
+      this.store.put(
+        collection,
+        source === 'observer'
+          ? { ...receipt, observerReport: { snapshot, reportedAt: now() } }
+          : { ...receipt, snapshot, reportedAt: now() },
+      );
       this.notify(work.runId);
-      return { workId, attempt, sequence: snapshot.sequence, applied: true };
+      return {
+        workId,
+        attempt,
+        source,
+        sequence: snapshot.sequence,
+        applied: true,
+      };
     });
   }
 
@@ -215,6 +249,7 @@ export class Usage {
     return {
       runId: query.runId,
       includeDescendants: query.includeDescendants,
+      includeReports: query.includeReports,
       includedRuns: scope.size,
       includedDetachedRuns: runs.filter(
         (run) =>
@@ -228,6 +263,7 @@ export class Usage {
         .slice(query.offset, query.offset + query.limit)
         .map(([key, group]) => {
           const first = group[0];
+          const selected = selectedUsageReport(first);
           return {
             key,
             ...(query.groupBy !== 'worker' ? { runId: first.runId } : {}),
@@ -244,8 +280,22 @@ export class Usage {
                   outcome: first.outcome,
                   claimedAt: first.claimedAt,
                   endedAt: first.endedAt ?? null,
-                  reportedAt: first.reportedAt ?? null,
-                  snapshot: first.snapshot ?? null,
+                  source: selected?.source ?? null,
+                  reportedAt: selected?.reportedAt ?? null,
+                  snapshot: selected?.snapshot ?? null,
+                  ...(query.includeReports
+                    ? {
+                        reports: {
+                          executor: first.snapshot
+                            ? {
+                                snapshot: first.snapshot,
+                                reportedAt: first.reportedAt ?? null,
+                              }
+                            : null,
+                          observer: first.observerReport ?? null,
+                        },
+                      }
+                    : {}),
                   ...(first.requestedTier !== undefined
                     ? { requestedTier: first.requestedTier }
                     : {}),

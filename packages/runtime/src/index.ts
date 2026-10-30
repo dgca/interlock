@@ -131,7 +131,7 @@ export class Engine {
       this.event(
         this.run(runId),
         'work.usage_reported',
-        'Executor usage updated',
+        'Reported usage updated',
       );
     });
     this.budgets = new Budgets(store, this.usage, (runId, blocked) =>
