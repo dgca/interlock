@@ -2009,9 +2009,19 @@ it.each(['stdio', 'http'])(
       expect(
         tools.find((tool) => tool.name === 'report_usage')!.inputSchema
           .required,
-      ).toEqual(
-        expect.arrayContaining(['workId', 'attempt', 'token', 'snapshot']),
-      );
+      ).toEqual(expect.arrayContaining(['workId', 'attempt', 'snapshot']));
+      const reportSchema = tools.find(
+        (tool) => tool.name === 'report_usage',
+      )!.inputSchema;
+      expect(reportSchema.required).not.toContain('token');
+      expect(reportSchema.properties?.source).toMatchObject({
+        enum: ['executor', 'observer'],
+        default: 'executor',
+      });
+      expect(
+        tools.find((tool) => tool.name === 'get_run_usage')!.inputSchema
+          .properties?.includeReports,
+      ).toMatchObject({ default: false });
       expect(
         tools.find((tool) => tool.name === 'get_run_usage')!.description,
       ).toContain('detached');
@@ -2032,6 +2042,39 @@ it.each(['stdio', 'http'])(
           ],
         },
       };
+      const observerInput = {
+        source: 'observer',
+        workId: claim.id,
+        attempt: claim.attempt,
+        snapshot: {
+          sequence: 1,
+          final: true,
+          models: [
+            {
+              provider: 'test',
+              model: 'observed',
+              inputTokens: 150,
+              outputTokens: 30,
+            },
+          ],
+        },
+      };
+      expect(
+        (
+          await client.callTool({
+            name: 'report_usage',
+            arguments: observerInput,
+          })
+        ).isError,
+      ).toBe(true);
+      expect(
+        (
+          await client.callTool({
+            name: 'report_usage',
+            arguments: { ...usageInput, token: undefined },
+          })
+        ).isError,
+      ).toBe(true);
       const usageResponses = await Promise.all([
         call('report_usage', usageInput),
         call('report_usage', usageInput),
@@ -2136,6 +2179,55 @@ it.each(['stdio', 'http'])(
         output: { number: 42 },
       });
       expect(result.run.status).toBe('completed');
+      expect(await call('report_usage', observerInput)).toMatchObject({
+        applied: true,
+        source: 'observer',
+      });
+      expect(await call('report_usage', observerInput)).toMatchObject({
+        applied: false,
+        source: 'observer',
+      });
+      const observedUsage = await call('get_run_usage', {
+        runId: claim.runId,
+        groupBy: 'attempt',
+        includeReports: true,
+      });
+      expect(observedUsage).toMatchObject({
+        totals: {
+          attempts: 1,
+          reportedAttempts: 1,
+          tokens: { inputTokens: { value: 150, coverage: 'complete' } },
+        },
+        groups: [
+          {
+            source: 'observer',
+            snapshot: { models: [{ model: 'observed' }] },
+            reports: {
+              executor: { snapshot: { models: [{ inputTokens: 100 }] } },
+              observer: { snapshot: { models: [{ inputTokens: 150 }] } },
+            },
+          },
+        ],
+      });
+      expect(JSON.stringify(observedUsage)).not.toContain(claim.token);
+      expect(JSON.stringify(observedUsage)).not.toContain('tokenHash');
+      const observerUrl = process.env.INTERLOCK_URL;
+      process.env.INTERLOCK_URL = url;
+      try {
+        expect(
+          await runCommand(['report-usage', JSON.stringify(observerInput)]),
+        ).toMatchObject({ applied: false, source: 'observer' });
+        expect(
+          await runCommand([
+            'usage',
+            claim.runId,
+            '{"groupBy":"attempt","includeReports":true}',
+          ]),
+        ).toEqual(observedUsage);
+      } finally {
+        if (observerUrl === undefined) delete process.env.INTERLOCK_URL;
+        else process.env.INTERLOCK_URL = observerUrl;
+      }
       expect(
         (
           await client.callTool({

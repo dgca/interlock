@@ -43,7 +43,9 @@ All successful claims count, including failed work, lease expiries, claims relea
 - `allow` admits claims below the reported thresholds and exposes incomplete telemetry as a warning. A claim-count limit can bound reservations when telemetry is unavailable.
 - `block` stops further claims while any scoped attempt lacks final figures for a configured reported metric. A final report with an omitted metric still leaves that metric unknown. A scope with no attempts has zero consumption, so its first claim can proceed if its maxima permit it.
 
-Partial sums reaching a maximum block under either policy. Aggregate overflow blocks instead of rounding down. Cost in a different currency remains unavailable for the configured currency. A final report can clear an incomplete-usage block automatically, but cannot clear a reached maximum. Executors must report actual measurements using [usage reporting](usage-reporting.md).
+Partial sums reaching a maximum block under either policy. Aggregate overflow blocks instead of rounding down. Cost in a different currency remains unavailable for the configured currency. Within one source, a final cumulative report can clear an incomplete-usage block automatically, but cannot lower consumption below a reached maximum. Executors or observers must report actual measurements using [usage reporting](usage-reporting.md).
+
+Totals and budget checks select the observer snapshot when present, otherwise the executor snapshot, once per attempt. Source snapshots are never added or merged. An observer can report only after the attempt ends; late reports can raise or lower selected consumption and change admission. See [source selection](usage-reporting.md#report-measured-usage-as-an-observer).
 
 A strict reported-usage policy can serialize claims until each worker supplies final usage. If an interrupted worker cannot report, inspect the remaining uncertainty and explicitly adjust the policy within the user's authorized budget.
 

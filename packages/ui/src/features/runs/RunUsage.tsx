@@ -106,7 +106,8 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
             </Text>
             {!totals.reportedAttempts && (
               <Text size="xs" c="dimmed">
-                Executors must report usage. Missing figures do not mean zero.
+                Executors or observers must report usage. Missing figures do not
+                mean zero.
               </Text>
             )}
             {!!report.groups.length && (
@@ -141,6 +142,7 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
                             <th>Requested tier</th>
                             <th>Declared selection</th>
                             <th>Usage-reported models</th>
+                            <th>Usage source</th>
                           </>
                         )}
                         <th>Input tokens</th>
@@ -182,6 +184,13 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
                                       `${model.provider} / ${model.model}`,
                                   )
                                   .join(', ') ?? 'Unknown'}
+                              </td>
+                              <td>
+                                {group.source === 'observer'
+                                  ? 'Observer'
+                                  : group.source === 'executor'
+                                    ? 'Executor'
+                                    : 'Unknown'}
                               </td>
                             </>
                           )}

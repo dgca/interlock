@@ -35,6 +35,7 @@ mcp       Stdio MCP bridge to the running engine. Set INTERLOCK_URL to override
 
 Workflow commands: workflows, workflow, import, update, edit, export, publish, archive, restore, delete, start
 Run commands: runs, run, work, claim, submit, fail, renew, work-hold, cancel, retry
+Usage commands: usage, report-usage
 Run 'interlock commands' for argument syntax.
 
 Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL`);
@@ -73,6 +74,8 @@ Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL`);
       'renew',
       'cancel',
       'retry',
+      'usage',
+      'report-usage',
     ];
     if (!known.includes(argv[0]))
       throw new Error(`Unknown command: ${argv[0]}. Run interlock --help.`);

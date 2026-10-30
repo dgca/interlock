@@ -371,3 +371,280 @@ it('canonicalizes model order and retains cost provenance across updates', () =>
     costCoverage: 'partial',
   });
 });
+
+it('validates source credentials and keeps existing token reports compatible', () => {
+  const input = {
+    workId: 'work',
+    attempt: 1,
+    snapshot: { sequence: 1, models: [model] },
+  };
+  expect(reportUsageSchema.parse({ ...input, token: 'token' }).source).toBe(
+    'executor',
+  );
+  expect(reportUsageSchema.parse({ ...input, source: 'observer' }).source).toBe(
+    'observer',
+  );
+  for (const extra of [
+    {},
+    { source: 'executor' },
+    { source: 'observer', token: 'token' },
+    { source: 'other' },
+  ])
+    expect(reportUsageSchema.safeParse({ ...input, ...extra }).success).toBe(
+      false,
+    );
+});
+
+it('rejects live, nonexistent and unretained observer attempts without mutating state', () => {
+  const { engine, store, run, work } = fixture();
+  const observe = (workId = work.id, attempt = work.attempt) =>
+    engine.usage.report({
+      source: 'observer',
+      workId,
+      attempt,
+      snapshot: { sequence: 1, models: [model] },
+    });
+  const before = engine.inspect(run.id);
+  const receipts = store.list('usageAttempts');
+  expect(() => observe()).toThrow('retained ended attempt');
+  expect(() => observe(work.id, 2)).toThrow('retained ended attempt');
+  expect(() => observe('missing')).toThrow('Assignment not found');
+  expect(engine.inspect(run.id)).toEqual(before);
+  expect(store.list('usageAttempts')).toEqual(receipts);
+  // Even a past lease deadline requires the engine to record the outcome first.
+  vi.useFakeTimers();
+  vi.advanceTimersByTime(10001);
+  expect(() => observe()).toThrow('retained ended attempt');
+  engine.pump();
+  expect(observe()).toMatchObject({ source: 'observer', applied: true });
+  store.remove('usageAttempts', `${work.id}:${work.attempt}`);
+  expect(() => observe()).toThrow('retained ended attempt');
+});
+
+it.each(['completed', 'failed', 'expired', 'cancelled', 'held'] as const)(
+  'accepts observer reports after %s without restoring claim authority',
+  (outcome) => {
+    vi.useFakeTimers();
+    const { engine, run, work } = fixture();
+    if (outcome === 'completed') engine.submit(work.id, work.token!, {});
+    if (outcome === 'failed')
+      engine.reportFailure(work.id, work.token!, 'failed');
+    if (outcome === 'expired') {
+      vi.useFakeTimers();
+      vi.advanceTimersByTime(10001);
+      engine.pump();
+    }
+    if (outcome === 'cancelled') engine.cancel(run.id);
+    if (outcome === 'held')
+      engine.manageWorkHold({
+        action: 'hold',
+        workId: work.id,
+        expectedAttempt: work.attempt,
+        expectedRevision: 0,
+        actor: 'observer-test',
+        category: 'other',
+        reason: 'blocked',
+        checkpointRef: 'checkpoint',
+      });
+    const before = engine.inspect(run.id);
+    engine.usage.report({
+      source: 'observer',
+      workId: work.id,
+      attempt: work.attempt,
+      snapshot: { sequence: 1, final: true, models: [model] },
+    });
+    const inspected = engine.inspect(run.id);
+    expect(inspected.run).toEqual(before.run);
+    expect(inspected.work).toEqual(before.work);
+    expect(
+      engine.usage.read({ runId: run.id, groupBy: 'attempt' }).groups[0],
+    ).toMatchObject({
+      source: 'observer',
+      outcome,
+      snapshot: { final: true },
+      totals: {
+        attempts: 1,
+        reportedAttempts: 1,
+        tokens: { inputTokens: { value: 100, coverage: 'complete' } },
+      },
+    });
+    expect(() =>
+      engine.submit(work.id, work.token!, { changed: true }),
+    ).toThrow();
+  },
+);
+
+it('keeps independent cumulative source streams and selects observer snapshots without double counting', () => {
+  const { engine, work, run, report } = fixture();
+  report(1, [model], true);
+  engine.reportFailure(work.id, work.token!, 'retry');
+  const next = engine.claim(work.id, { ...worker, workerId: 'next-worker' });
+  const observe = (
+    sequence = 1,
+    models: ModelUsage[] = [{ ...model, inputTokens: 200 }],
+    final = false,
+  ) =>
+    engine.usage.report({
+      source: 'observer',
+      workId: work.id,
+      attempt: work.attempt,
+      snapshot: { sequence, final, models },
+    });
+  expect(observe()).toMatchObject({ applied: true, source: 'observer' });
+  expect(observe()).toMatchObject({ applied: false });
+  expect(() => observe(1, [{ ...model, inputTokens: 201 }])).toThrow(
+    'different usage',
+  );
+  expect(() => observe(2, [{ ...model, inputTokens: 199 }])).toThrow(
+    'decrease',
+  );
+  expect(() => observe(2, [{ ...model, model: 'replacement' }])).toThrow(
+    'remove a model',
+  );
+  expect(observe(2, [{ ...model, inputTokens: 250 }], true)).toMatchObject({
+    applied: true,
+  });
+  expect(() => observe()).toThrow('stale');
+  expect(() => observe(3, [{ ...model, inputTokens: 300 }], true)).toThrow(
+    'Final usage',
+  );
+  expect(report(1, [model], true)).toMatchObject({
+    applied: false,
+    source: 'executor',
+  });
+  engine.usage.report({
+    workId: next.id,
+    attempt: next.attempt,
+    token: next.token!,
+    snapshot: { sequence: 1, final: true, models: [model] },
+  });
+  engine.submit(next.id, next.token!, {});
+  const result = engine.usage.read({ runId: run.id, groupBy: 'attempt' });
+  expect(result.totals).toMatchObject({
+    attempts: 2,
+    reportedAttempts: 2,
+    finalAttempts: 2,
+    tokens: { inputTokens: { value: 350, coverage: 'complete' } },
+  });
+  const first = result.groups.find((g) => g.attempt === 1)!;
+  expect(first).toMatchObject({
+    source: 'observer',
+    snapshot: { sequence: 2, models: [{ inputTokens: 250 }] },
+  });
+  expect(first).not.toHaveProperty('reports');
+  const detail = engine.usage.read({
+    runId: run.id,
+    groupBy: 'attempt',
+    includeReports: true,
+  });
+  expect(detail.totals).toEqual(result.totals);
+  expect(detail.groups.find((g) => g.attempt === 1)?.reports).toMatchObject({
+    executor: {
+      snapshot: { sequence: 1, final: true, models: [{ inputTokens: 100 }] },
+    },
+    observer: {
+      snapshot: { sequence: 2, final: true, models: [{ inputTokens: 250 }] },
+    },
+  });
+  const serialized = JSON.stringify(detail);
+  expect(serialized).not.toContain(work.token!);
+  expect(serialized).not.toContain(next.token!);
+  expect(serialized).not.toContain('tokenHash');
+});
+
+it('keeps missing observer metrics unknown and enforces observer cost provenance independently', () => {
+  const { engine, work, run, report } = fixture();
+  report(
+    1,
+    [
+      {
+        ...model,
+        cost: { amountMicros: 100, currency: 'USD', source: 'executor' },
+      },
+    ],
+    true,
+  );
+  engine.submit(work.id, work.token!, {});
+  const a: ModelUsage = {
+    provider: 'test',
+    model: 'a',
+    inputTokens: 0,
+    cost: { amountMicros: 50, currency: 'USD', source: 'runtime log' },
+  };
+  const b: ModelUsage = { provider: 'test', model: 'b' };
+  const observe = (sequence: number, models: ModelUsage[]) =>
+    engine.usage.report({
+      source: 'observer',
+      workId: work.id,
+      attempt: work.attempt,
+      snapshot: { sequence, models },
+    });
+  observe(1, [b, a]);
+  expect(observe(1, [a, b])).toMatchObject({ applied: false });
+  for (const cost of [
+    undefined,
+    { ...a.cost!, amountMicros: 49 },
+    { ...a.cost!, currency: 'EUR' },
+    { ...a.cost!, source: 'other log' },
+  ])
+    expect(() => observe(2, [{ ...a, cost }, b])).toThrow('cost');
+  const result = engine.usage.read({ runId: run.id });
+  expect(result.totals).toMatchObject({
+    attempts: 1,
+    reportedAttempts: 1,
+    finalAttempts: 0,
+    tokens: {
+      inputTokens: { value: 0, coverage: 'partial' },
+      outputTokens: { value: null, coverage: 'unknown' },
+    },
+    costs: [
+      { currency: 'USD', amountMicros: { value: 50, coverage: 'partial' } },
+    ],
+  });
+});
+
+it('retains observer precedence when an executor reports late, across restart and deletion', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'interlock-observer-usage-'));
+  const path = join(directory, 'test.db');
+  const { engine, store, workflow, work, run, report } = fixture(path);
+  engine.submit(work.id, work.token!, {});
+  const observer = {
+    source: 'observer' as const,
+    workId: work.id,
+    attempt: work.attempt,
+    snapshot: {
+      sequence: 1,
+      final: true,
+      models: [{ ...model, inputTokens: 50 }],
+    },
+  };
+  engine.usage.report(observer);
+  report(1, [model], true);
+  const before = engine.usage.read({
+    runId: run.id,
+    groupBy: 'attempt',
+    includeReports: true,
+  });
+  expect(before.totals.tokens.inputTokens.value).toBe(50);
+  engine.stop();
+  store.close();
+  open.pop();
+  const reopened = new Store(path),
+    resumed = new Engine(reopened, process.cwd());
+  try {
+    expect(
+      resumed.usage.read({
+        runId: run.id,
+        groupBy: 'attempt',
+        includeReports: true,
+      }),
+    ).toEqual(before);
+    expect(resumed.usage.report(observer)).toMatchObject({ applied: false });
+    resumed.deleteWorkflow(workflow.id);
+    expect(reopened.list('usageAttempts')).toEqual([]);
+  } finally {
+    resumed.stop();
+    reopened.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

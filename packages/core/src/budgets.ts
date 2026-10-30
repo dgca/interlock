@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   summarizeUsage,
   summarizeUsageMetric,
+  selectedUsageReport,
   type UsageAttempt,
   type UsageMetric,
 } from './usage.js';
@@ -80,7 +81,7 @@ export function evaluateBudget(policy: BudgetPolicy, attempts: UsageAttempt[]) {
   const totals = summarizeUsage(attempts);
   const zero: UsageMetric = { value: 0, coverage: 'complete', overflow: false };
   const models = attempts.flatMap(
-    (attempt) => attempt.snapshot?.models ?? [undefined],
+    (attempt) => selectedUsageReport(attempt)?.snapshot.models ?? [undefined],
   );
   const cost = policy.limits.cost;
   const metrics: {
@@ -116,7 +117,9 @@ export function evaluateBudget(policy: BudgetPolicy, attempts: UsageAttempt[]) {
                 ? model.cost.amountMicros
                 : undefined,
             ),
-            attempts.every((attempt) => attempt.snapshot?.final),
+            attempts.every(
+              (attempt) => selectedUsageReport(attempt)?.snapshot.final,
+            ),
           )
         : zero,
     });

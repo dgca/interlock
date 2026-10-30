@@ -161,3 +161,45 @@ it('separates requested tiers, declared selections and usage-reported models', a
     'Tier: fast; provider: declared-provider; model: declared-model',
   );
 });
+
+it('shows the selected observer source and measurements in claim attribution', async () => {
+  const work = engine.claim(engine.available(id)[0].id, {
+    workerId: 'worker',
+    freshContext: false,
+    tools: [],
+    skills: [],
+  });
+  engine.usage.report({
+    workId: work.id,
+    attempt: work.attempt,
+    token: work.token!,
+    snapshot: {
+      sequence: 1,
+      final: true,
+      models: [{ provider: 'test', model: 'executor-model', inputTokens: 100 }],
+    },
+  });
+  engine.submit(work.id, work.token!, {});
+  engine.usage.report({
+    source: 'observer',
+    workId: work.id,
+    attempt: work.attempt,
+    snapshot: {
+      sequence: 1,
+      final: true,
+      models: [{ provider: 'test', model: 'observer-model', inputTokens: 200 }],
+    },
+  });
+  await render();
+  await act(async () => {
+    container.querySelector('summary')!.click();
+    const select = container.querySelector('select')!;
+    select.value = 'attempt';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(container.textContent).toContain('Input tokens: 200');
+  const row = container.querySelector('tbody')!.textContent;
+  expect(row).toContain('Observer');
+  expect(row).toContain('observer-model');
+  expect(row).not.toContain('executor-model');
+});

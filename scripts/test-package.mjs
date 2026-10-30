@@ -394,6 +394,46 @@ try {
   });
   assert.equal(submitted.runStatus, 'completed');
   assert.equal(submitted.nextCall.tool, 'get_run_result');
+  const observerReport = {
+    source: 'observer',
+    workId: work.id,
+    attempt: claim.attempt,
+    snapshot: {
+      sequence: 1,
+      final: true,
+      models: [
+        {
+          provider: 'smoke',
+          model: 'measured',
+          inputTokens: 100,
+          outputTokens: 20,
+        },
+      ],
+    },
+  };
+  const usageOptions = {
+    cwd: workdir,
+    env: { ...env, INTERLOCK_URL: url },
+    encoding: 'utf8',
+  };
+  const usageAck = JSON.parse(
+    execFileSync(
+      bin,
+      ['report-usage', JSON.stringify(observerReport)],
+      usageOptions,
+    ),
+  );
+  assert.equal(usageAck.applied, true);
+  assert.equal(usageAck.source, 'observer');
+  const usage = JSON.parse(
+    execFileSync(
+      bin,
+      ['usage', agentRun.runId, '{"groupBy":"attempt"}'],
+      usageOptions,
+    ),
+  );
+  assert.equal(usage.totals.tokens.inputTokens.value, 100);
+  assert.equal(usage.groups[0].source, 'observer');
   const finalResult = await call(
     submitted.nextCall.tool,
     submitted.nextCall.arguments,

@@ -59,6 +59,150 @@ function report(
     },
   });
 }
+
+it('uses the selected observer report for token and cost gates, refreshing discovery and continuation', () => {
+  const e = setup(),
+    id = publish(e);
+  const run = e.start(id, {}, undefined, {
+    scope: 'run',
+    unknownUsage: 'block',
+    limits: {
+      claims: { max: 3 },
+      inputTokens: { max: 200 },
+      cost: { currency: 'USD', threshold: { max: 200 } },
+    },
+  }).run;
+  const work = e.claim(e.available(run.id)[0].id, worker);
+  e.usage.report({
+    workId: work.id,
+    attempt: work.attempt,
+    token: work.token!,
+    snapshot: {
+      sequence: 1,
+      final: true,
+      models: [
+        {
+          provider: 'test',
+          model: 'test',
+          inputTokens: 300,
+          cost: {
+            amountMicros: 300,
+            currency: 'USD',
+            source: 'executor measurement',
+          },
+        },
+      ],
+    },
+  });
+  e.reportFailure(work.id, work.token!, 'retry');
+  expect(e.available(run.id)).toHaveLength(0);
+  const blocked = e.continuation.briefing({ id: run.id, limit: 20 });
+  const observe = (
+    sequence: number,
+    tokens: number,
+    cost: number,
+    final = true,
+  ) =>
+    e.usage.report({
+      source: 'observer',
+      workId: work.id,
+      attempt: work.attempt,
+      snapshot: {
+        sequence,
+        final,
+        models: [
+          {
+            provider: 'test',
+            model: 'test',
+            inputTokens: tokens,
+            cost: {
+              amountMicros: cost,
+              currency: 'USD',
+              source: 'runtime log',
+            },
+          },
+        ],
+      },
+    });
+  // The selected observer snapshot may be lower than a separate executor report.
+  observe(1, 50, 60, false);
+  expect(e.available(run.id)).toHaveLength(0);
+  expect(e.budgets.read(run.id).governing[0].checks).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        metric: 'inputTokens',
+        value: 50,
+        reasons: ['usage_incomplete'],
+      }),
+      expect.objectContaining({
+        metric: 'cost',
+        value: 60,
+        reasons: ['usage_incomplete'],
+      }),
+    ]),
+  );
+  observe(2, 50, 60);
+  expect(e.available(run.id)).toHaveLength(1);
+  expect(e.continuation.briefing({ id: run.id, limit: 20 }).cursor).not.toEqual(
+    blocked.cursor,
+  );
+  expect(e.budgets.read(run.id).governing[0]).toMatchObject({
+    state: 'ready',
+    attempts: 1,
+    checks: [
+      { metric: 'claims', value: 1 },
+      { metric: 'inputTokens', value: 50 },
+      { metric: 'cost', value: 60 },
+    ],
+  });
+});
+
+it('blocks further claims when a late observer report reaches token or cost thresholds', () => {
+  const e = setup(),
+    id = publish(e),
+    run = e.start(id, {}).run;
+  const work = e.claim(e.available(run.id)[0].id, worker);
+  e.reportFailure(work.id, work.token!, 'retry');
+  e.budgets.set({
+    runId: run.id,
+    expectedRevision: 0,
+    budget: {
+      scope: 'run',
+      unknownUsage: 'allow',
+      limits: {
+        inputTokens: { max: 100 },
+        cost: { currency: 'USD', threshold: { max: 100 } },
+      },
+    },
+  });
+  expect(e.available(run.id)).toHaveLength(1);
+  e.usage.report({
+    source: 'observer',
+    workId: work.id,
+    attempt: work.attempt,
+    snapshot: {
+      sequence: 1,
+      final: true,
+      models: [
+        {
+          provider: 'test',
+          model: 'test',
+          inputTokens: 100,
+          cost: { amountMicros: 100, currency: 'USD', source: 'runtime log' },
+        },
+      ],
+    },
+  });
+  expect(e.available(run.id)).toHaveLength(0);
+  expect(() => e.claim(work.id, worker)).toThrow('Budget blocked');
+  expect(e.budgets.read(run.id).governing[0]).toMatchObject({
+    state: 'blocked',
+    checks: [
+      { metric: 'inputTokens', value: 100, reasons: ['limit_reached'] },
+      { metric: 'cost', value: 100, reasons: ['limit_reached'] },
+    ],
+  });
+});
 afterEach(() => {
   for (const engine of engines.splice(0)) {
     engine.stop();

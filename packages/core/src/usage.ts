@@ -64,21 +64,56 @@ export const reportUsageSchema = z
   .object({
     workId: z.string().min(1),
     attempt: positive,
-    token: z.string().min(1).max(500),
+    source: z
+      .enum(['executor', 'observer'])
+      .default('executor')
+      .describe(
+        'Executor uses its claim token; observer requires a retained ended attempt and no token.',
+      ),
+    token: z
+      .string()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe('Required for executor reports; omit for observer reports.'),
     snapshot: usageSnapshotSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.source === 'executor' && value.token === undefined)
+      context.addIssue({
+        code: 'custom',
+        path: ['token'],
+        message: 'Executor usage requires the claim token',
+      });
+    if (value.source === 'observer' && value.token !== undefined)
+      context.addIssue({
+        code: 'custom',
+        path: ['token'],
+        message: 'Observer usage must omit the claim token',
+      });
+  });
 export const usageQuerySchema = z
   .object({
     runId: z.string().min(1),
     includeDescendants: z.boolean().default(false),
     groupBy: z.enum(['run', 'node', 'worker', 'attempt']).default('node'),
+    includeReports: z
+      .boolean()
+      .default(false)
+      .describe(
+        'With groupBy attempt, include both source reports for inspection. Totals still select observer over executor, without adding them.',
+      ),
     limit: z.number().int().min(1).max(100).default(20),
     offset: z.number().int().min(0).max(1_000_000).default(0),
   })
   .strict();
 export type ModelUsage = z.infer<typeof modelUsageSchema>;
 export type UsageSnapshot = z.infer<typeof usageSnapshotSchema>;
+export interface UsageReport {
+  snapshot: UsageSnapshot;
+  reportedAt: string;
+}
 export type UsageReportInput = z.input<typeof reportUsageSchema>;
 export type UsageQuery = z.input<typeof usageQuerySchema>;
 export type UsageOutcome =
@@ -107,6 +142,19 @@ export interface UsageAttempt {
   endedAt?: string;
   reportedAt?: string;
   snapshot?: UsageSnapshot;
+  observerReport?: UsageReport;
+}
+/** Select one complete source snapshot per attempt for both totals and budgets. */
+export function selectedUsageReport(attempt: UsageAttempt) {
+  if (attempt.observerReport)
+    return { source: 'observer' as const, ...attempt.observerReport };
+  if (attempt.snapshot)
+    return {
+      source: 'executor' as const,
+      snapshot: attempt.snapshot,
+      reportedAt: attempt.reportedAt ?? null,
+    };
+  return null;
 }
 export type UsageCoverage = 'unknown' | 'partial' | 'complete';
 export interface UsageMetric {
@@ -135,11 +183,12 @@ export function summarizeUsageMetric(
   };
 }
 export function summarizeUsage(attempts: UsageAttempt[]) {
-  const models = attempts.flatMap(
-    (attempt) => attempt.snapshot?.models ?? [undefined],
+  const reports = attempts.map(selectedUsageReport);
+  const models = reports.flatMap(
+    (report) => report?.snapshot.models ?? [undefined],
   );
   const final =
-    attempts.length > 0 && attempts.every((attempt) => attempt.snapshot?.final);
+    attempts.length > 0 && reports.every((report) => report?.snapshot.final);
   const outcomes: Record<UsageOutcome, number> = {
     claimed: 0,
     held: 0,
@@ -177,8 +226,8 @@ export function summarizeUsage(attempts: UsageAttempt[]) {
   const reportedCosts = models.filter((model) => model?.cost).length;
   return {
     attempts: attempts.length,
-    reportedAttempts: attempts.filter((attempt) => attempt.snapshot).length,
-    finalAttempts: attempts.filter((attempt) => attempt.snapshot?.final).length,
+    reportedAttempts: reports.filter(Boolean).length,
+    finalAttempts: reports.filter((report) => report?.snapshot.final).length,
     outcomes,
     tokens,
     costs,
