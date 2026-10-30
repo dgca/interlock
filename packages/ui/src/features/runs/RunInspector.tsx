@@ -128,6 +128,33 @@ export function RunInspector({
         </div>
         <Badge status={progress.runStates[run.id] ?? run.status} />
         <div className="actions">
+          {run.chain?.previousRunId && (
+            <Button onClick={() => onOpen(run.chain!.previousRunId!)}>
+              Previous run
+            </Button>
+          )}
+          {run.chain?.nextRunId && (
+            <Button onClick={() => onOpen(run.chain!.nextRunId!)}>
+              Next run
+            </Button>
+          )}
+          {data.chain &&
+            !data.chain.cancelledAt &&
+            ['running', 'waiting', 'failed'].includes(
+              data.chain.latestStatus,
+            ) && (
+              <Button
+                onClick={() =>
+                  void act(async () => {
+                    await api.runs.cancel.mutate({ id, scope: 'chain' });
+                    refresh();
+                  }, 'Run chain stopped.')
+                }
+              >
+                <Square />
+                Stop chain
+              </Button>
+            )}
           {data.counterpartRunId && (
             <Button onClick={() => onOpen(data.counterpartRunId!)}>
               {run.comparison?.side === 'baseline'
@@ -176,9 +203,16 @@ export function RunInspector({
         </div>
       </header>
       <div className={styles.liveSummary} role="status" aria-live="polite">
-        <strong>{progress.title}</strong>
+        <strong>
+          {run.chain?.nextRunId ? 'Continued as new' : progress.title}
+        </strong>
+        {run.chain && data.chain && (
+          <span>
+            Chain run {run.chain.index} · {data.chain.maxRuns} run limit
+          </span>
+        )}
         {progress.detail && <span>{progress.detail}</span>}
-        {run.status === 'completed' && (
+        {run.status === 'completed' && !run.chain?.nextRunId && (
           <a href="#workflow-result">View result</a>
         )}
       </div>
@@ -314,7 +348,7 @@ export function RunInspector({
                 </div>
               ))}
             </details>
-            {run.status === 'completed' && (
+            {run.status === 'completed' && !run.chain?.nextRunId && (
               <section id="workflow-result" className={styles.result}>
                 <h3>Workflow result</h3>
                 {typeof run.output === 'string' ? (

@@ -20,7 +20,7 @@ export const budgetPolicySchema = z
     scope: z
       .enum(['run', 'lifecycle', 'tree'])
       .describe(
-        'run only; lifecycle includes ordinary descendants; tree also includes detached descendants.',
+        'All scopes include continue-as-new chain members: run only those; lifecycle also ordinary descendants; tree also detached descendants.',
       ),
     unknownUsage: z
       .enum(['allow', 'block'])

@@ -97,6 +97,12 @@ export const usageQuerySchema = z
   .object({
     runId: z.string().min(1),
     includeDescendants: z.boolean().default(false),
+    includeChain: z
+      .boolean()
+      .default(false)
+      .describe(
+        'Include all runs in the requested run chain; includeDescendants then includes their children too.',
+      ),
     groupBy: z.enum(['run', 'node', 'worker', 'attempt']).default('node'),
     includeReports: z
       .boolean()

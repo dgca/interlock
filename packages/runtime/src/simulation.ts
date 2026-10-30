@@ -198,6 +198,10 @@ export class Simulations {
       throw new InterlockError('Published workflow version not found');
     const definition = version.definition;
     const unsupported = definition.nodes.flatMap((node) => {
+      if (node.kind === 'exit' && node.continueAsNew)
+        return [
+          `Node ${node.id}: continue as new is unsupported in simulation`,
+        ];
       if (
         ![
           'entry',

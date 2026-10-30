@@ -4,6 +4,7 @@ import {
 } from './contextContinuity.js';
 import { z } from 'zod';
 import { modelTierSchema } from './modelTiers.js';
+import { runChainLinkSchema } from './runChains.js';
 
 export const briefingQuerySchema = z.object({
   id: z
@@ -139,6 +140,7 @@ export const heldWorkSchema = z.object({
   truncated: z.boolean(),
 });
 export const mutationSummarySchema = z.object({
+  chain: runChainLinkSchema.optional(),
   ok: z.literal(true),
   runId: z
     .string()
@@ -153,6 +155,7 @@ export const mutationSummarySchema = z.object({
     truncated: z.boolean(),
   }),
   next: z.enum([
+    'continue_as_new',
     'claim_work',
     'adjust_budget',
     'inspect_hold',
@@ -228,6 +231,12 @@ export function withNextCall<T extends z.infer<typeof mutationSummarySchema>>(
   const id = summary.runId;
   let nextCall: z.infer<typeof nextCallSchema> = null;
   switch (summary.next) {
+    case 'continue_as_new':
+      nextCall = {
+        tool: 'get_run_briefing',
+        arguments: { id: summary.chain!.nextRunId! },
+      };
+      break;
     case 'inspect_result':
       nextCall = {
         tool:

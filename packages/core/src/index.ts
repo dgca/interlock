@@ -1,4 +1,6 @@
 export * from './simulation.js';
+export * from './runChains.js';
+import { continueAsNewSchema } from './runChains.js';
 import { z } from 'zod';
 export * from './usage.js';
 export * from './budgets.js';
@@ -132,7 +134,15 @@ const onFailureSchema = z
 
 export const nodeSchema = z.discriminatedUnion('kind', [
   z.object({ ...nodeBase, kind: z.literal('entry') }),
-  z.object({ ...nodeBase, kind: z.literal('exit') }),
+  z.object({
+    ...nodeBase,
+    kind: z.literal('exit'),
+    continueAsNew: continueAsNewSchema
+      .optional()
+      .describe(
+        'Standalone rollover using Exit input; same version and captured prompts. Chain budgets persist. No final output.',
+      ),
+  }),
   z.object({
     ...nodeBase,
     kind: z.literal('agent'),
@@ -286,6 +296,7 @@ export interface WorkflowVersion {
 export type RunStatus =
   'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
 export const runQuerySchema = z.object({
+  chainRootRunId: z.string().min(1).optional(),
   workflowId: z.string().optional(),
   status: z
     .enum(['running', 'waiting', 'completed', 'failed', 'cancelled'])
@@ -325,6 +336,7 @@ export interface PollCheckResult {
   error?: string;
 }
 export interface Run {
+  chain?: import('./runChains.js').RunChainLink;
   contextRevision?: number;
   budgetRevision?: number;
   comparison?: import('./testbench.js').ComparisonRunContext;
@@ -559,6 +571,8 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
         `${node.label}: saved prompt IDs must be unique`,
       );
   for (const node of d.nodes) {
+    if (node.kind === 'exit' && node.continueAsNew && node.batchId)
+      throw new InterlockError('Continue as new is unavailable inside a Batch');
     if (node.kind !== 'agent') continue;
     const problems = resultRuleProblems(
       node.resultRules,
@@ -569,6 +583,13 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       throw new InterlockError(`${node.label}: ${problems.join('; ')}`);
   }
   const ids = new Set(d.nodes.map((n) => n.id));
+  const chainLimits = new Set(
+    d.nodes.flatMap((n) =>
+      n.kind === 'exit' && n.continueAsNew ? [n.continueAsNew.maxRuns] : [],
+    ),
+  );
+  if (chainLimits.size > 1)
+    throw new InterlockError('Continuing Exits must use the same maxRuns');
   if (ids.size !== d.nodes.length)
     throw new InterlockError('Node IDs must be unique');
   if (new Set(d.edges.map((e) => e.id)).size !== d.edges.length)

@@ -2,7 +2,7 @@ import type { WorkflowNode } from '@interlock/core';
 
 export const nodeDescriptions: Record<WorkflowNode['kind'], string> = {
   entry: 'Starts the workflow with the input supplied for this run.',
-  exit: 'Finishes the workflow and returns the result.',
+  exit: 'Returns a final result or continues as a new standalone run with a checkpoint.',
   agent:
     'Pauses for an agent or person to complete an assignment and return a result.',
   script: 'Runs JavaScript or Bash to transform data or perform a task.',

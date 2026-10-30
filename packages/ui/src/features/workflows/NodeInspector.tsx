@@ -9,6 +9,7 @@ import {
   SegmentedControl,
   Radio,
   Stack,
+  NumberInput,
 } from '@mantine/core';
 import {
   nodeKindLabel,
@@ -636,6 +637,37 @@ export function NodeInspector({
             inputSource={hint.source}
           />
         )}
+        {node.kind === 'exit' && (
+          <>
+            <Switch
+              mb="md"
+              label="Continue as new"
+              checked={!!node.continueAsNew}
+              description="Start a standalone successor with this checkpoint, the same version and captured prompts. Budgets count the whole chain."
+              onChange={(e) =>
+                patch({
+                  continueAsNew: e.currentTarget.checked
+                    ? { maxRuns: 100 }
+                    : undefined,
+                })
+              }
+            />
+            {node.continueAsNew && (
+              <NumberInput
+                mb="md"
+                label="Maximum runs in chain"
+                min={2}
+                max={10000}
+                allowDecimal={false}
+                value={node.continueAsNew.maxRuns}
+                onChange={(value) => {
+                  if (typeof value === 'number')
+                    patch({ continueAsNew: { maxRuns: value } });
+                }}
+              />
+            )}
+          </>
+        )}
         {(node.kind === 'entry' || node.kind === 'exit') &&
         definition &&
         onBoundaryChange ? (
@@ -643,16 +675,29 @@ export function NodeInspector({
             <p className="hint">
               {node.kind === 'entry'
                 ? 'Entry passes the workflow input through unchanged. This contract is shared with Workflow settings.'
-                : 'Exit returns the workflow output unchanged. This contract is shared with Workflow settings.'}
+                : node.continueAsNew
+                  ? 'This checkpoint must match the workflow input contract. A continuing Exit does not produce a final workflow result.'
+                  : 'Exit returns the workflow output unchanged. This contract is shared with Workflow settings.'}
             </p>
             <ContractEditor
-              label="Input / Output"
+              label={
+                node.kind === 'exit' && node.continueAsNew
+                  ? 'Successor input'
+                  : 'Input / Output'
+              }
               value={
                 node.kind === 'entry'
                   ? definition.inputSchema
-                  : definition.outputSchema
+                  : node.continueAsNew
+                    ? definition.inputSchema
+                    : definition.outputSchema
               }
-              onChange={onBoundaryChange}
+              readOnly={node.kind === 'exit' && !!node.continueAsNew}
+              onChange={
+                node.kind === 'exit' && node.continueAsNew
+                  ? undefined
+                  : onBoundaryChange
+              }
             />
             {Object.keys(node.inputSchema).length > 0 && (
               <ContractEditor

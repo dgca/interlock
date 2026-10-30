@@ -17,6 +17,21 @@ function placedNode(id: string, x: number, y: number) {
   });
 }
 
+it('shows the successor input contract on continuing Exits', () => {
+  const d = batchDefinition();
+  d.inputSchema = { type: 'array' };
+  d.outputSchema = { type: 'string' };
+  d.nodes = d.nodes.map((node) =>
+    node.kind === 'exit'
+      ? nodeSchema.parse({ ...node, continueAsNew: { maxRuns: 10 } })
+      : node,
+  );
+  expect(
+    canvasGraph(d).nodes.find((node) => node.id === 'exit')?.data
+      .boundarySchema,
+  ).toEqual(d.inputSchema);
+});
+
 it('renders nested groups parent-first with relative positions and explicit End edges', () => {
   const d = nestedBatches(2);
   d.nodes.find((n) => n.id === 'work')!.position = { x: 140, y: 160 };
