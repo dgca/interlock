@@ -312,6 +312,35 @@ export class Store {
       .get(id) as { revision: number | null };
     return row.revision ?? 0;
   }
+  promptRevision(id: string, revision: number): SavedPrompt | undefined {
+    const record = this.get<SavedPrompt>(
+      'promptRevisions',
+      `${id}:${revision}`,
+    );
+    if (!record) return undefined;
+    const { name, description, content, createdAt, updatedAt } = record;
+    return { id, revision, name, description, content, createdAt, updatedAt };
+  }
+  promptHistory(id: string, offset: number, limit: number) {
+    const where =
+      "collection = 'promptRevisions' AND json_extract(value, '$.promptId') = ?";
+    const total = (
+      this.db
+        .prepare(`SELECT COUNT(*) AS total FROM documents WHERE ${where}`)
+        .get(id) as { total: number }
+    ).total;
+    const items = this.db
+      .prepare(
+        `SELECT json_extract(value, '$.revision') AS revision, json_extract(value, '$.name') AS name FROM documents WHERE ${where} ORDER BY json_extract(value, '$.revision') DESC LIMIT ? OFFSET ?`,
+      )
+      .all(id, limit, offset) as { revision: number; name: string }[];
+    return {
+      items,
+      total,
+      offset,
+      nextOffset: offset + items.length < total ? offset + items.length : null,
+    };
+  }
   savePrompt(prompt: SavedPrompt) {
     const key = `${prompt.id}:${prompt.revision}`;
     const previous = this.get<SavedPrompt>('promptRevisions', key);

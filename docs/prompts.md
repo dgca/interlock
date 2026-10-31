@@ -23,7 +23,7 @@ Editing a saved prompt changes the guidance used by future runs of every workflo
 
 Each workflow run captures the latest content when it starts. Later Agent steps, loops, Batch items, claim recovery, retries, and server restart keep that content. A Workflow node starts a separate run that captures the latest instructions at its own startup. A parent and child can use different revisions if a prompt changes between their start times. Detached workflows follow the same rule.
 
-Open **Captured prompts** in run inspection to see the actual content and revisions. Agent assignments show the composed instructions and their saved prompt revisions. Prompt revisions are retained internally; history restoration UI and prompt pinning are outside the current scope.
+Open **Captured prompts** in run inspection to see the actual content and revisions. Agent assignments show the composed instructions and their saved prompt revisions. MCP `get_prompt` supports bounded revision history and exact revision reads. History restoration UI and prompt pinning in ordinary workflow definitions are outside the current scope.
 
 ## Remove an unused prompt
 
@@ -55,4 +55,4 @@ An Agent definition can include:
 
 Use a real ID returned by the prompt library. Missing IDs block publication and startup, while incomplete drafts remain saveable. Full work discovery and claims include the composed assignment `prompt` and captured `savedPrompts`; `get_run` includes `promptSnapshots`. Summary discovery and run briefings omit instruction bodies. Execute the assignment's captured guidance instead of reloading newer content.
 
-Workflow comparisons capture current saved prompts once when the experiment starts. Matching prompt IDs use that capture across both sides, queued samples, Batch items and invoked workflows. This differs from ordinary runs capturing at each workflow invocation and prevents prompt edits during a comparison from changing later samples. Reports disclose captured revisions; the capture does not reconstruct publication-time prompt history.
+Workflow comparisons capture current saved prompts once by default. Optional per-side complete revision manifests select retained historical content instead. Queued samples, Batch items and invoked workflows use their side's retained capture. This differs from ordinary runs capturing at each workflow invocation. Reports identify both sides and their differences without instruction bodies. See [exact comparison configurations](workflow-testbench.md#select-exact-side-configurations).

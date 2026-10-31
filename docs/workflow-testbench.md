@@ -51,11 +51,55 @@ Use `read_test_suites` with `request: {"action":"list"}` for compact discovery, 
 
 ## Preview and start a comparison
 
-Call `preview_workflow_comparison` with `suiteId`, `suiteRevision`, `baselineVersion` and `candidateVersion`. Optional `repetitions` defaults to 1 and `concurrency` to 2. Preview is read-only. It lists exact root-run count, case input/assertion hashes, transitive version pins/hashes, current saved prompt revisions/hashes, and blockers. Five cases with one repetition produce ten roots, plus whatever children their definitions dispatch.
+Call `preview_workflow_comparison` with `suiteId`, `suiteRevision`, `baselineVersion` and `candidateVersion`. Optional `repetitions` defaults to 1 and `concurrency` to 2. Preview is read-only. It lists exact root-run count, case input/assertion hashes, transitive version pins/hashes, selected saved prompt revisions/hashes, per-side identities/differences, and blockers. Five cases with one repetition produce ten roots, plus whatever children their definitions dispatch.
 
-If `canStart` is true, call `start_workflow_comparison` with the same selection, its `confirmation`, and a caller-generated `requestId`. Start rechecks the plan transactionally. Changed suite/prompt revisions, pins or eligibility require another preview. Repeat identical arguments and request ID after a lost response to recover the same comparison. Conflicting reuse rejects without starting another experiment.
+If `canStart` is true, call `start_workflow_comparison` with the same selection, its `confirmation`, and a caller-generated `requestId`. Start rechecks the plan transactionally. Changes to selected prompt content, suite revisions, pins or eligibility require another preview. Current library edits leave explicitly selected retained revisions unchanged. Repeat identical arguments and request ID after a lost response to recover the same comparison. Conflicting reuse rejects without starting another experiment.
 
-Use `list_work`, `claim_work`, `submit_result` and existing renewal/failure tools to perform Agent assignments. The testbench does not launch an executor. Exact published versions and current prompt captures persist across queued samples, delayed Batch items, child invocations and restart. Both sides use the same captured content for matching saved prompt IDs. This capture describes the prompt library at comparison start; it does not recover the library as it existed when an older definition was published. Ordinary runs retain their existing capture behavior.
+Use `list_work`, `claim_work`, `submit_result` and existing renewal/failure tools to perform Agent assignments. The testbench does not launch an executor. Exact published versions and selected prompt captures persist across queued samples, delayed Batch items, child invocations and restart. By default, both sides capture current content for matching saved prompt IDs. This does not recover the library as it existed when an older definition was published. Ordinary runs retain their existing capture behavior.
+
+## Select exact side configurations
+
+To compare a prompt change, include `configurations` in preview and start. Each side can supply a complete `promptRevisions` manifest covering every saved prompt referenced by its root and transitive child definitions. Omit the manifest to use current content for that side. An explicit empty array is valid only when the side uses no saved prompts. Extra, duplicate, missing or unavailable revisions reject before work starts.
+
+```json
+{
+  "suiteId": "SUITE_ID",
+  "suiteRevision": 1,
+  "baselineVersion": 1,
+  "candidateVersion": 2,
+  "configurations": {
+    "baseline": {
+      "promptRevisions": [{ "id": "PROMPT_ID", "revision": 1 }]
+    },
+    "candidate": {
+      "promptRevisions": [{ "id": "PROMPT_ID", "revision": 2 }],
+      "executor": { "provider": "example", "model": "example-model" },
+      "environment": {
+        "identity": "trial-manifest",
+        "receipt": "local:manifest-reference"
+      }
+    }
+  }
+}
+```
+
+Use actual IDs from the suite and prompt library. `get_prompt` with `id` and `history:{"offset":0,"limit":10}` lists retained revisions newest first, without instruction bodies. Follow `history.nextOffset` until null. Read one with `get_prompt` and `revision`; `currentRevision` identifies the editable current revision, or null for a deleted prompt. Retained history can have gaps, including imports that begin at a later revision. Interlock never fills a missing historical revision with current content. Current content can supply its own revision when a legacy library lacks that history record.
+
+Preview and report `configurations.baseline` and `.candidate` identify each side by SHA-256, transitive definition pins, selected prompt revisions/content hashes, and optional executor/environment metadata. `differences` names changed prompt IDs and flags different pins, executor requests or environment references. The top-level `prompts` list is the union of selected revisions, so the same ID can appear twice; use the side manifests to associate them. Preview confirmation includes exact selections and identities. Changing a selection, dependency or metadata requires another preview. Editing the current library does not invalidate an explicitly selected retained revision. Start responses and list items include compact `configurationIds`.
+
+The comparison retains the selected content once per distinct revision, independently of later library edits or lost revision records. Both sides together allow 64 distinct prompt IDs and at most 128 revisions totaling 1 MiB. Each side manifest has at most 64 entries. Legacy comparisons retain their shared capture and return `configurations:null` with their existing prompt metadata. No storage migration is required.
+
+Retained prompt revisions survive normal prompt deletion. Comparisons do not restore deleted prompts, change ordinary startup rules, or alter portable workflows. Normal workflow deletion removes its comparison records; workflow exports exclude experiments, revision history, and environment references. Deleting a comparison's retained history removes that evidence rather than reconstructing it from current state.
+
+### Executor and environment attribution
+
+Optional `executor` fields are `profile`, `tier`, `provider`, and `model`, with at least one supplied. Tier uses `max`, `balanced`, or `fast`; other values are nonblank labels up to 200 characters. These are requested experiment conditions, not a provider adapter, claim constraint, or model switch. The external executor must choose how to honor them. Normal Agent context and capability rules still apply.
+
+Reports keep `executorConditions.declared` separate from `.reported`. The first compares the request with captured claim `modelSelection`; the second compares it with model identities in selected usage receipts. A known difference produces `mismatch`; missing requested fields or non-final reporting retain `unknown` coverage. Usage cannot verify a tier or profile. Claims do not currently declare profile identity, so requested profiles remain unknown. A declaration alone cannot fill missing usage. Trials with no measured Agent attempts cannot establish a requested model match. These states describe attribution, not independent proof of provider execution.
+
+Per-side metrics count matched, mismatched, unknown, pending, and not-requested samples across the whole comparison. Requested unknown or mismatched conditions add availability reasons. `metricsDetail:"full"` exposes at most ten distinct declaration and usage-model identities per sample, with totals and truncation flags. For further inspection, use `get_run_usage` with the sample run ID, `includeDescendants:true`, and `groupBy:"attempt"`. Late selected usage reports update attribution for the original frozen cohort; retries do not change it. Before observation, attribution stays pending. Without an executor request it stays `not_requested`.
+
+Optional `environment` has a nonblank `identity` up to 200 characters and optional `receipt` reference up to 512. Use non-secret labels or references to an external harness manifest. It is retained and fingerprinted, but does not prepare a workspace, verify a receipt or prove isolation. Reports mark this gap as `environment_unverified`. Different trial environments can be described by the referenced manifest. Never put credentials, logs or workspace contents in these fields.
 
 ## Inspect results and record quality
 
@@ -119,7 +163,7 @@ Shared server API operations are `testbench.suites`, `suite`, `createSuite`, `up
 | `read_workflow_comparisons`   | `list`, `report`, `case`   |
 | `update_workflow_comparison`  | `cancel`, `record_quality` |
 
-The four grouped tools require a `request` object with one explicit `action`. Each action accepts only its own fields. Read actions cannot save or execute work. Preview and start retain their separate top-level parameters. These tools expose the shared operations above without changing their behavior. No testbench CLI commands or dedicated dashboard are included.
+The four grouped tools require a `request` object with one explicit `action`. Each action accepts only its own fields. Read actions cannot save or execute work. Preview and start retain their separate top-level parameters. These tools expose the shared operations above without changing their behavior. Comparison preview, start and report remain MCP/shared-API operations; no comparison CLI commands or dedicated dashboard are included.
 
 Output assertions use `kind: "output"`, optional root-scope `nodeId`, positive `visit` (default 1), `path` (default empty), and `operator`. `exists` has no expected value. `equals` requires a JSON `expected` value and ignores object key order. `gte` and `lte` require numeric expected and actual values. Paths use Interlock's dot-separated object keys and array indices; an empty path selects the entire value. Route assertions require `kind: "route"`, `nodeId`, positive `visit` and expected `port`.
 
@@ -136,7 +180,7 @@ Only root-scope checkpoints are supported. Preview rejects unknown nodes, Batch-
 | Root runs per comparison  | At most 100                                                                                               |
 | Concurrency               | 1–10 trees per comparison, default 2; ten globally                                                        |
 | Active comparisons        | At most four, including cancelled comparisons with active descendants                                     |
-| Capture                   | At most 64 transitive version pins and 64 prompts totaling 1 MiB                                          |
+| Capture                   | At most 64 transitive version pins, 64 prompt IDs and 128 selected revisions totaling 1 MiB               |
 | Preview blockers          | At most 50 details, with exact `blockerCount`                                                             |
 | Discovery                 | Limit 1–100, default 20, with exact total                                                                 |
 | Report samples            | Limit 1–25, default 10; zero-based `offset`                                                               |

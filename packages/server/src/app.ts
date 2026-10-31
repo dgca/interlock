@@ -80,6 +80,7 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
         '/trpc/workflows.validate',
         '/trpc/work.preflight',
         '/trpc/work.size',
+        '/trpc/testbench.preview',
       ].includes(c.req.path),
       createContext: () => ({ engine, connection, signal: c.req.raw.signal }),
     }),

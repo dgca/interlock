@@ -21,6 +21,7 @@ import {
   waitQuerySchema,
   resultQuerySchema,
   promptContentSchema,
+  promptReadSchema,
   versionSelectionSchema,
   versionDeletionSchema,
   ownershipPreviewSchema,
@@ -148,10 +149,9 @@ export const appRouter = t.router({
   }),
   prompts: t.router({
     list: p.query(({ ctx }) => ctx.engine.prompts.list()),
-    get: p.input(id).query(({ ctx, input }) => ({
-      ...ctx.engine.prompts.get(input.id),
-      usage: ctx.engine.prompts.usage(input.id),
-    })),
+    get: p
+      .input(promptReadSchema)
+      .query(({ ctx, input }) => ctx.engine.prompts.read(input)),
     create: p
       .input(promptContentSchema)
       .mutation(({ ctx, input }) => ctx.engine.prompts.create(input)),

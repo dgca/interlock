@@ -215,7 +215,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
       .array(z.string().min(1))
       .optional()
       .describe(
-        'Ordered saved prompt IDs. Latest content is captured at workflow run startup; Batch items inherit capture, invoked workflows capture independently.',
+        'Ordered saved prompt IDs. Latest content is captured at ordinary workflow startup; Batch items inherit, invoked workflows capture independently. Comparisons use selected side captures.',
       ),
     context: contextPolicySchema.default({}),
     maxAttempts: z.number().int().min(1).max(10).default(2),
@@ -904,6 +904,7 @@ export {
 export {
   promptContentSchema,
   savedPromptSchema,
+  promptReadSchema,
   promptIds,
   snapshotPrompt,
   composePrompt,
@@ -920,6 +921,10 @@ export {
   createSuiteSchema,
   updateSuiteSchema,
   comparisonPreviewSchema,
+  comparisonSideSchema,
+  comparisonExecutorSchema,
+  type ComparisonSideSelection,
+  type ComparisonConfiguration,
   comparisonStartSchema,
   testbenchListSchema,
   comparisonReportSchema,

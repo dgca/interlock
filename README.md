@@ -106,7 +106,7 @@ The **Tidy** icon sits below **Fit View** in the canvas controls and runs your l
 
 ### Compare workflow behavior
 
-Use the MCP [workflow testbench](docs/workflow-testbench.md) to save representative cases, preview and execute two published versions, and inspect execution, assertion and quality results alongside timing, reported cost and evaluation coverage. Existing Runs views label each comparison, case, baseline/candidate side and repetition, with counterpart navigation. These are real runs using connected executors and normal Script/Fetch actions. Comparison configuration stays in MCP; publication remains separate.
+Use the MCP [workflow testbench](docs/workflow-testbench.md) to save representative cases, preview and execute two published versions, and inspect execution, assertion and quality results alongside timing, reported cost and evaluation coverage. Existing Runs views label each comparison, case, baseline/candidate side and repetition, with counterpart navigation. These are real runs using connected executors and normal Script/Fetch actions. Comparison configuration stays in MCP, including optional exact per-side prompt revisions and requested executor/environment references. Reports distinguish those requests from declared and usage-reported models. Publication remains separate.
 
 Import the [evaluation starter](docs/workflow-evaluation.md) to grade retained comparison outputs with a fixed rubric, fresh artifact reviewers or frozen checks, and resumable judgment receipts. Its usage stays separate from the original trials.
 

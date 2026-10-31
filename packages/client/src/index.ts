@@ -11,9 +11,12 @@ export function createClient(url = 'http://127.0.0.1:4310') {
       splitLink({
         // Candidate definitions can exceed the HTTP request-line limit.
         condition: (operation) =>
-          ['workflows.validate', 'work.preflight', 'work.size'].includes(
-            operation.path,
-          ),
+          [
+            'workflows.validate',
+            'work.preflight',
+            'work.size',
+            'testbench.preview',
+          ].includes(operation.path),
         true: httpLink({
           url: `${url}/trpc`,
           methodOverride: 'POST',

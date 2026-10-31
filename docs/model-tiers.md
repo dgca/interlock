@@ -47,4 +47,4 @@ interlock usage RUN_ID '{"groupBy":"attempt","limit":20,"offset":0}'
 
 Usage `snapshot.models` contains separately reported model identities and measured figures. It can contain several models and differ from the claim declaration. A declared model with no usage report still has unknown measured usage. The run inspector offers **Claim attempt** grouping under **Usage and model attribution** for these values.
 
-Declarations and usage survive workflow-version cleanup but are excluded from portable workflow bundles. Deleting run history removes them. Reviewer independence, executor model mappings, automatic model switching, and comparisons between mappings are outside this feature.
+Declarations and usage survive workflow-version cleanup but are excluded from portable workflow bundles. Deleting run history removes them. [Workflow comparisons](workflow-testbench.md#executor-and-environment-attribution) can record requested model/profile conditions and report attribution gaps. They do not select a model or verify a profile. Reviewer independence, executor model mappings, and automatic model switching are outside this feature.
