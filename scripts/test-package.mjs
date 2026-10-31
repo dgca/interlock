@@ -36,6 +36,7 @@ try {
   );
   assert(packed.files.some((file) => file.path === 'dist/cli.js'));
   assert(packed.files.some((file) => file.path === 'workflows/sdlc.json'));
+  assert(packed.files.some((file) => file.path === 'workflows/evaluate.json'));
   assert(
     !packed.files.some(
       (file) =>
@@ -240,6 +241,29 @@ try {
     }),
   );
   assert.equal(publishedStarter.latestVersion, 1);
+  const evaluatorFile = join(
+    prefix,
+    'lib/node_modules/@type_of/interlock/workflows/evaluate.json',
+  );
+  const evaluator = JSON.parse(
+    execFileSync(bin, ['import', `@${evaluatorFile}`], {
+      cwd: workdir,
+      env: { ...env, INTERLOCK_URL: url },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }),
+  );
+  const publishedEvaluator = JSON.parse(
+    execFileSync(bin, ['publish', evaluator.id], {
+      cwd: workdir,
+      env: { ...env, INTERLOCK_URL: url },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }),
+  );
+  assert.equal(publishedEvaluator.latestVersion, 1);
+  assert.equal(publishedEvaluator.name, 'Evaluate workflow comparison');
+
   const workflow = await call('create_workflow', {
     name: 'Packed install smoke',
     layout: 'tidy',

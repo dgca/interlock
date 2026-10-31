@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { fingerprint } from './versionIdentity.js';
 import {
   InterlockError,
   readPath,
@@ -426,6 +427,7 @@ export class Continuation {
       path: parsed.path,
       bytes,
       value,
+      ...(parsed.includeHash ? { sha256: fingerprint(value) } : {}),
     };
   }
 }
