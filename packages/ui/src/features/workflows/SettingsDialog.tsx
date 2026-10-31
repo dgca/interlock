@@ -10,8 +10,6 @@ import { ArrowLeft, Download } from 'lucide-react';
 import {
   nodeSchema,
   outgoingPorts,
-  hasFailureRoute,
-  hasTimeoutRoute,
   type Workflow,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -26,7 +24,7 @@ import {
 } from '../../components/ContractEditor/ContractEditor';
 import { workflowTargets } from './workflowTargets';
 import { NodeInspector } from './NodeInspector';
-import { nodeDescriptions } from './nodeDescriptions';
+import type { NodeSectionName } from './NodeSettingsSections';
 import { api, download } from '../../lib/api';
 import { newNodePosition, separateNodes } from '@interlock/core/layout';
 import styles from './SettingsDialog.module.css';
@@ -89,6 +87,7 @@ export function SettingsDialog({
   );
   const [contract, setContract] = useState<ContractPage>();
   const [error, setError] = useState('');
+  const [nodeSection, setNodeSection] = useState<NodeSectionName>('work');
   const [childName, setChildName] = useState('');
   const [targetMode, setTargetMode] = useState('existing');
   const [creatingChild, setCreatingChild] = useState(false);
@@ -103,19 +102,26 @@ export function SettingsDialog({
           id: newNodeId,
           kind,
           batchId: parentBatchId,
-          label: kind === 'batch' ? 'Batch' : `New ${kind}`,
+          label:
+            kind === 'switch'
+              ? 'New branch'
+              : kind === 'batch'
+                ? 'Batch'
+                : `New ${kind}`,
           prompt: 'Describe the assignment.',
           url: '',
           language: 'javascript',
           command: 'return input;',
           path: '',
           equals: true,
-          cases: [{ port: 'case-1', equals: '' }],
+          cases: [{ port: 'true', equals: true }],
+          default: kind === 'switch' ? 'false' : undefined,
           workflowId: reference?.id ?? 'choose-workflow',
           version: reference?.latestVersion ?? null,
         }),
     );
     setError('');
+    setNodeSection('work');
   };
   const form = useRef<HTMLDivElement>(null);
   const patchDefinition = (patch: Partial<WorkflowDefinition>) =>
@@ -125,7 +131,18 @@ export function SettingsDialog({
     if (creating && !nodeDraft) return;
     const invalid = form.current?.querySelector<HTMLInputElement>(':invalid');
     if (invalid) {
-      invalid.reportValidity();
+      const section = invalid
+        .closest('[data-node-section]')
+        ?.getAttribute('data-node-section');
+      if (section) setNodeSection(section as NodeSectionName);
+      for (
+        let ancestor = invalid.parentElement;
+        ancestor;
+        ancestor = ancestor.parentElement
+      )
+        if (ancestor.tagName === 'DETAILS')
+          (ancestor as HTMLDetailsElement).open = true;
+      setTimeout(() => invalid.reportValidity(), 0);
       return;
     }
     try {
@@ -163,19 +180,10 @@ export function SettingsDialog({
                 ]
               : settings.definition.edges.filter(
                   (e) =>
-                    !(
-                      e.source === parsed.id &&
-                      ((e.port === 'timeout' &&
-                        (parsed.kind === 'agent' || parsed.kind === 'wait') &&
-                        !hasTimeoutRoute(parsed)) ||
-                        (e.port === 'failed' &&
-                          (parsed.kind === 'script' ||
-                            parsed.kind === 'fetch' ||
-                            parsed.kind === 'workflow') &&
-                          !hasFailureRoute(parsed)) ||
-                        (parsed.kind === 'switch' &&
-                          !outgoingPorts(parsed).includes(e.port)))
-                    ),
+                    e.source !== parsed.id ||
+                    !node ||
+                    !outgoingPorts(node).includes(e.port) ||
+                    outgoingPorts(parsed).includes(e.port),
                 ),
           nodes: creating
             ? [...settings.definition.nodes, parsed]
@@ -249,7 +257,6 @@ export function SettingsDialog({
                 <NativeSelect
                   mb="md"
                   label="Node type"
-                  description={nodeDraft && nodeDescriptions[nodeDraft.kind]}
                   value={nodeDraft?.kind ?? ''}
                   onChange={(e) => chooseType(e.target.value)}
                 >
@@ -257,8 +264,7 @@ export function SettingsDialog({
                   <option value="script">Script</option>
                   <option value="fetch">Fetch</option>
                   <option value="wait">Wait</option>
-                  <option value="condition">Condition</option>
-                  <option value="switch">Switch</option>
+                  <option value="switch">Branch</option>
                   <option value="workflow">Workflow</option>
                   <option value="batch">Batch</option>
                 </NativeSelect>
@@ -294,6 +300,11 @@ export function SettingsDialog({
               )}
               {nodeDraft ? (
                 <NodeInspector
+                  section={nodeSection}
+                  onSectionChange={(section) => {
+                    setNodeSection(section);
+                    if (form.current) form.current.scrollTop = 0;
+                  }}
                   prompts={prompts}
                   node={nodeDraft}
                   creating={creating}
@@ -413,6 +424,31 @@ export function SettingsDialog({
             </ContractNavigation.Provider>
           </fieldset>
         </div>
+        {node &&
+          nodeDraft &&
+          settings.definition.edges.some(
+            (edge) =>
+              edge.source === node.id &&
+              outgoingPorts(node).includes(edge.port) &&
+              !outgoingPorts(nodeDraft).includes(edge.port),
+          ) && (
+            <p className="hint" role="status">
+              Applying these changes removes connections for:{' '}
+              {[
+                ...new Set(
+                  settings.definition.edges
+                    .filter(
+                      (edge) =>
+                        edge.source === node.id &&
+                        outgoingPorts(node).includes(edge.port) &&
+                        !outgoingPorts(nodeDraft).includes(edge.port),
+                    )
+                    .map((edge) => edge.port),
+                ),
+              ].join(', ')}
+              . Reconnect changed branches on the canvas.
+            </p>
+          )}
         {error && (
           <p role="alert" className="error-text">
             {error}

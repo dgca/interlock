@@ -30,11 +30,13 @@ export function ContractEditor({
   onChange,
   label,
   readOnly = false,
+  compact = false,
 }: {
   value: Contract;
   onChange?: (schema: Contract) => void;
   label: string;
   readOnly?: boolean;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useContext(ContractNavigation);
@@ -46,7 +48,7 @@ export function ContractEditor({
       ? `${Object.keys(propertiesOf(value)).length} named fields`
       : fieldTypes[type];
   return (
-    <section className={styles.card}>
+    <section className={`${styles.card} ${compact ? styles.compact : ''}`}>
       <div>
         <span>{label}</span>
         <strong>{summary}</strong>

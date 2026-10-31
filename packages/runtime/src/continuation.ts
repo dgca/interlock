@@ -412,9 +412,17 @@ export class Continuation {
       : run;
     if (!source)
       throw new InterlockError('Execution not found in requested run');
-    if (!Object.hasOwn(source, parsed.field))
+    if (parsed.field === 'result' && !parsed.executionId)
+      throw new InterlockError('Raw result requires executionId');
+    const field =
+      parsed.field === 'result' && !Object.hasOwn(source, 'result')
+        ? 'output'
+        : parsed.field;
+    const selected =
+      field === 'result' ? (source as NodeExecution).result : source[field];
+    if (selected === undefined)
       throw new InterlockError('Requested result is not available');
-    const value = readPath(source[parsed.field]!, parsed.path);
+    const value = readPath(selected, parsed.path);
     const bytes = Buffer.byteLength(JSON.stringify(value));
     if (bytes > parsed.maxBytes)
       throw new InterlockError(

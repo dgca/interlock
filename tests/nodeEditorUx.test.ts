@@ -109,6 +109,7 @@ async function select(label: string, value: string) {
   });
 }
 async function chooseType(label: string, value: string) {
+  if (!field(label)) await click('Show value types');
   const input = field(label) as HTMLInputElement;
   await act(async () => input.click());
   await act(async () =>
@@ -199,15 +200,15 @@ it.each(
 );
 it('keeps text distinct from numbers and blocks invalid Condition JSON', async () => {
   const { onApply } = await render({ kind: 'condition', path: '', equals: '' });
-  await fill('Condition match value', '42');
+  await fill('Case 1 match value', '42');
   await click('Apply changes');
   expect(onApply.mock.calls[0][0].definition.nodes[0].equals).toBe('42');
   onApply.mockClear();
-  await chooseType('Condition match value type', 'json');
-  await fill('Condition match value, as JSON', '{');
+  await chooseType('Case 1 match value type', 'json');
+  await fill('Case 1 match value, as JSON', '{');
   await click('Apply changes');
   expect(onApply).not.toHaveBeenCalled();
-  await fill('Condition match value, as JSON', '42');
+  await fill('Case 1 match value, as JSON', '42');
   await click('Apply changes');
   expect(onApply.mock.calls[0][0].definition.nodes[0].equals).toBe(42);
 });
@@ -308,7 +309,7 @@ it('discards edited comparisons on Cancel', async () => {
     path: '',
     equals: 'before',
   });
-  await fill('Condition match value', 'after');
+  await fill('Case 1 match value', 'after');
   await click('Cancel');
   expect(onClose).toHaveBeenCalledOnce();
   expect(onApply).not.toHaveBeenCalled();
@@ -577,4 +578,30 @@ it('adds, edits, reopens and removes captured-input result checks', async () => 
   expect(
     again.onApply.mock.calls[0][0].definition.nodes[0].resultRules,
   ).toBeUndefined();
+});
+
+it('keeps Agent routing optional and prefers an enum result field when enabled', async () => {
+  const { onApply } = await render({
+    kind: 'agent',
+    prompt: 'Review',
+    outputSchema: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string' },
+        verdict: { enum: ['approved', 'changes_requested'] },
+      },
+    },
+  });
+  await click('Result');
+  expect((field('Branch on result') as HTMLInputElement).checked).toBe(false);
+  await act(async () => field('Branch on result').click());
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0]).toMatchObject({
+    kind: 'agent',
+    routing: {
+      path: 'verdict',
+      cases: [{ port: 'match', equals: 'approved' }],
+      default: 'otherwise',
+    },
+  });
 });

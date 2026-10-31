@@ -1,7 +1,14 @@
+import { useState } from 'react';
+import {
+  NodeSettingsSections,
+  NodeSection,
+  type NodeSectionName,
+} from './NodeSettingsSections';
+import { BranchEditor } from './BranchEditor';
+import { NodeResultEditor } from './NodeResultEditor';
 import {
   TextInput,
   TagsInput,
-  Text,
   Switch,
   Textarea,
   NativeSelect,
@@ -12,12 +19,9 @@ import {
   NumberInput,
 } from '@mantine/core';
 import {
-  nodeKindLabel,
   DEFAULT_BATCH_MAX_ITEMS,
   MAX_BATCH_ITEMS,
-  STARTED_RUN_SCHEMA,
   nodeInputHint,
-  contractAtPath,
   type WorkflowDefinition,
   type Workflow,
   type WorkflowNode,
@@ -25,15 +29,12 @@ import {
   type PollCheck,
 } from '@interlock/core';
 import { workflowTargets } from './workflowTargets';
-import { ResultRulesEditor } from './ResultRulesEditor';
 import { DurationInput } from './DurationInput';
 import { InputBindingsEditor } from './InputBindingsEditor';
 import { InputPathInput } from './InputPathInput';
 import { TypedValueEditor } from './TypedValueEditor';
 import { FetchEditor } from './FetchEditor';
-import { SwitchEditor } from './SwitchEditor';
 import { WorkflowModeEditor } from './WorkflowModeEditor';
-import { nodeDescriptions } from './nodeDescriptions';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
@@ -51,7 +52,11 @@ export function NodeInspector({
   onDelete,
   definition,
   onBoundaryChange,
+  section,
+  onSectionChange,
 }: {
+  section?: NodeSectionName;
+  onSectionChange?: (section: NodeSectionName) => void;
   node: WorkflowNode;
   workflows: Workflow[];
   prompts?: import('@interlock/core').SavedPrompt[];
@@ -64,6 +69,22 @@ export function NodeInspector({
   definition?: WorkflowDefinition;
   onBoundaryChange?: (schema: WorkflowDefinition['inputSchema']) => void;
 }) {
+  const [localSection, setLocalSection] = useState<NodeSectionName>('work');
+  const active = section ?? localSection;
+  const workLabel = (
+    {
+      agent: 'Assignment',
+      script: 'Code',
+      fetch: 'Request',
+      condition: 'Branches',
+      switch: 'Branches',
+      workflow: 'Workflow',
+      wait: 'Wait',
+      batch: 'Batch',
+      entry: 'Entry',
+      exit: 'Exit',
+    } as const
+  )[node.kind];
   const patch = (value: Record<string, unknown>) =>
     onChange({ ...node, ...value } as WorkflowNode);
   const hint = definition
@@ -78,33 +99,39 @@ export function NodeInspector({
       }).schema
     : {};
   return (
-    <>
-      {!creating && (
-        <div className="inspector-heading">
-          <span className="eyebrow">
-            {nodeKindLabel(node.kind).toUpperCase()} NODE
-          </span>
-          <p>{nodeDescriptions[node.kind]}</p>
-        </div>
-      )}
+    <NodeSettingsSections
+      active={active}
+      onChange={onSectionChange ?? setLocalSection}
+      workLabel={workLabel}
+      execution={
+        node.kind === 'agent' ||
+        node.kind === 'script' ||
+        node.kind === 'fetch' ||
+        (node.kind === 'workflow' && node.mode !== 'detached')
+      }
+      boundary={node.kind === 'entry' || node.kind === 'exit'}
+    >
       <div className="inspector-fields">
-        <TextInput
-          mb="md"
-          label="Name"
-          value={node.label}
-          onChange={(e) => patch({ label: e.target.value })}
-        />
-
-        {node.kind === 'fetch' && (
-          <FetchEditor
-            node={node}
-            onChange={onChange}
-            inputSchema={inputShape}
-            inputSource={hint.source}
+        <NodeSection name="work">
+          <TextInput
+            mb="md"
+            label="Name"
+            value={node.label}
+            onChange={(e) => patch({ label: e.target.value })}
           />
+        </NodeSection>
+        {node.kind === 'fetch' && (
+          <NodeSection name="work">
+            <FetchEditor
+              node={node}
+              onChange={onChange}
+              inputSchema={inputShape}
+              inputSource={hint.source}
+            />
+          </NodeSection>
         )}
         {node.kind === 'wait' && (
-          <>
+          <NodeSection name="work">
             <Input.Wrapper label="Resume" mb="md">
               <SegmentedControl
                 mt={4}
@@ -172,297 +199,307 @@ export function NodeInspector({
                 restart.
               </p>
             )}
-          </>
+          </NodeSection>
         )}
         {node.kind === 'agent' && (
           <>
-            <PromptPicker
-              node={node}
-              prompts={prompts}
-              onChange={(promptIds) =>
-                patch({ promptIds: promptIds.length ? promptIds : undefined })
-              }
-            />
-            <Textarea
-              mb="md"
-              label="Task instructions"
-              rows={8}
-              value={node.prompt}
-              onChange={(e) => patch({ prompt: e.target.value })}
-            />
+            <NodeSection name="work">
+              <PromptPicker
+                node={node}
+                prompts={prompts}
+                onChange={(promptIds) =>
+                  patch({ promptIds: promptIds.length ? promptIds : undefined })
+                }
+              />
+              <Textarea
+                mb="md"
+                label="Task instructions"
+                rows={8}
+                value={node.prompt}
+                onChange={(e) => patch({ prompt: e.target.value })}
+              />
+            </NodeSection>
+            <NodeSection name="execution">
+              <Radio.Group
+                mb="md"
+                label="Context"
+                value={node.context.mode}
+                onChange={(mode) =>
+                  patch({ context: { ...node.context, mode } })
+                }
+              >
+                <Stack gap="xs" mt="xs">
+                  <Radio value="current" label="Current conversation" />
+                  <Radio value="fresh" label="Fresh agent session required" />
+                </Stack>
+              </Radio.Group>
 
-            <Radio.Group
-              mb="md"
-              label="Context"
-              value={node.context.mode}
-              onChange={(mode) => patch({ context: { ...node.context, mode } })}
-            >
-              <Stack gap="xs" mt="xs">
-                <Radio value="current" label="Current conversation" />
-                <Radio value="fresh" label="Fresh agent session required" />
-              </Stack>
-            </Radio.Group>
+              <p className="hint">
+                Fresh context requires an executor that declares isolation.
+                Interlock cannot erase a caller's conversation.
+              </p>
 
-            <p className="hint">
-              Fresh context requires an executor that declares isolation.
-              Interlock cannot erase a caller's conversation.
-            </p>
+              <TextInput
+                mb="md"
+                label="Continuity group"
+                description="Optional session binding within this run. Requires current context; child runs have separate groups."
+                maxLength={128}
+                value={node.context.continuityGroup ?? ''}
+                onChange={(e) =>
+                  patch({
+                    context: {
+                      ...node.context,
+                      continuityGroup: e.target.value || undefined,
+                    },
+                  })
+                }
+              />
 
-            <TextInput
-              mb="md"
-              label="Continuity group"
-              description="Optional session binding within this run. Requires current context; child runs have separate groups."
-              maxLength={128}
-              value={node.context.continuityGroup ?? ''}
-              onChange={(e) =>
-                patch({
-                  context: {
-                    ...node.context,
-                    continuityGroup: e.target.value || undefined,
-                  },
-                })
-              }
-            />
+              <NativeSelect
+                mb="md"
+                label="Model tier"
+                description="Executor preference for either Context setting. Required session continuity and isolation take precedence."
+                value={node.context.tier ?? ''}
+                data={[
+                  { value: '', label: 'No preference' },
+                  { value: 'max', label: 'Max' },
+                  { value: 'balanced', label: 'Balanced' },
+                  { value: 'fast', label: 'Fast' },
+                ]}
+                onChange={(event) => {
+                  const { tier: _tier, ...context } = node.context;
+                  patch({
+                    context: event.currentTarget.value
+                      ? { ...context, tier: event.currentTarget.value }
+                      : context,
+                  });
+                }}
+              />
 
-            <NativeSelect
-              mb="md"
-              label="Model tier"
-              description="Executor preference for either Context setting. Required session continuity and isolation take precedence."
-              value={node.context.tier ?? ''}
-              data={[
-                { value: '', label: 'No preference' },
-                { value: 'max', label: 'Max' },
-                { value: 'balanced', label: 'Balanced' },
-                { value: 'fast', label: 'Fast' },
-              ]}
-              onChange={(event) => {
-                const { tier: _tier, ...context } = node.context;
-                patch({
-                  context: event.currentTarget.value
-                    ? { ...context, tier: event.currentTarget.value }
-                    : context,
-                });
-              }}
-            />
+              <Textarea
+                mb="md"
+                label="Context instructions"
+                rows={4}
+                value={node.context.instructions}
+                onChange={(e) =>
+                  patch({
+                    context: { ...node.context, instructions: e.target.value },
+                  })
+                }
+              />
 
-            <Textarea
-              mb="md"
-              label="Context instructions"
-              rows={4}
-              value={node.context.instructions}
-              onChange={(e) =>
-                patch({
-                  context: { ...node.context, instructions: e.target.value },
-                })
-              }
-            />
+              <TagsInput
+                mb="md"
+                label="Required tools"
+                description="Enter a name and press Enter. These must match the executor's declared tools."
+                placeholder="Add a tool"
+                value={node.context.tools}
+                acceptValueOnBlur
+                allowDuplicates
+                onChange={(tools) =>
+                  patch({
+                    context: {
+                      ...node.context,
+                      tools: tools.map((name) => name.trim()).filter(Boolean),
+                    },
+                  })
+                }
+              />
 
-            <TagsInput
-              mb="md"
-              label="Required tools"
-              description="Enter a name and press Enter. These must match the executor's declared tools."
-              placeholder="Add a tool"
-              value={node.context.tools}
-              acceptValueOnBlur
-              allowDuplicates
-              onChange={(tools) =>
-                patch({
-                  context: {
-                    ...node.context,
-                    tools: tools.map((name) => name.trim()).filter(Boolean),
-                  },
-                })
-              }
-            />
+              <TagsInput
+                mb="md"
+                label="Required skills"
+                description="Enter a name and press Enter. These must match the executor's declared skills."
+                placeholder="Add a skill"
+                value={node.context.skills}
+                acceptValueOnBlur
+                allowDuplicates
+                onChange={(skills) =>
+                  patch({
+                    context: {
+                      ...node.context,
+                      skills: skills.map((name) => name.trim()).filter(Boolean),
+                    },
+                  })
+                }
+              />
 
-            <TagsInput
-              mb="md"
-              label="Required skills"
-              description="Enter a name and press Enter. These must match the executor's declared skills."
-              placeholder="Add a skill"
-              value={node.context.skills}
-              acceptValueOnBlur
-              allowDuplicates
-              onChange={(skills) =>
-                patch({
-                  context: {
-                    ...node.context,
-                    skills: skills.map((name) => name.trim()).filter(Boolean),
-                  },
-                })
-              }
-            />
-
-            <Switch
-              mb="md"
-              label="Route on unclaimed timeout"
-              checked={node.unclaimedTimeoutMs !== undefined}
-              onChange={(e) =>
-                patch({
-                  unclaimedTimeoutMs: e.currentTarget.checked
-                    ? 86_400_000
-                    : undefined,
-                })
-              }
-            />
-            {node.unclaimedTimeoutMs !== undefined && (
-              <>
-                <DurationInput
-                  label="If unclaimed for"
-                  min={1}
-                  value={node.unclaimedTimeoutMs}
-                  onChange={(unclaimedTimeoutMs) =>
-                    patch({ unclaimedTimeoutMs })
-                  }
-                />
-                <p className="hint">
-                  Connect Timeout to the next step for unanswered work. It
-                  receives the original input. Claiming stops this timer; a
-                  failed or expired claim starts a new timer when work becomes
-                  available again.
-                </p>
-              </>
-            )}
-            <DurationInput
-              label="Claim lease"
-              value={(node.leaseSeconds ?? 300) * 1000}
-              min={10_000}
-              max={3_600_000}
-              step={1000}
-              onChange={(ms) => patch({ leaseSeconds: ms / 1000 })}
-            />
-            <p className="hint">
-              Workers can override this duration and must renew before it
-              expires.{' '}
-              {node.maxLeaseExpiries === undefined
-                ? 'Expiry consumes an attempt.'
-                : 'Expiry consumes the separate expiry budget.'}
-            </p>
-            <TextInput
-              mb="md"
-              label={
-                node.maxLeaseExpiries === undefined
-                  ? 'Maximum attempts'
-                  : 'Maximum failures'
-              }
-              className={styles.number}
-              type="number"
-              min={1}
-              max={10}
-              value={node.maxAttempts}
-              onChange={(e) => patch({ maxAttempts: Number(e.target.value) })}
-            />
-            <Switch
-              mb="md"
-              label="Separate lease expiry budget"
-              checked={node.maxLeaseExpiries !== undefined}
-              onChange={(e) =>
-                patch({
-                  maxLeaseExpiries: e.currentTarget.checked ? 3 : undefined,
-                })
-              }
-            />
-            {node.maxLeaseExpiries !== undefined && (
-              <>
-                <TextInput
-                  mb="md"
-                  label="Maximum lease expiries"
-                  className={styles.number}
-                  type="number"
-                  min={1}
-                  max={10}
-                  step={1}
-                  value={node.maxLeaseExpiries}
-                  onChange={(e) =>
-                    patch({ maxLeaseExpiries: Number(e.target.value) })
-                  }
-                />
-                <p className="hint">
-                  Reaching either budget fails the run. After an expiry, reclaim
-                  available work with a new token before submitting.
-                </p>
-              </>
-            )}
+              <Switch
+                mb="md"
+                label="Route on unclaimed timeout"
+                checked={node.unclaimedTimeoutMs !== undefined}
+                onChange={(e) =>
+                  patch({
+                    unclaimedTimeoutMs: e.currentTarget.checked
+                      ? 86_400_000
+                      : undefined,
+                  })
+                }
+              />
+              {node.unclaimedTimeoutMs !== undefined && (
+                <>
+                  <DurationInput
+                    label="If unclaimed for"
+                    min={1}
+                    value={node.unclaimedTimeoutMs}
+                    onChange={(unclaimedTimeoutMs) =>
+                      patch({ unclaimedTimeoutMs })
+                    }
+                  />
+                  <p className="hint">
+                    Connect Timeout to the next step for unanswered work. It
+                    receives the original input. Claiming stops this timer; a
+                    failed or expired claim starts a new timer when work becomes
+                    available again.
+                  </p>
+                </>
+              )}
+              <DurationInput
+                label="Claim lease"
+                value={(node.leaseSeconds ?? 300) * 1000}
+                min={10_000}
+                max={3_600_000}
+                step={1000}
+                onChange={(ms) => patch({ leaseSeconds: ms / 1000 })}
+              />
+              <p className="hint">
+                Workers can override this duration and must renew before it
+                expires.{' '}
+                {node.maxLeaseExpiries === undefined
+                  ? 'Expiry consumes an attempt.'
+                  : 'Expiry consumes the separate expiry budget.'}
+              </p>
+              <TextInput
+                mb="md"
+                label={
+                  node.maxLeaseExpiries === undefined
+                    ? 'Maximum attempts'
+                    : 'Maximum failures'
+                }
+                className={styles.number}
+                type="number"
+                min={1}
+                max={10}
+                value={node.maxAttempts}
+                onChange={(e) => patch({ maxAttempts: Number(e.target.value) })}
+              />
+              <Switch
+                mb="md"
+                label="Separate lease expiry budget"
+                checked={node.maxLeaseExpiries !== undefined}
+                onChange={(e) =>
+                  patch({
+                    maxLeaseExpiries: e.currentTarget.checked ? 3 : undefined,
+                  })
+                }
+              />
+              {node.maxLeaseExpiries !== undefined && (
+                <>
+                  <TextInput
+                    mb="md"
+                    label="Maximum lease expiries"
+                    className={styles.number}
+                    type="number"
+                    min={1}
+                    max={10}
+                    step={1}
+                    value={node.maxLeaseExpiries}
+                    onChange={(e) =>
+                      patch({ maxLeaseExpiries: Number(e.target.value) })
+                    }
+                  />
+                  <p className="hint">
+                    Reaching either budget fails the run. After an expiry,
+                    reclaim available work with a new token before submitting.
+                  </p>
+                </>
+              )}
+            </NodeSection>
           </>
         )}
         {node.kind === 'script' && (
           <>
-            <Input.Wrapper label="Language" mb="md">
-              <SegmentedControl
-                mt={4}
-                style={{ display: 'flex', width: 'fit-content' }}
-                aria-label="Language"
-                value={node.language ?? 'bash'}
-                onChange={(language) => {
-                  const starter =
-                    node.language === 'javascript' ? 'return input;' : 'cat';
-                  patch({
-                    language,
-                    command:
-                      node.command === starter
-                        ? language === 'javascript'
-                          ? 'return input;'
-                          : 'cat'
-                        : node.command,
-                  });
-                }}
-                data={[
-                  { value: 'javascript', label: 'JavaScript' },
-                  { value: 'bash', label: 'Bash' },
-                ]}
+            <NodeSection name="work">
+              <Input.Wrapper label="Language" mb="md">
+                <SegmentedControl
+                  mt={4}
+                  style={{ display: 'flex', width: 'fit-content' }}
+                  aria-label="Language"
+                  value={node.language ?? 'bash'}
+                  onChange={(language) => {
+                    const starter =
+                      node.language === 'javascript' ? 'return input;' : 'cat';
+                    patch({
+                      language,
+                      command:
+                        node.command === starter
+                          ? language === 'javascript'
+                            ? 'return input;'
+                            : 'cat'
+                          : node.command,
+                    });
+                  }}
+                  data={[
+                    { value: 'javascript', label: 'JavaScript' },
+                    { value: 'bash', label: 'Bash' },
+                  ]}
+                />
+              </Input.Wrapper>
+
+              <CodeEditor
+                label={
+                  node.language === 'javascript'
+                    ? 'JavaScript code'
+                    : 'Bash command'
+                }
+                language={node.language ?? 'bash'}
+                value={node.command}
+                onChange={(command) => patch({ command })}
               />
-            </Input.Wrapper>
 
-            <CodeEditor
-              label={
-                node.language === 'javascript'
-                  ? 'JavaScript code'
-                  : 'Bash command'
-              }
-              language={node.language ?? 'bash'}
-              value={node.command}
-              onChange={(command) => patch({ command })}
-            />
-
-            <p className="hint">
-              {node.language === 'javascript'
-                ? 'Read the input variable and return a JSON value. Supports await and require. Console logs go to stderr.'
-                : 'Reads JSON from stdin. Write one JSON value to stdout.'}{' '}
-              Runs locally with your OS permissions.
-            </p>
-
-            <DurationInput
-              key={`script-timeout-${node.id}`}
-              label="Timeout"
-              min={100}
-              max={120_000}
-              value={node.timeoutMs}
-              onChange={(timeoutMs) => patch({ timeoutMs })}
-            />
+              <p className="hint">
+                {node.language === 'javascript'
+                  ? 'Read the input variable and return a JSON value. Supports await and require. Console logs go to stderr.'
+                  : 'Reads JSON from stdin. Write one JSON value to stdout.'}{' '}
+                Runs locally with your OS permissions.
+              </p>
+            </NodeSection>
+            <NodeSection name="execution">
+              <DurationInput
+                key={`script-timeout-${node.id}`}
+                label="Timeout"
+                min={100}
+                max={120_000}
+                value={node.timeoutMs}
+                onChange={(timeoutMs) => patch({ timeoutMs })}
+              />
+            </NodeSection>
           </>
         )}
         {(node.kind === 'script' ||
           node.kind === 'fetch' ||
           (node.kind === 'workflow' && node.mode !== 'detached')) && (
-          <Switch
-            mb="md"
-            label="Route on failure"
-            aria-label="Route on failure"
-            description={
-              node.kind === 'workflow'
-                ? 'Failed receives input, error and child references. Cancellation stays terminal. Disabling removes its connection when applied.'
-                : 'Failed receives the input, error, and any returned output. Disabling removes its connection when changes are applied.'
-            }
-            checked={node.onFailure === 'route'}
-            onChange={(e) =>
-              patch({
-                onFailure: e.currentTarget.checked ? 'route' : undefined,
-              })
-            }
-          />
+          <NodeSection name="execution">
+            <Switch
+              mb="md"
+              label="Route on failure"
+              aria-label="Route on failure"
+              description={
+                node.kind === 'workflow'
+                  ? 'Failed receives input, error and child references. Cancellation stays terminal. Disabling removes its connection when applied.'
+                  : 'Failed receives the input, error, and any returned output. Disabling removes its connection when changes are applied.'
+              }
+              checked={node.onFailure === 'route'}
+              onChange={(e) =>
+                patch({
+                  onFailure: e.currentTarget.checked ? 'route' : undefined,
+                })
+              }
+            />
+          </NodeSection>
         )}
         {node.kind === 'workflow' && !hideWorkflowTarget && (
-          <>
+          <NodeSection name="work">
             <NativeSelect
               mb="md"
               label="Referenced workflow"
@@ -539,10 +576,12 @@ export function NodeInspector({
                 </>
               );
             })()}
-          </>
+          </NodeSection>
         )}
         {node.kind === 'workflow' && (
-          <WorkflowModeEditor key={node.id} node={node} onChange={onChange} />
+          <NodeSection name="work">
+            <WorkflowModeEditor key={node.id} node={node} onChange={onChange} />
+          </NodeSection>
         )}
         {node.kind === 'batch' && (
           <p className="hint">
@@ -553,7 +592,7 @@ export function NodeInspector({
           </p>
         )}
         {node.kind === 'batch' && (
-          <>
+          <NodeSection name="work">
             <InputPathInput
               mb="md"
               label="List to process"
@@ -602,49 +641,25 @@ export function NodeInspector({
                 <Radio value="collect" label="Collect successes and failures" />
               </Stack>
             </Radio.Group>
-          </>
+          </NodeSection>
         )}
-        {node.kind === 'condition' && (
-          <>
-            <InputPathInput
-              mb="md"
-              label="Check this input field"
-              description="Use dots for nested fields, or leave blank to check the whole input. A missing field fails the run."
-              placeholder="e.g. approved or request.status"
-              value={node.path}
-              schema={inputShape}
-              suggestionSource={hint.source}
-              onChange={(path) => patch({ path })}
-            />
-
-            <TypedValueEditor
+        {(node.kind === 'condition' || node.kind === 'switch') && (
+          <NodeSection name="work">
+            <BranchEditor
               key={node.id}
-              label="Condition match value"
-              value={node.equals}
-              onChange={(equals) => patch({ equals })}
-              suggestedSchema={contractAtPath(inputShape, node.path)}
-              suggestionSource={hint.source}
+              node={node}
+              onChange={onChange}
+              connectedBranches={definition?.edges
+                .filter((edge) => edge.source === node.id)
+                .map((edge) => edge.port)}
+              inputSchema={inputShape}
+              inputSource={hint.source}
+              showConnectionWarning={false}
             />
-            <Text size="xs" c="dimmed" mt="xs" mb="md">
-              Matches follow True; everything else follows False. Text and
-              numbers are different values.
-            </Text>
-          </>
-        )}
-        {node.kind === 'switch' && (
-          <SwitchEditor
-            key={node.id}
-            node={node}
-            onChange={onChange}
-            connectedBranches={definition?.edges
-              .filter((edge) => edge.source === node.id)
-              .map((edge) => edge.port)}
-            inputSchema={inputShape}
-            inputSource={hint.source}
-          />
+          </NodeSection>
         )}
         {node.kind === 'exit' && (
-          <>
+          <NodeSection name="work">
             <Switch
               mb="md"
               label="Continue as new"
@@ -672,12 +687,12 @@ export function NodeInspector({
                 }}
               />
             )}
-          </>
+          </NodeSection>
         )}
         {(node.kind === 'entry' || node.kind === 'exit') &&
         definition &&
         onBoundaryChange ? (
-          <>
+          <NodeSection name="input">
             <p className="hint">
               {node.kind === 'entry'
                 ? 'Entry passes the workflow input through unchanged. This contract is shared with Workflow settings.'
@@ -719,15 +734,15 @@ export function NodeInspector({
                 onChange={(outputSchema) => patch({ outputSchema })}
               />
             )}
-          </>
+          </NodeSection>
         ) : (
           <>
-            <section aria-label="Input" className={styles.inputSection}>
-              <h3>Input</h3>
+            <NodeSection name="input">
               {node.kind !== 'entry' && node.kind !== 'exit' && (
                 <InputBindingsEditor
                   key={node.id}
                   node={node}
+                  definition={definition}
                   nodes={
                     definition?.nodes.map((candidate) =>
                       candidate.id === node.id ? node : candidate,
@@ -773,31 +788,16 @@ export function NodeInspector({
                 }
                 onChange={(inputSchema) => patch({ inputSchema })}
               />
-            </section>
-            <ContractEditor
-              label={
-                node.kind === 'workflow' && node.mode === 'detached'
-                  ? 'Output · Started run'
-                  : 'Output'
-              }
-              readOnly={node.kind === 'workflow' && node.mode === 'detached'}
-              value={
-                node.kind === 'workflow' && node.mode === 'detached'
-                  ? STARTED_RUN_SCHEMA
-                  : node.kind === 'batch' &&
-                      Object.keys(node.outputSchema).length === 0
-                    ? { type: 'array' }
-                    : node.outputSchema
-              }
-              onChange={(outputSchema) => patch({ outputSchema })}
-            />
+            </NodeSection>
+            <NodeSection name="result">
+              <NodeResultEditor
+                key={node.kind}
+                node={node}
+                definition={definition}
+                onChange={onChange}
+              />
+            </NodeSection>
           </>
-        )}
-        {node.kind === 'agent' && (
-          <ResultRulesEditor
-            value={node.resultRules}
-            onChange={(resultRules) => patch({ resultRules })}
-          />
         )}
         {onDelete && node.kind !== 'entry' && node.kind !== 'exit' && (
           <Button variant="danger" onClick={onDelete}>
@@ -805,7 +805,7 @@ export function NodeInspector({
           </Button>
         )}
       </div>
-    </>
+    </NodeSettingsSections>
   );
 }
 

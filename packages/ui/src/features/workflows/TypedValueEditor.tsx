@@ -105,6 +105,7 @@ export function TypedValueEditor({
   valueLabel = 'Match value',
   suggestedSchema = {},
   suggestionSource,
+  showType = true,
 }: {
   value: Json;
   onChange: (value: Json) => void;
@@ -112,6 +113,7 @@ export function TypedValueEditor({
   valueLabel?: string;
   suggestedSchema?: Contract;
   suggestionSource?: string;
+  showType?: boolean;
 }) {
   const [type, setType] = useState<ValueType>(() => valueType(value));
   const expected = fieldType(suggestedSchema);
@@ -121,31 +123,33 @@ export function TypedValueEditor({
       ? (suggestedSchema.enum as string[])
       : [];
   return (
-    <div className={styles.matchValue}>
-      <Select
-        label="Type"
-        aria-label={`${label} type`}
-        value={type}
-        allowDeselect={false}
-        onChange={(next) => {
-          if (!next) return;
-          const nextType = next as ValueType;
-          setType(nextType);
-          // JSON can represent the current value without converting it.
-          onChange(
-            nextType === 'json' || nextType === valueType(value)
-              ? value
-              : defaults[nextType],
-          );
-        }}
-        data={[
-          { value: 'text', label: 'Text' },
-          { value: 'number', label: 'Number' },
-          { value: 'boolean', label: 'Boolean' },
-          { value: 'null', label: 'Null' },
-          { value: 'json', label: 'JSON' },
-        ]}
-      />
+    <div className={styles.matchValue} data-show-type={showType}>
+      {showType && (
+        <Select
+          label="Type"
+          aria-label={`${label} type`}
+          value={type}
+          allowDeselect={false}
+          onChange={(next) => {
+            if (!next) return;
+            const nextType = next as ValueType;
+            setType(nextType);
+            // JSON can represent the current value without converting it.
+            onChange(
+              nextType === 'json' || nextType === valueType(value)
+                ? value
+                : defaults[nextType],
+            );
+          }}
+          data={[
+            { value: 'text', label: 'Text' },
+            { value: 'number', label: 'Number' },
+            { value: 'boolean', label: 'Boolean' },
+            { value: 'null', label: 'Null' },
+            { value: 'json', label: 'JSON' },
+          ]}
+        />
+      )}
       <div className={styles.value}>
         {type === 'text' && choices.length > 0 ? (
           <SuggestionInput
@@ -208,9 +212,9 @@ export function TypedValueEditor({
             rows={2}
           />
         )}
-        {expected !== 'any' && (
+        {showType && expected !== 'any' && (
           <small className={styles.expected}>
-            Input field: {fieldTypes[expected]}
+            Expected: {fieldTypes[expected]}
           </small>
         )}
       </div>

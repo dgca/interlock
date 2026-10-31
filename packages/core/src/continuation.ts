@@ -56,9 +56,11 @@ export const resultQuerySchema = z.object({
       'Execution reference from the briefing. Omit for the run input/output.',
     ),
   field: z
-    .enum(['input', 'output'])
+    .enum(['input', 'output', 'result'])
     .default('output')
-    .describe('Persisted field to read. Unavailable outputs return an error.'),
+    .describe(
+      'input or forwarded output; result requires executionId and reads the raw node result when retained, otherwise output. Unavailable fields return an error.',
+    ),
   path: z
     .string()
     .max(2048)

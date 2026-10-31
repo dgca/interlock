@@ -4,6 +4,9 @@ import { Store } from '@interlock/storage';
 import { tidyWorkflow } from '@interlock/core/layout';
 import {
   assertContract,
+  resolveBindingFields,
+  matchRouting,
+  type PathBinding,
   workHoldRequestSchema,
   HoldDeadlineError,
   type WorkHoldRequest,
@@ -83,6 +86,14 @@ export interface Worker {
   skills: string[];
 }
 
+class ResultProcessingError extends InterlockError {
+  constructor(
+    readonly setting: 'routing' | 'outputBindings',
+    message: string,
+  ) {
+    super(message);
+  }
+}
 export class Engine {
   readonly continuation: Continuation;
   readonly prompts: Prompts;
@@ -1061,6 +1072,68 @@ export class Engine {
       this.failOperation(routed, execution, node, error, category, child);
     });
   }
+  private bindingSource(run: Run, input: Json) {
+    let workflowRun = run;
+    while (workflowRun.batchNodeId && workflowRun.parentRunId)
+      workflowRun = this.run(workflowRun.parentRunId);
+    let root = workflowRun;
+    while (root.parentRunId) root = this.run(root.parentRunId);
+    const sources = {
+      input,
+      runInput: workflowRun.input,
+      rootInput: root.input,
+      itemInput: run.input,
+    };
+    return (binding: PathBinding): Json => {
+      if (binding.source === 'itemInput' && !run.batchNodeId)
+        throw new InterlockError(
+          'itemInput is only available inside a Batch item run',
+        );
+      if (binding.source !== 'node') return sources[binding.source];
+      const previous = run.executions.findLast(
+        (candidate) =>
+          candidate.nodeId === binding.nodeId &&
+          candidate.status === 'completed',
+      );
+      if (!previous || previous.output === undefined)
+        throw new InterlockError(
+          `Node "${binding.nodeId}" has no completed output in this run`,
+        );
+      return previous.output;
+    };
+  }
+  private prepareResult(run: Run, node: WorkflowNode, result: Json) {
+    let port = 'default';
+    if (node.routing) {
+      try {
+        const matched = matchRouting(node.routing, result);
+        if (matched === undefined)
+          throw new InterlockError(
+            `No result branch matched at "${node.routing.path || '$'}"`,
+          );
+        port = matched;
+      } catch (error) {
+        throw new ResultProcessingError(
+          'routing',
+          `${node.label} result routing: ${message(error)}`,
+        );
+      }
+    }
+    try {
+      const output = node.outputBindings
+        ? resolveBindingFields(
+            node.outputBindings,
+            this.bindingSource(run, result),
+          )
+        : result;
+      return { port, output };
+    } catch (error) {
+      throw new ResultProcessingError(
+        'outputBindings',
+        `${node.label} output fields: ${message(error)}`,
+      );
+    }
+  }
   private finish(
     run: Run,
     execution: NodeExecution,
@@ -1068,6 +1141,29 @@ export class Engine {
     output: Json,
     port: WorkflowEdge['port'] = 'default',
   ) {
+    // Lifecycle routes bypass success-result validation, routing and shaping.
+    const timeout = port === 'timeout' && hasTimeoutRoute(node);
+    if (!timeout)
+      assertContract(
+        node.kind === 'workflow' && node.mode === 'detached'
+          ? STARTED_RUN_SCHEMA
+          : node.outputSchema,
+        output,
+        `${node.label} output`,
+      );
+    let rawResult: Json | undefined;
+    if (port === 'default' && (node.routing || node.outputBindings)) {
+      try {
+        const prepared = this.prepareResult(run, node, output);
+        if (node.outputBindings) rawResult = output;
+        output = prepared.output;
+        port = prepared.port;
+      } catch (error) {
+        execution.result = output;
+        this.fail(run, execution, message(error));
+        return;
+      }
+    }
     const edge = this.definition(run).edges.find(
       (e) => e.source === node.id && e.port === port,
     );
@@ -1077,15 +1173,6 @@ export class Engine {
       );
     if (edge?.targetHandle === 'end' && edge.target !== run.batchNodeId)
       throw new InterlockError('End must belong to the current Batch group');
-    // A timeout returns the original input, not a result.
-    if (!(port === 'timeout' && hasTimeoutRoute(node)))
-      assertContract(
-        node.kind === 'workflow' && node.mode === 'detached'
-          ? STARTED_RUN_SCHEMA
-          : node.outputSchema,
-        output,
-        `${node.label} output`,
-      );
     if (node.kind === 'exit' && !node.continueAsNew)
       assertContract(
         this.definition(run).outputSchema,
@@ -1131,6 +1218,7 @@ export class Engine {
       });
       return;
     }
+    if (rawResult !== undefined) execution.result = rawResult;
     execution.output = output;
     execution.port = port;
     execution.status = 'completed';
@@ -1173,37 +1261,9 @@ export class Engine {
       try {
         if (node.inputBindings) {
           execution.originalInput = run.value;
-          let workflowRun = run;
-          while (workflowRun.batchNodeId && workflowRun.parentRunId)
-            workflowRun = this.run(workflowRun.parentRunId);
-          let root = workflowRun;
-          while (root.parentRunId) root = this.run(root.parentRunId);
-          const sources = {
-            input: run.value,
-            runInput: workflowRun.input,
-            rootInput: root.input,
-            itemInput: run.input,
-          };
-          execution.input = Object.fromEntries(
-            Object.entries(node.inputBindings).map(([key, binding]) => {
-              if (binding.source === 'itemInput' && !run.batchNodeId)
-                throw new InterlockError(
-                  'itemInput is only available inside a Batch item run',
-                );
-              if (binding.source === 'node') {
-                const previous = run.executions.findLast(
-                  (candidate) =>
-                    candidate.nodeId === binding.nodeId &&
-                    candidate.status === 'completed',
-                );
-                if (!previous || previous.output === undefined)
-                  throw new InterlockError(
-                    `Node "${binding.nodeId}" has no completed output in this run`,
-                  );
-                return [key, readPath(previous.output, binding.path)];
-              }
-              return [key, readPath(sources[binding.source], binding.path)];
-            }),
+          execution.input = resolveBindingFields(
+            node.inputBindings,
+            this.bindingSource(run, run.value),
           );
         }
         if (node.batchId !== run.batchNodeId)
@@ -2088,8 +2148,33 @@ export class Engine {
       work.input,
       output,
     );
+    let inspectMapping = false;
+    if (!diagnostics.total) {
+      const run = this.run(work.runId);
+      const node = this.definition(run).nodes.find(
+        (n) => n.id === work.nodeId,
+      )!;
+      try {
+        if (node.routing || node.outputBindings)
+          this.prepareResult(run, node, output);
+      } catch (error) {
+        inspectMapping =
+          error instanceof ResultProcessingError &&
+          error.setting === 'outputBindings';
+        diagnostics.items.push({
+          path: '',
+          schemaPath:
+            error instanceof ResultProcessingError ? `#/${error.setting}` : '#',
+          rule: 'result_mapping',
+          message: message(error).slice(0, 512),
+          pathTruncated: false,
+        });
+        diagnostics.total = 1;
+      }
+    }
     return {
       ...report(diagnostics.total ? 'invalid_result' : 'ready', true),
+      ...(inspectMapping ? { nextAction: 'inspect_work' as const } : {}),
       diagnostics,
     };
   }

@@ -68,7 +68,9 @@ export function validateEvaluationReceipt(
   );
   if (!execution || execution.status !== 'completed')
     return fail('grader execution must be completed');
-  const gradeResult = evaluationGradeSchema.safeParse(execution.output);
+  const gradeResult = evaluationGradeSchema.safeParse(
+    Object.hasOwn(execution, 'result') ? execution.result : execution.output,
+  );
   if (!gradeResult.success)
     return fail('accepted grader output does not satisfy the grade contract');
   const grade = gradeResult.data;

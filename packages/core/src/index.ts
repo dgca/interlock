@@ -1,3 +1,4 @@
+export { matchRouting } from './resultRouting.js';
 export * from './simulation.js';
 export * from './runChains.js';
 import { continueAsNewSchema } from './runChains.js';
@@ -15,6 +16,12 @@ export * from './authoringLayout.js';
 import { modelTierSchema } from './modelTiers.js';
 import { continuityGroupSchema } from './contextContinuity.js';
 import Ajv from 'ajv';
+import { bindingLeaves } from './valueBindings.js';
+export {
+  bindingLeaves,
+  resolveBindingFields,
+  type PathBinding,
+} from './valueBindings.js';
 import { validateFetch, type FetchRequest } from './fetch.js';
 export {
   resolveFetch,
@@ -97,6 +104,65 @@ export const pollCheckSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('fetch'), ...fetchRequestFields }),
 ]);
 export type PollCheck = z.infer<typeof pollCheckSchema>;
+export type ValueBinding =
+  | {
+      source: 'input' | 'runInput' | 'rootInput' | 'itemInput';
+      path: string;
+      default?: Json;
+    }
+  | { source: 'node'; nodeId: string; path: string; default?: Json }
+  | { source: 'literal'; value: Json }
+  | { source: 'object'; fields: Record<string, ValueBinding> };
+export type ValueBindingInput =
+  | {
+      source: 'input' | 'runInput' | 'rootInput' | 'itemInput';
+      path?: string;
+      default?: Json;
+    }
+  | { source: 'node'; nodeId: string; path?: string; default?: Json }
+  | { source: 'literal'; value: Json }
+  | { source: 'object'; fields: Record<string, ValueBindingInput> };
+export const valueBindingSchema: z.ZodType<
+  ValueBinding,
+  z.ZodTypeDef,
+  ValueBindingInput
+> = z.lazy(() =>
+  z.discriminatedUnion('source', [
+    z.object({
+      source: z.enum(['input', 'runInput', 'rootInput', 'itemInput']),
+      path: z.string().default(''),
+      default: jsonSchema.optional(),
+    }),
+    z.object({
+      source: z.literal('node'),
+      nodeId: z.string().min(1),
+      path: z.string().default(''),
+      default: jsonSchema.optional(),
+    }),
+    z.object({ source: z.literal('literal'), value: jsonSchema }),
+    z.object({
+      source: z.literal('object'),
+      fields: z.record(valueBindingSchema),
+    }),
+  ]),
+);
+export const valueBindingsSchema = z
+  .record(valueBindingSchema)
+  .superRefine((fields, context) => {
+    try {
+      bindingLeaves(fields);
+    } catch (error) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: error instanceof Error ? error.message : 'Invalid bindings',
+      });
+    }
+  });
+export const routingSchema = z.object({
+  path: z.string(),
+  cases: z.array(z.object({ port: z.string(), equals: jsonSchema })),
+  default: z.string().optional(),
+});
 const nodeBase = {
   id: z.string().min(1),
   label: z.string().min(1),
@@ -104,28 +170,20 @@ const nodeBase = {
   position: z.object({ x: z.number(), y: z.number() }).default({ x: 0, y: 0 }),
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
-  inputBindings: z
-    .record(
-      z.discriminatedUnion('source', [
-        z.object({
-          source: z.enum(['input', 'runInput', 'rootInput', 'itemInput']),
-          path: z.string().default(''),
-        }),
-        z.object({
-          source: z.literal('node'),
-          nodeId: z
-            .string()
-            .min(1)
-            .describe(
-              'Node in the same Batch group or main workflow scope, excluding Entry and Exit.',
-            ),
-          path: z.string().default(''),
-        }),
-      ]),
-    )
+  inputBindings: valueBindingsSchema
     .optional()
     .describe(
-      'Optional replacement input object. Each field selects a path from incoming input, original enclosing workflow runInput, outermost rootInput, original Batch itemInput, or source node with nodeId for its latest completed output in this run. Blank paths select the entire value. Original run inputs remain independent of agent output.',
+      'Optional replacement input fields. Sources: input, runInput, rootInput, itemInput, node (same-scope completed output), literal {value}, object {fields}. Paths default blank; default applies only to a missing path. Record keys stay literal, including dots; use object for nesting, at most 10 levels. Original inputs remain immutable.',
+    ),
+  outputBindings: valueBindingsSchema
+    .optional()
+    .describe(
+      'Optional forwarded output fields after result validation and routing. Same bindings; input selects the raw operation result. Raw result remains inspectable; omission forwards it unchanged.',
+    ),
+  routing: routingSchema
+    .optional()
+    .describe(
+      'Optional success-result branches for Agent, Script, Fetch or waited Workflow. Match raw validated result before outputBindings; same Switch first-match/fallback semantics. Missing path or unmatched without default fails. Failure/timeout routes remain separate.',
     ),
 };
 export const DEFAULT_BATCH_MAX_ITEMS = 200;
@@ -134,7 +192,7 @@ const onFailureSchema = z
   .enum(['fail', 'route'])
   .optional()
   .describe(
-    'Omit or use fail to stop the run. route requires default and failed edges. Failed receives {input, error: {nodeId, executionId, kind: script|fetch, category: execution|http|output, message}, output}. input is the resolved operation input; output is returned JSON or null if unavailable. The success outputSchema does not apply to Failed; its destination validates the envelope. Only operation errors, rejected HTTP statuses and output-contract failures route. Input/request validation, cancellation, step limits and interrupted operations after restart remain terminal. No automatic retry.',
+    'Omit or use fail to stop the run. route requires a failed edge and all configured success routes (default without result routing). Failed receives {input, error: {nodeId, executionId, kind: script|fetch, category: execution|http|output, message}, output}. input is the resolved operation input; output is returned JSON or null if unavailable. The success outputSchema does not apply to Failed; its destination validates the envelope. Only operation errors, rejected HTTP statuses and output-contract failures route. Input/request validation, cancellation, step limits, result-routing/output-mapping errors and interrupted operations after restart remain terminal. No automatic retry.',
   );
 
 export const nodeSchema = z.discriminatedUnion('kind', [
@@ -248,7 +306,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
     ...nodeBase,
     kind: z.literal('workflow'),
     onFailure: onFailureSchema.describe(
-      'Waited calls only: route requires default and failed edges. Failed receives {input,error:{nodeId,executionId,kind:workflow,category:child|output,message,child:{runId,workflowId,version,executionId}},output}. Child failure or rejected successful output routes; caller input/dispatch errors, cancellation and persistence errors stay terminal. No automatic retry.',
+      'Waited calls only: route requires a failed edge and all configured success edges (default without result routing). Failed receives {input,error:{nodeId,executionId,kind:workflow,category:child|output,message,child:{runId,workflowId,version,executionId}},output}. Child failure or rejected successful output routes; caller input/dispatch errors, cancellation and persistence errors stay terminal. No automatic retry.',
     ),
     mode: z.enum(['wait', 'detached']).optional(),
     workflowId: z.string().min(1),
@@ -322,6 +380,8 @@ export interface NodeExecution {
   input: Json;
   originalInput?: Json;
   output?: Json;
+  /** Raw validated operation result when outputBindings shape the forwarded output. */
+  result?: Json;
   status: RunStatus;
   startedAt: string;
   completedAt?: string;
@@ -519,21 +579,28 @@ export function readPath(value: Json, path: string): Json {
     throw new InterlockError(`Input has no path "${path}"`);
   return result;
 }
+export function supportsResultRouting(node: WorkflowNode): boolean {
+  return (
+    ['agent', 'script', 'fetch'].includes(node.kind) ||
+    (node.kind === 'workflow' && node.mode !== 'detached')
+  );
+}
 export function outgoingPorts(node: WorkflowNode): WorkflowEdge['port'][] {
   if (node.kind === 'exit') return [];
   if (node.kind === 'condition') return ['true', 'false'];
-  if (node.kind === 'switch')
-    return [
-      ...node.cases.map((entry) => entry.port),
-      ...(node.default === undefined ? [] : [node.default]),
-    ];
   if (node.kind === 'batch') return ['item', 'complete'];
-  if (hasFailureRoute(node)) return ['default', 'failed'];
-  if (node.kind === 'agent' && node.unclaimedTimeoutMs !== undefined)
-    return ['default', 'timeout'];
-  if (isPollWait(node) && node.timing.timeoutMs !== undefined)
-    return ['default', 'timeout'];
-  return ['default'];
+  const routes = node.kind === 'switch' ? node : node.routing;
+  const ports = routes
+    ? [
+        ...routes.cases.map((c) => c.port),
+        ...(routes.default === undefined ? [] : [routes.default]),
+      ]
+    : ['default'];
+  return [
+    ...ports,
+    ...(hasFailureRoute(node) ? ['failed'] : []),
+    ...(hasTimeoutRoute(node) ? ['timeout'] : []),
+  ];
 }
 export function hasFailureRoute(node: WorkflowNode): boolean {
   return (
@@ -628,12 +695,16 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       );
     if (
       !node.batchId &&
-      Object.values(node.inputBindings ?? {}).some(
-        (binding) => binding.source === 'itemInput',
-      )
+      [
+        ...bindingLeaves(node.inputBindings ?? {}),
+        ...bindingLeaves(node.outputBindings ?? {}),
+      ].some((binding) => binding.source === 'itemInput')
     )
       throw new InterlockError('itemInput bindings require Batch membership');
-    for (const binding of Object.values(node.inputBindings ?? {})) {
+    for (const binding of [
+      ...bindingLeaves(node.inputBindings ?? {}),
+      ...bindingLeaves(node.outputBindings ?? {}),
+    ]) {
       if (binding.source !== 'node') continue;
       const target = d.nodes.find(
         (candidate) => candidate.id === binding.nodeId,
@@ -683,7 +754,15 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       );
     const outgoing = d.edges.filter((e) => e.source === node.id);
     const expected = outgoingPorts(node);
-    if (node.kind === 'switch') {
+    if (node.routing && !supportsResultRouting(node))
+      throw new InterlockError(
+        `${node.label}: result routing requires an Agent, Script, Fetch or waited Workflow`,
+      );
+    if (node.outputBindings && !supportsResultRouting(node))
+      throw new InterlockError(
+        `${node.label}: output bindings require an Agent, Script, Fetch or waited Workflow`,
+      );
+    if (node.kind === 'switch' || node.routing) {
       if (expected.some((port) => !port.trim()))
         throw new InterlockError(
           `${node.label}: Switch port names must not be blank`,
@@ -760,11 +839,16 @@ export {
   contractAtPath,
   contractPaths,
   nodeInputHint,
+  nodeOutputContract,
   type InputHint,
 } from './inputHints.js';
 
 export function nodeKindLabel(kind: WorkflowNode['kind']): string {
-  return kind === 'batch' ? 'Batch' : kind;
+  return kind === 'switch' || kind === 'condition'
+    ? 'Branch'
+    : kind === 'batch'
+      ? 'Batch'
+      : kind;
 }
 
 /** Ownership restricts authoring references, independently of execution ancestry. */

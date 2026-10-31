@@ -12,17 +12,17 @@ The check also reads the current claim state. It does not accept a result, renew
 
 `accepted` is always `false` because the check accepts no new result. `alreadyAccepted` identifies an identical result accepted earlier. `claimUsable` describes the live claim at check time. `canSubmit` permits either a new valid submission or an identical completed replay.
 
-| Code                                                                                 | Next action                                                                                    |
-| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `ready`                                                                              | Submit before the lease expires.                                                               |
-| `invalid_result`                                                                     | Correct the listed fields, then check or submit again while the claim is usable.               |
-| `already_accepted`                                                                   | Read the result. Repeating the identical submission is safe.                                   |
-| `completed_conflict`                                                                 | Read the accepted result. A different result cannot replace it.                                |
-| `held`, `expired`, `replaced`, `cancelled`, `inactive`, `invalid_claim`, `not_found` | Inspect the existing run and assignment before attempting recovery. Never reuse a stale token. |
+| Code                                                                                 | Next action                                                                                                              |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `ready`                                                                              | Submit before the lease expires.                                                                                         |
+| `invalid_result`                                                                     | Follow nextAction: correct listed result fields, or inspect workflow routing/output mappings, while the claim is usable. |
+| `already_accepted`                                                                   | Read the result. Repeating the identical submission is safe.                                                             |
+| `completed_conflict`                                                                 | Read the accepted result. A different result cannot replace it.                                                          |
+| `held`, `expired`, `replaced`, `cancelled`, `inactive`, `invalid_claim`, `not_found` | Inspect the existing run and assignment before attempting recovery. Never reuse a stale token.                           |
 
 Known expired-token receipts distinguish an expired claim from one replaced by a later active claim. Unknown tokens report `invalid_claim`. Receipt retention is bounded by existing lease-recovery rules. Cancelled work reports `cancelled` even after token invalidation.
 
-`diagnostics` contains at most ten `items`, the full error `total`, and a `truncated` flag. Each item has a JSON Pointer `path`, a `schemaPath`, a JSON Schema `rule`, a corrective `message`, and `pathTruncated`. The empty pointer identifies the root value. Paths retain at most 256 characters plus an ellipsis. Messages exclude candidate values and contract enum values; consult the assignment's output schema for allowed values and limits. These are structural checks, not proof of implementation correctness.
+`diagnostics` contains at most ten `items`, the full error `total`, and a `truncated` flag. Each item has a JSON Pointer `path`, a `schemaPath`, a validation or result-processing `rule`, a corrective `message`, and `pathTruncated`. The empty pointer identifies the root value. Paths retain at most 256 characters plus an ellipsis. Messages exclude candidate values and contract enum values; consult the assignment's output schema for allowed values and limits. These are structural checks, not proof of implementation correctness.
 
 ## Handle rejected submissions
 
@@ -32,7 +32,7 @@ CLI preflight prints the report and exits successfully when the check itself com
 
 ## Check results against assignment input
 
-Agent nodes accept up to 32 optional `resultRules`. Rules are captured with the assignment and published definition. Full assignments and claims include them; compact discovery omits them. In Agent settings, use **Result checks** to add or remove checks.
+Agent nodes accept up to 32 optional `resultRules`. Rules are captured with the assignment and published definition. Full assignments and claims include them; compact discovery omits them. In Agent settings, use **Result → Additional result checks** to add or remove checks.
 
 ```json
 {
@@ -55,3 +55,5 @@ Paths use the existing dot-separated keys and array indices. Blank paths or `$` 
 Preflight and submission share the evaluator. A failed rule returns `invalid_result`, retains a usable claim for correction, and does not dispatch downstream work. Diagnostics add `ruleId` and, for equality checks, `inputPath`. They retain the ten-item limit and never return compared values. A later publication or prompt edit cannot change existing captured rules or input. No rules preserves existing behavior. These checks validate structural obligations, not whether evidence or software claims are true.
 
 Held work reports `held` with no usable claim. [Resume explicitly](work-holds.md), inspect external side effects, and obtain a fresh claim before submitting. A pre-hold token cannot regain result authority.
+
+Result preflight also checks the pinned node’s result routing and output mappings without dispatching downstream work. Missing or unmatched result fields reject the candidate under the live claim. Mapping errors identify `#/outputBindings` and suggest `inspect_work`; an unavailable original source or earlier execution may require fixing the workflow. Routing reads the raw candidate before forwarding fields are built. See [Step data and result branches](node-data.md).

@@ -3,7 +3,7 @@ import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { STARTED_RUN_SCHEMA } from '@interlock/core';
+import { STARTED_RUN_SCHEMA, type WorkflowNode } from '@interlock/core';
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
 import { workflowCall } from './fixtures/detached';
 vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
@@ -38,10 +38,12 @@ async function render(
   mode?: 'wait' | 'detached',
   batchId?: string,
   onFailure?: 'route' | 'fail',
+  resultSettings: Pick<WorkflowNode, 'routing' | 'outputBindings'> = {},
 ) {
   const definition = workflowCall('child', mode);
   const node = definition.nodes[1];
   node.batchId = batchId;
+  Object.assign(node, resultSettings);
   if (node.kind === 'workflow') node.onFailure = onFailure;
   if (onFailure === 'route')
     definition.edges.push({
@@ -95,9 +97,9 @@ it('preserves omitted mode and restores the wait contract when toggling before A
   ).toBe(true);
   await choose('detached');
   expect(container.textContent).toContain('runId, workflowId, and version');
-  const output = Array.from(container.querySelectorAll('section')).find((s) =>
-    s.textContent?.includes('Output · Started run'),
-  )!;
+  const output = Array.from(container.querySelectorAll('span'))
+    .find((s) => s.textContent === 'Output · Started run')!
+    .closest('section')!;
   expect(output.querySelector('button')).toBeNull();
   await choose('wait');
   await apply();
@@ -173,4 +175,26 @@ it('removes the failed edge when disabling Workflow failure routing', async () =
       (edge: any) => edge.port === 'failed',
     ),
   ).toBe(false);
+});
+
+it('restores result branches and output fields when a detached toggle is reversed before Apply', async () => {
+  const routing = {
+    path: 'ready',
+    cases: [{ port: 'yes', equals: true }],
+    default: 'no',
+  };
+  const outputBindings = {
+    summary: { source: 'literal' as const, value: 'done' },
+  };
+  const { onApply } = await render(undefined, undefined, undefined, {
+    routing,
+    outputBindings,
+  });
+  await choose('detached');
+  await choose('wait');
+  await apply();
+  expect(onApply.mock.calls[0][0].definition.nodes[1]).toMatchObject({
+    routing,
+    outputBindings,
+  });
 });

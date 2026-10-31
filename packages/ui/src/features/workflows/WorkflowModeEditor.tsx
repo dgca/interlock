@@ -14,10 +14,16 @@ export function WorkflowModeEditor({
   const waitOnFailure = useRef(
     node.mode === 'detached' ? undefined : node.onFailure,
   );
+  const waitRouting = useRef(
+    node.mode === 'detached' ? undefined : node.routing,
+  );
+  const waitBindings = useRef(
+    node.mode === 'detached' ? undefined : node.outputBindings,
+  );
   return (
     <>
       <Radio.Group
-        label="Execution"
+        label="When to continue"
         mt="md"
         mb="md"
         value={node.mode ?? 'wait'}
@@ -26,10 +32,15 @@ export function WorkflowModeEditor({
           if (node.mode !== 'detached') {
             waitOutput.current = node.outputSchema;
             waitOnFailure.current = node.onFailure;
+            waitRouting.current = node.routing;
+            waitBindings.current = node.outputBindings;
           }
           onChange({
             ...node,
             mode,
+            routing: mode === 'detached' ? undefined : waitRouting.current,
+            outputBindings:
+              mode === 'detached' ? undefined : waitBindings.current,
             onFailure: mode === 'detached' ? undefined : waitOnFailure.current,
             outputSchema:
               mode === 'detached'

@@ -1399,7 +1399,7 @@ it.each(['stdio', 'http'])(
         );
       expect(createDefinition.description).toContain('Switch nodes');
       expect(createDefinition.description).toContain('Missing paths fail');
-      expect(client.getInstructions()).toContain('Switch executions record');
+      expect(client.getInstructions()).toContain('Routed executions record');
       expect(createDefinition.description).toContain('Omit default to fail');
       for (const withFallback of [true, false]) {
         const switchDraft = switchDefinition(withFallback);

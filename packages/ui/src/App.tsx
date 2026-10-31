@@ -35,6 +35,19 @@ export function App() {
   const [editorDirty, setEditorDirty] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [engineHost, setEngineHost] = useState<string>();
+  useEffect(() => {
+    let active = true;
+    void api.connection
+      .query()
+      .then((config) => {
+        if (active) setEngineHost(new URL(config.engineUrl).host);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
   const [loadError, setLoadError] = useState('');
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
@@ -123,6 +136,7 @@ export function App() {
         onConnect={context.onConnect}
         page={page}
         connected={connected}
+        engineHost={engineHost}
         onNavigate={(next) =>
           void navigate(
             next === 'runs'

@@ -109,7 +109,7 @@ Claim assignments with your actual capabilities. For context.continuityGroup, re
 Perform each assignment using its composed prompt, input, and context policy. Saved prompts are captured for the run; do not reload newer library content to replace assignment instructions. Submit results and use the returned runId and cursor for continuation. nextCall suggests a read-only call; null means choose work and claim with your actual identity and capabilities.
 Submit JSON matching its output schema.
 Use get_run_briefing to resume and distinguish blockers when no work is available.
-Use get_run_result for selected data and final outputs, and wait_for_run_change with the briefing cursor. The final output can differ from your last submission.
+Use get_run_result for selected data and final outputs (`field:"result"` with executionId reads a raw node result before output mapping), and wait_for_run_change with the briefing cursor. The final output can differ from your last submission.
 Use get_run for full inspection of the existing run. Do not start another run to inspect it.
 For a long timer wait, report the deadline and resume this same run later.
 Do not poll continuously or submit a made-up result to end a wait.

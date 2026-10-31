@@ -1,4 +1,6 @@
-# Switch routing
+# Branch routing
+
+The editor calls this step **Branch**; its stored kind remains `switch`. Legacy `condition` definitions also use the Branch editor and retain their behavior.
 
 A Switch chooses one named route by comparing a path in its input against ordered JSON values. It uses the same structural equality as Condition. Strings, numbers, booleans, null, arrays, and objects are supported without type coercion. Object key order does not affect equality; array order does.
 
@@ -48,14 +50,16 @@ Switch runs automatically without an agent assignment. A routed execution record
 
 ## Editor
 
-Select **Switch** in **Add node**. **Check this input field** selects a field from the JSON data the node receives. For `{"route":"ticket"}`, enter `route`. Use dots for nested fields or leave the field blank to compare the whole input.
+Select **Branch** in **Add node**. **Check this input field** selects a field from the JSON data the node receives. For `{"route":"ticket"}`, enter `route`. Use dots for nested fields or leave the field blank to compare the whole input.
 
-When the input has a declared or inferred shape, the path field suggests known fields. The match editor shows the selected field's type and uses it for newly added cases. Declared text choices appear as suggestions, but you can type another value. Existing case values stay unchanged when the path changes. You can still type a path or select a different match-value type.
+When the input has a declared or inferred shape, the path field suggests known fields. The match editor uses the selected field's type for newly added cases. Use **Show value types** to inspect or change each value's type. Declared text choices appear as suggestions, but you can type another value. Existing case values stay unchanged when the path changes. You can still type a path or select a different match-value type.
 
 Each case has a value type, a match value, and a **Branch name**. Enter text without JSON quotes. Choose Number, Boolean, or Null for those value types, or JSON for lists, objects, and direct JSON editing. Boolean values use visible True and False choices. Existing values keep their types when opened. New cases start with a value based on the selected field's known type, or empty text when the type is unknown.
 
-**When no case matches** defaults to **Fail the run** for new nodes. Choose **Follow a fallback branch** to reveal **Fallback branch name**, then connect that branch on the canvas. Existing Switch nodes with a fallback keep that setting. Connect each case branch too. The canvas marks the fallback handle and expands for additional cases. Branch names are stored as `port` values; the optional fallback name is stored in `default`.
+New Branches start with a True comparison and a False fallback. **When no case matches** can use **Fail the run** or **Follow a fallback branch**. Choose **Follow a fallback branch** to reveal **Fallback branch name**, then connect that branch on the canvas. Existing Switch nodes with a fallback keep that setting. Connect each case branch too. The canvas marks the fallback handle and expands for additional cases. Branch names are stored as `port` values; the optional fallback name is stored in `default`.
 
 Renaming or removing a branch, or disabling fallback, in settings removes its connection when you select **Apply changes**. The editor lists affected connected branches before you apply. Connect renamed branches again before publication. Cancel discards the settings changes. Raw edits retain edges exactly as entered, so update those edges when changing port names.
 
 Incomplete graphs and duplicate or blank port names can be saved as drafts. Publication reports the invalid names or missing routes. Regex and range matching are not supported.
+
+Agent, Script, Fetch and waited Workflow steps can also [branch on a result](node-data.md), using the same matching rules after their work completes.

@@ -9,6 +9,7 @@ export type ExecutionMetadata = Omit<
   NodeExecution,
   | 'input'
   | 'output'
+  | 'result'
   | 'originalInput'
   | 'request'
   | 'retryChildRunIds'
@@ -72,7 +73,7 @@ export function continuationState(db: DatabaseSync, id: string) {
     db
       .prepare(
         `${tree}
-    SELECT json_set(json_remove(e.value, '$.input', '$.output', '$.originalInput', '$.request', '$.retryChildRunIds', '$.check.output'),
+    SELECT json_set(json_remove(e.value, '$.input', '$.output', '$.result', '$.originalInput', '$.request', '$.retryChildRunIds', '$.check.output'),
       '$.runId', d.id, '$.hasOutput', json_type(e.value, '$.output') IS NOT NULL) AS value
     FROM tree JOIN documents d ON d.collection = 'runs' AND d.id = tree.id, json_each(d.value, '$.executions') e
     ORDER BY d.rowid, CAST(e.key AS INTEGER)

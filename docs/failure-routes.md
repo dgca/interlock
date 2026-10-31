@@ -97,3 +97,5 @@ A child whose failure was handled cannot be retried independently, even while it
 Route-enabled allocation and caller links commit together, and routing uses a savepoint. A persistence failure rolls back allocation or recovery and stops the caller. An engine restart observes committed child outcomes and does not route an already-handled call again.
 
 Agent attempts and claim correction, detached runs, and polling Wait checks retain their existing behavior. Automatic retry, backoff, and executor fallback remain outside this feature.
+
+With [result routing](node-data.md), connect every configured success branch and the independent `failed` port. Result-routing or output-mapping errors stay terminal; they do not represent a failed operation and do not take Failed. Failure envelopes bypass success-result routing and mapping.
