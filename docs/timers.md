@@ -145,3 +145,5 @@ A waiting execution consumes one step regardless of how long it waits or how man
 Timer fields are optional additions to persisted records and require no data migration. Existing Agent definitions without `unclaimedTimeoutMs` retain indefinite waiting. Timers pause existing runs; they do not schedule new or recurring runs. For repeated Agent work, [continuing Exits](continue-as-new.md) explicitly pass checkpoints to bounded successor runs with fresh step budgets; reaching maxSteps never triggers rollover automatically.
 
 [External holds](work-holds.md) suspend the remaining unclaimed timeout of available Agent work. Holding claimed work invalidates its lease; resumption starts a full unclaimed interval. Budget blocking can keep that interval suspended after resumption. No lease or unclaimed timeout advances while held, and a deadline that has already elapsed wins before a hold.
+
+An Agent with [result routing](node-data.md) connects its configured success branches and the independent Timeout port. Timeout sends the original input and bypasses result routing and output mappings.

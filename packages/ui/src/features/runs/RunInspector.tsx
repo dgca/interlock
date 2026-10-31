@@ -507,10 +507,21 @@ export function RunInspector({
               </>
             )}
             {(execution || !nodeId) && (
-              <JsonEditor label="Input" value={execution?.input ?? run.input} />
+              <JsonEditor
+                label="Input"
+                value={execution ? execution.input : run.input}
+              />
+            )}
+            {execution?.result !== undefined && (
+              <JsonEditor label="Accepted result" value={execution.result} />
             )}
             {execution?.output !== undefined && (
-              <JsonEditor label="Output" value={execution.output} />
+              <JsonEditor
+                label={
+                  execution.result !== undefined ? 'Forwarded output' : 'Output'
+                }
+                value={execution.output}
+              />
             )}{' '}
             {allWork
               .filter((w) => w.executionId === execution?.id)

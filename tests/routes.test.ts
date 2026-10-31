@@ -10,6 +10,9 @@ import { routes } from '../packages/ui/src/routes';
 const queries = vi.hoisted(() => ({ workflows: vi.fn(), runs: vi.fn() }));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
+    connection: {
+      query: () => Promise.resolve({ engineUrl: 'http://127.0.0.1:4310' }),
+    },
     workflows: { list: { query: queries.workflows } },
     runs: { list: { query: queries.runs } },
     prompts: { list: { query: () => Promise.resolve([]) } },

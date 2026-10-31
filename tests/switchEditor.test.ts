@@ -104,6 +104,12 @@ async function fill(label: string, value: string) {
   });
 }
 async function chooseType(label: string, value: string) {
+  if (!container.querySelector(`[aria-label="${label}"]`))
+    await act(async () =>
+      Array.from(container.querySelectorAll('button'))
+        .find((b) => b.textContent === 'Show value types')!
+        .click(),
+    );
   const field = container.querySelector<HTMLInputElement>(
     `[aria-label="${label}"]`,
   )!;
@@ -136,19 +142,25 @@ const cases = (onApply: ReturnType<typeof vi.fn>) =>
   onApply.mock.calls[0][0].definition.nodes[1].cases;
 
 async function chooseUnmatched(value: string) {
-  await act(async () =>
-    container
-      .querySelector<HTMLInputElement>(`input[type="radio"][value="${value}"]`)!
-      .click(),
-  );
+  const select = container.querySelector<HTMLSelectElement>(
+    'select[aria-label="When no case matches"]',
+  )!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLSelectElement.prototype,
+      'value',
+    )!.set!.call(select, value);
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
 }
 
 it('preserves existing fallbacks and their connections when settings are applied', async () => {
   const { onApply } = await render(['ticket']);
   expect(
-    container.querySelector<HTMLInputElement>('input[value="fallback"]')!
-      .checked,
-  ).toBe(true);
+    container.querySelector<HTMLSelectElement>(
+      'select[aria-label="When no case matches"]',
+    )!.value,
+  ).toBe('fallback');
   expect(container.textContent).toContain('Fallback branch name');
   await apply();
   const definition = onApply.mock.calls[0][0].definition;
@@ -181,8 +193,10 @@ it('warns before removing a fallback connection and restores it if toggled back 
 it('allows adding a fallback to a Switch that previously failed on no match', async () => {
   const { onApply } = await render(['ticket'], { withFallback: false });
   expect(
-    container.querySelector<HTMLInputElement>('input[value="fail"]')!.checked,
-  ).toBe(true);
+    container.querySelector<HTMLSelectElement>(
+      'select[aria-label="When no case matches"]',
+    )!.value,
+  ).toBe('fail');
   await chooseUnmatched('fallback');
   await apply();
   expect(onApply.mock.calls[0][0].definition.nodes[1].default).toBe('fallback');
@@ -191,16 +205,20 @@ it('allows adding a fallback to a Switch that previously failed on no match', as
 it('opens every JSON value type without changing existing definitions', async () => {
   const values: Json[] = ['42', 42, false, null, { route: 'ticket' }, [1, 'a']];
   const { onApply, node } = await render(values);
-  expect(container.textContent).toContain(
-    'Checks a value and follows one matching branch.',
-  );
-  expect(container.textContent).toContain('Use dots for nested fields.');
+  expect(container.textContent).toContain('Branches');
+  expect(container.textContent).toContain('check the whole input.');
   expect(container.textContent).not.toContain('ID:');
   expect(
     container.querySelector<HTMLInputElement>(
       '[aria-label="Case 1 match value"]',
     )!.value,
   ).toBe('42');
+  expect(container.querySelector('input[aria-label$="type"]')).toBeNull();
+  await act(async () =>
+    Array.from(container.querySelectorAll('button'))
+      .find((b) => b.textContent === 'Show value types')!
+      .click(),
+  );
   expect(
     Array.from(
       container.querySelectorAll<HTMLInputElement>('input[aria-label$="type"]'),
@@ -307,7 +325,11 @@ it('offers upstream fields and types while leaving the input contract as any', a
     ),
   ).toContain('active');
   await fill('Check this input field', 'active');
-  expect(container.textContent).toContain('Input field: Boolean');
+  const showTypes = Array.from(container.querySelectorAll('button')).find(
+    (b) => b.textContent === 'Show value types',
+  );
+  if (showTypes) await act(async () => showTypes.click());
+  expect(container.textContent).toContain('Expected: Boolean');
   await act(async () =>
     Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent === 'Add case')!

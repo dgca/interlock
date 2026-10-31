@@ -5,11 +5,13 @@ export function Sidebar({
   page,
   onNavigate,
   connected,
+  engineHost,
   onConnect,
 }: {
   page: 'workflows' | 'runs' | 'prompts';
   onNavigate: (page: 'workflows' | 'runs' | 'prompts') => void;
   connected: boolean;
+  engineHost?: string;
   onConnect?: () => void;
 }) {
   return (
@@ -47,7 +49,7 @@ export function Sidebar({
         <i className={connected ? styles.online : styles.offline} />
         <div>
           {connected ? 'Local engine connected' : 'Connecting to engine'}
-          <small>127.0.0.1:4310</small>
+          {engineHost && <small>{engineHost}</small>}
         </div>
       </footer>
     </aside>

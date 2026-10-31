@@ -1,10 +1,17 @@
 import {
+  bindingEntries,
+  literalContract,
+  type PathBinding,
+} from './valueBindings.js';
+import type { ValueBinding } from './index.js';
+import {
   definitionSchema,
   isPollWait,
   hasTimeoutRoute,
   hasFailureRoute,
   failureRouteContract,
   outgoingPorts,
+  supportsResultRouting,
   validateContractSchema,
   validateDefinition,
   validateBatchScopes,
@@ -159,6 +166,20 @@ export function diagnoseDraft(input: unknown): {
     }
   });
   d.nodes.forEach((n, i) => {
+    if (n.routing && !supportsResultRouting(n))
+      add(
+        'unsupported_result_routing',
+        `nodes.${i}.routing`,
+        'Result routing requires an Agent, Script, Fetch or waited Workflow.',
+        { nodeId: n.id },
+      );
+    if (n.outputBindings && !supportsResultRouting(n))
+      add(
+        'unsupported_output_bindings',
+        `nodes.${i}.outputBindings`,
+        'Output fields require an Agent, Script, Fetch or waited Workflow.',
+        { nodeId: n.id },
+      );
     const ports = outgoingPorts(n),
       edges = d.edges.filter((e) => e.source === n.id);
     if (
@@ -171,9 +192,19 @@ export function diagnoseDraft(input: unknown): {
         `Expected outgoing routes: ${ports.join(', ') || 'none'}.`,
         { nodeId: n.id },
       );
-    for (const [field, binding] of Object.entries(n.inputBindings ?? {})) {
-      const path = `nodes.${i}.inputBindings.${field}`;
-      if (n.kind === 'entry' || n.kind === 'exit')
+    for (const [field, binding] of [
+      ...bindingEntries(n.inputBindings ?? {}).map(
+        ([field, b]) => [`inputBindings.${field}`, b] as const,
+      ),
+      ...bindingEntries(n.outputBindings ?? {}).map(
+        ([field, b]) => [`outputBindings.${field}`, b] as const,
+      ),
+    ]) {
+      const path = `nodes.${i}.${field}`;
+      if (
+        (n.kind === 'entry' || n.kind === 'exit') &&
+        field.startsWith('inputBindings.')
+      )
         add(
           'invalid_binding_target',
           path,
@@ -379,9 +410,10 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
   };
   const bindingSource = (
     node: WorkflowNode,
-    binding: NonNullable<WorkflowNode['inputBindings']>[string],
+    binding: PathBinding,
+    raw?: Shape,
   ): Shape => {
-    if (binding.source === 'input') return incoming(node);
+    if (binding.source === 'input') return raw ?? incoming(node);
     if (binding.source === 'runInput') return shape(d.inputSchema);
     // A workflow can also be invoked from another workflow. Root schema is not known here.
     if (binding.source === 'rootInput') return unknownShape();
@@ -412,13 +444,33 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
     }
     return unknownShape();
   };
-  const resolved = (node: WorkflowNode): Shape => {
-    if (node.kind === 'entry') return shape(d.inputSchema);
-    if (!node.inputBindings) return incoming(node);
+  const bindingShape = (
+    node: WorkflowNode,
+    binding: ValueBinding,
+    raw?: Shape,
+  ): Shape => {
+    if (binding.source === 'literal')
+      return shape(literalContract(binding.value));
+    if (binding.source === 'object')
+      return fieldsShape(node, binding.fields, raw);
+    const selected = atPath(bindingSource(node, binding, raw), binding.path);
+    if (!Object.hasOwn(binding, 'default') || binding.default === undefined)
+      return selected;
+    const fallback = shape(literalContract(binding.default!));
+    if (selected.state === 'missing') return fallback;
+    return structuralEqual(selected.schema, fallback.schema)
+      ? selected
+      : unknownShape();
+  };
+  const fieldsShape = (
+    node: WorkflowNode,
+    fields: Record<string, ValueBinding>,
+    raw?: Shape,
+  ): Shape => {
     const propertyShapes: Record<string, Shape> = Object.fromEntries(
-      Object.entries(node.inputBindings).map(([field, binding]) => [
+      Object.entries(fields).map(([field, b]) => [
         field,
-        atPath(bindingSource(node, binding), binding.path),
+        bindingShape(node, b, raw),
       ]),
     );
     const properties = Object.fromEntries(
@@ -441,6 +493,12 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
       propertyShapes,
     };
   };
+  const resolved = (node: WorkflowNode): Shape =>
+    node.kind === 'entry'
+      ? shape(d.inputSchema)
+      : node.inputBindings
+        ? fieldsShape(node, node.inputBindings)
+        : incoming(node);
   const output = (node: WorkflowNode, port: string): Shape => {
     const key = JSON.stringify([node.id, port]);
     if (cache.has(key)) return cache.get(key)!;
@@ -474,6 +532,8 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
       !isPollWait(node)
     )
       result = resolved(node);
+    else if (node.outputBindings)
+      result = fieldsShape(node, node.outputBindings, shape(node.outputSchema));
     else if (Object.keys(node.outputSchema).length)
       result = shape(node.outputSchema);
     else if (node.kind === 'batch') result = shape({ type: 'array' });
@@ -568,9 +628,31 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
   };
   d.nodes.forEach((node, i) => {
     const base = `nodes.${i}`;
+    if (node.outputBindings) {
+      for (const [field, binding] of bindingEntries(node.outputBindings)) {
+        if (!('path' in binding)) continue;
+        const value = bindingShape(node, binding, shape(node.outputSchema));
+        const path = `${base}.outputBindings.${field}.path`;
+        if (value.state === 'missing')
+          warn(
+            'binding_missing_path',
+            node,
+            path,
+            `Source contract excludes path "${binding.path}".`,
+          );
+        else if (value.state === 'unknown' || value.uncertain)
+          warn(
+            'binding_unknown',
+            node,
+            path,
+            `Cannot determine source path "${binding.path}".`,
+          );
+      }
+    }
     if (node.inputBindings) {
-      for (const [field, binding] of Object.entries(node.inputBindings)) {
-        const value = atPath(bindingSource(node, binding), binding.path),
+      for (const [field, binding] of bindingEntries(node.inputBindings)) {
+        if (!('path' in binding)) continue;
+        const value = bindingShape(node, binding),
           path = `${base}.inputBindings.${field}.path`;
         if (value.state === 'missing')
           warn(

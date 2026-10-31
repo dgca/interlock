@@ -24,7 +24,13 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Wait**: A step that pauses until a persisted deadline and passes its input through unchanged, or re-runs a check on a schedule until its result matches and continues with that result merged into the input.
 
-**Switch**: A step that compares one input path against ordered cases and passes its input unchanged through the first matching route. Unmatched values fail the run unless a fallback route is configured.
+**Branch**: A step that compares one input path against ordered cases and passes its input unchanged through the first matching route. Unmatched values fail the run unless a fallback route is configured.
+
+**Accepted result**: Data produced by a step and accepted against its result contract and checks, before result routing or output mapping.
+
+**Result routing**: A step's selection of its next route by comparing its accepted result against ordered cases.
+
+**Forwarded output**: Data a completed step sends onward. It is the accepted result unless the step constructs a different set of output fields.
 
 **Batch**: A step that repeats an item path for each value in a list and sends the ordered results to its continuation after all items finish.
 
@@ -48,7 +54,7 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Executor**: An agent or person that claims a work request and supplies its result.
 
-**Input or output contract**: The structure and constraints a workflow or node requires of the data it receives or returns.
+**Input or output contract**: The structure and constraints required at a workflow boundary or for a step’s input or accepted result. A step’s accepted-result contract can differ from its forwarded output.
 
 **Test suite**: A named, revisioned collection of representative input cases and explicit checks for one workflow.
 

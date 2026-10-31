@@ -34,8 +34,10 @@ Without bindings, `sample.input` is the Agent input. With bindings, provide the 
 - `runInput`, `rootInput`, and `itemInput`: the corresponding scope inputs.
 - `outputs`: a map of node IDs to their latest completed output in the same execution scope. For repeated visits, supply the output for the visit being previewed.
 
-Missing sources or paths stay unknown; an empty object is never substituted. Item input requires a Batch-scoped Agent. Node-output fixtures cannot cross Batch scopes or refer to Entry or Exit. The report includes up to twenty unresolved fields, their total count, and a truncation flag. `inputValidation` is `valid`, `invalid`, or `unknown` for previews, and `captured` for existing assignments. `invalid_sample_input` warns about a resolved sample that does not satisfy the Agent input contract.
+Fixed and nested fields resolve from their configured values. An explicit missing-path default is included when its source is supplied. Missing sources or paths without defaults stay unknown; an empty object is never substituted. Item input requires a Batch-scoped Agent. Node-output fixtures cannot cross Batch scopes or refer to Entry or Exit. The report includes up to twenty unresolved fields, their total count, and a truncation flag. `inputValidation` is `valid`, `invalid`, or `unknown` for previews, and `captured` for existing assignments. `invalid_sample_input` warns about a resolved sample that does not satisfy the Agent input contract.
 
 Previews use the selected definition and current saved prompt contents, matching capture-at-start behavior. Missing saved prompts remain unknown. Fresh-session execution instructions include future run and work IDs, so their size remains unknown until an actual assignment exists. A preview does not execute upstream nodes, prove that a route is reachable, or guarantee publication. Inspect a captured assignment for exact component sizes, including saved prompts and fresh-session instructions. Later prompt or draft edits do not change captured assignments.
 
 When present, resultRules are measured as a separate component in captured assignments and previews.
+
+Result routing and forwarded output fields run after an assignment. Their data is excluded from the assignment input unless input bindings select it.

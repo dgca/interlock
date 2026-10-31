@@ -592,3 +592,27 @@ it('uses receipt coverage to keep an omitted trial partial even if preparation f
     state: 'partial',
   });
 });
+
+it('validates a grader receipt against its raw result when forwarded output is reshaped', async () => {
+  const e = engine(),
+    f = fixture(e),
+    run = start(e, f);
+  const stopped = await drive(e, run.id, { stopBeforeRecord: true });
+  const reference = stopped!.q.evaluation!;
+  const reviewer = e.run(reference.reviewerRunId),
+    execution = reviewer.executions.find(
+      (x) => x.id === reference.executionId,
+    )!;
+  const raw = structuredClone(execution.output!);
+  execution.result = raw;
+  execution.output = { summary: 'Forwarded presentation data' };
+  e.store.put('runs', reviewer);
+  expect(
+    e.continuation.result({
+      id: reviewer.id,
+      executionId: execution.id,
+      field: 'result',
+    }).value,
+  ).toEqual(raw);
+  expect(e.testbench.judge(stopped!.q).evaluation?.grader.kind).toBe('agent');
+});

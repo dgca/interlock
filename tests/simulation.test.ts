@@ -563,3 +563,52 @@ it('evaluates Switch routes and input bindings using the pinned engine semantics
   );
   expect(await finish(e, request)).toMatchObject({ state: 'passed' });
 });
+
+it('simulates raw result routing before applying output fields without running the Script', async () => {
+  const e = setup(),
+    d = blankDefinition();
+  d.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    kind: 'script',
+    label: 'Fixture only',
+    language: 'javascript',
+    command: 'throw new Error("Must use the fixture");',
+    routing: {
+      path: 'ready',
+      cases: [{ port: 'ready', equals: true }],
+      default: 'other',
+    },
+    outputBindings: {
+      answer: { source: 'input', path: 'value' },
+      policy: { source: 'literal', value: 'fixed' },
+    },
+  });
+  d.edges = d.edges
+    .filter((edge) => edge.source !== 'agent')
+    .concat(
+      ['ready', 'other'].map((port) => ({
+        id: `route-${port}`,
+        source: 'agent',
+        port,
+        target: 'exit',
+      })),
+    );
+  const { request } = scenario(
+    e,
+    [
+      {
+        nodeId: 'agent',
+        kind: 'script',
+        output: { ready: true, value: 42, privateBlob: 'hidden'.repeat(1000) },
+      },
+    ],
+    d,
+    [
+      { kind: 'route', nodeId: 'agent', visit: 1, port: 'ready' },
+      { kind: 'output', path: 'answer', operator: 'equals', expected: 42 },
+    ],
+  );
+  const report = await finish(e, request);
+  expect(report.state).toBe('passed');
+  expect(JSON.stringify(report)).not.toContain('hidden'.repeat(10));
+});

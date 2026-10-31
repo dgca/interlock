@@ -99,7 +99,7 @@ it('renders named Switch handles, expands for cases, and preserves ports through
   ]);
 });
 
-it('creates a Switch with editable cases and fails unmatched values by default', async () => {
+it('creates a Branch with editable Boolean routes', async () => {
   const onApply = vi.fn();
   await act(async () =>
     root.render(
@@ -133,20 +133,22 @@ it('creates a Switch with editable cases and fails unmatched values by default',
   ).not.toBeNull();
   expect(container.textContent).toContain('When no case matches');
   expect(
-    container.querySelector<HTMLInputElement>('input[value="fail"]')!.checked,
-  ).toBe(true);
+    container.querySelector<HTMLSelectElement>(
+      'select[aria-label="When no case matches"]',
+    )!.value,
+  ).toBe('fallback');
   await act(async () => button('Add node').click());
   expect(onApply.mock.calls[0][0].definition.nodes.at(-1)).toMatchObject({
     kind: 'switch',
     path: '',
     cases: [
+      { port: 'true', equals: true },
       { port: 'case-1', equals: '' },
-      { port: 'case-2', equals: '' },
     ],
   });
-  expect(
-    onApply.mock.calls[0][0].definition.nodes.at(-1).default,
-  ).toBeUndefined();
+  expect(onApply.mock.calls[0][0].definition.nodes.at(-1).default).toBe(
+    'false',
+  );
 });
 
 it('removes deleted and renamed Switch connections only when settings are applied', async () => {
@@ -179,7 +181,7 @@ it('removes deleted and renamed Switch connections only when settings are applie
       .click(),
   );
   const label = Array.from(container.querySelectorAll('label')).find(
-    (element) => element.textContent === 'Fallback branch name',
+    (element) => element.textContent?.startsWith('Fallback branch name'),
   )!;
   const input = container.querySelector<HTMLInputElement>(
     `[id="${label.htmlFor}"]`,
@@ -258,7 +260,6 @@ it('creates a Batch from the ordinary add dialog without a nested definition or 
     'script',
     'fetch',
     'wait',
-    'condition',
     'switch',
     'workflow',
     'batch',
@@ -441,7 +442,7 @@ it('shows intrinsic Batch array contracts and explains selection by Items path',
   expect(
     container.querySelector('[data-contract="Expected format"]')!.textContent,
   ).toContain('{"type":"array"}');
-  const inputSection = container.querySelector('section[aria-label="Input"]')!;
+  const inputSection = container.querySelector('[data-node-section="input"]')!;
   expect(
     inputSection.querySelector('select[aria-label="Source"]'),
   ).not.toBeNull();
@@ -450,7 +451,7 @@ it('shows intrinsic Batch array contracts and explains selection by Items path',
   ).not.toBeNull();
   expect(container.textContent).not.toContain('Input bindings');
   expect(
-    container.querySelector('[data-contract="Output"]')!.textContent,
+    container.querySelector('[data-contract="Result format"]')!.textContent,
   ).toContain('{"type":"array"}');
   expect(container.textContent).toContain('Input must be an array');
 });

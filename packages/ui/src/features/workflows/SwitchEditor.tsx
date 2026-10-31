@@ -1,7 +1,9 @@
-import { Radio, Stack, TextInput } from '@mantine/core';
+import { NativeSelect, TextInput, Textarea, Text } from '@mantine/core';
 import { useState } from 'react';
 import { Trash2, Plus } from 'lucide-react';
 import {
+  matchRouting,
+  type Json,
   contractAtPath,
   outgoingPorts,
   type Contract,
@@ -19,14 +21,39 @@ export function SwitchEditor({
   connectedBranches = [],
   inputSchema = {},
   inputSource,
+  dataSource = 'input',
+  reservedPorts = [],
+  showConnectionWarning = true,
 }: {
   node: SwitchNode;
   onChange: (node: SwitchNode) => void;
   connectedBranches?: string[];
   inputSchema?: Contract;
   inputSource?: string;
+  dataSource?: 'input' | 'result';
+  reservedPorts?: string[];
+  showConnectionWarning?: boolean;
 }) {
   // Editor-only identities keep partially typed values with their row on removal.
+  const [showTypes, setShowTypes] = useState(false);
+  const [sample, setSample] = useState('');
+  let sampleMessage = '',
+    sampleError = false;
+  if (sample.trim()) {
+    try {
+      const parsed = JSON.parse(sample) as Json;
+      const port = matchRouting(node, parsed);
+      sampleMessage =
+        port === undefined
+          ? 'No match. This step would fail.'
+          : `Follow branch: ${port}`;
+      sampleError = port === undefined;
+    } catch (error) {
+      sampleMessage =
+        error instanceof Error ? error.message : 'Enter valid JSON.';
+      sampleError = true;
+    }
+  }
   const [keys, setKeys] = useState(() =>
     node.cases.map(() => crypto.randomUUID()),
   );
@@ -51,30 +78,52 @@ export function SwitchEditor({
   const removed = connectedBranches.filter(
     (name) => !outgoingPorts(node).includes(name),
   );
+  const portError = (port: string) =>
+    !port.trim()
+      ? 'Enter a branch name.'
+      : reservedPorts.includes(port)
+        ? `"${port}" is reserved for the lifecycle route.`
+        : [
+              ...node.cases.map((c) => c.port),
+              ...(node.default === undefined ? [] : [node.default]),
+            ].filter((p) => p === port).length > 1
+          ? 'Each branch needs a unique name.'
+          : '';
   return (
     <div className={styles.editor}>
       <div>
         <InputPathInput
-          label="Check this input field"
-          aria-label="Check this input field"
+          label={`Check this ${dataSource} field`}
+          aria-label={`Check this ${dataSource} field`}
           value={node.path}
           schema={inputSchema}
           suggestionSource={inputSource}
           placeholder="e.g. route or request.category"
-          onChange={(path) => patch({ path })}
+          onChange={(path) => {
+            const schema = contractAtPath(inputSchema, path);
+            const suggested = suggestedMatchValue(schema);
+            if (
+              (schema.type || schema.enum) &&
+              node.cases.some(
+                (c) =>
+                  (c.equals === null ? 'null' : typeof c.equals) !==
+                  (suggested === null ? 'null' : typeof suggested),
+              )
+            )
+              setShowTypes(true);
+            patch({ path });
+          }}
         />
         <p className={styles.help}>
-          Use dots for nested fields. Leave blank to check the whole input. A
-          missing field fails the run.
+          Leave blank to check the whole {dataSource}. Missing fields fail the
+          step.
         </p>
       </div>
       <div className={styles.cases}>
-        <div>
-          <h3 className={styles.sectionHeading}>Cases</h3>
-          <p className={styles.help}>
-            The first match wins. Connect each named branch to its next step on
-            the canvas.
-          </p>
+        <div className={styles.caseTools}>
+          <Button variant="ghost" onClick={() => setShowTypes(!showTypes)}>
+            {showTypes ? 'Hide value types' : 'Show value types'}
+          </Button>
         </div>
         {node.cases.map((entry, index) => (
           <section
@@ -82,12 +131,11 @@ export function SwitchEditor({
             aria-label={`Case ${index + 1}`}
             key={keys[index]}
           >
-            <span className={styles.caseNumber} aria-hidden="true">
-              {index + 1}
-            </span>
             <div className={styles.caseFields}>
               <TypedValueEditor
                 label={`Case ${index + 1} match value`}
+                valueLabel="Match value"
+                showType={showTypes}
                 value={entry.equals}
                 onChange={(equals) => updateCase(index, { equals })}
                 suggestedSchema={contractAtPath(inputSchema, node.path)}
@@ -98,6 +146,11 @@ export function SwitchEditor({
                 aria-label={`Case ${index + 1} branch name`}
                 placeholder="e.g. create-ticket"
                 value={entry.port}
+                required
+                error={portError(entry.port) || undefined}
+                ref={(element) =>
+                  element?.setCustomValidity(portError(entry.port))
+                }
                 onChange={(event) =>
                   updateCase(index, { port: event.target.value })
                 }
@@ -143,32 +196,32 @@ export function SwitchEditor({
         </div>
       </div>
       <div className={styles.otherwise}>
-        <Radio.Group
+        <NativeSelect
           label="When no case matches"
+          aria-label="When no case matches"
           value={node.default === undefined ? 'fail' : 'fallback'}
-          onChange={(value) =>
-            patch({ default: value === 'fallback' ? fallbackName : undefined })
+          data={[
+            { value: 'fail', label: 'Fail the run' },
+            { value: 'fallback', label: 'Follow a fallback branch' },
+          ]}
+          onChange={(event) =>
+            patch({
+              default:
+                event.target.value === 'fallback' ? fallbackName : undefined,
+            })
           }
-        >
-          <Stack gap="sm" mt="xs">
-            <Radio
-              value="fail"
-              label="Fail the run"
-              description="Stop with an error showing the unmatched value."
-            />
-            <Radio
-              value="fallback"
-              label="Follow a fallback branch"
-              description="Send unmatched values to another step."
-            />
-          </Stack>
-        </Radio.Group>
+        />
         {node.default !== undefined && (
           <TextInput
             mt="md"
             label="Fallback branch name"
             description="Connect this branch to its next step on the canvas."
             value={node.default}
+            required
+            error={portError(node.default) || undefined}
+            ref={(element) =>
+              element?.setCustomValidity(portError(node.default!))
+            }
             onChange={(event) => {
               setFallbackName(event.target.value);
               patch({ default: event.target.value });
@@ -176,7 +229,28 @@ export function SwitchEditor({
           />
         )}
       </div>
-      {removed.length > 0 && (
+      <details className={styles.tryRouting}>
+        <summary>Try branch matching</summary>
+        <Textarea
+          mt="sm"
+          label={`Sample ${dataSource} JSON`}
+          value={sample}
+          placeholder={`Paste a sample ${dataSource}`}
+          rows={3}
+          onChange={(event) => setSample(event.currentTarget.value)}
+        />
+        {sampleMessage && (
+          <Text
+            mt="xs"
+            size="sm"
+            c={sampleError ? 'yellow' : undefined}
+            role="status"
+          >
+            {sampleMessage}
+          </Text>
+        )}
+      </details>
+      {showConnectionWarning && removed.length > 0 && (
         <p className={styles.warning}>
           Applying these changes removes connections for: {removed.join(', ')}.
           Reconnect renamed branches on the canvas.

@@ -53,7 +53,9 @@ The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by th
 
 Select **New workflow** to create a draft. Use **Add node** to choose each step's type, then connect the nodes in execution order. Agent is selected initially; choose another type when needed.
 
-Available nodes include entry and exit, Agent, Script, Fetch, Wait, Condition, Switch, Workflow, and Batch. A Workflow node invokes a pinned published workflow once. It defaults to **Wait for result**. Choose **Start and continue** to return a run reference immediately while the invoked workflow runs independently, even after parent cancellation. See [Workflow execution](docs/workflow-execution.md). A Batch repeats a visible path for each item and collects the results in input order.
+Available nodes include entry and exit, Agent, Script, Fetch, Wait, Branch, Workflow, and Batch. Branch unifies Condition and Switch authoring while retaining existing definitions. A Workflow node invokes a pinned published workflow once. It defaults to **Wait for result**. Choose **Start and continue** to return a run reference immediately while the invoked workflow runs independently, even after parent cancellation. See [Workflow execution](docs/workflow-execution.md). A Batch repeats a visible path for each item and collects the results in input order.
+
+Node settings group the work, input, result and execution controls. Agent, Script, Fetch and waited Workflow steps can branch on an accepted result and construct forwarded fields using fixed values, missing-field defaults and nested objects. The engine validates and routes the raw result before shaping the output. See [Step data and result branches](docs/node-data.md).
 
 Script, Fetch and waited Workflow settings offer **Route on failure** to send structured error data through a **Failed** connector. Existing nodes still stop the run by default. See [failure routes](docs/failure-routes.md) for the error contract and limits.
 

@@ -1,4 +1,8 @@
-import type { WorkflowDefinition, WorkflowNode } from '../index.js';
+import {
+  outgoingPorts,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from '../index.js';
 import { bindingNodeIds } from './inputBindings.js';
 
 export const NODE_SIZE = { width: 220, height: 116 };
@@ -43,6 +47,11 @@ export function canvasGeometry(
       result.height = Math.max(
         result.height,
         32 * (node.cases.length + 1) + 24,
+      );
+    if (node.routing)
+      result.height = Math.max(
+        result.height,
+        32 * outgoingPorts(node).length + 24,
       );
     if (node.kind === 'batch' && !collapsed?.has(node.id)) {
       for (const child of definition.nodes.filter(

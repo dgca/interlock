@@ -1,3 +1,4 @@
+import { bindingsContract } from './valueBindings.js';
 import {
   isPollWait,
   hasTimeoutRoute,
@@ -75,8 +76,9 @@ export function contractPaths(schema: Contract, depth = 0): string[] {
 export function nodeInputHint(
   definition: WorkflowDefinition,
   node: WorkflowNode,
+  side: 'input' | 'output' = 'input',
 ): InputHint {
-  if (known(node.inputSchema))
+  if (side === 'input' && known(node.inputSchema))
     return {
       schema: node.inputSchema,
       source: 'Expected format',
@@ -135,34 +137,8 @@ export function nodeInputHint(
     let result: InputHint;
     if (target.inputBindings) {
       const previous = incoming(target).schema;
-      const properties = Object.fromEntries(
-        Object.entries(target.inputBindings).map(([key, binding]) => {
-          let source: Contract = {};
-          if (binding.source === 'input') source = previous;
-          if (binding.source === 'runInput') source = definition.inputSchema;
-          if (binding.source === 'itemInput' && target.batchId) {
-            const batch = nodes.get(target.batchId);
-            if (batch?.kind === 'batch') source = output(batch, 'item');
-          }
-          if (binding.source === 'node') {
-            const referenced = nodes.get(binding.nodeId);
-            if (
-              referenced &&
-              referenced.batchId === target.batchId &&
-              !hasTimeoutRoute(referenced)
-            )
-              source = output(referenced, 'default');
-          }
-          return [key, contractAtPath(source, binding.path)];
-        }),
-      );
       result = {
-        schema: {
-          type: 'object',
-          properties,
-          required: Object.keys(properties),
-          additionalProperties: false,
-        },
+        schema: boundContract(target, target.inputBindings, previous),
         source: 'Selected input fields',
         inferred: true,
       };
@@ -171,6 +147,30 @@ export function nodeInputHint(
     return result;
   };
 
+  const boundContract = (
+    target: WorkflowNode,
+    fields: NonNullable<WorkflowNode['inputBindings']>,
+    previous: Contract,
+  ): Contract =>
+    bindingsContract(fields, (binding) => {
+      let source: Contract = {};
+      if (binding.source === 'input') source = previous;
+      if (binding.source === 'runInput') source = definition.inputSchema;
+      if (binding.source === 'itemInput' && target.batchId) {
+        const batch = nodes.get(target.batchId);
+        if (batch?.kind === 'batch') source = output(batch, 'item');
+      }
+      if (binding.source === 'node') {
+        const referenced = nodes.get(binding.nodeId);
+        if (
+          referenced &&
+          referenced.batchId === target.batchId &&
+          !hasTimeoutRoute(referenced)
+        )
+          source = output(referenced, 'default');
+      }
+      return contractAtPath(source, binding.path);
+    });
   const output = (source: WorkflowNode, port: string): Contract => {
     if (hasFailureRoute(source) && port === 'failed')
       return failureRouteContract(source.kind);
@@ -187,6 +187,18 @@ export function nodeInputHint(
     }
     if (source.kind === 'workflow' && source.mode === 'detached')
       return STARTED_RUN_SCHEMA;
+    if (source.outputBindings) {
+      const key = `output:${source.id}`;
+      if (visiting.has(key)) return {};
+      visiting.add(key);
+      const result = boundContract(
+        source,
+        source.outputBindings,
+        source.outputSchema,
+      );
+      visiting.delete(key);
+      return result;
+    }
     if (known(source.outputSchema)) return source.outputSchema;
     if (source.kind === 'entry') return definition.inputSchema;
     if (
@@ -199,5 +211,18 @@ export function nodeInputHint(
     return {};
   };
 
-  return input(node);
+  return side === 'input'
+    ? input(node)
+    : {
+        schema: output(node, 'default'),
+        source: 'Forwarded output',
+        inferred: Boolean(node.outputBindings),
+      };
+}
+
+export function nodeOutputContract(
+  definition: WorkflowDefinition,
+  node: WorkflowNode,
+): Contract {
+  return nodeInputHint(definition, node, 'output').schema;
 }

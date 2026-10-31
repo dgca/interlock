@@ -141,6 +141,27 @@ export function FlowNode(props: NodeProps<CanvasNode>) {
     </ActivePorts.Provider>
   );
 }
+function routedPort(node: WorkflowNode, port: string) {
+  if (
+    (port === 'failed' && hasFailureRoute(node)) ||
+    (port === 'timeout' && hasTimeoutRoute(node))
+  )
+    return {
+      label: port === 'failed' ? 'Failed' : 'Timeout',
+      color: 'var(--edge-exception)',
+    };
+  const routing = node.kind === 'switch' ? node : node.routing;
+  const binary =
+    routing?.cases.length === 1 &&
+    routing.cases[0].port === 'true' &&
+    routing.default === 'false';
+  if (binary && (port === 'true' || port === 'false'))
+    return {
+      label: port === 'true' ? 'True' : 'False',
+      color: conditionColors[port],
+    };
+  return { label: port === routing?.default ? `${port} (fallback)` : port };
+}
 function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
   const n = data.node,
     Icon = icons[n.kind];
@@ -157,8 +178,9 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
       : n.kind === 'batch' && !n.itemsPath
         ? { type: 'array' }
         : n.inputSchema;
-  const outputSchema =
-    n.kind === 'workflow' && n.mode === 'detached'
+  const outputSchema = n.outputBindings
+    ? { type: 'object' }
+    : n.kind === 'workflow' && n.mode === 'detached'
       ? STARTED_RUN_SCHEMA
       : n.outputSchema.type
         ? n.outputSchema
@@ -397,7 +419,7 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
               color={conditionColors.false}
             />
           </>
-        ) : n.kind === 'switch' ? (
+        ) : n.kind === 'switch' || n.routing ? (
           [...new Set(outgoingPorts(n))]
             .filter((port) => port.trim())
             .map((port) => (
@@ -405,7 +427,7 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
                 key={port}
                 type="source"
                 id={port}
-                label={port === n.default ? `${port} (fallback)` : port}
+                {...routedPort(n, port)}
                 top={outputPortTop(n, port)}
               />
             ))

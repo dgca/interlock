@@ -24,7 +24,7 @@ Replace the workflow ID and version with an existing published version. Connect 
 
 ## Recover a waited failure
 
-Wait for result can opt into `onFailure:"route"` with default and failed edges. A failed child or a successful result rejected by the caller's output contract sends `{input,error,output}` through Failed, including `error.child` run/version/execution references. The child remains inspectable. Cancellation, caller input/dispatch errors and persistence failures stay terminal. Defaults remain unchanged; detached calls cannot route failures. See [Workflow failure routes](failure-routes.md#waited-workflow-calls).
+Wait for result can opt into `onFailure:"route"` with its configured success edges and a failed edge. A failed child or a successful result rejected by the caller's output contract sends `{input,error,output}` through Failed, including `error.child` run/version/execution references. The child remains inspectable. Cancellation, caller input/dispatch errors and persistence failures stay terminal. Defaults remain unchanged; detached calls cannot route failures. See [Workflow failure routes](failure-routes.md#waited-workflow-calls).
 
 An already-handled failed child cannot be retried independently while recovery proceeds. Retry a later failed recovery step through its owning run. That retry does not replay the child.
 
@@ -97,3 +97,5 @@ A detached workflow creates a new `runInput` scope. Its `rootInput` remains the 
 Deleting a workflow remains blocked if its deletion set includes active detached descendants. Archive it to preserve ongoing work and history.
 
 There is no join node, completion callback, automatic parent notification, cancel-all-descendants action, or global detached-work concurrency limit. Inspect the returned run ID for status and results.
+
+Waited nodes may [route and map their accepted result](node-data.md). Start and continue returns the intrinsic run reference and cannot configure result routing or output mappings. The editor restores pending waited-result settings if you switch back before applying.

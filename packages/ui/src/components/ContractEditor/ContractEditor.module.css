@@ -166,3 +166,20 @@
   flex: 1;
   min-width: 0;
 }
+
+.compact {
+  margin-bottom: 0;
+  padding: 10px 12px;
+}
+.compact > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.compact > div > span {
+  margin: 0;
+}
+.compact small {
+  display: none;
+}

@@ -108,7 +108,8 @@ it('leaves default input untouched and adds fields using the first source option
   await select('Source', 'fields');
   await click('Advanced JSON');
   await click('Use field editor');
-  expect(changed).not.toHaveBeenCalled();
+  expect(latest.inputBindings).toEqual({});
+  changed.mockClear();
   await click('Add input field');
   const source = container.querySelector(
     'select[aria-label="Read from for field 1"]',
@@ -122,7 +123,7 @@ it('leaves default input untouched and adds fields using the first source option
   await select('Read from for field 1', 'node');
   expect(container.querySelector('select:invalid')).not.toBeNull();
   await select('Node for field 1', 'triage');
-  await input('Output path for field 1', 'answer.text');
+  await input('Source path for field 1', 'answer.text');
   expect(latest.inputBindings).toEqual({
     decision: { source: 'node', nodeId: 'triage', path: 'answer.text' },
   });
@@ -134,6 +135,8 @@ it('leaves default input untouched and adds fields using the first source option
   ).toEqual(latest.inputBindings);
   await click('Use field editor');
   await click('Remove field 1');
+  expect(latest.inputBindings).toEqual({});
+  await select('Source', 'previous');
   expect(latest.inputBindings).toBeUndefined();
 });
 
@@ -180,7 +183,7 @@ it('suggests paths from a selected node output without restricting free text', a
   await select('Read from for field 1', 'node');
   await select('Node for field 1', 'triage');
   const path = container.querySelector<HTMLInputElement>(
-    '[aria-label="Output path for field 1"]',
+    '[aria-label="Source path for field 1"]',
   )!;
   expect(path.hasAttribute('list')).toBe(false);
   await act(async () => path.focus());
@@ -190,8 +193,8 @@ it('suggests paths from a selected node output without restricting free text', a
       (option) => option.textContent,
     ),
   ).toContain('answer.text');
-  await input('Output path for field 1', 'other.path');
-  expect(latest.inputBindings?.field.path).toBe('other.path');
+  await input('Source path for field 1', 'other.path');
+  expect(latest.inputBindings?.field).toMatchObject({ path: 'other.path' });
 });
 
 it('rejects duplicate field names without overwriting a binding', async () => {
@@ -212,6 +215,7 @@ it('validates advanced bindings and preserves explicit empty objects until reset
   await render();
   await select('Source', 'fields');
   await click('Advanced JSON');
+  changed.mockClear();
   await input('Input fields JSON', '{"decision":{"source":"node"}}');
   expect(container.querySelector('textarea:invalid')).not.toBeNull();
   expect(changed).not.toHaveBeenCalled();
@@ -225,7 +229,7 @@ it('validates advanced bindings and preserves explicit empty objects until reset
   await input('Input fields JSON', '{}');
   expect(latest.inputBindings).toEqual({});
   await click('Use field editor');
-  expect(container.textContent).toContain('empty input object');
+  expect(container.textContent).toContain('empty object');
   await select('Source', 'previous');
   expect(latest.inputBindings).toBeUndefined();
 });
@@ -254,5 +258,5 @@ it('switches back to whole previous output without changing the expected format'
   expect(button('Advanced JSON')).toBeUndefined();
   await select('Source', 'fields');
   expect(container.querySelector('input')).toBeNull();
-  expect(latest.inputBindings).toBeUndefined();
+  expect(latest.inputBindings).toEqual({});
 });

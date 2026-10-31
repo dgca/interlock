@@ -6,12 +6,10 @@ import {
   SegmentedControl,
 } from '@mantine/core';
 import { useRef, useState } from 'react';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download, Plus } from 'lucide-react';
 import {
   nodeSchema,
   outgoingPorts,
-  hasFailureRoute,
-  hasTimeoutRoute,
   type Workflow,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -27,6 +25,7 @@ import {
 import { workflowTargets } from './workflowTargets';
 import { NodeInspector } from './NodeInspector';
 import { nodeDescriptions } from './nodeDescriptions';
+import type { NodeSectionName } from './NodeSettingsSections';
 import { api, download } from '../../lib/api';
 import { newNodePosition, separateNodes } from '@interlock/core/layout';
 import styles from './SettingsDialog.module.css';
@@ -89,6 +88,7 @@ export function SettingsDialog({
   );
   const [contract, setContract] = useState<ContractPage>();
   const [error, setError] = useState('');
+  const [nodeSection, setNodeSection] = useState<NodeSectionName>('work');
   const [childName, setChildName] = useState('');
   const [targetMode, setTargetMode] = useState('existing');
   const [creatingChild, setCreatingChild] = useState(false);
@@ -103,19 +103,26 @@ export function SettingsDialog({
           id: newNodeId,
           kind,
           batchId: parentBatchId,
-          label: kind === 'batch' ? 'Batch' : `New ${kind}`,
+          label:
+            kind === 'switch'
+              ? 'New branch'
+              : kind === 'batch'
+                ? 'Batch'
+                : `New ${kind}`,
           prompt: 'Describe the assignment.',
           url: '',
           language: 'javascript',
           command: 'return input;',
           path: '',
           equals: true,
-          cases: [{ port: 'case-1', equals: '' }],
+          cases: [{ port: 'true', equals: true }],
+          default: kind === 'switch' ? 'false' : undefined,
           workflowId: reference?.id ?? 'choose-workflow',
           version: reference?.latestVersion ?? null,
         }),
     );
     setError('');
+    setNodeSection('work');
   };
   const form = useRef<HTMLDivElement>(null);
   const patchDefinition = (patch: Partial<WorkflowDefinition>) =>
@@ -125,7 +132,18 @@ export function SettingsDialog({
     if (creating && !nodeDraft) return;
     const invalid = form.current?.querySelector<HTMLInputElement>(':invalid');
     if (invalid) {
-      invalid.reportValidity();
+      const section = invalid
+        .closest('[data-node-section]')
+        ?.getAttribute('data-node-section');
+      if (section) setNodeSection(section as NodeSectionName);
+      for (
+        let ancestor = invalid.parentElement;
+        ancestor;
+        ancestor = ancestor.parentElement
+      )
+        if (ancestor.tagName === 'DETAILS')
+          (ancestor as HTMLDetailsElement).open = true;
+      setTimeout(() => invalid.reportValidity(), 0);
       return;
     }
     try {
@@ -163,19 +181,10 @@ export function SettingsDialog({
                 ]
               : settings.definition.edges.filter(
                   (e) =>
-                    !(
-                      e.source === parsed.id &&
-                      ((e.port === 'timeout' &&
-                        (parsed.kind === 'agent' || parsed.kind === 'wait') &&
-                        !hasTimeoutRoute(parsed)) ||
-                        (e.port === 'failed' &&
-                          (parsed.kind === 'script' ||
-                            parsed.kind === 'fetch' ||
-                            parsed.kind === 'workflow') &&
-                          !hasFailureRoute(parsed)) ||
-                        (parsed.kind === 'switch' &&
-                          !outgoingPorts(parsed).includes(e.port)))
-                    ),
+                    e.source !== parsed.id ||
+                    !node ||
+                    !outgoingPorts(node).includes(e.port) ||
+                    outgoingPorts(parsed).includes(e.port),
                 ),
           nodes: creating
             ? [...settings.definition.nodes, parsed]
@@ -211,16 +220,27 @@ export function SettingsDialog({
   return (
     <Modal
       title={
-        contract
-          ? `${contract.label} contract`
-          : creating
-            ? 'Add node'
-            : nodeDraft
-              ? nodeDraft.label
-              : 'Workflow settings'
+        contract ? (
+          `${contract.label} contract`
+        ) : creating ? (
+          <span className={styles.title}>
+            <Plus size={18} aria-hidden="true" />
+            Add node
+          </span>
+        ) : nodeDraft ? (
+          nodeDraft.label
+        ) : (
+          'Workflow settings'
+        )
       }
       onClose={creatingChild ? () => {} : contract ? back : onClose}
-      size={960}
+      size={nodeDraft && !contract ? 880 : 960}
+      className={nodeDraft && !contract ? styles.nodeDialog : undefined}
+      classNames={
+        nodeDraft && !contract
+          ? { header: styles.header, body: styles.body }
+          : undefined
+      }
     >
       {contract && (
         <>
@@ -238,33 +258,42 @@ export function SettingsDialog({
           />
         </>
       )}
-      <div hidden={Boolean(contract)}>
-        <div ref={form} className={styles.content}>
+      <div
+        hidden={Boolean(contract)}
+        className={nodeDraft ? styles.nodeSettings : undefined}
+      >
+        <div
+          ref={form}
+          className={nodeDraft ? styles.nodeContent : styles.content}
+        >
           <fieldset
             disabled={creatingChild}
             style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+            className={nodeDraft ? styles.nodeFields : undefined}
           >
             <ContractNavigation.Provider value={setContract}>
               {creating && (
-                <NativeSelect
-                  mb="md"
-                  label="Node type"
-                  description={nodeDraft && nodeDescriptions[nodeDraft.kind]}
-                  value={nodeDraft?.kind ?? ''}
-                  onChange={(e) => chooseType(e.target.value)}
-                >
-                  <option value="agent">Agent</option>
-                  <option value="script">Script</option>
-                  <option value="fetch">Fetch</option>
-                  <option value="wait">Wait</option>
-                  <option value="condition">Condition</option>
-                  <option value="switch">Switch</option>
-                  <option value="workflow">Workflow</option>
-                  <option value="batch">Batch</option>
-                </NativeSelect>
+                <div className={styles.typeChooser}>
+                  <NativeSelect
+                    label="Node type"
+                    value={nodeDraft?.kind ?? ''}
+                    onChange={(e) => chooseType(e.target.value)}
+                  >
+                    <option value="agent">Agent</option>
+                    <option value="script">Script</option>
+                    <option value="fetch">Fetch</option>
+                    <option value="wait">Wait</option>
+                    <option value="switch">Branch</option>
+                    <option value="workflow">Workflow</option>
+                    <option value="batch">Batch</option>
+                  </NativeSelect>
+                  {nodeDraft && (
+                    <p className="hint">{nodeDescriptions[nodeDraft.kind]}</p>
+                  )}
+                </div>
               )}
               {creating && nodeDraft?.kind === 'workflow' && onCreateChild && (
-                <>
+                <div className={styles.workflowSource}>
                   <Input.Wrapper label="Workflow source" mb="md">
                     <SegmentedControl
                       mt={4}
@@ -290,10 +319,12 @@ export function SettingsDialog({
                       onChange={(e) => setChildName(e.target.value)}
                     />
                   )}
-                </>
+                </div>
               )}
               {nodeDraft ? (
                 <NodeInspector
+                  section={nodeSection}
+                  onSectionChange={setNodeSection}
                   prompts={prompts}
                   node={nodeDraft}
                   creating={creating}
@@ -413,8 +444,39 @@ export function SettingsDialog({
             </ContractNavigation.Provider>
           </fieldset>
         </div>
+        {node &&
+          nodeDraft &&
+          settings.definition.edges.some(
+            (edge) =>
+              edge.source === node.id &&
+              outgoingPorts(node).includes(edge.port) &&
+              !outgoingPorts(nodeDraft).includes(edge.port),
+          ) && (
+            <p
+              className={`hint ${nodeDraft ? styles.feedback : ''}`}
+              role="status"
+            >
+              Applying these changes removes connections for:{' '}
+              {[
+                ...new Set(
+                  settings.definition.edges
+                    .filter(
+                      (edge) =>
+                        edge.source === node.id &&
+                        outgoingPorts(node).includes(edge.port) &&
+                        !outgoingPorts(nodeDraft).includes(edge.port),
+                    )
+                    .map((edge) => edge.port),
+                ),
+              ].join(', ')}
+              . Reconnect changed branches on the canvas.
+            </p>
+          )}
         {error && (
-          <p role="alert" className="error-text">
+          <p
+            role="alert"
+            className={`error-text ${nodeDraft ? styles.feedback : ''}`}
+          >
             {error}
           </p>
         )}
@@ -423,25 +485,27 @@ export function SettingsDialog({
             Changes apply to the draft. Save and publish from the workflow
             toolbar.
           </p>
-          <Button onClick={onClose} disabled={creatingChild}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            onClick={apply}
-            disabled={creatingChild || (creating && !nodeDraft)}
-          >
-            {creatingChild
-              ? 'Creating…'
-              : creating &&
-                  nodeDraft?.kind === 'workflow' &&
-                  targetMode === 'child' &&
-                  onCreateChild
-                ? 'Save and create child'
-                : creating
-                  ? 'Add node'
-                  : 'Apply changes'}
-          </Button>
+          <div className={styles.actions}>
+            <Button onClick={onClose} disabled={creatingChild}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={apply}
+              disabled={creatingChild || (creating && !nodeDraft)}
+            >
+              {creatingChild
+                ? 'Creating…'
+                : creating &&
+                    nodeDraft?.kind === 'workflow' &&
+                    targetMode === 'child' &&
+                    onCreateChild
+                  ? 'Save and create child'
+                  : creating
+                    ? 'Add node'
+                    : 'Apply changes'}
+            </Button>
+          </div>
         </footer>
       </div>
     </Modal>

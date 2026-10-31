@@ -2,7 +2,7 @@ import {
   assignmentSizeQuerySchema,
   measureAssignment,
   composePrompt,
-  readPath,
+  resolveBindingFields,
   assertContract,
   InterlockError,
   type AssignmentSizeQuery,
@@ -93,37 +93,45 @@ export class AssignmentSizes {
     if (node.inputBindings) {
       const fields: [string, Json][] = [];
       for (const [field, binding] of Object.entries(node.inputBindings)) {
-        if (binding.source === 'itemInput' && !node.batchId) {
-          add(field, 'item_scope_required');
-          continue;
-        }
-        if (binding.source === 'node') {
-          const source = definition.nodes.find((n) => n.id === binding.nodeId);
-          if (
-            !source ||
-            source.batchId !== node.batchId ||
-            source.kind === 'entry' ||
-            source.kind === 'exit'
-          ) {
-            add(field, 'invalid_node_scope');
-            continue;
-          }
-        }
-        const source =
-          binding.source === 'node'
-            ? q.sample?.outputs &&
-              Object.hasOwn(q.sample.outputs, binding.nodeId)
-              ? q.sample.outputs[binding.nodeId]
-              : undefined
-            : q.sample?.[binding.source];
-        if (source === undefined) {
-          add(field, 'source_not_supplied');
-          continue;
-        }
+        let reason:
+          | 'item_scope_required'
+          | 'invalid_node_scope'
+          | 'source_not_supplied'
+          | 'path_unresolved' = 'path_unresolved';
         try {
-          fields.push([field, readPath(source, binding.path)]);
+          const value = resolveBindingFields({ [field]: binding }, (leaf) => {
+            if (leaf.source === 'itemInput' && !node.batchId) {
+              reason = 'item_scope_required';
+              throw new Error(reason);
+            }
+            if (leaf.source === 'node') {
+              const source = definition.nodes.find((n) => n.id === leaf.nodeId);
+              if (
+                !source ||
+                source.batchId !== node.batchId ||
+                source.kind === 'entry' ||
+                source.kind === 'exit'
+              ) {
+                reason = 'invalid_node_scope';
+                throw new Error(reason);
+              }
+            }
+            const source =
+              leaf.source === 'node'
+                ? q.sample?.outputs &&
+                  Object.hasOwn(q.sample.outputs, leaf.nodeId)
+                  ? q.sample.outputs[leaf.nodeId]
+                  : undefined
+                : q.sample?.[leaf.source];
+            if (source === undefined) {
+              reason = 'source_not_supplied';
+              throw new Error(reason);
+            }
+            return source;
+          });
+          fields.push([field, value[field]]);
         } catch {
-          add(field, 'path_unresolved');
+          add(field, reason);
         }
       }
       resolved =
