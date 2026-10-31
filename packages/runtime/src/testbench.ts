@@ -32,6 +32,8 @@ import {
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import { definitionHash, fingerprint } from './versionIdentity.js';
+import { ComparisonMetrics } from './comparisonMetrics.js';
+import type { Usage } from './usage.js';
 const active = (run: Run) =>
   run.status === 'running' || run.status === 'waiting';
 const now = () => new Date().toISOString();
@@ -39,6 +41,7 @@ const key = (pin: ComparisonPin) => `${pin.workflowId}:${pin.version}`;
 const textError = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const trimError = (e?: string) => e?.slice(0, 512);
 export class Testbench {
+  private metrics: ComparisonMetrics;
   constructor(
     private store: Store,
     private hooks: {
@@ -50,7 +53,10 @@ export class Testbench {
       ) => Run;
       cancel: (id: string) => void;
     },
-  ) {}
+    usage: Usage,
+  ) {
+    this.metrics = new ComparisonMetrics(store, usage);
+  }
   private workflow(id: string) {
     const w = this.store.get<Workflow>('workflows', id);
     if (!w) throw new InterlockError(`Workflow ${id} not found`);
@@ -444,6 +450,17 @@ export class Testbench {
     let changed = false;
     const comparisons = this.store.list<WorkflowComparison>('comparisons');
     let runs = this.store.runs();
+    let source: ReturnType<ComparisonMetrics['captureSource']> | undefined;
+    const captureSource = () =>
+      (source ??= this.metrics.captureSource(
+        new Set(
+          comparisons.flatMap((c) =>
+            c.samples
+              .filter((s) => s.runId && !s.observation)
+              .flatMap((s) => this.tree(s.runId!, runs).map((r) => r.id)),
+          ),
+        ),
+      ));
     let globalBusy = comparisons.reduce(
       (n, c) =>
         n +
@@ -465,6 +482,11 @@ export class Testbench {
           if (tree.some(active)) continue;
           const run = runs.find((r) => r.id === sample.runId);
           const testCase = c.suite.cases.find((t) => t.id === sample.caseId)!;
+          sample.measurement = this.metrics.capture(
+            sample.runId,
+            tree,
+            captureSource(),
+          );
           sample.observation = {
             at: now(),
             status: run?.status ?? 'unavailable',
@@ -521,8 +543,7 @@ export class Testbench {
   progress(id: string) {
     return this.summary(this.get(id));
   }
-  private summary(c: WorkflowComparison) {
-    const runs = this.store.runs();
+  private summary(c: WorkflowComparison, runs = this.store.runs()) {
     const activeDetached = c.samples
       .flatMap((s) => (s.runId ? this.tree(s.runId, runs) : []))
       .filter((r) => r.parentMode === 'detached' && active(r));
@@ -566,11 +587,19 @@ export class Testbench {
     const q = comparisonReportSchema.parse(input),
       c = this.get(q.id),
       runs = this.store.runs();
+    const metrics = this.metrics.report(
+      c,
+      q.caseOffset,
+      q.caseLimit,
+      q.currency,
+      q.metricsDetail,
+    );
     const samples = c.samples.slice(q.offset, q.offset + q.limit).map((s) => {
-      const { observation, ...identity } = s;
+      const { observation, measurement: _measurement, ...identity } = s;
       const checks = observation?.checks ?? [];
       return {
         ...identity,
+        metrics: metrics.sample(s),
         currentStatus: s.runId
           ? (runs.find((r) => r.id === s.runId)?.status ?? 'unavailable')
           : 'queued',
@@ -626,7 +655,8 @@ export class Testbench {
     });
     const allChecks = c.samples.flatMap((s) => s.observation?.checks ?? []);
     const result = {
-      ...this.summary(c),
+      ...this.summary(c, runs),
+      metrics: metrics.summary,
       offset: q.offset,
       samples,
       checkCounts: {
@@ -663,11 +693,18 @@ export class Testbench {
       result.truncated = true;
       if (result.judgments.length) result.judgments.pop();
       else if (result.samples.length > 1) result.samples.pop();
+      else if (result.metrics.cases.items.length > 1)
+        result.metrics.cases.items.pop();
       else
         throw new InterlockError('Comparison report metadata exceeds 256 KiB');
     }
     result.nextOffset = q.offset + result.samples.length;
     result.nextJudgmentOffset = q.judgmentOffset + result.judgments.length;
+    result.metrics.cases.nextOffset =
+      q.caseOffset + result.metrics.cases.items.length <
+      result.metrics.cases.total
+        ? q.caseOffset + result.metrics.cases.items.length
+        : null;
     return result;
   }
   cancel(input: Input<typeof comparisonCancelSchema>) {

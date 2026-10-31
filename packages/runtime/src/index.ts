@@ -153,18 +153,22 @@ export class Engine {
         'Context continuity binding updated',
       ),
     );
-    this.testbench = new Testbench(store, {
-      create: (workflowId, version, input, comparison) =>
-        this.newRun(
-          workflowId,
-          version,
-          input,
-          undefined,
-          undefined,
-          comparison,
-        ),
-      cancel: (id) => this.cancelTree(id),
-    });
+    this.testbench = new Testbench(
+      store,
+      {
+        create: (workflowId, version, input, comparison) =>
+          this.newRun(
+            workflowId,
+            version,
+            input,
+            undefined,
+            undefined,
+            comparison,
+          ),
+        cancel: (id) => this.cancelTree(id),
+      },
+      this.usage,
+    );
     // A process interruption gives no evidence that local work or remote side effects completed.
     for (const run of store.runs()) {
       const execution = run.executions.at(-1);

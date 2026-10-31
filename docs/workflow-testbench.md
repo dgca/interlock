@@ -67,6 +67,45 @@ Use `update_workflow_comparison` with a `request` containing `action: "record_qu
 
 Reports identify each evaluated assertion from the captured suite revision. Expected values up to 1 KiB appear inline; larger values set `expectedOmitted: true`. Use `read_workflow_comparisons` with a `request` containing `action: "case"`, `id` from `assertionRef.comparisonId` and `caseId` from `assertionRef.caseId` to read the immutable full case, including input, expectations and quality guidance. This explicit read is bounded by the 1 MiB suite limit. `read_test_suites` with `request.action: "get"` reads the current editable revision, which may differ from the comparison snapshot.
 
+## Compare measurements
+
+`read_workflow_comparisons` with `request.action:"report"` returns `metrics.sides.baseline` and `metrics.sides.candidate` for the whole comparison, independently of every report page. `metrics.cases.items` groups the same measurements by case and pairs repetitions. Default `metricsDetail:"summary"` keeps sample state and compact case comparisons. Set `metricsDetail:"full"` for sample timing/usage and complete per-case side statistics; narrow `limit` and `caseLimit` when reading that detail. Whole-comparison side statistics are available in either mode.
+
+```json
+{
+  "request": {
+    "action": "report",
+    "id": "COMPARISON_ID",
+    "caseOffset": 0,
+    "caseLimit": 5
+  }
+}
+```
+
+Case pages default to five and cap at 25. Follow `metrics.cases.nextOffset` until null. Sample, check, judgment, and case paging are independent. The report retains its 256 KiB cap and can shorten pages with `truncated:true`; follow the returned offsets.
+
+| Measurement                    | Meaning                                                                                                   |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `execution`                    | Observed run outcomes, queued/pending trials, and trials cancelled before starting                        |
+| `checks`                       | Pass/fail/unknown assertion counts, kept separate from execution and quality                              |
+| `timing.rootElapsedMs`         | Root creation to its recorded terminal event                                                              |
+| `timing.treeElapsedMs`         | Root creation through the latest terminal event in its ordinary/detached tree                             |
+| `timing.claimIntervalMs`       | Sum of claim-to-recorded-end intervals, including failed, expired and held attempts                       |
+| `timing.unclaimedAssignmentMs` | Assignment elapsed intervals minus known claim and declared-hold intervals; includes queue/budget waiting |
+| `timing.declaredHoldMs`        | Declared external-hold intervals for assignments                                                          |
+| `usage`                        | Reported usage for the frozen trial cohort, with coverage, source counts and separate currencies          |
+| `quality`                      | Judged/unjudged sample counts, judgment count and distinct exact rubric text count; no score averaging    |
+
+Timing summaries report `count`, `unknown`, `min`, `max`, and `median`. Sample timing values retain partial/unknown coverage for summed intervals. Distributions include only complete values. Assignment intervals can overlap across concurrent work and must not be interpreted as wall time or model compute time. Invalid or missing timestamps remain unknown. Recorded terminal events measure workflow progress, not provider latency. Later budget or context metadata updates do not extend a completed run's duration. Missing terminal events leave elapsed time unknown.
+
+Paired timing and cost deltas use **candidate minus baseline**. Negative means a lower measured value, not a better overall workflow. Cost deltas require complete matching single-currency trials. Multiple currencies remain separate and are never converted or filled with zero. Summaries return at most ten currency groups with `currencyCount` and `currenciesTruncated`; pass `currency:"USD"`, for example, to inspect a specific currency outside that selection. The filter does not change other metrics or the trial cohort.
+
+At first observation, Interlock freezes run/attempt membership and timing. Subsequent retries cannot rewrite them or add new work to that trial's costs. Late executor or observer receipts can improve usage for the original attempts, following [source selection](usage-reporting.md#report-measured-usage-as-an-observer). `metrics.asOf` identifies report time. Missing receipts, partial counts, overflow and different currencies remain explicit. Legacy observations without a frozen inventory use `state:"legacy"` and unknown measurements, even if current run history exists. Captured timing survives later history loss; missing receipts become unknown. Routine reports omit the internal inventory and claim credentials.
+
+`metrics.availability.state` is `pending`, `insufficient_evidence`, or `descriptive`, with reasons for missing execution, measurement history, timing, cost, grading, or matching rubrics. `descriptive` means those measurement gaps were not found; it is not statistical confidence or proof of quality. A recorded judgment is still a declared assessment. Repeated judgments do not increase judged-sample counts, and unrelated rubric scores are never averaged. `bothJudged` and `sharedRubricPairs` describe paired coverage.
+
+Comparison `status:"completed"` continues to mean execution finished. No automatic evaluator, winner, acceptance threshold or promotion is introduced. Check representative repeated trials and the evidence behind judgments before deciding whether a change is useful.
+
 ## Reference
 
 Shared server API operations are `testbench.suites`, `suite`, `createSuite`, `updateSuite`, `preview`, `start`, `comparisons`, `report`, `case`, `cancel` and `judge`. HTTP and stdio MCP register the same six tools:
@@ -102,6 +141,8 @@ Only root-scope checkpoints are supported. Preview rejects unknown nodes, Batch-
 | Discovery                 | Limit 1–100, default 20, with exact total                                                                 |
 | Report samples            | Limit 1–25, default 10; zero-based `offset`                                                               |
 | Checks per sample page    | Limit 1–10, default 5; zero-based `checkOffset`                                                           |
+| Case measurement page     | Limit 1–25, default 5; zero-based `caseOffset`, nullable `metrics.cases.nextOffset`                       |
+| Currency detail selection | At most ten groups; optional three-letter `currency` selects one without conversion                       |
 | Judgments per report page | Limit 1–25, default 10; zero-based `judgmentOffset`                                                       |
 | Quality judgments         | At most 1000 per comparison                                                                               |
 | Report JSON               | At most 256 KiB; byte truncation returns exact totals, `truncated`, `nextOffset` and `nextJudgmentOffset` |

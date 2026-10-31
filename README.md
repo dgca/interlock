@@ -104,7 +104,7 @@ The **Tidy** icon sits below **Fit View** in the canvas controls and runs your l
 
 ### Compare workflow behavior
 
-Use the MCP [workflow testbench](docs/workflow-testbench.md) to save representative cases, preview and execute two published versions, and inspect separate execution, assertion and quality results. Existing Runs views label each comparison, case, baseline/candidate side and repetition, with counterpart navigation. These are real runs using connected executors and normal Script/Fetch actions. Comparison configuration stays in MCP; publication remains separate.
+Use the MCP [workflow testbench](docs/workflow-testbench.md) to save representative cases, preview and execute two published versions, and inspect execution, assertion and quality results alongside timing, reported cost and evaluation coverage. Existing Runs views label each comparison, case, baseline/candidate side and repetition, with counterpart navigation. These are real runs using connected executors and normal Script/Fetch actions. Comparison configuration stays in MCP; publication remains separate.
 
 Use [fixture simulation](docs/workflow-simulation.md) to test supported flat graphs with saved Agent, Script and Fetch outcomes without model calls or external effects. Simulated reports stay separate from live comparisons. Author cases with `interlock test-suite` and run or inspect them with `interlock simulation` or the grouped MCP tool.
 

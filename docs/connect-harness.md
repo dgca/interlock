@@ -228,7 +228,7 @@ Transport tests cover HTTP and stdio initialization, tool discovery, work discov
 
 The optional `scripts/codex-smoke.ts` check invokes the installed Codex CLI with a real account and a local text task. It creates a workflow in the running engine and consumes model usage. Its result depends on the client's authentication and tool approval settings; it is separate from the automated transport tests.
 
-Use the [workflow testbench](workflow-testbench.md) for MCP-first saved cases and paired live comparisons. The existing claim/submit loop performs Agent work; starting a comparison does not launch an executor. Reports preserve execution/check/quality distinctions and identify independent detached work.
+Use the [workflow testbench](workflow-testbench.md) for MCP-first saved cases and paired live comparisons. The existing claim/submit loop performs Agent work; starting a comparison does not launch an executor. Reports preserve execution/check/quality distinctions and identify independent detached work. They also provide [comparison measurements](workflow-testbench.md#compare-measurements) for both sides and paired cases, with frozen timing/cohorts, late-receipt usage and explicit evaluation gaps.
 
 ## Resume grouped Agent sessions
 

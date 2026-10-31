@@ -1,0 +1,14 @@
+# Workflow comparison measurements
+
+Implement #176 directly, as requested. No SDLC run was started. Base: origin/main at 8b49cc1.
+
+- Keep comparison status as execution status. Add descriptive measurement availability, per-side totals and paged paired case summaries through the existing report. Do not select a winner, run graders or promote versions.
+- Capture each completed trial's exact run and attempt inventory and timing at its first observation. Capture all ordinary and detached descendants. Do not return inventories in reports. Later retries cannot change this cohort or timing.
+- Re-read usage receipts for only those captured attempts so late executor/observer reporting can improve telemetry. Preserve existing source precedence, missing/partial/overflow behavior, currencies and as-of reporting. Missing legacy cohorts remain unknown; never reconstruct them from mutable current history.
+- Define root elapsed time from root creation to its recorded terminal event, and tree elapsed time through the latest terminal descendant event. Keep claim-to-recorded-end intervals and assignment unclaimed/declared-hold durations separate. Sums across assignments can overlap and are not wall time or model compute time. Invalid or incomplete timestamps remain unknown. Freeze these values, including partial coverage, at observation.
+- Distributions expose count, unknown count, median and range. Paired deltas are candidate minus baseline; negative timing/cost deltas mean lower measurements, not proof of a better workflow. Cost deltas require complete matching single-currency trial receipts. Never convert currencies or impute absent currencies as zero.
+- Quality summaries count judged/unjudged samples, distinct rubric text and judgments. Do not average arbitrary rubrics or imply recorded judgments prove actual task acceptance. Retain original append-only judgments on their existing page.
+- Read scoped usage/work/hold/event sources in one eligible capture batch and receipts once per report. Scope storage reads to relevant runs. Whole-comparison side summaries are independent of sample/check/judgment/case paging.
+- Default metrics to summary detail, keeping sample state and compact paired cases. Explicit full detail adds sample measurements and complete per-case side statistics through the same report.
+- Add bounded case pages (default 5, max 25) and bound currency summaries to 10 with explicit counts/truncation. Preserve the existing 256 KiB report cap and exact continuation offsets. Keep bodies, prompt text and tokens out of measurement summaries.
+- Validate timing, nested/detached scope, late receipts, partial data, multiple currencies, retries, restart, missing history, cancellations and paging with deterministic fake work and temporary databases. Update affected docs/MCP discovery and execution over both transports. Include a pending root patch changeset.

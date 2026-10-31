@@ -9,6 +9,7 @@ import {
 } from './index.js';
 import { structuralEqual } from './jsonEquality.js';
 import type { PromptSnapshot } from './prompts.js';
+import type { UsageAttempt, UsageMetric } from './usage.js';
 
 const id = z.string().min(1).max(120);
 const name = z.string().trim().min(1).max(120);
@@ -129,6 +130,16 @@ export const comparisonReportSchema = z
     checkLimit: z.number().int().min(1).max(10).default(5),
     judgmentOffset: z.number().int().min(0).default(0),
     judgmentLimit: z.number().int().min(1).max(25).default(10),
+    caseOffset: z.number().int().min(0).default(0),
+    caseLimit: z.number().int().min(1).max(25).default(5),
+    metricsDetail: z.enum(['summary', 'full']).default('summary'),
+    currency: z
+      .string()
+      .regex(/^[A-Z]{3}$/)
+      .optional()
+      .describe(
+        'Select cost details for one currency; omission returns at most ten currencies without conversion.',
+      ),
   })
   .strict();
 export const comparisonCaseSchema = z.object({ id, caseId: id }).strict();
@@ -224,6 +235,8 @@ export interface ComparisonSample {
   repetition: number;
   version: number;
   runId?: string;
+  /** Internal frozen membership; reports expose aggregates, never this inventory. */
+  measurement?: ComparisonMeasurement;
   observation?: {
     at: string;
     status: Run['status'] | 'unavailable' | 'not_started';
@@ -234,6 +247,21 @@ export interface ComparisonSample {
       status: Run['status'];
       error?: string;
     }[];
+  };
+}
+export interface ComparisonMeasurement {
+  runIds: string[];
+  detachedRuns: number;
+  attempts: Pick<
+    UsageAttempt,
+    'id' | 'workId' | 'runId' | 'attempt' | 'outcome'
+  >[];
+  timing: {
+    rootElapsedMs: number | null;
+    treeElapsedMs: number | null;
+    claimIntervalMs: UsageMetric;
+    unclaimedAssignmentMs: UsageMetric;
+    declaredHoldMs: UsageMetric;
   };
 }
 export interface ComparisonPin {

@@ -855,6 +855,7 @@ export {
   type ComparisonRunContext,
   type CheckResult,
   type ComparisonSample,
+  type ComparisonMeasurement,
   type ComparisonPin,
   type QualityJudgment,
   type WorkflowComparison,

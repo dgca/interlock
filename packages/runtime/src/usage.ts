@@ -180,14 +180,11 @@ export class Usage {
   attemptsForRuns(scope: Set<string>) {
     const receipts = new Map(
       this.store
-        .list<UsageAttempt>(collection)
-        .filter((record) => scope.has(record.runId))
+        .forRuns<UsageAttempt>(collection, scope)
         .map((record) => [record.id, record]),
     );
     const attempts: UsageAttempt[] = [];
-    for (const work of this.store
-      .work()
-      .filter((work) => scope.has(work.runId)))
+    for (const work of this.store.forRuns<WorkRequest>('work', scope))
       for (let attempt = 1; attempt <= work.attempt; attempt++) {
         const id = key(work.id, attempt);
         const receipt = receipts.get(id);

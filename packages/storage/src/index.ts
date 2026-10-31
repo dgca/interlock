@@ -84,6 +84,34 @@ export class Store {
       .all(collection)
       .map((row) => JSON.parse(row.value as string) as T);
   }
+  forRuns<T>(collection: string, runIds: Set<string>): T[] {
+    if (!runIds.size) return [];
+    return this.db
+      .prepare(
+        `SELECT value FROM documents WHERE collection = ?
+      AND json_extract(value, '$.runId') IN (SELECT value FROM json_each(?)) ORDER BY rowid`,
+      )
+      .all(collection, JSON.stringify([...runIds]))
+      .map((row) => JSON.parse(row.value as string) as T);
+  }
+  eventTimesForRuns(
+    runIds: Set<string>,
+  ): Pick<RunEvent, 'runId' | 'type' | 'at'>[] {
+    if (!runIds.size) return [];
+    return this.db
+      .prepare(
+        `SELECT json_extract(value, '$.runId') AS runId,
+      json_extract(value, '$.type') AS type, json_extract(value, '$.at') AS at
+      FROM documents WHERE collection = 'events'
+      AND json_extract(value, '$.runId') IN (SELECT value FROM json_each(?)) ORDER BY rowid`,
+      )
+      .all(JSON.stringify([...runIds]))
+      .map((row) => ({
+        runId: row.runId as string,
+        type: row.type as string,
+        at: row.at as string,
+      }));
+  }
   put<T extends { id: string }>(collection: string, value: T): void {
     this.db
       .prepare(
