@@ -109,6 +109,7 @@ export class ComparisonMetrics {
         this.store.forRuns<WorkHoldInterval>('workHolds', scope),
         (h) => h.workId,
       ),
+      events: group(this.store.eventTimesForRuns(scope), (e) => e.runId),
     };
   }
 
@@ -123,7 +124,18 @@ export class ComparisonMetrics {
     const work = tree.flatMap((r) => source.work.get(r.id) ?? []);
     const byWork = group(attempts, (a) => a.workId);
     const runIndex = new Map(tree.map((r) => [r.id, r]));
-    const endTimes = tree.map((r) => Date.parse(r.updatedAt));
+    const terminalAt = (r: Run) => {
+      const type =
+        r.status === 'completed'
+          ? 'run.completed'
+          : r.status === 'failed'
+            ? 'node.failed'
+            : r.status === 'cancelled'
+              ? 'run.cancelled'
+              : undefined;
+      return source.events.get(r.id)?.findLast((e) => e.type === type)?.at;
+    };
+    const endTimes = tree.map((r) => Date.parse(terminalAt(r) ?? ''));
     const unclaimed: (number | undefined)[] = [],
       held: (number | undefined)[] = [];
     for (const w of work) {
@@ -169,7 +181,7 @@ export class ComparisonMetrics {
         outcome,
       })),
       timing: {
-        rootElapsedMs: interval(root.createdAt, root.updatedAt) ?? null,
+        rootElapsedMs: interval(root.createdAt, terminalAt(root)) ?? null,
         treeElapsedMs: endTimes.every(Number.isFinite)
           ? (interval(
               root.createdAt,

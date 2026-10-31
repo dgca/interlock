@@ -388,6 +388,37 @@ it('keeps legacy observations unknown and captured timing intact when underlying
   });
 });
 
+it('uses terminal event times when parent metadata changes before detached work settles', () => {
+  const e = engine(),
+    child = publish(e),
+    c = launch(e, { definition: workflowCall(child.id, 'detached') });
+  const root = c.report().samples.find((s) => s.side === 'baseline')!.runId!;
+  expect(e.run(root).status).toBe('completed');
+  time(1000);
+  e.budgets.set({ runId: root, expectedRevision: 0, budget: null });
+  expect(e.run(root).updatedAt).toBe(new Date(epoch + 1000).toISOString());
+  finishAll(e);
+  const measured = c.report().samples.find((s) => s.side === 'baseline')!
+    .metrics.timing!;
+  expect(measured.rootElapsedMs).toBe(0);
+  expect(measured.treeElapsedMs).toBeGreaterThan(1000);
+});
+
+it('leaves elapsed time unknown if the original terminal event is unavailable', () => {
+  const e = engine(),
+    child = publish(e),
+    c = launch(e, { definition: workflowCall(child.id, 'detached') });
+  const root = c.report().samples.find((s) => s.side === 'baseline')!.runId!;
+  for (const event of e.store.events(root))
+    if (event.type === 'run.completed') e.store.remove('events', event.id);
+  finishAll(e);
+  const r = c.report(),
+    measurement = r.samples.find((s) => s.side === 'baseline')!.metrics.timing!;
+  expect(measurement.rootElapsedMs).toBeNull();
+  expect(measurement.treeElapsedMs).toBeNull();
+  expect(r.metrics.availability.reasons).toContain('timing_incomplete');
+});
+
 it('reports cancellation and queued samples without inventing execution or quality', () => {
   const e = engine(),
     c = launch(e, { concurrency: 1 });
@@ -397,6 +428,7 @@ it('reports cancellation and queued samples without inventing execution or quali
   const r = c.report();
   expect(r.status).toBe('cancelled');
   expect(r.metrics.sides.baseline.execution.cancelled).toBe(1);
+  expect(r.metrics.sides.baseline.timing.rootElapsedMs.median).toBe(1000);
   expect(r.metrics.sides.candidate.execution.not_started).toBe(1);
   expect(r.samples.find((s) => s.side === 'candidate')!.metrics.state).toBe(
     'not_started',

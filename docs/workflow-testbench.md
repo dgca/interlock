@@ -88,15 +88,15 @@ Case pages default to five and cap at 25. Follow `metrics.cases.nextOffset` unti
 | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | `execution`                    | Observed run outcomes, queued/pending trials, and trials cancelled before starting                        |
 | `checks`                       | Pass/fail/unknown assertion counts, kept separate from execution and quality                              |
-| `timing.rootElapsedMs`         | Root creation to its observed terminal update                                                             |
-| `timing.treeElapsedMs`         | Root creation through the latest terminal update in its ordinary/detached tree                            |
+| `timing.rootElapsedMs`         | Root creation to its recorded terminal event                                                              |
+| `timing.treeElapsedMs`         | Root creation through the latest terminal event in its ordinary/detached tree                             |
 | `timing.claimIntervalMs`       | Sum of claim-to-recorded-end intervals, including failed, expired and held attempts                       |
 | `timing.unclaimedAssignmentMs` | Assignment elapsed intervals minus known claim and declared-hold intervals; includes queue/budget waiting |
 | `timing.declaredHoldMs`        | Declared external-hold intervals for assignments                                                          |
 | `usage`                        | Reported usage for the frozen trial cohort, with coverage, source counts and separate currencies          |
 | `quality`                      | Judged/unjudged sample counts, judgment count and distinct exact rubric text count; no score averaging    |
 
-Timing summaries report `count`, `unknown`, `min`, `max`, and `median`. Sample timing values retain partial/unknown coverage for summed intervals. Distributions include only complete values. Assignment intervals can overlap across concurrent work and must not be interpreted as wall time or model compute time. Invalid or missing timestamps remain unknown. The engine's terminal-update timestamps measure observed workflow progress, not provider latency.
+Timing summaries report `count`, `unknown`, `min`, `max`, and `median`. Sample timing values retain partial/unknown coverage for summed intervals. Distributions include only complete values. Assignment intervals can overlap across concurrent work and must not be interpreted as wall time or model compute time. Invalid or missing timestamps remain unknown. Recorded terminal events measure workflow progress, not provider latency. Later budget or context metadata updates do not extend a completed run's duration. Missing terminal events leave elapsed time unknown.
 
 Paired timing and cost deltas use **candidate minus baseline**. Negative means a lower measured value, not a better overall workflow. Cost deltas require complete matching single-currency trials. Multiple currencies remain separate and are never converted or filled with zero. Summaries return at most ten currency groups with `currencyCount` and `currenciesTruncated`; pass `currency:"USD"`, for example, to inspect a specific currency outside that selection. The filter does not change other metrics or the trial cohort.
 
