@@ -1,5 +1,13 @@
 # @type_of/interlock
 
+## 0.2.10
+
+### Patch Changes
+
+- a4dadf0: Add an importable workflow comparison evaluator with fixed rubrics, fresh artifact review or frozen structural checks, resumable idempotent judgments, artifact digests and separate evaluation usage. Keep incomplete assessments explicit and preserve independent reviews.
+- baf5bb9: Allow waited Workflow calls to route failed children or rejected successful outputs to recovery steps. Preserve child history and include child references in the failure value. Cancellation remains terminal, and handled child failures cannot be retried independently.
+- fb63184: Report timing, reported usage and cost, and quality coverage for both sides of workflow comparisons and paired cases. Preserve original trial timing and attempt membership across retries while incorporating late usage receipts. Keep missing data explicit and provide bounded case and currency detail without selecting a winner.
+
 ## 0.2.9
 
 ### Patch Changes
