@@ -7,12 +7,14 @@ export function Modal({
   onClose,
   children,
   className = '',
+  classNames,
   size = 550,
 }: {
-  title: string;
+  title: ReactNode;
   onClose: () => void;
   children: ReactNode;
   className?: string;
+  classNames?: { header?: string; body?: string };
   size?: number;
 }) {
   return (
@@ -21,7 +23,7 @@ export function Modal({
       title={title}
       onClose={onClose}
       size={size}
-      classNames={{ content: className }}
+      classNames={{ ...classNames, content: className }}
       closeButtonProps={{ 'aria-label': 'Close dialog' }}
       closeOnClickOutside={false}
     >

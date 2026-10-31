@@ -19,6 +19,70 @@
 .content :global(.inspector-fields) {
   padding: 0;
 }
+.nodeDialog {
+  display: flex;
+  flex-direction: column;
+  height: min(820px, calc(100dvh - 48px));
+  overflow: hidden;
+}
+.header {
+  flex-shrink: 0;
+  min-height: 64px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.nodeSettings:not([hidden]),
+.nodeContent,
+.nodeFields {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.nodeContent {
+  overflow: hidden;
+}
+.typeChooser {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  align-items: end;
+  gap: 20px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.typeChooser > p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.workflowSource {
+  padding: 16px 24px 0;
+  border-bottom: 1px solid var(--border);
+  max-height: 40%;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.workflowSource :global(.mantine-SegmentedControl-root) {
+  max-width: 100%;
+}
+.feedback {
+  margin: 0;
+  padding: 12px 24px;
+}
 .footer {
   display: flex;
   align-items: center;
@@ -26,9 +90,26 @@
   padding-top: 18px;
   border-top: 1px solid var(--border);
 }
+.nodeSettings > .footer {
+  flex-shrink: 0;
+  padding: 16px 24px;
+}
 .footer p {
+  margin-top: 0;
+  margin-bottom: 0;
   margin-right: auto;
   max-width: 440px;
+}
+.nodeSettings > .footer p {
+  max-width: 360px;
+  font-size: 12px;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
 }
 @media (max-width: 700px) {
   .footer {
@@ -37,5 +118,34 @@
   .footer p {
     width: 100%;
     max-width: none;
+  }
+}
+@media (max-width: 640px) {
+  .nodeDialog {
+    height: calc(100dvh - 32px);
+  }
+  .header {
+    padding: 12px 16px;
+    min-height: 56px;
+  }
+  .typeChooser {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 12px 16px;
+  }
+  .typeChooser > p {
+    margin: 0;
+  }
+  .workflowSource {
+    padding: 12px 16px 0;
+  }
+  .workflowSource :global(.mantine-SegmentedControl-label) {
+    white-space: normal;
+  }
+  .nodeSettings > .footer {
+    padding: 12px 16px;
+  }
+  .feedback {
+    padding: 12px 16px;
   }
 }

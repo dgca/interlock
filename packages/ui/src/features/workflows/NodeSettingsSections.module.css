@@ -1,19 +1,20 @@
 .layout {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
-  gap: 28px;
-  min-height: 400px;
-  align-items: start;
+  grid-template-columns: 164px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.sidebar {
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
 }
 .navigation {
-  position: sticky;
-  top: 0;
-  background: var(--surface);
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-right: 16px;
-  border-right: 1px solid var(--border);
+  padding: 16px 12px;
 }
 .navigation button {
   display: flex;
@@ -23,10 +24,10 @@
   border: 0;
   background: transparent;
   color: var(--muted);
-  padding: 10px 12px;
+  padding: 12px;
   border-radius: 6px;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
 }
 .navigation button:hover {
@@ -44,9 +45,16 @@
 }
 .panel {
   min-width: 0;
+  padding: 28px;
+  overflow-y: auto;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+.panel :global(.inspector-fields) {
+  padding: 0;
 }
 .panel > h2 {
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1.4;
   margin: 0 0 24px;
   font-weight: 600;
@@ -54,21 +62,26 @@
 @media (max-width: 640px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
-    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    overflow-y: hidden;
   }
   .navigation {
     flex-direction: row;
     overflow-x: auto;
     max-width: 100%;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-    padding: 0 0 12px;
+    padding: 8px;
   }
   .navigation button {
     white-space: nowrap;
     flex-shrink: 0;
-    padding: 9px 10px;
+    padding: 12px 10px;
+  }
+  .panel {
+    padding: 20px 16px;
   }
 }
 

@@ -1,4 +1,11 @@
-import { createContext, useContext, useId, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  type ReactNode,
+} from 'react';
 import {
   FileText,
   ArrowDownToLine,
@@ -38,6 +45,10 @@ export function NodeSettingsSections({
   children: ReactNode;
 }) {
   const heading = useId();
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (panel.current) panel.current.scrollTop = 0;
+  }, [active, workLabel]);
   const sections = [
     { name: 'work' as const, label: workLabel, Icon: FileText },
     {
@@ -55,20 +66,22 @@ export function NodeSettingsSections({
   return (
     <CurrentSection.Provider value={active}>
       <div className={styles.layout}>
-        <nav aria-label="Node settings" className={styles.navigation}>
-          {sections.map(({ name, label, Icon }) => (
-            <button
-              key={name}
-              type="button"
-              aria-current={active === name ? 'page' : undefined}
-              onClick={() => onChange(name)}
-            >
-              <Icon size={16} />
-              {label}
-            </button>
-          ))}
-        </nav>
-        <section className={styles.panel} aria-labelledby={heading}>
+        <div className={styles.sidebar}>
+          <nav aria-label="Node settings" className={styles.navigation}>
+            {sections.map(({ name, label, Icon }) => (
+              <button
+                key={name}
+                type="button"
+                aria-current={active === name ? 'page' : undefined}
+                onClick={() => onChange(name)}
+              >
+                <Icon size={16} />
+                {label}
+              </button>
+            ))}
+          </nav>
+        </div>
+        <section ref={panel} className={styles.panel} aria-labelledby={heading}>
           <h2 id={heading}>{sections.find((s) => s.name === active)?.label}</h2>
           {children}
         </section>
