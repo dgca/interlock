@@ -116,3 +116,7 @@ The CLI uses the same request contracts as MCP. `report-usage` accepts either so
 Usage receipts use the existing `usageAttempts` document collection. Observer snapshots are separate optional fields on those receipts; no database schema migration is needed. Existing snapshots remain executor reports. Historical attempts without receipts remain unknown and cannot receive observer reports. The latest legacy attempt can report as executor if its token is still retained by the work record. Older replaced or revoked legacy tokens cannot create attribution retroactively. Claim timestamps unavailable in legacy data remain null.
 
 Receipts survive restart, retries, and published-definition cleanup. Deleting a workflow's run history also deletes its usage receipts. Portable workflow bundles exclude usage, just as they exclude runs. Summaries bound the returned groups, not the database scan or lifetime of retained history.
+
+## Usage in workflow comparisons
+
+[Comparison measurements](workflow-testbench.md#compare-measurements) freeze the observed trial's run and attempt inventory. Reports read current receipts for those original attempts, including late observer reports, with an as-of time. A later explicit retry does not add its work to the original measurement. Ordinary `get_run_usage` still describes current run history, including retries; its scope can therefore differ from a frozen comparison. Missing legacy inventories and deleted receipts remain unknown.
