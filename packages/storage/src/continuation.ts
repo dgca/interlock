@@ -46,6 +46,7 @@ export type WorkMetadata = Pick<
     WorkRequest['context'],
     'mode' | 'tools' | 'skills' | 'continuityGroup' | 'tier'
   >;
+  trialEnvironment?: { id: string };
 };
 
 const tree = `WITH RECURSIVE tree(id, lifecycle) AS (
@@ -85,7 +86,7 @@ export function continuationState(db: DatabaseSync, id: string) {
     db
       .prepare(
         `${tree}
-    SELECT json_remove(d.value, '$.input', '$.output', '$.prompt', '$.savedPrompts', '$.executionInstructions', '$.outputSchema', '$.token', '$.expiredClaims', '$.holdReceipt', '$.resultRules', '$.hold.reason', '$.hold.checkpointRef', '$.error', '$.context.instructions') AS value
+    SELECT json_remove(d.value, '$.input', '$.output', '$.prompt', '$.savedPrompts', '$.executionInstructions', '$.trialEnvironment.workspace', '$.trialEnvironment.baseCommit', '$.trialEnvironment.configurationId', '$.trialEnvironment.policy', '$.outputSchema', '$.token', '$.expiredClaims', '$.holdReceipt', '$.resultRules', '$.hold.reason', '$.hold.checkpointRef', '$.error', '$.context.instructions') AS value
     FROM documents d JOIN tree ON json_extract(d.value, '$.runId') = tree.id
     WHERE d.collection = 'work' AND json_extract(d.value, '$.status') IN ('available', 'claimed', 'held') ORDER BY d.rowid
   `,

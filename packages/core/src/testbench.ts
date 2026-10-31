@@ -12,6 +12,13 @@ import type { PromptSnapshot } from './prompts.js';
 import type { UsageAttempt, UsageMetric } from './usage.js';
 import { modelTierSchema } from './modelTiers.js';
 import {
+  trialSetupSchema,
+  trialReadSchema,
+  trialCleanupSchema,
+  type TrialSetup,
+  type TrialEnvironment,
+} from './trialEnvironments.js';
+import {
   evaluationReferenceSchema,
   type EvaluationReceipt,
 } from './evaluation.js';
@@ -159,6 +166,7 @@ export const comparisonPreviewSchema = z
     candidateVersion: z.number().int().positive(),
     repetitions: z.number().int().min(1).max(10).default(1),
     concurrency: z.number().int().min(1).max(10).default(2),
+    trialSetup: trialSetupSchema.optional(),
     configurations: z
       .object({
         baseline: comparisonSideSchema.optional(),
@@ -249,6 +257,7 @@ export const comparisonReadSchema = z
       testbenchListSchema.extend({ action: z.literal('list') }),
       comparisonReportSchema.extend({ action: z.literal('report') }),
       comparisonCaseSchema.extend({ action: z.literal('case') }),
+      trialReadSchema.extend({ action: z.literal('trial') }),
     ]),
   })
   .strict();
@@ -257,6 +266,7 @@ export const comparisonUpdateSchema = z
     request: z.discriminatedUnion('action', [
       comparisonCancelSchema.extend({ action: z.literal('cancel') }),
       qualityJudgmentSchema.extend({ action: z.literal('record_quality') }),
+      trialCleanupSchema.extend({ action: z.literal('cleanup_trial') }),
     ]),
   })
   .strict();
@@ -297,6 +307,7 @@ export interface CheckResult {
   reason: string;
 }
 export interface ComparisonSample {
+  trial?: TrialEnvironment;
   id: string;
   caseId: string;
   caseName: string;
@@ -353,6 +364,7 @@ export interface QualityJudgment {
   evaluation?: EvaluationReceipt;
 }
 export interface WorkflowComparison {
+  trialSetup?: TrialSetup;
   id: string;
   requestId: string;
   requestHash: string;

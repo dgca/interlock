@@ -90,6 +90,7 @@ export const mutationDetailSchema = z
     'Use summary for compact continuation without definitions or execution payloads. full includes the workflow definition, execution history, and input/output payloads.',
   );
 export const continuationWorkSchema = z.object({
+  trialEnvironmentId: z.string().optional(),
   id: z.string(),
   runId: z.string(),
   executionId: z.string(),

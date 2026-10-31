@@ -39,6 +39,9 @@ export class AssignmentSizes {
         runId: work.runId,
         ...measureAssignment(
           {
+            ...(work.trialEnvironment
+              ? { trialEnvironment: known(work.trialEnvironment) }
+              : {}),
             prompt: known(work.prompt),
             context: known(work.context),
             input: known(work.input),

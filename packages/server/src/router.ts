@@ -33,6 +33,8 @@ import {
   testbenchListSchema,
   comparisonReportSchema,
   comparisonCaseSchema,
+  trialReadSchema,
+  trialCleanupSchema,
   comparisonCancelSchema,
   qualityJudgmentSchema,
   continuationLimitSchema,
@@ -138,6 +140,14 @@ export const appRouter = t.router({
     case: p
       .input(comparisonCaseSchema)
       .query(({ ctx, input }) => ctx.engine.testbench.getCase(input)),
+    trial: p
+      .input(trialReadSchema)
+      .query(({ ctx, input }) => ctx.engine.testbench.readTrial(input)),
+    cleanupTrial: p.input(trialCleanupSchema).mutation(({ ctx, input }) => {
+      const result = ctx.engine.testbench.cleanupTrial(input);
+      ctx.engine.pump();
+      return result;
+    }),
     cancel: p.input(comparisonCancelSchema).mutation(({ ctx, input }) => {
       const result = ctx.engine.testbench.cancel(input);
       ctx.engine.pump();

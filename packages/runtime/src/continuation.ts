@@ -88,6 +88,9 @@ export class Continuation {
       label: work.label,
       status: work.status,
       context: work.context,
+      ...(work.trialEnvironment
+        ? { trialEnvironmentId: work.trialEnvironment.id }
+        : {}),
       ...(work.continuity ? { continuity: work.continuity } : {}),
       attempt: work.attempt,
       maxAttempts: work.maxAttempts,
