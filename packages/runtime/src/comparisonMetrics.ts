@@ -2,6 +2,7 @@ import {
   summarizeUsage,
   summarizeUsageMetric,
   selectedUsageReport,
+  qualityRubricKey,
   type ComparisonMeasurement,
   type ComparisonSample,
   type WorkflowComparison,
@@ -315,6 +316,20 @@ export class ComparisonMetrics {
         quality: {
           judgedSamples: observed.filter((s) => judgments.has(s.id)).length,
           unjudgedSamples: observed.filter((s) => !judgments.has(s.id)).length,
+          unassessedSamples: observed.filter((s) => {
+            const js = judgments.get(s.id) ?? [];
+            return (
+              js.length > 0 &&
+              js.every((j) => j.evaluation?.verdict === 'unknown')
+            );
+          }).length,
+          checksOnlySamples: observed.filter((s) => {
+            const js = judgments.get(s.id) ?? [];
+            return (
+              js.length > 0 &&
+              js.every((j) => j.evaluation?.mode === 'checks_only')
+            );
+          }).length,
           judgments: samples.reduce(
             (n, s) => n + (judgments.get(s.id)?.length ?? 0),
             0,
@@ -444,7 +459,7 @@ export class ComparisonMetrics {
                 p.candidate &&
                 (judgments.get(p.baseline.id) ?? []).some((a) =>
                   (judgments.get(p.candidate!.id) ?? []).some(
-                    (b) => a.rubric === b.rubric,
+                    (b) => qualityRubricKey(a) === qualityRubricKey(b),
                   ),
                 ),
             ).length,
@@ -468,6 +483,8 @@ export class ComparisonMetrics {
       reasons.push('reported_cost_incomplete');
     if (Object.values(sides).some((s) => s.quality.unjudgedSamples))
       reasons.push('quality_unjudged');
+    if (Object.values(sides).some((s) => s.quality.unassessedSamples))
+      reasons.push('quality_unassessed');
     if (
       c.samples.some((a) => {
         if (a.side !== 'baseline' || !judgments.has(a.id)) return false;
@@ -481,7 +498,9 @@ export class ComparisonMetrics {
           b &&
           judgments.has(b.id) &&
           !(judgments.get(a.id) ?? []).some((x) =>
-            (judgments.get(b.id) ?? []).some((y) => x.rubric === y.rubric),
+            (judgments.get(b.id) ?? []).some(
+              (y) => qualityRubricKey(x) === qualityRubricKey(y),
+            ),
           )
         );
       })

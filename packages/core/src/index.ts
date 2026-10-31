@@ -862,5 +862,14 @@ export {
 } from './testbench.js';
 
 export * from './authoring.js';
+export {
+  evaluationInputSchema,
+  evaluationEvidenceSchema,
+  evaluationReferenceSchema,
+  evaluationGradeSchema,
+  qualityRubricKey,
+  type EvaluationReference,
+  type EvaluationReceipt,
+} from './evaluation.js';
 
 export { nextCallSchema, withNextCall } from './continuation.js';

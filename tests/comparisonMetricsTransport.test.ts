@@ -3,7 +3,11 @@ import { serve } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { blankDefinition } from '@interlock/core';
+import {
+  blankDefinition,
+  definitionSchema,
+  type WorkflowComparison,
+} from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { createApp } from '../packages/server/src/app';
@@ -49,6 +53,23 @@ it.each(['http', 'stdio'])(
       );
       for (const field of ['caseOffset', 'caseLimit', 'currency'])
         expect(schema).toContain(field);
+      const qualitySchema = JSON.stringify(
+        tools.find((t) => t.name === 'update_workflow_comparison')?.inputSchema,
+      );
+      for (const field of [
+        'requestId',
+        'evaluation',
+        'reviewerRunId',
+        'executionId',
+        'evidence',
+        'sha256',
+      ])
+        expect(qualitySchema).toContain(field);
+      expect(
+        JSON.stringify(
+          tools.find((t) => t.name === 'get_run_result')?.inputSchema,
+        ),
+      ).toContain('includeHash');
       const call = async (name: string, args: Record<string, unknown>) => {
         const result = await client.callTool({ name, arguments: args });
         expect(result.isError).not.toBe(true);
@@ -175,6 +196,143 @@ it.each(['http', 'stdio'])(
       expect(JSON.stringify(first)).not.toContain('runIds');
       for (const token of tokens)
         expect(JSON.stringify(first)).not.toContain(token);
+      const captured = e.store.get<WorkflowComparison>('comparisons', c.id)!;
+      const sample = captured.samples[0];
+      const result = await call('get_run_result', {
+        id: sample.runId,
+        includeHash: true,
+      });
+      expect(result.sha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(
+        await call('get_run_result', { id: sample.runId }),
+      ).not.toHaveProperty('sha256');
+      const base = blankDefinition();
+      const evaluator = e.create(
+        'Transport evaluator',
+        '',
+        definitionSchema.parse({
+          ...base,
+          nodes: [
+            ...base.nodes.map((n) =>
+              n.id === 'agent' ? { ...n, context: { mode: 'fresh' } } : n,
+            ),
+            {
+              id: 'prepare',
+              kind: 'agent',
+              label: 'Capture sample',
+              prompt: 'Synthetic fixture',
+              position: { x: 0, y: 0 },
+              inputSchema: {},
+              outputSchema: {},
+              context: { mode: 'current' },
+              maxAttempts: 2,
+            },
+          ],
+          edges: [
+            { id: 'in', source: 'entry', target: 'prepare' },
+            { id: 'next', source: 'prepare', target: 'agent' },
+            { id: 'out', source: 'agent', target: 'exit' },
+          ],
+        }),
+      );
+      e.publish(evaluator.id);
+      const settings = {
+        comparisonId: c.id,
+        rubric: 'Inspect fixture output',
+        mode: 'review',
+        outputPath: '',
+        maxSamples: 10,
+      };
+      const evaluationRun = await call('start_run', {
+        workflowId: evaluator.id,
+        input: settings,
+      });
+      const prepare = await call('claim_work', {
+        workId: e.available(evaluationRun.runId)[0].id,
+        workerId: 'fixture',
+      });
+      const item = {
+        ...settings,
+        evaluationRunId: evaluationRun.runId,
+        sampleId: sample.id,
+        runId: sample.runId,
+        caseId: sample.caseId,
+        guidance:
+          captured.suite.cases.find((x) => x.id === sample.caseId)!
+            .qualityGuidance ?? '',
+        checks: sample.observation!.checks,
+      };
+      await call('submit_result', {
+        workId: prepare.id,
+        token: prepare.token,
+        output: item,
+      });
+      const reviewer = await call('claim_work', {
+        workId: e.available(evaluationRun.runId)[0].id,
+        workerId: 'fresh-fixture',
+        freshContext: true,
+      });
+      const evidence = [{ field: 'output', path: '', sha256: result.sha256 }];
+      const grade = {
+        evaluationRunId: evaluationRun.runId,
+        sampleId: sample.id,
+        rubric: settings.rubric,
+        mode: 'review',
+        outputPath: '',
+        verdict: 'pass',
+        score: 5,
+        notes: 'Synthetic actual-output review',
+        evidence,
+        findings: [
+          {
+            criterion: 'Fixture result',
+            status: 'pass',
+            notes: 'Inspected retained JSON',
+            references: [],
+          },
+        ],
+      };
+      await call('submit_result', {
+        workId: reviewer.id,
+        token: reviewer.token,
+        output: grade,
+      });
+      const quality = {
+        request: {
+          action: 'record_quality',
+          id: c.id,
+          sampleId: sample.id,
+          reviewer: 'fixture',
+          reviewerKind: 'agent',
+          rubric: settings.rubric,
+          score: 5,
+          notes: grade.notes,
+          requestId: evaluationRun.runId + ':' + sample.id,
+          evaluation: {
+            runId: evaluationRun.runId,
+            reviewerRunId: evaluationRun.runId,
+            executionId: reviewer.executionId,
+            evidence,
+          },
+        },
+      };
+      const receipt = await call('update_workflow_comparison', quality);
+      expect(await call('update_workflow_comparison', quality)).toEqual(
+        receipt,
+      );
+      expect(receipt.evaluation).toMatchObject({
+        mode: 'review',
+        verdict: 'pass',
+        comparisonSampleCount: 4,
+        source: { runId: sample.runId },
+        grader: { kind: 'agent', workId: reviewer.id },
+      });
+      expect(JSON.stringify(receipt)).not.toContain('requestHash');
+      const conflict = await client.callTool({
+        name: 'update_workflow_comparison',
+        arguments: { request: { ...quality.request, score: 2 } },
+      });
+      expect(conflict.isError).toBe(true);
       expect(
         (
           await client.callTool({

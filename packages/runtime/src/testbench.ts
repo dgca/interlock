@@ -34,6 +34,10 @@ import type { Store } from '@interlock/storage';
 import { definitionHash, fingerprint } from './versionIdentity.js';
 import { ComparisonMetrics } from './comparisonMetrics.js';
 import type { Usage } from './usage.js';
+import {
+  publicJudgment,
+  validateEvaluationReceipt,
+} from './evaluationReceipts.js';
 const active = (run: Run) =>
   run.status === 'running' || run.status === 'waiting';
 const now = () => new Date().toISOString();
@@ -673,10 +677,9 @@ export class Testbench {
         name,
         revision,
       })),
-      judgments: c.judgments.slice(
-        q.judgmentOffset,
-        q.judgmentOffset + q.judgmentLimit,
-      ),
+      judgments: c.judgments
+        .slice(q.judgmentOffset, q.judgmentOffset + q.judgmentLimit)
+        .map(publicJudgment),
       judgmentOffset: q.judgmentOffset,
       nextOffset: q.offset + samples.length,
       nextJudgmentOffset:
@@ -741,6 +744,17 @@ export class Testbench {
     const q = qualityJudgmentSchema.parse(input);
     return this.store.transaction(() => {
       const c = this.get(q.id);
+      const requestHash = q.requestId ? fingerprint(q) : undefined;
+      const previous = q.requestId
+        ? c.judgments.find((j) => j.requestId === q.requestId)
+        : undefined;
+      if (previous) {
+        if (previous.requestHash !== requestHash)
+          throw new InterlockError(
+            'Quality requestId was already used with different arguments',
+          );
+        return publicJudgment(previous);
+      }
       const sample = c.samples.find((s) => s.id === q.sampleId);
       if (!sample?.observation || sample.observation.status === 'not_started')
         throw new InterlockError(
@@ -750,12 +764,24 @@ export class Testbench {
         throw new InterlockError(
           'Comparison already has 1000 quality judgments',
         );
-      const { id, ...data } = q;
-      const judgment = { ...data, id: randomUUID(), createdAt: now() };
+      const { id, evaluation: _reference, ...data } = q;
+      const evaluation = q.evaluation
+        ? validateEvaluationReceipt(this.store, c, sample, {
+            ...q,
+            evaluation: q.evaluation,
+          })
+        : undefined;
+      const judgment = {
+        ...data,
+        ...(evaluation ? { evaluation } : {}),
+        ...(requestHash ? { requestHash } : {}),
+        id: randomUUID(),
+        createdAt: now(),
+      };
       c.judgments.push(judgment);
       c.updatedAt = now();
       this.store.put('comparisons', c);
-      return judgment;
+      return publicJudgment(judgment);
     });
   }
   counterpart(run: Run) {

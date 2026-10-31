@@ -41,6 +41,12 @@ export const waitQuerySchema = briefingQuerySchema.extend({
     ),
 });
 export const resultQuerySchema = z.object({
+  includeHash: z
+    .boolean()
+    .default(false)
+    .describe(
+      'Opt in to sha256 of the selected value as canonical JSON (object keys sorted). Omission preserves the normal result shape.',
+    ),
   id: z.string().min(1).describe('Run containing the requested data.'),
   executionId: z
     .string()
@@ -72,7 +78,7 @@ export const resultQuerySchema = z.object({
 });
 export type BriefingQuery = z.infer<typeof briefingQuerySchema>;
 export type WaitQuery = z.infer<typeof waitQuerySchema>;
-export type ResultQuery = z.infer<typeof resultQuerySchema>;
+export type ResultQuery = z.input<typeof resultQuerySchema>;
 
 export const continuationLimitSchema = briefingQuerySchema.shape.limit;
 export const mutationDetailSchema = z

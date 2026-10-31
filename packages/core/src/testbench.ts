@@ -10,6 +10,10 @@ import {
 import { structuralEqual } from './jsonEquality.js';
 import type { PromptSnapshot } from './prompts.js';
 import type { UsageAttempt, UsageMetric } from './usage.js';
+import {
+  evaluationReferenceSchema,
+  type EvaluationReceipt,
+} from './evaluation.js';
 
 const id = z.string().min(1).max(120);
 const name = z.string().trim().min(1).max(120);
@@ -155,6 +159,16 @@ export const qualityJudgmentSchema = z
     rubric: z.string().trim().min(1).max(4000),
     score: z.number().min(0).max(5),
     notes: z.string().max(4000).default(''),
+    requestId: id
+      .optional()
+      .describe(
+        'Optional comparison-scoped idempotency key. Identical retries return the original judgment; conflicting reuse rejects. Omit to append independent legacy judgments.',
+      ),
+    evaluation: evaluationReferenceSchema
+      .optional()
+      .describe(
+        'Optional captured evaluation provenance: runId owns fixed comparisonId/rubric/mode/outputPath/maxSamples input; reviewerRunId is its descendant, executionId the completed fresh Agent or checks-only Script grade. Evidence field/path/sha256 comes from get_run_result includeHash:true on the trial root. Requires requestId runId:sampleId; only retained originally completed trials are supported. Returns captured spec/version, verdict, findings and grader metadata.',
+      ),
   })
   .strict();
 // MCP groups related operations while retaining each shared server contract.
@@ -278,6 +292,10 @@ export interface QualityJudgment {
   score: number;
   notes: string;
   createdAt: string;
+  requestId?: string;
+  /** Internal idempotency fingerprint, omitted from public receipts. */
+  requestHash?: string;
+  evaluation?: EvaluationReceipt;
 }
 export interface WorkflowComparison {
   id: string;
