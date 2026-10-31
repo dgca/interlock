@@ -14,6 +14,7 @@ import {
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { Usage } from './usage.js';
+import { executorConditions } from './comparisonConfigurations.js';
 
 type Timing = ComparisonMeasurement['timing'];
 const timingNames = [
@@ -242,6 +243,17 @@ export class ComparisonMetrics {
     const sampleUsage = new Map(
       c.samples.map((s) => [s.id, summarizeUsage(attempts.get(s.id) ?? [])]),
     );
+    const conditions = new Map(
+      c.samples.map((s) => [
+        s.id,
+        executorConditions(
+          c.configurations?.[s.side].executor,
+          attempts.get(s.id) ?? [],
+          !s.observation,
+          detail === 'full',
+        ),
+      ]),
+    );
     const state = (s: ComparisonSample) =>
       !s.observation
         ? 'pending'
@@ -302,6 +314,23 @@ export class ComparisonMetrics {
       for (const s of samples) counts[s.observation?.status ?? 'pending']++;
       return {
         samples: samples.length,
+        executorConditions: {
+          matched: samples.filter(
+            (s) => conditions.get(s.id)!.state === 'matched',
+          ).length,
+          mismatched: samples.filter(
+            (s) => conditions.get(s.id)!.state === 'mismatch',
+          ).length,
+          unknown: samples.filter(
+            (s) => conditions.get(s.id)!.state === 'unknown',
+          ).length,
+          pending: samples.filter(
+            (s) => conditions.get(s.id)!.state === 'pending',
+          ).length,
+          notRequested: samples.filter(
+            (s) => conditions.get(s.id)!.state === 'not_requested',
+          ).length,
+        },
         execution: counts,
         checks: countChecks(samples),
         timing: Object.fromEntries(
@@ -345,6 +374,7 @@ export class ComparisonMetrics {
     };
     const sample = (s: ComparisonSample) => ({
       state: state(s),
+      executorConditions: conditions.get(s.id)!,
       runCount: s.measurement?.runIds.length ?? null,
       detachedRuns: s.measurement?.detachedRuns ?? null,
       timing:
@@ -468,6 +498,15 @@ export class ComparisonMetrics {
       });
     const pending = c.samples.filter((s) => state(s) === 'pending').length;
     const reasons: string[] = [];
+    if ([...conditions.values()].some((c) => c.state === 'mismatch'))
+      reasons.push('executor_configuration_mismatch');
+    if ([...conditions.values()].some((c) => c.state === 'unknown'))
+      reasons.push('executor_configuration_unknown');
+    if (
+      c.configurations &&
+      Object.values(c.configurations).some((c) => c.environment)
+    )
+      reasons.push('environment_unverified');
     if (pending) reasons.push('execution_pending');
     if (c.samples.some((s) => state(s) === 'not_started'))
       reasons.push('trials_not_started');

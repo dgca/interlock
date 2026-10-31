@@ -164,7 +164,7 @@ Claim an assignment only when ready to perform it. Claiming stops its unclaimed 
 
 ## Saved prompts
 
-Use `list_prompts` for IDs, names, descriptions, and revisions, then `get_prompt` for content and workflow usage. `create_prompt` saves named Markdown instructions. `update_prompt` requires the current revision and updates guidance for all future runs, including published workflows. Stale saves fail; active runs and retries retain captured content. `delete_prompt` rejects any draft or published-version reference.
+Use `list_prompts` for IDs, names, descriptions, and revisions, then `get_prompt` for content and workflow usage. Optional `history:{offset,limit}` lists retained revision/name metadata, default ten and maximum 25; optional `revision` reads one exact retained revision. These reads do not restore prompts or change the current edit revision. `create_prompt` saves named Markdown instructions. `update_prompt` requires the current revision and updates guidance for all future runs, including published workflows. Stale saves fail; active runs and retries retain captured content. `delete_prompt` rejects any draft or published-version reference.
 
 Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `prompt` task text. Each invoked workflow captures independently at startup; Batch items inherit capture. Full `list_work` and `claim_work` return the composed `prompt` and exact `savedPrompts`. `get_run` includes `promptSnapshots`; compact discovery and briefings omit these bodies. Saved prompts do not grant tools or skills or change the harness system prompt. See [Prompts](prompts.md).
 
@@ -228,7 +228,7 @@ Transport tests cover HTTP and stdio initialization, tool discovery, work discov
 
 The optional `scripts/codex-smoke.ts` check invokes the installed Codex CLI with a real account and a local text task. It creates a workflow in the running engine and consumes model usage. Its result depends on the client's authentication and tool approval settings; it is separate from the automated transport tests.
 
-Use the [workflow testbench](workflow-testbench.md) for MCP-first saved cases and paired live comparisons. The existing claim/submit loop performs Agent work; starting a comparison does not launch an executor. Reports preserve execution/check/quality distinctions and identify independent detached work. They also provide [comparison measurements](workflow-testbench.md#compare-measurements) for both sides and paired cases, with frozen timing/cohorts, late-receipt usage and explicit evaluation gaps.
+Use the [workflow testbench](workflow-testbench.md) for MCP-first saved cases and paired live comparisons. The existing claim/submit loop performs Agent work; starting a comparison does not launch an executor. Optional side configurations select complete transitive prompt revisions and record non-secret executor/environment requests. Read those requests before choosing an external executor; Interlock does not enforce them. Reports distinguish requests, claim declarations, reported models, and unknown or mismatched conditions. Reports preserve execution/check/quality distinctions and identify independent detached work. They also provide [comparison measurements](workflow-testbench.md#compare-measurements) for both sides and paired cases, with frozen timing/cohorts, late-receipt usage and explicit evaluation gaps.
 
 ## Resume grouped Agent sessions
 

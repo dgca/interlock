@@ -10,6 +10,7 @@ import {
 import { structuralEqual } from './jsonEquality.js';
 import type { PromptSnapshot } from './prompts.js';
 import type { UsageAttempt, UsageMetric } from './usage.js';
+import { modelTierSchema } from './modelTiers.js';
 import {
   evaluationReferenceSchema,
   type EvaluationReceipt,
@@ -103,6 +104,53 @@ export const updateSuiteSchema = z
     content: suiteContentSchema,
   })
   .strict();
+export const comparisonExecutorSchema = z
+  .object({
+    profile: z.string().trim().min(1).max(200).optional(),
+    tier: modelTierSchema.optional(),
+    provider: z.string().trim().min(1).max(200).optional(),
+    model: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict()
+  .refine(
+    (value) => Object.values(value).some((v) => v !== undefined),
+    'Declare at least one executor preference',
+  );
+export const comparisonSideSchema = z
+  .object({
+    promptRevisions: z
+      .array(z.object({ id, revision: z.number().int().positive() }).strict())
+      .max(64)
+      .optional()
+      .describe(
+        'Complete prompt selection for this side, including child workflows. Omit for current revisions.',
+      ),
+    executor: comparisonExecutorSchema
+      .optional()
+      .describe(
+        'Requested configuration metadata only; does not dispatch or enforce a model/profile.',
+      ),
+    environment: z
+      .object({
+        identity: z.string().trim().min(1).max(200),
+        receipt: z.string().trim().min(1).max(512).optional(),
+      })
+      .strict()
+      .optional()
+      .describe(
+        'Non-secret external environment identity/receipt. Does not prepare or verify isolation.',
+      ),
+  })
+  .strict();
+export type ComparisonSideSelection = z.infer<typeof comparisonSideSchema>;
+export interface ComparisonConfiguration {
+  id: string;
+  promptSource: 'current' | 'revisions';
+  prompts: { id: string; revision: number }[];
+  pins: ComparisonPin[];
+  executor?: ComparisonSideSelection['executor'];
+  environment?: ComparisonSideSelection['environment'];
+}
 export const comparisonPreviewSchema = z
   .object({
     suiteId: id,
@@ -111,6 +159,13 @@ export const comparisonPreviewSchema = z
     candidateVersion: z.number().int().positive(),
     repetitions: z.number().int().min(1).max(10).default(1),
     concurrency: z.number().int().min(1).max(10).default(2),
+    configurations: z
+      .object({
+        baseline: comparisonSideSchema.optional(),
+        candidate: comparisonSideSchema.optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export const comparisonStartSchema = comparisonPreviewSchema.extend({
@@ -309,6 +364,8 @@ export interface WorkflowComparison {
   concurrency: number;
   pins: ComparisonPin[];
   prompts: PromptSnapshot[];
+  /** Absent on legacy comparisons, whose prompt pool is shared by both sides. */
+  configurations?: Record<'baseline' | 'candidate', ComparisonConfiguration>;
   samples: ComparisonSample[];
   judgments: QualityJudgment[];
   status: 'running' | 'completed' | 'cancelled';

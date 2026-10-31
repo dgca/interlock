@@ -6,6 +6,7 @@ import {
   promptContentSchema,
   promptIds,
   snapshotPrompt,
+  promptReadSchema,
   type SavedPrompt,
   type PromptContent,
   type PromptUsage,
@@ -17,10 +18,44 @@ export class Prompts {
   list() {
     return this.store.list<SavedPrompt>('prompts');
   }
-  get(id: string) {
-    const prompt = this.store.get<SavedPrompt>('prompts', id);
-    if (!prompt) throw new InterlockError(`Saved prompt ${id} does not exist`);
+  get(id: string, revision?: number) {
+    const current = this.store.get<SavedPrompt>('prompts', id);
+    const prompt =
+      revision === undefined
+        ? current
+        : (this.store.promptRevision(id, revision) ??
+          (current?.revision === revision ? current : undefined));
+    if (!prompt)
+      throw new InterlockError(
+        `Saved prompt ${id}${revision === undefined ? '' : ` revision ${revision}`} does not exist`,
+      );
     return prompt;
+  }
+  read(input: {
+    id: string;
+    revision?: number;
+    history?: { offset?: number; limit?: number };
+  }) {
+    const q = promptReadSchema.parse(input);
+    return {
+      ...this.get(q.id, q.revision),
+      usage: this.references(q.id),
+      ...(q.revision !== undefined
+        ? {
+            currentRevision:
+              this.store.get<SavedPrompt>('prompts', q.id)?.revision ?? null,
+          }
+        : {}),
+      ...(q.history
+        ? {
+            history: this.store.promptHistory(
+              q.id,
+              q.history.offset,
+              q.history.limit,
+            ),
+          }
+        : {}),
+    };
   }
   create(input: PromptContent) {
     const content = promptContentSchema.parse(input);
@@ -63,6 +98,9 @@ export class Prompts {
   }
   usage(id: string): PromptUsage[] {
     this.get(id);
+    return this.references(id);
+  }
+  private references(id: string): PromptUsage[] {
     return this.store.workflows().flatMap((w) => {
       const draft = promptIds(w.draft).includes(id);
       const versions: number[] = [];

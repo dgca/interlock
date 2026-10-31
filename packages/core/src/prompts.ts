@@ -39,6 +39,19 @@ export interface PromptUsage {
   draft: boolean;
   versions: number[];
 }
+export const promptReadSchema = z
+  .object({
+    id: z.string().min(1),
+    revision: z.number().int().positive().optional(),
+    history: z
+      .object({
+        offset: z.number().int().min(0).default(0),
+        limit: z.number().int().min(1).max(25).default(10),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
 export function promptIds(definition: WorkflowDefinition) {
   return [
     ...new Set(

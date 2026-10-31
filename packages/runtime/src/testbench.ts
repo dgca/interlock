@@ -5,8 +5,6 @@ type Output<T extends { _output: unknown }> = T['_output'];
 import {
   InterlockError,
   assertContract,
-  promptIds,
-  snapshotPrompt,
   assertionProblems,
   evaluateAssertions,
   createSuiteSchema,
@@ -22,16 +20,19 @@ import {
   type TestSuite,
   type CapturedCase,
   type WorkflowComparison,
-  type ComparisonPin,
   type ComparisonRunContext,
   type ComparisonSample,
   type Run,
   type Workflow,
-  type SavedPrompt,
   type Json,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
-import { definitionHash, fingerprint } from './versionIdentity.js';
+import { fingerprint } from './versionIdentity.js';
+import {
+  captureConfigurations,
+  configurationSummary,
+  promptsForSide,
+} from './comparisonConfigurations.js';
 import { ComparisonMetrics } from './comparisonMetrics.js';
 import type { Usage } from './usage.js';
 import {
@@ -41,7 +42,6 @@ import {
 const active = (run: Run) =>
   run.status === 'running' || run.status === 'waiting';
 const now = () => new Date().toISOString();
-const key = (pin: ComparisonPin) => `${pin.workflowId}:${pin.version}`;
 const textError = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const trimError = (e?: string) => e?.slice(0, 512);
 export class Testbench {
@@ -238,44 +238,14 @@ export class Testbench {
       blockers.push(
         'Comparison exceeds 100 root runs; reduce cases or repetitions',
       );
-    const pins = new Map<string, ComparisonPin>();
-    const prompts = new Map<string, ReturnType<typeof snapshotPrompt>>();
-    const visit = (workflowId: string, version: number) => {
-      const id = `${workflowId}:${version}`;
-      if (pins.has(id)) return;
-      if (pins.size >= 64)
-        throw new InterlockError(
-          'Comparison exceeds 64 pinned workflow versions',
-        );
-      const snapshot = this.store.getVersion(workflowId, version);
-      if (!snapshot)
-        throw new InterlockError(`Published dependency ${id} is unavailable`);
-      if (
-        snapshot.definition.nodes.some(
-          (node) => node.kind === 'exit' && node.continueAsNew,
-        )
-      )
-        blockers.push(`Continue as new is unsupported in comparisons: ${id}`);
-      pins.set(id, {
-        workflowId,
-        version,
-        definitionHash: definitionHash(snapshot.definition),
-      });
-      for (const promptId of promptIds(snapshot.definition)) {
-        const prompt = this.store.get<SavedPrompt>('prompts', promptId);
-        if (!prompt)
-          throw new InterlockError(`Saved prompt ${promptId} is missing`);
-        prompts.set(promptId, snapshotPrompt(prompt));
-      }
-      for (const node of snapshot.definition.nodes)
-        if (node.kind === 'workflow') {
-          if (node.version === null)
-            throw new InterlockError(`Unresolved Workflow pin ${node.id}`);
-          visit(node.workflowId, node.version);
-        }
-    };
+    const captured = captureConfigurations(
+      this.store,
+      workflow.id,
+      { baseline: q.baselineVersion, candidate: q.candidateVersion },
+      q.configurations,
+    );
+    blockers.push(...captured.blockers);
     for (const version of [q.baselineVersion, q.candidateVersion]) {
-      visit(workflow.id, version);
       const definition = this.store.getVersion(
         workflow.id,
         version,
@@ -297,20 +267,9 @@ export class Testbench {
         );
       }
     }
-    if (
-      prompts.size > 64 ||
-      Buffer.byteLength(JSON.stringify([...prompts.values()])) > 1048576
-    )
-      throw new InterlockError(
-        'Comparison prompt capture exceeds 64 prompts or 1 MiB',
-      );
-    return {
-      suite,
-      pins: [...pins.values()].sort((a, b) => key(a).localeCompare(key(b))),
-      prompts: [...prompts.values()].sort((a, b) => a.id.localeCompare(b.id)),
-      blockers,
-    };
+    return { ...captured, suite, blockers };
   }
+
   preview(input: Input<typeof comparisonPreviewSchema>) {
     const q = comparisonPreviewSchema.parse(input),
       c = this.capture(q);
@@ -329,6 +288,7 @@ export class Testbench {
         }),
       ),
       rootRunCount: c.suite.cases.length * q.repetitions * 2,
+      configurations: configurationSummary(c),
       pins: c.pins,
       prompts: c.prompts.map(({ id, name, revision, content }) => ({
         id,
@@ -411,6 +371,7 @@ export class Testbench {
         concurrency: q.concurrency,
         pins: captured.pins,
         prompts: captured.prompts,
+        configurations: captured.configurations,
         samples,
         judgments: [],
         status: 'running',
@@ -422,7 +383,7 @@ export class Testbench {
     });
   }
   promptsFor(context: ComparisonRunContext) {
-    return this.get(context.comparisonId).prompts;
+    return promptsForSide(this.get(context.comparisonId), context.side);
   }
   context(c: WorkflowComparison, s: ComparisonSample): ComparisonRunContext {
     return {
@@ -560,6 +521,14 @@ export class Testbench {
       suiteRevision: c.suite.revision,
       baselineVersion: c.baselineVersion,
       candidateVersion: c.candidateVersion,
+      ...(c.configurations
+        ? {
+            configurationIds: {
+              baseline: c.configurations.baseline.id,
+              candidate: c.configurations.candidate.id,
+            },
+          }
+        : {}),
       repetitions: c.repetitions,
       concurrency: c.concurrency,
       status: c.status,
@@ -661,6 +630,7 @@ export class Testbench {
     const result = {
       ...this.summary(c, runs),
       metrics: metrics.summary,
+      configurations: configurationSummary(c),
       offset: q.offset,
       samples,
       checkCounts: {
