@@ -1,0 +1,37 @@
+{
+  "name": "Local Git trial example",
+  "description": "Compare independent local Git checkouts using a reviewed Script. Requires managed trialSetup and a committed trial-fixture.txt. No external calls. See docs/local-git-trials.md.",
+  "definition": {
+    "nodes": [
+      {
+        "id": "entry",
+        "kind": "entry",
+        "label": "Input"
+      },
+      {
+        "id": "write",
+        "kind": "script",
+        "label": "Change local fixture",
+        "language": "javascript",
+        "command": "const fs = require('node:fs');\nif (!process.env.INTERLOCK_TRIAL_ID || process.cwd() !== fs.realpathSync(process.env.INTERLOCK_TRIAL_WORKSPACE || '.')) throw new Error('Run this example only through a managed local Git comparison');\nconst file = 'trial-fixture.txt';\nif (!fs.lstatSync(file).isFile()) throw new Error('Expected a regular trial fixture');\nconst before = fs.readFileSync(file, 'utf8');\nconst after = before + '\\nbaseline';\nfs.writeFileSync(file, after);\nreturn { before, after, environmentId: process.env.INTERLOCK_TRIAL_ID };"
+      },
+      {
+        "id": "exit",
+        "kind": "exit",
+        "label": "Output"
+      }
+    ],
+    "edges": [
+      {
+        "id": "in",
+        "source": "entry",
+        "target": "write"
+      },
+      {
+        "id": "out",
+        "source": "write",
+        "target": "exit"
+      }
+    ]
+  }
+}

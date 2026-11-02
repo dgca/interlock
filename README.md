@@ -108,6 +108,8 @@ The **Tidy** icon sits below **Fit View** in the canvas controls and runs your l
 
 Use the MCP [workflow testbench](docs/workflow-testbench.md) to save representative cases, preview and execute two published versions, and inspect execution, assertion and quality results alongside timing, reported cost and evaluation coverage. Existing Runs views label each comparison, case, baseline/candidate side and repetition, with counterpart navigation. These are real runs using connected executors and normal Script/Fetch actions. Comparison configuration stays in MCP, including optional exact per-side prompt revisions and requested executor/environment references. Reports distinguish those requests from declared and usage-reported models. Publication remains separate.
 
+For trusted local repository work, use [managed Git trials](docs/local-git-trials.md) to prepare a separate checkout per sample, route Scripts and Agent assignments to it, retain evidence and track cleanup. External executors must prevent outbound writes; the recipe is not an OS sandbox.
+
 Import the [evaluation starter](docs/workflow-evaluation.md) to grade retained comparison outputs with a fixed rubric, fresh artifact reviewers or frozen checks, and resumable judgment receipts. Its usage stays separate from the original trials.
 
 Use [fixture simulation](docs/workflow-simulation.md) to test supported flat graphs with saved Agent, Script and Fetch outcomes without model calls or external effects. Simulated reports stay separate from live comparisons. Author cases with `interlock test-suite` and run or inspect them with `interlock simulation` or the grouped MCP tool.

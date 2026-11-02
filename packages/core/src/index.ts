@@ -12,6 +12,7 @@ import { resultRulesSchema, resultRuleProblems } from './resultRules.js';
 export * from './assignmentSize.js';
 export * from './contextContinuity.js';
 export * from './modelTiers.js';
+export * from './trialEnvironments.js';
 export * from './authoringLayout.js';
 import { modelTierSchema } from './modelTiers.js';
 import { continuityGroupSchema } from './contextContinuity.js';
@@ -436,6 +437,7 @@ export interface RunAncestry {
   rootWorkflowId: string;
 }
 export interface WorkRequest {
+  trialEnvironment?: import('./trialEnvironments.js').TrialWorkContext;
   hold?: import('./workHolds.js').WorkHold;
   holdRevision?: number;
   endedAt?: string;

@@ -17,6 +17,8 @@ import {
   comparisonCaseSchema,
   comparisonCancelSchema,
   qualityJudgmentSchema,
+  trialReadSchema,
+  trialCleanupSchema,
   type TestSuite,
   type CapturedCase,
   type WorkflowComparison,
@@ -34,6 +36,12 @@ import {
   promptsForSide,
 } from './comparisonConfigurations.js';
 import { ComparisonMetrics } from './comparisonMetrics.js';
+import {
+  TrialEnvironments,
+  publicTrial,
+  trialReserved,
+} from './trialEnvironments.js';
+import { isAbsolute } from 'node:path';
 import type { Usage } from './usage.js';
 import {
   publicJudgment,
@@ -58,6 +66,7 @@ export class Testbench {
       cancel: (id: string) => void;
     },
     usage: Usage,
+    private trials: TrialEnvironments,
   ) {
     this.metrics = new ComparisonMetrics(store, usage);
   }
@@ -91,6 +100,10 @@ export class Testbench {
   assertRetryCapacity(run: Run) {
     if (!run.comparison) return;
     const comparison = this.get(run.comparison.comparisonId);
+    if (comparison.trialSetup)
+      throw new InterlockError(
+        'Managed Git trials retain their original evidence; start a new comparison for another full trial',
+      );
     const sample = comparison.samples.find(
       (s) => s.id === run.comparison!.sampleId,
     );
@@ -100,8 +113,11 @@ export class Testbench {
     // Retrying within an already active tree consumes no additional tree slot.
     if (this.tree(sample.runId, runs).some(active)) return;
     const busy = (c: WorkflowComparison) =>
-      c.samples.filter((s) => s.runId && this.tree(s.runId, runs).some(active))
-        .length;
+      c.samples.filter(
+        (s) =>
+          trialReserved(s) ||
+          (s.runId && this.tree(s.runId, runs).some(active)),
+      ).length;
     if (
       comparison.status !== 'running' &&
       busy(comparison) === 0 &&
@@ -111,7 +127,9 @@ export class Testbench {
           (c) =>
             c.status === 'running' ||
             c.samples.some(
-              (s) => s.runId && this.tree(s.runId, runs).some(active),
+              (s) =>
+                trialReserved(s) ||
+                (s.runId && this.tree(s.runId, runs).some(active)),
             ),
         ).length >= 4
     )
@@ -245,6 +263,30 @@ export class Testbench {
       q.configurations,
     );
     blockers.push(...captured.blockers);
+    if (q.trialSetup) {
+      if (!this.trials.configured)
+        blockers.push(
+          'Configure an explicit trialRoot for an in-memory engine',
+        );
+      if (!isAbsolute(q.trialSetup.repository))
+        blockers.push('Trial repository must be an absolute local path');
+      for (const pin of captured.pins) {
+        const nodes = this.store.getVersion(pin.workflowId, pin.version)!
+          .definition.nodes;
+        if (
+          nodes.some(
+            (n) =>
+              n.kind === 'fetch' ||
+              (n.kind === 'wait' &&
+                n.timing.kind === 'poll' &&
+                n.timing.check.kind === 'fetch'),
+          )
+        )
+          blockers.push(
+            `Local Git trials do not support Fetch effects: ${pin.workflowId}:${pin.version}`,
+          );
+      }
+    }
     for (const version of [q.baselineVersion, q.candidateVersion]) {
       const definition = this.store.getVersion(
         workflow.id,
@@ -298,8 +340,9 @@ export class Testbench {
       })),
       blockers: c.blockers.slice(0, 50),
       blockerCount: c.blockers.length,
-      execution:
-        'Real Agent, Script and Fetch execution. Connected executors are required for Agent work. Nested Workflow and Batch runs add work beyond the exact root count. Detached descendants count toward completion and concurrency.',
+      execution: q.trialSetup
+        ? 'Trusted local Git trial. Preparation gates root creation; native Scripts use the prepared cwd and clean environment. Native Fetch is rejected. Agent harnesses must enforce scoped local tools and prevent external writes; no OS sandbox is provided.'
+        : 'Real Agent, Script and Fetch execution. Connected executors are required for Agent work. Nested Workflow and Batch runs add work beyond the exact root count. Detached descendants count toward completion and concurrency.',
     };
     return {
       ...impact,
@@ -372,12 +415,16 @@ export class Testbench {
         pins: captured.pins,
         prompts: captured.prompts,
         configurations: captured.configurations,
+        ...(q.trialSetup ? { trialSetup: q.trialSetup } : {}),
         samples,
         judgments: [],
         status: 'running',
         createdAt: time,
         updatedAt: time,
       };
+      if (comparison.trialSetup)
+        for (const sample of comparison.samples)
+          sample.trial = this.trials.create(comparison, sample);
       this.store.put('comparisons', comparison);
       return this.summary(comparison);
     });
@@ -430,7 +477,9 @@ export class Testbench {
       (n, c) =>
         n +
         c.samples.filter(
-          (s) => s.runId && this.tree(s.runId, runs).some(active),
+          (s) =>
+            trialReserved(s) ||
+            (s.runId && this.tree(s.runId, runs).some(active)),
         ).length,
       0,
     );
@@ -438,7 +487,9 @@ export class Testbench {
       if (c.status === 'completed') continue;
       let updated = false;
       let busy = c.samples.filter(
-        (s) => s.runId && this.tree(s.runId, runs).some(active),
+        (s) =>
+          trialReserved(s) ||
+          (s.runId && this.tree(s.runId, runs).some(active)),
       ).length;
       for (const sample of c.samples) {
         if (sample.observation) continue;
@@ -472,7 +523,23 @@ export class Testbench {
           updated = true;
           continue;
         }
-        if (c.status !== 'running' || busy >= c.concurrency || globalBusy >= 10)
+        if (sample.trial?.preparation === 'failed') {
+          sample.observation = {
+            at: now(),
+            status: 'not_started',
+            error: sample.trial.error,
+            checks: [],
+            descendantErrors: [],
+          };
+          updated = true;
+          continue;
+        }
+        if (c.trialSetup && sample.trial?.preparation !== 'ready') continue;
+        const reserved = trialReserved(sample);
+        if (
+          c.status !== 'running' ||
+          (!reserved && (busy >= c.concurrency || globalBusy >= 10))
+        )
           continue;
         const testCase = c.suite.cases.find((t) => t.id === sample.caseId)!;
         // The parent pump owns the transaction; it starts external work only after commit.
@@ -485,14 +552,20 @@ export class Testbench {
         );
         sample.runId = run.id;
         updated = true;
-        busy++;
-        globalBusy++;
+        if (!reserved) {
+          busy++;
+          globalBusy++;
+        }
         runs.push(run);
       }
       if (
         c.status === 'running' &&
         c.samples.every((s) => Boolean(s.observation)) &&
-        !c.samples.some((s) => s.runId && this.tree(s.runId, runs).some(active))
+        !c.samples.some(
+          (s) =>
+            trialReserved(s) ||
+            (s.runId && this.tree(s.runId, runs).some(active)),
+        )
       ) {
         c.status = 'completed';
         updated = true;
@@ -541,6 +614,24 @@ export class Testbench {
       activeDetachedCount: activeDetached.length,
       activeDetachedRunIds: activeDetached.slice(0, 25).map((r) => r.id),
       judgmentCount: c.judgments.length,
+      ...(c.trialSetup
+        ? {
+            trials: {
+              preparing: c.samples.filter(
+                (s) => s.trial!.preparation === 'preparing',
+              ).length,
+              preparationFailed: c.samples.filter(
+                (s) => s.trial!.preparation === 'failed',
+              ).length,
+              cleanupPending: c.samples.filter(
+                (s) => s.trial!.cleanup !== 'complete',
+              ).length,
+              cleanupBlocked: c.samples.filter(
+                (s) => s.trial!.cleanup === 'blocked',
+              ).length,
+            },
+          }
+        : {}),
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
     };
@@ -568,10 +659,16 @@ export class Testbench {
       q.metricsDetail,
     );
     const samples = c.samples.slice(q.offset, q.offset + q.limit).map((s) => {
-      const { observation, measurement: _measurement, ...identity } = s;
+      const { observation, measurement: _measurement, trial, ...identity } = s;
       const checks = observation?.checks ?? [];
       return {
         ...identity,
+        ...(trial
+          ? {
+              trial: publicTrial(trial),
+              trialRef: { comparisonId: c.id, sampleId: s.id },
+            }
+          : {}),
         metrics: metrics.sample(s),
         currentStatus: s.runId
           ? (runs.find((r) => r.id === s.runId)?.status ?? 'unavailable')
@@ -631,6 +728,14 @@ export class Testbench {
       ...this.summary(c, runs),
       metrics: metrics.summary,
       configurations: configurationSummary(c),
+      ...(c.trialSetup
+        ? {
+            trialSetup: {
+              kind: c.trialSetup.kind,
+              commit: c.trialSetup.commit,
+            },
+          }
+        : {}),
       offset: q.offset,
       samples,
       checkCounts: {
@@ -679,6 +784,21 @@ export class Testbench {
         ? q.caseOffset + result.metrics.cases.items.length
         : null;
     return result;
+  }
+  readTrial(input: Input<typeof trialReadSchema>) {
+    const q = trialReadSchema.parse(input),
+      c = this.get(q.id);
+    const sample = c.samples.find((s) => s.id === q.sampleId);
+    if (!sample) throw new InterlockError('Comparison sample not found');
+    return this.trials.read(c, sample);
+  }
+  cleanupTrial(input: Input<typeof trialCleanupSchema>) {
+    const q = trialCleanupSchema.parse(input),
+      c = this.get(q.id);
+    const sample = c.samples.find((s) => s.id === q.sampleId);
+    if (!sample) throw new InterlockError('Comparison sample not found');
+    this.trials.requestCleanup(c, sample, q.quiescent);
+    return this.progress(c.id);
   }
   cancel(input: Input<typeof comparisonCancelSchema>) {
     const q = comparisonCancelSchema.parse(input);
@@ -771,6 +891,18 @@ export class Testbench {
       : undefined;
   }
   assertDeletable(workflowId: string) {
+    if (
+      this.store
+        .list<WorkflowComparison>('comparisons')
+        .some(
+          (c) =>
+            c.workflowId === workflowId &&
+            c.samples.some((s) => s.trial && s.trial.cleanup !== 'complete'),
+        )
+    )
+      throw new InterlockError(
+        'Finish managed trial cleanup before deleting this workflow and its comparison receipts',
+      );
     if (
       this.store
         .list<WorkflowComparison>('comparisons')

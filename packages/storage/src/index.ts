@@ -59,7 +59,7 @@ export class Store {
     return Number(row?.size ?? 0);
   }
   readonly migration: MigrationResult;
-  constructor(path: string) {
+  constructor(readonly path: string) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     try {

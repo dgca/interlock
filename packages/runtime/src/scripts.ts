@@ -32,8 +32,10 @@ export function executeScript(
   cwd: string,
   signal?: AbortSignal,
   language: ScriptLanguage = 'bash',
+  env?: NodeJS.ProcessEnv,
 ): Promise<Json> {
   return new Promise((resolve, reject) => {
+    signal?.throwIfAborted();
     const child = spawn(
       language === 'javascript' ? process.execPath : '/bin/bash',
       language === 'javascript'
@@ -41,6 +43,7 @@ export function executeScript(
         : ['-c', command],
       {
         cwd,
+        env,
         stdio: ['pipe', 'pipe', 'pipe'],
         detached: true,
       },

@@ -56,6 +56,7 @@ import {
 import { freshContextInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
+import { TrialEnvironments } from './trialEnvironments.js';
 import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
 import { VersionCleanup } from './versionCleanup.js';
@@ -107,6 +108,7 @@ export class Engine {
   readonly assignmentSizes: AssignmentSizes;
   readonly holds: WorkHolds;
   readonly contextGroups: ContextContinuityGroups;
+  private readonly trials: TrialEnvironments;
   private localJobs = new Map<string, AbortController>();
   private stopped = false;
   private listeners = new Set<() => void>();
@@ -114,6 +116,7 @@ export class Engine {
     readonly store: Store,
     private cwd: string,
     private options: {
+      trialRoot?: string;
       substituteOperation?: (
         node: Extract<WorkflowNode, { kind: 'script' | 'fetch' }>,
         execution: NodeExecution,
@@ -164,6 +167,9 @@ export class Engine {
         'Context continuity binding updated',
       ),
     );
+    this.trials = new TrialEnvironments(store, options.trialRoot, () =>
+      this.pump(),
+    );
     this.testbench = new Testbench(
       store,
       {
@@ -179,7 +185,9 @@ export class Engine {
         cancel: (id) => this.cancelTree(id),
       },
       this.usage,
+      this.trials,
     );
+    for (const id of this.trials.recover()) this.cancelTree(id);
     // A process interruption gives no evidence that local work or remote side effects completed.
     for (const run of store.runs()) {
       const execution = run.executions.at(-1);
@@ -1316,6 +1324,7 @@ export class Engine {
             throw new InterlockError(`Missing captured prompt ${id}`);
           return snapshot;
         });
+        const trialEnvironment = this.trials.context(run);
         const work: WorkRequest = {
           id: randomUUID(),
           runId: run.id,
@@ -1325,7 +1334,18 @@ export class Engine {
           prompt: composePrompt(node.prompt, savedPrompts),
           ...(savedPrompts.length ? { savedPrompts } : {}),
           input: execution.input,
-          context: node.context,
+          context: trialEnvironment
+            ? {
+                ...node.context,
+                skills: [
+                  ...new Set([
+                    ...node.context.skills,
+                    'interlock-local-trials',
+                  ]),
+                ],
+              }
+            : node.context,
+          ...(trialEnvironment ? { trialEnvironment } : {}),
           ...(node.context.continuityGroup
             ? {
                 continuity: this.contextGroups.describe(
@@ -1644,6 +1664,7 @@ export class Engine {
     }
   }
   stop() {
+    this.trials.stop();
     this.simulations.stop();
     this.continuation.stop();
     this.stopped = true;
@@ -1709,18 +1730,38 @@ export class Engine {
       if (node.kind !== 'script' && node.kind !== 'fetch') continue;
       const controller = new AbortController();
       this.localJobs.set(execution.id, controller);
-      const job = this.options.substituteOperation
-        ? this.options.substituteOperation(node, execution)
-        : node.kind === 'fetch'
-          ? executeFetch(execution.request!, node.timeoutMs, controller.signal)
-          : executeScript(
-              node.command,
-              execution.input,
-              node.timeoutMs,
-              this.cwd,
-              controller.signal,
-              node.language,
+      const job = (() => {
+        try {
+          controller.signal.throwIfAborted();
+          const environment = this.trials.execution(run);
+          if (
+            environment &&
+            (node.kind === 'fetch' || this.options.substituteOperation)
+          )
+            throw new InterlockError(
+              'Unsupported operation in a local Git trial',
             );
+          return this.options.substituteOperation
+            ? this.options.substituteOperation(node, execution)
+            : node.kind === 'fetch'
+              ? executeFetch(
+                  execution.request!,
+                  node.timeoutMs,
+                  controller.signal,
+                )
+              : executeScript(
+                  node.command,
+                  execution.input,
+                  node.timeoutMs,
+                  environment?.cwd ?? this.cwd,
+                  controller.signal,
+                  node.language,
+                  environment?.env,
+                );
+        } catch (error) {
+          return Promise.reject(error);
+        }
+      })();
       void job
         .then(
           (output) => ({ ok: true as const, output }),
@@ -1794,6 +1835,7 @@ export class Engine {
           this.pump();
         });
     }
+    this.trials.pump(new Set(this.localJobs.keys()));
   }
   private finishPollTimeout(
     run: Run,
@@ -1833,6 +1875,11 @@ export class Engine {
     this.localJobs.set(execution.id, controller);
     const job: Promise<Json> = Promise.resolve().then(() => {
       controller.signal.throwIfAborted();
+      const environment = this.trials.execution(run);
+      if (environment && timing.check.kind === 'fetch')
+        throw new InterlockError(
+          'Unsupported Fetch probe in a local Git trial',
+        );
       return timing.check.kind === 'fetch'
         ? executeFetch(
             resolveFetch(timing.check, execution.input),
@@ -1852,9 +1899,10 @@ export class Engine {
             timing.check.command,
             execution.input,
             timing.check.timeoutMs,
-            this.cwd,
+            environment?.cwd ?? this.cwd,
             controller.signal,
             timing.check.language,
+            environment?.env,
           );
     });
     const settle = (result: { output?: Json; error?: string }) => {
@@ -1930,14 +1978,19 @@ export class Engine {
       ...visible
     } = work;
     work = visible;
-    if (work.context.mode !== 'fresh') return work;
-    return {
-      ...work,
-      executionInstructions: freshContextInstructions(
-        this.lifecycleRunId(work.runId),
-        work.id,
-      ),
-    };
+    const instructions = [
+      ...(work.trialEnvironment
+        ? [
+            `Local Git trial ${work.trialEnvironment.id}. Use only scoped local tools in ${work.trialEnvironment.workspace}. External writes are forbidden by this recipe. Stop all subprocesses before submitting success or failure. The harness must enforce tool scope; this directory is not an OS sandbox. Do not claim the interlock-local-trials skill unless you can honor this policy.`,
+          ]
+        : []),
+      ...(work.context.mode === 'fresh'
+        ? [freshContextInstructions(this.lifecycleRunId(work.runId), work.id)]
+        : []),
+    ];
+    return instructions.length
+      ? { ...work, executionInstructions: instructions.join('\n\n') }
+      : work;
   }
   private lifecycleRunId(id: string) {
     let run = this.run(id);
@@ -1969,6 +2022,9 @@ export class Engine {
       label: work.label,
       status: work.status,
       context: work.context,
+      ...(work.trialEnvironment
+        ? { trialEnvironmentId: work.trialEnvironment.id }
+        : {}),
       ...(work.continuity ? { continuity: work.continuity } : {}),
       attempt: work.attempt,
       maxAttempts: work.maxAttempts,
@@ -2014,6 +2070,7 @@ export class Engine {
       const work = this.store.get<WorkRequest>('work', workId);
       if (!work || work.status !== 'available')
         throw new InterlockError('Work is not available');
+      this.trials.context(this.run(work.runId));
       if (work.context.mode === 'fresh' && !worker.freshContext)
         throw new InterlockError('This assignment requires fresh context');
       const missingTools = work.context.tools.filter(
@@ -2243,6 +2300,18 @@ export class Engine {
     reason: 'failure' | 'expiry' = 'failure',
   ) {
     this.usage.ended(work, reason === 'expiry' ? 'expired' : 'failed');
+    if (reason === 'expiry' && work.trialEnvironment) {
+      work.status = 'failed';
+      work.error =
+        'Local trial lease expired; stop the worker and reconcile cleanup before starting a new comparison';
+      work.token = undefined;
+      work.leaseUntil = undefined;
+      this.store.put('work', work);
+      this.event(this.run(work.runId), 'work.lease_expired', work.error);
+      for (const id of this.trials.interrupt(this.run(work.runId)))
+        this.cancelTree(id);
+      return;
+    }
     if (work.maxLeaseExpiries !== undefined) {
       if (reason === 'expiry')
         work.leaseExpiryCount = (work.leaseExpiryCount ?? 0) + 1;

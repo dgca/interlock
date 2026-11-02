@@ -15,6 +15,7 @@ import {
   contextPolicySchema,
   modelTierSchema,
   modelSelectionSchema,
+  trialWorkContextSchema,
 } from '@interlock/core';
 
 export const mcpMutationDetailSchema = mutationDetailSchema
@@ -73,6 +74,7 @@ export const workListResponseSchema = z
       z
         .object({
           id: z.string(),
+          trialEnvironmentId: z.string().optional(),
           runId: z.string(),
           nodeId: z.string(),
           label: z.string(),
@@ -147,6 +149,7 @@ export const editResponseSchema = z.object({
 });
 export const claimResponseSchema = z
   .object({
+    trialEnvironment: trialWorkContextSchema.optional(),
     id: z.string(),
     runId: z.string(),
     executionId: z.string(),

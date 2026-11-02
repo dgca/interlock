@@ -245,3 +245,7 @@ Use `workflow_simulation` for [fixture-only contract and route checks](workflow-
 Full assignments may include resultRules. Satisfy these checks against captured input; preflight and submission return bounded rule diagnostics without accepting invalid results. See [result checks](result-preflight.md#check-results-against-assignment-input).
 
 Use [external holds](work-holds.md) for a recoverable provider or infrastructure blocker. Stop external activity cooperatively, declare the checkpoint, and resume with a fresh claim. Interlock does not suspend the executor process.
+
+## Execute managed local Git trials
+
+Optional comparison `trialSetup` gates work on an independent checkout. Compact assignments identify `trialEnvironmentId`; full assignments and claims supply `trialEnvironment` separately from unchanged task input. Claim only with actual `interlock-local-trials` capability: scoped local tools and prevention of external writes. Generic unrestricted coding tools do not satisfy this policy. Native Scripts use the prepared cwd and clean environment; Fetch rejects. Lease expiry cancels the sample rather than redispatching into uncertain state. Stop uncertain workers before confirming `quiescent:true` cleanup. Follow the [local Git trial recipe](local-git-trials.md) for limits, retained artifacts, restart and cancellation recovery. No sandbox or executor is launched by this setting.

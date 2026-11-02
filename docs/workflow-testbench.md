@@ -57,6 +57,12 @@ If `canStart` is true, call `start_workflow_comparison` with the same selection,
 
 Use `list_work`, `claim_work`, `submit_result` and existing renewal/failure tools to perform Agent assignments. The testbench does not launch an executor. Exact published versions and selected prompt captures persist across queued samples, delayed Batch items, child invocations and restart. By default, both sides capture current content for matching saved prompt IDs. This does not recover the library as it existed when an older definition was published. Ordinary runs retain their existing capture behavior.
 
+## Prepare local trial workspaces
+
+Optional `trialSetup:{kind:"local_git",repository:absolutePath,commit:fullSHA}` prepares a separate checkout per sample before allocating its root run. Native Scripts and polling checks use that checkout; Agent assignments receive its context separately from task input and require the `interlock-local-trials` skill. Native Fetch is unsupported. This recipe requires reviewed local-only code and an external executor that prevents outbound writes. It is not an OS sandbox. See [managed Git trials](local-git-trials.md) for the example, artifact limits and cleanup recovery.
+
+Reports link compact trial receipts; `request.action:"trial"` with `id` and `sampleId` reads paths and bounded errors. `update_workflow_comparison` action `cleanup_trial` retries cleanup. Uncertain workers require explicit `quiescent:true` after the harness stops them. Execution completion and cleanup completion are separate. Managed trials reject explicit run retries; start another comparison for new evidence.
+
 ## Select exact side configurations
 
 To compare a prompt change, include `configurations` in preview and start. Each side can supply a complete `promptRevisions` manifest covering every saved prompt referenced by its root and transitive child definitions. Omit the manifest to use current content for that side. An explicit empty array is valid only when the side uses no saved prompts. Extra, duplicate, missing or unavailable revisions reject before work starts.
