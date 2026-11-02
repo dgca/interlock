@@ -8,6 +8,8 @@ import {
   executorResponseSchema,
   executorOperationSchema,
   executorModelsQuerySchema,
+  executorSettingsSchema,
+  executorSettingsUpdateSchema,
   type ExecutorModels,
   tokenFields,
   type ExecutorProfile,
@@ -93,6 +95,12 @@ export class ExecutorManager {
   async manage(input: unknown) {
     const q = executorOperationSchema.parse(input);
     switch (q.action) {
+      case 'settings':
+        return this.settings();
+      case 'save_settings': {
+        const { action: _action, ...settings } = q;
+        return this.saveSettings(settings);
+      }
       case 'models': {
         const { action: _action, ...query } = q;
         return this.models(query);
@@ -121,6 +129,35 @@ export class ExecutorManager {
       ...defaults.filter((d) => !stored.some((p) => p.id === d.id)),
       ...stored,
     ];
+  }
+  settings() {
+    const stored = this.engine.store.get<{
+      id: string;
+      revision: number;
+      concurrency: number;
+    }>('executorSettings', 'shared');
+    return executorSettingsSchema.parse(
+      stored
+        ? { revision: stored.revision, concurrency: stored.concurrency }
+        : {},
+    );
+  }
+  saveSettings(input: unknown) {
+    const q = executorSettingsUpdateSchema.parse(input);
+    const result = this.engine.store.transaction(() => {
+      if (this.settings().revision !== q.expectedRevision)
+        throw new InterlockError(
+          'Execution settings changed. Reload before saving.',
+        );
+      const next = executorSettingsSchema.parse({
+        revision: q.expectedRevision + 1,
+        concurrency: q.concurrency,
+      });
+      this.engine.store.put('executorSettings', { id: 'shared', ...next });
+      return next;
+    });
+    this.schedule();
+    return result;
   }
   saveProfile(input: ExecutorProfileUpdate) {
     const q = executorProfileUpdateSchema.parse(input);
@@ -364,7 +401,11 @@ export class ExecutorManager {
       profileId: work.executor,
       harness: profile?.harness,
       state: reason ? 'blocked' : 'queued',
-      ...(reason ? { reason } : {}),
+      ...(reason
+        ? { reason }
+        : this.jobs.size >= this.settings().concurrency
+          ? { reason: 'Waiting for a shared Agent assignment slot' }
+          : {}),
     };
   }
   private incompatible(work: WorkRequest, profile: ExecutorProfile) {
@@ -454,7 +495,8 @@ export class ExecutorManager {
       for (const offered of this.engine.available(undefined, {
         advance: false,
       })) {
-        if (this.jobs.size >= 4 || this.stopped) break;
+        if (this.jobs.size >= this.settings().concurrency || this.stopped)
+          break;
         if (
           !offered.executor ||
           this.jobs.has(offered.id) ||
@@ -466,13 +508,7 @@ export class ExecutorManager {
         );
         if (!configured?.enabled) continue;
         const adapter = this.adapters.get(configured.harness);
-        if (
-          !adapter ||
-          [...this.jobs.values()].filter(
-            (j) => j.record.profile.id === configured.id,
-          ).length >= configured.concurrency
-        )
-          continue;
+        if (!adapter) continue;
         const group = offered.context.continuityGroup;
         const binding = group
           ? this.engine.contextGroups.describe(offered.runId, group)
@@ -539,6 +575,9 @@ export class ExecutorManager {
           previous?.cwd ??
           profile.cwd ??
           this.defaultCwd;
+        // Settings can change while native executable detection is pending.
+        if (this.jobs.size >= this.settings().concurrency || this.stopped)
+          break;
         let work: WorkRequest;
         try {
           work = this.engine.claim(offered.id, {
@@ -1023,13 +1062,14 @@ export function usageDelta(
   });
 }
 
-/** Earlier draft snapshots may retain a runtime cutoff; current execution ignores it. */
+/** Retired draft profile limits do not override the current shared execution settings. */
 function parseProfileSnapshot(value: unknown): ExecutorProfile {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const { timeoutMs: _retiredTimeout, ...current } = value as Record<
-      string,
-      unknown
-    >;
+    const {
+      timeoutMs: _retiredTimeout,
+      concurrency: _retiredConcurrency,
+      ...current
+    } = value as Record<string, unknown>;
     return executorProfileSchema.parse(current);
   }
   return executorProfileSchema.parse(value);

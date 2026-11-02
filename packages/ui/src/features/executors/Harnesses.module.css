@@ -4,6 +4,26 @@
 .list {
   border-top: 1px solid var(--border);
 }
+.sharedSettings {
+  padding-bottom: 24px;
+}
+.sharedSettings form {
+  max-width: 620px;
+}
+.sharedActions,
+.sharedError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+}
+.sharedNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
 .row {
   border-bottom: 1px solid var(--border);
   padding: 24px 0;
@@ -126,6 +146,10 @@
   }
 }
 @media (max-width: 480px) {
+  .sharedActions,
+  .sharedError {
+    flex-wrap: wrap;
+  }
   .page {
     padding: 0 12px 24px;
   }

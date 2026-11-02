@@ -111,6 +111,7 @@ const updateWorkflowInput = id.extend({
 const claim = z.object({ workId: z.string(), token: z.string() });
 export const appRouter = t.router({
   executors: t.router({
+    settings: p.query(({ ctx }) => ctx.engine.executors.settings()),
     models: p
       .input(executorModelsQuerySchema)
       .query(({ ctx, input }) => ctx.engine.executors.models(input)),

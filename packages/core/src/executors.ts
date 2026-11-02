@@ -43,6 +43,18 @@ export interface ExecutorModels {
   truncated: boolean;
   message?: string;
 }
+export const executorSettingsSchema = z
+  .object({
+    revision: z.number().int().nonnegative().default(0),
+    concurrency: z.number().int().min(1).max(8).default(3),
+  })
+  .strict();
+export const executorSettingsUpdateSchema = z
+  .object({
+    expectedRevision: z.number().int().nonnegative(),
+    concurrency: z.number().int().min(1).max(8),
+  })
+  .strict();
 export const executorProfileSchema = z
   .object({
     id: executorReferenceSchema,
@@ -59,7 +71,6 @@ export const executorProfileSchema = z
       ),
     tools: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
     skills: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
-    concurrency: z.number().int().min(1).max(8).default(1),
     permissions: z
       .enum(['ask', 'read-only', 'standard', 'full-access'])
       .default('standard')
@@ -118,6 +129,8 @@ export const executorResponseSchema = z
   })
   .strict();
 export const executorOperationSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('settings') }).strict(),
+  executorSettingsUpdateSchema.extend({ action: z.literal('save_settings') }),
   executorModelsQuerySchema.extend({ action: z.literal('models') }),
   z
     .object({ action: z.literal('list'), refresh: z.boolean().default(false) })

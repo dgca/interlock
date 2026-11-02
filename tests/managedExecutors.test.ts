@@ -486,6 +486,7 @@ it('reuses a managed continuity session while fresh reviewers start independentl
 });
 it('limits concurrency and observes cancellation without accepting a late result', async () => {
   const e = create();
+  e.executors.saveSettings({ expectedRevision: 0, concurrency: 1 });
   profile(e);
   const inputs: HarnessRun[] = [];
   e.executors.start([
@@ -904,9 +905,9 @@ it('stops active work when its local profile is disabled', async () => {
   );
 });
 
-it('enforces the global four-session limit even for a more permissive local profile', async () => {
+it('defaults to three shared slots and can raise the limit above the former hidden cap', async () => {
   const e = create();
-  profile(e, 'codex', { concurrency: 8 });
+  profile(e, 'codex');
   const inputs: HarnessRun[] = [];
   e.executors.start([
     adapter('codex', async (i) => {
@@ -919,11 +920,133 @@ it('enforces the global four-session limit even for a more permissive local prof
   ]);
   const w = workflow(e, 'codex'),
     runs = Array.from({ length: 6 }, (_, i) => start(e, w.id, i));
-  await vi.waitFor(() => expect(inputs).toHaveLength(4));
+  await vi.waitFor(() => expect(inputs).toHaveLength(3));
   expect(e.store.work().filter((w) => w.status === 'available')).toHaveLength(
-    2,
+    3,
   );
+  for (const work of e.available(undefined, { advance: false }))
+    expect(work.managedExecution).toMatchObject({
+      state: 'queued',
+      reason: 'Waiting for a shared Agent assignment slot',
+    });
+  e.executors.saveSettings({ expectedRevision: 0, concurrency: 5 });
+  await vi.waitFor(() => expect(inputs).toHaveLength(5));
   for (const run of runs) e.cancel(run.id);
+});
+it('shares capacity across harnesses and lowers it without interrupting active assignments', async () => {
+  const e = create();
+  e.executors.saveSettings({ expectedRevision: 0, concurrency: 2 });
+  profile(e, 'codex');
+  profile(e, 'claude-code');
+  const calls: HarnessRun[] = [];
+  const finish: (() => void)[] = [];
+  const run: HarnessAdapter['run'] = async (input) => {
+    calls.push(input);
+    await new Promise<void>((resolve) => {
+      finish.push(resolve);
+      input.signal.addEventListener('abort', () => resolve(), { once: true });
+    });
+    return { output: input.work.input };
+  };
+  e.executors.start([adapter('codex', run), adapter('claude-code', run)]);
+  const a = workflow(e, 'codex'),
+    b = workflow(e, 'claude-code');
+  const runs = [
+    start(e, a.id, 1),
+    start(e, b.id, 2),
+    start(e, a.id, 3),
+    start(e, b.id, 4),
+  ];
+  await vi.waitFor(() => expect(calls).toHaveLength(2));
+  expect(new Set(calls.map((c) => c.profile.harness)).size).toBe(2);
+  e.executors.saveSettings({ expectedRevision: 1, concurrency: 1 });
+  expect(calls.every((c) => !c.signal.aborted)).toBe(true);
+  finish[0]();
+  await vi.waitFor(() =>
+    expect(e.run(calls[0].work.runId).status).toBe('completed'),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(calls).toHaveLength(2);
+  finish[1]();
+  await vi.waitFor(() => expect(calls).toHaveLength(3));
+  expect(calls[2].signal.aborted).toBe(false);
+  for (const r of runs) if (e.run(r.id).status !== 'completed') e.cancel(r.id);
+});
+it('persists revision-checked shared settings and ignores retired profile limits', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'interlock-execution-settings-'));
+  dirs.push(dir);
+  const path = join(dir, 'state.db'),
+    e = create(path);
+  expect(e.executors.settings()).toEqual({ revision: 0, concurrency: 3 });
+  expect(
+    await e.executors.manage({
+      action: 'save_settings',
+      expectedRevision: 0,
+      concurrency: 5,
+    }),
+  ).toEqual({ revision: 1, concurrency: 5 });
+  expect(() =>
+    e.executors.saveSettings({ expectedRevision: 0, concurrency: 2 }),
+  ).toThrow('Reload');
+  for (const concurrency of [0, 9, 1.5])
+    expect(() =>
+      e.executors.saveSettings({ expectedRevision: 1, concurrency }),
+    ).toThrow();
+  e.store.put('executorProfiles', {
+    ...executorProfileSchema.parse({
+      id: 'codex',
+      harness: 'codex',
+      name: 'Old draft configuration',
+    }),
+    concurrency: 1,
+  });
+  expect(
+    e.executors.profiles().find((p) => p.id === 'codex'),
+  ).not.toHaveProperty('concurrency');
+  const reopened = create(path);
+  expect(await reopened.executors.manage({ action: 'settings' })).toEqual({
+    revision: 1,
+    concurrency: 5,
+  });
+});
+it('rechecks shared capacity after asynchronous executable detection', async () => {
+  const e = create();
+  profile(e);
+  profile(e, 'claude-code');
+  const calls: HarnessRun[] = [];
+  let release!: () => void;
+  let detecting = false;
+  const run: HarnessAdapter['run'] = async (input) => {
+    calls.push(input);
+    await new Promise<void>((resolve) =>
+      input.signal.addEventListener('abort', () => resolve(), { once: true }),
+    );
+    return { output: input.work.input };
+  };
+  e.executors.start([
+    adapter('codex', run),
+    {
+      ...adapter('claude-code', run),
+      detect: async () => {
+        detecting = true;
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return { status: 'detected', command: '/fake/claude-code' };
+      },
+    },
+  ]);
+  start(e, workflow(e, 'codex').id, 1);
+  start(e, workflow(e, 'claude-code').id, 2);
+  await vi.waitFor(() => expect(detecting).toBe(true));
+  expect(calls).toHaveLength(1);
+  e.executors.saveSettings({ expectedRevision: 0, concurrency: 1 });
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(calls).toHaveLength(1);
+  expect(e.store.work().filter((w) => w.status === 'available')).toHaveLength(
+    1,
+  );
 });
 it('rejects unsupported or empty native question answers without consuming the pending request', async () => {
   const e = create();

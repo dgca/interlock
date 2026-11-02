@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   Badge,
   NativeSelect,
-  NumberInput,
   Skeleton,
   Switch,
   TagsInput,
@@ -16,6 +15,7 @@ import layout from '../../components/PageLayout/PageLayout.module.css';
 import styles from './Harnesses.module.css';
 import { permissionOptions, permissionDescriptions } from './permissions';
 import { ModelPicker } from './ModelPicker';
+import { ExecutionSettings } from './ExecutionSettings';
 type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
 
 export function Harnesses() {
@@ -56,6 +56,7 @@ export function Harnesses() {
           {checking ? 'Checking…' : 'Check installations'}
         </Button>
       </header>
+      <ExecutionSettings />
       {error && (
         <p role="alert" className={styles.error}>
           {error}
@@ -76,8 +77,7 @@ export function Harnesses() {
       <div className={styles.bottom}>
         <p>
           Installation checks make no model calls. Authentication is checked
-          when the harness runs. Up to four assignments run at once across all
-          profiles.
+          when the harness runs.
         </p>
         <Button variant="ghost" onClick={() => setAdding(!adding)}>
           <Plus size={14} />
@@ -255,14 +255,6 @@ function ProfileRow({
                     command: e.currentTarget.value || undefined,
                   })
                 }
-              />
-              <NumberInput
-                label="Concurrent assignment limit"
-                description="Shared across all workflows using this configuration. Additional assignments wait for a slot."
-                min={1}
-                max={8}
-                value={draft.concurrency}
-                onChange={(v) => setDraft({ ...draft, concurrency: Number(v) })}
               />
               <TextInput
                 label="Profile reference"

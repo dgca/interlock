@@ -35,3 +35,7 @@ The user explicitly dropped Agent runtime limits. The 30-minute harness cutoff a
 ## Native model discovery and workflow defaults
 
 The user approved native model pickers with custom IDs and an optional workflow `agentModel` override. Harness model omission uses the CLI default; workflow omission inherits each selected harness default. The existing advisory context tier does not select a concrete model. Runtime captures overrides on published assignments and retains resolved profiles for retries/continuity. The shared API exposes one bounded models operation inside manage_executors and an equivalent UI query. Catalogs are queried on demand, cached by harness/executable/directory, and never start an Agent turn. No new MCP tool or global discovery payload is added. Native startup and managed policy can still apply during discovery.
+
+## Final shared concurrency decision
+
+The user replaced both prior concurrency controls with one app-wide managed-assignment limit at the top of Harnesses, default 3, range 1–8. It spans all configurations and workflows, with a read-only workflow hint linking back. No per-profile limit or hidden four-job cap remains. Lowering allows in-flight work to finish; raising admits queued work. Persist settings with revision protection; settings are local and not exported. Earlier draft profile/snapshot concurrency fields are ignored. Existing connected-agent claim behavior and continuity exclusions are unchanged.

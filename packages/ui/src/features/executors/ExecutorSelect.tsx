@@ -31,9 +31,25 @@ export function ExecutorSelect({
   const [profiles, setProfiles] =
     useState<Awaited<ReturnType<typeof api.executors.profiles.query>>>();
   const [error, setError] = useState('');
+  const [concurrency, setConcurrency] = useState<number>();
+  const [concurrencyError, setConcurrencyError] = useState('');
+  const workflowSettings = !!(onPermissionsChange || onModelChange);
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
+    if (workflowSettings)
+      void api.executors.settings
+        .query()
+        .then((settings) => {
+          if (alive) {
+            setConcurrency(settings.concurrency);
+            setConcurrencyError('');
+          }
+        })
+        .catch(() => {
+          if (alive)
+            setConcurrencyError('Shared assignment limit could not be loaded.');
+        });
     void api.executors.profiles
       .query()
       .then((p) => {
@@ -45,7 +61,7 @@ export function ExecutorSelect({
     return () => {
       alive = false;
     };
-  }, [enabled]);
+  }, [enabled, workflowSettings]);
   const selected = value === undefined ? inherit : value;
   const profile = profiles?.find((p) => p.id === selected);
   const effective = workflowPermissions ?? profile?.permissions;
@@ -95,6 +111,19 @@ export function ExecutorSelect({
           Manage harnesses
         </a>
       </p>
+      {workflowSettings && (concurrency !== undefined || concurrencyError) && (
+        <p className="hint">
+          {concurrencyError ||
+            `Up to ${concurrency} Agent assignments at once across all harnesses and workflows.`}{' '}
+          <a
+            href="/settings/harnesses#concurrency"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Manage shared limit
+          </a>
+        </p>
+      )}
       {onPermissionsChange && (
         <NativeSelect
           mt="md"
