@@ -223,3 +223,39 @@ it.each([claudeAdapter, codexAdapter])(
   },
   15000,
 );
+
+it.each(
+  [claudeAdapter, codexAdapter].flatMap((adapter) =>
+    (['read-only', 'standard', 'full-access'] as const).map((permissions) => ({
+      adapter,
+      permissions,
+    })),
+  ),
+)(
+  'maps $adapter.id $permissions into native controls',
+  async ({ adapter, permissions }) => {
+    const requests: any[] = [];
+    const result = await adapter.run({
+      command,
+      cwd: process.cwd(),
+      work,
+      profile: executorProfileSchema.parse({
+        id: adapter.id,
+        harness: adapter.id,
+        name: adapter.id,
+        permissions,
+        model: 'permissions-' + permissions,
+      }),
+      signal: new AbortController().signal,
+      onSession: () => {},
+      onProgress: () => {},
+      request: async (request) => {
+        requests.push(request);
+        return { allow: false };
+      },
+    });
+    expect(result.output).toEqual({ ok: permissions === 'full-access' });
+    expect(requests).toHaveLength(permissions === 'standard' ? 1 : 0);
+  },
+  15000,
+);

@@ -1402,7 +1402,15 @@ export class Engine {
               ? undefined
               : (node.executor ?? this.definition(run).executor)
           )
-            ? { executor: node.executor ?? this.definition(run).executor }
+            ? {
+                executor: node.executor ?? this.definition(run).executor,
+                ...(this.definition(run).agentPermissions
+                  ? {
+                      executorPermissions:
+                        this.definition(run).agentPermissions,
+                    }
+                  : {}),
+              }
             : {}),
           ...(resources ? { resources } : {}),
           id: randomUUID(),
@@ -2129,6 +2137,9 @@ export class Engine {
       ...(work.executor
         ? {
             executor: work.executor,
+            ...(work.executorPermissions
+              ? { executorPermissions: work.executorPermissions }
+              : {}),
             managedExecution: this.executors.describe(work),
           }
         : {}),

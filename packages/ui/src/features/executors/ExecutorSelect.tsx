@@ -1,17 +1,27 @@
 import { useEffect, useState } from 'react';
 import { NativeSelect } from '@mantine/core';
 import { api, errorMessage } from '../../lib/api';
+import type { ExecutorPermissionMode } from '@interlock/core';
+import {
+  permissionLabels,
+  permissionDescriptions,
+  permissionOptions,
+} from './permissions';
 
 export function ExecutorSelect({
   value,
   onChange,
   inherit,
   enabled = true,
+  workflowPermissions,
+  onPermissionsChange,
 }: {
   value: string | null | undefined;
   onChange: (value: string | null | undefined) => void;
   inherit?: string;
   enabled?: boolean;
+  workflowPermissions?: ExecutorPermissionMode;
+  onPermissionsChange?: (mode: ExecutorPermissionMode | undefined) => void;
 }) {
   const [profiles, setProfiles] =
     useState<Awaited<ReturnType<typeof api.executors.profiles.query>>>();
@@ -31,6 +41,9 @@ export function ExecutorSelect({
       alive = false;
     };
   }, [enabled]);
+  const selected = value === undefined ? inherit : value;
+  const profile = profiles?.find((p) => p.id === selected);
+  const effective = workflowPermissions ?? profile?.permissions;
   return (
     <div style={{ marginBottom: 20 }}>
       <NativeSelect
@@ -77,6 +90,42 @@ export function ExecutorSelect({
           Manage harnesses
         </a>
       </p>
+      {onPermissionsChange && (
+        <NativeSelect
+          mt="md"
+          label="Agent permissions"
+          value={workflowPermissions ?? '__default'}
+          onChange={(e) =>
+            onPermissionsChange(
+              e.currentTarget.value === '__default'
+                ? undefined
+                : (e.currentTarget.value as ExecutorPermissionMode),
+            )
+          }
+          data={[
+            { value: '__default', label: 'Use harness default' },
+            ...permissionOptions,
+          ]}
+        />
+      )}
+      {(selected || onPermissionsChange) && (
+        <p className="hint">
+          {effective ? (
+            <>
+              {permissionLabels[effective]} ·{' '}
+              {workflowPermissions
+                ? 'workflow override'
+                : `inherited from ${profile?.name ?? selected}`}
+              . {permissionDescriptions[effective]}
+            </>
+          ) : (
+            'Each managed Agent uses its selected harness’s default permissions.'
+          )}
+          {onPermissionsChange &&
+            !selected &&
+            ' Connected agents keep their own permissions.'}
+        </p>
+      )}
       {error && (
         <p role="alert" className="hint">
           Harness settings could not be loaded. {error}

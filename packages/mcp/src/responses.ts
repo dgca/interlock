@@ -1,5 +1,6 @@
 import {
   executorReferenceSchema,
+  executorPermissionModeSchema,
   managedWorkSummarySchema,
   resourceOwnerSchema,
 } from '@interlock/core';
@@ -80,6 +81,7 @@ export const workListResponseSchema = z
         .object({
           id: z.string(),
           executor: executorReferenceSchema.optional(),
+          executorPermissions: executorPermissionModeSchema.optional(),
           managedExecution: managedWorkSummarySchema.optional(),
           trialEnvironmentId: z.string().optional(),
           runId: z.string(),

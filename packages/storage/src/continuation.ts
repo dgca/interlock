@@ -22,6 +22,7 @@ export type ExecutionMetadata = Omit<
 export type WorkMetadata = Pick<
   WorkRequest,
   | 'executor'
+  | 'executorPermissions'
   | 'managedExecution'
   | 'id'
   | 'runId'

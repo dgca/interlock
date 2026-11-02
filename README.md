@@ -53,7 +53,7 @@ The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by th
 
 ## Run agents automatically
 
-Open **Harnesses** in the sidebar to configure an installed Claude Code or Codex executable. Configurations start disabled. Set the working directory, permissions and optional model, then enable the configuration. Choose it in **Workflow settings → Default Agent executor** or override it in an Agent node’s **Execution → Executor** settings, save and publish. Existing workflows keep connected-agent execution unless you opt in.
+Open **Harnesses** in the sidebar to configure an installed Claude Code or Codex executable. Configurations start disabled. Set the working directory, default permissions and optional model, then enable the configuration. Choose it in **Workflow settings → Default Agent executor** or override it in an Agent node’s **Execution → Executor** settings, save and publish. Workflow **Agent permissions** can inherit the harness default or select **Read only**, **Standard** or **Full access**. Existing workflows keep connected-agent execution unless you opt in.
 
 Interlock launches ready assignments inside its existing server, including independently started workflows. Permission requests and questions appear in the run inspector; stopping or losing a session requires explicit recovery before retrying. Installation detection makes no model calls and does not verify authentication. See [managed Agent execution](docs/managed-executors.md) for setup, native authentication requirements, MCP/CLI operations and limitations.
 

@@ -106,6 +106,9 @@ export class Continuation {
       status: work.status,
       context: work.context,
       ...(work.executor ? { executor: work.executor } : {}),
+      ...(work.executorPermissions
+        ? { executorPermissions: work.executorPermissions }
+        : {}),
       ...(work.managedExecution
         ? { managedExecution: work.managedExecution }
         : {}),

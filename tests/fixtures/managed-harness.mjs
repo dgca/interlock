@@ -93,6 +93,21 @@ for await (const line of createInterface({ input: process.stdin })) {
     if (['thread/start', 'thread/resume'].includes(message.method)) {
       model = message.params.model ?? model;
       session = message.params.threadId ?? session;
+      if (model.startsWith('permissions-')) {
+        const mode = model.slice('permissions-'.length);
+        const expectedSandbox =
+          mode === 'read-only'
+            ? 'read-only'
+            : mode === 'full-access'
+              ? 'danger-full-access'
+              : 'workspace-write';
+        const expectedApprovals = mode === 'standard' ? 'untrusted' : 'never';
+        if (
+          message.params.sandbox !== expectedSandbox ||
+          message.params.approvalPolicy !== expectedApprovals
+        )
+          throw Error('Unexpected native Codex permission configuration');
+      }
       if (model === 'diagnostic-flood') await diagnostics();
       send({
         id: message.id,
@@ -110,6 +125,10 @@ for await (const line of createInterface({ input: process.stdin })) {
         id: message.id,
         result: { turn: { id: 'turn', status: 'inProgress' } },
       });
+      if (model === 'permissions-full-access') {
+        end(true);
+        continue;
+      }
       if (model === 'foreign-event')
         send({
           method: 'turn/completed',
@@ -213,6 +232,29 @@ for await (const line of createInterface({ input: process.stdin })) {
         apiKeySource: 'none',
         permissionMode: 'default',
       });
+      if (model.startsWith('permissions-')) {
+        const mode = model.slice('permissions-'.length);
+        const expected =
+          mode === 'read-only'
+            ? 'plan'
+            : mode === 'full-access'
+              ? 'bypassPermissions'
+              : 'default';
+        if (flag('--permission-mode') !== expected)
+          throw Error('Unexpected native Claude permission configuration');
+      }
+      if (flag('--permission-mode') === 'bypassPermissions') {
+        if (
+          !process.argv.some(
+            (value) =>
+              value === '--allow-dangerously-skip-permissions' ||
+              value === '--allow-dangerously-skip-permissions=true',
+          )
+        )
+          throw Error('Missing explicit bypass enablement');
+        end(true);
+        continue;
+      }
       send({
         type: 'control_request',
         request_id: 'permission',

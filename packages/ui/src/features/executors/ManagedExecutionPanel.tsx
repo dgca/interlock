@@ -8,6 +8,7 @@ import type {
 import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import styles from './ManagedExecutionPanel.module.css';
+import { permissionLabels } from './permissions';
 
 type Inspection = Awaited<ReturnType<typeof api.executors.inspect.query>>;
 export function ManagedExecutionPanel({
@@ -130,6 +131,13 @@ export function ManagedExecutionPanel({
         <dl>
           <dt>Harness</dt>
           <dd>{record.profile.harness}</dd>
+          <dt>Permissions</dt>
+          <dd>
+            {permissionLabels[record.profile.permissions] ?? 'Standard'}
+            {record.permissionSource
+              ? ` · ${record.permissionSource === 'workflow' ? 'workflow override' : 'harness default'}`
+              : ''}
+          </dd>
           <dt>Directory</dt>
           <dd>{record.cwd}</dd>
           <dt>Executable</dt>

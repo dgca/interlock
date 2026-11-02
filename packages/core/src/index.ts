@@ -1,6 +1,9 @@
 export * from './workResources.js';
 export * from './executors.js';
-import { executorReferenceSchema } from './executors.js';
+import {
+  executorPermissionModeSchema,
+  executorReferenceSchema,
+} from './executors.js';
 import { resourceNamesSchema } from './workResources.js';
 export { matchRouting } from './resultRouting.js';
 export * from './simulation.js';
@@ -346,6 +349,11 @@ export const nodeSchema = z.discriminatedUnion('kind', [
 ]);
 export type WorkflowNode = z.infer<typeof nodeSchema>;
 export const definitionSchema = z.object({
+  agentPermissions: executorPermissionModeSchema
+    .optional()
+    .describe(
+      'Permission override for managed Agent execution. Omit to use each selected harness default. Connected agents retain their own permissions.',
+    ),
   executor: executorReferenceSchema
     .optional()
     .describe(
@@ -468,6 +476,7 @@ export interface RunAncestry {
 }
 export interface WorkRequest {
   executor?: string;
+  executorPermissions?: import('./executors.js').ExecutorPermissionMode;
   managedExecution?: import('./executors.js').ManagedWorkSummary;
   resources?: string[];
   resourceBlocked?: import('./workResources.js').ResourceBlock;

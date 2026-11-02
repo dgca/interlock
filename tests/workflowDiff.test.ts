@@ -121,3 +121,20 @@ it('treats ordered Switch cases as a setting change', () => {
     'cases',
   );
 });
+
+it('shows managed executor and permission changes before publication', () => {
+  const before = blankDefinition(),
+    after = clone(before);
+  after.executor = 'codex';
+  after.agentPermissions = 'full-access';
+  const diff = compareWorkflow(after, before);
+  expect(diff.workflow.map((change) => change.title)).toEqual([
+    'Default Agent executor',
+    'Agent permissions',
+  ]);
+  expect(
+    compareWorkflow(before, after).workflow.find(
+      (change) => change.id === 'agentPermissions',
+    )?.details[0],
+  ).toMatchObject({ before: 'full-access', after: undefined });
+});

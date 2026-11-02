@@ -357,11 +357,6 @@ export function SettingsDialog({
                 </p>
               ) : (
                 <>
-                  <p className="hint">
-                    Configure the workflow's inputs, outputs, and execution
-                    limit.
-                  </p>
-
                   <TextInput
                     mb="md"
                     label="Name"
@@ -387,6 +382,10 @@ export function SettingsDialog({
 
                   <ExecutorSelect
                     value={settings.definition.executor}
+                    workflowPermissions={settings.definition.agentPermissions}
+                    onPermissionsChange={(agentPermissions) =>
+                      patchDefinition({ agentPermissions })
+                    }
                     onChange={(executor) =>
                       patchDefinition({ executor: executor ?? undefined })
                     }

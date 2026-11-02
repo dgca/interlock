@@ -100,12 +100,15 @@
   overflow-wrap: anywhere;
 }
 @media (max-width: 850px) {
+  .page > header {
+    flex-wrap: wrap;
+  }
   .rowHeading {
     flex-wrap: wrap;
     gap: 12px;
   }
   .identity {
-    flex: 1;
+    flex: 1 0 calc(100% - 40px);
   }
   .rowHeading > button {
     margin-left: auto;
@@ -120,5 +123,13 @@
   .bottom {
     flex-direction: column;
     gap: 14px;
+  }
+}
+@media (max-width: 480px) {
+  .page {
+    padding: 0 12px 24px;
+  }
+  .formActions {
+    flex-wrap: wrap;
   }
 }

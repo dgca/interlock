@@ -38,7 +38,14 @@ export const claudeAdapter: HarnessAdapter = {
           abortController,
           settingSources: ['user', 'project', 'local'],
           permissionMode:
-            input.profile.permissions === 'read-only' ? 'plan' : 'default',
+            input.profile.permissions === 'read-only'
+              ? 'plan'
+              : input.profile.permissions === 'full-access'
+                ? 'bypassPermissions'
+                : 'default',
+          ...(input.profile.permissions === 'full-access'
+            ? { allowDangerouslySkipPermissions: true }
+            : {}),
           permissionPrompts: 'host',
           outputFormat: {
             type: 'json_schema',

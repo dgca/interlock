@@ -71,6 +71,10 @@ export const codexAdapter: HarnessAdapter = {
             message.method === 'item/commandExecution/requestApproval' ||
             message.method === 'item/fileChange/requestApproval'
           ) {
+            if (input.profile.permissions === 'read-only') {
+              rpc.send({ id: message.id, result: { decision: 'decline' } });
+              return;
+            }
             const commandRequest = message.method.includes('commandExecution');
             const changes = fileChanges.get(params.itemId);
             if (
@@ -208,12 +212,18 @@ export const codexAdapter: HarnessAdapter = {
       rpc.send({ method: 'initialized' });
       const options = {
         cwd: input.cwd,
-        approvalPolicy: 'untrusted',
+        approvalPolicy:
+          input.profile.permissions === 'read-only' ||
+          input.profile.permissions === 'full-access'
+            ? 'never'
+            : 'untrusted',
         approvalsReviewer: 'user',
         sandbox:
           input.profile.permissions === 'read-only'
             ? 'read-only'
-            : 'workspace-write',
+            : input.profile.permissions === 'full-access'
+              ? 'danger-full-access'
+              : 'workspace-write',
         ...(input.profile.model ? { model: input.profile.model } : {}),
       };
       const thread = await rpc.request(

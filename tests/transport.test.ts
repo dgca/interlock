@@ -2668,6 +2668,13 @@ it.each(['stdio', 'http'])(
         name: 'Managed transport',
         definition: managedDefinition,
       });
+      await call('edit_workflow', {
+        id: managedWorkflow.id,
+        draftRevision: managedWorkflow.draftRevision,
+        edits: [
+          { op: 'update_settings', set: { agentPermissions: 'read-only' } },
+        ],
+      });
       await call('publish_workflow', { id: managedWorkflow.id });
       const managedRun = await call('start_run', {
         workflowId: managedWorkflow.id,
@@ -2684,6 +2691,10 @@ it.each(['stdio', 'http'])(
         request: { action: 'inspect', workId: managedWork.id },
       });
       const managedAttempt = managedInspection.items[0];
+      expect(managedAttempt).toMatchObject({
+        profile: { permissions: 'read-only' },
+        permissionSource: 'workflow',
+      });
       expect(JSON.stringify(managedInspection)).not.toContain(
         managedWork.token,
       );
@@ -2702,6 +2713,20 @@ it.each(['stdio', 'http'])(
         expect(engine.run(managedRun.runId).status).toBe('completed'),
       );
       expect(engine.run(managedRun.runId).output).toBe(false);
+      const permissionsDraft = await call('get_workflow', {
+        id: managedWorkflow.id,
+      });
+      await call('edit_workflow', {
+        id: managedWorkflow.id,
+        draftRevision: permissionsDraft.draftRevision,
+        edits: [
+          { op: 'update_settings', set: {}, unset: ['agentPermissions'] },
+        ],
+      });
+      expect(
+        (await call('get_workflow', { id: managedWorkflow.id })).draft
+          .agentPermissions,
+      ).toBeUndefined();
       console.log(
         `${mode}: ${tools.length} MCP tools, ${Buffer.byteLength(JSON.stringify(tools))} B definitions`,
       );

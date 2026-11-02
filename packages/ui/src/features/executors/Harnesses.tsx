@@ -14,6 +14,7 @@ import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 import styles from './Harnesses.module.css';
+import { permissionOptions, permissionDescriptions } from './permissions';
 type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
 
 export function Harnesses() {
@@ -44,7 +45,12 @@ export function Harnesses() {
           <h1>Harnesses</h1>
           <p>Choose which local agents Interlock can launch.</p>
         </div>
-        <Button disabled={checking} onClick={() => void refresh(true)}>
+        <Button
+          aria-label="Check installations"
+          title="Check installations"
+          disabled={checking}
+          onClick={() => void refresh(true)}
+        >
           <RefreshCw size={14} />
           {checking ? 'Checking…' : 'Check installations'}
         </Button>
@@ -222,7 +228,9 @@ function ProfileRow({
               }
             />
             <NativeSelect
-              label="Permissions"
+              label="Default permissions"
+              inputWrapperOrder={['label', 'input', 'description', 'error']}
+              description={permissionDescriptions[draft.permissions]}
               value={draft.permissions}
               onChange={(e) =>
                 setDraft({
@@ -231,10 +239,7 @@ function ProfileRow({
                     .value as ExecutorProfile['permissions'],
                 })
               }
-              data={[
-                { value: 'ask', label: 'Ask when the harness needs approval' },
-                { value: 'read-only', label: 'Read-only tools' },
-              ]}
+              data={permissionOptions}
             />
           </div>
           <details className={styles.advanced}>

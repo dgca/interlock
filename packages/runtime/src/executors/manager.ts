@@ -42,6 +42,7 @@ interface Session {
   id: string;
   runId: string;
   profile: ExecutorProfile;
+  permissionSource?: 'workflow' | 'harness';
   command: string;
   cwd: string;
   nativeId?: string;
@@ -101,7 +102,9 @@ export class ExecutorManager {
     }
   }
   profiles() {
-    const stored = this.engine.store.list<ExecutorProfile>(profilesCollection);
+    const stored = this.engine.store
+      .list<unknown>(profilesCollection)
+      .map((profile) => executorProfileSchema.parse(profile));
     return [
       ...defaults.filter((d) => !stored.some((p) => p.id === d.id)),
       ...stored,
@@ -372,9 +375,25 @@ export class ExecutorManager {
           sessionKey,
         );
         if (binding?.session && !priorSession) continue; // An external binding is not an owned managed session.
+        if (priorSession)
+          priorSession.profile = executorProfileSchema.parse(
+            priorSession.profile,
+          );
         const previous = this.latest(offered.id);
-        const profile =
-          priorSession?.profile ?? previous?.profile ?? configured;
+        const profile = executorProfileSchema.parse(
+          priorSession?.profile ??
+            previous?.profile ?? {
+              ...configured,
+              permissions:
+                offered.executorPermissions ?? configured.permissions,
+            },
+        );
+        const permissionSource =
+          priorSession?.permissionSource ??
+          previous?.permissionSource ??
+          (offered.executorPermissions
+            ? ('workflow' as const)
+            : ('harness' as const));
         if (this.incompatible(offered, profile)) continue;
         const pinnedCommand = priorSession?.command ?? previous?.command;
         const detection = await this.detect({
@@ -421,6 +440,7 @@ export class ExecutorManager {
           id: sessionKey,
           runId: work.runId,
           profile,
+          permissionSource,
           command: detection.command,
           cwd,
         };
@@ -432,6 +452,7 @@ export class ExecutorManager {
           attempt: work.attempt,
           state: 'starting',
           profile,
+          permissionSource,
           command: session.command,
           cwd,
           sessionId: session.nativeId,

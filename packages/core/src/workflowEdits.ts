@@ -41,7 +41,7 @@ export const workflowEditsSchema = z
   .array(z.lazy(() => jsonSchema))
   .max(100)
   .describe(
-    'Ordered list, at most 100 edits. Each edit has op: add_node with node; update_node with id, set and optional unset; remove_node with id; add_edge with edge; update_edge with id, set and optional unset; remove_edge with id; or update_settings with set and optional unset. Updates replace named fields shallowly. IDs and node kinds cannot change. Settings are inputSchema, outputSchema, maxSteps. Unknown fields reject the indexed operation. Node/edge objects use the workflow definition format. Added scripts default to JavaScript; existing omitted language retains Bash.',
+    'Ordered list, at most 100 edits. Each edit has op: add_node with node; update_node with id, set and optional unset; remove_node with id; add_edge with edge; update_edge with id, set and optional unset; remove_edge with id; or update_settings with set and optional unset. Updates replace named fields shallowly. IDs and node kinds cannot change. Settings are inputSchema, outputSchema, maxSteps, executor, agentPermissions. executor is a local profile reference. agentPermissions overrides managed Agent defaults with read-only, standard or full-access; unset inherits each harness default. Unknown fields reject the indexed operation. Node/edge objects use the workflow definition format. Added scripts default to JavaScript; existing omitted language retains Bash.',
   );
 function parseStrict<S extends z.ZodTypeAny>(
   schema: S,
@@ -98,7 +98,13 @@ export function draftChanges(
   return {
     nodes: changeIds(before.nodes, after.nodes),
     edges: changeIds(before.edges, after.edges),
-    settings: ['inputSchema', 'outputSchema', 'maxSteps', 'executor'].filter(
+    settings: [
+      'inputSchema',
+      'outputSchema',
+      'maxSteps',
+      'executor',
+      'agentPermissions',
+    ].filter(
       (key) =>
         !structuralEqual(
           before[key as keyof WorkflowDefinition],
@@ -197,6 +203,9 @@ export function applyWorkflowEdits(
         else definition.edges.splice(index, 1);
       } else {
         const current = {
+          ...(definition.agentPermissions
+            ? { agentPermissions: definition.agentPermissions }
+            : {}),
           ...(definition.executor ? { executor: definition.executor } : {}),
           inputSchema: definition.inputSchema,
           outputSchema: definition.outputSchema,
@@ -205,6 +214,7 @@ export function applyWorkflowEdits(
         const nextSettings = parseStrict(
           definitionSchema.pick({
             executor: true,
+            agentPermissions: true,
             inputSchema: true,
             outputSchema: true,
             maxSteps: true,
@@ -212,6 +222,7 @@ export function applyWorkflowEdits(
           updateFields(current, edit.set, edit.unset, []),
         );
         delete definition.executor;
+        delete definition.agentPermissions;
         Object.assign(definition, nextSettings);
       }
     } catch (error) {

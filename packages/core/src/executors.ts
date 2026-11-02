@@ -7,6 +7,14 @@ export const executorReferenceSchema = z
   .min(1)
   .max(80)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/);
+export const executorPermissionModeSchema = z.enum([
+  'read-only',
+  'standard',
+  'full-access',
+]);
+export type ExecutorPermissionMode = z.infer<
+  typeof executorPermissionModeSchema
+>;
 export const executorProfileSchema = z
   .object({
     id: executorReferenceSchema,
@@ -21,7 +29,13 @@ export const executorProfileSchema = z
     skills: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
     concurrency: z.number().int().min(1).max(8).default(1),
     timeoutMs: z.number().int().min(1000).max(86_400_000).default(1_800_000),
-    permissions: z.enum(['ask', 'read-only']).default('ask'),
+    permissions: z
+      .enum(['ask', 'read-only', 'standard', 'full-access'])
+      .default('standard')
+      .transform((mode) => (mode === 'ask' ? 'standard' : mode))
+      .describe(
+        'Default managed Agent permissions. standard uses native approval rules; read-only denies writes; full-access opts into broad access without routine approval stops. Legacy ask means standard. Workflow agentPermissions can override this default.',
+      ),
   })
   .strict();
 export type ExecutorProfile = z.infer<typeof executorProfileSchema>;
@@ -121,6 +135,7 @@ export interface ManagedExecution {
   attempt: number;
   state: ExecutorState;
   profile: ExecutorProfile;
+  permissionSource?: 'workflow' | 'harness';
   command: string;
   cwd: string;
   sessionId?: string;

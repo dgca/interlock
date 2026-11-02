@@ -1,5 +1,8 @@
 import { resourceOwnerSchema } from './workResources.js';
-import { managedWorkSummarySchema } from './executors.js';
+import {
+  executorPermissionModeSchema,
+  managedWorkSummarySchema,
+} from './executors.js';
 import { externalTaskSchema } from './runStarts.js';
 import {
   continuitySchema,
@@ -94,6 +97,7 @@ export const mutationDetailSchema = z
   );
 export const continuationWorkSchema = z.object({
   executor: z.string().optional(),
+  executorPermissions: executorPermissionModeSchema.optional(),
   managedExecution: managedWorkSummarySchema.optional(),
   resources: z.array(z.string()).max(8).optional(),
   trialEnvironmentId: z.string().optional(),
