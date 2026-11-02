@@ -32,6 +32,19 @@
   align-items: center;
   gap: 10px;
   padding-top: 2px;
+  flex-wrap: wrap;
+}
+.limitModes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+.limitedChoice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 170px;
 }
 .sharedControls > button {
   min-width: 88px;

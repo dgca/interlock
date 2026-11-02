@@ -39,3 +39,7 @@ The user approved native model pickers with custom IDs and an optional workflow 
 ## Final shared concurrency decision
 
 The user replaced both prior concurrency controls with one app-wide managed-assignment limit at the top of Harnesses, default 3, range 1–8. It spans all configurations and workflows, with a read-only workflow hint linking back. No per-profile limit or hidden four-job cap remains. Lowering allows in-flight work to finish; raising admits queued work. Persist settings with revision protection; settings are local and not exported. Earlier draft profile/snapshot concurrency fields are ignored. Existing connected-agent claim behavior and continuity exclusions are unchanged.
+
+## Unlimited assignment option
+
+The user approved explicit Limited/Unlimited choices, with Limited to 3 remaining the default. Limited accepts positive whole numbers without the prior ceiling of 8; numeric values must be exactly representable as JavaScript safe integers. Unlimited persists as concurrency:null, never zero. Runtime removes only the shared admission cap; claim requirements, exclusive resources, continuity, workflow sequencing and native policies remain in force. Returning to Limited leaves current work running and waits for capacity. Workflow settings show the actual Limited or Unlimited state.

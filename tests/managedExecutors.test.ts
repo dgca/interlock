@@ -276,8 +276,9 @@ it('allows a node override, discovers separately started roots, and preserves ex
     }),
   ).toThrow(/not available/);
 });
-it('checks capabilities and disabled or missing local profiles before claiming', async () => {
+it('checks capabilities and disabled or missing local profiles even with Unlimited', async () => {
   const e = create();
+  e.executors.saveSettings({ expectedRevision: 0, concurrency: null });
   const run = vi.fn(adapter().run);
   e.executors.start([adapter('codex', run)]);
   profile(e, 'codex', { enabled: false });
@@ -905,7 +906,7 @@ it('stops active work when its local profile is disabled', async () => {
   );
 });
 
-it('defaults to three shared slots and can raise the limit above the former hidden cap', async () => {
+it('defaults to three slots and supports large limits, Unlimited and returning to Limited', async () => {
   const e = create();
   profile(e, 'codex');
   const inputs: HarnessRun[] = [];
@@ -919,18 +920,29 @@ it('defaults to three shared slots and can raise the limit above the former hidd
     }),
   ]);
   const w = workflow(e, 'codex'),
-    runs = Array.from({ length: 6 }, (_, i) => start(e, w.id, i));
+    runs = Array.from({ length: 12 }, (_, i) => start(e, w.id, i));
   await vi.waitFor(() => expect(inputs).toHaveLength(3));
   expect(e.store.work().filter((w) => w.status === 'available')).toHaveLength(
-    3,
+    9,
   );
   for (const work of e.available(undefined, { advance: false }))
     expect(work.managedExecution).toMatchObject({
       state: 'queued',
       reason: 'Waiting for a shared Agent assignment slot',
     });
-  e.executors.saveSettings({ expectedRevision: 0, concurrency: 5 });
-  await vi.waitFor(() => expect(inputs).toHaveLength(5));
+  e.executors.saveSettings({ expectedRevision: 0, concurrency: 10 });
+  await vi.waitFor(() => expect(inputs).toHaveLength(10));
+  e.executors.saveSettings({ expectedRevision: 1, concurrency: null });
+  await vi.waitFor(() => expect(inputs).toHaveLength(12));
+  e.executors.saveSettings({ expectedRevision: 2, concurrency: 2 });
+  expect(inputs.every((i) => !i.signal.aborted)).toBe(true);
+  const queued = start(e, w.id, 13);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(inputs).toHaveLength(12);
+  expect(e.store.work().find((work) => work.runId === queued.id)?.status).toBe(
+    'available',
+  );
+  e.cancel(queued.id);
   for (const run of runs) e.cancel(run.id);
 });
 it('shares capacity across harnesses and lowers it without interrupting active assignments', async () => {
@@ -972,6 +984,36 @@ it('shares capacity across harnesses and lowers it without interrupting active a
   expect(calls[2].signal.aborted).toBe(false);
   for (const r of runs) if (e.run(r.id).status !== 'completed') e.cancel(r.id);
 });
+it('keeps exclusive resource coordination with Unlimited', async () => {
+  const e = create();
+  e.executors.saveSettings({ expectedRevision: 0, concurrency: null });
+  profile(e);
+  const calls: HarnessRun[] = [];
+  const finish: (() => void)[] = [];
+  e.executors.start([
+    adapter('codex', async (input) => {
+      calls.push(input);
+      await new Promise<void>((resolve) => {
+        finish.push(resolve);
+        input.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+      return { output: input.work.input };
+    }),
+  ]);
+  const w = workflow(e, 'codex', {
+    resources: [{ source: 'literal', value: 'shared-project' }],
+  });
+  const a = start(e, w.id, 1),
+    b = start(e, w.id, 2);
+  await vi.waitFor(() => expect(calls).toHaveLength(1));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(calls).toHaveLength(1);
+  finish[0]();
+  await vi.waitFor(() => expect(calls).toHaveLength(2));
+  finish[1]();
+  await settled(e, a.id);
+  await settled(e, b.id);
+});
 it('persists revision-checked shared settings and ignores retired profile limits', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'interlock-execution-settings-'));
   dirs.push(dir);
@@ -988,7 +1030,7 @@ it('persists revision-checked shared settings and ignores retired profile limits
   expect(() =>
     e.executors.saveSettings({ expectedRevision: 0, concurrency: 2 }),
   ).toThrow('Reload');
-  for (const concurrency of [0, 9, 1.5])
+  for (const concurrency of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])
     expect(() =>
       e.executors.saveSettings({ expectedRevision: 1, concurrency }),
     ).toThrow();
@@ -1003,10 +1045,16 @@ it('persists revision-checked shared settings and ignores retired profile limits
   expect(
     e.executors.profiles().find((p) => p.id === 'codex'),
   ).not.toHaveProperty('concurrency');
+  e.executors.saveSettings({
+    expectedRevision: 1,
+    concurrency: Number.MAX_SAFE_INTEGER,
+  });
+  expect(e.executors.settings().concurrency).toBe(Number.MAX_SAFE_INTEGER);
+  e.executors.saveSettings({ expectedRevision: 2, concurrency: null });
   const reopened = create(path);
   expect(await reopened.executors.manage({ action: 'settings' })).toEqual({
-    revision: 1,
-    concurrency: 5,
+    revision: 3,
+    concurrency: null,
   });
 });
 it('rechecks shared capacity after asynchronous executable detection', async () => {

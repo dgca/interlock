@@ -31,7 +31,7 @@ export function ExecutorSelect({
   const [profiles, setProfiles] =
     useState<Awaited<ReturnType<typeof api.executors.profiles.query>>>();
   const [error, setError] = useState('');
-  const [concurrency, setConcurrency] = useState<number>();
+  const [concurrency, setConcurrency] = useState<number | null>();
   const [concurrencyError, setConcurrencyError] = useState('');
   const workflowSettings = !!(onPermissionsChange || onModelChange);
   useEffect(() => {
@@ -114,7 +114,9 @@ export function ExecutorSelect({
       {workflowSettings && (concurrency !== undefined || concurrencyError) && (
         <p className="hint">
           {concurrencyError ||
-            `Up to ${concurrency} Agent assignments at once across all harnesses and workflows.`}{' '}
+            (concurrency === null
+              ? 'No shared assignment limit. Interlock starts every ready assignment; workflow requirements and resource coordination still apply.'
+              : `Up to ${concurrency} Agent assignments at once across all harnesses and workflows.`)}{' '}
           <a
             href="/settings/harnesses#concurrency"
             target="_blank"

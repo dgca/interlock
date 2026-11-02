@@ -134,7 +134,7 @@ export class ExecutorManager {
     const stored = this.engine.store.get<{
       id: string;
       revision: number;
-      concurrency: number;
+      concurrency: number | null;
     }>('executorSettings', 'shared');
     return executorSettingsSchema.parse(
       stored
@@ -158,6 +158,10 @@ export class ExecutorManager {
     });
     this.schedule();
     return result;
+  }
+  private atCapacity() {
+    const limit = this.settings().concurrency;
+    return limit !== null && this.jobs.size >= limit;
   }
   saveProfile(input: ExecutorProfileUpdate) {
     const q = executorProfileUpdateSchema.parse(input);
@@ -403,7 +407,7 @@ export class ExecutorManager {
       state: reason ? 'blocked' : 'queued',
       ...(reason
         ? { reason }
-        : this.jobs.size >= this.settings().concurrency
+        : this.atCapacity()
           ? { reason: 'Waiting for a shared Agent assignment slot' }
           : {}),
     };
@@ -495,8 +499,7 @@ export class ExecutorManager {
       for (const offered of this.engine.available(undefined, {
         advance: false,
       })) {
-        if (this.jobs.size >= this.settings().concurrency || this.stopped)
-          break;
+        if (this.atCapacity() || this.stopped) break;
         if (
           !offered.executor ||
           this.jobs.has(offered.id) ||
@@ -576,8 +579,7 @@ export class ExecutorManager {
           profile.cwd ??
           this.defaultCwd;
         // Settings can change while native executable detection is pending.
-        if (this.jobs.size >= this.settings().concurrency || this.stopped)
-          break;
+        if (this.atCapacity() || this.stopped) break;
         let work: WorkRequest;
         try {
           work = this.engine.claim(offered.id, {

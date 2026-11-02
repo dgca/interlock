@@ -69,7 +69,9 @@ it('prevents edits while reloading shared settings after a revision conflict', a
   await act(async () =>
     root.render(h(MantineProvider, {}, h(ExecutionSettings))),
   );
-  const input = container.querySelector('input')!;
+  const input = container.querySelector<HTMLInputElement>(
+    'input:not([type="radio"]):not([type="hidden"])',
+  )!;
   const fill = (value: string) => {
     Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
@@ -180,6 +182,75 @@ function button(text: string) {
     (b) => b.textContent?.trim() === text,
   )!;
 }
+it('saves Unlimited explicitly and accepts a larger numeric limit when returning to Limited', async () => {
+  await act(async () =>
+    root.render(h(MantineProvider, {}, h(ExecutionSettings))),
+  );
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>(
+        'input[type="radio"][value="unlimited"]',
+      )!
+      .click(),
+  );
+  expect(
+    container.querySelector('input:not([type="radio"]):not([type="hidden"])'),
+  ).toBeNull();
+  expect(container.textContent).toContain('Start every ready assignment');
+  rpc.manage.mockResolvedValueOnce({ revision: 1, concurrency: null });
+  await act(async () => button('Save limit').click());
+  expect(rpc.manage).toHaveBeenLastCalledWith({
+    action: 'save_settings',
+    expectedRevision: 0,
+    concurrency: null,
+  });
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>('input[type="radio"][value="limited"]')!
+      .click(),
+  );
+  const input = container.querySelector<HTMLInputElement>(
+    'input:not([type="radio"]):not([type="hidden"])',
+  )!;
+  expect(input.value).toBe('3');
+  await act(async () => setInput(input, '25'));
+  rpc.manage.mockResolvedValueOnce({ revision: 2, concurrency: 25 });
+  await act(async () => button('Save limit').click());
+  expect(rpc.manage).toHaveBeenLastCalledWith({
+    action: 'save_settings',
+    expectedRevision: 1,
+    concurrency: 25,
+  });
+});
+it('loads saved Unlimited and explains it in workflow settings', async () => {
+  rpc.settings.mockResolvedValue({ revision: 2, concurrency: null });
+  await act(async () =>
+    root.render(h(MantineProvider, {}, h(ExecutionSettings))),
+  );
+  expect(
+    container.querySelector<HTMLInputElement>(
+      'input[type="radio"][value="unlimited"]',
+    )!.checked,
+  ).toBe(true);
+  expect(
+    container.querySelector('input:not([type="radio"]):not([type="hidden"])'),
+  ).toBeNull();
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(ExecutorSelect, {
+          value: 'codex',
+          onChange: () => {},
+          onModelChange: () => {},
+        }),
+      ),
+    ),
+  );
+  expect(container.textContent).toContain('No shared assignment limit');
+  expect(container.textContent).not.toContain('Up to null');
+});
 it('preserves open configuration edits across refresh and reloads only on explicit recovery', async () => {
   const original = harnessProfile();
   rpc.profiles.mockResolvedValue([original]);

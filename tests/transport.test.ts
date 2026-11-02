@@ -2657,6 +2657,27 @@ it.each(['stdio', 'http'])(
           },
         }),
       ).toEqual({ revision: 1, concurrency: 5 });
+      expect(
+        await call('manage_executors', {
+          request: {
+            action: 'save_settings',
+            expectedRevision: 1,
+            concurrency: null,
+          },
+        }),
+      ).toEqual({ revision: 2, concurrency: null });
+      expect(
+        await call('manage_executors', { request: { action: 'settings' } }),
+      ).toEqual({ revision: 2, concurrency: null });
+      expect(
+        await call('manage_executors', {
+          request: {
+            action: 'save_settings',
+            expectedRevision: 2,
+            concurrency: 25,
+          },
+        }),
+      ).toEqual({ revision: 3, concurrency: 25 });
       const localProfiles = await call('manage_executors', {
         request: { action: 'list' },
       });

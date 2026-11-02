@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { NumberInput, Skeleton, VisuallyHidden } from '@mantine/core';
+import { NumberInput, Radio, Skeleton, VisuallyHidden } from '@mantine/core';
 import { executorSettingsSchema } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
@@ -10,6 +10,7 @@ export function ExecutionSettings() {
   const [settings, setSettings] =
     useState<Awaited<ReturnType<typeof api.executors.settings.query>>>();
   const [value, setValue] = useState<string | number>(3);
+  const [mode, setMode] = useState('limited');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -20,7 +21,9 @@ export function ExecutionSettings() {
     try {
       const next = await api.executors.settings.query();
       setSettings(next);
-      setValue(next.concurrency);
+      setMode(next.concurrency === null ? 'unlimited' : 'limited');
+      setValue(next.concurrency ?? 3);
+      setSaved(false);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -31,10 +34,9 @@ export function ExecutionSettings() {
     void load();
   }, []);
   const valid =
-    typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= 1 &&
-    value <= 8;
+    mode === 'unlimited' ||
+    (typeof value === 'number' && Number.isSafeInteger(value) && value >= 1);
+  const concurrency = mode === 'unlimited' ? null : value;
   return (
     <section
       id="concurrency"
@@ -46,7 +48,12 @@ export function ExecutionSettings() {
           className={styles.sharedForm}
           onSubmit={async (e) => {
             e.preventDefault();
-            if (!valid || busy || loading || value === settings.concurrency)
+            if (
+              !valid ||
+              busy ||
+              loading ||
+              concurrency === settings.concurrency
+            )
               return;
             setBusy(true);
             setError('');
@@ -54,7 +61,7 @@ export function ExecutionSettings() {
               const next = executorSettingsSchema.parse(
                 await api.executors.manage.mutate({
                   action: 'save_settings',
-                  concurrency: Number(value),
+                  concurrency: concurrency === null ? null : Number(value),
                   expectedRevision: settings.revision,
                 }),
               );
@@ -68,42 +75,66 @@ export function ExecutionSettings() {
           }}
         >
           <div className={styles.sharedCopy}>
-            <label
-              htmlFor={inputId}
-              id={`${inputId}-label`}
-              className={styles.sharedLabel}
-            >
+            <div id={`${inputId}-label`} className={styles.sharedLabel}>
               Concurrent assignments
-            </label>
+            </div>
             <p>
-              Maximum Agent assignments Interlock runs at once across all
-              harnesses and workflows. Additional assignments wait.
+              {mode === 'unlimited'
+                ? 'Start every ready assignment. Workflow requirements and resource coordination still apply.'
+                : 'Maximum Agent assignments Interlock runs at once across all harnesses and workflows. Additional assignments wait.'}
             </p>
             <p className={styles.sharedNote}>
               Changing the limit does not stop running assignments.
             </p>
           </div>
           <div className={styles.sharedControls}>
-            <NumberInput
-              id={inputId}
+            <Radio.Group
               aria-labelledby={`${inputId}-label`}
-              min={1}
-              max={8}
-              allowDecimal={false}
-              allowNegative={false}
-              value={value}
-              onChange={(value) => {
-                setValue(value);
+              value={mode}
+              onChange={(mode) => {
+                setMode(mode);
                 setSaved(false);
               }}
-              disabled={busy || loading}
-              className={styles.limitInput}
-            />
+            >
+              <div className={styles.limitModes}>
+                <div className={styles.limitedChoice}>
+                  <Radio
+                    value="limited"
+                    label="Limited"
+                    disabled={busy || loading}
+                  />
+                  {mode === 'limited' && (
+                    <NumberInput
+                      id={inputId}
+                      aria-labelledby={`${inputId}-label`}
+                      min={1}
+                      allowDecimal={false}
+                      allowNegative={false}
+                      value={value}
+                      onChange={(value) => {
+                        setValue(value);
+                        setSaved(false);
+                      }}
+                      disabled={busy || loading}
+                      className={styles.limitInput}
+                    />
+                  )}
+                </div>
+                <Radio
+                  value="unlimited"
+                  label="Unlimited"
+                  disabled={busy || loading}
+                />
+              </div>
+            </Radio.Group>
             <Button
               type="submit"
               variant="primary"
               disabled={
-                !valid || busy || loading || value === settings.concurrency
+                !valid ||
+                busy ||
+                loading ||
+                concurrency === settings.concurrency
               }
             >
               {busy

@@ -43,16 +43,25 @@ export interface ExecutorModels {
   truncated: boolean;
   message?: string;
 }
+export const executorConcurrencySchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(Number.MAX_SAFE_INTEGER)
+  .nullable()
+  .describe(
+    'Shared managed Agent assignment limit. A positive whole number sets the limit; null means Unlimited and removes only this shared cap.',
+  );
 export const executorSettingsSchema = z
   .object({
     revision: z.number().int().nonnegative().default(0),
-    concurrency: z.number().int().min(1).max(8).default(3),
+    concurrency: executorConcurrencySchema.default(3),
   })
   .strict();
 export const executorSettingsUpdateSchema = z
   .object({
     expectedRevision: z.number().int().nonnegative(),
-    concurrency: z.number().int().min(1).max(8),
+    concurrency: executorConcurrencySchema,
   })
   .strict();
 export const executorProfileSchema = z
