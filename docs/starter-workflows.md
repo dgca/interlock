@@ -52,6 +52,8 @@ Use `copy:true` with a new key for a deliberate additional copy. Starter request
 
 Explicit imports track the catalog identity against the local workflow ID, so subsequent edits and renames do not lose that association. Older manual copies can be recognized by current drafts or retained published definitions, ignoring canvas positions and declaration order. An arbitrary changed and renamed old copy without retained matching content cannot be identified reliably. Display names alone never establish identity.
 
+Definitions that do not match the current schema are skipped during content recognition. They remain unchanged in the library and do not block starter discovery or imports. Other compatible drafts and retained versions can still identify an existing copy.
+
 A starter import's nonblank request key is an opaque, case- and whitespace-sensitive string of at most 120 characters. Identical keyed retries return the same copy, even after restart; conflicting reuse and a deleted imported result reject. The request receipt commits atomically with creation/publication and copy tracking. A failed creation leaves no accepted receipt. No key is automatically changed to hide uncertain history.
 
 Copy associations and retry receipts live in the library database and survive ordinary deletion and full database backup/restore. Portable bundles contain workflow definitions rather than local import history. Replacing the database or restoring an older backup loses decisions absent from that database.

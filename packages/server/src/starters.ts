@@ -36,13 +36,14 @@ interface Receipt {
   created: boolean;
 }
 function contentHash(definition: WorkflowDefinition) {
-  const d = definitionSchema.parse(definition);
   const order = (a: { id: string }, b: { id: string }) =>
     a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   return fingerprint({
-    ...d,
-    nodes: d.nodes.map(({ position: _position, ...n }) => n).sort(order),
-    edges: [...d.edges].sort(order),
+    ...definition,
+    nodes: definition.nodes
+      .map(({ position: _position, ...n }) => n)
+      .sort(order),
+    edges: [...definition.edges].sort(order),
   });
 }
 function existing(
@@ -65,7 +66,11 @@ function existing(
     [
       w.draft,
       ...retained.filter((v) => v.workflowId === w.id).map((v) => v.definition),
-    ].some((d) => contentHash(d) === hash),
+    ].some((d) => {
+      // Historical definitions may use node kinds the current schema no longer supports.
+      const parsed = definitionSchema.safeParse(d);
+      return parsed.success && contentHash(parsed.data) === hash;
+    }),
   );
 }
 const reference = (w: Workflow) => ({
