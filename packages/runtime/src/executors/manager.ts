@@ -8,6 +8,7 @@ import {
   executorResponseSchema,
   executorOperationSchema,
   executorModelsQuerySchema,
+  executorEffortSchema,
   executorSettingsSchema,
   executorSettingsUpdateSchema,
   type ExecutorModels,
@@ -47,10 +48,12 @@ interface Session {
   runId: string;
   profile: ExecutorProfile;
   permissionSource?: 'workflow' | 'harness';
-  modelSource?: 'workflow' | 'harness' | 'cli';
+  modelSource?: ManagedExecution['modelSource'];
+  effortSource?: ManagedExecution['effortSource'];
   command: string;
   cwd: string;
   nativeId?: string;
+  requestedModel?: string;
   usage?: ModelUsage[];
   usageUncertain?: boolean;
 }
@@ -209,19 +212,28 @@ export class ExecutorManager {
     const profile = q.paths
       ? { ...stored, command: q.paths.command, cwd: q.paths.cwd }
       : stored;
+    return this.profileModels(profile, q.refresh);
+  }
+  private catalogKey(profile: ExecutorProfile) {
+    return JSON.stringify([
+      profile.harness,
+      profile.command,
+      profile.cwd ?? this.defaultCwd,
+    ]);
+  }
+  private async profileModels(
+    profile: ExecutorProfile,
+    refresh = false,
+  ): Promise<ExecutorModels> {
     for (const path of [profile.command, profile.cwd])
       if (path && !isAbsolute(path))
         throw new InterlockError(
           'Executable and working directory overrides must be absolute paths',
         );
-    const key = JSON.stringify([
-      profile.harness,
-      profile.command,
-      profile.cwd ?? this.defaultCwd,
-    ]);
+    const key = this.catalogKey(profile);
     const cached = this.catalogs.get(key);
     if (
-      !q.refresh &&
+      !refresh &&
       cached &&
       Date.now() - cached.at <
         (cached.result.status === 'ready' ? 300000 : 30000)
@@ -246,7 +258,7 @@ export class ExecutorManager {
         const adapter = this.adapters.get(profile.harness);
         if (!adapter?.models)
           throw new Error('This harness does not support model discovery');
-        const detection = await this.detect(profile, q.refresh);
+        const detection = await this.detect(profile, refresh);
         if (abort.signal.aborted) throw abort.signal.reason;
         if (!detection.command || detection.status !== 'detected')
           throw new Error(detection.message ?? 'Harness is unavailable');
@@ -270,6 +282,22 @@ export class ExecutorManager {
           models.push({
             id: model.id,
             name: (model.name || model.id).slice(0, 120),
+            ...(model.effortLevels !== undefined
+              ? {
+                  effortLevels: [
+                    ...new Set(
+                      model.effortLevels.filter(
+                        (level) =>
+                          executorEffortSchema.safeParse(level).success,
+                      ),
+                    ),
+                  ].slice(0, 20),
+                }
+              : {}),
+            ...(model.defaultEffort &&
+            executorEffortSchema.safeParse(model.defaultEffort).success
+              ? { defaultEffort: model.defaultEffort }
+              : {}),
             ...(model.description
               ? { description: model.description.slice(0, 300) }
               : {}),
@@ -390,17 +418,25 @@ export class ExecutorManager {
           binding.sessionId,
         ]),
       );
-    const resolvedProfile = owned?.profile ?? record?.profile ?? profile;
+    const resolvedProfile =
+      owned?.profile ??
+      record?.profile ??
+      (profile && this.assignmentProfile(work, profile));
     const reason =
       binding && (binding.executorId !== work.executor || !owned)
         ? 'This continuity group is bound to another executor session'
-        : detection && detection.status !== 'detected'
-          ? (detection.message ?? 'Harness executable is unavailable')
-          : !profile
-            ? 'Configure this local harness profile'
-            : !profile.enabled
-              ? 'Automatic execution is disabled for this profile'
-              : this.incompatible(work, resolvedProfile!);
+        : owned && this.continuityProblem(work, owned)
+          ? this.continuityProblem(work, owned)
+          : detection && detection.status !== 'detected'
+            ? (detection.message ?? 'Harness executable is unavailable')
+            : !profile
+              ? 'Configure this local harness profile'
+              : !profile.enabled
+                ? 'Automatic execution is disabled for this profile'
+                : (this.incompatible(work, resolvedProfile!) ??
+                  (owned || record
+                    ? undefined
+                    : this.effortProblem(resolvedProfile!)));
     return {
       profileId: work.executor,
       harness: profile?.harness,
@@ -422,6 +458,51 @@ export class ExecutorManager {
     return missing.length
       ? `Profile is missing configured capabilities: ${missing.join(', ')}`
       : undefined;
+  }
+  private assignmentProfile(
+    work: WorkRequest,
+    configured: ExecutorProfile,
+  ): ExecutorProfile {
+    return {
+      ...configured,
+      model: work.executorModel ?? configured.model,
+      effort:
+        work.executorEffort !== undefined
+          ? work.executorEffort
+          : configured.effort,
+      permissions: work.executorPermissions ?? configured.permissions,
+    };
+  }
+  private continuityProblem(work: WorkRequest, session: Session) {
+    if (
+      work.executorModel !== undefined &&
+      (session.requestedModel !== undefined ||
+        work.executorModelSource === 'node') &&
+      work.executorModel !==
+        (session.requestedModel ?? session.profile.model) &&
+      work.executorModel !== session.profile.model
+    )
+      return 'This continuity group already uses another model. Use the same model or a separate continuity group.';
+    if (
+      work.executorEffort !== undefined &&
+      (work.executorEffort ?? null) !== (session.profile.effort ?? null)
+    )
+      return 'This continuity group already uses another thinking effort. Use the same effort or a separate continuity group.';
+  }
+  private effortProblem(profile: ExecutorProfile) {
+    if (!profile.effort) return;
+    if (!profile.model)
+      return 'Select a model before configuring thinking effort';
+    const catalog = this.catalogs.get(this.catalogKey(profile))?.result;
+    if (!catalog)
+      return 'Checking thinking effort support for the selected model';
+    if (catalog.status !== 'ready')
+      return `Thinking effort support could not be checked: ${catalog.message ?? 'model discovery unavailable'}`;
+    const model = catalog.models.find((m) => m.id === profile.model);
+    if (!model?.effortLevels)
+      return 'This model does not report thinking effort choices. Use native default or select a model with reported support.';
+    if (!model.effortLevels.includes(profile.effort))
+      return `Thinking effort ${profile.effort} is not supported by ${profile.model}. Choose a supported level or use native default.`;
   }
   assertClaim(work: WorkRequest) {
     const record = this.latest(work.id);
@@ -531,15 +612,13 @@ export class ExecutorManager {
         if (binding?.session && !priorSession) continue; // An external binding is not an owned managed session.
         if (priorSession)
           priorSession.profile = parseProfileSnapshot(priorSession.profile);
+        if (priorSession && this.continuityProblem(offered, priorSession))
+          continue;
         const previous = this.latest(offered.id);
         const profile = parseProfileSnapshot(
           priorSession?.profile ??
-            previous?.profile ?? {
-              ...configured,
-              model: offered.executorModel ?? configured.model,
-              permissions:
-                offered.executorPermissions ?? configured.permissions,
-            },
+            previous?.profile ??
+            this.assignmentProfile(offered, configured),
         );
         const permissionSource =
           priorSession?.permissionSource ??
@@ -551,12 +630,28 @@ export class ExecutorManager {
           priorSession?.modelSource ??
           previous?.modelSource ??
           (offered.executorModel
-            ? 'workflow'
+            ? (offered.executorModelSource ?? 'workflow')
             : profile.model
               ? 'harness'
               : 'cli');
         if (this.incompatible(offered, profile)) continue;
+        const effortSource =
+          priorSession?.effortSource ??
+          previous?.effortSource ??
+          (offered.executorEffort !== undefined
+            ? (offered.executorEffortSource ?? 'workflow')
+            : profile.effort
+              ? 'harness'
+              : 'cli');
         const pinnedCommand = priorSession?.command ?? previous?.command;
+        const catalogProfile = {
+          ...profile,
+          ...(pinnedCommand ? { command: pinnedCommand } : {}),
+        };
+        if (profile.effort && !priorSession && !previous) {
+          if (profile.model) await this.profileModels(catalogProfile);
+          if (this.effortProblem(catalogProfile)) continue;
+        }
         const detection = await this.detect({
           ...profile,
           ...(pinnedCommand ? { command: pinnedCommand } : {}),
@@ -602,9 +697,11 @@ export class ExecutorManager {
         const session: Session = priorSession ?? {
           id: sessionKey,
           runId: work.runId,
+          requestedModel: profile.model,
           profile,
           permissionSource,
           modelSource,
+          effortSource,
           command: detection.command,
           cwd,
         };
@@ -618,6 +715,7 @@ export class ExecutorManager {
           profile,
           permissionSource,
           modelSource,
+          effortSource,
           command: session.command,
           cwd,
           sessionId: session.nativeId,

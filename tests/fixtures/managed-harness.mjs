@@ -97,6 +97,11 @@ for await (const line of createInterface({ input: process.stdin })) {
           data: [
             {
               model: message.params.cursor ? 'fixture-fast' : 'fixture-model',
+              supportedReasoningEfforts: [
+                { reasoningEffort: 'low' },
+                { reasoningEffort: 'high' },
+              ],
+              defaultReasoningEffort: 'high',
               displayName: message.params.cursor
                 ? 'Fixture Fast'
                 : 'Fixture Model',
@@ -135,6 +140,8 @@ for await (const line of createInterface({ input: process.stdin })) {
       });
     }
     if (message.method === 'turn/start') {
+      if (model === 'effort-check' && message.params.effort !== 'high')
+        throw Error('Missing native Codex effort');
       if (message.params.outputSchema?.properties?.result === undefined)
         throw Error('Missing result schema');
       send({
@@ -231,6 +238,8 @@ for await (const line of createInterface({ input: process.stdin })) {
             models: [
               {
                 value: 'fixture-model',
+                supportsEffort: true,
+                supportedEffortLevels: ['low', 'high'],
                 displayName: 'Fixture Model',
                 description: 'Native catalog fixture',
               },
@@ -245,6 +254,8 @@ for await (const line of createInterface({ input: process.stdin })) {
       if (process.argv.includes('--strict-mcp-config'))
         throw Error('Discovery must not send a user message');
       model = flag('--model') ?? model;
+      if (model === 'effort-check' && flag('--effort') !== 'high')
+        throw Error('Missing native Claude effort');
       send({
         type: 'system',
         subtype: 'init',

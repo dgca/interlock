@@ -39,6 +39,7 @@ it.each([claudeAdapter, codexAdapter])(
     expect(catalog.models[0]).toMatchObject({
       id: 'fixture-model',
       name: 'Fixture Model',
+      effortLevels: ['low', 'high'],
     });
     expect(catalog.models).toHaveLength(adapter.id === 'codex' ? 2 : 1);
   },
@@ -273,4 +274,27 @@ it.each(
     expect(requests).toHaveLength(permissions === 'standard' ? 1 : 0);
   },
   15000,
+);
+
+it.each([claudeAdapter, codexAdapter])(
+  'passes explicit effort through $id native protocol',
+  async (adapter) => {
+    const result = await adapter.run({
+      command,
+      cwd: process.cwd(),
+      work,
+      profile: executorProfileSchema.parse({
+        id: adapter.id,
+        harness: adapter.id,
+        name: adapter.id,
+        model: 'effort-check',
+        effort: 'high',
+      }),
+      signal: new AbortController().signal,
+      onSession: () => {},
+      onProgress: () => {},
+      request: async () => ({ allow: true }),
+    });
+    expect(result.output).toEqual({ ok: true });
+  },
 );

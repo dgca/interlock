@@ -56,3 +56,5 @@ Optional [model tiers](model-tiers.md) apply to both current and fresh context. 
 For connected-agent claims, Interlock checks declarations and records handoffs. It does not create sessions, authenticate the declared actor or executor, inspect conversation history, or prove continuity or fresh-review isolation. The external harness owns those responsibilities. A group name alone does not cause an executor to resume a session.
 
 [Managed execution](managed-executors.md) owns its native sessions. It maps a run-local logical binding to a native session, retains captured configuration across grouped steps and retries, and does not adopt external bindings. Ungrouped or fresh assignments start independently. Interrupted sessions require reconciliation, and uncertain cumulative usage stays unattributed.
+
+Managed sessions pin their resolved model and thinking effort. A later node override that conflicts with those settings stays unclaimed with a reason; use matching settings or another continuity group. Profile edits do not change captured retries or continuing sessions. See [managed model and effort selection](managed-executors.md#choose-a-model).

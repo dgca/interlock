@@ -5,9 +5,12 @@ import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   executorProfileSchema,
+  nodeSchema,
+  type WorkflowNode,
   type ExecutorPermissionMode,
 } from '@interlock/core';
 import { ExecutorSelect } from '../packages/ui/src/features/executors/ExecutorSelect';
+import { NodeInspector } from '../packages/ui/src/features/workflows/NodeInspector';
 import { ExecutionSettings } from '../packages/ui/src/features/executors/ExecutionSettings';
 import { Harnesses } from '../packages/ui/src/features/executors/Harnesses';
 const rpc = vi.hoisted(() => ({
@@ -383,4 +386,168 @@ it('shows effective workflow permissions for a node-specific executor without an
   );
   expect(container.textContent).toContain('Standard · workflow override');
   expect(container.querySelectorAll('select')).toHaveLength(1);
+});
+
+it('offers model-specific effort with node inheritance, native reset and incompatible model feedback', async () => {
+  rpc.profiles.mockResolvedValue([
+    { ...harnessProfile(), model: 'native-model', effort: 'high' },
+  ]);
+  rpc.models.mockResolvedValue({
+    status: 'ready',
+    truncated: false,
+    models: [
+      {
+        id: 'native-model',
+        name: 'Native Model',
+        effortLevels: ['low', 'high'],
+      },
+      { id: 'other-model', name: 'Other Model', effortLevels: ['medium'] },
+    ],
+  });
+  const changes: unknown[] = [];
+  function NodeModel() {
+    const [model, setModel] = useState<string>();
+    const [effort, setEffort] = useState<string | null>();
+    return h(ExecutorSelect, {
+      value: undefined,
+      inherit: 'codex',
+      onChange: () => {},
+      workflowModel: 'native-model',
+      workflowEffort: 'high',
+      nodeModel: model,
+      nodeEffort: effort,
+      onNodeModelChange: setModel,
+      onNodeEffortChange: (v) => {
+        changes.push(v);
+        setEffort(v);
+      },
+    });
+  }
+  await act(async () => root.render(h(MantineProvider, {}, h(NodeModel))));
+  expect(rpc.models).toHaveBeenCalled();
+  expect(container.textContent).toContain(
+    'native-model · inherited from workflow',
+  );
+  const effortSelect = () =>
+    [...container.querySelectorAll('select')].find((s) =>
+      [...s.options].some((o) => o.textContent === 'Use native default'),
+    )!;
+  expect([...effortSelect().options].map((o) => o.value)).toEqual([
+    '__inherit',
+    '__native',
+    'low',
+    'high',
+  ]);
+  await act(async () => {
+    effortSelect().value = 'low';
+    effortSelect().dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(changes.at(-1)).toBe('low');
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!
+      .click(),
+  );
+  await act(async () =>
+    [...document.querySelectorAll<HTMLElement>('[role="option"]')]
+      .find((e) => e.textContent?.includes('Other Model'))!
+      .click(),
+  );
+  expect(container.textContent).toContain('not reported for other-model');
+  expect([...effortSelect().options].map((o) => o.value)).toContain('medium');
+  expect([...effortSelect().options].map((o) => o.value)).not.toContain('high');
+  await act(async () => {
+    effortSelect().value = '__native';
+    effortSelect().dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(changes.at(-1)).toBeNull();
+  expect(container.textContent).not.toContain('not reported for other-model');
+  await act(async () => {
+    effortSelect().value = '__inherit';
+    effortSelect().dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(changes.at(-1)).toBeUndefined();
+  expect(container.textContent).toContain(
+    'Thinking effort high is not reported for other-model',
+  );
+});
+
+it('hides managed model controls for connected nodes and removes manual capability fields from harness settings', async () => {
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(ExecutorSelect, {
+          value: null,
+          inherit: 'codex',
+          onChange: () => {},
+          nodeModel: 'saved',
+          nodeEffort: 'high',
+          onNodeModelChange: () => {},
+          onNodeEffortChange: () => {},
+        }),
+      ),
+    ),
+  );
+  expect(container.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
+  rpc.profiles.mockResolvedValue([harnessProfile()]);
+  await act(async () => root.render(h(MantineProvider, {}, h(Harnesses))));
+  await act(async () => button('Configure').click());
+  expect(container.textContent).not.toContain('Available tools');
+  expect(container.textContent).not.toContain('Available skills');
+});
+
+it('switches node model controls and advisory tiers without losing either setting', async () => {
+  let saved: WorkflowNode;
+  function Editor() {
+    const [node, setNode] = useState(() =>
+      nodeSchema.parse({
+        id: 'agent',
+        kind: 'agent',
+        label: 'Agent',
+        prompt: 'Work',
+        executor: 'codex',
+        model: 'native-model',
+        effort: 'high',
+        context: { tier: 'fast' },
+      }),
+    );
+    saved = node;
+    return h(NodeInspector, {
+      node,
+      workflows: [],
+      section: 'execution',
+      onChange: setNode,
+    });
+  }
+  await act(async () => root.render(h(MantineProvider, {}, h(Editor))));
+  const field = (label: string) =>
+    [...container.querySelectorAll<HTMLSelectElement>('select')].find(
+      (el) =>
+        container.querySelector(`label[for="${el.id}"]`)?.textContent === label,
+    )!;
+  expect(field('Model tier')).toBeUndefined();
+  expect(container.textContent).toContain('node override');
+  await act(async () => {
+    field('Executor').value = '__manual';
+    field('Executor').dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(field('Model tier').value).toBe('fast');
+  expect(container.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
+  expect(saved!).toMatchObject({
+    model: 'native-model',
+    effort: 'high',
+    context: { tier: 'fast' },
+  });
+  await act(async () => {
+    field('Executor').value = 'codex';
+    field('Executor').dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(field('Model tier')).toBeUndefined();
+  expect(saved!).toMatchObject({
+    model: 'native-model',
+    effort: 'high',
+    context: { tier: 'fast' },
+  });
 });

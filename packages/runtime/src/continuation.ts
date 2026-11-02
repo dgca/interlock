@@ -107,6 +107,15 @@ export class Continuation {
       context: work.context,
       ...(work.executor ? { executor: work.executor } : {}),
       ...(work.executorModel ? { executorModel: work.executorModel } : {}),
+      ...(work.executorModelSource
+        ? { executorModelSource: work.executorModelSource }
+        : {}),
+      ...(work.executorEffort !== undefined
+        ? {
+            executorEffort: work.executorEffort,
+            executorEffortSource: work.executorEffortSource,
+          }
+        : {}),
       ...(work.executorPermissions
         ? { executorPermissions: work.executorPermissions }
         : {}),

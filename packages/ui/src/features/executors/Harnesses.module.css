@@ -156,13 +156,7 @@
   padding: 0;
   margin-bottom: 16px;
 }
-.capabilityNote {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
-  max-width: 70ch;
-  margin: 24px 0 0;
-}
+
 .errorRow {
   display: flex;
   align-items: center;

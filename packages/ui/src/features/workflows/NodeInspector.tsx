@@ -226,6 +226,11 @@ export function NodeInspector({
                 value={node.executor}
                 workflowPermissions={definition?.agentPermissions}
                 workflowModel={definition?.agentModel}
+                workflowEffort={definition?.agentEffort}
+                nodeModel={node.model}
+                nodeEffort={node.effort}
+                onNodeModelChange={(model) => patch({ model })}
+                onNodeEffortChange={(effort) => patch({ effort })}
                 inherit={definition?.executor ?? ''}
                 enabled={active === 'execution'}
                 onChange={(executor) => patch({ executor })}
@@ -265,26 +270,30 @@ export function NodeInspector({
                 }
               />
 
-              <NativeSelect
-                mb="md"
-                label="Model tier"
-                description="Executor preference for either Context setting. Required session continuity and isolation take precedence."
-                value={node.context.tier ?? ''}
-                data={[
-                  { value: '', label: 'No preference' },
-                  { value: 'max', label: 'Max' },
-                  { value: 'balanced', label: 'Balanced' },
-                  { value: 'fast', label: 'Fast' },
-                ]}
-                onChange={(event) => {
-                  const { tier: _tier, ...context } = node.context;
-                  patch({
-                    context: event.currentTarget.value
-                      ? { ...context, tier: event.currentTarget.value }
-                      : context,
-                  });
-                }}
-              />
+              {!(node.executor === null
+                ? undefined
+                : (node.executor ?? definition?.executor)) && (
+                <NativeSelect
+                  mb="md"
+                  label="Model tier"
+                  description="Advisory preference for the connected agent. Its harness chooses the actual model."
+                  value={node.context.tier ?? ''}
+                  data={[
+                    { value: '', label: 'No preference' },
+                    { value: 'max', label: 'Max' },
+                    { value: 'balanced', label: 'Balanced' },
+                    { value: 'fast', label: 'Fast' },
+                  ]}
+                  onChange={(event) => {
+                    const { tier: _tier, ...context } = node.context;
+                    patch({
+                      context: event.currentTarget.value
+                        ? { ...context, tier: event.currentTarget.value }
+                        : context,
+                    });
+                  }}
+                />
+              )}
 
               <Textarea
                 mb="md"

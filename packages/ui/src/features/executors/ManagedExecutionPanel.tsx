@@ -148,11 +148,18 @@ export function ManagedExecutionPanel({
               <dd>
                 {record.profile.model}
                 {record.modelSource
-                  ? ` · ${record.modelSource === 'workflow' ? 'workflow override' : record.modelSource === 'harness' ? 'harness default' : 'CLI default'}`
+                  ? ` · ${record.modelSource === 'node' ? 'node override' : record.modelSource === 'workflow' ? 'workflow override' : record.modelSource === 'harness' ? 'harness default' : 'CLI default'}`
                   : ''}
               </dd>
             </>
           )}
+          <dt>Thinking effort</dt>
+          <dd>
+            {record.profile.effort ?? 'Native default'}
+            {record.effortSource
+              ? ` · ${record.effortSource === 'node' ? 'node override' : record.effortSource === 'workflow' ? 'workflow override' : record.effortSource === 'harness' ? 'harness default' : 'native default'}`
+              : ''}
+          </dd>
           {record.sessionId && (
             <>
               <dt>Session</dt>

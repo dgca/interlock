@@ -1329,3 +1329,228 @@ it('retains the native resolved model in a continuing session when defaults chan
   ]);
   expect(calls[1].sessionId).toBe('native');
 });
+
+it.each([
+  [undefined, undefined, undefined, 'high', 'harness'],
+  ['low', undefined, undefined, 'low', 'workflow'],
+  ['low', 'medium', 'node-model', 'medium', 'node'],
+  ['low', null, 'node-model', null, 'node'],
+  [null, undefined, undefined, null, 'workflow'],
+] as const)(
+  'resolves thinking effort %s / %s and node model %s',
+  async (workflowEffort, nodeEffort, nodeModel, expectedEffort, source) => {
+    const e = create();
+    profile(e, 'codex', { model: 'harness-model', effort: 'high' });
+    const run = vi.fn(adapter().run);
+    e.executors.start([
+      {
+        ...adapter('codex', run),
+        models: async () => ({
+          models: ['harness-model', 'workflow-model', 'node-model'].map(
+            (id) => ({ id, name: id, effortLevels: ['low', 'medium', 'high'] }),
+          ),
+        }),
+      },
+    ]);
+    const d = blankDefinition();
+    d.executor = 'codex';
+    d.agentModel = 'workflow-model';
+    d.agentEffort = workflowEffort;
+    const node = d.nodes.find((n) => n.kind === 'agent')!;
+    Object.assign(node, {
+      model: nodeModel,
+      effort: nodeEffort,
+      context: { ...node.context, tier: 'fast' },
+    });
+    const w = e.create('Effort inheritance', '', definitionSchema.parse(d));
+    e.publish(w.id);
+    const r = start(e, w.id, 1);
+    await settled(e, r.id);
+    expect(run.mock.calls[0][0].profile).toMatchObject({
+      model: nodeModel ?? 'workflow-model',
+      effort: expectedEffort,
+    });
+    const work = e.store.work()[0];
+    expect(e.executors.inspect(work.id).items[0]).toMatchObject({
+      modelSource: nodeModel ? 'node' : 'workflow',
+      effortSource: source,
+    });
+    expect(work).toMatchObject({
+      executorModel: nodeModel ?? 'workflow-model',
+      executorModelSource: nodeModel ? 'node' : 'workflow',
+    });
+  },
+);
+
+it.each([
+  ['known', 'ultra', 'not supported'],
+  ['unknown', 'high', 'does not report'],
+  [undefined, 'high', 'Select a model'],
+] as const)(
+  'blocks unsupported effort for %s before claiming',
+  async (model, effort, reason) => {
+    const e = create();
+    profile(e, 'codex', { model, effort });
+    const run = vi.fn(adapter().run);
+    e.executors.start([
+      {
+        ...adapter('codex', run),
+        models: async () => ({
+          models: [
+            { id: 'known', name: 'Known', effortLevels: ['low', 'high'] },
+          ],
+        }),
+      },
+    ]);
+    const r = start(e, workflow(e, 'codex').id, 1);
+    await vi.waitFor(() =>
+      expect(e.available(r.id)[0].managedExecution?.reason).toContain(reason),
+    );
+    expect(e.available(r.id)[0].attempt).toBe(0);
+    expect(run).not.toHaveBeenCalled();
+  },
+);
+
+it('keeps node overrides portable and ignores them for connected agents', async () => {
+  const e = create();
+  profile(e);
+  const run = vi.fn(adapter().run);
+  e.executors.start([adapter('codex', run)]);
+  const w = workflow(e, 'codex', {
+    executor: null,
+    model: 'node-model',
+    effort: 'high',
+  });
+  const r = start(e, w.id, 1);
+  const work = e.available(r.id)[0];
+  expect(work.executorModel).toBeUndefined();
+  expect(work.executorEffort).toBeUndefined();
+  expect(
+    e.workflow(w.id).draft.nodes.find((n) => n.kind === 'agent'),
+  ).toMatchObject({ model: 'node-model', effort: 'high' });
+  expect(run).not.toHaveBeenCalled();
+});
+
+it.each(['model', 'effort'] as const)(
+  'blocks conflicting node %s overrides within a pinned continuity group',
+  async (setting) => {
+    const e = create();
+    profile(e, 'codex', {
+      model: 'first-model',
+      effort: 'high',
+      tools: ['git'],
+    });
+    const calls: HarnessRun[] = [];
+    e.executors.start([
+      {
+        ...adapter('codex', async (input) => {
+          calls.push(input);
+          input.onSession('native', 'resolved-first');
+          return { output: input.work.input };
+        }),
+        models: async () => ({
+          models: [
+            { id: 'first-model', name: 'First', effortLevels: ['low', 'high'] },
+          ],
+        }),
+      },
+    ]);
+    const w = groupedWorkflow(e);
+    const draft = e.workflow(w.id);
+    const agents = draft.draft.nodes.filter((n) => n.kind === 'agent');
+    Object.assign(
+      agents[1],
+      setting === 'model' ? { model: 'other-model' } : { effort: 'low' },
+    );
+    e.update(w.id, { draftRevision: draft.draftRevision, draft: draft.draft });
+    e.publish(w.id);
+    const r = start(e, w.id, 1);
+    await vi.waitFor(() =>
+      expect(e.available(r.id)[0]?.managedExecution?.reason).toContain(
+        `another ${setting === 'model' ? 'model' : 'thinking effort'}`,
+      ),
+    );
+    expect(calls).toHaveLength(1);
+    expect(e.available(r.id)[0].attempt).toBe(0);
+  },
+);
+
+it('retains captured node effort across retries and later profile changes', async () => {
+  const { HarnessResultError } =
+    await import('../packages/runtime/src/executors/contracts');
+  const e = create();
+  profile(e, 'codex', { model: 'model', effort: 'low' });
+  const efforts: (string | null | undefined)[] = [];
+  e.executors.start([
+    {
+      ...adapter('codex', async (input) => {
+        efforts.push(input.profile.effort);
+        if (efforts.length === 1) {
+          profile(e, 'codex', {
+            model: 'later',
+            effort: 'low',
+            expectedRevision: 1,
+          });
+          throw new HarnessResultError('Completed failure');
+        }
+        return { output: input.work.input };
+      }),
+      models: async () => ({
+        models: [{ id: 'model', name: 'Model', effortLevels: ['low', 'high'] }],
+      }),
+    },
+  ]);
+  const r = start(e, workflow(e, 'codex', { effort: 'high' }).id, 1);
+  await settled(e, r.id);
+  expect(efforts).toEqual(['high', 'high']);
+  expect(e.executors.inspect(e.store.work()[0].id).items[0]).toMatchObject({
+    effortSource: 'node',
+    profile: { model: 'model', effort: 'high' },
+  });
+});
+
+it.each(['model', 'effort'] as const)(
+  'does not silently discard an inherited workflow %s after an earlier node override',
+  async (setting) => {
+    const e = create();
+    profile(e, 'codex', {
+      model: 'workflow-model',
+      effort: 'high',
+      tools: ['git'],
+    });
+    const w = groupedWorkflow(e),
+      current = e.workflow(w.id);
+    current.draft.agentModel = 'workflow-model';
+    current.draft.agentEffort = 'high';
+    const first = current.draft.nodes.find((n) => n.kind === 'agent')!;
+    Object.assign(
+      first,
+      setting === 'model' ? { model: 'node-model' } : { effort: 'low' },
+    );
+    e.update(w.id, {
+      draft: current.draft,
+      draftRevision: current.draftRevision,
+    });
+    e.publish(w.id);
+    const run = vi.fn(adapter().run);
+    e.executors.start([
+      {
+        ...adapter('codex', run),
+        models: async () => ({
+          models: ['workflow-model', 'node-model'].map((id) => ({
+            id,
+            name: id,
+            effortLevels: ['low', 'high'],
+          })),
+        }),
+      },
+    ]);
+    const r = start(e, w.id, 1);
+    await vi.waitFor(() =>
+      expect(e.available(r.id)[0]?.managedExecution?.reason).toContain(
+        `another ${setting === 'model' ? 'model' : 'thinking effort'}`,
+      ),
+    );
+    expect(run).toHaveBeenCalledTimes(1);
+  },
+);

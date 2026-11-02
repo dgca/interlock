@@ -4,7 +4,6 @@ import {
   NativeSelect,
   Skeleton,
   Switch,
-  TagsInput,
   TextInput,
 } from '@mantine/core';
 import {
@@ -24,7 +23,7 @@ import {
   permissionDescriptions,
   permissionLabels,
 } from './permissions';
-import { ModelPicker } from './ModelPicker';
+import { ModelSettings } from './ModelSettings';
 import { ExecutionSettings } from './ExecutionSettings';
 type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
 
@@ -197,12 +196,13 @@ function ProfileRow({
           <h2>{profile.name}</h2>
           {!open ? (
             <p
-              title={`${profile.model ?? 'CLI default'} · ${permissionLabels[profile.permissions]} permissions`}
+              title={`${profile.model ?? 'CLI default'}${profile.effort ? ` · ${profile.effort} effort` : ''} · ${permissionLabels[profile.permissions]} permissions`}
             >
               {profile.name !==
                 (profile.harness === 'claude-code' ? 'Claude Code' : 'Codex') &&
                 `${profile.harness === 'claude-code' ? 'Claude Code' : 'Codex'} · `}
-              {profile.model ?? 'CLI default'} ·{' '}
+              {profile.model ?? 'CLI default'}
+              {profile.effort ? ` · ${profile.effort} effort` : ''} ·{' '}
               {permissionLabels[profile.permissions]} permissions
             </p>
           ) : profile.name !==
@@ -304,14 +304,18 @@ function ProfileRow({
           <fieldset className={styles.fieldGroup} disabled={busy}>
             <legend>Execution defaults</legend>
             <div className={styles.fields}>
-              <ModelPicker
+              <ModelSettings
                 disabled={busy}
                 label="Default model"
                 defaultLabel="Use CLI default"
                 profileId={profile.id}
                 paths={{ command: draft.command, cwd: draft.cwd }}
-                value={draft.model}
-                onChange={(model) => setDraft({ ...draft, model })}
+                model={draft.model}
+                effort={draft.effort}
+                effortDefaultLabel="Use native default"
+                canResetEffort={false}
+                onModelChange={(model) => setDraft({ ...draft, model })}
+                onEffortChange={(effort) => setDraft({ ...draft, effort })}
               />
               <NativeSelect
                 label="Default permissions"
@@ -366,25 +370,6 @@ function ProfileRow({
                 inputWrapperOrder={['label', 'input', 'description', 'error']}
                 value={profile.id}
                 readOnly
-              />
-            </div>
-            <p className={styles.capabilityNote}>
-              Declare tools and skills already available in this harness so
-              Interlock can match Agent requirements. This does not install
-              them.
-            </p>
-            <div className={styles.fields}>
-              <TagsInput
-                label="Available tools"
-                disabled={busy}
-                value={draft.tools}
-                onChange={(tools) => setDraft({ ...draft, tools })}
-              />
-              <TagsInput
-                label="Available skills"
-                disabled={busy}
-                value={draft.skills}
-                onChange={(skills) => setDraft({ ...draft, skills })}
               />
             </div>
           </details>

@@ -97,6 +97,9 @@ export const mutationDetailSchema = z
   );
 export const continuationWorkSchema = z.object({
   executor: z.string().optional(),
+  executorModelSource: z.enum(['node', 'workflow']).optional(),
+  executorEffort: z.string().nullable().optional(),
+  executorEffortSource: z.enum(['node', 'workflow']).optional(),
   executorPermissions: executorPermissionModeSchema.optional(),
   executorModel: z.string().optional(),
   managedExecution: managedWorkSummarySchema.optional(),

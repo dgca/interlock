@@ -384,6 +384,10 @@ export function SettingsDialog({
                     value={settings.definition.executor}
                     workflowPermissions={settings.definition.agentPermissions}
                     workflowModel={settings.definition.agentModel}
+                    workflowEffort={settings.definition.agentEffort}
+                    onEffortChange={(agentEffort) =>
+                      patchDefinition({ agentEffort })
+                    }
                     onModelChange={(agentModel) =>
                       patchDefinition({ agentModel })
                     }

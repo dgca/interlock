@@ -3,6 +3,7 @@ export * from './executors.js';
 import {
   executorPermissionModeSchema,
   executorModelSchema,
+  executorEffortSchema,
   executorReferenceSchema,
 } from './executors.js';
 import { resourceNamesSchema } from './workResources.js';
@@ -230,6 +231,17 @@ export const nodeSchema = z.discriminatedUnion('kind', [
       .describe(
         'Local executor profile override. Omit to inherit the workflow default; null keeps connected-agent execution.',
       ),
+    model: executorModelSchema
+      .optional()
+      .describe(
+        'Managed model override; omission inherits workflow/harness defaults. Connected agents ignore it.',
+      ),
+    effort: executorEffortSchema
+      .nullable()
+      .optional()
+      .describe(
+        'Managed effort override; omit to inherit, null for native default. Use levels reported for the effective model.',
+      ),
     resources: resourceBindingsSchema
       .optional()
       .describe(
@@ -353,7 +365,13 @@ export const definitionSchema = z.object({
   agentModel: executorModelSchema
     .optional()
     .describe(
-      'Model ID override for all managed Agents in this workflow, including node-specific executors. Omit to inherit each harness default. Connected agents keep their own model; explicit unavailable models fail without substitution.',
+      'Default model ID for managed Agents in this workflow. Node model overrides it; omission inherits each harness default. Connected agents keep their own model; explicit unavailable models fail without substitution.',
+    ),
+  agentEffort: executorEffortSchema
+    .nullable()
+    .optional()
+    .describe(
+      'Managed effort default; Agent effort overrides it. Omit to inherit the harness; null uses native defaults.',
     ),
   agentPermissions: executorPermissionModeSchema
     .optional()
@@ -484,6 +502,9 @@ export interface WorkRequest {
   executor?: string;
   executorPermissions?: import('./executors.js').ExecutorPermissionMode;
   executorModel?: string;
+  executorModelSource?: 'node' | 'workflow';
+  executorEffort?: string | null;
+  executorEffortSource?: 'node' | 'workflow';
   managedExecution?: import('./executors.js').ManagedWorkSummary;
   resources?: string[];
   resourceBlocked?: import('./workResources.js').ResourceBlock;

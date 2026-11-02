@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NativeSelect } from '@mantine/core';
 import { api, errorMessage } from '../../lib/api';
 import type { ExecutorPermissionMode } from '@interlock/core';
-import { ModelPicker } from './ModelPicker';
+import { ModelSettings } from './ModelSettings';
 import {
   permissionLabels,
   permissionDescriptions,
@@ -18,6 +18,12 @@ export function ExecutorSelect({
   onPermissionsChange,
   workflowModel,
   onModelChange,
+  workflowEffort,
+  onEffortChange,
+  nodeModel,
+  nodeEffort,
+  onNodeModelChange,
+  onNodeEffortChange,
 }: {
   value: string | null | undefined;
   onChange: (value: string | null | undefined) => void;
@@ -27,6 +33,12 @@ export function ExecutorSelect({
   onPermissionsChange?: (mode: ExecutorPermissionMode | undefined) => void;
   workflowModel?: string;
   onModelChange?: (model: string | undefined) => void;
+  workflowEffort?: string | null;
+  onEffortChange?: (value: string | null | undefined) => void;
+  nodeModel?: string;
+  nodeEffort?: string | null;
+  onNodeModelChange?: (value: string | undefined) => void;
+  onNodeEffortChange?: (value: string | null | undefined) => void;
 }) {
   const [profiles, setProfiles] =
     useState<Awaited<ReturnType<typeof api.executors.profiles.query>>>();
@@ -167,27 +179,34 @@ export function ExecutorSelect({
           Harness settings could not be loaded. {error}
         </p>
       )}
-      {onModelChange && (
+      {(onModelChange || (selected && onNodeModelChange)) && (
         <div style={{ marginTop: 20 }}>
-          <ModelPicker
-            label="Agent model"
-            defaultLabel="Use harness default"
+          <ModelSettings
+            modelHint={`${nodeModel && onNodeModelChange ? `${nodeModel} · node override.` : workflowModel ? `${workflowModel} · ${onNodeModelChange ? 'inherited from workflow' : 'workflow override'}.` : profile ? `${profile.model ?? 'CLI default'} · inherited from ${profile.name}.` : 'Each managed Agent uses its selected harness’s default model.'}${onModelChange ? ' Agent nodes can override the model and thinking effort. Connected agents keep their own settings.' : ''}`}
+            label={onNodeModelChange ? 'Model' : 'Agent model'}
+            defaultLabel={
+              onNodeModelChange ? 'Use workflow default' : 'Use harness default'
+            }
+            effortDefaultLabel={
+              onNodeModelChange ? 'Use workflow default' : 'Use harness default'
+            }
             profileId={profile?.id}
-            value={workflowModel}
-            onChange={onModelChange}
+            model={onNodeModelChange ? nodeModel : workflowModel}
+            effort={onNodeModelChange ? nodeEffort : workflowEffort}
+            inheritedModel={
+              onNodeModelChange
+                ? (workflowModel ?? profile?.model)
+                : profile?.model
+            }
+            inheritedEffort={
+              onNodeModelChange && workflowEffort !== undefined
+                ? workflowEffort
+                : profile?.effort
+            }
+            onModelChange={onNodeModelChange ?? onModelChange!}
+            onEffortChange={onNodeEffortChange ?? onEffortChange ?? (() => {})}
           />
         </div>
-      )}
-      {(selected || onModelChange) && (
-        <p className="hint">
-          {workflowModel
-            ? `${workflowModel} · workflow override.`
-            : profile
-              ? `${profile.model ?? 'CLI default'} · inherited from ${profile.name}.`
-              : 'Each managed Agent uses its selected harness’s default model.'}
-          {onModelChange &&
-            ' Applies to all managed Agents, including node-specific executors. Connected agents keep their own model.'}
-        </p>
       )}
     </div>
   );

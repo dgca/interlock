@@ -22,6 +22,8 @@ export function ModelPicker({
   paths,
   defaultLabel,
   disabled = false,
+  onCatalog,
+  loadCapabilities = false,
 }: {
   label: string;
   value?: string;
@@ -30,6 +32,8 @@ export function ModelPicker({
   paths?: { command?: string; cwd?: string };
   defaultLabel: string;
   disabled?: boolean;
+  onCatalog?: (catalog: ExecutorModels | undefined) => void;
+  loadCapabilities?: boolean;
 }) {
   const [search, setSearch] = useState('');
   const id = useId();
@@ -40,6 +44,7 @@ export function ModelPicker({
   useEffect(() => {
     sequence.current++;
     setCatalog(undefined);
+    onCatalog?.(undefined);
     setLoading(false);
     return () => {
       sequence.current++;
@@ -55,19 +60,28 @@ export function ModelPicker({
         paths,
         refresh,
       });
-      if (sequence.current === request) setCatalog(result);
+      if (sequence.current === request) {
+        setCatalog(result);
+        onCatalog?.(result);
+      }
     } catch (error) {
-      if (sequence.current === request)
-        setCatalog({
+      if (sequence.current === request) {
+        const failed: ExecutorModels = {
           status: 'unavailable',
           models: [],
           truncated: false,
           message: errorMessage(error),
-        });
+        };
+        setCatalog(failed);
+        onCatalog?.(failed);
+      }
     } finally {
       if (sequence.current === request) setLoading(false);
     }
   };
+  useEffect(() => {
+    if (loadCapabilities && profileId && !catalog && !loading) void load();
+  }, [key, loadCapabilities]);
   const combobox = useCombobox({
     onDropdownOpen: () => {
       setSearch('');

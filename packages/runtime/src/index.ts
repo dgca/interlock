@@ -1404,8 +1404,27 @@ export class Engine {
           )
             ? {
                 executor: node.executor ?? this.definition(run).executor,
-                ...(this.definition(run).agentModel
-                  ? { executorModel: this.definition(run).agentModel }
+                ...((node.model ?? this.definition(run).agentModel)
+                  ? {
+                      executorModel:
+                        node.model ?? this.definition(run).agentModel,
+                      executorModelSource: node.model
+                        ? ('node' as const)
+                        : ('workflow' as const),
+                    }
+                  : {}),
+                ...(node.effort !== undefined ||
+                this.definition(run).agentEffort !== undefined
+                  ? {
+                      executorEffort:
+                        node.effort !== undefined
+                          ? node.effort
+                          : this.definition(run).agentEffort,
+                      executorEffortSource:
+                        node.effort !== undefined
+                          ? ('node' as const)
+                          : ('workflow' as const),
+                    }
                   : {}),
                 ...(this.definition(run).agentPermissions
                   ? {
@@ -2142,6 +2161,15 @@ export class Engine {
             executor: work.executor,
             ...(work.executorModel
               ? { executorModel: work.executorModel }
+              : {}),
+            ...(work.executorModelSource
+              ? { executorModelSource: work.executorModelSource }
+              : {}),
+            ...(work.executorEffort !== undefined
+              ? {
+                  executorEffort: work.executorEffort,
+                  executorEffortSource: work.executorEffortSource,
+                }
               : {}),
             ...(work.executorPermissions
               ? { executorPermissions: work.executorPermissions }

@@ -47,3 +47,7 @@ The user approved explicit Limited/Unlimited choices, with Limited to 3 remainin
 ## Concurrency dropdown refinement
 
 The user reviewed the side-by-side radios and approved a compact native dropdown instead. Options are Limit to and Unlimited; the positive numeric field is shown only for Limit to. On narrow screens the dropdown sits above the number and Save action. The canonical numeric/null settings contract and default of 3 are unchanged.
+
+## Concrete node models and native thinking effort
+
+The user approved removing Available tools/skills from the harness form while preserving advanced API declarations and existing requirement checks. Native harness setup supplies installed capabilities; declarations neither discover nor invoke skills. Connected Agent nodes retain advisory Model tier; managed nodes show Model and Thinking effort and preserve hidden values when switching. Agent model/effort override workflow agentModel/agentEffort, then profile defaults, then native defaults. Omission inherits; null effort explicitly resets to native defaults. Native catalogs report model-specific levels; unsupported or unverifiable explicit efforts block before claim. Retries and continuity retain captured settings; conflicting node overrides cannot change a pinned group. No token-budget controls or tier-to-model mapping.

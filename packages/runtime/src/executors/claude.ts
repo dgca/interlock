@@ -61,6 +61,11 @@ export const claudeAdapter: HarnessAdapter = {
           id: m.value,
           name: m.displayName,
           description: m.description,
+          ...(m.supportsEffort === false
+            ? { effortLevels: [] }
+            : m.supportedEffortLevels
+              ? { effortLevels: m.supportedEffortLevels }
+              : {}),
         })),
         truncated: models.length > 100,
       };
@@ -93,6 +98,12 @@ export const claudeAdapter: HarnessAdapter = {
           pathToClaudeCodeExecutable: input.command,
           cwd: input.cwd,
           ...(input.profile.model ? { model: input.profile.model } : {}),
+          ...(input.profile.effort
+            ? {
+                effort: input.profile.effort as
+                  'low' | 'medium' | 'high' | 'xhigh' | 'max',
+              }
+            : {}),
           ...(input.sessionId ? { resume: input.sessionId } : {}),
           abortController,
           settingSources: ['user', 'project', 'local'],

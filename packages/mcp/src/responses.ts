@@ -81,6 +81,9 @@ export const workListResponseSchema = z
         .object({
           id: z.string(),
           executor: executorReferenceSchema.optional(),
+          executorModelSource: z.enum(['node', 'workflow']).optional(),
+          executorEffort: z.string().nullable().optional(),
+          executorEffortSource: z.enum(['node', 'workflow']).optional(),
           executorPermissions: executorPermissionModeSchema.optional(),
           executorModel: z.string().optional(),
           managedExecution: managedWorkSummarySchema.optional(),

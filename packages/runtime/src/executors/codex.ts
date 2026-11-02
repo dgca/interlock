@@ -45,6 +45,16 @@ export const codexAdapter: HarnessAdapter = {
             id: m.model,
             name: m.displayName ?? m.model,
             description: m.description,
+            ...(Array.isArray(m.supportedReasoningEfforts)
+              ? {
+                  effortLevels: m.supportedReasoningEfforts
+                    .map((e: any) => e.reasoningEffort)
+                    .filter((e: unknown): e is string => typeof e === 'string'),
+                }
+              : {}),
+            ...(typeof m.defaultReasoningEffort === 'string'
+              ? { defaultEffort: m.defaultReasoningEffort }
+              : {}),
           })),
         );
         cursor = page.nextCursor || undefined;
@@ -291,6 +301,7 @@ export const codexAdapter: HarnessAdapter = {
             text_elements: [],
           },
         ],
+        ...(input.profile.effort ? { effort: input.profile.effort } : {}),
         outputSchema: resultEnvelope(input.work),
       });
       turnId = turn.turn.id;

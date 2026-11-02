@@ -16,6 +16,18 @@ export type ExecutorPermissionMode = z.infer<
   typeof executorPermissionModeSchema
 >;
 export const executorModelSchema = z.string().trim().min(1).max(200);
+export const executorEffortSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[a-z][a-z0-9_-]*$/);
+export const executorSettingSourceSchema = z.enum([
+  'node',
+  'workflow',
+  'harness',
+  'cli',
+]);
 export const executorModelsQuerySchema = z
   .object({
     profileId: executorReferenceSchema,
@@ -36,6 +48,8 @@ export interface HarnessModel {
   id: string;
   name: string;
   description?: string;
+  effortLevels?: string[];
+  defaultEffort?: string;
 }
 export interface ExecutorModels {
   status: 'ready' | 'unavailable';
@@ -76,7 +90,13 @@ export const executorProfileSchema = z
     model: executorModelSchema
       .optional()
       .describe(
-        'Default model ID; omission uses the native CLI default. Workflow agentModel can override it.',
+        'Default model ID; node model and workflow agentModel override it. Omission uses the native CLI default.',
+      ),
+    effort: executorEffortSchema
+      .nullable()
+      .optional()
+      .describe(
+        'Default effort for a selected model; omit or null for native defaults. Model discovery reports supported levels.',
       ),
     tools: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
     skills: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
@@ -190,7 +210,8 @@ export interface ManagedExecution {
   state: ExecutorState;
   profile: ExecutorProfile;
   permissionSource?: 'workflow' | 'harness';
-  modelSource?: 'workflow' | 'harness' | 'cli';
+  modelSource?: z.infer<typeof executorSettingSourceSchema>;
+  effortSource?: z.infer<typeof executorSettingSourceSchema>;
   command: string;
   cwd: string;
   sessionId?: string;

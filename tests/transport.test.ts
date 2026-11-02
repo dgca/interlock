@@ -2632,7 +2632,13 @@ it.each(['stdio', 'http'])(
             version: 'transport fixture',
           }),
           models: async () => ({
-            models: [{ id: 'transport-model', name: 'Transport Model' }],
+            models: [
+              {
+                id: 'transport-model',
+                name: 'Transport Model',
+                effortLevels: ['low', 'high'],
+              },
+            ],
           }),
           run: async (input) => {
             input.onSession('transport-native');
@@ -2718,7 +2724,25 @@ it.each(['stdio', 'http'])(
             set: {
               agentPermissions: 'read-only',
               agentModel: 'transport-model',
+              agentEffort: 'low',
             },
+          },
+        ],
+      });
+      const managedNode = managedDefinition.nodes.find(
+        (n) => n.kind === 'agent',
+      )!;
+      const beforeNodeEdit = await call('get_workflow', {
+        id: managedWorkflow.id,
+      });
+      await call('edit_workflow', {
+        id: managedWorkflow.id,
+        draftRevision: beforeNodeEdit.draftRevision,
+        edits: [
+          {
+            op: 'update_node',
+            id: managedNode.id,
+            set: { model: 'transport-model', effort: 'high' },
           },
         ],
       });
@@ -2738,9 +2762,22 @@ it.each(['stdio', 'http'])(
         request: { action: 'inspect', workId: managedWork.id },
       });
       const managedAttempt = managedInspection.items[0];
+      expect(
+        (await call('get_run_briefing', { id: managedRun.runId })).claimed
+          .items[0],
+      ).toMatchObject({
+        executorModelSource: 'node',
+        executorEffort: 'high',
+        executorEffortSource: 'node',
+      });
       expect(managedAttempt).toMatchObject({
-        profile: { permissions: 'read-only', model: 'transport-model' },
-        modelSource: 'workflow',
+        profile: {
+          permissions: 'read-only',
+          model: 'transport-model',
+          effort: 'high',
+        },
+        modelSource: 'node',
+        effortSource: 'node',
         permissionSource: 'workflow',
       });
       expect(JSON.stringify(managedInspection)).not.toContain(
@@ -2771,7 +2808,7 @@ it.each(['stdio', 'http'])(
           {
             op: 'update_settings',
             set: {},
-            unset: ['agentPermissions', 'agentModel'],
+            unset: ['agentPermissions', 'agentModel', 'agentEffort'],
           },
         ],
       });
@@ -2782,6 +2819,10 @@ it.each(['stdio', 'http'])(
       expect(
         (await call('get_workflow', { id: managedWorkflow.id })).draft
           .agentModel,
+      ).toBeUndefined();
+      expect(
+        (await call('get_workflow', { id: managedWorkflow.id })).draft
+          .agentEffort,
       ).toBeUndefined();
       console.log(
         `${mode}: ${tools.length} MCP tools, ${Buffer.byteLength(JSON.stringify(tools))} B definitions`,
