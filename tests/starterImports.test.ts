@@ -36,6 +36,58 @@ it('lists bundled choices without installing, publishing or starting anything', 
   expect(e.store.list('starterCopies')).toEqual([]);
   expect(e.store.runs()).toEqual([]);
 });
+it.each(['draft', 'version'])(
+  'ignores an incompatible saved %s when listing and importing starters',
+  (source) => {
+    const e = setup(),
+      w = e.create('Legacy workflow', '', blankDefinition());
+    e.publish(w.id);
+    const version = e.store.getVersion(w.id, 1)!;
+    const definition = {
+      ...w.draft,
+      nodes: w.draft.nodes.map((n, i) =>
+        i === 1 ? { ...n, kind: source === 'draft' ? 'map' : 'list' } : n,
+      ),
+    };
+    // Older definitions can remain in storage after their node kinds are removed.
+    if (source === 'draft')
+      e.store.put('workflows', { ...e.workflow(w.id), draft: definition });
+    else e.store.put('versions', { ...version, id: `${w.id}:1`, definition });
+    const before = e.workflow(w.id),
+      versions = e.store.listVersions(w.id);
+
+    expect(listStarters(e).map((s) => s.id)).toEqual([
+      'sdlc',
+      'evaluate-comparison',
+    ]);
+    expect(listStarters(e).every((s) => !s.existing)).toBe(true);
+    expect(add(e)).toMatchObject({ created: true });
+    expect(e.workflow(w.id)).toEqual(before);
+    expect(e.store.listVersions(w.id)).toEqual(versions);
+    expect(e.store.runs()).toEqual([]);
+  },
+);
+it('recognizes a retained starter after an incompatible draft and earlier version', () => {
+  const e = setup(),
+    w = e.create('My SDLC', '', definitionSchema.parse(sdlc.definition));
+  e.publish(w.id);
+  const first = e.store.getVersion(w.id, 1)!;
+  e.publish(w.id);
+  const definition = {
+    ...w.draft,
+    nodes: w.draft.nodes.map((n, i) => (i === 1 ? { ...n, kind: 'map' } : n)),
+  };
+  e.store.put('workflows', { ...e.workflow(w.id), draft: definition });
+  e.store.put('versions', { ...first, id: `${w.id}:1`, definition });
+  const before = e.workflow(w.id),
+    versions = e.store.listVersions(w.id);
+
+  expect(listStarters(e)[0].existing?.id).toBe(w.id);
+  expect(add(e)).toMatchObject({ created: false, workflow: { id: w.id } });
+  expect(e.store.workflows()).toHaveLength(1);
+  expect(e.workflow(w.id)).toEqual(before);
+  expect(e.store.listVersions(w.id)).toEqual(versions);
+});
 it('explicitly adds a published copy, recovers retries and offers the existing copy by default', () => {
   const e = setup(),
     a = add(e);
