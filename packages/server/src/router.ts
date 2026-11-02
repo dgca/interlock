@@ -1,3 +1,4 @@
+import { workResourceRequestSchema } from '@interlock/core';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { developmentConnection, type ConnectionConfig } from './connection.js';
@@ -443,6 +444,9 @@ export const appRouter = t.router({
     retry: p.input(id).mutation(({ ctx, input }) => ctx.engine.retry(input.id)),
   }),
   work: t.router({
+    resources: p
+      .input(workResourceRequestSchema)
+      .mutation(({ ctx, input }) => ctx.engine.manageWorkResources(input)),
     hold: p
       .input(workHoldRequestSchema)
       .mutation(({ ctx, input }) => ctx.engine.manageWorkHold(input)),

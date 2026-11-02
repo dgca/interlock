@@ -1,3 +1,4 @@
+import { AgentResourcesEditor } from './AgentResourcesEditor';
 import { useState } from 'react';
 import {
   NodeSettingsSections,
@@ -324,6 +325,10 @@ export function NodeInspector({
                 }
               />
 
+              <AgentResourcesEditor
+                value={node.resources}
+                onChange={(resources) => patch({ resources })}
+              />
               <Switch
                 mb="md"
                 label="Route on unclaimed timeout"

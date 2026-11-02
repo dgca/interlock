@@ -1,3 +1,9 @@
+import { WorkResources } from './workResources.js';
+import {
+  resourceNamesSchema,
+  workResourceRequestSchema,
+  type WorkResourceRequest,
+} from '@interlock/core';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { Store } from '@interlock/storage';
@@ -110,6 +116,7 @@ export class Engine {
   readonly budgets: Budgets;
   readonly assignmentSizes: AssignmentSizes;
   readonly holds: WorkHolds;
+  private readonly resources: WorkResources;
   readonly contextGroups: ContextContinuityGroups;
   private readonly starts: RunStarts;
   private readonly trials: TrialEnvironments;
@@ -149,6 +156,7 @@ export class Engine {
     this.ownership = new Ownership(store);
     this.usage = new Usage(store, (runId) => {
       this.budgets.refresh();
+      this.resources.refresh();
       this.event(
         this.run(runId),
         'work.usage_reported',
@@ -171,6 +179,10 @@ export class Engine {
         'Context continuity binding updated',
       ),
     );
+    this.resources = new WorkResources(store, (id, message) => {
+      if (store.get('runs', id))
+        this.event(this.run(id), 'work.resources', message);
+    });
     this.starts = new RunStarts(store);
     this.trials = new TrialEnvironments(store, options.trialRoot, () =>
       this.pump(),
@@ -651,6 +663,7 @@ export class Engine {
         'events',
       ))
         if (removed.has(event.runId)) this.store.remove('events', event.id);
+      this.resources.assertDelete(removed);
       this.starts.deleted(removed);
       for (const runId of removed) this.store.remove('runs', runId);
       for (const version of this.store.list<
@@ -1337,6 +1350,7 @@ export class Engine {
             );
           if (
             work?.budgetBlocked ||
+            work?.resourceBlocked ||
             !work?.availableUntil ||
             Date.parse(work.availableUntil) > Date.now()
           )
@@ -1358,7 +1372,22 @@ export class Engine {
           return snapshot;
         });
         const trialEnvironment = this.trials.context(run);
+        const resources = node.resources?.length
+          ? resourceNamesSchema
+              .parse(
+                Object.values(
+                  resolveBindingFields(
+                    Object.fromEntries(
+                      node.resources.map((binding, i) => [String(i), binding]),
+                    ),
+                    this.bindingSource(run, execution.input),
+                  ),
+                ),
+              )
+              .sort()
+          : undefined;
         const work: WorkRequest = {
+          ...(resources ? { resources } : {}),
           id: randomUUID(),
           runId: run.id,
           executionId: execution.id,
@@ -1408,6 +1437,7 @@ export class Engine {
         };
         this.store.put('work', work);
         this.budgets.refresh();
+        this.resources.refresh();
         execution.status = 'waiting';
         run.status = 'waiting';
         this.save(run);
@@ -1707,6 +1737,7 @@ export class Engine {
     if (this.stopped) return;
     this.store.transaction(() => {
       this.budgets.refresh();
+      this.resources.refresh();
       for (const work of this.store.work())
         if (
           work.status === 'claimed' &&
@@ -1727,6 +1758,7 @@ export class Engine {
         rounds = 0;
       while (changed && rounds++ < 2000) {
         this.budgets.refresh();
+        this.resources.refresh();
         changed = this.testbench.advance();
         // Earlier advances can cancel or resume descendants in this same pass.
         for (const { id } of this.store.activeRuns()) {
@@ -2011,7 +2043,21 @@ export class Engine {
       ...visible
     } = work;
     work = visible;
+    const reservations = work.resources?.length
+      ? this.resources.forWork(work.id)
+      : [];
+    work = {
+      ...work,
+      ...(reservations.length ? { resourceReservations: reservations } : {}),
+    };
     const instructions = [
+      ...(work.resources?.length
+        ? [
+            'Exclusive Agent resources: ' +
+              JSON.stringify(work.resources) +
+              '. Stop using them and stop subprocesses before submitting success or reporting failure. Holding, expiry or cancellation may leave reservations uncertain; do not resume resource use with an invalid claim. These reservations coordinate cooperating Agent claims only.',
+          ]
+        : []),
       ...(work.trialEnvironment
         ? [
             `Local Git trial ${work.trialEnvironment.id}. Use only scoped local tools in ${work.trialEnvironment.workspace}. External writes are forbidden by this recipe. Stop all subprocesses before submitting success or failure. The harness must enforce tool scope; this directory is not an OS sandbox. Do not claim the interlock-local-trials skill unless you can honor this policy.`,
@@ -2041,7 +2087,11 @@ export class Engine {
     return this.store
       .work()
       .filter(
-        (w) => w.status === 'available' && !w.budgetBlocked && within(w.runId),
+        (w) =>
+          w.status === 'available' &&
+          !w.budgetBlocked &&
+          !w.resourceBlocked &&
+          within(w.runId),
       )
       .map((work) => this.describeWork(work));
   }
@@ -2060,6 +2110,7 @@ export class Engine {
         : {}),
       ...(work.continuity ? { continuity: work.continuity } : {}),
       attempt: work.attempt,
+      ...(work.resources ? { resources: work.resources } : {}),
       maxAttempts: work.maxAttempts,
       maxLeaseExpiries: work.maxLeaseExpiries,
       failureCount: work.failureCount,
@@ -2077,8 +2128,16 @@ export class Engine {
     this.pump();
     try {
       return this.store.transaction(() => {
+        const before = this.store.get<WorkRequest>('work', q.workId);
         const result = this.holds.change(q);
+        if (
+          result.applied &&
+          q.action === 'hold' &&
+          before?.status === 'claimed'
+        )
+          this.resources.end(before, 'held');
         this.budgets.refresh();
+        this.resources.refresh();
         return result;
       });
     } catch (error) {
@@ -2088,6 +2147,18 @@ export class Engine {
       }
       throw error;
     }
+  }
+  manageWorkResources(input: WorkResourceRequest) {
+    const q = workResourceRequestSchema.parse(input);
+    if (q.action === 'inspect')
+      return {
+        workId: q.workId,
+        reservations: this.resources.forWork(q.workId),
+      };
+    this.pump();
+    return this.store.transaction(() =>
+      this.resources.release(q.workId, q.expectedAttempt, q.actor),
+    );
   }
   handoffContext(input: ContextHandoffInput) {
     this.pump();
@@ -2128,6 +2199,7 @@ export class Engine {
       work.leaseUntil = new Date(
         Date.now() + work.claimLeaseSeconds * 1000,
       ).toISOString();
+      this.resources.acquire(work);
       this.store.put('work', work);
       this.event(
         this.run(work.runId),
@@ -2136,6 +2208,7 @@ export class Engine {
       );
       this.usage.claimed(work);
       this.budgets.refresh();
+      this.resources.refresh();
       return this.describeWork(work);
     });
   }
@@ -2304,6 +2377,7 @@ export class Engine {
         )!;
         this.finish(run, execution, node, output);
         this.usage.ended(work, 'completed');
+        this.resources.end(work, 'completed');
         work.status = 'completed';
         work.output = output;
         this.store.put('work', work);
@@ -2332,6 +2406,7 @@ export class Engine {
     error: string,
     reason: 'failure' | 'expiry' = 'failure',
   ) {
+    this.resources.end(work, reason);
     this.usage.ended(work, reason === 'expiry' ? 'expired' : 'failed');
     if (reason === 'expiry' && work.trialEnvironment) {
       work.status = 'failed';
@@ -2418,6 +2493,7 @@ export class Engine {
         (w) =>
           w.runId === id && ['available', 'claimed', 'held'].includes(w.status),
       )) {
+      this.resources.end(work, 'cancelled');
       this.usage.ended(work, 'cancelled');
       this.holds.close(work, now(), 'run cancellation', 'cancelled');
       work.status = 'cancelled';

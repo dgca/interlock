@@ -131,7 +131,13 @@ export function runProgress(
                 assignment.status === 'held',
             )
           ? 'Held for external blocker'
-          : 'Waiting for an agent';
+          : work.some(
+                (w) =>
+                  w.executionId === items[0]?.execution?.id &&
+                  w.resourceBlocked,
+              )
+            ? 'Waiting for a resource'
+            : 'Waiting for an agent';
     if (node.kind === 'wait' && state === 'waiting' && !node.batchId)
       label = 'Waiting for timer';
     if (
@@ -204,7 +210,13 @@ export function runProgress(
       ['running', 'waiting'].includes(runs.get(assignment.runId)?.status ?? ''),
   );
   if (title === 'Waiting' && activeAssignments.length)
-    title = 'Waiting for an agent';
+    title = activeAssignments.some(
+      (w) => !w.budgetBlocked && !w.resourceBlocked,
+    )
+      ? 'Waiting for an agent'
+      : activeAssignments.some((w) => !w.budgetBlocked && w.resourceBlocked)
+        ? 'Waiting for a resource'
+        : 'Budget blocked';
   if (
     title === 'Waiting' &&
     work.some(

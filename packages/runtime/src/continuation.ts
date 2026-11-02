@@ -1,3 +1,5 @@
+import { resourceCollection, resourceOwner } from './workResources.js';
+import type { ResourceReservation } from '@interlock/core';
 import { randomUUID } from 'node:crypto';
 import { fingerprint } from './versionIdentity.js';
 import {
@@ -61,6 +63,12 @@ export class Continuation {
       next: snapshot.next,
       ...(snapshot.run.chain ? { chain: snapshot.run.chain } : {}),
       nextDeadline: snapshot.nextDeadline,
+      ...(snapshot.resourceBlocked
+        ? { resourceBlocked: snapshot.resourceBlocked }
+        : {}),
+      ...(snapshot.resourceReservations
+        ? { resourceReservations: snapshot.resourceReservations }
+        : {}),
       ...(snapshot.held.total ? { heldWork: snapshot.held } : {}),
       ...(snapshot.budgetBlocked.total
         ? { budgetBlocked: snapshot.budgetBlocked }
@@ -108,6 +116,10 @@ export class Continuation {
       leaseUntil: work.leaseUntil,
       availableUntil: work.availableUntil,
       budgetBlocked: work.budgetBlocked,
+      ...(work.resources ? { resources: work.resources } : {}),
+      ...(work.resourceBlocked
+        ? { resourceBlocked: work.resourceBlocked }
+        : {}),
       ...(work.holdRevision ? { holdRevision: work.holdRevision } : {}),
       ...(work.heldClaimCount ? { heldClaimCount: work.heldClaimCount } : {}),
       ...(work.hold
@@ -176,14 +188,16 @@ export class Continuation {
                 ? 'claimed_work'
                 : assignment?.budgetBlocked
                   ? 'budget_blocked'
-                  : assignment
-                    ? 'available_work'
-                    : execution?.kind === 'wait'
-                      ? 'wait'
-                      : execution?.kind === 'batch' ||
-                          execution?.kind === 'workflow'
-                        ? 'children'
-                        : 'executing';
+                  : assignment?.resourceBlocked
+                    ? 'resource_blocked'
+                    : assignment
+                      ? 'available_work'
+                      : execution?.kind === 'wait'
+                        ? 'wait'
+                        : execution?.kind === 'batch' ||
+                            execution?.kind === 'workflow'
+                          ? 'children'
+                          : 'executing';
         return {
           ...reference(run.id, execution?.id),
           lifecycleRunId: run.lifecycleRunId,
@@ -192,6 +206,9 @@ export class Continuation {
           ...(assignment?.hold ? { hold: assignment.hold } : {}),
           ...(assignment?.budgetBlocked
             ? { budgetRunIds: assignment.budgetBlocked.runIds }
+            : {}),
+          ...(assignment?.resourceBlocked
+            ? { resourceOwners: assignment.resourceBlocked.owners }
             : {}),
           error: run.error,
           resumeAt: execution?.resumeAt,
@@ -250,7 +267,32 @@ export class Continuation {
         completedAt: e.completedAt,
         hasOutput: Boolean(e.hasOutput),
       }));
+    const resourceBlocked = work
+      .filter((w) => w.status === 'available' && w.resourceBlocked)
+      .map((w) => ({
+        workId: w.id,
+        runId: w.runId,
+        owners: w.resourceBlocked!.owners,
+      }));
+    const uncertain = this.store
+      .forRuns<ResourceReservation>(
+        resourceCollection,
+        new Set(state.runs.map((r) => r.id)),
+      )
+      .filter((r) => r.state === 'uncertain')
+      .map(resourceOwner);
+    const needsResourceRecovery =
+      uncertain.length > 0 ||
+      resourceBlocked.some((w) =>
+        w.owners.some((o) => o.state === 'uncertain'),
+      );
     return {
+      ...(resourceBlocked.length
+        ? { resourceBlocked: bounded(resourceBlocked, limit) }
+        : {}),
+      ...(uncertain.length
+        ? { resourceReservations: bounded(uncertain, limit) }
+        : {}),
       run: summaries.find((run) => run.id === id)!,
       cursor: Buffer.from(
         JSON.stringify({
@@ -279,7 +321,10 @@ export class Continuation {
         limit,
       ),
       available: bounded(
-        work.filter((w) => w.status === 'available' && !w.budgetBlocked),
+        work.filter(
+          (w) =>
+            w.status === 'available' && !w.budgetBlocked && !w.resourceBlocked,
+        ),
         limit,
       ),
       budgetBlocked: bounded(
@@ -327,19 +372,26 @@ export class Continuation {
       recentResults: bounded(results, limit),
       next: requested.chain?.nextRunId
         ? 'continue_as_new'
-        : requested.status === 'failed'
-          ? 'inspect_failure'
-          : work.some((w) => w.status === 'available' && !w.budgetBlocked)
-            ? 'claim_work'
-            : work.some((w) => w.status === 'available' && w.budgetBlocked)
-              ? 'adjust_budget'
-              : work.some((w) => w.status === 'claimed')
-                ? 'wait_for_worker'
-                : work.some((w) => w.status === 'held')
-                  ? 'inspect_hold'
-                  : ['completed', 'cancelled'].includes(requested.status)
-                    ? 'inspect_result'
-                    : 'wait_for_change',
+        : needsResourceRecovery
+          ? 'inspect_resources'
+          : requested.status === 'failed'
+            ? 'inspect_failure'
+            : work.some(
+                  (w) =>
+                    w.status === 'available' &&
+                    !w.budgetBlocked &&
+                    !w.resourceBlocked,
+                )
+              ? 'claim_work'
+              : work.some((w) => w.status === 'available' && w.budgetBlocked)
+                ? 'adjust_budget'
+                : work.some((w) => w.status === 'claimed')
+                  ? 'wait_for_worker'
+                  : work.some((w) => w.status === 'held')
+                    ? 'inspect_hold'
+                    : ['completed', 'cancelled'].includes(requested.status)
+                      ? 'inspect_result'
+                      : 'wait_for_change',
     };
   }
 

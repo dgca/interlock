@@ -1,3 +1,5 @@
+export * from './workResources.js';
+import { resourceNamesSchema } from './workResources.js';
 export { matchRouting } from './resultRouting.js';
 export * from './simulation.js';
 export * from './runChains.js';
@@ -169,6 +171,7 @@ export const routingSchema = z.object({
   cases: z.array(z.object({ port: z.string(), equals: jsonSchema })),
   default: z.string().optional(),
 });
+export const resourceBindingsSchema = z.array(valueBindingSchema).max(8);
 const nodeBase = {
   id: z.string().min(1),
   label: z.string().min(1),
@@ -215,6 +218,11 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('agent'),
+    resources: resourceBindingsSchema
+      .optional()
+      .describe(
+        'Exclusive library-wide resource names, resolved from existing value bindings at assignment creation. Each must resolve to a distinct nonblank string of at most 120 characters. Agent claims only; no Script/Fetch or OS isolation.',
+      ),
     resultRules: resultRulesSchema.optional(),
     prompt: z.string(),
     promptIds: z
@@ -446,6 +454,10 @@ export interface RunAncestry {
   rootWorkflowId: string;
 }
 export interface WorkRequest {
+  resources?: string[];
+  resourceBlocked?: import('./workResources.js').ResourceBlock;
+  resourceReservations?: import('./workResources.js').ResourceOwner[]; // Derived inspection, not stored.
+
   trialEnvironment?: import('./trialEnvironments.js').TrialWorkContext;
   hold?: import('./workHolds.js').WorkHold;
   holdRevision?: number;
@@ -700,6 +712,28 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       throw new InterlockError('Edges cannot target the entry');
   }
   for (const node of d.nodes) {
+    const resourceBindings =
+      node.kind === 'agent'
+        ? Object.fromEntries(
+            (node.resources ?? []).map((b, i) => [String(i), b]),
+          )
+        : {};
+    if (node.kind === 'agent' && node.resources?.length) {
+      if (node.resources.some((b) => b.source === 'object'))
+        throw new InterlockError(
+          `${node.label}: resource bindings must resolve to names, not objects`,
+        );
+      const literals = node.resources.filter((b) => b.source === 'literal');
+      if (literals.length) {
+        const checked = resourceNamesSchema.safeParse(
+          literals.map((b) => b.value),
+        );
+        if (!checked.success)
+          throw new InterlockError(
+            `${node.label}: invalid resource names: ${checked.error.issues[0].message}`,
+          );
+      }
+    }
     if (node.inputBindings && (node.kind === 'entry' || node.kind === 'exit'))
       throw new InterlockError(
         'Entry and Exit cannot replace their input with bindings',
@@ -709,12 +743,14 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       [
         ...bindingLeaves(node.inputBindings ?? {}),
         ...bindingLeaves(node.outputBindings ?? {}),
+        ...bindingLeaves(resourceBindings),
       ].some((binding) => binding.source === 'itemInput')
     )
       throw new InterlockError('itemInput bindings require Batch membership');
     for (const binding of [
       ...bindingLeaves(node.inputBindings ?? {}),
       ...bindingLeaves(node.outputBindings ?? {}),
+      ...bindingLeaves(resourceBindings),
     ]) {
       if (binding.source !== 'node') continue;
       const target = d.nodes.find(
