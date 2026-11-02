@@ -1,3 +1,4 @@
+import { externalTaskSchema } from './runStarts.js';
 import {
   continuitySchema,
   continuityGroupSchema,
@@ -151,6 +152,8 @@ export const heldWorkSchema = z.object({
 export const mutationSummarySchema = z.object({
   chain: runChainLinkSchema.optional(),
   ok: z.literal(true),
+  startRequestId: z.string().optional(),
+  externalTask: externalTaskSchema.optional(),
   runId: z
     .string()
     .describe(

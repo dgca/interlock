@@ -126,6 +126,10 @@ A fresh-context assignment includes `executionInstructions` for a fresh session 
 
 Detached Workflow nodes can leave independent work active after the requested parent finishes. Inspect and report those run IDs; continue their assignments by their own run IDs. Global discovery still returns their work. Fresh-session instructions target the nearest detached run, while root identity fields retain the original ancestry. Cancelling a parent does not cancel detached work. See [Workflow execution](workflow-execution.md).
 
+## Redeliver task starts safely
+
+Use optional `start_run.requestId` for a stable task-attempt delivery key. Identical redelivery returns the original run read-only across restart or later publication; conflicting reuse and removed history reject. Optional `externalTask:{system,id,url?}` supplies bounded non-secret correlation for `list_runs`, inspection and briefings. It does not reserve the task or update its board. A deliberate new attempt uses a new key. Follow [idempotent run starts](idempotent-run-starts.md) for equality, retention and CLI behavior.
+
 ## Manage run budgets
 
 Optional [run budgets](run-budgets.md) stop new Agent claims when limits are reached. Use `get_run_budget` to inspect policy and usage, and `set_run_budget` for an authorized adjustment. `next:adjust_budget` and budget blockers identify recoverable gates; already claimed work can finish. Keep detached scope and incomplete-report policy explicit.

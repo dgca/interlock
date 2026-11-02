@@ -44,7 +44,9 @@ import {
   composePrompt,
   promptIds,
   continuationLimitSchema,
-  budgetPolicySchema,
+  runStartSchema,
+  runStartOptionsSchema,
+  type RunStartOptions,
   type BudgetPolicy,
   type ContextHandoffInput,
   type SessionIdentity,
@@ -56,6 +58,7 @@ import {
 import { freshContextInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
+import { RunStarts } from './runStarts.js';
 import { TrialEnvironments } from './trialEnvironments.js';
 import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
@@ -108,6 +111,7 @@ export class Engine {
   readonly assignmentSizes: AssignmentSizes;
   readonly holds: WorkHolds;
   readonly contextGroups: ContextContinuityGroups;
+  private readonly starts: RunStarts;
   private readonly trials: TrialEnvironments;
   private localJobs = new Map<string, AbortController>();
   private stopped = false;
@@ -167,6 +171,7 @@ export class Engine {
         'Context continuity binding updated',
       ),
     );
+    this.starts = new RunStarts(store);
     this.trials = new TrialEnvironments(store, options.trialRoot, () =>
       this.pump(),
     );
@@ -646,6 +651,7 @@ export class Engine {
         'events',
       ))
         if (removed.has(event.runId)) this.store.remove('events', event.id);
+      this.starts.deleted(removed);
       for (const runId of removed) this.store.remove('runs', runId);
       for (const version of this.store.list<
         import('@interlock/core').WorkflowVersion & { id: string }
@@ -816,6 +822,9 @@ export class Engine {
     const time = now();
     const run: Run = {
       ...(comparison ? { comparison } : {}),
+      ...(continuedFrom?.externalTask
+        ? { externalTask: continuedFrom.externalTask }
+        : {}),
       id: randomUUID(),
       workflowId,
       workflowName: w.name,
@@ -862,8 +871,11 @@ export class Engine {
     input: Json,
     version?: number,
     budget?: BudgetPolicy,
+    options?: RunStartOptions,
   ) {
-    return this.inspect(this.startRun(workflowId, input, version, budget));
+    return this.inspect(
+      this.startRun(workflowId, input, version, budget, options),
+    );
   }
   startSummary(
     workflowId: string,
@@ -871,37 +883,54 @@ export class Engine {
     version?: number,
     limit = 20,
     budget?: BudgetPolicy,
+    options?: RunStartOptions,
   ) {
     const bounded = continuationLimitSchema.parse(limit);
-    const id = this.startRun(workflowId, input, version, budget);
-    return this.continuation.summary(id, bounded);
+    return this.continuation.summary(
+      this.startRun(workflowId, input, version, budget, options),
+      bounded,
+    );
   }
   private startRun(
     workflowId: string,
     input: Json,
     version?: number,
     budget?: BudgetPolicy,
+    options?: RunStartOptions,
   ) {
-    const w = this.workflow(workflowId);
-    if (
-      w.archived ||
-      (w.ownerWorkflowId && this.workflow(w.ownerWorkflowId).archived)
-    )
-      throw new InterlockError('Restore this workflow before starting it');
-    const policy =
-      budget === undefined ? undefined : budgetPolicySchema.parse(budget);
-    const run = this.store.transaction(() => {
-      const run = this.newRun(workflowId, version ?? w.latestVersion, input);
-      if (policy)
+    const metadata = runStartOptionsSchema.parse(options ?? {});
+    const q = runStartSchema.parse({
+      workflowId,
+      input,
+      version,
+      budget,
+      ...metadata,
+    });
+    const result = this.starts.resolve(q, () => {
+      const w = this.workflow(q.workflowId);
+      if (
+        w.archived ||
+        (w.ownerWorkflowId && this.workflow(w.ownerWorkflowId).archived)
+      )
+        throw new InterlockError('Restore this workflow before starting it');
+      const run = this.newRun(
+        q.workflowId,
+        q.version ?? w.latestVersion,
+        q.input,
+      );
+      if (q.requestId !== undefined) run.startRequestId = q.requestId;
+      if (q.externalTask) run.externalTask = q.externalTask;
+      if (q.requestId !== undefined || q.externalTask) this.save(run);
+      if (q.budget)
         this.budgets.set({
           runId: run.id,
           expectedRevision: 0,
-          budget: policy,
+          budget: q.budget,
         });
       return run;
     });
-    this.pump();
-    return run.id;
+    if (!result.replayed) this.pump();
+    return result.id;
   }
   inspect(id: string) {
     const run = this.run(id);

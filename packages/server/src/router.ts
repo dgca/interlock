@@ -14,6 +14,7 @@ import {
   workflowEditsSchema,
   jsonSchema,
   runQuerySchema,
+  runStartSchema,
   cancelRunSchema,
   InterlockError,
   ResultRejection,
@@ -40,7 +41,6 @@ import {
   continuationLimitSchema,
   reportUsageSchema,
   usageQuerySchema,
-  budgetPolicySchema,
   setBudgetSchema,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
@@ -394,15 +394,7 @@ export const appRouter = t.router({
       .input(usageQuerySchema)
       .query(({ ctx, input }) => ctx.engine.usage.read(input)),
     startSummary: p
-      .input(
-        z.object({
-          workflowId: z.string(),
-          version: z.number().int().positive().optional(),
-          input: jsonSchema,
-          budget: budgetPolicySchema.optional(),
-          limit: continuationLimitSchema,
-        }),
-      )
+      .input(runStartSchema.extend({ limit: continuationLimitSchema }))
       .mutation(({ ctx, input }) =>
         ctx.engine.startSummary(
           input.workflowId,
@@ -410,6 +402,7 @@ export const appRouter = t.router({
           input.version,
           input.limit,
           input.budget,
+          { requestId: input.requestId, externalTask: input.externalTask },
         ),
       ),
     briefing: p
@@ -434,20 +427,14 @@ export const appRouter = t.router({
     list: p.query(({ ctx }) => ctx.engine.store.runs().reverse()),
     get: p.input(id).query(({ ctx, input }) => ctx.engine.inspect(input.id)),
     start: p
-      .input(
-        z.object({
-          workflowId: z.string(),
-          version: z.number().int().positive().optional(),
-          input: jsonSchema,
-          budget: budgetPolicySchema.optional(),
-        }),
-      )
+      .input(runStartSchema)
       .mutation(({ ctx, input }) =>
         ctx.engine.start(
           input.workflowId,
           input.input,
           input.version,
           input.budget,
+          { requestId: input.requestId, externalTask: input.externalTask },
         ),
       ),
     cancel: p

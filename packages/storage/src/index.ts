@@ -211,6 +211,16 @@ export class Store {
   findRuns(query: RunQuery) {
     const filters = ["collection = 'runs'"];
     const parameters: string[] = [];
+    if (query.requestId !== undefined) {
+      filters.push("json_extract(value, '$.startRequestId') = ?");
+      parameters.push(query.requestId);
+    }
+    if (query.externalTask) {
+      filters.push(
+        "json_extract(value, '$.externalTask.system') = ? AND json_extract(value, '$.externalTask.id') = ?",
+      );
+      parameters.push(query.externalTask.system, query.externalTask.id);
+    }
     if (query.workflowId !== undefined) {
       filters.push("json_extract(value, '$.workflowId') = ?");
       parameters.push(query.workflowId);
@@ -246,6 +256,8 @@ export class Store {
       | 'batchNodeId'
       | 'comparison'
       | 'chain'
+      | 'startRequestId'
+      | 'externalTask'
     > &
       RunAncestry)[] = [];
     for (const row of rows) {
@@ -291,6 +303,10 @@ export class Store {
         parentRunId,
         batchNodeId,
         ...(comparison ? { comparison } : {}),
+        ...(run.startRequestId !== undefined
+          ? { startRequestId: run.startRequestId }
+          : {}),
+        ...(run.externalTask ? { externalTask: run.externalTask } : {}),
         ...(run.chain ? { chain: run.chain } : {}),
       });
       if (result.length === query.limit) break;
