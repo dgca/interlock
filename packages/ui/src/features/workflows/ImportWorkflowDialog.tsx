@@ -293,12 +293,12 @@ export function ImportWorkflowDialog({
           ? prepare('paste', json)
           : add();
   const sources = [
-    { id: 'starters', label: 'Starters', icon: BookOpen },
     { id: 'github', label: 'GitHub folder', icon: FolderGit2 },
     ...(allowLocalFile
       ? [{ id: 'file', label: 'Local file', icon: FileJson }]
       : []),
     { id: 'paste', label: 'Paste JSON', icon: Braces },
+    { id: 'starters', label: 'Starters', icon: BookOpen },
   ] as const;
   return (
     <Modal
