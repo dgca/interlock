@@ -1,3 +1,4 @@
+import { ExecutorSelect } from '../executors/ExecutorSelect';
 import { AgentResourcesEditor } from './AgentResourcesEditor';
 import { useState } from 'react';
 import {
@@ -221,6 +222,12 @@ export function NodeInspector({
               />
             </NodeSection>
             <NodeSection name="execution">
+              <ExecutorSelect
+                value={node.executor}
+                inherit={definition?.executor ?? ''}
+                enabled={active === 'execution'}
+                onChange={(executor) => patch({ executor })}
+              />
               <Radio.Group
                 mb="md"
                 label="Context"
@@ -230,14 +237,14 @@ export function NodeInspector({
                 }
               >
                 <Stack gap="xs" mt="xs">
-                  <Radio value="current" label="Current conversation" />
+                  <Radio value="current" label="Existing context allowed" />
                   <Radio value="fresh" label="Fresh agent session required" />
                 </Stack>
               </Radio.Group>
 
               <p className="hint">
-                Fresh context requires an executor that declares isolation.
-                Interlock cannot erase a caller's conversation.
+                Managed executors start a new session unless a continuity group
+                reuses one. Fresh context requires an independent session.
               </p>
 
               <TextInput

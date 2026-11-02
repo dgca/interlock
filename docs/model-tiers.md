@@ -9,7 +9,7 @@ Agent `context.tier` is an optional capability preference. The executor maps the
 | `fast`     | Speed                                         |
 | Omitted    | No preference; executor uses its default      |
 
-Tiers do not guarantee a price, latency, reasoning effort, or result quality. Interlock does not choose, launch, or verify models. It accepts claims without model declarations or with a declared tier different from the request.
+Tiers do not guarantee a price, latency, reasoning effort, or result quality. Connected executors choose their own models. Managed profiles launch their configured model or the native default; this release does not map advisory tiers to native models. It accepts claims without model declarations or with a declared tier different from the request.
 
 ## Context and discovery
 

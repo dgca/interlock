@@ -6,6 +6,7 @@ import { Engine } from '@interlock/runtime';
 import { createApp } from './app.js';
 import type { ConnectionConfig } from './connection.js';
 import { checkPort, startupError } from './startup.js';
+import { nativeAdapters } from '../../runtime/src/executors/native.js';
 
 export async function startServer(options: {
   database: string;
@@ -28,6 +29,7 @@ export async function startServer(options: {
   let engine: Engine | undefined;
   try {
     engine = new Engine(store, options.workdir);
+    engine.executors.start(nativeAdapters);
     engine.pump();
   } catch (error) {
     engine?.stop();
@@ -55,8 +57,9 @@ export async function startServer(options: {
     process.exitCode = 1;
   });
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
-    process.on(signal, () => {
+    process.on(signal, async () => {
       clearInterval(timer);
+      await engine.executors.stop();
       engine.stop();
       server.close(() => {
         store.close();

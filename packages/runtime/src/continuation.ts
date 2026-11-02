@@ -61,6 +61,9 @@ export class Continuation {
       cursor: snapshot.cursor,
       nextWork: snapshot.available,
       next: snapshot.next,
+      ...(snapshot.executorAttention
+        ? { executorAttention: snapshot.executorAttention }
+        : {}),
       ...(snapshot.run.chain ? { chain: snapshot.run.chain } : {}),
       nextDeadline: snapshot.nextDeadline,
       ...(snapshot.resourceBlocked
@@ -102,6 +105,10 @@ export class Continuation {
       label: work.label,
       status: work.status,
       context: work.context,
+      ...(work.executor ? { executor: work.executor } : {}),
+      ...(work.managedExecution
+        ? { managedExecution: work.managedExecution }
+        : {}),
       ...(work.trialEnvironment
         ? { trialEnvironmentId: work.trialEnvironment.id }
         : {}),
@@ -286,6 +293,9 @@ export class Continuation {
       resourceBlocked.some((w) =>
         w.owners.some((o) => o.state === 'uncertain'),
       );
+    const executorAttention = work.find((w) =>
+      ['needs_human', 'interrupted'].includes(w.managedExecution?.state ?? ''),
+    );
     return {
       ...(resourceBlocked.length
         ? { resourceBlocked: bounded(resourceBlocked, limit) }
@@ -370,28 +380,38 @@ export class Continuation {
       deadlines: bounded(deadlines, limit),
       nextDeadline: deadlines[0] ?? null,
       recentResults: bounded(results, limit),
-      next: requested.chain?.nextRunId
-        ? 'continue_as_new'
-        : needsResourceRecovery
-          ? 'inspect_resources'
-          : requested.status === 'failed'
-            ? 'inspect_failure'
-            : work.some(
-                  (w) =>
-                    w.status === 'available' &&
-                    !w.budgetBlocked &&
-                    !w.resourceBlocked,
-                )
-              ? 'claim_work'
-              : work.some((w) => w.status === 'available' && w.budgetBlocked)
-                ? 'adjust_budget'
-                : work.some((w) => w.status === 'claimed')
-                  ? 'wait_for_worker'
-                  : work.some((w) => w.status === 'held')
-                    ? 'inspect_hold'
-                    : ['completed', 'cancelled'].includes(requested.status)
-                      ? 'inspect_result'
-                      : 'wait_for_change',
+      ...(executorAttention
+        ? {
+            executorAttention: {
+              workId: executorAttention.id,
+              profileId: executorAttention.managedExecution!.profileId,
+            },
+          }
+        : {}),
+      next: executorAttention
+        ? 'inspect_executor'
+        : requested.chain?.nextRunId
+          ? 'continue_as_new'
+          : needsResourceRecovery
+            ? 'inspect_resources'
+            : requested.status === 'failed'
+              ? 'inspect_failure'
+              : work.some(
+                    (w) =>
+                      w.status === 'available' &&
+                      !w.budgetBlocked &&
+                      !w.resourceBlocked,
+                  )
+                ? 'claim_work'
+                : work.some((w) => w.status === 'available' && w.budgetBlocked)
+                  ? 'adjust_budget'
+                  : work.some((w) => w.status === 'claimed')
+                    ? 'wait_for_worker'
+                    : work.some((w) => w.status === 'held')
+                      ? 'inspect_hold'
+                      : ['completed', 'cancelled'].includes(requested.status)
+                        ? 'inspect_result'
+                        : 'wait_for_change',
     };
   }
 

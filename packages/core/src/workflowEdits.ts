@@ -98,7 +98,7 @@ export function draftChanges(
   return {
     nodes: changeIds(before.nodes, after.nodes),
     edges: changeIds(before.edges, after.edges),
-    settings: ['inputSchema', 'outputSchema', 'maxSteps'].filter(
+    settings: ['inputSchema', 'outputSchema', 'maxSteps', 'executor'].filter(
       (key) =>
         !structuralEqual(
           before[key as keyof WorkflowDefinition],
@@ -197,21 +197,22 @@ export function applyWorkflowEdits(
         else definition.edges.splice(index, 1);
       } else {
         const current = {
+          ...(definition.executor ? { executor: definition.executor } : {}),
           inputSchema: definition.inputSchema,
           outputSchema: definition.outputSchema,
           maxSteps: definition.maxSteps,
         };
-        Object.assign(
-          definition,
-          parseStrict(
-            definitionSchema.pick({
-              inputSchema: true,
-              outputSchema: true,
-              maxSteps: true,
-            }),
-            updateFields(current, edit.set, edit.unset, []),
-          ),
+        const nextSettings = parseStrict(
+          definitionSchema.pick({
+            executor: true,
+            inputSchema: true,
+            outputSchema: true,
+            maxSteps: true,
+          }),
+          updateFields(current, edit.set, edit.unset, []),
         );
+        delete definition.executor;
+        Object.assign(definition, nextSettings);
       }
     } catch (error) {
       return {

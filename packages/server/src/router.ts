@@ -1,6 +1,7 @@
 import { listStarters, importStarter } from './starters.js';
 import { parseImportDocument } from '../../core/src/importDocument.js';
 import { workResourceRequestSchema } from '@interlock/core';
+import { executorOperationSchema } from '@interlock/core';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { developmentConnection, type ConnectionConfig } from './connection.js';
@@ -106,6 +107,15 @@ const updateWorkflowInput = id.extend({
 });
 const claim = z.object({ workId: z.string(), token: z.string() });
 export const appRouter = t.router({
+  executors: t.router({
+    profiles: p.query(({ ctx }) => ctx.engine.executors.listProfiles()),
+    inspect: p
+      .input(z.object({ workId: z.string().min(1) }))
+      .query(({ ctx, input }) => ctx.engine.executors.inspect(input.workId)),
+    manage: p
+      .input(executorOperationSchema)
+      .mutation(({ ctx, input }) => ctx.engine.executors.manage(input)),
+  }),
   connection: p.query(({ ctx }) => {
     const config = ctx.connection ?? developmentConnection();
     return { ...config, mcpUrl: new URL('/mcp', config.engineUrl).href };

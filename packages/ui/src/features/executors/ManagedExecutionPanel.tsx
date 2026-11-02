@@ -1,0 +1,297 @@
+import { useEffect, useState } from 'react';
+import { Badge, Checkbox, NativeSelect, Textarea } from '@mantine/core';
+import type {
+  ExecutorAnswer,
+  ExecutorRequest,
+  WorkRequest,
+} from '@interlock/core';
+import { Button } from '../../components/Button/Button';
+import { api, errorMessage } from '../../lib/api';
+import styles from './ManagedExecutionPanel.module.css';
+
+type Inspection = Awaited<ReturnType<typeof api.executors.inspect.query>>;
+export function ManagedExecutionPanel({
+  work,
+  onRefresh,
+}: {
+  work: Omit<WorkRequest, 'token'>;
+  onRefresh: () => void;
+}) {
+  const [inspection, setInspection] = useState<Inspection>(),
+    [error, setError] = useState(''),
+    [busy, setBusy] = useState(false),
+    [confirmed, setConfirmed] = useState(false);
+  const refresh = async () =>
+    setInspection(await api.executors.inspect.query({ workId: work.id }));
+  useEffect(() => {
+    let alive = true;
+    void api.executors.inspect
+      .query({ workId: work.id })
+      .then((result) => {
+        if (alive) setInspection(result);
+      })
+      .catch((e) => {
+        if (alive) setError(errorMessage(e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [work]);
+  useEffect(() => {
+    setConfirmed(false);
+    setInspection(undefined);
+  }, [work.id, work.attempt]);
+  const record = inspection?.items[0];
+  const perform = async (fn: () => Promise<unknown>) => {
+    setError('');
+    setBusy(true);
+    try {
+      await fn();
+      await refresh();
+      onRefresh();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!record)
+    return error ? (
+      <p role="alert" className="error-text">
+        {error}
+      </p>
+    ) : null;
+  const pending = record.requests.filter((r) => r.state === 'pending');
+  return (
+    <div className={styles.panel}>
+      <div className={styles.heading}>
+        <strong>{record.profile.name}</strong>
+        <Badge
+          tt="none"
+          variant="light"
+          color={
+            record.state === 'needs_human'
+              ? 'yellow'
+              : record.state === 'interrupted'
+                ? 'orange'
+                : 'blue'
+          }
+        >
+          {record.state.replaceAll('_', ' ')}
+        </Badge>
+        <span>Attempt {record.attempt}</span>
+      </div>
+      {record.error && <p className={styles.reason}>{record.error}</p>}
+      {pending.map((request) => (
+        <Request
+          key={request.id}
+          request={request}
+          busy={busy}
+          onAnswer={(answer) =>
+            perform(() =>
+              api.executors.manage.mutate({
+                action: 'respond',
+                executionId: record.id,
+                requestId: request.id,
+                answer,
+              }),
+            )
+          }
+        />
+      ))}
+      {record.state === 'interrupted' && (
+        <div className={styles.recovery}>
+          <Checkbox
+            checked={confirmed}
+            onChange={(e) => setConfirmed(e.currentTarget.checked)}
+            label="I confirmed this harness session and its subprocesses have stopped"
+          />
+          <Button
+            disabled={!confirmed || busy}
+            onClick={() =>
+              void perform(() =>
+                api.executors.manage.mutate({
+                  action: 'reconcile',
+                  executionId: record.id,
+                  confirmStopped: true,
+                }),
+              )
+            }
+          >
+            Confirm stopped{work.status === 'held' ? ' and retry' : ''}
+          </Button>
+        </div>
+      )}
+      <details className={styles.details}>
+        <summary>
+          Execution details
+          {record.logCount ? ` · ${record.logCount} updates` : ''}
+        </summary>
+        <dl>
+          <dt>Harness</dt>
+          <dd>{record.profile.harness}</dd>
+          <dt>Directory</dt>
+          <dd>{record.cwd}</dd>
+          <dt>Executable</dt>
+          <dd>{record.command}</dd>
+          {record.profile.model && (
+            <>
+              <dt>Model</dt>
+              <dd>{record.profile.model}</dd>
+            </>
+          )}
+          {record.sessionId && (
+            <>
+              <dt>Session</dt>
+              <dd>{record.sessionId}</dd>
+            </>
+          )}
+        </dl>
+        {record.logs.length > 0 && (
+          <ol className={styles.logs}>
+            {record.logs.map((log, i) => (
+              <li key={i}>
+                <time>{new Date(log.at).toLocaleTimeString()}</time>
+                {log.message}
+              </li>
+            ))}
+          </ol>
+        )}
+        <p className="hint">
+          Recent progress only. Full conversations stay in the harness.{' '}
+          {inspection && inspection.total > 1
+            ? `${inspection.total} attempts recorded.`
+            : ''}
+        </p>
+        {['starting', 'running', 'needs_human'].includes(record.state) && (
+          <Button
+            variant="danger"
+            disabled={busy}
+            onClick={() =>
+              void perform(() =>
+                api.executors.manage.mutate({
+                  action: 'stop',
+                  executionId: record.id,
+                }),
+              )
+            }
+          >
+            Stop execution
+          </Button>
+        )}
+      </details>
+      {error && (
+        <p role="alert" className="error-text">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+function Request({
+  request,
+  busy,
+  onAnswer,
+}: {
+  request: ExecutorRequest;
+  busy: boolean;
+  onAnswer: (answer: ExecutorAnswer) => Promise<void>;
+}) {
+  const [answers, setAnswers] = useState<Record<string, string[]>>({});
+  return (
+    <section className={styles.request}>
+      <h4>{request.title}</h4>
+      {request.detail && <pre>{request.detail}</pre>}
+      {request.kind === 'permission' ? (
+        <div className={styles.actions}>
+          <Button
+            disabled={busy}
+            onClick={() => void onAnswer({ allow: false })}
+          >
+            Deny
+          </Button>
+          <Button
+            variant="primary"
+            disabled={busy}
+            onClick={() => void onAnswer({ allow: true })}
+          >
+            Allow once
+          </Button>
+        </div>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void onAnswer({ answers });
+          }}
+        >
+          {request.questions?.map((q) => (
+            <div key={q.id} className={styles.question}>
+              {q.multiple && q.options?.length ? (
+                <>
+                  <p>{q.text}</p>
+                  {q.options.map((option) => (
+                    <Checkbox
+                      key={option}
+                      mb="xs"
+                      label={option}
+                      checked={answers[q.id]?.includes(option) ?? false}
+                      onChange={(e) =>
+                        setAnswers({
+                          ...answers,
+                          [q.id]: e.currentTarget.checked
+                            ? [...(answers[q.id] ?? []), option]
+                            : (answers[q.id] ?? []).filter((v) => v !== option),
+                        })
+                      }
+                    />
+                  ))}
+                </>
+              ) : q.options?.length ? (
+                <NativeSelect
+                  label={q.text}
+                  value={answers[q.id]?.[0] ?? ''}
+                  data={[
+                    { value: '', label: 'Choose an answer' },
+                    ...q.options.map((value) => ({ value, label: value })),
+                  ]}
+                  onChange={(e) =>
+                    setAnswers({
+                      ...answers,
+                      [q.id]: e.currentTarget.value
+                        ? [e.currentTarget.value]
+                        : [],
+                    })
+                  }
+                />
+              ) : (
+                <Textarea
+                  label={q.text}
+                  value={answers[q.id]?.[0] ?? ''}
+                  maxLength={4000}
+                  onChange={(e) =>
+                    setAnswers({ ...answers, [q.id]: [e.currentTarget.value] })
+                  }
+                />
+              )}
+            </div>
+          ))}
+          <div className={styles.actions}>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={
+                busy ||
+                !request.questions?.every((q) =>
+                  answers[q.id]?.some((v) => v.trim()),
+                )
+              }
+            >
+              Send answers
+            </Button>
+          </div>
+        </form>
+      )}
+    </section>
+  );
+}

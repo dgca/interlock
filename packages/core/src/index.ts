@@ -1,4 +1,6 @@
 export * from './workResources.js';
+export * from './executors.js';
+import { executorReferenceSchema } from './executors.js';
 import { resourceNamesSchema } from './workResources.js';
 export { matchRouting } from './resultRouting.js';
 export * from './simulation.js';
@@ -218,6 +220,12 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('agent'),
+    executor: executorReferenceSchema
+      .nullable()
+      .optional()
+      .describe(
+        'Local executor profile override. Omit to inherit the workflow default; null keeps connected-agent execution.',
+      ),
     resources: resourceBindingsSchema
       .optional()
       .describe(
@@ -338,6 +346,11 @@ export const nodeSchema = z.discriminatedUnion('kind', [
 ]);
 export type WorkflowNode = z.infer<typeof nodeSchema>;
 export const definitionSchema = z.object({
+  executor: executorReferenceSchema
+    .optional()
+    .describe(
+      'Default local executor profile for Agent nodes. Omission preserves connected-agent execution. Configuration and credentials stay local.',
+    ),
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
   nodes: z.array(nodeSchema).min(2),
@@ -454,6 +467,8 @@ export interface RunAncestry {
   rootWorkflowId: string;
 }
 export interface WorkRequest {
+  executor?: string;
+  managedExecution?: import('./executors.js').ManagedWorkSummary;
   resources?: string[];
   resourceBlocked?: import('./workResources.js').ResourceBlock;
   resourceReservations?: import('./workResources.js').ResourceOwner[]; // Derived inspection, not stored.

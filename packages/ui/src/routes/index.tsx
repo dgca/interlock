@@ -12,6 +12,7 @@ import { WorkflowLibrary } from '../features/workflows/WorkflowLibrary';
 import { WorkflowEditor } from '../features/workflows/WorkflowEditor';
 import { RunList } from '../features/runs/RunList';
 import { RunInspector } from '../features/runs/RunInspector';
+import { Harnesses } from '../features/executors/Harnesses';
 import { paths } from './paths';
 import { flushSync } from 'react-dom';
 import { PromptLibrary, PromptEditor } from '../features/prompts/Prompts';
@@ -200,6 +201,7 @@ export const routes: RouteObject[] = [
       { index: true, element: <Navigate to={paths.workflows} replace /> },
       { path: 'workflows', Component: LibraryRoute },
       { path: 'prompts', Component: PromptsRoute },
+      { path: 'settings/harnesses', Component: Harnesses },
       { path: 'prompts/:promptId', Component: PromptRoute },
       { path: 'workflows/:workflowId', Component: WorkflowRoute },
       { path: 'runs', Component: RunsRoute },

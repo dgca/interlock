@@ -1,3 +1,4 @@
+import { ExecutorSelect } from '../executors/ExecutorSelect';
 import {
   TextInput,
   Textarea,
@@ -384,6 +385,12 @@ export function SettingsDialog({
                     }
                   />
 
+                  <ExecutorSelect
+                    value={settings.definition.executor}
+                    onChange={(executor) =>
+                      patchDefinition({ executor: executor ?? undefined })
+                    }
+                  />
                   <ContractEditor
                     label="Workflow input"
                     value={settings.definition.inputSchema}

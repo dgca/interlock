@@ -2621,6 +2621,87 @@ it.each(['stdio', 'http'])(
       expect(
         tools.find((t) => t.name === 'claim_work')?.inputSchema.properties,
       ).toHaveProperty('session');
+      // Managed profiles share the same API and discovery over both transports.
+      expect(tools.some((t) => t.name === 'manage_executors')).toBe(true);
+      engine.executors.start([
+        {
+          id: 'codex',
+          detect: async () => ({
+            status: 'detected',
+            command: '/fake/codex',
+            version: 'transport fixture',
+          }),
+          run: async (input) => {
+            input.onSession('transport-native');
+            const answer = await input.request({
+              kind: 'permission',
+              title: 'Transport test permission',
+              detail: 'No command will run',
+            });
+            return { output: answer.allow ?? false };
+          },
+        },
+      ]);
+      const localProfiles = await call('manage_executors', {
+        request: { action: 'list' },
+      });
+      expect(localProfiles.find((p: any) => p.id === 'codex')).toMatchObject({
+        enabled: false,
+        revision: 0,
+        detection: { status: 'detected' },
+      });
+      await call('manage_executors', {
+        request: {
+          action: 'save',
+          profile: {
+            id: 'codex',
+            harness: 'codex',
+            name: 'Transport Codex',
+            enabled: true,
+            expectedRevision: 0,
+          },
+        },
+      });
+      const managedDefinition = blankDefinition();
+      managedDefinition.executor = 'codex';
+      const managedWorkflow = await call('create_workflow', {
+        name: 'Managed transport',
+        definition: managedDefinition,
+      });
+      await call('publish_workflow', { id: managedWorkflow.id });
+      const managedRun = await call('start_run', {
+        workflowId: managedWorkflow.id,
+        input: 5,
+      });
+      let managedWork: any;
+      await vi.waitFor(() => {
+        managedWork = engine.store
+          .work()
+          .find((work) => work.runId === managedRun.runId);
+        expect(managedWork?.managedExecution?.state).toBe('needs_human');
+      });
+      const managedInspection = await call('manage_executors', {
+        request: { action: 'inspect', workId: managedWork.id },
+      });
+      const managedAttempt = managedInspection.items[0];
+      expect(JSON.stringify(managedInspection)).not.toContain(
+        managedWork.token,
+      );
+      expect(
+        (await call('get_run_briefing', { id: managedRun.runId })).next,
+      ).toBe('inspect_executor');
+      await call('manage_executors', {
+        request: {
+          action: 'respond',
+          executionId: managedAttempt.id,
+          requestId: managedAttempt.requests[0].id,
+          answer: { allow: false },
+        },
+      });
+      await vi.waitFor(() =>
+        expect(engine.run(managedRun.runId).status).toBe('completed'),
+      );
+      expect(engine.run(managedRun.runId).output).toBe(false);
       console.log(
         `${mode}: ${tools.length} MCP tools, ${Buffer.byteLength(JSON.stringify(tools))} B definitions`,
       );

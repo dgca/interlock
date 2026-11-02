@@ -1,4 +1,10 @@
 import { WorkResources } from './workResources.js';
+import { ExecutorManager } from './executors/manager.js';
+export type {
+  HarnessAdapter,
+  HarnessRun,
+  HarnessResult,
+} from './executors/contracts.js';
 import {
   resourceNamesSchema,
   workResourceRequestSchema,
@@ -105,6 +111,7 @@ class ResultProcessingError extends InterlockError {
   }
 }
 export class Engine {
+  readonly executors: ExecutorManager;
   readonly continuation: Continuation;
   readonly prompts: Prompts;
   readonly versions: VersionCleanup;
@@ -134,6 +141,7 @@ export class Engine {
       ) => Promise<Json>;
     } = {},
   ) {
+    this.executors = new ExecutorManager(this, cwd);
     this.simulations = new Simulations(store, cwd);
     this.chains = new RunChains(store);
     this.continuation = new Continuation(store);
@@ -652,6 +660,7 @@ export class Engine {
         throw new InterlockError(
           'Cancel or finish active runs before deleting this workflow.',
         );
+      this.executors.assertDelete(removed);
       for (const work of this.store.work())
         if (removed.has(work.runId)) this.store.remove('work', work.id);
       this.usage.removeRuns(removed);
@@ -659,6 +668,7 @@ export class Engine {
       this.holds.removeRuns(removed);
       this.budgets.removeRuns(removed);
       this.contextGroups.removeRuns(removed);
+      this.executors.removeRuns(removed);
       for (const event of this.store.list<import('@interlock/core').RunEvent>(
         'events',
       ))
@@ -1387,6 +1397,13 @@ export class Engine {
               .sort()
           : undefined;
         const work: WorkRequest = {
+          ...((
+            node.executor === null
+              ? undefined
+              : (node.executor ?? this.definition(run).executor)
+          )
+            ? { executor: node.executor ?? this.definition(run).executor }
+            : {}),
           ...(resources ? { resources } : {}),
           id: randomUUID(),
           runId: run.id,
@@ -1727,6 +1744,7 @@ export class Engine {
     }
   }
   stop() {
+    void this.executors.stop();
     this.trials.stop();
     this.simulations.stop();
     this.continuation.stop();
@@ -2048,6 +2066,9 @@ export class Engine {
       : [];
     work = {
       ...work,
+      ...(this.executors.describe(work)
+        ? { managedExecution: this.executors.describe(work) }
+        : {}),
       ...(reservations.length ? { resourceReservations: reservations } : {}),
     };
     const instructions = [
@@ -2077,8 +2098,8 @@ export class Engine {
       run = this.run(run.parentRunId);
     return run.id;
   }
-  available(runId?: string) {
-    this.pump();
+  available(runId?: string, options: { advance?: boolean } = {}) {
+    if (options.advance !== false) this.pump();
     const within = (id: string): boolean => {
       if (!runId || id === runId) return true;
       const parent = this.run(id).parentRunId;
@@ -2105,6 +2126,12 @@ export class Engine {
       label: work.label,
       status: work.status,
       context: work.context,
+      ...(work.executor
+        ? {
+            executor: work.executor,
+            managedExecution: this.executors.describe(work),
+          }
+        : {}),
       ...(work.trialEnvironment
         ? { trialEnvironmentId: work.trialEnvironment.id }
         : {}),
@@ -2174,6 +2201,7 @@ export class Engine {
       const work = this.store.get<WorkRequest>('work', workId);
       if (!work || work.status !== 'available')
         throw new InterlockError('Work is not available');
+      this.executors.assertClaim(work);
       this.trials.context(this.run(work.runId));
       if (work.context.mode === 'fresh' && !worker.freshContext)
         throw new InterlockError('This assignment requires fresh context');
