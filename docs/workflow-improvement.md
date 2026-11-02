@@ -82,7 +82,9 @@ A deterministic Script compares complete case/repetition pairs using the capture
 - `retain_baseline`: a candidate case regresses, a required candidate check or grade fails, or the average score gain falls below `minQualityGain`.
 - `candidate_better`: required semantic grades are assessed, no case regresses, average quality gain reaches the threshold, and total measured cost/elapsed stay within the captured allowances.
 - `tradeoff`: quality qualifies but total cost or elapsed exceeds an allowance. The starter does not relax the allowance or decide that tradeoff for you.
-- `insufficient_evidence`: membership, execution, checks, semantic grading, trial and grader usage, timing, cleanup or configuration or model-attribution evidence is missing, disputed, stale or malformed. Changed production or budget policies also prevent a proposal.
+- `insufficient_evidence`: membership, execution, checks, semantic grading, trial and grader usage, timing, cleanup or configuration or model-attribution evidence is missing, disputed or stale. Changed production or budget policies also prevent a proposal.
+
+Malformed evidence projections reject at the collection assignment's output contract, keeping its claim usable for correction. Missing facts use explicit null or unknown values and produce insufficient evidence.
 
 Only a qualifying tuning result uses acceptance cases. A qualifying acceptance result produces `acceptance:"proposal_only"` and `promotionProposal` with expected production revision/version/definition and prompt revisions, the exact candidate version/hash, side configuration identities and comparison/evaluator references. Every other result has no promotion proposal. Coordinator expense is tracked separately as complete or `pending_final_usage`: the collector may not have its own final cost yet. Pending expense is never substituted with zero, and the proposal requires a final expense review before adoption. The result also records scope, informed case IDs, reasons, measured evidence and a regression link.
 

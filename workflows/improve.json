@@ -448,7 +448,155 @@
                 "rows": {
                   "type": "array",
                   "maxItems": 20,
-                  "items": { "type": "object" }
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "sampleId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "trialRef": {
+                        "type": "object",
+                        "properties": {
+                          "comparisonId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "sampleId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          }
+                        },
+                        "required": ["comparisonId", "sampleId"],
+                        "additionalProperties": false
+                      },
+                      "caseId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "side": { "enum": ["baseline", "candidate"] },
+                      "repetition": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2
+                      },
+                      "status": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "currentStatus": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "executorConditionsState": {
+                        "enum": [
+                          "matched",
+                          "unknown",
+                          "mismatch",
+                          "pending",
+                          "not_requested"
+                        ]
+                      },
+                      "graderConfigurationMatched": { "type": "boolean" },
+                      "checks": {
+                        "type": "array",
+                        "maxItems": 50,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "status": { "enum": ["pass", "fail", "unknown"] }
+                          },
+                          "required": ["status"],
+                          "additionalProperties": false
+                        }
+                      },
+                      "grade": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "mode": { "enum": ["review", "checks_only"] },
+                              "verdict": {
+                                "enum": ["pass", "fail", "unknown"]
+                              },
+                              "score": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 5
+                              },
+                              "rubric": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 4000
+                              },
+                              "runId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120
+                              },
+                              "specificationHash": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                              },
+                              "disagreement": { "type": "boolean" }
+                            },
+                            "required": [
+                              "mode",
+                              "verdict",
+                              "score",
+                              "rubric",
+                              "runId",
+                              "specificationHash",
+                              "disagreement"
+                            ],
+                            "additionalProperties": false
+                          },
+                          { "type": "null" }
+                        ]
+                      },
+                      "costMicros": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          { "type": "null" }
+                        ]
+                      },
+                      "elapsedMs": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          { "type": "null" }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "sampleId",
+                      "caseId",
+                      "side",
+                      "repetition",
+                      "status",
+                      "currentStatus",
+                      "executorConditionsState",
+                      "graderConfigurationMatched",
+                      "checks",
+                      "grade",
+                      "costMicros",
+                      "elapsedMs"
+                    ],
+                    "additionalProperties": false
+                  }
                 },
                 "cleanupComplete": { "type": "boolean" },
                 "graderUsageComplete": { "type": "boolean" },
@@ -632,7 +780,155 @@
                 "rows": {
                   "type": "array",
                   "maxItems": 20,
-                  "items": { "type": "object" }
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "sampleId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "trialRef": {
+                        "type": "object",
+                        "properties": {
+                          "comparisonId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "sampleId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          }
+                        },
+                        "required": ["comparisonId", "sampleId"],
+                        "additionalProperties": false
+                      },
+                      "caseId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "side": { "enum": ["baseline", "candidate"] },
+                      "repetition": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2
+                      },
+                      "status": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "currentStatus": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "executorConditionsState": {
+                        "enum": [
+                          "matched",
+                          "unknown",
+                          "mismatch",
+                          "pending",
+                          "not_requested"
+                        ]
+                      },
+                      "graderConfigurationMatched": { "type": "boolean" },
+                      "checks": {
+                        "type": "array",
+                        "maxItems": 50,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "status": { "enum": ["pass", "fail", "unknown"] }
+                          },
+                          "required": ["status"],
+                          "additionalProperties": false
+                        }
+                      },
+                      "grade": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "mode": { "enum": ["review", "checks_only"] },
+                              "verdict": {
+                                "enum": ["pass", "fail", "unknown"]
+                              },
+                              "score": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 5
+                              },
+                              "rubric": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 4000
+                              },
+                              "runId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 120
+                              },
+                              "specificationHash": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                              },
+                              "disagreement": { "type": "boolean" }
+                            },
+                            "required": [
+                              "mode",
+                              "verdict",
+                              "score",
+                              "rubric",
+                              "runId",
+                              "specificationHash",
+                              "disagreement"
+                            ],
+                            "additionalProperties": false
+                          },
+                          { "type": "null" }
+                        ]
+                      },
+                      "costMicros": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          { "type": "null" }
+                        ]
+                      },
+                      "elapsedMs": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          { "type": "null" }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "sampleId",
+                      "caseId",
+                      "side",
+                      "repetition",
+                      "status",
+                      "currentStatus",
+                      "executorConditionsState",
+                      "graderConfigurationMatched",
+                      "checks",
+                      "grade",
+                      "costMicros",
+                      "elapsedMs"
+                    ],
+                    "additionalProperties": false
+                  }
                 },
                 "cleanupComplete": { "type": "boolean" },
                 "graderUsageComplete": { "type": "boolean" },

@@ -23,7 +23,7 @@ Source generation embeds standalone Script functions into workflows/improve.json
 ## Verification
 
 - 1,036 tests in 90 files passed, including 20 improvement tests and four comparison-budget tests. Fake executors, temporary repositories/databases and synthetic accounting only.
-- Tests cover real owned semantic grading, independent Git writes/source preservation, held-out regression, missing/unknown/mismatched evidence, fractional scores, dirty production drafts, fixed budgets, delayed roots across restart, and publication/dispatch recovery without duplicate candidates or comparisons.
+- Evidence projections use a typed contract; malformed submissions reject before acceptance and can be corrected on the same claim. Tests cover real owned semantic grading, independent Git writes/source preservation, held-out regression, missing/unknown/mismatched evidence, fractional scores, dirty production drafts, fixed budgets, delayed roots across restart, and publication/dispatch recovery without duplicate candidates or comparisons.
 - HTTP/stdio comparison transport calls verify atomic policy installation and matching discovery. No new MCP tools; 49 tools, 266,684 bytes of discovery JSON versus 263,059 on the base commit.
 - pnpm build, pnpm format:check, git diff --check and pnpm test:package passed. Packed global/npx installation covers CLI, UI assets, HTTP/stdio MCP, restart, JavaScript and persistence.
 - Reviewed affected README, architecture, limits, harness, testbench, budget, evaluator and import guidance; CLI import/start/budget commands; MCP comparison preview/start/read, run budget, claim/retry, usage, evaluation and version-inspection flow. This is an affected-flow review, not a full unrelated-tool audit.

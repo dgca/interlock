@@ -497,6 +497,62 @@ const object = (properties, required = Object.keys(properties)) => ({
 });
 const text = { type: 'string', minLength: 1, maxLength: 120 },
   positive = { type: 'integer', minimum: 1 };
+const metric = {
+  anyOf: [
+    { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+    { type: 'null' },
+  ],
+};
+const evidenceRow = object(
+  {
+    sampleId: text,
+    trialRef: object({ comparisonId: text, sampleId: text }),
+    caseId: text,
+    side: { enum: ['baseline', 'candidate'] },
+    repetition: { type: 'integer', minimum: 1, maximum: 2 },
+    status: text,
+    currentStatus: text,
+    executorConditionsState: {
+      enum: ['matched', 'unknown', 'mismatch', 'pending', 'not_requested'],
+    },
+    graderConfigurationMatched: { type: 'boolean' },
+    checks: {
+      type: 'array',
+      maxItems: 50,
+      items: object({ status: { enum: ['pass', 'fail', 'unknown'] } }),
+    },
+    grade: {
+      anyOf: [
+        object({
+          mode: { enum: ['review', 'checks_only'] },
+          verdict: { enum: ['pass', 'fail', 'unknown'] },
+          score: { type: 'number', minimum: 0, maximum: 5 },
+          rubric: { type: 'string', minLength: 1, maxLength: 4000 },
+          runId: text,
+          specificationHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+          disagreement: { type: 'boolean' },
+        }),
+        { type: 'null' },
+      ],
+    },
+    costMicros: metric,
+    elapsedMs: metric,
+  },
+  [
+    'sampleId',
+    'caseId',
+    'side',
+    'repetition',
+    'status',
+    'currentStatus',
+    'executorConditionsState',
+    'graderConfigurationMatched',
+    'checks',
+    'grade',
+    'costMicros',
+    'elapsedMs',
+  ],
+);
 const ref = object({ suiteId: text, suiteRevision: positive });
 const budget = {
   type: 'object',
@@ -679,7 +735,7 @@ for (const phase of ['tuning', 'acceptance']) {
         requestId: text,
         evaluationRunId: text,
         configurationIds: object({ baseline: text, candidate: text }),
-        rows: { type: 'array', maxItems: 20, items: { type: 'object' } },
+        rows: { type: 'array', maxItems: 20, items: evidenceRow },
         cleanupComplete: { type: 'boolean' },
         graderUsageComplete: { type: 'boolean' },
         coordinatorUsageComplete: { type: 'boolean' },

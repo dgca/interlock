@@ -325,7 +325,7 @@ function collect(f: ReturnType<typeof setup>, w: WorkRequest, options: any) {
               m.model === x.plan.request.executor.model,
           ),
         ),
-      checks: s.observation?.checks ?? [],
+      checks: (s.observation?.checks ?? []).map((c) => ({ status: c.status })),
       grade: j?.evaluation
         ? {
             mode: j.evaluation.mode,
@@ -499,8 +499,14 @@ async function drive(f: ReturnType<typeof setup>, options: any = {}) {
           e.reportFailure(w.id, w.token!, 'Lost delivery after start');
           return;
         }
-      } else if (a.nodeId.startsWith('collect_')) out = collect(f, w, options);
-      else throw Error('Unknown coordinator ' + a.nodeId);
+      } else if (a.nodeId.startsWith('collect_')) {
+        out = collect(f, w, options);
+        if (options.checkProjectionContract) {
+          const malformed = structuredClone(out);
+          delete malformed.rows[0].checks;
+          expect(() => e.submit(w.id, w.token!, malformed)).toThrow();
+        }
+      } else throw Error('Unknown coordinator ' + a.nodeId);
       e.submit(w.id, w.token!, out as Json);
     }
   }
@@ -515,7 +521,7 @@ it('ships a generated importable starter and completes a held-out experiment wit
     '--check',
   ]);
   const f = setup();
-  await drive(f);
+  await drive(f, { checkProjectionContract: true });
   expect(f.e.run(f.runId).error).toBeUndefined();
   expect(f.e.run(f.runId).output).toMatchObject({
     outcome: 'candidate_better',
