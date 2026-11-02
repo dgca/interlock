@@ -78,6 +78,7 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
       // Keep the query contract and legacy GET callers while accepting large bodies.
       allowMethodOverride: [
         '/trpc/workflows.validate',
+        '/trpc/workflows.previewImport',
         '/trpc/work.preflight',
         '/trpc/work.size',
         '/trpc/testbench.preview',

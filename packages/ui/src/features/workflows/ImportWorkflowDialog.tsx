@@ -1,343 +1,611 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  Checkbox,
-  SegmentedControl,
-  Stack,
-  Text,
-  TextInput,
-  Textarea,
-} from '@mantine/core';
+import { Checkbox, Radio, Stack, Textarea, TextInput } from '@mantine/core';
+import { BookOpen, Braces, FileJson, FolderGit2, Upload } from 'lucide-react';
 import { Modal } from '../../components/Modal/Modal';
 import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import type { Action } from '../../lib/useActionFeedback';
-import styles from './ImportWorkflowDialog.module.css';
 import { importWorkflowJson } from './importWorkflowJson';
+import styles from './ImportWorkflowDialog.module.css';
 
-type Preview = Awaited<ReturnType<typeof api.workflows.discoverGithub.query>>;
+type Source = 'starters' | 'github' | 'file' | 'paste';
+type GithubPreview = Awaited<
+  ReturnType<typeof api.workflows.discoverGithub.query>
+>;
+type DocumentPreview = Awaited<
+  ReturnType<typeof api.workflows.previewImport.query>
+>;
+type Starter = Awaited<ReturnType<typeof api.workflows.starters.query>>[number];
+type LocalDocument = {
+  text: string;
+  filename?: string;
+  preview: DocumentPreview;
+};
+function Details({
+  item,
+  filename,
+  commit,
+}: {
+  item: Pick<DocumentPreview, 'workflows' | 'prompts'>;
+  filename?: string;
+  commit?: string;
+}) {
+  const included = [
+    item.workflows.length
+      ? `${item.workflows.length} included workflow${item.workflows.length === 1 ? '' : 's'}`
+      : '',
+    item.prompts.length
+      ? `${item.prompts.length} saved prompt${item.prompts.length === 1 ? '' : 's'}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  if (!included && !filename && !commit) return null;
+  return (
+    <details className={styles.details}>
+      <summary>{included || 'File details'}</summary>
+      {item.workflows.map((w) => (
+        <p key={w.id}>
+          {w.name}
+          {w.owned ? ' · owned child' : ''}
+          <code>{w.id}</code>
+        </p>
+      ))}
+      {item.prompts.map((p) => (
+        <p key={p.id}>
+          {p.name}
+          <code>{p.id}</code>
+        </p>
+      ))}
+      {filename && <p>{filename}</p>}
+      {commit && (
+        <p>
+          Source revision <code>{commit}</code>
+        </p>
+      )}
+    </details>
+  );
+}
 export function ImportWorkflowDialog({
   onClose,
-  onLocalFile,
   onImported,
+  allowLocalFile = true,
   act,
 }: {
   onClose: () => void;
-  onLocalFile?: () => void;
-  onImported?: (id: string) => void;
+  onImported?: (ids: string[]) => void;
+  allowLocalFile?: boolean;
   act: Action;
 }) {
-  const [json, setJson] = useState('');
-  const [source, setSource] = useState('github');
-  const [url, setUrl] = useState('');
-  const [preview, setPreview] = useState<Preview>();
+  const [source, setSource] = useState<Source>('starters');
+  const [catalog, setCatalog] = useState<Starter[]>();
+  const [selectedStarter, setSelectedStarter] = useState('sdlc');
+  const [copy, setCopy] = useState(false);
+  const [url, setUrl] = useState(''),
+    [json, setJson] = useState('');
+  const [github, setGithub] = useState<GithubPreview>();
   const [selected, setSelected] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [documents, setDocuments] = useState<
+    Partial<Record<'file' | 'paste', LocalDocument>>
+  >({});
+  const [errors, setErrors] = useState<Partial<Record<Source, string>>>({});
+  const [loading, setLoading] = useState<Partial<Record<Source, boolean>>>({});
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const generation = useRef(0);
-  const importing = useRef(false);
-  useEffect(
-    () => () => {
-      generation.current++;
-    },
-    [],
-  );
-  const reset = () => {
-    generation.current++;
-    setPreview(undefined);
-    setSelected([]);
-    setError('');
-    setLoading(false);
+  const mounted = useRef(true),
+    importing = useRef(false),
+    githubGeneration = useRef(0),
+    documentGeneration = useRef({ file: 0, paste: 0 }),
+    request = useRef({ identity: '', id: '' });
+  const file = useRef<HTMLInputElement>(null),
+    panel = useRef<HTMLElement>(null);
+  const error = (kind: Source, message = '') => {
+    if (mounted.current) setErrors((e) => ({ ...e, [kind]: message }));
+  };
+  const load = (kind: Source, value: boolean) => {
+    if (mounted.current) setLoading((l) => ({ ...l, [kind]: value }));
+  };
+  const loadStarters = async () => {
+    load('starters', true);
+    error('starters');
+    try {
+      const rows = await api.workflows.starters.query();
+      if (mounted.current) setCatalog(rows);
+    } catch (e) {
+      error('starters', errorMessage(e));
+    } finally {
+      load('starters', false);
+    }
+  };
+  useEffect(() => {
+    mounted.current = true;
+    void loadStarters();
+    return () => {
+      mounted.current = false;
+      githubGeneration.current++;
+      documentGeneration.current.file++;
+      documentGeneration.current.paste++;
+    };
+  }, []);
+  const changeSource = (value: Source) => {
+    setSource(value);
+    panel.current?.scrollTo?.(0, 0);
   };
   const discover = async () => {
-    const current = ++generation.current;
-    setPreview(undefined);
-    setSelected([]);
-    setError('');
-    setLoading(true);
+    const generation = ++githubGeneration.current;
+    load('github', true);
+    error('github');
     try {
       const result = await api.workflows.discoverGithub.query({
         url: url.trim(),
       });
-      if (generation.current === current) setPreview(result);
-    } catch (error) {
-      if (generation.current === current) setError(errorMessage(error));
+      if (mounted.current && generation === githubGeneration.current) {
+        setGithub(result);
+        setSelected([]);
+      }
+    } catch (e) {
+      if (generation === githubGeneration.current)
+        error('github', errorMessage(e));
     } finally {
-      if (generation.current === current) setLoading(false);
+      if (generation === githubGeneration.current) load('github', false);
     }
   };
-  const importSelected = async () => {
-    if (!preview || !selected.length || importing.current || loading) return;
+  const prepare = async (
+    kind: 'file' | 'paste',
+    text: string,
+    filename?: string,
+    expectedGeneration?: number,
+  ) => {
+    const generation = expectedGeneration ?? ++documentGeneration.current[kind];
+    load(kind, true);
+    error(kind);
+    try {
+      let document;
+      try {
+        document = JSON.parse(text);
+        if (
+          document === null ||
+          typeof document !== 'object' ||
+          Array.isArray(document)
+        )
+          throw new Error('Use a workflow JSON object or a portable bundle.');
+      } catch (e) {
+        if (e instanceof Error && e.message.startsWith('Use a workflow'))
+          throw e;
+        throw new Error('Enter valid JSON before importing.');
+      }
+      const preview = await api.workflows.previewImport.query({ document });
+      if (mounted.current && generation === documentGeneration.current[kind])
+        setDocuments((d) => ({ ...d, [kind]: { text, filename, preview } }));
+    } catch (e) {
+      if (generation === documentGeneration.current[kind])
+        error(kind, errorMessage(e));
+    } finally {
+      if (generation === documentGeneration.current[kind]) load(kind, false);
+    }
+  };
+  const readFile = async (value?: File) => {
+    if (!value) return;
+    const generation = ++documentGeneration.current.file;
+    load('file', true);
+    setDocuments((d) => ({ ...d, file: undefined }));
+    if (value.size > 2 * 1024 * 1024) {
+      load('file', false);
+      error('file', 'Choose a JSON file smaller than 2 MiB.');
+      return;
+    }
+    try {
+      const text = await value.text();
+      if (!mounted.current || generation !== documentGeneration.current.file)
+        return;
+      await prepare('file', text, value.name, generation);
+    } catch (e) {
+      if (generation === documentGeneration.current.file) {
+        load('file', false);
+        error('file', errorMessage(e));
+      }
+    }
+  };
+  const starter = catalog?.find((s) => s.id === selectedStarter);
+  const local =
+    source === 'file' || source === 'paste' ? documents[source] : undefined;
+  const finish = (ids: string[]) => {
+    onClose();
+    onImported?.([...new Set(ids)]);
+  };
+  const add = async () => {
+    if (importing.current) return;
+    if (source === 'starters' && starter?.existing && !copy) {
+      finish([starter.existing.id]);
+      return;
+    }
     importing.current = true;
     setBusy(true);
-    setError('');
+    error(source);
     try {
       await act(async () => {
         try {
-          await api.workflows.importGithub.mutate({
-            source: preview.source,
-            files: selected,
-          });
-        } catch (error) {
-          const detail = errorMessage(error);
-          const message = detail.startsWith('Nothing imported:')
-            ? detail
-            : `The import result could not be confirmed. Inspect the library before retrying, especially for legacy files. ${detail}`;
-          setError(message);
+          if (source === 'starters' && starter) {
+            const identity = `${starter.id}:${copy}`;
+            if (request.current.identity !== identity)
+              request.current = { identity, id: crypto.randomUUID() };
+            const result = await api.workflows.importStarter.mutate({
+              starterId: starter.id,
+              requestId: request.current.id,
+              copy,
+            });
+            finish([result.workflow.id]);
+          } else if (source === 'github' && github && selected.length) {
+            const result = await api.workflows.importGithub.mutate({
+              source: github.source,
+              files: selected,
+            });
+            finish(result.rootIds);
+          } else if (local) finish([await importWorkflowJson(local.text)]);
+        } catch (e) {
+          const detail = errorMessage(e);
+          const message =
+            source === 'github' && !detail.startsWith('Nothing imported:')
+              ? `The import result could not be confirmed. Inspect the library before retrying. ${detail}`
+              : detail;
+          error(source, message);
           throw new Error(message);
         }
-        onClose();
-      }, 'Selected workflows imported.');
+      }, 'Workflows added to your library.');
     } finally {
       importing.current = false;
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   };
-  const importPasted = async () => {
-    if (importing.current || !json.trim()) return;
-    importing.current = true;
-    setBusy(true);
-    setError('');
-    try {
-      await act(async () => {
-        let id: string;
-        try {
-          id = await importWorkflowJson(json);
-        } catch (error) {
-          setError(errorMessage(error));
-          throw error;
-        }
-        onClose();
-        onImported?.(id);
-      }, 'Workflow imported.');
-    } finally {
-      importing.current = false;
-      setBusy(false);
-    }
-  };
+  const needsDiscovery =
+    source === 'github' && (!github || !github.items.some((i) => i.valid));
+  const primary =
+    source === 'starters'
+      ? starter?.existing && !copy
+        ? 'Open workflow'
+        : 'Add to library'
+      : needsDiscovery
+        ? 'Find workflows'
+        : source === 'file' && !local
+          ? 'Choose JSON file'
+          : source === 'paste' && !local
+            ? 'Preview workflow'
+            : source === 'github' && selected.length > 1
+              ? `Import ${selected.length} workflows`
+              : 'Import workflow';
+  const disabled =
+    busy ||
+    loading[source] ||
+    (source === 'starters'
+      ? !starter
+      : source === 'github'
+        ? needsDiscovery
+          ? !url.trim()
+          : !selected.length
+        : source === 'paste'
+          ? !json.trim()
+          : false);
+  const primaryAction = () =>
+    source === 'github' && needsDiscovery
+      ? discover()
+      : source === 'file' && !local
+        ? file.current?.click()
+        : source === 'paste' && !local
+          ? prepare('paste', json)
+          : add();
+  const sources = [
+    { id: 'github', label: 'GitHub folder', icon: FolderGit2 },
+    ...(allowLocalFile
+      ? [{ id: 'file', label: 'Local file', icon: FileJson }]
+      : []),
+    { id: 'paste', label: 'Paste JSON', icon: Braces },
+    { id: 'starters', label: 'Starters', icon: BookOpen },
+  ] as const;
   return (
     <Modal
-      title="Import workflows"
-      size={700}
+      title={
+        <span className={styles.title}>
+          <Upload size={18} />
+          Import workflows
+        </span>
+      }
+      size={920}
+      className={styles.dialog}
+      classNames={{ header: styles.header, body: styles.body }}
       onClose={() => {
-        if (!importing.current) {
-          generation.current++;
-          onClose();
-        }
+        if (!importing.current) onClose();
       }}
     >
-      <div className={styles.content}>
-        <Stack gap="md">
-          <SegmentedControl
-            aria-label="Import source"
-            value={source}
-            disabled={busy}
-            data={[
-              { value: 'github', label: 'GitHub folder' },
-              ...(onLocalFile ? [{ value: 'local', label: 'Local file' }] : []),
-              { value: 'paste', label: 'Paste JSON' },
-            ]}
-            onChange={(value) => {
-              reset();
-              setSource(value);
-            }}
-          />
-          {source === 'paste' ? (
-            <Textarea
-              label="Workflow JSON"
-              description="Paste a legacy workflow or a portable bundle with its dependencies."
-              rows={12}
-              value={json}
-              disabled={busy}
-              spellCheck={false}
-              styles={{ input: { fontFamily: 'var(--mono)' } }}
-              onChange={(event) => {
-                setJson(event.currentTarget.value);
-                setError('');
-              }}
-            />
-          ) : source === 'local' ? (
-            <Text size="sm">
-              Choose a legacy workflow JSON file or a portable bundle with its
-              dependencies.
-            </Text>
-          ) : (
-            <>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (!loading && !busy && url.trim()) void discover();
-                }}
+      <div className={styles.layout}>
+        <aside className={styles.sidebar}>
+          <nav aria-label="Import source">
+            {sources.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                aria-current={source === s.id ? 'page' : undefined}
+                disabled={busy}
+                onClick={() => changeSource(s.id as Source)}
               >
-                <Stack gap="sm">
-                  <TextInput
-                    data-autofocus
-                    label="Public GitHub folder URL"
-                    placeholder="https://github.com/owner/repo/tree/branch/folder"
-                    value={url}
-                    disabled={busy}
-                    onChange={(event) => {
-                      reset();
-                      setUrl(event.currentTarget.value);
-                    }}
-                  />
-                  <div className="actions">
-                    <Button
-                      disabled={busy || loading || !url.trim()}
-                      type="submit"
-                    >
-                      {loading
-                        ? 'Loading workflows…'
-                        : error && !preview
-                          ? 'Retry discovery'
-                          : 'Find workflows'}
-                    </Button>
-                  </div>
-                </Stack>
-              </form>
-              {loading && (
-                <Text role="status" size="sm">
-                  Reading direct JSON files from GitHub…
-                </Text>
+                <s.icon size={17} />
+                {s.label}
+              </button>
+            ))}
+          </nav>
+        </aside>
+        <section
+          className={styles.panel}
+          ref={panel}
+          aria-labelledby="import-source-heading"
+        >
+          <h2 id="import-source-heading">
+            {source === 'starters'
+              ? 'Starter workflows'
+              : sources.find((s) => s.id === source)?.label}
+          </h2>
+          {source === 'starters' && (
+            <>
+              {loading.starters && !catalog && (
+                <p role="status" className="hint">
+                  Loading starters…
+                </p>
               )}
-              {preview && (
-                <>
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                    style={{ overflowWrap: 'anywhere' }}
-                  >
-                    Commit {preview.source.commit.slice(0, 12)} ·{' '}
-                    {preview.source.folder}
-                  </Text>
-                  {!preview.items.some((item) => item.valid) && (
-                    <Text role="status">
-                      No importable workflows were found in this folder's direct
-                      JSON files.
-                    </Text>
-                  )}
-                  <Stack gap="sm">
-                    {preview.items.map((item) => (
+              {catalog && (
+                <Radio.Group
+                  value={selectedStarter}
+                  onChange={(value) => {
+                    setSelectedStarter(value);
+                    setCopy(false);
+                    error('starters');
+                  }}
+                  aria-label="Starter workflow"
+                >
+                  <Stack gap={0}>
+                    {catalog.map((s) => (
                       <div
-                        key={item.file}
-                        style={{
-                          border: '1px solid var(--mantine-color-dark-4)',
-                          borderRadius: 6,
-                          padding: 12,
-                          overflowWrap: 'anywhere',
-                        }}
+                        className={styles.starterRow}
+                        data-selected={s.id === selectedStarter || undefined}
+                        key={s.id}
                       >
-                        {item.valid ? (
-                          <>
-                            <Checkbox
-                              disabled={busy}
-                              label={item.name}
-                              checked={selected.includes(item.file)}
-                              onChange={(event) => {
-                                const checked = event.currentTarget.checked;
-                                setSelected((current) =>
-                                  checked
-                                    ? [...current, item.file]
-                                    : current.filter(
-                                        (file) => file !== item.file,
-                                      ),
-                                );
-                              }}
-                            />
-                            {item.description && (
-                              <Text size="sm" mt={8}>
-                                {item.description}
-                              </Text>
-                            )}
-                            <Text size="xs" c="dimmed" mt={6}>
-                              {item.file}
-                            </Text>
-                            <Text size="xs" mt={6}>
-                              {item.workflows.length} workflow{' '}
-                              {item.workflows.length === 1
-                                ? 'dependency'
-                                : 'dependencies'}{' '}
-                              · {item.prompts.length} saved{' '}
-                              {item.prompts.length === 1 ? 'prompt' : 'prompts'}
-                            </Text>
-                            {item.workflows.map((w) => (
-                              <Text key={w.id} size="xs">
-                                {w.name}
-                                {w.owned ? ' (owned child)' : ''} · {w.id}
-                              </Text>
-                            ))}
-                            {item.prompts.map((p) => (
-                              <Text key={p.id} size="xs">
-                                Saved prompt: {p.name} · {p.id}
-                              </Text>
-                            ))}
-                          </>
-                        ) : (
-                          <>
-                            <Text size="sm">{item.file}</Text>
-                            <details>
-                              <summary>Cannot import this file</summary>
-                              <Text
-                                size="xs"
-                                c="dimmed"
-                                style={{ whiteSpace: 'pre-wrap' }}
-                              >
-                                {item.error}
-                              </Text>
-                            </details>
-                          </>
+                        <Radio
+                          disabled={busy}
+                          value={s.id}
+                          label={s.name}
+                          description={s.description}
+                        />
+                        {s.existing && (
+                          <span className={styles.existing}>
+                            In your library
+                          </span>
                         )}
                       </div>
                     ))}
                   </Stack>
-                  {preview.items.some((item) => item.valid) && (
-                    <Text size="sm">
-                      {selected.length} selected. Bundles include their
-                      dependencies. A conflict rejects the whole selection.
-                    </Text>
+                </Radio.Group>
+              )}
+              {starter && (
+                <div className={styles.starterContext}>
+                  <p>{starter.requirements}</p>
+                  {starter.existing && (
+                    <>
+                      <p className="hint">
+                        Your copy: <strong>{starter.existing.name}</strong>
+                        {starter.existing.archived
+                          ? ' · Archived'
+                          : starter.existing.latestVersion
+                            ? ` · v${starter.existing.latestVersion}`
+                            : ' · Draft'}
+                      </p>
+                      <Checkbox
+                        disabled={busy}
+                        label="Add another copy"
+                        checked={copy}
+                        onChange={(e) => setCopy(e.currentTarget.checked)}
+                      />
+                    </>
                   )}
+                </div>
+              )}
+              {!!errors.starters && (
+                <Button variant="ghost" onClick={() => void loadStarters()}>
+                  Reload starters
+                </Button>
+              )}
+            </>
+          )}
+          {source === 'github' && (
+            <>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (url.trim() && !busy && !loading.github) void discover();
+                }}
+              >
+                <TextInput
+                  label="Public GitHub folder URL"
+                  placeholder="https://github.com/owner/repo/tree/branch/folder"
+                  value={url}
+                  disabled={busy}
+                  onChange={(e) => {
+                    githubGeneration.current++;
+                    setUrl(e.currentTarget.value);
+                    setGithub(undefined);
+                    setSelected([]);
+                    load('github', false);
+                    error('github');
+                  }}
+                />
+              </form>
+              {loading.github && (
+                <p role="status" className="hint">
+                  Reading workflows from GitHub…
+                </p>
+              )}
+              {github && (
+                <>
+                  <div className={styles.resultHeading}>
+                    <h3>Choose workflows</h3>
+                    <Button
+                      variant="ghost"
+                      disabled={busy || loading.github}
+                      onClick={() => void discover()}
+                    >
+                      Reload folder
+                    </Button>
+                  </div>
+                  {!github.items.some((i) => i.valid) && (
+                    <p role="status">
+                      No importable workflows were found in this folder.
+                    </p>
+                  )}
+                  {github.items.map((item) => (
+                    <article className={styles.resultRow} key={item.file}>
+                      {item.valid ? (
+                        <>
+                          <Checkbox
+                            disabled={busy}
+                            label={item.name}
+                            checked={selected.includes(item.file)}
+                            onChange={(e) => {
+                              const checked = e.currentTarget.checked;
+                              setSelected((ids) =>
+                                checked
+                                  ? [...ids, item.file]
+                                  : ids.filter((id) => id !== item.file),
+                              );
+                            }}
+                          />
+                          <div className={styles.resultBody}>
+                            {item.description && <p>{item.description}</p>}
+                            <Details
+                              item={item}
+                              filename={item.file}
+                              commit={github.source.commit}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <details>
+                          <summary>{item.file} · Cannot import</summary>
+                          <p className={styles.error}>{item.error}</p>
+                        </details>
+                      )}
+                    </article>
+                  ))}
                 </>
               )}
             </>
           )}
-          {error && (
-            <Text role="alert" c="red" size="sm">
-              {error}
-            </Text>
+          {(source === 'file' || source === 'paste') && (
+            <>
+              {source === 'file' && (
+                <input
+                  ref={file}
+                  type="file"
+                  accept="application/json,.json"
+                  hidden
+                  onChange={(e) => {
+                    void readFile(e.currentTarget.files?.[0]);
+                    e.currentTarget.value = '';
+                  }}
+                />
+              )}
+              {source === 'file' && !local && (
+                <div
+                  className={styles.dropZone}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (!busy) void readFile(e.dataTransfer.files[0]);
+                  }}
+                >
+                  <FileJson size={26} />
+                  <p>Drop a workflow JSON file here</p>
+                  <Button disabled={busy} onClick={() => file.current?.click()}>
+                    Browse files
+                  </Button>
+                </div>
+              )}
+              {source === 'paste' && !local && (
+                <Textarea
+                  label="Workflow JSON"
+                  description="A workflow definition or a portable bundle with its dependencies."
+                  value={json}
+                  disabled={busy}
+                  rows={13}
+                  spellCheck={false}
+                  className={styles.json}
+                  onChange={(e) => {
+                    documentGeneration.current.paste++;
+                    setJson(e.currentTarget.value);
+                    load('paste', false);
+                    error('paste');
+                  }}
+                />
+              )}
+              {local && (
+                <>
+                  <div className={styles.resultHeading}>
+                    <h3>Review import</h3>
+                    <Button
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() =>
+                        source === 'file'
+                          ? file.current?.click()
+                          : setDocuments((d) => ({ ...d, paste: undefined }))
+                      }
+                    >
+                      {source === 'file' ? 'Change file' : 'Edit JSON'}
+                    </Button>
+                  </div>
+                  <article className={styles.documentPreview}>
+                    <h3>{local.preview.name}</h3>
+                    {local.preview.description && (
+                      <p>{local.preview.description}</p>
+                    )}
+                    <p className="hint">
+                      {local.preview.published
+                        ? 'Includes published versions.'
+                        : 'Added as a draft. Review and publish before running.'}
+                    </p>
+                    <Details item={local.preview} filename={local.filename} />
+                  </article>
+                </>
+              )}
+              {loading[source] && (
+                <p role="status" className="hint">
+                  Reading workflow…
+                </p>
+              )}
+            </>
           )}
-        </Stack>
+          {errors[source] && (
+            <p role="alert" className={styles.error}>
+              {errors[source]}
+            </p>
+          )}
+        </section>
       </div>
       <footer className={styles.footer}>
-        <Button
-          disabled={busy}
-          onClick={() => {
-            generation.current++;
-            onClose();
-          }}
-        >
-          Cancel
-        </Button>
-        {source === 'paste' ? (
+        <p>
+          {source === 'starters' && starter && (!starter.existing || copy)
+            ? 'Adds a published copy. Nothing runs automatically.'
+            : source === 'github' && selected.length
+              ? `${selected.length} selected. Included dependencies come with them.`
+              : ''}
+        </p>
+        <div className={styles.actions}>
+          <Button disabled={busy} onClick={onClose}>
+            Cancel
+          </Button>
           <Button
             variant="primary"
-            disabled={busy || !json.trim()}
-            onClick={() => void importPasted()}
+            disabled={!!disabled}
+            onClick={() => void primaryAction()}
           >
-            {busy ? 'Importing…' : 'Import JSON'}
+            {busy ? 'Importing…' : loading[source] ? 'Loading…' : primary}
           </Button>
-        ) : source === 'local' ? (
-          <Button variant="primary" onClick={onLocalFile}>
-            Choose JSON file
-          </Button>
-        ) : (
-          <Button
-            variant="primary"
-            disabled={busy || loading || !preview || !selected.length}
-            onClick={() => void importSelected()}
-          >
-            {busy ? 'Importing…' : 'Import selected'}
-          </Button>
-        )}
+        </div>
       </footer>
     </Modal>
   );

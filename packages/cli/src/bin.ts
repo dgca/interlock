@@ -33,8 +33,8 @@ Default script working directory: current directory
 mcp       Stdio MCP bridge to the running engine. Set INTERLOCK_URL to override
           http://127.0.0.1:4310. Stdout is reserved for the MCP protocol.
 
-Workflow commands: workflows, workflow, import, update, edit, export, publish, archive, restore, delete, start
-Run commands: runs, run, work, claim, submit, fail, renew, work-hold, cancel, retry
+Workflow commands: workflows, workflow, starters, import-starter, import, update, edit, export, publish, archive, restore, delete, start
+Run commands: runs, run, work, claim, submit, fail, renew, assignment-size, work-hold, work-resources, cancel, retry
 Usage and budget commands: usage, report-usage, budget, set-budget
 Run 'interlock commands' for argument syntax.
 
@@ -56,6 +56,8 @@ Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL`);
       'commands',
       'workflows',
       'workflow',
+      'starters',
+      'import-starter',
       'update',
       'edit',
       'archive',
@@ -72,6 +74,9 @@ Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL`);
       'submit',
       'fail',
       'renew',
+      'assignment-size',
+      'work-hold',
+      'work-resources',
       'cancel',
       'retry',
       'usage',

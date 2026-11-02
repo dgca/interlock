@@ -1,3 +1,5 @@
+import { listStarters, importStarter } from './starters.js';
+import { parseImportDocument } from '../../core/src/importDocument.js';
 import { workResourceRequestSchema } from '@interlock/core';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -181,6 +183,56 @@ export const appRouter = t.router({
       .mutation(({ ctx, input }) => ctx.engine.prompts.delete(input.id)),
   }),
   workflows: t.router({
+    starters: p.query(({ ctx }) => listStarters(ctx.engine)),
+    importStarter: p
+      .input(
+        z
+          .object({
+            starterId: z.string().min(1).max(64),
+            requestId: z
+              .string()
+              .min(1)
+              .max(120)
+              .refine((v) => /\S/.test(v), 'Use a nonblank request key'),
+            copy: z.boolean().default(false),
+          })
+          .strict(),
+      )
+      .mutation(({ ctx, input }) => importStarter(ctx.engine, input)),
+    previewImport: p
+      .input(z.object({ document: jsonSchema }))
+      .query(({ input }) => {
+        const doc = parseImportDocument(input.document);
+        if (doc.kind === 'legacy')
+          return {
+            name: doc.workflow.name,
+            description: doc.workflow.description,
+            workflows: [] as { id: string; name: string; owned: boolean }[],
+            prompts: [] as { id: string; name: string }[],
+            published: false,
+          };
+        const root = doc.bundle.workflows.find(
+          (w) => w.id === doc.bundle.rootId,
+        );
+        if (!root)
+          throw new InterlockError('Bundle is missing its root workflow');
+        return {
+          name: root.name,
+          description: root.description,
+          workflows: doc.bundle.workflows
+            .filter((w) => w.id !== root.id)
+            .map((w) => ({
+              id: w.id,
+              name: w.name,
+              owned: !!w.ownerWorkflowId,
+            })),
+          prompts: (doc.bundle.prompts ?? []).map((p) => ({
+            id: p.id,
+            name: p.name,
+          })),
+          published: root.versions.length > 0,
+        };
+      }),
     discoverGithub: p
       .input(z.object({ url: z.string().max(2000) }))
       .query(({ ctx, input, signal }) =>

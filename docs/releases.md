@@ -64,3 +64,9 @@ Before releasing a persistence change, follow [Add a database migration](upgradi
 Inspect the failed **Release** run and check the version in npm first. After fixing the cause, run **Actions → Release → Run workflow** on `main`. The workflow also runs when a fix merges to `main`.
 
 Keep the existing version when retrying a failed publish. Changesets skips versions already in npm. A published version cannot be reused. If npm publication succeeded but GitHub release creation failed, check the tag and GitHub release separately, since a retry may skip the already-published package.
+
+## Ship a bundled starter
+
+Keep the curated set small and self-contained. Add its template and a permanent identity in `packages/server/src/starters.ts`. Catalog additions make a choice available; they never install or execute it. Keep specialized examples in optional workflow files. Preserve catalog identities when a template changes so existing copies retain their provenance.
+
+Test catalog discovery, explicit imports, existing/customized copies, another-copy intent, keyed retries, failure rollback and the packed installation. Update the picker copy, [starter guide](starter-workflows.md) and affected examples. Shipped template changes never overwrite user copies.

@@ -80,3 +80,7 @@ Workflow test suites and comparisons use new document collections and optional r
 Optional Agent continuity groups use additive document collections for bindings and claim/handoff history, plus optional assignment metadata. Existing workflows and active ungrouped claims need no conversion. Restart Interlock and refresh MCP discovery to use the new group operations. Workflow export/import carries declarations without run session identities.
 
 Optional Agent model tiers and claim selections add compatible fields without a database rewrite. Existing attempts keep unknown attribution. Restart Interlock and refresh MCP discovery to use `context.tier` and claim `modelSelection`; portable exports include tiers but exclude attempt declarations and usage.
+
+## Bundled starter choices
+
+Upgrades no longer add workflows automatically. Existing workflows, versions and runs remain intact, including earlier seeded SDLC copies. Find opt-in bundled procedures in **Workflows → Import → Starters**, or use `interlock starters`. Deleting a copy leaves it absent until another explicit import. Local copy tracking and import receipts use additive collections without a schema conversion; portable workflow bundles exclude them. See [starter workflows](starter-workflows.md).

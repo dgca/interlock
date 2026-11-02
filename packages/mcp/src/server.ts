@@ -327,6 +327,12 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     'list_workflows',
     'Discover workflows as compact summaries by default: id, name, description, ownerWorkflowId, archived, latestVersion, draftRevision, createdAt, updatedAt, and draftMatchesLatest. Summaries omit draft nodes, prompts, and contracts. Use get_workflow for one full draft, or includeDraft:true for the legacy full list. draftRevision counts draft saves; latestVersion is the highest published number, not the count of retained definitions. draftMatchesLatest is structural equality with the latest published definition, or null when unpublished. Omit ownerWorkflowId for all workflows, use null for the library, or a parent ID for its children.',
     {
+      source: z
+        .enum(['library', 'starters'])
+        .default('library')
+        .describe(
+          'Starters returns bundled choices and existing-copy references without definitions; library filters do not apply.',
+        ),
       includeDraft: z
         .boolean()
         .default(false)
@@ -341,7 +347,8 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
           'False hides archived workflows and children of archived owners. Omission preserves all workflows.',
         ),
     },
-    async ({ includeDraft, ...input }) => {
+    async ({ includeDraft, source, ...input }) => {
+      if (source === 'starters') return client.workflows.starters();
       const workflows = await client.workflows.list(input);
       return includeDraft
         ? workflows
@@ -380,11 +387,21 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'import_workflows',
-    'Transactionally upsert portable bundle formats 1, 2, and 3. New workflows retain bundle IDs; retained version numbers can have gaps. Identical imports are no-ops. Ordinary imports skip deliberately deleted versions and return skippedVersions; a caller whose retained definition pins a skipped dependency rejects the bundle. restoreDeletedVersions:true explicitly restores only original definitions with original numbers after ownership and dependency checks, returning restoredVersions. Different content at a deleted number is always rejected. Format 3 carries cleanup identity hashes without deleted definitions and cannot delete versions retained locally. To replace existing drafts, supply draftRevisions keyed by target workflow ID from get_workflow, or force:true. Force cannot overwrite published versions, shared prompt content, change ownership, or authorize restoration. Use preview_workflow_ownership and set_workflow_owner to move existing workflows on the destination. Prompt-bearing bundles must include referenced prompts. Identical prompt content reuses the local revision; divergent content rejects the entire bundle even with force. Restoring a deleted prompt ID allocates a revision above retained local history; a new ID retains its bundle revision. Conflicts roll back the entire bundle. Existing runs and archive flags remain unchanged.',
+    'For an explicit bundled starter, pass starterId from list_workflows source:starters and a stable requestId; copy:true requests another copy. Default reuse returns an existing copy. New copies are published without running. Identical keyed retries recover their copy; conflicting keys or deleted history reject. Bundle replacement flags do not apply to starters. Otherwise transactionally upsert portable bundle formats 1, 2, and 3. New workflows retain bundle IDs; retained version numbers can have gaps. Identical imports are no-ops. Ordinary imports skip deliberately deleted versions and return skippedVersions; a caller whose retained definition pins a skipped dependency rejects the bundle. restoreDeletedVersions:true explicitly restores only original definitions with original numbers after ownership and dependency checks, returning restoredVersions. Different content at a deleted number is always rejected. Format 3 carries cleanup identity hashes without deleted definitions and cannot delete versions retained locally. To replace existing drafts, supply draftRevisions keyed by target workflow ID from get_workflow, or force:true. Force cannot overwrite published versions, shared prompt content, change ownership, or authorize restoration. Use preview_workflow_ownership and set_workflow_owner to move existing workflows on the destination. Prompt-bearing bundles must include referenced prompts. Identical prompt content reuses the local revision; divergent content rejects the entire bundle even with force. Restoring a deleted prompt ID allocates a revision above retained local history; a new ID retains its bundle revision. Conflicts roll back the entire bundle. Existing runs and archive flags remain unchanged.',
     {
-      bundle: workflowBundleSchema.describe(
-        `Portable bundle containing workflow definitions. ${definitionGuide}`,
-      ),
+      starterId: z.string().min(1).max(64).optional(),
+      requestId: z
+        .string()
+        .min(1)
+        .max(120)
+        .refine((v) => /\S/.test(v), 'Use a nonblank request key')
+        .optional(),
+      copy: z.boolean().optional(),
+      bundle: workflowBundleSchema
+        .optional()
+        .describe(
+          `Portable bundle containing workflow definitions. ${definitionGuide}`,
+        ),
       force: z.boolean().optional(),
       draftRevisions: z.record(z.number().int().positive()).optional(),
       restoreDeletedVersions: z
@@ -394,7 +411,39 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
           'Explicitly restore original deleted definitions from this backup. Defaults to false. Review restored callers and dependency/ownership constraints first; force does not enable restoration.',
         ),
     },
-    (input) => client.workflows.import(input),
+    (input) => {
+      if (input.starterId) {
+        if (
+          !input.requestId ||
+          input.bundle ||
+          input.force !== undefined ||
+          input.draftRevisions ||
+          input.restoreDeletedVersions !== undefined
+        )
+          throw new Error(
+            'Starter imports require requestId and cannot use bundle replacement options',
+          );
+        return client.workflows.importStarter({
+          starterId: input.starterId,
+          requestId: input.requestId,
+          copy: input.copy,
+        });
+      }
+      if (
+        !input.bundle ||
+        input.requestId !== undefined ||
+        input.copy !== undefined
+      )
+        throw new Error(
+          'Provide a portable bundle, or starterId with requestId',
+        );
+      return client.workflows.import({
+        bundle: input.bundle,
+        force: input.force,
+        draftRevisions: input.draftRevisions,
+        restoreDeletedVersions: input.restoreDeletedVersions,
+      });
+    },
   );
   tool(
     'create_workflow',

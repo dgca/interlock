@@ -1,6 +1,6 @@
 # Use the SDLC workflow
 
-Fresh Interlock libraries include **SDLC workflow**, published as version 1. It takes a software change request through intent, specification, implementation planning, construction, and independent review. It records decisions and verification evidence in the target repository.
+Add **SDLC workflow** through **Workflows → Import → Starters → Add to library**. This explicitly creates a published version 1 without starting a run. It takes a software change request through intent, specification, implementation planning, construction, and independent review. It records decisions and verification evidence in the target repository.
 
 ## Connect a coding agent
 
@@ -49,13 +49,13 @@ Final review checks the complete task diff, observable acceptance evidence, and 
 
 ## Existing libraries
 
-Startup seeds the SDLC starter once in a fresh library. Upgrading preserves existing workflows and published versions, including older examples or a customized SDLC. Deleting all workflows does not seed them again. Starter updates apply to new libraries; they do not rewrite your copies or active runs.
+Startup does not install starters. Upgrades preserve existing workflows, including older seeded SDLC copies and their versions, edits and runs. The starter picker recognizes known copies and offers Open workflow; adding another copy is explicit. Deleting a copy leaves it absent until you deliberately add one again. Shipped template updates never overwrite your copy. See [starter workflows](starter-workflows.md).
 
 ### Import the starter into an existing library
 
 1. Open **Workflows → Import → GitHub folder**.
 2. Enter `https://github.com/dgca/interlock/tree/main/workflows` and select **Find workflows**.
-3. Select **SDLC workflow** and choose **Import selected**.
+3. Select **SDLC workflow** and choose **Import workflow**.
 4. Open the imported draft, review its settings, and select **Review & publish**.
 
 Alternatively, download [workflows/sdlc.json](../workflows/sdlc.json) and upload it through **Import → Local file**. From a repository checkout with Interlock running, the CLI accepts the same file:
@@ -65,4 +65,4 @@ interlock import @workflows/sdlc.json
 interlock publish WORKFLOW_ID
 ```
 
-Replace `WORKFLOW_ID` with the ID returned by import. The file contains the starter's name, description, and definition, shared with fresh-install seeding. Each import creates a separate draft with a new ID. It does not replace a customized SDLC, retain someone else's run history, or start a run. Publish the copy to make it runnable.
+Replace `WORKFLOW_ID` with the ID returned by import. The file contains the starter's name, description, and definition, shared with the bundled starter picker. Each import creates a separate draft with a new ID. It does not replace a customized SDLC, retain someone else's run history, or start a run. Publish the copy to make it runnable.
