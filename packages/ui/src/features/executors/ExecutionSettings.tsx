@@ -1,17 +1,19 @@
-import { useEffect, useState } from 'react';
-import { NumberInput, Skeleton } from '@mantine/core';
+import { useEffect, useId, useState } from 'react';
+import { NumberInput, Skeleton, VisuallyHidden } from '@mantine/core';
 import { executorSettingsSchema } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import styles from './Harnesses.module.css';
 
 export function ExecutionSettings() {
+  const inputId = useId();
   const [settings, setSettings] =
     useState<Awaited<ReturnType<typeof api.executors.settings.query>>>();
   const [value, setValue] = useState<string | number>(3);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
   const load = async () => {
     setLoading(true);
     setError('');
@@ -41,9 +43,11 @@ export function ExecutionSettings() {
     >
       {settings ? (
         <form
+          className={styles.sharedForm}
           onSubmit={async (e) => {
             e.preventDefault();
-            if (!valid || busy) return;
+            if (!valid || busy || loading || value === settings.concurrency)
+              return;
             setBusy(true);
             setError('');
             try {
@@ -55,6 +59,7 @@ export function ExecutionSettings() {
                 }),
               );
               setSettings(next);
+              setSaved(true);
             } catch (e) {
               setError(errorMessage(e));
             } finally {
@@ -62,22 +67,38 @@ export function ExecutionSettings() {
             }
           }}
         >
-          <NumberInput
-            label="Concurrent assignments"
-            description="Maximum Agent assignments running at once across all harnesses and workflows. Additional assignments wait."
-            min={1}
-            max={8}
-            allowDecimal={false}
-            allowNegative={false}
-            value={value}
-            onChange={setValue}
-            disabled={busy || loading}
-            styles={{ wrapper: { maxWidth: 160 } }}
-          />
-          <div className={styles.sharedActions}>
+          <div className={styles.sharedCopy}>
+            <label
+              htmlFor={inputId}
+              id={`${inputId}-label`}
+              className={styles.sharedLabel}
+            >
+              Concurrent assignments
+            </label>
+            <p>
+              Maximum Agent assignments Interlock runs at once across all
+              harnesses and workflows. Additional assignments wait.
+            </p>
             <p className={styles.sharedNote}>
               Changing the limit does not stop running assignments.
             </p>
+          </div>
+          <div className={styles.sharedControls}>
+            <NumberInput
+              id={inputId}
+              aria-labelledby={`${inputId}-label`}
+              min={1}
+              max={8}
+              allowDecimal={false}
+              allowNegative={false}
+              value={value}
+              onChange={(value) => {
+                setValue(value);
+                setSaved(false);
+              }}
+              disabled={busy || loading}
+              className={styles.limitInput}
+            />
             <Button
               type="submit"
               variant="primary"
@@ -85,8 +106,17 @@ export function ExecutionSettings() {
                 !valid || busy || loading || value === settings.concurrency
               }
             >
-              {busy ? 'Saving…' : loading ? 'Loading…' : 'Save limit'}
+              {busy
+                ? 'Saving…'
+                : loading
+                  ? 'Loading…'
+                  : saved
+                    ? 'Saved'
+                    : 'Save limit'}
             </Button>
+            <VisuallyHidden role="status">
+              {saved ? 'Concurrent assignment limit saved.' : ''}
+            </VisuallyHidden>
           </div>
         </form>
       ) : !error ? (

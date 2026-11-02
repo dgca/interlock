@@ -21,6 +21,7 @@ export function ModelPicker({
   profileId,
   paths,
   defaultLabel,
+  disabled = false,
 }: {
   label: string;
   value?: string;
@@ -28,6 +29,7 @@ export function ModelPicker({
   profileId?: string;
   paths?: { command?: string; cwd?: string };
   defaultLabel: string;
+  disabled?: boolean;
 }) {
   const [search, setSearch] = useState('');
   const id = useId();
@@ -95,7 +97,7 @@ export function ModelPicker({
             variant="subtle"
             aria-label="Refresh models"
             title="Refresh models"
-            disabled={loading}
+            disabled={disabled || loading}
             onClick={() => void load(true)}
           >
             {loading ? <Loader size={12} /> : <RefreshCw size={13} />}
@@ -105,6 +107,7 @@ export function ModelPicker({
       <Combobox
         store={combobox}
         onOptionSubmit={(option) => {
+          if (disabled) return;
           onChange(option === '__default' ? undefined : option.slice(6));
           combobox.closeDropdown();
         }}
@@ -112,6 +115,7 @@ export function ModelPicker({
         <Combobox.Target>
           <InputBase
             component="button"
+            disabled={disabled}
             type="button"
             id={id}
             aria-labelledby={`${id}-label`}

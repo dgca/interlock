@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   Badge,
   NativeSelect,
@@ -7,33 +7,47 @@ import {
   TagsInput,
   TextInput,
 } from '@mantine/core';
-import { ChevronDown, RefreshCw, Terminal, Plus } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  Terminal,
+  Plus,
+} from 'lucide-react';
 import { executorProfileSchema, type ExecutorProfile } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 import styles from './Harnesses.module.css';
-import { permissionOptions, permissionDescriptions } from './permissions';
+import {
+  permissionOptions,
+  permissionDescriptions,
+  permissionLabels,
+} from './permissions';
 import { ModelPicker } from './ModelPicker';
 import { ExecutionSettings } from './ExecutionSettings';
 type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
 
 export function Harnesses() {
+  const request = useRef(0);
   const [profiles, setProfiles] = useState<Profile[]>(),
     [error, setError] = useState(''),
     [checking, setChecking] = useState(false),
     [adding, setAdding] = useState(false);
   const refresh = async (check = false) => {
+    const current = ++request.current;
     setError('');
-    setChecking(check);
+    setChecking(true);
     try {
       if (check)
         await api.executors.manage.mutate({ action: 'list', refresh: true });
-      setProfiles(await api.executors.profiles.query());
+      const next = await api.executors.profiles.query();
+      if (request.current === current) setProfiles(next);
+      return next;
     } catch (e) {
-      setError(errorMessage(e));
+      if (request.current === current) setError(errorMessage(e));
     } finally {
-      setChecking(false);
+      if (request.current === current) setChecking(false);
     }
   };
   useEffect(() => {
@@ -58,15 +72,22 @@ export function Harnesses() {
       </header>
       <ExecutionSettings />
       {error && (
-        <p role="alert" className={styles.error}>
-          {error}
-        </p>
+        <div className={styles.errorRow}>
+          <p role="alert" className={styles.error}>
+            {error}
+          </p>
+          <Button variant="ghost" onClick={() => void refresh()}>
+            Retry loading harnesses
+          </Button>
+        </div>
       )}
       {!profiles ? (
-        <div aria-label="Loading harnesses">
-          <Skeleton height={105} mb="md" />
-          <Skeleton height={105} />
-        </div>
+        !error && (
+          <div aria-label="Loading harnesses">
+            <Skeleton height={105} mb="md" />
+            <Skeleton height={105} />
+          </div>
+        )
       ) : (
         <div className={styles.list}>
           {profiles.map((p) => (
@@ -79,7 +100,11 @@ export function Harnesses() {
           Installation checks make no model calls. Authentication is checked
           when the harness runs.
         </p>
-        <Button variant="ghost" onClick={() => setAdding(!adding)}>
+        <Button
+          variant="ghost"
+          disabled={adding}
+          onClick={() => setAdding(true)}
+        >
           <Plus size={14} />
           Add configuration
         </Button>
@@ -105,13 +130,46 @@ function ProfileRow({
   refresh,
 }: {
   profile: Profile;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<Profile[] | undefined>;
 }) {
+  const editorId = useId();
+  const row = useRef<HTMLElement>(null);
+  const wasOpen = useRef(false);
   const [open, setOpen] = useState(false),
     [draft, setDraft] = useState<ExecutorProfile>(() => configuration(profile)),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
-  useEffect(() => setDraft(configuration(profile)), [profile.revision]);
+  useEffect(() => {
+    if (!open) setDraft(configuration(profile));
+  }, [profile.revision, open]);
+  useEffect(() => {
+    if (wasOpen.current && !open)
+      row.current
+        ?.querySelector<HTMLButtonElement>('button[aria-controls]')
+        ?.focus();
+    wasOpen.current = open;
+  }, [open]);
+  const changed =
+    JSON.stringify({ ...draft, revision: 0 }) !==
+    JSON.stringify({ ...configuration(profile), revision: 0 });
+  const cancel = () => {
+    setDraft(configuration(profile));
+    setOpen(false);
+    setError('');
+  };
+  const reload = async () => {
+    setBusy(true);
+    try {
+      const latest = await refresh();
+      const current = latest?.find((p) => p.id === profile.id);
+      if (current) {
+        setDraft(configuration(current));
+        setError('');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
   const save = async (value: ExecutorProfile) => {
     setBusy(true);
     setError('');
@@ -132,15 +190,25 @@ function ProfileRow({
   };
   const detected = profile.detection.status === 'detected';
   return (
-    <section className={styles.row} aria-label={profile.name}>
+    <section ref={row} className={styles.row} aria-label={profile.name}>
       <div className={styles.rowHeading}>
         <Terminal size={21} className={styles.icon} />
         <div className={styles.identity}>
           <h2>{profile.name}</h2>
-          <p>
-            {profile.harness === 'claude-code' ? 'Claude Code' : 'Codex'}
-            {profile.detection.version ? ` · ${profile.detection.version}` : ''}
-          </p>
+          {!open ? (
+            <p
+              title={`${profile.model ?? 'CLI default'} · ${permissionLabels[profile.permissions]} permissions`}
+            >
+              {profile.name !==
+                (profile.harness === 'claude-code' ? 'Claude Code' : 'Codex') &&
+                `${profile.harness === 'claude-code' ? 'Claude Code' : 'Codex'} · `}
+              {profile.model ?? 'CLI default'} ·{' '}
+              {permissionLabels[profile.permissions]} permissions
+            </p>
+          ) : profile.name !==
+            (profile.harness === 'claude-code' ? 'Claude Code' : 'Codex') ? (
+            <p>{profile.harness === 'claude-code' ? 'Claude Code' : 'Codex'}</p>
+          ) : null}
         </div>
         <Badge variant="light" color={detected ? 'blue' : 'gray'} tt="none">
           {detected
@@ -164,10 +232,19 @@ function ProfileRow({
         <Button
           variant="ghost"
           aria-expanded={open}
-          onClick={() => setOpen(!open)}
+          aria-controls={editorId}
+          disabled={busy}
+          onClick={() => {
+            if (open) cancel();
+            else {
+              setDraft(configuration(profile));
+              setError('');
+              setOpen(true);
+            }
+          }}
         >
-          <ChevronDown size={14} />
-          {open ? 'Close settings' : 'Configure'}
+          {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          {open ? 'Cancel editing' : 'Configure'}
         </Button>
       </div>
       {!detected && (
@@ -186,13 +263,14 @@ function ProfileRow({
           </a>
         </p>
       )}
-      {error && (
+      {error && !open && (
         <p role="alert" className={styles.error}>
           {error}
         </p>
       )}
       {open && (
         <form
+          id={editorId}
           className={styles.configuration}
           onSubmit={(e) => {
             e.preventDefault();
@@ -203,6 +281,7 @@ function ProfileRow({
             <TextInput
               label="Configuration name"
               required
+              disabled={busy}
               maxLength={120}
               value={draft.name}
               onChange={(e) =>
@@ -211,40 +290,65 @@ function ProfileRow({
             />
             <TextInput
               label="Working directory"
-              placeholder="Use the server’s working directory"
+              description="The folder this agent starts in. Leave blank to use Interlock’s working directory."
+              inputWrapperOrder={['label', 'input', 'description', 'error']}
+              placeholder="Use Interlock’s working directory"
+              disabled={busy}
+              maxLength={4096}
               value={draft.cwd ?? ''}
               onChange={(e) =>
                 setDraft({ ...draft, cwd: e.currentTarget.value || undefined })
               }
             />
-            <ModelPicker
-              label="Default model"
-              defaultLabel="Use CLI default"
-              profileId={profile.id}
-              paths={{ command: draft.command, cwd: draft.cwd }}
-              value={draft.model}
-              onChange={(model) => setDraft({ ...draft, model })}
-            />
-            <NativeSelect
-              label="Default permissions"
-              inputWrapperOrder={['label', 'input', 'description', 'error']}
-              description={permissionDescriptions[draft.permissions]}
-              value={draft.permissions}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  permissions: e.currentTarget
-                    .value as ExecutorProfile['permissions'],
-                })
-              }
-              data={permissionOptions}
-            />
           </div>
+          <fieldset className={styles.fieldGroup} disabled={busy}>
+            <legend>Execution defaults</legend>
+            <div className={styles.fields}>
+              <ModelPicker
+                disabled={busy}
+                label="Default model"
+                defaultLabel="Use CLI default"
+                profileId={profile.id}
+                paths={{ command: draft.command, cwd: draft.cwd }}
+                value={draft.model}
+                onChange={(model) => setDraft({ ...draft, model })}
+              />
+              <NativeSelect
+                label="Default permissions"
+                disabled={busy}
+                inputWrapperOrder={['label', 'input', 'description', 'error']}
+                description={permissionDescriptions[draft.permissions]}
+                value={draft.permissions}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    permissions: e.currentTarget
+                      .value as ExecutorProfile['permissions'],
+                  })
+                }
+                data={permissionOptions}
+              />
+            </div>
+            <p className={styles.note}>
+              Sign-in and project settings come from the harness. Approvals
+              apply to one request; manage permanent rules in the harness.
+              {draft.permissions === 'read-only' &&
+                ' Read-only restrictions do not sandbox project startup hooks.'}
+            </p>
+          </fieldset>
           <details className={styles.advanced}>
             <summary>Advanced settings</summary>
             <div className={styles.fields}>
               <TextInput
                 label="Executable path"
+                disabled={busy}
+                maxLength={4096}
+                description={
+                  profile.detection.version
+                    ? `Detected version: ${profile.detection.version}`
+                    : 'Leave blank to find the harness on PATH.'
+                }
+                inputWrapperOrder={['label', 'input', 'description', 'error']}
                 placeholder={
                   profile.detection.command ?? 'Auto-detect from PATH'
                 }
@@ -257,41 +361,52 @@ function ProfileRow({
                 }
               />
               <TextInput
-                label="Profile reference"
+                label="Configuration ID"
+                description="Stable reference used by workflows and MCP."
+                inputWrapperOrder={['label', 'input', 'description', 'error']}
                 value={profile.id}
                 readOnly
               />
+            </div>
+            <p className={styles.capabilityNote}>
+              Declare tools and skills already available in this harness so
+              Interlock can match Agent requirements. This does not install
+              them.
+            </p>
+            <div className={styles.fields}>
               <TagsInput
-                label="Configured tools"
-                description="Capability names already available in this harness."
+                label="Available tools"
+                disabled={busy}
                 value={draft.tools}
                 onChange={(tools) => setDraft({ ...draft, tools })}
               />
               <TagsInput
-                label="Configured skills"
-                description="Declares availability; Interlock does not install skills."
+                label="Available skills"
+                disabled={busy}
                 value={draft.skills}
                 onChange={(skills) => setDraft({ ...draft, skills })}
               />
             </div>
           </details>
-          <p className={styles.note}>
-            Uses the harness’s supported authentication and project
-            configuration. Permission decisions apply to the current request;
-            Interlock does not save broader approval rules. Read-only
-            restrictions do not sandbox project startup hooks.
-          </p>
+          {error && (
+            <div className={styles.errorRow}>
+              <p role="alert" className={styles.error}>
+                {error}
+              </p>
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => void reload()}
+              >
+                Reload configuration
+              </Button>
+            </div>
+          )}
           <div className={styles.formActions}>
-            <Button
-              disabled={busy}
-              onClick={() => {
-                setDraft(configuration(profile));
-                setOpen(false);
-              }}
-            >
+            <Button disabled={busy} onClick={cancel}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" disabled={busy}>
+            <Button type="submit" variant="primary" disabled={busy || !changed}>
               {busy ? 'Saving…' : 'Save configuration'}
             </Button>
           </div>
@@ -313,6 +428,7 @@ function NewProfile({
     [busy, setBusy] = useState(false);
   return (
     <form
+      aria-label="Add harness configuration"
       className={styles.newProfile}
       onSubmit={async (e) => {
         e.preventDefault();
@@ -336,6 +452,8 @@ function NewProfile({
       <div className={styles.fields}>
         <TextInput
           label="Name"
+          autoFocus
+          disabled={busy}
           value={name}
           required
           maxLength={120}
@@ -343,6 +461,7 @@ function NewProfile({
         />
         <NativeSelect
           label="Harness"
+          disabled={busy}
           value={harness}
           onChange={(e) => setHarness(e.currentTarget.value as typeof harness)}
           data={[

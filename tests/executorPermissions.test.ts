@@ -3,9 +3,13 @@ import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { type ExecutorPermissionMode } from '@interlock/core';
+import {
+  executorProfileSchema,
+  type ExecutorPermissionMode,
+} from '@interlock/core';
 import { ExecutorSelect } from '../packages/ui/src/features/executors/ExecutorSelect';
 import { ExecutionSettings } from '../packages/ui/src/features/executors/ExecutionSettings';
+import { Harnesses } from '../packages/ui/src/features/executors/Harnesses';
 const rpc = vi.hoisted(() => ({
   profiles: vi.fn(),
   models: vi.fn(),
@@ -25,6 +29,14 @@ vi.mock('../packages/ui/src/lib/api', () => ({
 }));
 let root: Root, container: HTMLDivElement;
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -136,6 +148,129 @@ it('loads a workflow model picker on demand and lets it return to the harness de
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
+});
+const harnessProfile = () => ({
+  ...executorProfileSchema.parse({
+    id: 'codex',
+    harness: 'codex',
+    name: 'Codex',
+    model: 'custom-model',
+    cwd: '/project',
+    command: '/installed/codex',
+    tools: ['git'],
+    skills: ['review'],
+    permissions: 'standard',
+  }),
+  detection: {
+    status: 'detected',
+    command: '/installed/codex',
+    version: 'fixture',
+  },
+});
+function setInput(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    'value',
+  )!.set!.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function button(text: string) {
+  return [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+    (b) => b.textContent?.trim() === text,
+  )!;
+}
+it('preserves open configuration edits across refresh and reloads only on explicit recovery', async () => {
+  const original = harnessProfile();
+  rpc.profiles.mockResolvedValue([original]);
+  await act(async () => root.render(h(MantineProvider, {}, h(Harnesses))));
+  await act(async () => button('Configure').click());
+  const input = container.querySelector<HTMLInputElement>(
+    'input[maxlength="120"]',
+  )!;
+  await act(async () => setInput(input, 'Unsaved name'));
+  const updated = { ...original, revision: 1, name: 'Updated elsewhere' };
+  rpc.profiles.mockResolvedValue([updated]);
+  rpc.manage.mockImplementation(async (q) => {
+    if (q.action === 'list') return [updated];
+    throw new Error('Harness configuration changed. Reload before saving.');
+  });
+  await act(async () => button('Check installations').click());
+  expect(input.value).toBe('Unsaved name');
+  await act(async () => button('Save configuration').click());
+  expect(container.textContent).toContain('Harness configuration changed');
+  expect(input.value).toBe('Unsaved name');
+  await act(async () => button('Reload configuration').click());
+  expect(input.value).toBe('Updated elsewhere');
+  expect(button('Save configuration').disabled).toBe(true);
+});
+it('locks a pending save and preserves model, paths, capabilities and permissions', async () => {
+  const original = harnessProfile();
+  rpc.profiles.mockResolvedValue([original]);
+  await act(async () => root.render(h(MantineProvider, {}, h(Harnesses))));
+  await act(async () => button('Configure').click());
+  const input = container.querySelector<HTMLInputElement>(
+    'input[maxlength="120"]',
+  )!;
+  await act(async () => setInput(input, 'Renamed configuration'));
+  let resolve!: (profile: unknown) => void;
+  rpc.manage.mockReturnValue(
+    new Promise((r) => {
+      resolve = r;
+    }),
+  );
+  await act(async () => button('Save configuration').click());
+  expect(input.disabled).toBe(true);
+  expect(button('Cancel editing').disabled).toBe(true);
+  expect(
+    container.querySelector<HTMLButtonElement>(
+      'button[aria-haspopup="listbox"]',
+    )!.disabled,
+  ).toBe(true);
+  expect(rpc.manage).toHaveBeenCalledWith({
+    action: 'save',
+    profile: {
+      id: 'codex',
+      harness: 'codex',
+      name: 'Renamed configuration',
+      enabled: false,
+      expectedRevision: 0,
+      model: 'custom-model',
+      cwd: '/project',
+      command: '/installed/codex',
+      permissions: 'standard',
+      tools: ['git'],
+      skills: ['review'],
+    },
+  });
+  const updated = { ...original, name: 'Renamed configuration', revision: 1 };
+  rpc.profiles.mockResolvedValue([updated]);
+  await act(async () => resolve(updated));
+  expect(button('Configure')).toBeDefined();
+  await act(async () => button('Configure').click());
+  await act(async () =>
+    setInput(
+      container.querySelector<HTMLInputElement>('input[maxlength="120"]')!,
+      'Discard this',
+    ),
+  );
+  await act(async () => button('Cancel editing').click());
+  expect(document.activeElement).toBe(button('Configure'));
+  await act(async () => button('Configure').click());
+  expect(
+    container.querySelector<HTMLInputElement>('input[maxlength="120"]')!.value,
+  ).toBe('Renamed configuration');
+});
+it('offers recovery instead of an endless loading skeleton after a failed harness lookup', async () => {
+  rpc.profiles.mockRejectedValueOnce(new Error('Harness lookup failed'));
+  await act(async () => root.render(h(MantineProvider, {}, h(Harnesses))));
+  expect(container.textContent).toContain('Harness lookup failed');
+  expect(
+    container.querySelector('[aria-label="Loading harnesses"]'),
+  ).toBeNull();
+  rpc.profiles.mockResolvedValue([harnessProfile()]);
+  await act(async () => button('Retry loading harnesses').click());
+  expect(button('Configure')).toBeDefined();
 });
 function Controls() {
   const [permissions, setPermissions] = useState<ExecutorPermissionMode>();
