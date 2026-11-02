@@ -4,11 +4,11 @@ Issue #185. The user chose direct implementation, then changed the delivery pref
 
 ## Delivery and review status
 
-Local implementation replaces automatic starter installation with explicit imports. PR #192 still contains the previous automatic-installation implementation at 12a190d. Do not push or update that PR until the user has reviewed this actual UI. The original checkout and user databases were not changed. Preview and tests use temporary databases.
+The user reviewed the opt-in import flow and source ordering, then authorized pushing the changes to PR #192. The implementation replaces automatic starter installation with explicit imports. The PR title and description must reflect the opt-in flow. The original checkout and user databases were not changed. Preview and tests use temporary databases.
 
 ## Product behavior
 
-New libraries start empty. The empty library offers Browse starter workflows, while the toolbar still supports blank creation. One Import workflows dialog has Starters, GitHub folder, Local file and Paste JSON sources. The source sidebar and footer remain stable while only the content panel scrolls. Mobile uses a horizontally scrolling source navigation. Local-file capability gating remains intact.
+New libraries start empty. The empty library offers Browse starter workflows, while the toolbar still supports blank creation. One Import workflows dialog lists GitHub folder, Local file, Paste JSON and Starters in that order. Starters remains the default selected source. The source sidebar and footer remain stable while only the content panel scrolls. Mobile uses a horizontally scrolling source navigation. Local-file capability gating remains intact.
 
 The small offline catalog contains SDLC and Evaluate workflow comparison. Specialized examples remain optional files. Explicit starter imports create and publish v1 without starting a run. Known copies offer Open workflow; Add another copy is a separate opt-in. Existing drafts, versions, archive flags, ownership and runs are never overwritten or republished. New template versions do not replace copies. Deletion leaves a workflow absent until another explicit import.
 
@@ -36,4 +36,4 @@ README, starter/evaluation/SDLC/embedded UI guides, architecture, upgrade/releas
 
 ## Local review instance
 
-The temporary preview runs the real server startup and built UI at http://127.0.0.1:49266/workflows, starting from an empty temporary library. /tmp/interlock-import-preview-state.json records its process and database directory. /tmp/interlock-import-preview.mts is the restart helper. Stop the process recorded in that state file when review is finished. A prepared replacement PR body is at /tmp/interlock-185-pr.md; do not apply it before UI review.
+The temporary preview runs the real server startup and built UI at http://127.0.0.1:49266/workflows, starting from an empty temporary library. /tmp/interlock-import-preview-state.json records its process and database directory. /tmp/interlock-import-preview.mts is the restart helper. Stop the process recorded in that state file when review is finished. The replacement PR body is at /tmp/interlock-185-pr.md. UI review is complete and the user authorized the PR update.
