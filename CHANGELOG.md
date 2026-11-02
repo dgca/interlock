@@ -1,5 +1,22 @@
 # @type_of/interlock
 
+## 0.2.10
+
+### Patch Changes
+
+- 531abac: Add an optional workflow improvement starter that tests one prompt candidate on tuning and separate acceptance cases, grades captured evidence, and proposes adoption without changing production. Comparison samples can now receive independent tree budgets before Agent work is eligible.
+- 01e4567: Select exact saved-prompt revisions independently for each side of a workflow comparison, including child workflows. Retain captures across queued work and restart, expose configuration differences and executor-attribution gaps, and support bounded prompt revision history reads.
+- fe71668: Add opt-in local Git workspaces for live comparison samples, with prepared Script and Agent context, retained patch/file evidence, and recoverable cleanup. Include a local-only example and explicit external-executor requirements.
+- d7b57c0: Organize node settings into work, input, result and execution sections with persistent navigation and actions. Unify Condition/Switch authoring under Branch while preserving existing definitions.
+
+  Add optional result branches and forwarded output fields to Agent, Script, Fetch and waited Workflow steps. Data bindings support fixed values, missing-field defaults and nested objects. Keep raw results available for bounded inspection and evaluation when output fields reshape data.
+
+  Show the connected engine's address when running on a custom port.
+
+- a4dadf0: Add an importable workflow comparison evaluator with fixed rubrics, fresh artifact review or frozen structural checks, resumable idempotent judgments, artifact digests and separate evaluation usage. Keep incomplete assessments explicit and preserve independent reviews.
+- baf5bb9: Allow waited Workflow calls to route failed children or rejected successful outputs to recovery steps. Preserve child history and include child references in the failure value. Cancellation remains terminal, and handled child failures cannot be retried independently.
+- fb63184: Report timing, reported usage and cost, and quality coverage for both sides of workflow comparisons and paired cases. Preserve original trial timing and attempt membership across retries while incorporating late usage receipts. Keep missing data explicit and provide bounded case and currency detail without selecting a winner.
+
 ## 0.2.9
 
 ### Patch Changes
