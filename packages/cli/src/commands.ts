@@ -311,6 +311,8 @@ export async function runCommand(argv: string[]) {
         ? withNextCall(await client.work.submitSummary.mutate(input))
         : client.work.submit.mutate(input);
     }
+    case 'work-resources':
+      return client.work.resources.mutate(await parse(args[0]));
     case 'fail':
       return client.work.fail.mutate({
         workId: args[0],
@@ -350,6 +352,7 @@ export async function runCommand(argv: string[]) {
           'import <json|@file> [--force | --revisions JSON] [--restore-deleted-versions] (force changes drafts only; explicit restoration requires original definitions and valid dependencies/ownership)',
           'export <id>',
           'publish <id> [--cascade]',
+          'work-resources <json|@file> (inspect reservations or release an exact uncertain attempt after stop confirmation)',
           'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file]',
           'runs [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',

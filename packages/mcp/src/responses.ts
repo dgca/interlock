@@ -1,3 +1,4 @@
+import { resourceOwnerSchema } from '@interlock/core';
 import { z } from 'zod';
 import {
   continuitySchema,
@@ -149,6 +150,8 @@ export const editResponseSchema = z.object({
 });
 export const claimResponseSchema = z
   .object({
+    resources: z.array(z.string()).max(8).optional(),
+    resourceReservations: z.array(resourceOwnerSchema).max(8).optional(),
     trialEnvironment: trialWorkContextSchema.optional(),
     id: z.string(),
     runId: z.string(),

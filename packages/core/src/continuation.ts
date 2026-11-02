@@ -1,3 +1,4 @@
+import { resourceOwnerSchema } from './workResources.js';
 import { externalTaskSchema } from './runStarts.js';
 import {
   continuitySchema,
@@ -91,6 +92,7 @@ export const mutationDetailSchema = z
     'Use summary for compact continuation without definitions or execution payloads. full includes the workflow definition, execution history, and input/output payloads.',
   );
 export const continuationWorkSchema = z.object({
+  resources: z.array(z.string()).max(8).optional(),
   trialEnvironmentId: z.string().optional(),
   id: z.string(),
   runId: z.string(),
@@ -171,12 +173,35 @@ export const mutationSummarySchema = z.object({
     'claim_work',
     'adjust_budget',
     'inspect_hold',
+    'inspect_resources',
     'wait_for_worker',
     'wait_for_change',
     'inspect_failure',
     'inspect_result',
   ]),
   heldWork: heldWorkSchema.optional(),
+  resourceBlocked: z
+    .object({
+      items: z
+        .array(
+          z.object({
+            workId: z.string(),
+            runId: z.string(),
+            owners: z.array(resourceOwnerSchema).max(8),
+          }),
+        )
+        .max(100),
+      total: z.number().int().nonnegative(),
+      truncated: z.boolean(),
+    })
+    .optional(),
+  resourceReservations: z
+    .object({
+      items: z.array(resourceOwnerSchema).max(100),
+      total: z.number().int().nonnegative(),
+      truncated: z.boolean(),
+    })
+    .optional(),
   budgetBlocked: z
     .object({
       items: z
@@ -258,6 +283,7 @@ export function withNextCall<T extends z.infer<typeof mutationSummarySchema>>(
         arguments: { id },
       };
       break;
+    case 'inspect_resources':
     case 'inspect_hold':
     case 'adjust_budget':
     case 'inspect_failure':

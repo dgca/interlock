@@ -40,6 +40,30 @@ export class Store {
       });
     }
   }
+  /** Advance a run cursor for state retained outside run/work documents. */
+  touchRun(id: string) {
+    this.transaction(() => {
+      if (
+        !this.db
+          .prepare(
+            "SELECT id FROM documents WHERE collection = 'runs' AND id = ?",
+          )
+          .get(id)
+      )
+        return;
+      this.db
+        .prepare(
+          'UPDATE continuation_sequence SET revision = revision + 1 WHERE id = 1',
+        )
+        .run();
+      this.db
+        .prepare(
+          'INSERT INTO run_revisions(run_id, revision) SELECT ?, revision FROM continuation_sequence WHERE id = 1 ON CONFLICT(run_id) DO UPDATE SET revision = excluded.revision',
+        )
+        .run(id);
+      this.changed('runs');
+    });
+  }
   continuation(id: string) {
     return continuationState(this.db, id);
   }
@@ -92,6 +116,14 @@ export class Store {
       AND json_extract(value, '$.runId') IN (SELECT value FROM json_each(?)) ORDER BY rowid`,
       )
       .all(collection, JSON.stringify([...runIds]))
+      .map((row) => JSON.parse(row.value as string) as T);
+  }
+  forWork<T>(collection: string, workId: string): T[] {
+    return this.db
+      .prepare(
+        "SELECT value FROM documents WHERE collection = ? AND json_extract(value, '$.workId') = ? ORDER BY rowid",
+      )
+      .all(collection, workId)
       .map((row) => JSON.parse(row.value as string) as T);
   }
   eventTimesForRuns(

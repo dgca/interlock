@@ -168,6 +168,10 @@ Standalone recurring Agent workflows can use an Exit with `continueAsNew:{maxRun
 
 Optional `start_run.requestId` recovers the original run after repeated delivery or a lost response. `externalTask` links a run to a non-secret task identity for existing lookup tools. Old keys cannot recreate deleted history; deliberate new attempts use new keys. See [idempotent run starts](docs/idempotent-run-starts.md) for MCP, CLI and retention rules.
 
+### Coordinate shared resources
+
+Agent nodes can require exclusive named resources so cooperating assignments share a checkout, browser or device without overlapping claims. Expiry and cancellation retain uncertain reservations until the executor confirms it stopped. See [Agent resources](docs/work-resources.md) for scope, settings and recovery.
+
 ### Resume an agent run
 
 Use MCP `get_run_briefing` with the existing run ID for current progress, available and claimed work, blockers, Batch counts, deadlines, and result references. Detached trees have independent lifecycle counts, including after the requested run finishes. Use `get_run_result` to read one input or output path, and `wait_for_run_change` with the returned cursor to wait for a scoped change. Waits default to 30 seconds and stop after at most 60 seconds. These reads do not claim or execute work.

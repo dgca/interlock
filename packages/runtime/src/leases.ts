@@ -46,6 +46,11 @@ export function expiredClaimMessage(
       prefix +
       'The assignment was reclaimed after this claim expired; this token is invalid. Rediscover work and inspect the current assignment before continuing.'
     );
+  if (work.status === 'available' && work.resourceBlocked)
+    return (
+      prefix +
+      'The assignment is resource-blocked. Inspect resourceBlocked in the run briefing. Uncertain owners require confirmation that the exact old attempt and subprocesses stopped before manage_work_resources release; obtain a fresh claim only after resources are available.'
+    );
   if (work.status === 'available')
     return (
       prefix +

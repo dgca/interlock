@@ -130,6 +130,10 @@ Detached Workflow nodes can leave independent work active after the requested pa
 
 Use optional `start_run.requestId` for a stable task-attempt delivery key. Identical redelivery returns the original run read-only across restart or later publication; conflicting reuse and removed history reject. Optional `externalTask:{system,id,url?}` supplies bounded non-secret correlation for `list_runs`, inspection and briefings. It does not reserve the task or update its board. A deliberate new attempt uses a new key. Follow [idempotent run starts](idempotent-run-starts.md) for equality, retention and CLI behavior.
 
+## Coordinate shared resources
+
+Agent `resources` declare exclusive names resolved from value bindings. Claiming reserves all names atomically; conflicting work is excluded from discovery and shown in briefing `resourceBlocked`. Stop using resources and stop subprocesses before success or cooperative failure. Expiry, cancellation and holds can retain uncertain ownership; follow `next:inspect_resources`, stop the exact old attempt, and use `manage_work_resources` for explicit release. Renewal alone never releases ownership. See [scope and recovery](work-resources.md).
+
 ## Manage run budgets
 
 Optional [run budgets](run-budgets.md) stop new Agent claims when limits are reached. Use `get_run_budget` to inspect policy and usage, and `set_run_budget` for an authorized adjustment. `next:adjust_budget` and budget blockers identify recoverable gates; already claimed work can finish. Keep detached scope and incomplete-report policy explicit.
@@ -191,7 +195,7 @@ Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `
 | `preview_workflow_ownership`, `set_workflow_owner`                              | Preview and move existing workflows while preserving identity and history.        |
 | `delete_workflow`                                                               | Permanently remove an unreferenced workflow and its inactive history.             |
 
-`list_work` returns available assignments, excluding claimed, held and budget-blocked work. An empty list does not mean the execution has completed. Use `get_run_briefing` for its status, claimed assignments, blockers, and detached progress. When given an existing run ID, resume it rather than calling `start_run` again.
+`list_work` returns available assignments, excluding claimed, held, resource-blocked and budget-blocked work. An empty list does not mean the execution has completed. Use `get_run_briefing` for its status, claimed assignments, blockers, and detached progress. When given an existing run ID, resume it rather than calling `start_run` again.
 
 `retry_run` retries the failed step of a failed run. Inspect its error first, since Script and Fetch retries can repeat external side effects. Failed Batch retries preserve successful items. Retry a failed parent when an ordinary child belongs to a terminal parent. Failed detached children can be retried directly after their parent ends. A child already handled through a Workflow Failed route cannot be retried independently; inspect the current parent recovery. Completed and cancelled runs cannot be retried. The CLI equivalent is `interlock retry RUN_ID`.
 

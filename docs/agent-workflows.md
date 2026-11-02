@@ -285,6 +285,10 @@ Without flags, `interlock runs` retains its full history dump. The shared `runs.
 
 Use `start_run.requestId` for atomic redelivery safety. External-task lookup does not reserve a task: distinct keys can create concurrent attempts. A dispatcher requiring one active task owner must still serialize admission or maintain its own reservation. See [start identity and retention](idempotent-run-starts.md).
 
+## Coordinate shared Agent resources
+
+Set Agent `resources` to up to eight existing value bindings, each resolving to a distinct bounded non-secret name. Claims reserve the complete set atomically; conflicts spend no attempt or budget and appear in `resourceBlocked` rather than available work. Resource blocking pauses the unclaimed deadline alongside budget gates and holds. Stop resource use and subprocesses before submitting success or reporting failure. Expiry, cancellation and claimed holds require explicit reconciliation if the old worker might still be active. Inspect `resourceReservations` and `next:inspect_resources`, then use `manage_work_resources` or CLI `work-resources` after confirming the exact old attempt stopped. These declarations cover cooperating Agent claims only. See [authoring, lifecycle and recovery](work-resources.md).
+
 ## Bind original input into later steps
 
 Optional `inputBindings` constructs a replacement input object before the node's input contract is checked. Each output field selects a `source` and a dot-separated `path`. Omitted or blank paths select the entire source. Missing paths fail that node. Omitting `inputBindings` retains the previous node's complete output as input. An explicit empty binding object produces an empty object.

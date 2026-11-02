@@ -1,4 +1,5 @@
-import { Textarea } from '@mantine/core';
+import { Checkbox, Textarea } from '@mantine/core';
+import { Link } from 'react-router';
 import { useState, useEffect, useSyncExternalStore } from 'react';
 import { Bot, Copy } from 'lucide-react';
 import { Button } from '../../components/Button/Button';
@@ -23,6 +24,10 @@ export function WorkPanel({
     stored.workerId === work.workerId
       ? stored
       : undefined;
+  const [stopped, setStopped] = useState(false);
+  const uncertain =
+    work.resourceReservations?.filter((r) => r.state === 'uncertain') ?? [];
+  useEffect(() => setStopped(false), [work.id, work.attempt]);
   const [output, setOutput] = useState('{}'),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
@@ -52,7 +57,9 @@ export function WorkPanel({
         {work.status === 'available'
           ? work.budgetBlocked
             ? 'Budget blocked. Adjust the governing run budget through MCP or the CLI to resume claims.'
-            : 'Waiting for an agent to pick up this assignment.'
+            : work.resourceBlocked
+              ? 'Waiting for a shared resource.'
+              : 'Waiting for an agent to pick up this assignment.'
           : work.status === 'held'
             ? 'Held for an external blocker. Resume explicitly, then obtain a fresh claim.'
             : work.status === 'claimed'
@@ -61,6 +68,33 @@ export function WorkPanel({
                 ? 'Nobody claimed this assignment before its deadline. The run followed Timeout with the original input.'
                 : `Assignment ${work.status}.`}
       </p>
+      {work.resourceBlocked && (
+        <ul style={{ overflowWrap: 'anywhere' }}>
+          {work.resourceBlocked.owners.map((owner) => (
+            <li key={owner.name}>
+              <code>{owner.name}</code> ·{' '}
+              <Link to={'/runs/' + owner.runId}>Owning run</Link>
+              {owner.state === 'uncertain'
+                ? ' · confirmation that the agent stopped is required'
+                : ' · in use'}
+            </li>
+          ))}
+        </ul>
+      )}
+      {uncertain.length > 0 && (
+        <div>
+          <p style={{ overflowWrap: 'anywhere' }}>
+            Attempt {uncertain[0].attempt} ended, but these resources remain
+            reserved: {uncertain.map((r) => r.name).join(', ')}.
+          </p>
+          <Checkbox
+            label="This attempt and its subprocesses have stopped using these resources"
+            checked={stopped}
+            onChange={(e) => setStopped(e.currentTarget.checked)}
+            mb="sm"
+          />
+        </div>
+      )}
       {work.hold && (
         <div style={{ overflowWrap: 'anywhere' }}>
           <p>
@@ -111,6 +145,7 @@ export function WorkPanel({
       )}
       {work.status === 'available' &&
         !work.budgetBlocked &&
+        !work.resourceBlocked &&
         work.availableUntil && (
           <p className="hint">
             Timeout at {new Date(work.availableUntil).toLocaleString()} if
@@ -118,6 +153,25 @@ export function WorkPanel({
           </p>
         )}
       <div className="actions">
+        {uncertain.length > 0 && (
+          <Button
+            variant="primary"
+            disabled={busy || !stopped}
+            onClick={() =>
+              void perform(() =>
+                api.work.resources.mutate({
+                  action: 'release',
+                  workId: work.id,
+                  expectedAttempt: uncertain[0].attempt,
+                  confirmStopped: true,
+                  actor: 'manual-ui',
+                }),
+              )
+            }
+          >
+            Release resources
+          </Button>
+        )}
         {work.status === 'held' && (
           <Button
             disabled={busy}
@@ -172,6 +226,7 @@ export function WorkPanel({
       </details>
       {work.status === 'available' &&
         !work.budgetBlocked &&
+        !work.resourceBlocked &&
         work.context.mode === 'current' &&
         !work.context.continuityGroup &&
         !work.context.tools.length &&
@@ -228,6 +283,25 @@ export function WorkPanel({
           />
 
           <div className="actions">
+            {uncertain.length > 0 && (
+              <Button
+                variant="primary"
+                disabled={busy || !stopped}
+                onClick={() =>
+                  void perform(() =>
+                    api.work.resources.mutate({
+                      action: 'release',
+                      workId: work.id,
+                      expectedAttempt: uncertain[0].attempt,
+                      confirmStopped: true,
+                      actor: 'manual-ui',
+                    }),
+                  )
+                }
+              >
+                Release resources
+              </Button>
+            )}
             <Button
               disabled={busy}
               onClick={() =>
