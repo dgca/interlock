@@ -10,6 +10,7 @@ import {
 import { structuralEqual } from './jsonEquality.js';
 import type { PromptSnapshot } from './prompts.js';
 import type { UsageAttempt, UsageMetric } from './usage.js';
+import { budgetPolicySchema, type BudgetPolicy } from './budgets.js';
 import { modelTierSchema } from './modelTiers.js';
 import {
   trialSetupSchema,
@@ -167,6 +168,15 @@ export const comparisonPreviewSchema = z
     repetitions: z.number().int().min(1).max(10).default(1),
     concurrency: z.number().int().min(1).max(10).default(2),
     trialSetup: trialSetupSchema.optional(),
+    sampleBudget: budgetPolicySchema
+      .refine(
+        (b) => b.scope === 'tree',
+        'Comparison sample budgets require tree scope',
+      )
+      .optional()
+      .describe(
+        'Independent budget installed atomically on each root before Agent claims are eligible; tree includes all descendants. Not a pooled comparison or billing cap.',
+      ),
     configurations: z
       .object({
         baseline: comparisonSideSchema.optional(),
@@ -365,6 +375,7 @@ export interface QualityJudgment {
 }
 export interface WorkflowComparison {
   trialSetup?: TrialSetup;
+  sampleBudget?: BudgetPolicy;
   id: string;
   requestId: string;
   requestHash: string;
