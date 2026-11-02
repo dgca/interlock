@@ -127,10 +127,12 @@ it('shows managed executor and permission changes before publication', () => {
     after = clone(before);
   after.executor = 'codex';
   after.agentPermissions = 'full-access';
+  after.agentModel = 'custom-model';
   const diff = compareWorkflow(after, before);
   expect(diff.workflow.map((change) => change.title)).toEqual([
     'Default Agent executor',
     'Agent permissions',
+    'Agent model',
   ]);
   expect(
     compareWorkflow(before, after).workflow.find(

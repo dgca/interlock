@@ -82,6 +82,7 @@ export const workListResponseSchema = z
           id: z.string(),
           executor: executorReferenceSchema.optional(),
           executorPermissions: executorPermissionModeSchema.optional(),
+          executorModel: z.string().optional(),
           managedExecution: managedWorkSummarySchema.optional(),
           trialEnvironmentId: z.string().optional(),
           runId: z.string(),

@@ -41,3 +41,9 @@ This review does not establish real-account authentication, enterprise policy or
 ## Subsequent scope decision
 
 The user removed managed Agent runtime limits after this review. The draft runtime cutoff and settings control are gone; proposed workflow overrides were discarded before publication. Regression coverage now advances a pending assignment past the former 30-minute cutoff, verifies ongoing claim renewal, and verifies that retired timeoutMs fields in earlier draft configurations and continuity snapshots do not impose a limit. The original timeout-review observation above is historical.
+
+## Model selection extension review
+
+Native model discovery and workflow model overrides received separate correctness and standards reviews against commit 98447a6. Neither reviewer found an actionable regression. Tests cover cached and refreshed catalogs on disabled configurations without claims, unsaved paths, bounded results, timeout/shutdown cleanup, native discovery with no user prompt/turn, captured workflow overrides, retry pinning and resolved-model continuity. The full suite passed 101 files / 1,184 tests, followed by the focused picker tests after final label/focus refinements. HTTP and stdio each expose 51 tools / 293,810 bytes of definitions; catalogs remain on demand inside the existing grouped tool.
+
+The installed local Codex catalog loaded in the rendered UI without starting a task. Claude is not installed on this machine, so its catalog checks used the native stand-in. Native approval/task runs against real provider accounts remain pending. The scoped Impeccable model-picker review returned ship with no material findings; node inspector and execution provenance received source review only. The documentation comparison is in model-selection-ui-review.md.

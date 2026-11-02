@@ -4,6 +4,7 @@ import type {
   ExecutorQuestion,
   Json,
   ModelUsage,
+  HarnessModel,
   WorkRequest,
 } from '@interlock/core';
 
@@ -31,6 +32,11 @@ export interface HarnessResult {
 /** Native transports remain inside adapters; neither owns Interlock claims. */
 export interface HarnessAdapter {
   id: ExecutorProfile['harness'];
+  models?: (input: {
+    command: string;
+    cwd: string;
+    signal: AbortSignal;
+  }) => Promise<{ models: HarnessModel[]; truncated?: boolean }>;
   detect: (override?: string) => Promise<{
     command?: string;
     version?: string;

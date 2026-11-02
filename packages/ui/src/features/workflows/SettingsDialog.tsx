@@ -383,6 +383,10 @@ export function SettingsDialog({
                   <ExecutorSelect
                     value={settings.definition.executor}
                     workflowPermissions={settings.definition.agentPermissions}
+                    workflowModel={settings.definition.agentModel}
+                    onModelChange={(agentModel) =>
+                      patchDefinition({ agentModel })
+                    }
                     onPermissionsChange={(agentPermissions) =>
                       patchDefinition({ agentPermissions })
                     }

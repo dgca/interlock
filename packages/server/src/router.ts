@@ -1,7 +1,10 @@
 import { listStarters, importStarter } from './starters.js';
 import { parseImportDocument } from '../../core/src/importDocument.js';
 import { workResourceRequestSchema } from '@interlock/core';
-import { executorOperationSchema } from '@interlock/core';
+import {
+  executorOperationSchema,
+  executorModelsQuerySchema,
+} from '@interlock/core';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { developmentConnection, type ConnectionConfig } from './connection.js';
@@ -108,6 +111,9 @@ const updateWorkflowInput = id.extend({
 const claim = z.object({ workId: z.string(), token: z.string() });
 export const appRouter = t.router({
   executors: t.router({
+    models: p
+      .input(executorModelsQuerySchema)
+      .query(({ ctx, input }) => ctx.engine.executors.models(input)),
     profiles: p.query(({ ctx }) => ctx.engine.executors.listProfiles()),
     inspect: p
       .input(z.object({ workId: z.string().min(1) }))

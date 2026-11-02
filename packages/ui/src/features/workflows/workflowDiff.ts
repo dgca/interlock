@@ -148,6 +148,7 @@ export function compareWorkflow(
     ['maxSteps', 'Maximum steps'],
     ['executor', 'Default Agent executor'],
     ['agentPermissions', 'Agent permissions'],
+    ['agentModel', 'Agent model'],
   ] as const) {
     const before = published?.[key];
     const after = draft[key];

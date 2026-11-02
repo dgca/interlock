@@ -14,6 +14,14 @@ Batch items use their owning workflow’s settings; invoked workflows use their 
 
 The manager discovers ready assignments globally, including work started by scripts or in detached workflows. It uses the existing exclusive claim path, so a connected worker and managed harness cannot own the same attempt simultaneously. Budgets, shared resources, output validation and retry limits still apply. Managed local Git trials remain blocked because these adapters do not implement the scoped-tool containment contract.
 
+## Choose a model
+
+Harness **Default model** offers **Use CLI default**, models reported by the configured native harness, and custom model IDs. Open the picker to load its list; **Refresh models** bypasses the cache. Discovery initializes the native integration without sending a user prompt or starting an Agent turn. It uses the configured executable and working directory, including unsaved path edits in harness settings, and never claims work. Authentication and native startup policy still apply. Claude discovery disables ordinary hooks and configured MCP servers; administrator-required hooks can still run.
+
+The picker reads Claude Code's SDK `supportedModels()` and Codex's app-server `model/list`, rather than a generic provider catalog. Lists can vary with the installed version, account and project configuration, and do not guarantee a later request will succeed. Catalogs return at most 100 models and cache for five minutes; failed reads cache for 30 seconds. Discovery is bounded to 15 seconds plus process cleanup and version detection. Failures preserve the saved model; refresh or enter a custom ID. No fallback model is substituted by Interlock.
+
+Workflow **Agent model** offers **Use harness default** or an explicit model ID, stored as optional `agentModel`. The override applies to every managed Agent in that workflow, including node-specific executors. If those use different harnesses, choose an ID they all accept or leave the model inherited. Connected agents retain their own model. Batch items inherit their owning workflow; invoked workflows use their own setting. Publish to apply changes to new runs. Published assignments capture the override as `executorModel`; retries and continuing sessions retain the resolved profile/model. Effective model and source appear in settings and execution details. The workflow override travels in exports; model catalogs and local profile defaults do not. Existing advisory model tiers remain separate.
+
 ## Sessions and permissions
 
 Ungrouped assignments start independent native sessions, including retries. A `current` assignment permits existing context; it does not inherit the conversation that started the workflow. A run-local `context.continuityGroup` reuses a manager-owned native session and serializes work in that group. `fresh` always starts independently and cannot use a continuity group. Existing externally bound groups are not silently adopted.
@@ -41,6 +49,7 @@ One `manage_executors` tool handles these operations through the shared server A
 ```sh
 interlock executors
 interlock executors '{"action":"list","refresh":true}'
+interlock executors '{"action":"models","profileId":"codex","refresh":true}'
 interlock executors '{"action":"save","profile":{"id":"codex","harness":"codex","name":"Codex","enabled":true,"cwd":"/absolute/project","expectedRevision":0}}'
 interlock executors '{"action":"inspect","workId":"WORK_ID"}'
 interlock executors '{"action":"respond","executionId":"EXECUTION_ID","requestId":"REQUEST_ID","answer":{"allow":false}}'

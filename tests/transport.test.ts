@@ -2631,6 +2631,9 @@ it.each(['stdio', 'http'])(
             command: '/fake/codex',
             version: 'transport fixture',
           }),
+          models: async () => ({
+            models: [{ id: 'transport-model', name: 'Transport Model' }],
+          }),
           run: async (input) => {
             input.onSession('transport-native');
             const answer = await input.request({
@@ -2650,6 +2653,11 @@ it.each(['stdio', 'http'])(
         revision: 0,
         detection: { status: 'detected' },
       });
+      expect(
+        await call('manage_executors', {
+          request: { action: 'models', profileId: 'codex' },
+        }),
+      ).toMatchObject({ status: 'ready', models: [{ id: 'transport-model' }] });
       await call('manage_executors', {
         request: {
           action: 'save',
@@ -2672,7 +2680,13 @@ it.each(['stdio', 'http'])(
         id: managedWorkflow.id,
         draftRevision: managedWorkflow.draftRevision,
         edits: [
-          { op: 'update_settings', set: { agentPermissions: 'read-only' } },
+          {
+            op: 'update_settings',
+            set: {
+              agentPermissions: 'read-only',
+              agentModel: 'transport-model',
+            },
+          },
         ],
       });
       await call('publish_workflow', { id: managedWorkflow.id });
@@ -2692,7 +2706,8 @@ it.each(['stdio', 'http'])(
       });
       const managedAttempt = managedInspection.items[0];
       expect(managedAttempt).toMatchObject({
-        profile: { permissions: 'read-only' },
+        profile: { permissions: 'read-only', model: 'transport-model' },
+        modelSource: 'workflow',
         permissionSource: 'workflow',
       });
       expect(JSON.stringify(managedInspection)).not.toContain(
@@ -2720,12 +2735,20 @@ it.each(['stdio', 'http'])(
         id: managedWorkflow.id,
         draftRevision: permissionsDraft.draftRevision,
         edits: [
-          { op: 'update_settings', set: {}, unset: ['agentPermissions'] },
+          {
+            op: 'update_settings',
+            set: {},
+            unset: ['agentPermissions', 'agentModel'],
+          },
         ],
       });
       expect(
         (await call('get_workflow', { id: managedWorkflow.id })).draft
           .agentPermissions,
+      ).toBeUndefined();
+      expect(
+        (await call('get_workflow', { id: managedWorkflow.id })).draft
+          .agentModel,
       ).toBeUndefined();
       console.log(
         `${mode}: ${tools.length} MCP tools, ${Buffer.byteLength(JSON.stringify(tools))} B definitions`,

@@ -91,6 +91,127 @@ function adapter(
 async function settled(e: Engine, id: string) {
   await vi.waitFor(() => expect(e.run(id).status).toBe('completed'));
 }
+it('discovers models on disabled profiles, caches and refreshes without claiming work', async () => {
+  const e = create();
+  profile(e, 'codex', { enabled: false });
+  const run = vi.fn(adapter().run);
+  const models = vi.fn(async () => ({
+    models: [{ id: 'native-model', name: 'Native Model' }],
+  }));
+  e.executors.start([{ ...adapter('codex', run), models }]);
+  const r = start(e, workflow(e, 'codex').id, 1);
+  const query = { profileId: 'codex' };
+  const [a, b] = await Promise.all([
+    e.executors.models(query),
+    e.executors.models(query),
+  ]);
+  expect(a).toEqual(b);
+  expect(a).toMatchObject({
+    status: 'ready',
+    models: [{ id: 'native-model' }],
+  });
+  await e.executors.models(query);
+  expect(models).toHaveBeenCalledTimes(1);
+  await e.executors.manage({ action: 'models', ...query, refresh: true });
+  expect(models).toHaveBeenCalledTimes(2);
+  expect(run).not.toHaveBeenCalled();
+  expect(e.run(r.id).status).not.toBe('completed');
+  expect(e.store.work()[0].status).toBe('available');
+});
+it('uses unsaved discovery paths without changing the configuration and bounds catalogs', async () => {
+  const e = create();
+  const saved = profile(e, 'codex', { enabled: false, cwd: '/saved' });
+  const models = vi.fn<NonNullable<HarnessAdapter['models']>>(async () => ({
+    models: Array.from({ length: 150 }, (_, i) => ({
+      id: `model-${i}`,
+      name: 'N'.repeat(300),
+    })),
+  }));
+  const detect = vi.fn(async (override) => ({
+    status: 'detected' as const,
+    command: override ?? '/native/codex',
+  }));
+  e.executors.start([{ ...adapter(), models, detect }]);
+  const catalog = await e.executors.models({
+    profileId: 'codex',
+    paths: { cwd: '/unsaved', command: '/unsaved/codex' },
+  });
+  expect(models.mock.calls[0][0]).toMatchObject({
+    cwd: '/unsaved',
+    command: '/unsaved/codex',
+  });
+  expect(catalog.models).toHaveLength(100);
+  expect(catalog.models[0].name).toHaveLength(120);
+  expect(catalog.truncated).toBe(true);
+  expect(e.executors.profiles().find((p) => p.id === 'codex')).toEqual(saved);
+  await e.executors.models({ profileId: 'codex', paths: {} });
+  expect(models.mock.calls[1][0]).toMatchObject({
+    cwd: process.cwd(),
+    command: '/native/codex',
+  });
+  await expect(
+    e.executors.models({ profileId: 'codex', paths: { cwd: 'relative' } }),
+  ).rejects.toThrow('absolute');
+});
+it('bounds stalled model discovery and cancels it at shutdown', async () => {
+  vi.useFakeTimers();
+  const e = create();
+  e.executors.start([
+    {
+      ...adapter(),
+      models: ({ signal }) =>
+        new Promise((_, reject) =>
+          signal.addEventListener('abort', () => reject(signal.reason), {
+            once: true,
+          }),
+        ),
+    },
+  ]);
+  const request = e.executors.models({ profileId: 'codex' });
+  await vi.advanceTimersByTimeAsync(16000);
+  expect(await request).toMatchObject({
+    status: 'unavailable',
+    message: 'Model discovery timed out',
+    models: [],
+  });
+  const pending = e.executors.models({ profileId: 'codex', refresh: true });
+  await vi.advanceTimersByTimeAsync(0);
+  await e.executors.stop();
+  expect(await pending).toMatchObject({
+    status: 'unavailable',
+    message: 'Interlock stopped',
+  });
+});
+it.each([
+  [undefined, undefined, undefined, 'cli'],
+  ['default-model', undefined, 'default-model', 'harness'],
+  ['default-model', 'custom-model', 'custom-model', 'workflow'],
+] as const)(
+  'captures default model %s and workflow override %s',
+  async (defaultModel, override, effective, source) => {
+    const e = create();
+    profile(e, 'codex', { model: defaultModel });
+    const calls: HarnessRun[] = [];
+    e.executors.start([
+      adapter('codex', async (input) => {
+        calls.push(input);
+        return { output: input.work.input };
+      }),
+    ]);
+    const d = blankDefinition();
+    d.executor = 'codex';
+    d.agentModel = override;
+    const w = e.create('Models', '', d);
+    e.publish(w.id);
+    const r = start(e, w.id, 1);
+    await settled(e, r.id);
+    expect(calls[0].profile.model).toBe(effective);
+    expect(e.store.work()[0].executorModel).toBe(override);
+    expect(e.executors.inspect(e.store.work()[0].id).items[0]).toMatchObject({
+      modelSource: source,
+    });
+  },
+);
 it.each(['claude-code', 'codex'] as const)(
   'automatically executes through %s without another worker process',
   async (harness) => {
@@ -980,4 +1101,60 @@ it('accepts older continuity snapshots while omitting retired timeout settings',
   expect(calls[1].sessionId).toBe('native');
   expect(executorProfileSchema.shape).not.toHaveProperty('timeoutMs');
   expect(definitionSchema.shape).not.toHaveProperty('agentTimeoutMs');
+});
+it('pins the workflow model across retries and later published edits', async () => {
+  const e = create();
+  profile(e, 'codex', { model: 'harness-model' });
+  const d = blankDefinition();
+  d.executor = 'codex';
+  d.agentModel = 'workflow-model';
+  d.nodes.find((n) => n.kind === 'agent')!.outputSchema = { type: 'number' };
+  const w = e.create('Pinned model', '', d);
+  e.publish(w.id);
+  const calls: string[] = [];
+  e.executors.start([
+    adapter('codex', async (input) => {
+      calls.push(input.profile.model!);
+      if (calls.length === 1) {
+        const current = e.workflow(w.id);
+        e.update(w.id, {
+          draft: { ...current.draft, agentModel: 'later-model' },
+          draftRevision: current.draftRevision,
+        });
+        e.publish(w.id);
+        return { output: 'invalid number' };
+      }
+      return { output: input.work.input };
+    }),
+  ]);
+  const first = start(e, w.id, 1);
+  await settled(e, first.id);
+  const next = start(e, w.id, 2);
+  await settled(e, next.id);
+  expect(calls).toEqual(['workflow-model', 'workflow-model', 'later-model']);
+});
+it('retains the native resolved model in a continuing session when defaults change', async () => {
+  const e = create();
+  profile(e, 'codex', { model: 'model-alias', tools: ['git'] });
+  const calls: HarnessRun[] = [];
+  e.executors.start([
+    adapter('codex', async (input) => {
+      calls.push(input);
+      input.onSession('native', 'resolved-model');
+      if (calls.length === 1)
+        profile(e, 'codex', {
+          model: 'new-default',
+          tools: ['git'],
+          expectedRevision: 1,
+        });
+      return { output: input.work.input };
+    }),
+  ]);
+  const r = start(e, groupedWorkflow(e).id, 1);
+  await settled(e, r.id);
+  expect(calls.map((c) => c.profile.model)).toEqual([
+    'model-alias',
+    'resolved-model',
+  ]);
+  expect(calls[1].sessionId).toBe('native');
 });

@@ -2,6 +2,7 @@ export * from './workResources.js';
 export * from './executors.js';
 import {
   executorPermissionModeSchema,
+  executorModelSchema,
   executorReferenceSchema,
 } from './executors.js';
 import { resourceNamesSchema } from './workResources.js';
@@ -349,6 +350,11 @@ export const nodeSchema = z.discriminatedUnion('kind', [
 ]);
 export type WorkflowNode = z.infer<typeof nodeSchema>;
 export const definitionSchema = z.object({
+  agentModel: executorModelSchema
+    .optional()
+    .describe(
+      'Model ID override for all managed Agents in this workflow, including node-specific executors. Omit to inherit each harness default. Connected agents keep their own model; explicit unavailable models fail without substitution.',
+    ),
   agentPermissions: executorPermissionModeSchema
     .optional()
     .describe(
@@ -477,6 +483,7 @@ export interface RunAncestry {
 export interface WorkRequest {
   executor?: string;
   executorPermissions?: import('./executors.js').ExecutorPermissionMode;
+  executorModel?: string;
   managedExecution?: import('./executors.js').ManagedWorkSummary;
   resources?: string[];
   resourceBlocked?: import('./workResources.js').ResourceBlock;

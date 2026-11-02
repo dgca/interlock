@@ -29,6 +29,21 @@ const work: WorkRequest = {
   },
 };
 it.each([claudeAdapter, codexAdapter])(
+  'discovers $id models without starting a task',
+  async (adapter) => {
+    const catalog = await adapter.models!({
+      command,
+      cwd: process.cwd(),
+      signal: new AbortController().signal,
+    });
+    expect(catalog.models[0]).toMatchObject({
+      id: 'fixture-model',
+      name: 'Fixture Model',
+    });
+    expect(catalog.models).toHaveLength(adapter.id === 'codex' ? 2 : 1);
+  },
+);
+it.each([claudeAdapter, codexAdapter])(
   'bridges $id native protocol, explicit permissions and structured results without a provider',
   async (adapter) => {
     const sessions: string[] = [],

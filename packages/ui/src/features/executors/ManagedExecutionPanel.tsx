@@ -145,7 +145,12 @@ export function ManagedExecutionPanel({
           {record.profile.model && (
             <>
               <dt>Model</dt>
-              <dd>{record.profile.model}</dd>
+              <dd>
+                {record.profile.model}
+                {record.modelSource
+                  ? ` · ${record.modelSource === 'workflow' ? 'workflow override' : record.modelSource === 'harness' ? 'harness default' : 'CLI default'}`
+                  : ''}
+              </dd>
             </>
           )}
           {record.sessionId && (

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NativeSelect } from '@mantine/core';
 import { api, errorMessage } from '../../lib/api';
 import type { ExecutorPermissionMode } from '@interlock/core';
+import { ModelPicker } from './ModelPicker';
 import {
   permissionLabels,
   permissionDescriptions,
@@ -15,6 +16,8 @@ export function ExecutorSelect({
   enabled = true,
   workflowPermissions,
   onPermissionsChange,
+  workflowModel,
+  onModelChange,
 }: {
   value: string | null | undefined;
   onChange: (value: string | null | undefined) => void;
@@ -22,6 +25,8 @@ export function ExecutorSelect({
   enabled?: boolean;
   workflowPermissions?: ExecutorPermissionMode;
   onPermissionsChange?: (mode: ExecutorPermissionMode | undefined) => void;
+  workflowModel?: string;
+  onModelChange?: (model: string | undefined) => void;
 }) {
   const [profiles, setProfiles] =
     useState<Awaited<ReturnType<typeof api.executors.profiles.query>>>();
@@ -129,6 +134,28 @@ export function ExecutorSelect({
       {error && (
         <p role="alert" className="hint">
           Harness settings could not be loaded. {error}
+        </p>
+      )}
+      {onModelChange && (
+        <div style={{ marginTop: 20 }}>
+          <ModelPicker
+            label="Agent model"
+            defaultLabel="Use harness default"
+            profileId={profile?.id}
+            value={workflowModel}
+            onChange={onModelChange}
+          />
+        </div>
+      )}
+      {(selected || onModelChange) && (
+        <p className="hint">
+          {workflowModel
+            ? `${workflowModel} · workflow override.`
+            : profile
+              ? `${profile.model ?? 'CLI default'} · inherited from ${profile.name}.`
+              : 'Each managed Agent uses its selected harness’s default model.'}
+          {onModelChange &&
+            ' Applies to all managed Agents, including node-specific executors. Connected agents keep their own model.'}
         </p>
       )}
     </div>

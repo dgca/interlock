@@ -12,6 +12,65 @@ import { detectExecutable, spawnManagedProcess } from './process.js';
 export const claudeAdapter: HarnessAdapter = {
   id: 'claude-code',
   detect: (override) => detectExecutable('claude', override),
+  async models(input) {
+    const abortController = new AbortController();
+    const abort = () => abortController.abort(input.signal.reason);
+    input.signal.addEventListener('abort', abort, { once: true });
+    if (input.signal.aborted) abort();
+    let owned: ReturnType<typeof spawnManagedProcess> | undefined;
+    let stream: ReturnType<typeof query> | undefined;
+    try {
+      // Initialize the native session without ever sending a user message or starting a turn.
+      async function* noMessages(): AsyncGenerator<never> {
+        if (!abortController.signal.aborted)
+          await new Promise<void>((resolve) =>
+            abortController.signal.addEventListener('abort', () => resolve(), {
+              once: true,
+            }),
+          );
+      }
+      stream = query({
+        prompt: noMessages(),
+        options: {
+          pathToClaudeCodeExecutable: input.command,
+          cwd: input.cwd,
+          abortController,
+          settingSources: ['user', 'project', 'local'],
+          persistSession: false,
+          tools: [],
+          mcpServers: {},
+          strictMcpConfig: true,
+          settings: { disableAllHooks: true },
+          canUseTool: async () => ({
+            behavior: 'deny',
+            message: 'Model discovery does not execute tools',
+          }),
+          spawnClaudeCodeProcess: (options) => {
+            owned = spawnManagedProcess(options.command, options.args, {
+              cwd: options.cwd,
+              env: options.env,
+            });
+            owned.child.stderr.resume();
+            return owned.child;
+          },
+        },
+      });
+      const models = await stream.supportedModels();
+      return {
+        models: models.slice(0, 100).map((m) => ({
+          id: m.value,
+          name: m.displayName,
+          description: m.description,
+        })),
+        truncated: models.length > 100,
+      };
+    } finally {
+      input.signal.removeEventListener('abort', abort);
+      abortController.abort();
+      stream?.close();
+      await owned?.close();
+    }
+  },
   async run(input: HarnessRun) {
     const abortController = new AbortController();
     const abort = () => abortController.abort();

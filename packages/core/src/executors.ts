@@ -15,6 +15,34 @@ export const executorPermissionModeSchema = z.enum([
 export type ExecutorPermissionMode = z.infer<
   typeof executorPermissionModeSchema
 >;
+export const executorModelSchema = z.string().trim().min(1).max(200);
+export const executorModelsQuerySchema = z
+  .object({
+    profileId: executorReferenceSchema,
+    refresh: z.boolean().default(false),
+    paths: z
+      .object({
+        command: z.string().trim().min(1).max(4096).optional(),
+        cwd: z.string().trim().min(1).max(4096).optional(),
+      })
+      .strict()
+      .optional()
+      .describe(
+        'Optional unsaved executable/directory settings. When supplied, omitted paths use native/server defaults.',
+      ),
+  })
+  .strict();
+export interface HarnessModel {
+  id: string;
+  name: string;
+  description?: string;
+}
+export interface ExecutorModels {
+  status: 'ready' | 'unavailable';
+  models: HarnessModel[];
+  truncated: boolean;
+  message?: string;
+}
 export const executorProfileSchema = z
   .object({
     id: executorReferenceSchema,
@@ -24,7 +52,11 @@ export const executorProfileSchema = z
     revision: z.number().int().min(0).default(0),
     command: z.string().trim().min(1).max(4096).optional(),
     cwd: z.string().trim().min(1).max(4096).optional(),
-    model: z.string().trim().min(1).max(200).optional(),
+    model: executorModelSchema
+      .optional()
+      .describe(
+        'Default model ID; omission uses the native CLI default. Workflow agentModel can override it.',
+      ),
     tools: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
     skills: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
     concurrency: z.number().int().min(1).max(8).default(1),
@@ -86,6 +118,7 @@ export const executorResponseSchema = z
   })
   .strict();
 export const executorOperationSchema = z.discriminatedUnion('action', [
+  executorModelsQuerySchema.extend({ action: z.literal('models') }),
   z
     .object({ action: z.literal('list'), refresh: z.boolean().default(false) })
     .strict(),
@@ -135,6 +168,7 @@ export interface ManagedExecution {
   state: ExecutorState;
   profile: ExecutorProfile;
   permissionSource?: 'workflow' | 'harness';
+  modelSource?: 'workflow' | 'harness' | 'cli';
   command: string;
   cwd: string;
   sessionId?: string;

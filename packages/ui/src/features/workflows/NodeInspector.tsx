@@ -225,6 +225,7 @@ export function NodeInspector({
               <ExecutorSelect
                 value={node.executor}
                 workflowPermissions={definition?.agentPermissions}
+                workflowModel={definition?.agentModel}
                 inherit={definition?.executor ?? ''}
                 enabled={active === 'execution'}
                 onChange={(executor) => patch({ executor })}

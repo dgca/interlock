@@ -23,6 +23,7 @@ export type WorkMetadata = Pick<
   WorkRequest,
   | 'executor'
   | 'executorPermissions'
+  | 'executorModel'
   | 'managedExecution'
   | 'id'
   | 'runId'

@@ -90,6 +90,22 @@ for await (const line of createInterface({ input: process.stdin })) {
   if (codex) {
     if (message.method === 'initialize')
       send({ id: message.id, result: { userAgent: 'test' } });
+    if (message.method === 'model/list') {
+      send({
+        id: message.id,
+        result: {
+          data: [
+            {
+              model: message.params.cursor ? 'fixture-fast' : 'fixture-model',
+              displayName: message.params.cursor
+                ? 'Fixture Fast'
+                : 'Fixture Model',
+            },
+          ],
+          nextCursor: message.params.cursor ? null : 'page-two',
+        },
+      });
+    }
     if (['thread/start', 'thread/resume'].includes(message.method)) {
       model = message.params.model ?? model;
       session = message.params.threadId ?? session;
@@ -212,7 +228,13 @@ for await (const line of createInterface({ input: process.stdin })) {
           response: {
             commands: [],
             agents: [],
-            models: [],
+            models: [
+              {
+                value: 'fixture-model',
+                displayName: 'Fixture Model',
+                description: 'Native catalog fixture',
+              },
+            ],
             account: {},
             output_style: 'default',
             available_output_styles: [],
@@ -220,6 +242,8 @@ for await (const line of createInterface({ input: process.stdin })) {
         },
       });
     if (message.type === 'user') {
+      if (process.argv.includes('--strict-mcp-config'))
+        throw Error('Discovery must not send a user message');
       model = flag('--model') ?? model;
       send({
         type: 'system',

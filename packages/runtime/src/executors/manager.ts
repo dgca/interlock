@@ -7,6 +7,8 @@ import {
   executorProfileUpdateSchema,
   executorResponseSchema,
   executorOperationSchema,
+  executorModelsQuerySchema,
+  type ExecutorModels,
   tokenFields,
   type ExecutorProfile,
   type ExecutorProfileUpdate,
@@ -43,6 +45,7 @@ interface Session {
   runId: string;
   profile: ExecutorProfile;
   permissionSource?: 'workflow' | 'harness';
+  modelSource?: 'workflow' | 'harness' | 'cli';
   command: string;
   cwd: string;
   nativeId?: string;
@@ -68,6 +71,11 @@ interface Job {
 export class ExecutorManager {
   private adapters = new Map<string, HarnessAdapter>();
   private jobs = new Map<string, Job>();
+  private catalogs = new Map<string, { at: number; result: ExecutorModels }>();
+  private modelRequests = new Map<
+    string,
+    { abort: AbortController; done: Promise<ExecutorModels> }
+  >();
   private detections = new Map<
     string,
     { at: number; result: Awaited<ReturnType<HarnessAdapter['detect']>> }
@@ -85,6 +93,10 @@ export class ExecutorManager {
   async manage(input: unknown) {
     const q = executorOperationSchema.parse(input);
     switch (q.action) {
+      case 'models': {
+        const { action: _action, ...query } = q;
+        return this.models(query);
+      }
       case 'list':
         return this.listProfiles(q.refresh);
       case 'save':
@@ -148,6 +160,109 @@ export class ExecutorManager {
         detection: await this.detect(profile, refresh),
       })),
     );
+  }
+  async models(input: unknown): Promise<ExecutorModels> {
+    const q = executorModelsQuerySchema.parse(input);
+    const stored = this.profiles().find((p) => p.id === q.profileId);
+    if (!stored) throw new InterlockError('Harness configuration not found');
+    const profile = q.paths
+      ? { ...stored, command: q.paths.command, cwd: q.paths.cwd }
+      : stored;
+    for (const path of [profile.command, profile.cwd])
+      if (path && !isAbsolute(path))
+        throw new InterlockError(
+          'Executable and working directory overrides must be absolute paths',
+        );
+    const key = JSON.stringify([
+      profile.harness,
+      profile.command,
+      profile.cwd ?? this.defaultCwd,
+    ]);
+    const cached = this.catalogs.get(key);
+    if (
+      !q.refresh &&
+      cached &&
+      Date.now() - cached.at <
+        (cached.result.status === 'ready' ? 300000 : 30000)
+    )
+      return cached.result;
+    const pending = this.modelRequests.get(key);
+    if (pending) return pending.done;
+    if (this.stopped || this.modelRequests.size >= 4)
+      return {
+        status: 'unavailable',
+        models: [],
+        truncated: false,
+        message: 'Model discovery is busy or stopping. Try again shortly.',
+      };
+    const abort = new AbortController();
+    const done = (async (): Promise<ExecutorModels> => {
+      const timer = setTimeout(
+        () => abort.abort(new Error('Model discovery timed out')),
+        15000,
+      );
+      try {
+        const adapter = this.adapters.get(profile.harness);
+        if (!adapter?.models)
+          throw new Error('This harness does not support model discovery');
+        const detection = await this.detect(profile, q.refresh);
+        if (abort.signal.aborted) throw abort.signal.reason;
+        if (!detection.command || detection.status !== 'detected')
+          throw new Error(detection.message ?? 'Harness is unavailable');
+        const catalog = await adapter.models({
+          command: detection.command,
+          cwd: profile.cwd ?? this.defaultCwd,
+          signal: abort.signal,
+        });
+        if (abort.signal.aborted) throw abort.signal.reason;
+        const models: ExecutorModels['models'] = [];
+        const ids = new Set<string>();
+        for (const model of catalog.models) {
+          if (
+            typeof model.id !== 'string' ||
+            !model.id.trim() ||
+            model.id.length > 200 ||
+            ids.has(model.id)
+          )
+            continue;
+          ids.add(model.id);
+          models.push({
+            id: model.id,
+            name: (model.name || model.id).slice(0, 120),
+            ...(model.description
+              ? { description: model.description.slice(0, 300) }
+              : {}),
+          });
+          if (models.length === 100) break;
+        }
+        return {
+          status: 'ready',
+          models,
+          truncated: !!catalog.truncated || catalog.models.length > 100,
+        };
+      } catch (error) {
+        return {
+          status: 'unavailable',
+          models: [],
+          truncated: false,
+          message: errorText(error),
+        };
+      } finally {
+        clearTimeout(timer);
+      }
+    })();
+    this.modelRequests.set(key, { abort, done });
+    try {
+      const result = await done;
+      if (!this.stopped) {
+        if (this.catalogs.size >= 20)
+          this.catalogs.delete(this.catalogs.keys().next().value!);
+        this.catalogs.set(key, { at: Date.now(), result });
+      }
+      return result;
+    } finally {
+      this.modelRequests.delete(key);
+    }
   }
   private async detect(profile: ExecutorProfile, refresh = false) {
     const key = `${profile.id}:${profile.revision}:${profile.command ?? ''}`;
@@ -382,6 +497,7 @@ export class ExecutorManager {
           priorSession?.profile ??
             previous?.profile ?? {
               ...configured,
+              model: offered.executorModel ?? configured.model,
               permissions:
                 offered.executorPermissions ?? configured.permissions,
             },
@@ -392,6 +508,14 @@ export class ExecutorManager {
           (offered.executorPermissions
             ? ('workflow' as const)
             : ('harness' as const));
+        const modelSource =
+          priorSession?.modelSource ??
+          previous?.modelSource ??
+          (offered.executorModel
+            ? 'workflow'
+            : profile.model
+              ? 'harness'
+              : 'cli');
         if (this.incompatible(offered, profile)) continue;
         const pinnedCommand = priorSession?.command ?? previous?.command;
         const detection = await this.detect({
@@ -439,6 +563,7 @@ export class ExecutorManager {
           runId: work.runId,
           profile,
           permissionSource,
+          modelSource,
           command: detection.command,
           cwd,
         };
@@ -451,6 +576,7 @@ export class ExecutorManager {
           state: 'starting',
           profile,
           permissionSource,
+          modelSource,
           command: session.command,
           cwd,
           sessionId: session.nativeId,
@@ -844,12 +970,17 @@ export class ExecutorManager {
     this.stopped = true;
     this.unsubscribe?.();
     clearInterval(this.interval);
+    for (const request of this.modelRequests.values())
+      request.abort.abort(new Error('Interlock stopped'));
     for (const job of this.jobs.values())
       this.interruptJob(
         job,
         'Interlock stopped during execution. Confirm the previous session and subprocesses stopped before retrying.',
       );
     await Promise.allSettled([...this.jobs.values()].map((j) => j.done));
+    await Promise.allSettled(
+      [...this.modelRequests.values()].map((r) => r.done),
+    );
   }
 }
 function errorText(error: unknown) {

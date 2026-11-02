@@ -12,6 +12,52 @@ import { detectExecutable, JsonLinesProcess } from './process.js';
 export const codexAdapter: HarnessAdapter = {
   id: 'codex',
   detect: (override) => detectExecutable('codex', override),
+  async models(input) {
+    const rpc = new JsonLinesProcess(
+      input.command,
+      ['app-server', '--listen', 'stdio://'],
+      input.cwd,
+    );
+    const abort = () => {
+      void rpc.close().catch(() => {});
+    };
+    input.signal.addEventListener('abort', abort, { once: true });
+    try {
+      if (input.signal.aborted) throw input.signal.reason;
+      await rpc.request('initialize', {
+        clientInfo: { name: 'interlock', version: VERSION },
+        capabilities: { experimentalApi: false },
+      });
+      rpc.send({ method: 'initialized' });
+      const models = [];
+      const cursors = new Set<string>();
+      let cursor: string | undefined;
+      do {
+        const page = await rpc.request('model/list', {
+          limit: 100 - models.length,
+          includeHidden: false,
+          ...(cursor ? { cursor } : {}),
+        });
+        if (!Array.isArray(page.data))
+          throw new Error('Codex returned an invalid model catalog');
+        models.push(
+          ...page.data.slice(0, 100 - models.length).map((m: any) => ({
+            id: m.model,
+            name: m.displayName ?? m.model,
+            description: m.description,
+          })),
+        );
+        cursor = page.nextCursor || undefined;
+        if (cursor && cursors.has(cursor))
+          throw new Error('Codex model catalog repeated its cursor');
+        if (cursor) cursors.add(cursor);
+      } while (cursor && models.length < 100 && cursors.size < 10);
+      return { models, truncated: !!cursor };
+    } finally {
+      input.signal.removeEventListener('abort', abort);
+      await rpc.close();
+    }
+  },
   async run(input: HarnessRun) {
     const rpc = new JsonLinesProcess(
       input.command,

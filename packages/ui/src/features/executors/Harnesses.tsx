@@ -15,6 +15,7 @@ import { api, errorMessage } from '../../lib/api';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 import styles from './Harnesses.module.css';
 import { permissionOptions, permissionDescriptions } from './permissions';
+import { ModelPicker } from './ModelPicker';
 type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
 
 export function Harnesses() {
@@ -216,16 +217,13 @@ function ProfileRow({
                 setDraft({ ...draft, cwd: e.currentTarget.value || undefined })
               }
             />
-            <TextInput
-              label="Model"
-              placeholder="Harness default"
-              value={draft.model ?? ''}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  model: e.currentTarget.value || undefined,
-                })
-              }
+            <ModelPicker
+              label="Default model"
+              defaultLabel="Use CLI default"
+              profileId={profile.id}
+              paths={{ command: draft.command, cwd: draft.cwd }}
+              value={draft.model}
+              onChange={(model) => setDraft({ ...draft, model })}
             />
             <NativeSelect
               label="Default permissions"

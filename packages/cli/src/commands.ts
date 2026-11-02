@@ -368,7 +368,7 @@ export async function runCommand(argv: string[]) {
     default:
       return {
         usage: [
-          'executors [json|@file] (list by default; save local profiles, inspect work, respond, stop or reconcile an interrupted execution)',
+          'executors [json|@file] (list by default; discover models, save local profiles, inspect work, respond, stop or reconcile an interrupted execution)',
           'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
           'workflow <id>',
           'update <workflow-id> <json|@file> (metadata or draft replacement; layout:"tidy" arranges with Dagre; draft/layout changes require draftRevision)',

@@ -98,6 +98,7 @@ export const mutationDetailSchema = z
 export const continuationWorkSchema = z.object({
   executor: z.string().optional(),
   executorPermissions: executorPermissionModeSchema.optional(),
+  executorModel: z.string().optional(),
   managedExecution: managedWorkSummarySchema.optional(),
   resources: z.array(z.string()).max(8).optional(),
   trialEnvironmentId: z.string().optional(),

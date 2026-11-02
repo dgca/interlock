@@ -1404,6 +1404,9 @@ export class Engine {
           )
             ? {
                 executor: node.executor ?? this.definition(run).executor,
+                ...(this.definition(run).agentModel
+                  ? { executorModel: this.definition(run).agentModel }
+                  : {}),
                 ...(this.definition(run).agentPermissions
                   ? {
                       executorPermissions:
@@ -2137,6 +2140,9 @@ export class Engine {
       ...(work.executor
         ? {
             executor: work.executor,
+            ...(work.executorModel
+              ? { executorModel: work.executorModel }
+              : {}),
             ...(work.executorPermissions
               ? { executorPermissions: work.executorPermissions }
               : {}),
