@@ -23,9 +23,9 @@ Keep the terminal running while you use Interlock. Closing the browser does not 
 
 ## Run your first workflow
 
-New libraries include a published **SDLC workflow** for planning, implementing, and reviewing a software change. It creates a task branch, saves planning artifacts, and commits the completed change. It finishes locally by default. Existing libraries are preserved when you upgrade.
+New libraries include a published **SDLC workflow** for planning, implementing, and reviewing a software change. It creates a task branch, saves planning artifacts, and commits the completed change. It finishes locally by default. Fresh libraries also include the published **Evaluate workflow comparison** starter. Upgrades add newly introduced curated starters once, preserve your copies, and respect tracked deletions. Nothing runs automatically. See [automatic starters](docs/starter-workflows.md) for legacy-library behavior.
 
-For an existing library, import the starter from [workflows/sdlc.json](workflows/sdlc.json). In **Import → GitHub folder**, use `https://github.com/dgca/interlock/tree/main/workflows`, select **SDLC workflow**, and choose **Import selected**. Review the imported draft and publish it before running. See [Import the SDLC starter](docs/sdlc-workflow.md#import-the-starter-into-an-existing-library) for local-file and CLI options.
+If SDLC is absent from an earlier library, explicitly import the starter from [workflows/sdlc.json](workflows/sdlc.json). In **Import → GitHub folder**, use `https://github.com/dgca/interlock/tree/main/workflows`, select **SDLC workflow**, and choose **Import selected**. Review the imported draft and publish it before running. See [Import the SDLC starter](docs/sdlc-workflow.md#import-the-starter-into-an-existing-library) for local-file and CLI options.
 
 For a node-editor reference, the same folder includes [All nodes (demo)](workflows/all-nodes.json), an optional example covering every current node type. Import it and inspect the editors without starting a run. See [Workflow examples](workflows/README.md).
 
@@ -110,7 +110,7 @@ Use the MCP [workflow testbench](docs/workflow-testbench.md) to save representat
 
 For trusted local repository work, use [managed Git trials](docs/local-git-trials.md) to prepare a separate checkout per sample, route Scripts and Agent assignments to it, retain evidence and track cleanup. External executors must prevent outbound writes; the recipe is not an OS sandbox.
 
-Import the [evaluation starter](docs/workflow-evaluation.md) to grade retained comparison outputs with a fixed rubric, fresh artifact reviewers or frozen checks, and resumable judgment receipts. Its usage stays separate from the original trials.
+Use the automatically installed [evaluation starter](docs/workflow-evaluation.md) to grade retained comparison outputs with a fixed rubric, fresh artifact reviewers or frozen checks, and resumable judgment receipts. Its usage stays separate from the original trials.
 
 Import the [workflow improvement starter](docs/workflow-improvement.md) for one inline prompt candidate, fixed tuning and separate acceptance cases, bounded trial budgets and a revision-bound adoption proposal. Experimental versions stay on a separate workflow; production remains unchanged.
 

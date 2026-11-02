@@ -64,3 +64,9 @@ Before releasing a persistence change, follow [Add a database migration](upgradi
 Inspect the failed **Release** run and check the version in npm first. After fixing the cause, run **Actions → Release → Run workflow** on `main`. The workflow also runs when a fix merges to `main`.
 
 Keep the existing version when retrying a failed publish. Changesets skips versions already in npm. A published version cannot be reused. If npm publication succeeded but GitHub release creation failed, check the tag and GitHub release separately, since a retry may skip the already-published package.
+
+## Ship a curated starter
+
+Keep the automatic set small and self-contained. Add a new entry in `packages/server/src/starters.ts` with a permanent unique ID and a checked-in template. Never change an existing ID to force a template update; users own installed copies, and deletion receipts remain final. Specialized examples stay optional.
+
+Test fresh and existing libraries, manual copies, repeated startup, deletion, failed publication and the packed installation. Update [automatic starter behavior](starter-workflows.md), affected starter guides and package smoke expectations. New automatic deliveries publish without starting runs. Changes to an existing template affect only libraries that have not already handled its identity.

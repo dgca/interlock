@@ -66,13 +66,18 @@ function draftAndReview(engine: Engine, runId: string, stage: string) {
   });
 }
 
-it('publishes a self-contained SDLC v1 in a fresh store without old versions or runs', () => {
+it('publishes both curated starters in a fresh store without old versions or runs', () => {
   const engine = setup();
   seed(engine);
   const workflows = engine.store.workflows();
-  expect(workflows).toHaveLength(1);
+  expect(workflows).toHaveLength(2);
   const workflow = workflows[0];
   expect(workflow.name).toBe('SDLC workflow');
+  expect(workflows[1]).toMatchObject({
+    name: 'Evaluate workflow comparison',
+    latestVersion: 1,
+  });
+  expect(engine.store.list('starterInstallations')).toHaveLength(2);
   expect(workflow.latestVersion).toBe(1);
   expect(workflow.ownerWorkflowId).toBeNull();
   const version = engine.store.getVersion(workflow.id, 1)!;
@@ -177,7 +182,7 @@ it('seeds once and never revives a deleted starter', () => {
   const first = engine.store.workflows();
   seed(engine);
   expect(engine.store.workflows()).toEqual(first);
-  engine.deleteWorkflow(first[0].id);
+  for (const workflow of first) engine.deleteWorkflow(workflow.id);
   seed(engine);
   expect(engine.store.workflows()).toEqual([]);
 });
@@ -189,19 +194,33 @@ it('preserves a pre-marker library and its published versions', () => {
   const before = engine.store.workflows(),
     version = engine.store.getVersion(own.id, 1);
   seed(engine);
-  expect(engine.store.workflows()).toEqual(before);
+  expect(engine.store.workflows().filter((w) => w.id === own.id)).toEqual(
+    before,
+  );
+  expect(engine.store.workflows().some((w) => w.name === 'SDLC workflow')).toBe(
+    false,
+  );
   expect(engine.store.getVersion(own.id, 1)).toEqual(version);
   engine.deleteWorkflow(own.id);
+  const evaluator = engine.store
+    .workflows()
+    .find((w) => w.name === 'Evaluate workflow comparison')!;
+  engine.deleteWorkflow(evaluator.id);
   seed(engine);
   expect(engine.store.workflows()).toEqual([]);
 });
 
-it('preserves a marked empty library', () => {
+it('keeps a legacy deleted SDLC absent while introducing the evaluator once', () => {
   const engine = setup();
   const marker = { id: 'seed', seededAt: '2025-01-01T00:00:00Z' };
   engine.store.put('meta', marker);
   seed(engine);
-  expect(engine.store.workflows()).toEqual([]);
+  expect(engine.store.workflows()).toMatchObject([
+    { name: 'Evaluate workflow comparison', latestVersion: 1 },
+  ]);
+  expect(engine.store.get('starterInstallations', 'sdlc')).toMatchObject({
+    outcome: 'legacy-skipped',
+  });
   expect(engine.store.get('meta', 'seed')).toEqual(marker);
 });
 
@@ -215,6 +234,6 @@ it('rolls back a failed starter publication and permits a clean retry', () => {
   expect(engine.store.list('versions')).toEqual([]);
   expect(engine.store.get('meta', 'seed')).toBeUndefined();
   seed(engine);
-  expect(engine.store.workflows()).toHaveLength(1);
+  expect(engine.store.workflows()).toHaveLength(2);
   expect(engine.store.workflows()[0].latestVersion).toBe(1);
 });

@@ -1,6 +1,6 @@
 # Import a workflow
 
-These files are optional imports for an existing Interlock library. Fresh libraries receive the SDLC starter automatically.
+Fresh libraries receive SDLC and the comparison evaluator as published workflows. Upgrades add newly introduced curated starters once while preserving existing copies and tracked deletions. See [automatic starters](../docs/starter-workflows.md). These files also support explicit manual imports; specialized examples remain optional.
 
 | File                                         | Workflow                     | Purpose                                                                                                                                   |
 | -------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -19,7 +19,7 @@ These files are optional imports for an existing Interlock library. Fresh librar
 
 Alternatively, download a JSON file and upload it through **Import → Local file**. From a repository checkout, the CLI accepts `interlock import @workflows/all-nodes.json`.
 
-Importing does not start a run. The demo imports as a draft with a published owned helper so both Workflow editors have a valid target. Reimporting the unchanged demo bundle is a no-op; conflicting local edits are preserved by import conflict checks. The SDLC file creates a new draft on each import. Only publish a root draft if you want to run it.
+Importing does not start a run. The demo imports as a draft with a published owned helper so both Workflow editors have a valid target. Reimporting the unchanged demo bundle is a no-op; conflicting local edits are preserved by import conflict checks. The standalone SDLC and evaluator files create a new draft on each explicit import. Only publish a root draft if you want to run it.
 
 ## Inspect the demo
 

@@ -1,6 +1,6 @@
 {
   "name": "Evaluate workflow comparison",
-  "description": "Grade retained comparison outputs with a captured rubric, fresh artifact reviewers or frozen checks, idempotent receipts, and a separate evaluator usage scope. No model provider or winner selection. Import and publish before use.",
+  "description": "Grade retained comparison outputs with a captured rubric, fresh artifact reviewers or frozen checks, idempotent receipts, and a separate evaluator usage scope. No model provider or winner selection.",
   "definition": {
     "inputSchema": {
       "type": "object",

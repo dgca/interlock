@@ -2,15 +2,18 @@
 
 Use the importable **Evaluate workflow comparison** starter to assess retained outputs from an existing comparison. It captures a fixed rubric, runs fresh artifact reviewers or deterministic structural grading, and records judgments against exact sample artifacts. Evaluation runs have their own usage scope. Publication and acceptance remain separate decisions.
 
-## Import and publish the starter
+## Find the starter
+
+Open **Workflows** or ask your connected agent to find **Evaluate workflow comparison** and inspect its input contract. New and upgraded libraries receive it published and ready to configure. Recognized manual copies stay unchanged and may still require publication. Deleted copies are not automatically reinstalled. See [automatic starters](starter-workflows.md) for legacy recognition and deletion limits.
+
+For an explicit additional copy:
 
 1. Open **Workflows → Import → GitHub folder**.
 2. Enter `https://github.com/dgca/interlock/tree/main/workflows` and select **Find workflows**.
 3. Select **Evaluate workflow comparison**, then **Import selected**.
 4. Review the draft and publish it.
 
-For a local checkout or installed package, import [workflows/evaluate.json](../workflows/evaluate.json) with `interlock import @/absolute/path/to/workflows/evaluate.json`, then run `interlock publish WORKFLOW_ID`. Existing libraries and the fresh-library SDLC seed remain unchanged.
-
+For a local checkout or installed package, import [workflows/evaluate.json](../workflows/evaluate.json) with `interlock import @/absolute/path/to/workflows/evaluate.json`, then run `interlock publish WORKFLOW_ID`. Explicit standalone imports create separate drafts.
 The starter uses ordinary JavaScript Script, Agent, Condition and Batch nodes. Connect an executor using [Connect a harness](connect-harness.md). Review mode requires a fresh session or isolated subagent without inherited trial history; Interlock does not launch model sessions. Preparation and recording use ordinary current-context assignments in both modes.
 
 ## Capture a fixed evaluation request

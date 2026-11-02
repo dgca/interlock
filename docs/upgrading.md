@@ -63,6 +63,12 @@ Restoring replaces database state with the snapshot. Changes made after that sna
 
 Interlock does not run reverse migrations. Versions with the migration guard refuse databases with a newer schema than they support. Older releases without that guard may still open newer databases, so use a matching backup when reverting to them.
 
+## Receive new starter workflows
+
+Restart after upgrading to receive newly introduced curated starters. They arrive published; they do not start runs. Your drafts, versions, history and customized copies remain intact. Local delivery receipts keep deleted starters from reappearing. Earlier SDLC seed decisions remain final; manual-copy recognition and historical deletion limits are described in [automatic starters](starter-workflows.md).
+
+Receipt tracking uses an additive document collection without a schema conversion. Full database backups preserve it; portable workflow exports do not.
+
 ## Add a database migration
 
 The schema version is independent of the npm package version. `packages/storage/src/migrations.ts` owns the ordered migration list and the existing `migrations` table records completed versions.

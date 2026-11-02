@@ -49,7 +49,7 @@ Final review checks the complete task diff, observable acceptance evidence, and 
 
 ## Existing libraries
 
-Startup seeds the SDLC starter once in a fresh library. Upgrading preserves existing workflows and published versions, including older examples or a customized SDLC. Deleting all workflows does not seed them again. Starter updates apply to new libraries; they do not rewrite your copies or active runs.
+Startup installs SDLC once in a fresh library. Upgrading preserves the earlier SDLC seed decision, including a missing or deleted copy, and leaves customized workflows, published versions and runs intact. Other newly introduced curated starters can arrive once on upgrade. Shipped template changes never overwrite or republish existing copies. See [automatic starters](starter-workflows.md) for receipts and legacy recognition.
 
 ### Import the starter into an existing library
 
