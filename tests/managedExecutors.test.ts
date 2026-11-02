@@ -41,6 +41,7 @@ afterEach(async () => {
   }
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 const profile = (
   e: Engine,
@@ -755,31 +756,6 @@ it('renews a managed claim while a native question is pending', async () => {
   );
   expect(e.executors.inspect(work.id).items[0].state).toBe('needs_human');
 });
-it('stops timed-out native work and cancels its pending human request', async () => {
-  const e = create();
-  profile(e, 'codex', { timeoutMs: 1000 });
-  e.executors.start([
-    adapter('codex', async (i) => {
-      await i.request({
-        kind: 'permission',
-        title: 'Waiting',
-        detail: 'test command',
-      });
-      return { output: true };
-    }),
-  ]);
-  start(e, workflow(e, 'codex').id, 1);
-  await vi.waitFor(() =>
-    expect(e.store.work()[0].managedExecution?.state).toBe('needs_human'),
-  );
-  await vi.waitFor(
-    () => expect(e.store.work()[0].managedExecution?.state).toBe('interrupted'),
-    { timeout: 3000 },
-  );
-  expect(
-    e.executors.inspect(e.store.work()[0].id).items[0].requests[0].state,
-  ).toBe('cancelled');
-});
 it('stops active work when its local profile is disabled', async () => {
   const e = create();
   profile(e);
@@ -936,4 +912,72 @@ it('captures workflow permission overrides in the published assignment', async (
     'read-only',
     'full-access',
   ]);
+});
+
+it('keeps long assignments alive and renews claims without the retired runtime cutoff', async () => {
+  vi.useFakeTimers();
+  const e = create();
+  e.store.put('executorProfiles', {
+    ...executorProfileSchema.parse({
+      id: 'codex',
+      harness: 'codex',
+      name: 'Codex',
+      enabled: true,
+    }),
+    timeoutMs: 1000,
+  });
+  const run = vi.fn(async (input: HarnessRun) => {
+    const answer = await input.request({
+      kind: 'permission',
+      title: 'Long assignment',
+      detail: 'test command',
+    });
+    return { output: answer.allow ?? false };
+  });
+  e.executors.start([adapter('codex', run)]);
+  const r = start(e, workflow(e, 'codex').id, 1);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(e.store.work()[0].managedExecution?.state).toBe('needs_human');
+  await vi.advanceTimersByTimeAsync(31 * 60 * 1000);
+  const work = e.store.work()[0],
+    record = e.executors.inspect(work.id).items[0];
+  expect(record.state).toBe('needs_human');
+  expect(work.status).toBe('claimed');
+  expect(Date.parse(work.leaseUntil!)).toBeGreaterThan(Date.now());
+  expect(run).toHaveBeenCalledTimes(1);
+  expect(record.profile).not.toHaveProperty('timeoutMs');
+  e.executors.respond({
+    executionId: record.id,
+    requestId: record.requests[0].id,
+    answer: { allow: false },
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(e.run(r.id).status).toBe('completed');
+}, 10000);
+it('accepts older continuity snapshots while omitting retired timeout settings', async () => {
+  const e = create();
+  profile(e, 'codex', { tools: ['git'] });
+  const calls: HarnessRun[] = [];
+  e.executors.start([
+    adapter('codex', async (input) => {
+      calls.push(input);
+      input.onSession('native');
+      if (calls.length === 1) {
+        const session = e.store.list<any>('executorSessions')[0];
+        e.store.put('executorSessions', {
+          ...session,
+          profile: { ...session.profile, timeoutMs: 1000 },
+        });
+      }
+      return { output: input.work.input };
+    }),
+  ]);
+  const r = start(e, groupedWorkflow(e).id, 1);
+  await settled(e, r.id);
+  expect(calls).toHaveLength(2);
+  for (const call of calls)
+    expect(call.profile).not.toHaveProperty('timeoutMs');
+  expect(calls[1].sessionId).toBe('native');
+  expect(executorProfileSchema.shape).not.toHaveProperty('timeoutMs');
+  expect(definitionSchema.shape).not.toHaveProperty('agentTimeoutMs');
 });

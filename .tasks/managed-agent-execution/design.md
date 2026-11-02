@@ -13,7 +13,7 @@ Issue #71. Direct implementation, explicitly selected by the user. Claude Code a
 - Claude Agent SDK core with explicit installed executable. Codex app-server over stdio. Installed CLI discovery/version checks make no model calls.
 - Independent ungrouped/fresh sessions; manager-owned logical continuity bindings map to native sessions and pin configuration within the run/group.
 - Explicit native permission/question responses. Additional Codex sandbox grants and MCP elicitation decline. Read-only tool restrictions are not startup-hook containment.
-- Interrupted execution is held and blocks fresh claims until explicit confirmation that the prior session/subprocesses stopped. Native processes are cancelled on timeout, disablement, claim loss and shutdown.
+- Interrupted execution is held and blocks fresh claims until explicit confirmation that the prior session/subprocesses stopped. Native processes are cancelled on disablement, claim loss and shutdown.
 - One grouped MCP tool and corresponding CLI/shared API, with compact work status and on-demand bounded execution details. Local Git trials remain blocked for these adapters until their scoped-executor contract can be met.
 
 ## Validation and remaining work
@@ -27,3 +27,7 @@ Before marking ready: finish rendered desktop/mobile checks and Impeccable finis
 The user meant workflow settings, not a new workspace concept. Harnesses define default Read only, Standard or Full access permissions. Workflow `agentPermissions` optionally overrides the selected harness default for managed Agent nodes, including node-specific executor selections; connected execution keeps its native permissions. The default workflow choice is Use harness default. Effective mode/source appear beside selectors and in execution provenance. Old draft profile `ask` values normalize to Standard. Published assignments retain their captured override, and retries/continuity retain resolved settings. Full access selects native bypass/broad-access controls explicitly, with existing native deny and organization rules retained.
 
 The permission settings extension received an Impeccable finish-review `ship` verdict after desktop/mobile captures and an empty detector pass. The documenter comparison is in [permissions-ui-review.md](permissions-ui-review.md). This verdict covers harness and workflow permission settings, not the entire run approval/recovery UI. The updated full suite passed 1,172 tests; native mode mapping and MCP set/unset tests use stand-ins without model calls.
+
+## Final runtime-limit scope
+
+The user explicitly dropped Agent runtime limits. The 30-minute harness cutoff and its control are removed; no workflow time-limit setting is introduced. Managed assignments continue until completion, explicit failure, cancellation, profile disablement or claim loss. Claims keep renewing while work or human input is pending. Retired timeoutMs values in earlier draft local profiles and continuity snapshots are ignored when resolving current execution; historical records are not rewritten. Existing Script/Fetch timeouts, optional unclaimed Agent deadlines and renewable leases retain their shipped behavior. Concurrency stays a shared per-harness-configuration capacity limit with no workflow override.

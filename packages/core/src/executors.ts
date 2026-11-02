@@ -28,7 +28,6 @@ export const executorProfileSchema = z
     tools: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
     skills: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
     concurrency: z.number().int().min(1).max(8).default(1),
-    timeoutMs: z.number().int().min(1000).max(86_400_000).default(1_800_000),
     permissions: z
       .enum(['ask', 'read-only', 'standard', 'full-access'])
       .default('standard')

@@ -104,7 +104,7 @@ export class ExecutorManager {
   profiles() {
     const stored = this.engine.store
       .list<unknown>(profilesCollection)
-      .map((profile) => executorProfileSchema.parse(profile));
+      .map(parseProfileSnapshot);
     return [
       ...defaults.filter((d) => !stored.some((p) => p.id === d.id)),
       ...stored,
@@ -376,11 +376,9 @@ export class ExecutorManager {
         );
         if (binding?.session && !priorSession) continue; // An external binding is not an owned managed session.
         if (priorSession)
-          priorSession.profile = executorProfileSchema.parse(
-            priorSession.profile,
-          );
+          priorSession.profile = parseProfileSnapshot(priorSession.profile);
         const previous = this.latest(offered.id);
-        const profile = executorProfileSchema.parse(
+        const profile = parseProfileSnapshot(
           priorSession?.profile ??
             previous?.profile ?? {
               ...configured,
@@ -489,14 +487,6 @@ export class ExecutorManager {
         this.interruptJob(
           job,
           'The assignment claim ended; stopping the harness.',
-        );
-      } else if (
-        Date.now() - Date.parse(job.record.startedAt) >
-        job.record.profile.timeoutMs
-      ) {
-        this.interruptJob(
-          job,
-          'Execution reached its time limit. Confirm the old session stopped before retrying.',
         );
       } else if (
         !this.profiles().find((p) => p.id === job.record.profile.id)?.enabled
@@ -900,4 +890,16 @@ export function usageDelta(
       };
     return result;
   });
+}
+
+/** Earlier draft snapshots may retain a runtime cutoff; current execution ignores it. */
+function parseProfileSnapshot(value: unknown): ExecutorProfile {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const { timeoutMs: _retiredTimeout, ...current } = value as Record<
+      string,
+      unknown
+    >;
+    return executorProfileSchema.parse(current);
+  }
+  return executorProfileSchema.parse(value);
 }

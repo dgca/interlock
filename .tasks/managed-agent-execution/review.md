@@ -37,3 +37,7 @@ The full suite passed **100 files / 1,158 tests** after the review changes. A fi
 Checked affected guidance in README, architecture, harness connection, current scope, model tiers, managed execution, context continuity, workflow execution, evaluation and testbench docs. MCP discovery and profile/dispatch/continuation/response flows are covered over HTTP and stdio; this is not a whole-tool-set audit.
 
 This review does not establish real-account authentication, enterprise policy or subscription compatibility. Rendered desktop/mobile UI review and the Impeccable finish review remain pending. Keep the PR in draft until those release checks are addressed. Process-group cleanup is not an operating-system sandbox and cannot contain deliberately detached or privileged external processes.
+
+## Subsequent scope decision
+
+The user removed managed Agent runtime limits after this review. The draft runtime cutoff and settings control are gone; proposed workflow overrides were discarded before publication. Regression coverage now advances a pending assignment past the former 30-minute cutoff, verifies ongoing claim renewal, and verifies that retired timeoutMs fields in earlier draft configurations and continuity snapshots do not impose a limit. The original timeout-review observation above is historical.

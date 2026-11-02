@@ -259,20 +259,12 @@ function ProfileRow({
                 }
               />
               <NumberInput
-                label="Concurrent assignments"
+                label="Concurrent assignment limit"
+                description="Shared across all workflows using this configuration. Additional assignments wait for a slot."
                 min={1}
                 max={8}
                 value={draft.concurrency}
                 onChange={(v) => setDraft({ ...draft, concurrency: Number(v) })}
-              />
-              <NumberInput
-                label="Execution time limit, minutes"
-                min={1}
-                max={1440}
-                value={draft.timeoutMs / 60000}
-                onChange={(v) =>
-                  setDraft({ ...draft, timeoutMs: Number(v) * 60000 })
-                }
               />
               <TextInput
                 label="Profile reference"

@@ -23,3 +23,9 @@ The settings dialog removes a redundant introductory sentence and places permiss
 At 390 pixels, the existing 175-pixel sidebar leaves a narrow harness configuration column. The captures retain that navigation behavior; redesigning the sidebar is outside this extension.
 
 The checkout has no `DESIGN.md` or `.impeccable/design.json`. This is an existing documentation gap, not evidence of a new visual system. Neither file was created. No UI, product context, design files, or sidecar files were changed by this documenter pass.
+
+## Follow-up comparison after runtime cutoff removal
+
+Compared the final `Harnesses.tsx` delta and inspected `no-runtime-cutoff-desktop.png` and `no-runtime-cutoff-mobile-advanced.png` under `.impeccable/review/`. The Execution time limit field is removed. The remaining Concurrent assignment limit uses the existing Mantine NumberInput and explains that the limit is shared across workflows using the configuration, with additional assignments waiting for a slot.
+
+The desktop grid and narrow single-column layout retain the incumbent typography, spacing, field styling, and Advanced settings disclosure. The longer label and guidance wrap within the mobile column. This comparison supports the supplied `ship` verdict for the removal and concurrency clarity only. The existing sidebar constraint remains. No design-system change or additional repair was made.
