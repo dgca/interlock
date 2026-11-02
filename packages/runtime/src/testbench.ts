@@ -25,6 +25,7 @@ import {
   type ComparisonRunContext,
   type ComparisonSample,
   type Run,
+  type BudgetPolicy,
   type Workflow,
   type Json,
 } from '@interlock/core';
@@ -62,6 +63,7 @@ export class Testbench {
         version: number,
         input: Json,
         context: ComparisonRunContext,
+        budget?: BudgetPolicy,
       ) => Run;
       cancel: (id: string) => void;
     },
@@ -416,6 +418,7 @@ export class Testbench {
         prompts: captured.prompts,
         configurations: captured.configurations,
         ...(q.trialSetup ? { trialSetup: q.trialSetup } : {}),
+        ...(q.sampleBudget ? { sampleBudget: q.sampleBudget } : {}),
         samples,
         judgments: [],
         status: 'running',
@@ -549,6 +552,7 @@ export class Testbench {
           sample.version,
           testCase.input,
           this.context(c, sample),
+          c.sampleBudget,
         );
         sample.runId = run.id;
         updated = true;
@@ -614,6 +618,7 @@ export class Testbench {
       activeDetachedCount: activeDetached.length,
       activeDetachedRunIds: activeDetached.slice(0, 25).map((r) => r.id),
       judgmentCount: c.judgments.length,
+      ...(c.sampleBudget ? { sampleBudget: c.sampleBudget } : {}),
       ...(c.trialSetup
         ? {
             trials: {

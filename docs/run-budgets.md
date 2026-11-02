@@ -97,3 +97,7 @@ Policies use the additive `runBudgets` document collection; blocked assignments 
 Reported usage that changes admission updates assignment markers and continuation cursors. Usage-only updates without an admission change retain the existing cursor behavior. Budget adjustments also wake continuation readers. Budget records describe local dispatch policy, not an authorization boundary or account balance.
 
 [External holds](work-holds.md) are separate from budget gates. Resume never resets usage or changes a governing policy. Held attempts may still report usage with their retained attempt token, without restoring claim authority.
+
+## Budget comparison work separately
+
+Comparison roots are independent runs, so they do not inherit the workflow budget of an agent that starts the comparison. Optional comparison `sampleBudget` installs a tree policy on every root before its work becomes eligible. Each root has its own allowance, shared with all descendants. Multiply it by the maximum root count when allocating an experiment budget, and account for proposal, coordination and grading separately. See [comparison budgets](workflow-testbench.md#budget-independent-samples) and the [bounded improvement starter](workflow-improvement.md).

@@ -173,15 +173,19 @@ export class Engine {
     this.testbench = new Testbench(
       store,
       {
-        create: (workflowId, version, input, comparison) =>
-          this.newRun(
+        create: (workflowId, version, input, comparison, budget) => {
+          const run = this.newRun(
             workflowId,
             version,
             input,
             undefined,
             undefined,
             comparison,
-          ),
+          );
+          if (budget)
+            this.budgets.set({ runId: run.id, expectedRevision: 0, budget });
+          return this.run(run.id);
+        },
         cancel: (id) => this.cancelTree(id),
       },
       this.usage,

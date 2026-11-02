@@ -112,6 +112,8 @@ For trusted local repository work, use [managed Git trials](docs/local-git-trial
 
 Import the [evaluation starter](docs/workflow-evaluation.md) to grade retained comparison outputs with a fixed rubric, fresh artifact reviewers or frozen checks, and resumable judgment receipts. Its usage stays separate from the original trials.
 
+Import the [workflow improvement starter](docs/workflow-improvement.md) for one inline prompt candidate, fixed tuning and separate acceptance cases, bounded trial budgets and a revision-bound adoption proposal. Experimental versions stay on a separate workflow; production remains unchanged.
+
 Use [fixture simulation](docs/workflow-simulation.md) to test supported flat graphs with saved Agent, Script and Fetch outcomes without model calls or external effects. Simulated reports stay separate from live comparisons. Author cases with `interlock test-suite` and run or inspect them with `interlock simulation` or the grouped MCP tool.
 
 ### Create a child workflow

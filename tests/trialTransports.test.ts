@@ -107,6 +107,11 @@ it.each(['http', 'stdio'])(
         baselineVersion: 1,
         candidateVersion: 1,
         trialSetup: { kind: 'local_git', repository, commit },
+        sampleBudget: {
+          scope: 'tree',
+          unknownUsage: 'allow',
+          limits: { claims: { max: 1 } },
+        },
       };
       const p = await call('preview_workflow_comparison', q);
       expect(p.canStart).toBe(true);
@@ -121,6 +126,9 @@ it.each(['http', 'stdio'])(
       expect(JSON.stringify(summaries)).not.toContain(root);
       expect(JSON.stringify(summaries)).not.toContain('ownerToken');
       const work = engine.available()[0];
+      expect(
+        (await call('get_run_budget', { runId: work.runId })).budget,
+      ).toMatchObject(q.sampleBudget);
       const briefing = await call('get_run_briefing', { id: work.runId });
       expect(JSON.stringify(briefing)).not.toContain(root);
       expect(JSON.stringify(briefing)).toContain(work.trialEnvironment!.id);

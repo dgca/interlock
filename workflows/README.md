@@ -2,11 +2,13 @@
 
 These files are optional imports for an existing Interlock library. Fresh libraries receive the SDLC starter automatically.
 
-| File                                         | Workflow                | Purpose                                                                                                                           |
-| -------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| [sdlc.json](sdlc.json)                       | SDLC workflow           | The same starter used by fresh installs. See [Use the SDLC workflow](../docs/sdlc-workflow.md).                                   |
-| [all-nodes.json](all-nodes.json)             | All nodes (demo)        | Inspect every current node editor using a fictional mission briefing. Importing also adds its owned **Format crew badge** helper. |
-| [local-git-trial.json](local-git-trial.json) | Local Git trial example | Reviewed local Script for independent comparison workspaces. See [managed Git trials](../docs/local-git-trials.md).               |
+| File                                         | Workflow                     | Purpose                                                                                                                                   |
+| -------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [sdlc.json](sdlc.json)                       | SDLC workflow                | The same starter used by fresh installs. See [Use the SDLC workflow](../docs/sdlc-workflow.md).                                           |
+| [all-nodes.json](all-nodes.json)             | All nodes (demo)             | Inspect every current node editor using a fictional mission briefing. Importing also adds its owned **Format crew badge** helper.         |
+| [local-git-trial.json](local-git-trial.json) | Local Git trial example      | Reviewed local Script for independent comparison workspaces. See [managed Git trials](../docs/local-git-trials.md).                       |
+| [evaluate.json](evaluate.json)               | Evaluate workflow comparison | Grade retained artifacts using a fixed rubric and record resumable receipts. See [workflow evaluation](../docs/workflow-evaluation.md).   |
+| [improve.json](improve.json)                 | Improve one workflow prompt  | One bounded experiment and adoption proposal, with a pinned owned evaluator. See [workflow improvement](../docs/workflow-improvement.md). |
 
 ## Import from GitHub
 

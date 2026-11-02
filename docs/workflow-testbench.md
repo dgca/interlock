@@ -57,6 +57,24 @@ If `canStart` is true, call `start_workflow_comparison` with the same selection,
 
 Use `list_work`, `claim_work`, `submit_result` and existing renewal/failure tools to perform Agent assignments. The testbench does not launch an executor. Exact published versions and selected prompt captures persist across queued samples, delayed Batch items, child invocations and restart. By default, both sides capture current content for matching saved prompt IDs. This does not recover the library as it existed when an older definition was published. Ordinary runs retain their existing capture behavior.
 
+## Budget independent samples
+
+Optional `sampleBudget` uses the existing [run budget](run-budgets.md) contract with required `scope:"tree"`. Each independent root receives its own captured policy atomically before Agent work becomes eligible. Descendants, including detached work, share that root's allowance. Delayed samples after restart receive the same policy; explicit retries retain consumed claims and usage.
+
+```json
+{
+  "sampleBudget": {
+    "scope": "tree",
+    "unknownUsage": "block",
+    "limits": { "claims": { "max": 2 } }
+  }
+}
+```
+
+Include the policy in both preview and start; changing it requires another confirmation. Preview and progress/report reads expose the captured policy. `get_run_budget` reads actual current policy and consumption for a sample root. Existing authorized adjustments remain possible but do not rewrite the comparison capture. Omission keeps existing unbudgeted behavior.
+
+An outer coordinator run budget does not govern these independent roots. Total possible reservations include every sample's allowance and separate coordinator/evaluator work. These policies gate Agent claims, not Script effects or provider billing. See the [improvement starter](workflow-improvement.md) for a bounded allocation across phases.
+
 ## Prepare local trial workspaces
 
 Optional `trialSetup:{kind:"local_git",repository:absolutePath,commit:fullSHA}` prepares a separate checkout per sample before allocating its root run. Native Scripts and polling checks use that checkout; Agent assignments receive its context separately from task input and require the `interlock-local-trials` skill. Native Fetch is unsupported. This recipe requires reviewed local-only code and an external executor that prevents outbound writes. It is not an OS sandbox. See [managed Git trials](local-git-trials.md) for the example, artifact limits and cleanup recovery.
