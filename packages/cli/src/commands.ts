@@ -21,7 +21,10 @@ function parseSummaryArgs(args: string[], withBudget = false) {
       positionals.push(...args.slice(i + 1));
       break;
     }
-    if (withBudget && arg === '--budget') {
+    if (
+      withBudget &&
+      ['--budget', '--request-id', '--external-task'].includes(arg)
+    ) {
       optionArgs.push(arg);
       if (i + 1 < args.length) optionArgs.push(args[++i]);
       continue;
@@ -38,7 +41,13 @@ function parseSummaryArgs(args: string[], withBudget = false) {
     args: optionArgs,
     options: {
       summary: { type: 'boolean' },
-      ...(withBudget ? { budget: { type: 'string' as const } } : {}),
+      ...(withBudget
+        ? {
+            budget: { type: 'string' as const },
+            'request-id': { type: 'string' as const },
+            'external-task': { type: 'string' as const },
+          }
+        : {}),
     },
   });
   return { values, positionals };
@@ -141,9 +150,17 @@ export async function runCommand(argv: string[]) {
       const { values, positionals } = parseSummaryArgs(args, true);
       if (positionals.length < 2 || positionals.length > 3)
         throw new Error(
-          'Usage: start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file]',
+          'Usage: start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file]',
         );
       const input = {
+        requestId:
+          typeof values['request-id'] === 'string'
+            ? values['request-id']
+            : undefined,
+        externalTask:
+          typeof values['external-task'] === 'string'
+            ? await parse(values['external-task'])
+            : undefined,
         budget:
           typeof values.budget === 'string'
             ? await parse(values.budget)
@@ -167,6 +184,8 @@ export async function runCommand(argv: string[]) {
           'root-only': { type: 'boolean' },
           chain: { type: 'string' },
           limit: { type: 'string' },
+          'request-id': { type: 'string' },
+          'external-task': { type: 'string' },
           'input-path': { type: 'string' },
           equals: { type: 'string' },
         },
@@ -180,6 +199,14 @@ export async function runCommand(argv: string[]) {
       return client.runs.find.query(
         runQuerySchema.parse({
           workflowId: values.workflow,
+          requestId:
+            typeof values['request-id'] === 'string'
+              ? values['request-id']
+              : undefined,
+          externalTask:
+            typeof values['external-task'] === 'string'
+              ? await parse(values['external-task'])
+              : undefined,
           chainRootRunId: values.chain,
           status: values.status,
           rootOnly: values['root-only'],
@@ -323,8 +350,8 @@ export async function runCommand(argv: string[]) {
           'import <json|@file> [--force | --revisions JSON] [--restore-deleted-versions] (force changes drafts only; explicit restoration requires original definitions and valid dependencies/ownership)',
           'export <id>',
           'publish <id> [--cascade]',
-          'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file]',
-          'runs [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
+          'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file]',
+          'runs [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
           'context-group <run-id> <group> [options-json|@file] (binding and history; offset, limit)',
           'handoff-context <json|@file> (runId, group, expectedRevision, session, actor, reason, checkpointRef)',

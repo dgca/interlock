@@ -164,6 +164,10 @@ Workflow-level routes can loop back to an upstream node other than Entry. The sa
 
 Standalone recurring Agent workflows can use an Exit with `continueAsNew:{maxRuns:100}` to pass a checkpoint into the same published version with fresh step history. The chain retains captured prompts and budget consumption. Inspect lineage and stop it from any member. See [continue as new](docs/continue-as-new.md).
 
+### Retry a task start safely
+
+Optional `start_run.requestId` recovers the original run after repeated delivery or a lost response. `externalTask` links a run to a non-secret task identity for existing lookup tools. Old keys cannot recreate deleted history; deliberate new attempts use new keys. See [idempotent run starts](docs/idempotent-run-starts.md) for MCP, CLI and retention rules.
+
 ### Resume an agent run
 
 Use MCP `get_run_briefing` with the existing run ID for current progress, available and claimed work, blockers, Batch counts, deadlines, and result references. Detached trees have independent lifecycle counts, including after the requested run finishes. Use `get_run_result` to read one input or output path, and `wait_for_run_change` with the returned cursor to wait for a scoped change. Waits default to 30 seconds and stop after at most 60 seconds. These reads do not claim or execute work.

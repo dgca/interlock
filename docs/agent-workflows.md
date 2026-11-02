@@ -74,7 +74,7 @@ Use `wait_for_run_change` with `id` equal to the returned `runId` and the return
 
 An identical submission can be retried with the same token. It does not repeat the transition, but returns current progress in the selected mode. Later work or a server restart can change the response and cursor. Different output under an accepted submission still rejects. Validation errors retain the existing MCP error shape.
 
-`get_run` provides full inspection of an existing run. Do not repeat `start_run` to inspect it: that creates another run. `get_run_result` reads selected values. The shared API exposes `runs.startSummary` and `work.submitSummary`, accepting the corresponding mutation arguments and optional `limit`. These return runtime summaries; MCP adds `nextCall`. `runs.start`, `work.submit`, UI, and CLI return full responses. `start_run`, `submit_result`, and `list_work` advertise output field schemas over both MCP transports; mode-specific required fields are listed above. `fail_work`, `retry_run`, and `cancel_run` return full inspection.
+`get_run` provides full inspection of an existing run. Use read tools for inspection. An unkeyed repeated `start_run` creates another run; an identical keyed redelivery reads its original run without advancing it. See [safe start retries](idempotent-run-starts.md). `get_run_result` reads selected values. The shared API exposes `runs.startSummary` and `work.submitSummary`, accepting the corresponding mutation arguments and optional `limit`. These return runtime summaries; MCP adds `nextCall`. `runs.start`, `work.submit`, UI, and CLI return full responses. `start_run`, `submit_result`, and `list_work` advertise output field schemas over both MCP transports; mode-specific required fields are listed above. `fail_work`, `retry_run`, and `cancel_run` return full inspection.
 
 `nextCall` suggests `get_run_result` for a completed result, `get_run_briefing` for failure, cancellation, or an external hold, or `wait_for_run_change` for claimed work and pending execution. Wait suggestions pair the snapshot's run ID and cursor and use the tool's finite wait default. Suggestions are read-only and do not execute automatically. The field is present on compact start/submission responses, not on briefing or wait responses.
 
@@ -272,7 +272,7 @@ Pass `leaseSeconds: 300` explicitly when a renewal should grant five minutes reg
 
 MCP `list_runs` and the shared API `runs.find` return summaries in descending creation order. The default limit is 50, with a maximum of 1000. Equal timestamps use descending insertion order.
 
-Available filters are `workflowId`, `status`, `rootOnly`, and `inputMatch: {path, equals}`. Status accepts `running`, `waiting`, `completed`, `failed`, or `cancelled`. `rootOnly` defaults to false, which includes nested Workflow and Batch item runs. A summary includes IDs, workflow name, version, status, timestamps, cursor, input, `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, `rootWorkflowId`, and `batchNodeId`. Root IDs follow the same rules as work summaries. Use `get_run` for execution details.
+Available filters include `requestId`, `externalTask:{system,id}`, `workflowId`, `status`, `rootOnly`, `chainRootRunId`, and `inputMatch: {path, equals}`. Optional `startRequestId` and `externalTask` appear in summaries and inspection. Status accepts `running`, `waiting`, `completed`, `failed`, or `cancelled`. `rootOnly` defaults to false, which includes nested Workflow and Batch item runs. A summary includes IDs, workflow name, version, status, timestamps, cursor, input, `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, `rootWorkflowId`, and `batchNodeId`. Root IDs follow the same rules as work summaries. Use `get_run` for execution details.
 
 Paths use dot-separated object keys or array indices. A blank path selects the complete input. Equality compares JSON structure, including object values independently of key order. Missing paths do not match, even when `equals` is null. Workflow, status, and creation ordering have database indexes. Arbitrary input-path matching scans the selected candidates until the limit is reached.
 
@@ -283,7 +283,7 @@ interlock runs --input-path thread_ts --equals '"1787334538.500319"' --limit 10
 
 Without flags, `interlock runs` retains its full history dump. The shared `runs.list` endpoint also retains its original response.
 
-Listing before starting a run is not atomic deduplication. A dispatcher that requires one active run per key must serialize starts or maintain its own atomic reservation.
+Use `start_run.requestId` for atomic redelivery safety. External-task lookup does not reserve a task: distinct keys can create concurrent attempts. A dispatcher requiring one active task owner must still serialize admission or maintain its own reservation. See [start identity and retention](idempotent-run-starts.md).
 
 ## Bind original input into later steps
 
@@ -387,7 +387,7 @@ Export carries the resulting ownership and includes owners/children as usual. Fr
 
 ## Archive, restore, or delete
 
-MCP `update_workflow` accepts `archived: true` or `false`. CLI provides `archive ID` and `restore ID`. Archive retains history and does not cancel active runs. New direct starts require an active workflow and owner; existing published invocations retain their pins.
+MCP `update_workflow` accepts `archived: true` or `false`. CLI provides `archive ID` and `restore ID`. Archive retains history and does not cancel active runs. New direct starts require an active workflow and owner; accepted keyed replays can inspect retained runs after archive. Minimal start receipts remain after deletion to prevent old requests from recreating work; existing published invocations retain their pins.
 
 `list_workflows` includes archived workflows by default. Pass `includeArchived: false` to hide archived workflows and children of archived owners. The owner filter remains independent.
 

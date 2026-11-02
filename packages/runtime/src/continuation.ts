@@ -50,6 +50,12 @@ export class Continuation {
       ok: true,
       runId: snapshot.run.id,
       runStatus: snapshot.run.status,
+      ...(snapshot.run.startRequestId !== undefined
+        ? { startRequestId: snapshot.run.startRequestId }
+        : {}),
+      ...(snapshot.run.externalTask
+        ? { externalTask: snapshot.run.externalTask }
+        : {}),
       cursor: snapshot.cursor,
       nextWork: snapshot.available,
       next: snapshot.next,

@@ -1,6 +1,11 @@
 export { matchRouting } from './resultRouting.js';
 export * from './simulation.js';
 export * from './runChains.js';
+export * from './runStarts.js';
+import {
+  startRequestIdSchema,
+  externalTaskIdentitySchema,
+} from './runStarts.js';
 import { continueAsNewSchema } from './runChains.js';
 import { z } from 'zod';
 export * from './usage.js';
@@ -363,6 +368,8 @@ export interface WorkflowVersion {
 export type RunStatus =
   'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
 export const runQuerySchema = z.object({
+  requestId: startRequestIdSchema.optional(),
+  externalTask: externalTaskIdentitySchema.optional(),
   chainRootRunId: z.string().min(1).optional(),
   workflowId: z.string().optional(),
   status: z
@@ -405,6 +412,8 @@ export interface PollCheckResult {
   error?: string;
 }
 export interface Run {
+  startRequestId?: string;
+  externalTask?: import('./runStarts.js').ExternalTask;
   chain?: import('./runChains.js').RunChainLink;
   contextRevision?: number;
   budgetRevision?: number;

@@ -15,11 +15,11 @@ This first version supports one target Agent's inline `prompt`, one candidate, a
 
 Copies that reference owned children of the production workflow cannot reuse those children as a different owner. Prepare an independent experimental tree with valid ownership before starting, or begin with a flat workflow. Do not change ownership or overwrite production to make an experiment publish.
 
-Setup is deliberately explicit. The starter does not create workflows or suites after it begins, so a lost creation response cannot silently create another experimental copy. Starting the starter twice still creates two experiments; serialize admission in your external heartbeat until [idempotent run creation](https://github.com/dgca/interlock/issues/181) is available.
+Setup is deliberately explicit. The starter does not create workflows or suites after it begins, so a lost creation response cannot silently create another experimental copy. Use the same outer `start_run.requestId` for redelivery of one experiment. Unkeyed starts or different keys still create separate experiments; serialize task admission in your external heartbeat when only one experiment should own the task. See [safe start retries](idempotent-run-starts.md).
 
 ## Start with fixed settings and budgets
 
-Call `start_run` with the imported root ID, its explicit published `version`, and input shaped like this:
+Call `start_run` with the imported root ID, its explicit published `version`, a stable outer `requestId` for this experiment attempt, and input shaped like this. The request key belongs beside `input`, not inside it:
 
 ```json
 {
