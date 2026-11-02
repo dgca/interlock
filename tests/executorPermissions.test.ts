@@ -70,7 +70,7 @@ it('prevents edits while reloading shared settings after a revision conflict', a
     root.render(h(MantineProvider, {}, h(ExecutionSettings))),
   );
   const input = container.querySelector<HTMLInputElement>(
-    'input:not([type="radio"]):not([type="hidden"])',
+    'input:not([type="hidden"])',
   )!;
   const fill = (value: string) => {
     Object.getOwnPropertyDescriptor(
@@ -182,20 +182,19 @@ function button(text: string) {
     (b) => b.textContent?.trim() === text,
   )!;
 }
+function setLimitMode(value: string) {
+  const select = container.querySelector<HTMLSelectElement>(
+    'select[aria-label="Assignment limit mode"]',
+  )!;
+  select.value = value;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+}
 it('saves Unlimited explicitly and accepts a larger numeric limit when returning to Limited', async () => {
   await act(async () =>
     root.render(h(MantineProvider, {}, h(ExecutionSettings))),
   );
-  await act(async () =>
-    container
-      .querySelector<HTMLInputElement>(
-        'input[type="radio"][value="unlimited"]',
-      )!
-      .click(),
-  );
-  expect(
-    container.querySelector('input:not([type="radio"]):not([type="hidden"])'),
-  ).toBeNull();
+  await act(async () => setLimitMode('unlimited'));
+  expect(container.querySelector('input:not([type="hidden"])')).toBeNull();
   expect(container.textContent).toContain('Start every ready assignment');
   rpc.manage.mockResolvedValueOnce({ revision: 1, concurrency: null });
   await act(async () => button('Save limit').click());
@@ -204,13 +203,9 @@ it('saves Unlimited explicitly and accepts a larger numeric limit when returning
     expectedRevision: 0,
     concurrency: null,
   });
-  await act(async () =>
-    container
-      .querySelector<HTMLInputElement>('input[type="radio"][value="limited"]')!
-      .click(),
-  );
+  await act(async () => setLimitMode('limited'));
   const input = container.querySelector<HTMLInputElement>(
-    'input:not([type="radio"]):not([type="hidden"])',
+    'input:not([type="hidden"])',
   )!;
   expect(input.value).toBe('3');
   await act(async () => setInput(input, '25'));
@@ -228,13 +223,11 @@ it('loads saved Unlimited and explains it in workflow settings', async () => {
     root.render(h(MantineProvider, {}, h(ExecutionSettings))),
   );
   expect(
-    container.querySelector<HTMLInputElement>(
-      'input[type="radio"][value="unlimited"]',
-    )!.checked,
-  ).toBe(true);
-  expect(
-    container.querySelector('input:not([type="radio"]):not([type="hidden"])'),
-  ).toBeNull();
+    container.querySelector<HTMLSelectElement>(
+      'select[aria-label="Assignment limit mode"]',
+    )!.value,
+  ).toBe('unlimited');
+  expect(container.querySelector('input:not([type="hidden"])')).toBeNull();
   await act(async () =>
     root.render(
       h(

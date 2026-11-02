@@ -1,5 +1,10 @@
 import { useEffect, useId, useState } from 'react';
-import { NumberInput, Radio, Skeleton, VisuallyHidden } from '@mantine/core';
+import {
+  NativeSelect,
+  NumberInput,
+  Skeleton,
+  VisuallyHidden,
+} from '@mantine/core';
 import { executorSettingsSchema } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
@@ -88,66 +93,59 @@ export function ExecutionSettings() {
             </p>
           </div>
           <div className={styles.sharedControls}>
-            <Radio.Group
-              aria-labelledby={`${inputId}-label`}
+            <NativeSelect
+              aria-label="Assignment limit mode"
+              className={styles.limitMode}
               value={mode}
-              onChange={(mode) => {
-                setMode(mode);
+              disabled={busy || loading}
+              onChange={(event) => {
+                setMode(event.currentTarget.value);
                 setSaved(false);
               }}
-            >
-              <div className={styles.limitModes}>
-                <div className={styles.limitedChoice}>
-                  <Radio
-                    value="limited"
-                    label="Limited"
-                    disabled={busy || loading}
-                  />
-                  {mode === 'limited' && (
-                    <NumberInput
-                      id={inputId}
-                      aria-labelledby={`${inputId}-label`}
-                      min={1}
-                      allowDecimal={false}
-                      allowNegative={false}
-                      value={value}
-                      onChange={(value) => {
-                        setValue(value);
-                        setSaved(false);
-                      }}
-                      disabled={busy || loading}
-                      className={styles.limitInput}
-                    />
-                  )}
-                </div>
-                <Radio
-                  value="unlimited"
-                  label="Unlimited"
+              data={[
+                { value: 'limited', label: 'Limit to' },
+                { value: 'unlimited', label: 'Unlimited' },
+              ]}
+            />
+            <div className={styles.limitValueActions}>
+              {mode === 'limited' && (
+                <NumberInput
+                  id={inputId}
+                  aria-labelledby={`${inputId}-label`}
+                  min={1}
+                  allowDecimal={false}
+                  allowNegative={false}
+                  value={value}
+                  onChange={(value) => {
+                    setValue(value);
+                    setSaved(false);
+                  }}
                   disabled={busy || loading}
+                  className={styles.limitInput}
                 />
-              </div>
-            </Radio.Group>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={
-                !valid ||
-                busy ||
-                loading ||
-                concurrency === settings.concurrency
-              }
-            >
-              {busy
-                ? 'Saving…'
-                : loading
-                  ? 'Loading…'
-                  : saved
-                    ? 'Saved'
-                    : 'Save limit'}
-            </Button>
-            <VisuallyHidden role="status">
-              {saved ? 'Concurrent assignment limit saved.' : ''}
-            </VisuallyHidden>
+              )}
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={
+                  !valid ||
+                  busy ||
+                  loading ||
+                  concurrency === settings.concurrency
+                }
+              >
+                {busy
+                  ? 'Saving…'
+                  : loading
+                    ? 'Loading…'
+                    : saved
+                      ? 'Saved'
+                      : 'Save limit'}
+              </Button>
+              <VisuallyHidden role="status">
+                {saved ? 'Concurrent assignment limit saved.' : ''}
+              </VisuallyHidden>
+            </div>
           </div>
         </form>
       ) : !error ? (

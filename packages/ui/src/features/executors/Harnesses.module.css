@@ -34,19 +34,15 @@
   padding-top: 2px;
   flex-wrap: wrap;
 }
-.limitModes {
+.limitMode {
+  width: 124px;
+}
+.limitValueActions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 12px 20px;
+  gap: 10px;
 }
-.limitedChoice {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 170px;
-}
-.sharedControls > button {
+.limitValueActions > button {
   min-width: 88px;
 }
 .limitInput {
@@ -258,5 +254,11 @@
   .sharedControls {
     gap: 8px;
     flex-wrap: wrap;
+  }
+  .limitMode {
+    width: 100%;
+  }
+  .limitValueActions {
+    gap: 8px;
   }
 }

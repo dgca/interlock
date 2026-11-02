@@ -43,3 +43,7 @@ The user replaced both prior concurrency controls with one app-wide managed-assi
 ## Unlimited assignment option
 
 The user approved explicit Limited/Unlimited choices, with Limited to 3 remaining the default. Limited accepts positive whole numbers without the prior ceiling of 8; numeric values must be exactly representable as JavaScript safe integers. Unlimited persists as concurrency:null, never zero. Runtime removes only the shared admission cap; claim requirements, exclusive resources, continuity, workflow sequencing and native policies remain in force. Returning to Limited leaves current work running and waits for capacity. Workflow settings show the actual Limited or Unlimited state.
+
+## Concurrency dropdown refinement
+
+The user reviewed the side-by-side radios and approved a compact native dropdown instead. Options are Limit to and Unlimited; the positive numeric field is shown only for Limit to. On narrow screens the dropdown sits above the number and Save action. The canonical numeric/null settings contract and default of 3 are unchanged.
