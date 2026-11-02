@@ -119,3 +119,107 @@ it.each([claudeAdapter, codexAdapter])(
   },
   15000,
 );
+
+it.each([
+  'file-approval',
+  'file-missing',
+  'file-grant',
+  'secret-question',
+  'foreign-event',
+])(
+  'handles Codex %s with complete, scoped approval details',
+  async (model) => {
+    const requests: any[] = [];
+    const result = await codexAdapter.run({
+      command,
+      cwd: process.cwd(),
+      work,
+      profile: executorProfileSchema.parse({
+        id: 'codex',
+        harness: 'codex',
+        name: 'Codex',
+        model,
+      }),
+      signal: new AbortController().signal,
+      onSession: () => {},
+      onProgress: () => {},
+      request: async (request) => {
+        requests.push(request);
+        return { allow: true };
+      },
+    });
+    if (model === 'file-approval') {
+      expect(requests).toHaveLength(1);
+      expect(requests[0].detail).toContain('example.txt');
+      expect(requests[0].detail).toContain('old');
+      expect(result.output).toEqual({ ok: true });
+    } else if (model === 'foreign-event') {
+      expect(result.output).toEqual({ ok: true });
+    } else {
+      expect(requests).toHaveLength(0);
+      expect(result.output).toEqual({ ok: false });
+    }
+  },
+  15000,
+);
+
+it.each([claudeAdapter, codexAdapter])(
+  'drains diagnostic floods from $id without stalling',
+  async (adapter) => {
+    const abort = new AbortController(),
+      timer = setTimeout(() => abort.abort(), 4000);
+    try {
+      const result = await adapter.run({
+        command,
+        cwd: process.cwd(),
+        work,
+        profile: executorProfileSchema.parse({
+          id: adapter.id,
+          harness: adapter.id,
+          name: adapter.id,
+          model: 'diagnostic-flood',
+        }),
+        signal: abort.signal,
+        onSession: () => {},
+        onProgress: () => {},
+        request: async () => ({ allow: false }),
+      });
+      expect(result.output).toEqual({ ok: false });
+    } finally {
+      clearTimeout(timer);
+      abort.abort();
+    }
+  },
+  15000,
+);
+it.each([claudeAdapter, codexAdapter])(
+  'resumes the exact owned native session through $id',
+  async (adapter) => {
+    const ids: string[] = [];
+    const result = await adapter.run({
+      command,
+      cwd: process.cwd(),
+      work: {
+        ...work,
+        context: {
+          ...work.context,
+          mode: 'current',
+          continuityGroup: 'author',
+        },
+      },
+      sessionId: 'existing-native-session',
+      profile: executorProfileSchema.parse({
+        id: adapter.id,
+        harness: adapter.id,
+        name: adapter.id,
+      }),
+      signal: new AbortController().signal,
+      onSession: (id) => ids.push(id),
+      onProgress: () => {},
+      request: async () => ({ allow: false }),
+    });
+    expect(ids).toEqual(['existing-native-session']);
+    expect(result.output).toEqual({ ok: false });
+  },
+  15000,
+);

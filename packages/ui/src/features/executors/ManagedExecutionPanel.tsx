@@ -198,6 +198,16 @@ function Request({
   onAnswer: (answer: ExecutorAnswer) => Promise<void>;
 }) {
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
+  const [other, setOther] = useState<Record<string, string>>({});
+  const supplied = Object.fromEntries(
+    (request.questions ?? []).map((q) => [
+      q.id,
+      [
+        ...(answers[q.id] ?? []),
+        ...(q.allowOther && other[q.id]?.trim() ? [other[q.id]] : []),
+      ],
+    ]),
+  );
   return (
     <section className={styles.request}>
       <h4>{request.title}</h4>
@@ -222,7 +232,7 @@ function Request({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void onAnswer({ answers });
+            void onAnswer({ answers: supplied });
           }}
         >
           {request.questions?.map((q) => (
@@ -255,14 +265,15 @@ function Request({
                     { value: '', label: 'Choose an answer' },
                     ...q.options.map((value) => ({ value, label: value })),
                   ]}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setOther({ ...other, [q.id]: '' });
                     setAnswers({
                       ...answers,
                       [q.id]: e.currentTarget.value
                         ? [e.currentTarget.value]
                         : [],
-                    })
-                  }
+                    });
+                  }}
                 />
               ) : (
                 <Textarea
@@ -274,6 +285,22 @@ function Request({
                   }
                 />
               )}
+              {q.allowOther && !!q.options?.length && (
+                <Textarea
+                  mt="sm"
+                  label={
+                    q.multiple
+                      ? 'Additional answer'
+                      : 'Or enter your own answer'
+                  }
+                  value={other[q.id] ?? ''}
+                  maxLength={4000}
+                  onChange={(e) => {
+                    setOther({ ...other, [q.id]: e.currentTarget.value });
+                    if (!q.multiple) setAnswers({ ...answers, [q.id]: [] });
+                  }}
+                />
+              )}
             </div>
           ))}
           <div className={styles.actions}>
@@ -283,7 +310,7 @@ function Request({
               disabled={
                 busy ||
                 !request.questions?.every((q) =>
-                  answers[q.id]?.some((v) => v.trim()),
+                  supplied[q.id]?.some((v) => v.trim()),
                 )
               }
             >

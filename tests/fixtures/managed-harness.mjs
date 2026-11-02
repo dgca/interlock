@@ -8,7 +8,22 @@ if (process.argv.includes('--version')) {
 }
 const codex = process.argv.includes('app-server');
 const send = (value) => process.stdout.write(JSON.stringify(value) + '\n');
-const session = randomUUID();
+function flag(name) {
+  const equals = process.argv.find((value) => value.startsWith(name + '='));
+  const index = process.argv.indexOf(name);
+  return equals
+    ? equals.slice(name.length + 1)
+    : index >= 0
+      ? process.argv[index + 1]
+      : undefined;
+}
+let session = flag('--resume') ?? randomUUID();
+async function diagnostics() {
+  await new Promise((resolve) =>
+    process.stderr.write('test diagnostic\n'.repeat(300000), resolve),
+  );
+}
+if (flag('--model') === 'diagnostic-flood') await diagnostics();
 let waiting = false,
   model = 'test-model';
 const end = (allowed) => {
@@ -77,6 +92,8 @@ for await (const line of createInterface({ input: process.stdin })) {
       send({ id: message.id, result: { userAgent: 'test' } });
     if (['thread/start', 'thread/resume'].includes(message.method)) {
       model = message.params.model ?? model;
+      session = message.params.threadId ?? session;
+      if (model === 'diagnostic-flood') await diagnostics();
       send({
         id: message.id,
         result: {
@@ -93,14 +110,64 @@ for await (const line of createInterface({ input: process.stdin })) {
         id: message.id,
         result: { turn: { id: 'turn', status: 'inProgress' } },
       });
+      if (model === 'foreign-event')
+        send({
+          method: 'turn/completed',
+          params: {
+            threadId: 'foreign',
+            turn: { id: 'foreign-turn', status: 'failed' },
+          },
+        });
+      const file = model.startsWith('file-');
+      if (model === 'file-approval')
+        send({
+          method: 'item/started',
+          params: {
+            threadId: session,
+            turnId: 'turn',
+            item: {
+              id: 'tool',
+              type: 'fileChange',
+              changes: [
+                {
+                  path: 'example.txt',
+                  kind: { type: 'update' },
+                  diff: '-old\n+new',
+                },
+              ],
+            },
+          },
+        });
       send({
         id: 900,
-        method: 'item/commandExecution/requestApproval',
+        method:
+          model === 'secret-question'
+            ? 'item/tool/requestUserInput'
+            : file
+              ? 'item/fileChange/requestApproval'
+              : 'item/commandExecution/requestApproval',
         params: {
           threadId: session,
           turnId: 'turn',
           itemId: 'tool',
-          command: 'test command',
+          ...(model === 'secret-question'
+            ? {
+                questions: [
+                  {
+                    id: 'key',
+                    question: 'Enter a token',
+                    isSecret: true,
+                    options: null,
+                    isOther: false,
+                  },
+                ],
+              }
+            : file
+              ? {
+                  reason: 'Update example file',
+                  ...(model === 'file-grant' ? { grantRoot: '/private' } : {}),
+                }
+              : { command: 'test command' }),
         },
       });
       waiting = true;
@@ -134,8 +201,7 @@ for await (const line of createInterface({ input: process.stdin })) {
         },
       });
     if (message.type === 'user') {
-      const index = process.argv.indexOf('--model');
-      if (index >= 0) model = process.argv[index + 1];
+      model = flag('--model') ?? model;
       send({
         type: 'system',
         subtype: 'init',

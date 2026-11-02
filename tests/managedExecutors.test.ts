@@ -491,3 +491,371 @@ it('keeps the event loop responsive while an ordinary script runs beside managed
     ),
   ).not.toThrow();
 });
+
+it('blocks external reclaim of expired managed work before the old harness is reconciled', async () => {
+  const e = create();
+  profile(e);
+  let entered = false;
+  e.executors.start([
+    adapter('codex', async (i) => {
+      entered = true;
+      await new Promise<void>((r) =>
+        i.signal.addEventListener('abort', () => r(), { once: true }),
+      );
+      throw Error('stopped');
+    }),
+  ]);
+  const r = start(e, workflow(e, 'codex').id, 1);
+  await vi.waitFor(() => expect(entered).toBe(true));
+  const work = e.store.work()[0];
+  e.store.put('work', {
+    ...work,
+    leaseUntil: new Date(Date.now() - 1).toISOString(),
+  });
+  e.pump();
+  expect(() =>
+    e.claim(work.id, {
+      workerId: 'external',
+      freshContext: true,
+      tools: [],
+      skills: [],
+    }),
+  ).toThrow(/managed|uncertain|reconcil/i);
+});
+it('holds unexpected harness failures instead of repeating unknown external effects', async () => {
+  const e = create();
+  profile(e);
+  const run = vi.fn(async () => {
+    throw Error('Harness process ended (signal)');
+  });
+  e.executors.start([adapter('codex', run)]);
+  const r = start(e, workflow(e, 'codex').id, 1);
+  await vi.waitFor(() =>
+    expect(e.executors.inspect(e.store.work()[0].id).items[0].state).toBe(
+      'interrupted',
+    ),
+  );
+  expect(run).toHaveBeenCalledTimes(1);
+  expect(e.store.work()[0].status).toBe('held');
+  expect(e.run(r.id).status).toBe('waiting');
+});
+function groupedWorkflow(e: Engine) {
+  const d = blankDefinition();
+  d.executor = 'codex';
+  const a = d.nodes.find((n) => n.kind === 'agent')!;
+  if (a.kind !== 'agent') throw Error();
+  a.context = { ...a.context, continuityGroup: 'author', tools: ['git'] };
+  const second = { ...structuredClone(a), id: 'second' };
+  d.nodes.push(second);
+  const edge = d.edges.find((edge) => edge.source === a.id)!;
+  const exit = edge.target;
+  edge.target = second.id;
+  d.edges.push({
+    id: 'second-exit',
+    source: second.id,
+    target: exit,
+    port: 'default',
+  });
+  const w = e.create('Pinned continuity', '', d);
+  e.publish(w.id);
+  return w;
+}
+it('uses the captured continuity capabilities after local profile edits', async () => {
+  const e = create();
+  profile(e, 'codex', { tools: ['git'] });
+  let calls = 0;
+  e.executors.start([
+    adapter('codex', async (i) => {
+      calls++;
+      i.onSession('native');
+      if (calls === 1)
+        save(e, {
+          ...e.executors.profiles().find((p) => p.id === 'codex')!,
+          tools: [],
+          expectedRevision: 1,
+        });
+      return { output: i.work.input };
+    }),
+  ]);
+  const r = start(e, groupedWorkflow(e).id, 1);
+  await settled(e, r.id);
+  expect(calls).toBe(2);
+});
+it('invalidates a resumed usage baseline after an ungraceful restart', async () => {
+  const e = create();
+  profile(e, 'codex', { tools: ['git'] });
+  let calls = 0;
+  e.executors.start([
+    adapter('codex', async (i) => {
+      calls++;
+      i.onSession('native');
+      if (calls === 2) {
+        await new Promise<void>((r) =>
+          i.signal.addEventListener('abort', () => r(), { once: true }),
+        );
+        throw Error('stopped');
+      }
+      return {
+        output: i.work.input,
+        usage: [
+          {
+            provider: 'openai',
+            model: 'test',
+            inputTokens: 100,
+            outputTokens: 10,
+          },
+        ],
+      };
+    }),
+  ]);
+  const r = start(e, groupedWorkflow(e).id, 1);
+  await vi.waitFor(() => expect(calls).toBe(2));
+  const work = e.store.work().find((w) => w.nodeId === 'second')!,
+    activeRecord = e.executors.inspect(work.id).items[0];
+  const session = e.store.list<any>('executorSessions')[0];
+  await e.executors.stop();
+  // Preserve the exact running records that an abrupt process loss would leave.
+  e.store.put('managedExecutions', activeRecord);
+  e.store.put('executorSessions', session);
+  const next = new Engine(e.store, process.cwd());
+  engines.push(next);
+  engines.splice(engines.indexOf(e), 1);
+  e.stop();
+  next.executors.start([
+    adapter('codex', async (i) => ({
+      output: i.work.input,
+      usage: [
+        {
+          provider: 'openai',
+          model: 'test',
+          inputTokens: 150,
+          outputTokens: 20,
+        },
+      ],
+    })),
+  ]);
+  next.executors.confirmStopped(activeRecord.id, true);
+  await settled(next, r.id);
+  expect(
+    next.store
+      .list<any>('usageAttempts')
+      .filter((u) => u.workId === work.id && u.snapshot),
+  ).toHaveLength(0);
+});
+
+it('rejects a permission answer after the claim expires even before the observer ticks', async () => {
+  const e = create();
+  profile(e);
+  e.executors.start([
+    adapter('codex', async (i) => {
+      await i.request({
+        kind: 'permission',
+        title: 'Expired approval',
+        detail: 'test command',
+      });
+      return { output: true };
+    }),
+  ]);
+  start(e, workflow(e, 'codex').id, 1);
+  await vi.waitFor(() =>
+    expect(e.store.work()[0].managedExecution?.state).toBe('needs_human'),
+  );
+  const work = e.store.work()[0],
+    record = e.executors.inspect(work.id).items[0];
+  e.store.put('work', {
+    ...work,
+    leaseUntil: new Date(Date.now() - 1).toISOString(),
+  });
+  expect(() =>
+    e.executors.respond({
+      executionId: record.id,
+      requestId: record.requests[0].id,
+      answer: { allow: true },
+    }),
+  ).toThrow(/no longer active|claim changed/);
+});
+it('pins the resolved executable and default directory across restart and retry', async () => {
+  const e = create();
+  profile(e);
+  e.executors.start([
+    {
+      ...adapter(),
+      detect: async (override) => ({
+        status: 'detected',
+        command: override ?? '/fake/original',
+      }),
+      run: async (i) => {
+        i.onSession('native');
+        await new Promise<void>((resolve) =>
+          i.signal.addEventListener('abort', () => resolve(), { once: true }),
+        );
+        throw Error('stopped');
+      },
+    },
+  ]);
+  const r = start(e, workflow(e, 'codex').id, 1);
+  await vi.waitFor(() =>
+    expect(e.store.work()[0].managedExecution?.state).toBe('running'),
+  );
+  const work = e.store.work()[0];
+  await e.executors.stop();
+  e.stop();
+  const next = new Engine(e.store, '/different/server-directory');
+  engines.splice(engines.indexOf(e), 1);
+  engines.push(next);
+  const run = vi.fn(async (i: HarnessRun) => ({ output: i.work.input }));
+  next.executors.start([
+    {
+      ...adapter(),
+      detect: async (override) => ({
+        status: 'detected',
+        command: override ?? '/fake/replacement',
+      }),
+      run,
+    },
+  ]);
+  next.executors.confirmStopped(
+    next.executors.inspect(work.id).items[0].id,
+    true,
+  );
+  await settled(next, r.id);
+  expect(run.mock.calls[0][0]).toMatchObject({
+    command: '/fake/original',
+    cwd: process.cwd(),
+  });
+});
+it('renews a managed claim while a native question is pending', async () => {
+  const e = create();
+  profile(e);
+  e.executors.start([
+    adapter('codex', async (i) => {
+      await i.request({
+        kind: 'permission',
+        title: 'Waiting',
+        detail: 'test command',
+      });
+      return { output: true };
+    }),
+  ]);
+  start(e, workflow(e, 'codex').id, 1);
+  await vi.waitFor(() =>
+    expect(e.store.work()[0].managedExecution?.state).toBe('needs_human'),
+  );
+  const work = e.store.work()[0];
+  e.store.put('work', {
+    ...work,
+    leaseUntil: new Date(Date.now() + 30000).toISOString(),
+  });
+  await vi.waitFor(
+    () =>
+      expect(
+        Date.parse(e.store.work()[0].leaseUntil!) - Date.now(),
+      ).toBeGreaterThan(240000),
+    { timeout: 2000 },
+  );
+  expect(e.executors.inspect(work.id).items[0].state).toBe('needs_human');
+});
+it('stops timed-out native work and cancels its pending human request', async () => {
+  const e = create();
+  profile(e, 'codex', { timeoutMs: 1000 });
+  e.executors.start([
+    adapter('codex', async (i) => {
+      await i.request({
+        kind: 'permission',
+        title: 'Waiting',
+        detail: 'test command',
+      });
+      return { output: true };
+    }),
+  ]);
+  start(e, workflow(e, 'codex').id, 1);
+  await vi.waitFor(() =>
+    expect(e.store.work()[0].managedExecution?.state).toBe('needs_human'),
+  );
+  await vi.waitFor(
+    () => expect(e.store.work()[0].managedExecution?.state).toBe('interrupted'),
+    { timeout: 3000 },
+  );
+  expect(
+    e.executors.inspect(e.store.work()[0].id).items[0].requests[0].state,
+  ).toBe('cancelled');
+});
+it('stops active work when its local profile is disabled', async () => {
+  const e = create();
+  profile(e);
+  e.executors.start([
+    adapter('codex', async (i) => {
+      await i.request({
+        kind: 'permission',
+        title: 'Waiting',
+        detail: 'test command',
+      });
+      return { output: true };
+    }),
+  ]);
+  start(e, workflow(e, 'codex').id, 1);
+  await vi.waitFor(() =>
+    expect(e.store.work()[0].managedExecution?.state).toBe('needs_human'),
+  );
+  save(e, {
+    ...e.executors.profiles().find((p) => p.id === 'codex')!,
+    enabled: false,
+    expectedRevision: 1,
+  });
+  await vi.waitFor(() =>
+    expect(e.store.work()[0].managedExecution?.state).toBe('interrupted'),
+  );
+});
+
+it('enforces the global four-session limit even for a more permissive local profile', async () => {
+  const e = create();
+  profile(e, 'codex', { concurrency: 8 });
+  const inputs: HarnessRun[] = [];
+  e.executors.start([
+    adapter('codex', async (i) => {
+      inputs.push(i);
+      await new Promise<void>((resolve) =>
+        i.signal.addEventListener('abort', () => resolve(), { once: true }),
+      );
+      return { output: i.work.input };
+    }),
+  ]);
+  const w = workflow(e, 'codex'),
+    runs = Array.from({ length: 6 }, (_, i) => start(e, w.id, i));
+  await vi.waitFor(() => expect(inputs).toHaveLength(4));
+  expect(e.store.work().filter((w) => w.status === 'available')).toHaveLength(
+    2,
+  );
+  for (const run of runs) e.cancel(run.id);
+});
+it('rejects unsupported or empty native question answers without consuming the pending request', async () => {
+  const e = create();
+  profile(e);
+  e.executors.start([
+    adapter('codex', async (i) => {
+      await i.request({
+        kind: 'question',
+        title: 'Choose',
+        detail: '',
+        questions: [{ id: 'choice', text: 'Which?', options: ['A', 'B'] }],
+      });
+      return { output: true };
+    }),
+  ]);
+  start(e, workflow(e, 'codex').id, 1);
+  await vi.waitFor(() =>
+    expect(e.store.work()[0].managedExecution?.state).toBe('needs_human'),
+  );
+  const record = e.executors.inspect(e.store.work()[0].id).items[0];
+  for (const answer of ['C', ' '])
+    expect(() =>
+      e.executors.respond({
+        executionId: record.id,
+        requestId: record.requests[0].id,
+        answer: { answers: { choice: [answer] } },
+      }),
+    ).toThrow(/supplied choices/);
+  expect(e.executors.inspect(record.workId).items[0].requests[0].state).toBe(
+    'pending',
+  );
+});

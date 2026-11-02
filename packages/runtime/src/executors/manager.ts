@@ -18,7 +18,11 @@ import {
   type ModelUsage,
 } from '@interlock/core';
 import type { Engine } from '../index.js';
-import type { HarnessAdapter, HarnessRequest } from './contracts.js';
+import {
+  HarnessResultError,
+  type HarnessAdapter,
+  type HarnessRequest,
+} from './contracts.js';
 
 const profilesCollection = 'executorProfiles',
   attemptsCollection = 'managedExecutions',
@@ -227,6 +231,7 @@ export class ExecutorManager {
           binding.sessionId,
         ]),
       );
+    const resolvedProfile = owned?.profile ?? record?.profile ?? profile;
     const reason =
       binding && (binding.executorId !== work.executor || !owned)
         ? 'This continuity group is bound to another executor session'
@@ -236,7 +241,7 @@ export class ExecutorManager {
             ? 'Configure this local harness profile'
             : !profile.enabled
               ? 'Automatic execution is disabled for this profile'
-              : this.incompatible(work, profile);
+              : this.incompatible(work, resolvedProfile!);
     return {
       profileId: work.executor,
       harness: profile?.harness,
@@ -257,7 +262,7 @@ export class ExecutorManager {
   }
   assertClaim(work: WorkRequest) {
     const record = this.latest(work.id);
-    if (record?.state === 'interrupted')
+    if (record && (active(record) || record.state === 'interrupted'))
       throw new InterlockError(
         'Managed execution is uncertain. Confirm that its old session and subprocesses stopped before claiming again.',
       );
@@ -341,8 +346,7 @@ export class ExecutorManager {
         const configured = this.profiles().find(
           (p) => p.id === offered.executor,
         );
-        if (!configured?.enabled || this.incompatible(offered, configured))
-          continue;
+        if (!configured?.enabled) continue;
         const adapter = this.adapters.get(configured.harness);
         if (
           !adapter ||
@@ -368,11 +372,15 @@ export class ExecutorManager {
           sessionKey,
         );
         if (binding?.session && !priorSession) continue; // An external binding is not an owned managed session.
+        const previous = this.latest(offered.id);
         const profile =
-          priorSession?.profile ??
-          this.latest(offered.id)?.profile ??
-          configured;
-        const detection = await this.detect(profile);
+          priorSession?.profile ?? previous?.profile ?? configured;
+        if (this.incompatible(offered, profile)) continue;
+        const pinnedCommand = priorSession?.command ?? previous?.command;
+        const detection = await this.detect({
+          ...profile,
+          ...(pinnedCommand ? { command: pinnedCommand } : {}),
+        });
         const currentProfile = this.profiles().find(
           (p) => p.id === configured.id,
         );
@@ -387,6 +395,7 @@ export class ExecutorManager {
         const cwd =
           offered.trialEnvironment?.workspace ??
           priorSession?.cwd ??
+          previous?.cwd ??
           profile.cwd ??
           this.defaultCwd;
         let work: WorkRequest;
@@ -486,6 +495,7 @@ export class ExecutorManager {
   }
   private async execute(job: Job, adapter: HarnessAdapter, session: Session) {
     const r = job.record;
+    let receivedResult = false;
     try {
       r.state = 'running';
       this.write(r);
@@ -512,6 +522,7 @@ export class ExecutorManager {
         },
         request: (request) => this.request(job, request),
       });
+      receivedResult = true;
       if (this.stopped || job.abort.signal.aborted) return;
       const usage =
         result.usage &&
@@ -540,6 +551,15 @@ export class ExecutorManager {
       this.write(r);
     } catch (error) {
       if (this.stopped || job.abort.signal.aborted) return;
+      if (!receivedResult && !(error instanceof HarnessResultError)) {
+        this.interruptJob(
+          job,
+          'Harness execution was lost: ' +
+            errorText(error) +
+            '. Inspect external effects and confirm the old session stopped before retrying.',
+        );
+        return;
+      }
       r.state = 'failed';
       r.endedAt = now();
       r.error = errorText(error);
@@ -605,6 +625,7 @@ export class ExecutorManager {
   }
   respond(input: unknown) {
     const q = executorResponseSchema.parse(input);
+    this.checkJobs();
     if (JSON.stringify(q.answer).length > 20000)
       throw new InterlockError('Answer is too large');
     const record = this.engine.store.get<ManagedExecution>(
@@ -662,6 +683,25 @@ export class ExecutorManager {
           'Choose one answer for each single-choice question',
         );
     }
+    if (
+      request.kind === 'question' &&
+      request.questions?.some((question) => {
+        const values = q.answer.answers![question.id];
+        return (
+          new Set(values).size !== values.length ||
+          values.some(
+            (value) =>
+              !value.trim() ||
+              (question.options?.length &&
+                !question.allowOther &&
+                !question.options.includes(value)),
+          )
+        );
+      })
+    )
+      throw new InterlockError(
+        'Use the supplied choices unless the question allows another answer',
+      );
     const live = job.record.requests.find((r) => r.id === request.id)!;
     live.state = 'answered';
     live.answer = q.answer;
@@ -673,6 +713,19 @@ export class ExecutorManager {
     return { applied: true };
   }
   private interrupted(record: ManagedExecution, reason: string) {
+    for (const session of this.engine.store.forRuns<Session>(
+      sessionsCollection,
+      new Set([record.runId]),
+    )) {
+      if (
+        session.profile.id === record.profile.id &&
+        (!record.sessionId || session.nativeId === record.sessionId)
+      )
+        this.engine.store.put(sessionsCollection, {
+          ...session,
+          usageUncertain: true,
+        });
+    }
     record.state = 'interrupted';
     record.error = reason;
     record.endedAt = now();
@@ -699,15 +752,6 @@ export class ExecutorManager {
   private interruptJob(job: Job, reason: string) {
     if (job.abort.signal.aborted) return;
     this.interrupted(job.record, reason);
-    const session = this.engine.store.get<Session>(
-      sessionsCollection,
-      job.sessionKey,
-    );
-    if (session)
-      this.engine.store.put(sessionsCollection, {
-        ...session,
-        usageUncertain: true,
-      });
     job.abort.abort();
     for (const answer of job.answers.values()) answer.reject(new Error(reason));
     job.answers.clear();

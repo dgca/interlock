@@ -43,6 +43,7 @@ export interface ExecutorQuestion {
   text: string;
   options?: string[];
   multiple?: boolean;
+  allowOther?: boolean;
 }
 export interface ExecutorRequest {
   id: string;

@@ -144,7 +144,7 @@ function ProfileRow({
         </Badge>
         <Switch
           checked={profile.enabled}
-          disabled={busy || (!profile.enabled && !detected)}
+          disabled={busy || open || (!profile.enabled && !detected)}
           aria-label={`Enable ${profile.name}`}
           label={profile.enabled ? 'Enabled' : 'Disabled'}
           onChange={(e) =>

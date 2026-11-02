@@ -1,5 +1,7 @@
+import { VERSION } from '../../../core/src/version.js';
 import { jsonSchema, type ModelUsage } from '@interlock/core';
 import {
+  HarnessResultError,
   assignmentPrompt,
   resultEnvelope,
   type HarnessAdapter,
@@ -19,6 +21,7 @@ export const codexAdapter: HarnessAdapter = {
     let turnId: string | undefined,
       threadId: string | undefined,
       finalText: string | undefined;
+    const fileChanges = new Map<string, unknown>();
     let usage: ModelUsage[] | undefined,
       model = input.profile.model ?? '',
       provider = 'openai';
@@ -31,11 +34,36 @@ export const codexAdapter: HarnessAdapter = {
         void rpc
           .request('turn/interrupt', { threadId, turnId }, 2000)
           .catch(() => {});
-      void rpc.close();
+      void rpc.close().catch(() => {});
     };
     input.signal.addEventListener('abort', abort, { once: true });
     rpc.onMessage = (message) => {
       const params = message.params ?? {};
+      const foreign =
+        (threadId && params.threadId && params.threadId !== threadId) ||
+        (turnId &&
+          (params.turnId ?? params.turn?.id) &&
+          (params.turnId ?? params.turn?.id) !== turnId);
+      if (foreign) {
+        if (message.id !== undefined)
+          rpc.send({
+            id: message.id,
+            error: {
+              code: -32602,
+              message: 'Request does not belong to this assignment',
+            },
+          });
+        return;
+      }
+      if (
+        message.method === 'item/started' &&
+        params.item?.type === 'fileChange'
+      ) {
+        if (fileChanges.size >= 20)
+          fileChanges.delete(fileChanges.keys().next().value!);
+        if (JSON.stringify(params.item.changes ?? null).length <= 16000)
+          fileChanges.set(params.item.id, params.item.changes);
+      }
       if (message.id !== undefined && message.method) {
         void (async () => {
           let result: unknown;
@@ -43,10 +71,34 @@ export const codexAdapter: HarnessAdapter = {
             message.method === 'item/commandExecution/requestApproval' ||
             message.method === 'item/fileChange/requestApproval'
           ) {
-            const detail =
-              params.command ??
-              params.reason ??
-              JSON.stringify(params.changes ?? {}, null, 2);
+            const commandRequest = message.method.includes('commandExecution');
+            const changes = fileChanges.get(params.itemId);
+            if (
+              params.grantRoot ||
+              (commandRequest ? !params.command : !changes)
+            ) {
+              rpc.send({ id: message.id, result: { decision: 'decline' } });
+              input.onProgress(
+                'Declined an approval with missing action details or a broader write grant',
+              );
+              return;
+            }
+            const detail = commandRequest
+              ? [
+                  params.kind ? `Action: ${params.kind}` : '',
+                  `Working directory: ${params.cwd ?? input.cwd}`,
+                  params.environmentId
+                    ? `Environment: ${params.environmentId}`
+                    : '',
+                  params.reason ?? '',
+                  params.command,
+                  params.networkApprovalContext
+                    ? JSON.stringify(params.networkApprovalContext, null, 2)
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join('\n\n')
+              : JSON.stringify({ reason: params.reason, changes }, null, 2);
             const answer = await input.request({
               kind: 'permission',
               title: message.method.includes('commandExecution')
@@ -56,12 +108,20 @@ export const codexAdapter: HarnessAdapter = {
             });
             result = { decision: answer.allow ? 'accept' : 'decline' };
           } else if (message.method === 'item/tool/requestUserInput') {
+            if (params.questions?.some((q: any) => q.isSecret)) {
+              rpc.send({ id: message.id, result: { answers: {} } });
+              input.onProgress(
+                'Declined a secret-input request; use native authentication outside this workflow',
+              );
+              return;
+            }
             const answer = await input.request({
               kind: 'question',
               title: 'Codex needs your input',
               detail: '',
               questions: (params.questions ?? []).map((q: any) => ({
                 id: q.id,
+                allowOther: !!q.isOther,
                 text: q.question,
                 options: q.options?.map((o: any) => o.label),
               })),
@@ -142,7 +202,7 @@ export const codexAdapter: HarnessAdapter = {
     try {
       if (input.signal.aborted) throw new Error('Execution stopped');
       await rpc.request('initialize', {
-        clientInfo: { name: 'interlock', title: 'Interlock', version: '1' },
+        clientInfo: { name: 'interlock', title: 'Interlock', version: VERSION },
         capabilities: { experimentalApi: false },
       });
       rpc.send({ method: 'initialized' });
@@ -161,6 +221,8 @@ export const codexAdapter: HarnessAdapter = {
         input.sessionId ? { threadId: input.sessionId, ...options } : options,
       );
       threadId = thread.thread.id;
+      if (input.sessionId && threadId !== input.sessionId)
+        throw new Error('Codex did not resume the required native session');
       model = thread.model;
       provider = thread.modelProvider ?? 'openai';
       input.onSession(threadId!, model);
@@ -177,17 +239,27 @@ export const codexAdapter: HarnessAdapter = {
       });
       turnId = turn.turn.id;
       const finished = await Promise.race([completed, rpc.ended()]);
-      if (input.signal.aborted || finished.status !== 'completed')
-        throw new Error(
+      if (input.signal.aborted) throw new Error('Execution stopped');
+      if (finished.id !== turnId)
+        throw new Error('Codex completed an unexpected native turn');
+      if (finished.status !== 'completed')
+        throw new HarnessResultError(
           finished.error?.message ?? `Codex turn ${finished.status}`,
         );
       if (!finalText)
-        throw new Error(
+        throw new HarnessResultError(
           'Codex completed without a structured assignment result',
         );
-      const envelope = JSON.parse(finalText);
+      let envelope;
+      try {
+        envelope = JSON.parse(finalText);
+      } catch {
+        throw new HarnessResultError('Codex returned invalid result JSON');
+      }
       if (!envelope || !Object.hasOwn(envelope, 'result'))
-        throw new Error('Codex returned an invalid result envelope');
+        throw new HarnessResultError(
+          'Codex returned an invalid result envelope',
+        );
       return { output: jsonSchema.parse(envelope.result), usage };
     } finally {
       input.signal.removeEventListener('abort', abort);

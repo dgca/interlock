@@ -45,6 +45,7 @@ export function assignmentPrompt(work: WorkRequest) {
     work.context.instructions,
     work.executionInstructions,
     'Complete this one Interlock assignment. Return a JSON object with one field, result, whose value matches the supplied result schema. The host unwraps result and owns claim, renewal and submission; do not claim or submit this assignment yourself.',
+    'Before returning, stop background commands and subprocesses you started. Do not detach daemons or leave work running after this assignment.',
     `Assignment input:\n${JSON.stringify(work.input)}`,
   ]
     .filter(Boolean)
@@ -58,3 +59,6 @@ export function resultEnvelope(work: WorkRequest) {
     additionalProperties: false,
   };
 }
+
+/** A completed native attempt returned an explicit failure or invalid result. */
+export class HarnessResultError extends Error {}

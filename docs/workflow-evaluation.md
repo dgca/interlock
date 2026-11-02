@@ -8,7 +8,7 @@ Open **Workflows → Import → Starters**, choose **Evaluate workflow compariso
 
 For another explicit file-based copy, choose **GitHub folder**, **Local file** or **Paste JSON** in the same dialog. The GitHub source is `https://github.com/dgca/interlock/tree/main/workflows`. Preview the selected workflow, import it, then publish its root draft if needed. Local and installed copies also support `interlock import @/absolute/path/to/workflows/evaluate.json` followed by `interlock publish WORKFLOW_ID`. File imports retain their existing draft/bundle behavior. See [starter workflows](starter-workflows.md) for CLI and MCP choices.
 
-The starter uses ordinary JavaScript Script, Agent, Condition and Batch nodes. Connect an executor using [Connect a harness](connect-harness.md). Review mode requires a fresh session or isolated subagent without inherited trial history; Interlock does not launch model sessions. Preparation and recording use ordinary current-context assignments in both modes.
+The starter uses ordinary JavaScript Script, Agent, Condition and Batch nodes. Connect an executor using [Connect a harness](connect-harness.md). Review mode requires a fresh session or isolated subagent without inherited trial history; Connected execution requires the caller to provide those sessions; an enabled [managed profile](managed-executors.md) can launch an independent session. Preparation and recording use ordinary current-context assignments in both modes.
 
 ## Capture a fixed evaluation request
 

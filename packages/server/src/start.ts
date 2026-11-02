@@ -56,8 +56,13 @@ export async function startServer(options: {
     store.close();
     process.exitCode = 1;
   });
+  let stopping = false;
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
     process.on(signal, async () => {
+      if (stopping) return;
+      stopping = true;
+      // Persist uncertainty immediately; bound shutdown even if a native transport stalls.
+      setTimeout(() => process.exit(0), 6000).unref();
       clearInterval(timer);
       await engine.executors.stop();
       engine.stop();

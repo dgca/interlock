@@ -1,7 +1,91 @@
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { delimiter, join } from 'node:path';
+import { promisify } from 'node:util';
+import { setTimeout as delay } from 'node:timers/promises';
+
+/** Own the process group, including children that outlive its original leader. */
+export function spawnManagedProcess(
+  command: string,
+  args: string[],
+  options: { cwd?: string; env?: NodeJS.ProcessEnv } = {},
+) {
+  const child = spawn(command, args, {
+    ...options,
+    detached: true,
+    stdio: 'pipe',
+  });
+  const exited = new Promise<void>((resolve) =>
+    child.once('close', () => resolve()),
+  );
+  let closing: Promise<void> | undefined;
+  const membersCanAct = async () => {
+    const { stdout } = await promisify(execFile)(
+      'ps',
+      ['-A', '-o', 'pid=,pgid=,stat='],
+      { timeout: 1000, maxBuffer: 2 * 1024 * 1024 },
+    );
+    return stdout.split('\n').some((line) => {
+      const [, group, state] = line.trim().split(/\s+/);
+      return Number(group) === child.pid && !state?.startsWith('Z');
+    });
+  };
+  const groupAlive = async (inspectMembers = false) => {
+    if (!child.pid) return false;
+    try {
+      process.kill(-child.pid, 0);
+      return inspectMembers ? membersCanAct() : true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+        // Darwin may report EPERM for a departed group. Zombie members cannot act.
+        return membersCanAct();
+      }
+      throw error;
+    }
+  };
+  const kill = (signal: NodeJS.Signals) => {
+    if (!child.pid) return;
+    try {
+      process.kill(-child.pid, signal);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+    }
+  };
+  return {
+    child,
+    close: () =>
+      (closing ??= (async () => {
+        if (await groupAlive()) kill('SIGTERM');
+        const deadline = Date.now() + 2000;
+        while ((await groupAlive()) && Date.now() < deadline) await delay(25);
+        if (await groupAlive()) kill('SIGKILL');
+        const finalDeadline = Date.now() + 1000;
+        while ((await groupAlive(true)) && Date.now() < finalDeadline)
+          await delay(25);
+        if (await groupAlive(true))
+          throw new Error(
+            'Harness subprocess termination could not be confirmed',
+          );
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([
+            exited,
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(
+                () =>
+                  reject(new Error('Harness process streams did not close')),
+                1000,
+              );
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
+      })()),
+  };
+}
 
 export async function detectExecutable(name: string, override?: string) {
   const candidates = override
@@ -24,30 +108,35 @@ export async function detectExecutable(name: string, override?: string) {
       message: `${name} was not found. Install it or choose an absolute executable path.`,
     };
   try {
-    const version = await new Promise<string>((resolve, reject) => {
-      const child = spawn(command!, ['--version'], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: process.env,
+    const managed = spawnManagedProcess(command, ['--version']);
+    let version: string;
+    try {
+      version = await new Promise<string>((resolve, reject) => {
+        const child = managed.child;
+        child.stdin.end();
+        child.stderr.resume();
+        let text = '';
+        const timer = setTimeout(() => {
+          child.kill('SIGKILL');
+          reject(new Error('Version check timed out'));
+        }, 5000);
+        child.stdout.on('data', (c) => {
+          text = (text + c.toString()).slice(0, 4096);
+        });
+        child.on('error', (error) => {
+          clearTimeout(timer);
+          reject(error);
+        });
+        child.on('close', (code) => {
+          clearTimeout(timer);
+          code === 0
+            ? resolve(text.trim().split('\n')[0].slice(0, 200))
+            : reject(new Error('Executable did not pass its version check'));
+        });
       });
-      let text = '';
-      const timer = setTimeout(() => {
-        child.kill('SIGKILL');
-        reject(new Error('Version check timed out'));
-      }, 5000);
-      child.stdout.on('data', (c) => {
-        text = (text + c.toString()).slice(0, 4096);
-      });
-      child.on('error', (error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-      child.on('close', (code) => {
-        clearTimeout(timer);
-        code === 0
-          ? resolve(text.trim().split('\n')[0].slice(0, 200))
-          : reject(new Error('Executable did not pass its version check'));
-      });
-    });
+    } finally {
+      await managed.close();
+    }
     return { status: 'detected' as const, command, version };
   } catch (error) {
     return {
@@ -62,6 +151,7 @@ export async function detectExecutable(name: string, override?: string) {
 /** Bounded JSON-lines transport. It never interprets terminal prompts or uses a shell. */
 export class JsonLinesProcess {
   private child;
+  private process;
   private sequence = 0;
   private pending = new Map<
     number,
@@ -72,23 +162,22 @@ export class JsonLinesProcess {
     }
   >();
   private closed = false;
-  private closePromise: Promise<void>;
+  private exitPromise: Promise<void>;
   private failed?: Error;
   onMessage: (message: any) => void = () => {};
   constructor(command: string, args: string[], cwd: string) {
-    this.child = spawn(command, args, {
+    this.process = spawnManagedProcess(command, args, {
       cwd,
       env: process.env,
-      detached: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
     });
+    this.child = this.process.child;
     let buffer = '';
     this.child.stdout.setEncoding('utf8');
     this.child.stdout.on('data', (chunk) => {
       buffer += chunk;
       if (buffer.length > 2 * 1024 * 1024) {
         this.fail(new Error('Harness protocol message exceeded 2 MiB'));
-        void this.close();
+        void this.close().catch(() => {});
         return;
       }
       let index;
@@ -123,20 +212,21 @@ export class JsonLinesProcess {
               ? error
               : new Error('Invalid harness protocol'),
           );
-          void this.close();
+          void this.close().catch(() => {});
         }
       }
     });
     // Drain diagnostics without retaining arbitrary environment values or credentials.
     this.child.stderr.resume();
     this.child.on('error', (error) => this.fail(error));
-    this.closePromise = new Promise((resolve) =>
-      this.child.on('close', (code) => {
+    this.exitPromise = new Promise((resolve) => {
+      this.child.once('exit', (code) => {
         this.closed = true;
         this.fail(new Error(`Harness process ended (${code ?? 'signal'})`));
         resolve();
-      }),
-    );
+      });
+      this.child.once('error', () => resolve());
+    });
     this.child.stdin.on('error', (error) => this.fail(error));
   }
   private fail(error: Error) {
@@ -170,22 +260,11 @@ export class JsonLinesProcess {
     });
   }
   ended() {
-    return this.closePromise.then(() => {
+    return this.exitPromise.then(() => {
       throw this.failed ?? new Error('Harness process ended');
     });
   }
   async close() {
-    if (this.closed) return;
-    const kill = (signal: NodeJS.Signals) => {
-      try {
-        if (this.child.pid) process.kill(-this.child.pid, signal);
-      } catch {
-        this.child.kill(signal);
-      }
-    };
-    kill('SIGTERM');
-    const timer = setTimeout(() => kill('SIGKILL'), 2000);
-    await this.closePromise;
-    clearTimeout(timer);
+    await this.process.close();
   }
 }
