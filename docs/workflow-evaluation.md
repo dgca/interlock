@@ -4,16 +4,10 @@ Use the importable **Evaluate workflow comparison** starter to assess retained o
 
 ## Find the starter
 
-Open **Workflows** or ask your connected agent to find **Evaluate workflow comparison** and inspect its input contract. New and upgraded libraries receive it published and ready to configure. Recognized manual copies stay unchanged and may still require publication. Deleted copies are not automatically reinstalled. See [automatic starters](starter-workflows.md) for legacy recognition and deletion limits.
+Open **Workflows → Import → Starters**, choose **Evaluate workflow comparison**, then **Add to library**. The explicit action creates a published copy and starts no run. Recognized existing copies offer **Open workflow** and remain unchanged; an unpublished manual copy may still need publication.
 
-For an explicit additional copy:
+For another explicit file-based copy, choose **GitHub folder**, **Local file** or **Paste JSON** in the same dialog. The GitHub source is `https://github.com/dgca/interlock/tree/main/workflows`. Preview the selected workflow, import it, then publish its root draft if needed. Local and installed copies also support `interlock import @/absolute/path/to/workflows/evaluate.json` followed by `interlock publish WORKFLOW_ID`. File imports retain their existing draft/bundle behavior. See [starter workflows](starter-workflows.md) for CLI and MCP choices.
 
-1. Open **Workflows → Import → GitHub folder**.
-2. Enter `https://github.com/dgca/interlock/tree/main/workflows` and select **Find workflows**.
-3. Select **Evaluate workflow comparison**, then **Import selected**.
-4. Review the draft and publish it.
-
-For a local checkout or installed package, import [workflows/evaluate.json](../workflows/evaluate.json) with `interlock import @/absolute/path/to/workflows/evaluate.json`, then run `interlock publish WORKFLOW_ID`. Explicit standalone imports create separate drafts.
 The starter uses ordinary JavaScript Script, Agent, Condition and Batch nodes. Connect an executor using [Connect a harness](connect-harness.md). Review mode requires a fresh session or isolated subagent without inherited trial history; Interlock does not launch model sessions. Preparation and recording use ordinary current-context assignments in both modes.
 
 ## Capture a fixed evaluation request

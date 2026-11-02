@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createClient, TRPCClientError } from '@interlock/client';
 import { parseArgs } from 'node:util';
@@ -113,6 +114,27 @@ export async function runCommand(argv: string[]) {
           'Usage: delete <id> --yes. Permanently removes the workflow, its history and local test suites/comparisons/simulations. Managed trial cleanup must finish first; retained trial files are not deleted. Use archive to preserve history.',
         );
       return client.workflows.delete.mutate({ id: args[0] });
+    case 'starters':
+      return client.workflows.starters.query();
+    case 'import-starter': {
+      const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: {
+          copy: { type: 'boolean' },
+          'request-id': { type: 'string' },
+        },
+      });
+      if (positionals.length !== 1)
+        throw new Error(
+          'Usage: import-starter <starter-id> [--copy] [--request-id key]',
+        );
+      return client.workflows.importStarter.mutate({
+        starterId: positionals[0],
+        copy: values.copy,
+        requestId: values['request-id'] ?? randomUUID(),
+      });
+    }
     case 'import': {
       const input = await parse(args[0]);
       if (input.format === 'interlock-workflows') {
@@ -350,6 +372,8 @@ export async function runCommand(argv: string[]) {
           'restore <id>',
           'delete <id> --yes',
           'import <json|@file> [--force | --revisions JSON] [--restore-deleted-versions] (force changes drafts only; explicit restoration requires original definitions and valid dependencies/ownership)',
+          'starters (list bundled choices and existing copies)',
+          'import-starter <starter-id> [--copy] [--request-id key] (explicit published copy; never starts a run)',
           'export <id>',
           'publish <id> [--cascade]',
           'work-resources <json|@file> (inspect reservations or release an exact uncertain attempt after stop confirmation)',

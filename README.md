@@ -23,9 +23,11 @@ Keep the terminal running while you use Interlock. Closing the browser does not 
 
 ## Run your first workflow
 
-New libraries include a published **SDLC workflow** for planning, implementing, and reviewing a software change. It creates a task branch, saves planning artifacts, and commits the completed change. It finishes locally by default. Fresh libraries also include the published **Evaluate workflow comparison** starter. Upgrades add newly introduced curated starters once, preserve your copies, and respect tracked deletions. Nothing runs automatically. See [automatic starters](docs/starter-workflows.md) for legacy-library behavior.
+New libraries start empty. Open **Workflows → Import → Starters**, select **SDLC workflow**, and choose **Add to library** for a published procedure that plans, implements, and reviews a software change. It creates a task branch, saves planning artifacts, and commits the completed change. It finishes locally by default. Existing libraries keep their workflows when you upgrade. Nothing is added or run automatically.
 
-If SDLC is absent from an earlier library, explicitly import the starter from [workflows/sdlc.json](workflows/sdlc.json). In **Import → GitHub folder**, use `https://github.com/dgca/interlock/tree/main/workflows`, select **SDLC workflow**, and choose **Import selected**. Review the imported draft and publish it before running. See [Import the SDLC starter](docs/sdlc-workflow.md#import-the-starter-into-an-existing-library) for local-file and CLI options.
+The picker also offers **Evaluate workflow comparison**. Known existing copies have an **Open workflow** action; **Add another copy** is explicit. GitHub folders, local files and pasted JSON share the same import dialog and show a preview before importing. See [starter workflows](docs/starter-workflows.md).
+
+For a standalone file import, use [workflows/sdlc.json](workflows/sdlc.json). In **Import → GitHub folder**, use `https://github.com/dgca/interlock/tree/main/workflows`, select **SDLC workflow**, and choose **Import workflow**. Review the imported draft and publish it before running. See [Import the SDLC starter](docs/sdlc-workflow.md#import-the-starter-into-an-existing-library) for local-file and CLI options.
 
 For a node-editor reference, the same folder includes [All nodes (demo)](workflows/all-nodes.json), an optional example covering every current node type. Import it and inspect the editors without starting a run. See [Workflow examples](workflows/README.md).
 
@@ -110,7 +112,7 @@ Use the MCP [workflow testbench](docs/workflow-testbench.md) to save representat
 
 For trusted local repository work, use [managed Git trials](docs/local-git-trials.md) to prepare a separate checkout per sample, route Scripts and Agent assignments to it, retain evidence and track cleanup. External executors must prevent outbound writes; the recipe is not an OS sandbox.
 
-Use the automatically installed [evaluation starter](docs/workflow-evaluation.md) to grade retained comparison outputs with a fixed rubric, fresh artifact reviewers or frozen checks, and resumable judgment receipts. Its usage stays separate from the original trials.
+Choose the [evaluation starter](docs/workflow-evaluation.md) to grade retained comparison outputs with a fixed rubric, fresh artifact reviewers or frozen checks, and resumable judgment receipts. Its usage stays separate from the original trials.
 
 Import the [workflow improvement starter](docs/workflow-improvement.md) for one inline prompt candidate, fixed tuning and separate acceptance cases, bounded trial budgets and a revision-bound adoption proposal. Experimental versions stay on a separate workflow; production remains unchanged.
 
@@ -205,7 +207,7 @@ Bash scripts read JSON from stdin and must write one JSON value to stdout. Write
 
 A thrown error, nonzero exit, timeout, or invalid output fails the script step. Scripts are not retried automatically.
 
-The library **Import** dialog accepts pasted JSON, local JSON files, and public GitHub folder links. **Paste JSON** accepts a legacy workflow or portable bundle. Paste the document and choose **Import JSON** to import it. Invalid JSON and server validation errors keep the text available for correction. Choose **GitHub folder**, paste an HTTPS `github.com/OWNER/REPO/tree/REF/FOLDER` URL, and select **Find workflows**. Review each workflow's description, source file, and dependencies, then select the workflows and choose **Import selected**. Branch names containing slashes and commit links are supported. Discovery reads direct JSON files only and pins the preview to a commit. Invalid files remain unselectable and do not hide valid workflows.
+The library **Import** dialog opens on bundled **Starters** and also accepts pasted JSON, local JSON files, and public GitHub folder links. **Paste JSON** accepts a legacy workflow or portable bundle. Paste the document, choose **Preview workflow**, then **Import workflow** after reviewing it. Invalid JSON and server validation errors keep the text available for correction. Choose **GitHub folder**, paste an HTTPS `github.com/OWNER/REPO/tree/REF/FOLDER` URL, and select **Find workflows**. Review each workflow's description, source file, and dependencies, then select the workflows and choose **Import workflow**, or **Import N workflows** for multiple selections. Branch names containing slashes and commit links are supported. Discovery reads direct JSON files only and pins the preview to a commit. Invalid files remain unselectable and do not hide valid workflows.
 
 GitHub selections import together. Any invalid selection or differing existing draft, metadata, ownership, published version, or saved prompt rejects the whole selection without changing the library. Portable bundles retain their IDs and pins; identical portable reimports are no-ops. Legacy files create a new workflow each time. Import saves definitions and prompts without starting runs. Local files remain available under **Local file** unless disabled by the host. Paste JSON and local files use the same import operations and conflict rules. GitHub import supports public repositories only, with at most 50 direct JSON files and 2 MiB per response or file; requests time out after 60 seconds. Private authentication, recursion, and automatic updates are not supported.
 

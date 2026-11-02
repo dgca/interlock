@@ -184,16 +184,7 @@ try {
   });
   assert(!stdioWorkflows.isError, JSON.stringify(stdioWorkflows));
   const starters = JSON.parse(stdioWorkflows.content[0].text);
-  assert.equal(starters.length, 2);
-  assert.deepEqual(starters.map((w) => w.name).sort(), [
-    'Evaluate workflow comparison',
-    'SDLC workflow',
-  ]);
-  assert(starters.every((w) => w.latestVersion === 1));
-  const sdlcId = starters.find((w) => w.name === 'SDLC workflow').id;
-  const evaluatorId = starters.find(
-    (w) => w.name === 'Evaluate workflow comparison',
-  ).id;
+  assert.deepEqual(starters, []);
   await client.close();
   client = new Client({ name: 'package-http-smoke', version: '1.0.0' });
   await client.connect(
@@ -205,19 +196,36 @@ try {
     assert(!response.isError, JSON.stringify(response));
     return JSON.parse(response.content[0].text);
   };
-  const starter = await call('get_workflow', { id: sdlcId });
+  const choices = await call('list_workflows', { source: 'starters' });
+  assert.deepEqual(
+    choices.map((s) => s.id),
+    ['sdlc', 'evaluate-comparison'],
+  );
+  const cliStarters = JSON.parse(
+    execFileSync(bin, ['starters'], {
+      cwd: workdir,
+      env: { ...env, INTERLOCK_URL: url },
+      encoding: 'utf8',
+    }),
+  );
+  assert.deepEqual(cliStarters, choices);
+  const addedSdlc = await call('import_workflows', {
+    starterId: 'sdlc',
+    requestId: 'package-sdlc',
+  });
+  assert.equal(addedSdlc.created, true);
+  const repeatSdlc = await call('import_workflows', {
+    starterId: 'sdlc',
+    requestId: 'package-sdlc',
+  });
+  assert.equal(repeatSdlc.workflow.id, addedSdlc.workflow.id);
+  const starter = await call('get_workflow', { id: addedSdlc.workflow.id });
   assert.equal(starter.latestVersion, 1);
   assert.deepEqual(starter.draft.inputSchema.required, ['request']);
   assert.equal(
     starter.draft.nodes.find((node) => node.id === 'review').context.mode,
     'fresh',
   );
-  const autoEvaluator = await call('get_workflow', { id: evaluatorId });
-  assert.equal(autoEvaluator.latestVersion, 1);
-  assert.deepEqual(autoEvaluator.draft.inputSchema.required, [
-    'comparisonId',
-    'rubric',
-  ]);
   const starterRun = await call('start_run', {
     workflowId: starter.id,
     input: {
@@ -254,6 +262,20 @@ try {
     }),
   );
   assert.equal(publishedStarter.latestVersion, 1);
+  const addedEvaluator = JSON.parse(
+    execFileSync(
+      bin,
+      [
+        'import-starter',
+        'evaluate-comparison',
+        '--request-id',
+        'package-evaluator',
+      ],
+      { cwd: workdir, env: { ...env, INTERLOCK_URL: url }, encoding: 'utf8' },
+    ),
+  );
+  assert.equal(addedEvaluator.workflow.latestVersion, 1);
+  await call('delete_workflow', { id: addedEvaluator.workflow.id });
   const evaluatorFile = join(
     prefix,
     'lib/node_modules/@type_of/interlock/workflows/evaluate.json',
@@ -276,7 +298,6 @@ try {
   );
   assert.equal(publishedEvaluator.latestVersion, 1);
   assert.equal(publishedEvaluator.name, 'Evaluate workflow comparison');
-  await call('delete_workflow', { id: evaluatorId });
 
   const workflow = await call('create_workflow', {
     name: 'Packed install smoke',
@@ -390,6 +411,21 @@ try {
   assert.equal(summary.rootRunId, agentRun.runId);
   assert.equal(summary.rootWorkflowId, agentWorkflow.id);
   assert.equal(summary.workflowId, agentWorkflow.id);
+  // These inspection commands must also be accepted by the packaged entrypoint.
+  for (const [command, input] of [
+    ['work-resources', { action: 'inspect', workId: work.id }],
+    ['work-hold', { action: 'history', workId: work.id }],
+    ['assignment-size', { workId: work.id }],
+  ]) {
+    const inspection = JSON.parse(
+      execFileSync(bin, [command, JSON.stringify(input)], {
+        cwd: workdir,
+        env: { ...env, INTERLOCK_URL: url },
+        encoding: 'utf8',
+      }),
+    );
+    assert.equal(inspection.workId, work.id);
+  }
   const claim = await call('claim_work', {
     workId: work.id,
     workerId: 'package-http-smoke',
@@ -408,14 +444,12 @@ try {
     `Expected npx cached installation, got ${restartedConnection.fallback.args[0]}`,
   );
   const afterRestart = await call('list_workflows');
-  assert(!afterRestart.some((w) => w.id === evaluatorId));
-  assert.deepEqual(
-    afterRestart
-      .filter((w) => w.name === 'Evaluate workflow comparison')
-      .map((w) => w.id),
-    [publishedEvaluator.id],
+  assert(!afterRestart.some((w) => w.id === addedEvaluator.workflow.id));
+  assert.equal(
+    afterRestart.filter((w) => w.name === 'Evaluate workflow comparison')
+      .length,
+    1,
   );
-  assert.equal(afterRestart.find((w) => w.id === sdlcId).latestVersion, 1);
   // The installed CLI preserves the original lease duration after restart.
   const renewed = JSON.parse(
     execFileSync(bin, ['renew', work.id, claim.token], {

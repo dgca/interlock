@@ -161,3 +161,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.imported {
+  border-color: var(--accent-border);
+}

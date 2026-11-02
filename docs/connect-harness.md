@@ -98,7 +98,7 @@ The development stdio fallback uses absolute paths to the current Node installat
 
 Ask the harness to find a workflow by name or description with `list_workflows`, inspect it with `get_workflow`, and use its ID and input contract. If several workflows match, identify the intended one before starting a run.
 
-Fresh libraries include [SDLC workflow](sdlc-workflow.md). It requires a coding agent with Git and repository access, plus a fresh session or isolated subagent for final review. Interlock coordinates assignments but does not launch that reviewer. Existing libraries retain their workflows when upgraded.
+Fresh libraries start empty. Explicitly add [SDLC workflow](sdlc-workflow.md) through the starter picker, CLI or MCP before using it. It requires a coding agent with Git and repository access, plus a fresh session or isolated subagent for final review. Interlock coordinates assignments but does not launch that reviewer. Existing libraries retain their workflows when upgraded.
 
 With the workflow selected, ask it to complete the run through Interlock:
 
@@ -261,3 +261,7 @@ Optional comparison `trialSetup` gates work on an independent checkout. Compact 
 ## Run a bounded improvement experiment
 
 The optional [improvement starter](workflow-improvement.md) uses a separate experimental workflow, captured tuning and acceptance cases, one fresh prompt proposer and a pinned owned evaluator. Configure the external worker to use the captured provider/model for trial and grading assignments, preserve fresh-context requirements, declare actual model selections and report measured usage. Missing or mismatched model/cost evidence prevents a promotion proposal. Coordinator tree budgets do not cover independent comparison roots; captured per-sample tree budgets install before those Agent claims. Resume existing IDs after interruption and keep external task status/decisions in your existing channels. The starter returns a proposal and never changes production automatically.
+
+## Choose a bundled starter
+
+Use `list_workflows` with `source:"starters"` for bounded names, purposes, requirements and known existing copies. It creates nothing and returns no definitions. Import a choice with `import_workflows`, supplying `starterId` and a stable `requestId`. New copies are published without running; existing known copies are returned unchanged. `copy:true` deliberately adds another copy. Reuse the same key after an uncertain response; conflicting reuse or deleted results reject. Bundle replacement flags apply only to portable bundles. See [starter workflows](starter-workflows.md).

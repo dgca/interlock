@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import {
   ArrowRight,
+  BookOpen,
   Plus,
   Search,
   Upload,
@@ -19,7 +20,6 @@ import type { Workflow } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { Badge } from '../../components/Badge/Badge';
 import { api, download } from '../../lib/api';
-import { importWorkflowJson } from './importWorkflowJson';
 import { ImportWorkflowDialog } from './ImportWorkflowDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { paths } from '../../routes/paths';
@@ -43,7 +43,7 @@ export function WorkflowLibrary({
     if (!importing) importTrigger.current?.focus();
   }, [importing]);
   const [deleting, setDeleting] = useState<Workflow>();
-  const file = useRef<HTMLInputElement>(null);
+  const [importedIds, setImportedIds] = useState<string[]>([]);
   const visible = workflows.filter(
     (w) =>
       !w.ownerWorkflowId &&
@@ -83,22 +83,6 @@ export function WorkflowLibrary({
           </Button>
         </div>
       </header>
-      {features.localFileImport && (
-        <input
-          ref={file}
-          type="file"
-          accept="application/json,.json"
-          hidden
-          onChange={(e) => {
-            const selected = e.target.files?.[0];
-            if (selected)
-              void act(async () => {
-                onOpen(await importWorkflowJson(await selected.text()));
-              }, 'Workflow imported.');
-            e.target.value = '';
-          }}
-        />
-      )}
       <Tabs
         value={archived ? 'archived' : 'active'}
         onChange={(value) => setArchived(value === 'archived')}
@@ -126,7 +110,10 @@ export function WorkflowLibrary({
         <Tabs.Panel value={archived ? 'archived' : 'active'}>
           <div className={styles.grid}>
             {visible.map((w) => (
-              <article key={w.id} className={styles.card}>
+              <article
+                key={w.id}
+                className={`${styles.card} ${importedIds.includes(w.id) ? styles.imported : ''}`}
+              >
                 <div className={styles.cardTop}>
                   <span className={styles.cardIcon}>
                     <GitBranch size={19} />
@@ -243,19 +230,37 @@ export function WorkflowLibrary({
             ))}
             <button
               className={styles.newCard}
-              onClick={() =>
+              onClick={() => {
+                if (!workflows.some((w) => !w.ownerWorkflowId)) {
+                  setImporting(true);
+                  return;
+                }
                 void act(async () => {
                   const w = await api.workflows.create.mutate({
                     name: 'Untitled workflow',
                   });
                   onOpen(w.id);
-                }, 'Workflow created.')
-              }
+                }, 'Workflow created.');
+              }}
             >
               <span>
-                <Plus size={23} />
+                {!workflows.some((w) => !w.ownerWorkflowId) ? (
+                  <BookOpen size={23} />
+                ) : (
+                  <Plus size={23} />
+                )}
               </span>
-              Create a workflow<small>Start with an input and an idea</small>
+              {!workflows.some((w) => !w.ownerWorkflowId) ? (
+                <>
+                  Browse starter workflows
+                  <small>Choose a procedure to add to your library</small>
+                </>
+              ) : (
+                <>
+                  Create a workflow
+                  <small>Start with an input and an idea</small>
+                </>
+              )}
             </button>
           </div>
         </Tabs.Panel>
@@ -263,16 +268,16 @@ export function WorkflowLibrary({
       {importing && (
         <ImportWorkflowDialog
           act={act}
-          onImported={onOpen}
+          onImported={(ids) => {
+            if (ids.length === 1) onOpen(ids[0]);
+            else {
+              setImportedIds(ids);
+              setQuery('');
+              setArchived(false);
+            }
+          }}
           onClose={() => setImporting(false)}
-          onLocalFile={
-            features.localFileImport
-              ? () => {
-                  setImporting(false);
-                  file.current?.click();
-                }
-              : undefined
-          }
+          allowLocalFile={features.localFileImport}
         />
       )}
       {deleting && (

@@ -1,36 +1,57 @@
-# Automatic starter workflows
+# Choose starter workflows
 
-Interlock installs a curated set of published workflows when a server starts with a new or upgraded library. Installation never starts a run, launches an executor or consumes model usage. Installed workflows belong to the user and use ordinary editing, publishing, archive and deletion operations.
+New libraries start empty. Existing workflows remain intact after upgrades, including earlier seeded SDLC copies. Bundled starters are explicit choices, available without a network connection or developer checkout.
 
-## Default set
+## Add a starter
 
-| Starter                          | Fresh library                         | Earlier library                                                                                    |
-| -------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **SDLC workflow**                | Installed and published as version 1. | The previous seed decision is preserved. A missing or deleted SDLC is not added again.             |
-| **Evaluate workflow comparison** | Installed and published as version 1. | Added once unless an existing copy is recognized or a legacy name collision prevents installation. |
+1. Open **Workflows → Import** or **Browse starter workflows** in an empty library.
+2. Choose **Starters** and select a procedure: **SDLC workflow** or **Evaluate workflow comparison**.
+3. Review its purpose and requirements, then choose **Add to library**.
 
-The improvement starter, local Git example and all-nodes demo remain optional imports. New default starters can arrive in later releases without replacing existing workflows. Find installed starters in **Workflows** or through normal MCP workflow discovery. Their input contracts and execution requirements are unchanged.
+This creates and publishes a copy without starting a run. Imported workflows belong to you. Editing, publishing, archive, ownership and deletion use the ordinary operations. The improvement recipe and specialized examples remain optional file imports.
 
-## Updates and deletion
+Known copies offer **Open workflow**. To deliberately create another one, select **Add another copy** before adding. Existing copies are never overwritten or republished. A recognized unpublished manual copy stays a draft; review and publish it on its workflow page if needed.
 
-Each starter has a permanent catalog identity and a local delivery receipt. Repeated startup, another release or a change to our shipped template does not deliver that identity again. Existing drafts, published versions, ownership, archive state and runs remain intact. Template changes apply only when installing into a library that has not handled that starter.
+After deletion, a starter remains absent until you deliberately import again. Shipped template updates change the available template and never replace your copies. There are no automatic upgrade installations or replacements.
 
-Deleting a starter keeps its receipt. It stays deleted after restart or upgrade, even when every workflow has been removed. A different newly introduced starter can still arrive in a later release. Automatic installation does not update or republish a customized copy.
+## Import from other sources
 
-Explicit manual imports remain available. Importing a standalone starter file creates another draft intentionally; it does not clear the receipt or replace an existing workflow. Imported drafts require publication before use. See [SDLC import](sdlc-workflow.md#import-the-starter-into-an-existing-library) and [evaluator setup](workflow-evaluation.md#find-the-starter).
+Choose **GitHub folder**, **Local file** or **Paste JSON** in the same dialog. GitHub discovery pins the source revision. Select workflows from its results; included dependencies are available under disclosure. A conflict rejects the entire selection. Local files and pasted JSON show a preview before importing, and changing sources retains the choices already entered.
 
-## Older libraries and manual copies
+File-based imports keep their existing semantics: standalone workflow files create drafts, while portable bundles retain their IDs and included versions. The interface does not force replacement or restore deleted definitions. Review errors beside the source input and keep uncertain delivery distinct from a confirmed rejection. When a response cannot be confirmed, inspect the library before retrying, especially for standalone files that create a new ID each time.
 
-The earlier `meta/seed` marker remains unchanged. On first upgrade to receipt tracking, Interlock treats SDLC as already handled in marked libraries and nonempty pre-marker libraries. This preserves prior deletions and the old rule that existing libraries were not seeded with SDLC.
+A single import opens its workflow. Multiple roots return to the library with the imported workflows highlighted. Imports do not start runs.
 
-For each new starter, matching compares its normalized definition with existing drafts and retained published definitions. Canvas positions, node declaration order, edge declaration order, and the workflow's name and description do not affect recognition. A recognized copy is left untouched, including an unpublished draft or an archived owned child. Its local ID is recorded as the copy already delivered. Multiple existing copies are preserved.
+## CLI and MCP
 
-A matching display name with different content is ambiguous. Installation is skipped permanently for that starter without assigning official identity to the existing workflow. A manual import can still create a copy if wanted. Names are not a permanent identity mechanism.
+```sh
+interlock starters
+interlock import-starter sdlc
+interlock import-starter evaluate-comparison --copy --request-id review-copy-1
+```
 
-An arbitrarily changed and renamed old copy with no retained matching definition cannot be identified reliably. Older manual deletions were not recorded either: an evaluator manually imported and deleted before receipt tracking may be installed once on upgrade. Deletion after tracking is permanent for automatic delivery.
+`--copy` requests another copy. The CLI generates a new key when you omit `--request-id`. Supply your own key and reuse it when retrying an uncertain operation. Without `--copy`, known existing copies are reused. Standalone file commands such as `interlock import @workflow.json` retain their existing draft/bundle behavior.
 
-## Library and package boundaries
+For MCP, discover choices on demand:
 
-Receipts live in the library database and survive normal workflow deletion and full database backup/restore. Portable workflow exports contain definitions, not delivery receipts. A different library makes its own installation decisions and can recognize imported definitions. Replacing the whole database or restoring an older backup discards decisions absent from that database.
+```json
+{ "source": "starters" }
+```
 
-All new deliveries and receipts commit together. A failure rolls back that startup's installation batch so it can be retried without partial copies. Previously committed workflows and receipts remain intact. The package bundles the curated templates; installation does not fetch GitHub content or depend on a developer checkout. No new MCP tools or starter-management UI are needed.
+Pass that to `list_workflows`; the normal default still lists the library. Choices contain bounded metadata and existing-copy references, without definitions or prompts.
+
+Pass the chosen identity to `import_workflows`:
+
+```json
+{ "starterId": "sdlc", "requestId": "sdlc-import-1" }
+```
+
+Use `copy:true` with a new key for a deliberate additional copy. Starter requests cannot include portable-bundle replacement options. Existing calls with `bundle` keep their original behavior.
+
+## Copies and retry records
+
+Explicit imports track the catalog identity against the local workflow ID, so subsequent edits and renames do not lose that association. Older manual copies can be recognized by current drafts or retained published definitions, ignoring canvas positions and declaration order. An arbitrary changed and renamed old copy without retained matching content cannot be identified reliably. Display names alone never establish identity.
+
+A starter import's nonblank request key is an opaque, case- and whitespace-sensitive string of at most 120 characters. Identical keyed retries return the same copy, even after restart; conflicting reuse and a deleted imported result reject. The request receipt commits atomically with creation/publication and copy tracking. A failed creation leaves no accepted receipt. No key is automatically changed to hide uncertain history.
+
+Copy associations and retry receipts live in the library database and survive ordinary deletion and full database backup/restore. Portable bundles contain workflow definitions rather than local import history. Replacing the database or restoring an older backup loses decisions absent from that database.

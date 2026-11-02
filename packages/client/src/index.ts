@@ -13,6 +13,7 @@ export function createClient(url = 'http://127.0.0.1:4310') {
         condition: (operation) =>
           [
             'workflows.validate',
+            'workflows.previewImport',
             'work.preflight',
             'work.size',
             'testbench.preview',

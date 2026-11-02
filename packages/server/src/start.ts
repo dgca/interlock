@@ -4,7 +4,6 @@ import { resolve } from 'node:path';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import { createApp } from './app.js';
-import { seed } from './seed.js';
 import type { ConnectionConfig } from './connection.js';
 import { checkPort, startupError } from './startup.js';
 
@@ -29,7 +28,6 @@ export async function startServer(options: {
   let engine: Engine | undefined;
   try {
     engine = new Engine(store, options.workdir);
-    seed(engine);
     engine.pump();
   } catch (error) {
     engine?.stop();

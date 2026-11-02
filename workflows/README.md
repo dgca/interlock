@@ -1,10 +1,10 @@
 # Import a workflow
 
-Fresh libraries receive SDLC and the comparison evaluator as published workflows. Upgrades add newly introduced curated starters once while preserving existing copies and tracked deletions. See [automatic starters](../docs/starter-workflows.md). These files also support explicit manual imports; specialized examples remain optional.
+These files are explicit imports. New libraries start empty; bundled SDLC and evaluator choices are available in **Workflows → Import → Starters**. The same dialog supports GitHub folders, local files and pasted JSON, with a preview before import. See [starter workflows](../docs/starter-workflows.md).
 
 | File                                         | Workflow                     | Purpose                                                                                                                                   |
 | -------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| [sdlc.json](sdlc.json)                       | SDLC workflow                | The same starter used by fresh installs. See [Use the SDLC workflow](../docs/sdlc-workflow.md).                                           |
+| [sdlc.json](sdlc.json)                       | SDLC workflow                | The same procedure offered by the bundled starter picker. See [Use the SDLC workflow](../docs/sdlc-workflow.md).                          |
 | [all-nodes.json](all-nodes.json)             | All nodes (demo)             | Inspect every current node editor using a fictional mission briefing. Importing also adds its owned **Format crew badge** helper.         |
 | [local-git-trial.json](local-git-trial.json) | Local Git trial example      | Reviewed local Script for independent comparison workspaces. See [managed Git trials](../docs/local-git-trials.md).                       |
 | [evaluate.json](evaluate.json)               | Evaluate workflow comparison | Grade retained artifacts using a fixed rubric and record resumable receipts. See [workflow evaluation](../docs/workflow-evaluation.md).   |
@@ -14,12 +14,12 @@ Fresh libraries receive SDLC and the comparison evaluator as published workflows
 
 1. Open **Workflows → Import → GitHub folder**.
 2. Enter `https://github.com/dgca/interlock/tree/main/workflows` and select **Find workflows**.
-3. Select the example you want and choose **Import selected**.
+3. Select the example you want and choose **Import workflow**.
 4. Open the imported draft. Double-click a node to inspect its settings. The Batch group has a **Settings** button.
 
 Alternatively, download a JSON file and upload it through **Import → Local file**. From a repository checkout, the CLI accepts `interlock import @workflows/all-nodes.json`.
 
-Importing does not start a run. The demo imports as a draft with a published owned helper so both Workflow editors have a valid target. Reimporting the unchanged demo bundle is a no-op; conflicting local edits are preserved by import conflict checks. The standalone SDLC and evaluator files create a new draft on each explicit import. Only publish a root draft if you want to run it.
+Importing does not start a run. The demo imports as a draft with a published owned helper so both Workflow editors have a valid target. Reimporting the unchanged demo bundle is a no-op; conflicting local edits are preserved by import conflict checks. The SDLC file creates a new draft on each import. Only publish a root draft if you want to run it.
 
 ## Inspect the demo
 

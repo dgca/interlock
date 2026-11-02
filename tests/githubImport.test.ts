@@ -8,7 +8,7 @@ import {
   inspectImportDocument,
 } from '../packages/runtime/src/importSelection';
 import { GithubImporter } from '../packages/server/src/githubImport';
-import { seed } from '../packages/server/src/seed';
+import { importStarter } from '../packages/server/src/starters';
 import sdlcWorkflow from '../workflows/sdlc.json';
 
 const commit = 'a'.repeat(40);
@@ -63,7 +63,7 @@ it('discovers and imports the shared SDLC starter without replacing an existing 
   const store = new Store(':memory:');
   const engine = new Engine(store, process.cwd());
   try {
-    seed(engine);
+    importStarter(engine, { starterId: 'sdlc', requestId: 'github-fixture' });
     const existing = structuredClone(store.workflows()[0]);
     const existingVersion = store.getVersion(existing.id, 1);
     const importer = new GithubImporter(fixture({ 'sdlc.json': sdlcWorkflow }));
