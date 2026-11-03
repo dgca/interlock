@@ -86,8 +86,10 @@ export class RunHistory {
         (!query.rootRunIds || query.rootRunIds.includes(root.id)),
     );
     const page = matching.slice(query.offset, query.offset + query.limit);
+    const scopes = new Map<string, Set<string>>();
     const items = page.map(({ root, members, updatedAt }) => {
       const ids = new Set(members.map((run) => run.id));
+      scopes.set(root.id, ids);
       const blockers: string[] = [];
       if (members.some((run) => !terminal(run)))
         blockers.push(
@@ -140,7 +142,7 @@ export class RunHistory {
           : fingerprint({ rootRunId: root.id, digest: inventory.digest }),
       };
     });
-    return {
+    const preview = {
       items,
       total: matching.length,
       offset: query.offset,
@@ -151,16 +153,17 @@ export class RunHistory {
       storage: this.store.storageSpace(),
       spaceGuidance,
     };
+    return { preview, scopes };
   }
 
   preview(input: HistorySelection = {}) {
-    return this.store.transaction(() => this.plan(input));
+    return this.store.transaction(() => this.plan(input).preview);
   }
 
   delete(input: HistoryDeletion) {
     const query = historyDeletionSchema.parse(input);
     const result = this.store.transaction(() => {
-      const preview = this.plan({
+      const { preview, scopes } = this.plan({
         rootRunIds: query.roots.map((root) => root.runId),
         limit: 100,
       });
@@ -176,24 +179,13 @@ export class RunHistory {
             'History or protections changed. Nothing deleted; preview again and review the current selection.',
           );
       }
-      const selected = new Set(query.roots.map((root) => root.runId));
-      // Selection already includes complete chains; the metadata projection is
-      // reused to collect their descendants without parsing retained payloads.
-      const all = this.store.historyRuns();
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const run of all)
-          if (
-            !selected.has(run.id) &&
-            ((run.parentRunId && selected.has(run.parentRunId)) ||
-              (run.chainRootRunId && selected.has(run.chainRootRunId)))
-          ) {
-            selected.add(run.id);
-            changed = true;
-          }
-      }
-      const inventory = this.store.historyInventory(selected);
+      const selected = new Set(
+        query.roots.flatMap((root) => [...scopes.get(root.runId)!]),
+      );
+      const collections: Record<string, number> = {};
+      for (const item of preview.items)
+        for (const [collection, count] of Object.entries(item.collections))
+          collections[collection] = (collections[collection] ?? 0) + count;
       const retainedStartReceipts = this.store.forRuns(
         'runStarts',
         selected,
@@ -203,8 +195,11 @@ export class RunHistory {
       return {
         deletedRoots: query.roots.length,
         deletedRuns: selected.size,
-        deletedDocuments: inventory.collections,
-        removedDocumentBytes: inventory.documentBytes,
+        deletedDocuments: collections,
+        removedDocumentBytes: preview.items.reduce(
+          (bytes, item) => bytes + item.documentBytes,
+          0,
+        ),
         retainedStartReceipts,
         storageBefore: preview.storage,
         storage: this.store.storageSpace(),

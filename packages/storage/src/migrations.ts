@@ -81,12 +81,13 @@ export const migrations: readonly Migration[] = [
         );
         CREATE INDEX comparison_execution_pending ON comparison_schedule(execution_pending, comparison_id);
         CREATE INDEX comparison_trial_pending ON comparison_schedule(trial_pending, comparison_id);
+        CREATE TABLE active_comparison_runs (run_id TEXT PRIMARY KEY, comparison_id TEXT NOT NULL);
         CREATE INDEX resource_state ON documents(json_extract(value, '$.state')) WHERE collection = 'workResources';
       `);
       const projection = (value: string) => `
         (json_extract(${value}, '$.status') = 'running' OR
           (json_extract(${value}, '$.status') = 'cancelled' AND EXISTS (
-            SELECT 1 FROM json_each(${value}, '$.samples') s WHERE json_type(s.value, '$.observation') IS NULL))),
+            SELECT 1 FROM json_each(${value}, '$.samples') s WHERE json_extract(s.value, '$.observation') IS NULL))),
         coalesce((json_type(${value}, '$.trialSetup') = 'object' AND
           (json_extract(${value}, '$.status') = 'running' OR EXISTS (
             SELECT 1 FROM json_each(${value}, '$.samples') s
@@ -103,6 +104,20 @@ export const migrations: readonly Migration[] = [
       db.exec(`CREATE TRIGGER comparison_schedule_delete AFTER DELETE ON documents
         WHEN OLD.collection = 'comparisons' BEGIN
         DELETE FROM comparison_schedule WHERE comparison_id = OLD.id; END;`);
+      const activeComparison = (
+        value: string,
+      ) => `json_extract(${value}, '$.status') IN ('running', 'waiting')
+        AND json_type(${value}, '$.comparison.comparisonId') = 'text'`;
+      db.exec(`INSERT INTO active_comparison_runs SELECT d.id, json_extract(d.value, '$.comparison.comparisonId')
+        FROM documents d WHERE d.collection = 'runs' AND ${activeComparison('d.value')};`);
+      for (const operation of ['INSERT', 'UPDATE'])
+        db.exec(`CREATE TRIGGER active_comparison_${operation.toLowerCase()} AFTER ${operation} ON documents
+          WHEN NEW.collection = 'runs' BEGIN
+          DELETE FROM active_comparison_runs WHERE run_id = NEW.id;
+          INSERT INTO active_comparison_runs SELECT NEW.id, json_extract(NEW.value, '$.comparison.comparisonId')
+            WHERE ${activeComparison('NEW.value')}; END;`);
+      db.exec(`CREATE TRIGGER active_comparison_delete AFTER DELETE ON documents
+        WHEN OLD.collection = 'runs' BEGIN DELETE FROM active_comparison_runs WHERE run_id = OLD.id; END;`);
     },
   },
 ];

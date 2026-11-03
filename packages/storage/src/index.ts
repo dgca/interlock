@@ -454,6 +454,7 @@ export class Store {
       .prepare(
         `WITH pending(id) AS (
       SELECT comparison_id FROM comparison_schedule WHERE execution_pending = 1
+      UNION SELECT comparison_id FROM active_comparison_runs
       ${includeTrials ? 'UNION SELECT comparison_id FROM comparison_schedule WHERE trial_pending = 1' : ''}
     ) SELECT d.value FROM pending CROSS JOIN documents d
       ON d.collection = 'comparisons' AND d.id = pending.id ORDER BY d.rowid

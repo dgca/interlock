@@ -102,6 +102,39 @@ function launch(engine: Engine, options: Parameters<typeof plan>[1] = {}) {
   engine.pump();
   return { ...p, id: comparison.id };
 }
+it.each(['cancelled', 'completed'] as const)(
+  'counts retried %s comparison samples against global dispatch capacity',
+  (status) => {
+    const { engine, store } = setup();
+    const definition = blankDefinition();
+    const agent = definition.nodes.find((node) => node.kind === 'agent')!;
+    if (agent.kind === 'agent') agent.maxAttempts = 1;
+    const comparison = launch(engine, {
+      workflowId: publish(engine, 'Retry accounting', definition),
+      concurrency: 2,
+    });
+    const claim = engine.claim(engine.available()[0].id, worker);
+    engine.reportFailure(claim.id, claim.token!, 'Failure');
+    if (status === 'cancelled') engine.testbench.cancel({ id: comparison.id });
+    else complete(engine);
+    engine.pump();
+    expect(report(engine, comparison.id).status).toBe(status);
+    const observations = store
+      .get<any>('comparisons', comparison.id)
+      .samples.map((sample: any) => sample.observation);
+    engine.retry(claim.runId);
+    expect(engine.run(claim.runId).status).toBe('waiting');
+    launch(engine, { repetitions: 5, concurrency: 10 });
+    expect(
+      store.activeRuns().filter((run) => run.comparison && !run.parentRunId),
+    ).toHaveLength(10);
+    expect(
+      store
+        .get<any>('comparisons', comparison.id)
+        .samples.map((sample: any) => sample.observation),
+    ).toEqual(observations);
+  },
+);
 function report(engine: Engine, id: string, extra = {}) {
   return engine.testbench.report({ id, ...extra });
 }

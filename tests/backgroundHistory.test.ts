@@ -126,6 +126,14 @@ it('backfills scheduling metadata during upgrade without changing comparison doc
         record.id,
         JSON.stringify(record),
       );
+    db.prepare("INSERT INTO documents VALUES ('runs', ?, ?)").run(
+      'retried',
+      JSON.stringify({
+        id: 'retried',
+        status: 'waiting',
+        comparison: { comparisonId: 'done' },
+      }),
+    );
     const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
     expect(migrate(db, ':memory:')).toEqual({ from: 4, to: 5 });
     expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -140,9 +148,43 @@ it('backfills scheduling metadata during upgrade without changing comparison doc
       { comparison_id: 'cleanup', execution_pending: 0, trial_pending: 1 },
       { comparison_id: 'done', execution_pending: 0, trial_pending: 0 },
     ]);
+    expect(db.prepare('SELECT * FROM active_comparison_runs').all()).toEqual([
+      { run_id: 'retried', comparison_id: 'done' },
+    ]);
   } finally {
     db.close();
   }
+});
+
+it('tracks active terminal-comparison retries transactionally without changing frozen observations', () => {
+  const { store } = setup();
+  const comparison = {
+    id: 'finished',
+    status: 'completed',
+    samples: [{ runId: 'sample', observation: { status: 'failed' } }],
+  };
+  store.put('comparisons', comparison);
+  expect(store.scheduledComparisons()).toEqual([]);
+  const run = {
+    id: 'retried',
+    status: 'waiting',
+    comparison: { comparisonId: comparison.id },
+  };
+  store.put('runs', run);
+  expect(store.scheduledComparisons().map((c) => c.id)).toEqual(['finished']);
+  expect(store.get('comparisons', comparison.id)).toEqual(comparison);
+  store.put('runs', { ...run, status: 'completed' });
+  expect(store.scheduledComparisons()).toEqual([]);
+  expect(() =>
+    store.transaction(() => {
+      store.put('runs', run);
+      throw new Error('rollback');
+    }),
+  ).toThrow('rollback');
+  expect(store.scheduledComparisons()).toEqual([]);
+  store.put('runs', run);
+  store.remove('runs', run.id);
+  expect(store.scheduledComparisons()).toEqual([]);
 });
 
 it('uses indexed pending metadata and claimed-resource lookups without archive scans', () => {
