@@ -1,17 +1,27 @@
 import type { Json } from '@interlock/core';
+import { inspect } from 'node:util';
 
 /** Known-value masking is performed before validation, routing, or persistence. */
 export function secretRedaction(secrets: string[]) {
   const variants = [
     ...new Set(
-      secrets
-        .filter(Boolean)
-        .flatMap((value) => [
-          value,
-          encodeURIComponent(value),
-          JSON.stringify(value).slice(1, -1),
-          Buffer.from(value).toString('base64'),
-        ]),
+      secrets.filter(Boolean).flatMap((value) => [
+        value,
+        encodeURIComponent(value),
+        JSON.stringify(value).slice(1, -1),
+        Buffer.from(value).toString('base64'),
+        inspect(value),
+        inspect(value, {
+          maxStringLength: Infinity,
+          breakLength: Infinity,
+          compact: true,
+        }),
+        inspect(value, {
+          maxStringLength: Infinity,
+          breakLength: Infinity,
+          compact: true,
+        }).slice(1, -1),
+      ]),
     ),
   ].sort((a, b) => b.length - a.length);
   // One pass prevents short secrets from matching text in the replacement itself.

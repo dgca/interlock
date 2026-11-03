@@ -1,0 +1,47 @@
+### Result
+{"candidate":"a11b336bbdb982481728814ec552e7761a30b03a","creationTypedAndKeyboardSubmitted":true,"nameFocus":true,"writeOnlyAfterCreate":true,"replacementFocus":true,"cancelClearsAndRestoresFocus":true,"replacementClearedAfterAcknowledgment":true,"reopenShowsRevisionOnly":true,"phoneNoOverflow":true,"fiveMobileDestinationsVisible":true,"deleteThroughConfirmation":true}
+### Ran Playwright code
+```js
+await (async page => {
+  const check=(condition,message)=>{if(!condition)throw Error(message);};
+  await page.getByRole('link',{name:'New variable',exact:true}).click();
+  const name=page.getByRole('textbox',{name:'Name',exact:true});
+  await name.waitFor();
+  check(await name.evaluate(el=>el===document.activeElement),'Name did not receive focus');
+  await name.pressSequentially('review_ui_secret');
+  const value=page.getByLabel('Secret value',{exact:true});
+  await value.pressSequentially('review-browser-fake-original');
+  await value.press('Enter');
+  await page.getByText('Value set',{exact:true}).waitFor();
+  check(await page.locator('input[type=password]').count()===0,'Secret entry remained after acknowledged creation');
+  check(await page.getByRole('button',{name:/reveal|show secret/i}).count()===0,'Unexpected Secret reveal control');
+  const replace=page.getByRole('button',{name:'Replace value',exact:true});
+  await replace.click();
+  const next=page.getByLabel('New secret value',{exact:true});
+  check(await next.evaluate(el=>el===document.activeElement),'Replacement did not receive focus');
+  await next.pressSequentially('review-browser-fake-cancelled');
+  await page.getByRole('button',{name:'Cancel value change',exact:true}).click();
+  await replace.waitFor();
+  await page.waitForFunction(()=>document.activeElement?.textContent==='Replace value');
+  await replace.click();
+  check(await next.inputValue()==='','Cancelled Secret text retained');
+  await next.pressSequentially('review-browser-fake-replaced');
+  await page.getByRole('button',{name:'Save changes',exact:true}).click();
+  await page.getByText('Value revision 2',{exact:true}).waitFor();
+  check(await page.locator('input[type=password]').count()===0,'Secret entry remained after replacement');
+  await page.reload();
+  await page.getByText('Value revision 2',{exact:true}).waitFor();
+  await page.setViewportSize({width:390,height:844});
+  check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Phone layout overflows');
+  for(const title of ['Workflows','Runs','Prompts','Variables','Harnesses'])check(await page.getByRole('button',{name:title,exact:true}).isVisible(),`Missing mobile navigation ${title}`);
+  await page.getByRole('button',{name:'Delete variable',exact:true}).click();
+  const dialog=page.getByRole('dialog');await dialog.waitFor();
+  check(await dialog.getByText(/protected value revisions/).isVisible(),'Missing delete consequence');
+  await dialog.getByRole('button',{name:'Delete variable',exact:true}).click();
+  await page.waitForURL('**/variables');
+  return {candidate:'a11b336bbdb982481728814ec552e7761a30b03a',creationTypedAndKeyboardSubmitted:true,nameFocus:true,writeOnlyAfterCreate:true,replacementFocus:true,cancelClearsAndRestoresFocus:true,replacementClearedAfterAcknowledgment:true,reopenShowsRevisionOnly:true,phoneNoOverflow:true,fiveMobileDestinationsVisible:true,deleteThroughConfirmation:true};
+}
+)(page);
+```
+### Events
+- New console entries: .playwright-cli/console-2026-11-03T17-13-29-469Z.log#L1-L2

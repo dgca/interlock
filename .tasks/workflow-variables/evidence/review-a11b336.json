@@ -1,0 +1,153 @@
+{
+  "verdict": "revise",
+  "summary": "Full independent review found two P1 defects: established vault writes accept a wrong valid-length key, and invalid Script environment values can disclose escaped Secret plaintext in ordinary history. Valid missing-key, native Fetch/history/export, Script redaction, and focused browser controls passed. No architecture or unrelated-formatting findings.",
+  "baseCommit": "a2112c8507adaab6daa3084ae45214c1edfcc30c",
+  "reviewedCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+  "priorReviewedCommit": null,
+  "reviewScope": "full",
+  "scopeReason": "First review, priorReview is null. Verified branch codex/workflow-variables, full HEAD, baseline and merge-base; tracked worktree is clean. Inspected complete baseline-to-candidate diff, accepted intent/spec/plan, current repository instructions, source tests, saved evidence and three committed screenshots. Both Standards and Spec passes ran separately. No evidence was carried forward from a prior review.",
+  "specEvidence": [
+    {
+      "criterion": "AC1",
+      "status": "verified",
+      "evidence": "Inspected core/variables.ts string/name/size contracts and runtime/variables.ts metadata, immutable-kind mutation schemas, case-insensitive names, metadata/value revisions and direct-ID lookup. Inspected tests/variables.test.ts central management/conflict assertions and actual passing tests.log. Native review capture retained safe revision 1.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC2",
+      "status": "verified",
+      "evidence": "Inspected metadata-only read and explicit Config read/Secret rejection, optimistic writes, and Variables.tsx acknowledgment-before-refresh, pending guard and rejected-edit state. Source tests and HTTP/stdio tests assert safe reads and stale rejection. Independently typed/keyboard-submitted a Secret, replaced it, cancelled another replacement and reopened it using real controls; /tmp/interlock-variables-review-ui.{js,log} proves focus, clearing and no reveal. Builder browser-checks.json reports stale-save and forced-refresh-failure assertions; these reported interactions were not re-executed.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC3",
+      "status": "gap",
+      "evidence": "Inspected AES-256-GCM authenticated envelopes, separate key lifecycle and existing failure tests. Independently verified missing-key rejection, unchanged protected state, no key regeneration and original-key recovery; live Fetch leaves raw DB/history/export free of plaintext. However wrong valid-length key allows a replacement write and changes state, then original-key restoration cannot read current revision. Invalid NUL Script value also leaks escaped plaintext into run/events. Proof /tmp/interlock-variables-fresh-review-proof.json and /tmp/interlock-review-nul-secret.json; findings a11b336-store-key-auth and a11b336-script-env-diagnostic.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC4",
+      "status": "gap",
+      "evidence": "Inspected header/environment-only schemas, unsupported-delivery rejection, pure masked previews, publication validation, native operation selection and clean managed-trial environment handling. Live Fetch received exactly the selected fake Secret with prefix; valid Script control echoed only [REDACTED]. NUL environment values are not validated for their target before spawn, and native diagnostics reveal supplied Secret instead of safe node/target/name guidance. Finding a11b336-script-env-diagnostic.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC5",
+      "status": "verified",
+      "evidence": "Inspected safe VariableCapture fields, capture limits, startup allocation order, exact-revision ready/resolve and inherited-capture selection. Existing source tests plus actual tests.log verify metadata edits do not advance value revisions, rotation pins delayed runs, retry/restart retain revision and deleted/reprovisioned identities never reuse a value revision. Independent Fetch control recorded capture revision 1. Locked-vault mutation defect is tracked under AC3.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC6",
+      "status": "verified",
+      "evidence": "Inspected runtime allocation and testbench transitive pin/configuration capture and report paths. Inspected actual source assertions for ordinary/detached independent child capture, queued Batch inheritance, continue-as-new inheritance, and comparison capture before four queued samples; tests.log records the suite passed. Simulation substituteOperation uses empty captures and editor resolveFetch omits live value resolver.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC7",
+      "status": "gap",
+      "evidence": "Inspected redaction before finish/validation/routing and full stderr-before-truncation, safe request previews and RunInspector capture display. Existing tests assert Fetch headers/body echoes, JSON keys, Base64, short/numeric secrets, polling output and routed failure redaction. Independent Fetch and valid Script controls passed. Independent NUL negative confirms escaped plaintext in run.error, execution.error, node.failed event and inspect response. Proof /tmp/interlock-review-nul-secret.json; finding a11b336-script-env-diagnostic.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC8",
+      "status": "verified",
+      "evidence": "Inspected workflow draft/retained-version dependency scan, imported identities, active runs/comparisons and deletion blockers; disable is rechecked per consumption and historical safe capture names persist. Tests assert disable-before-delayed-use and re-enable/retry of original revision, retained-reference delete blocking and deleted-value retry failure. Inspected browser reported dependency blocker and independently completed confirmed deletion of the review-only unreferenced variable.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC9",
+      "status": "verified",
+      "evidence": "Inspected core format-4 exact requirement validation, export transitive draft/retained definitions, transaction-wide import binding/provisioning, immutable-kind direct local bindings and existing-binding conflict guard. Source tests and actual transport pass records assert explicit binding, no automatic name attachment, kind/chaining rejection, atomic conflicts and unset provisioning. Independent Fetch export excludes fake Secret. Import UI uses explicit choices without changing definitions.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC10",
+      "status": "verified",
+      "evidence": "Inspected shared tRPC read/manage routes, CLI stdin-only value handling, safe prevalidation, grouped MCP operations, bounded list/dependency/version schemas and descriptions. Inspected tests/variablesTransport.test.ts actual HTTP/stdio discovery and behavior assertions plus passing tests.log. New tools and authoring/start/inspect/comparison/transfer guidance agree with shared API. CLI help/docs match implementation. Affected flow reviewed, not an audit of unrelated tools.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC11",
+      "status": "verified",
+      "evidence": "Inspected optional fields and preservation of omitted Script language/environment paths, no eager key setup, legacy variable-free bundle support, draft-save/publication distinction and transport fixture updates limited to 54-tool counts. Actual source assertions cover legacy Bash, absent captures and variable-free behavior; saved full 111-file/1310-test run, build and package-smoke outputs pass.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC12",
+      "status": "verified",
+      "evidence": "Viewed actual committed editor screenshots at 1280/900/390 and compared Variables.tsx/CSS, reference/import controls, sidebar and shared Button/Modal to incumbent theme and accepted states. Dark Mantine composition, spacing, write-only management and stacked mobile layout match spec. Independently executed real typing, Enter creation, Name/replacement focus, Cancel focus/clearing, save/reopen, mobile overflow/navigation and confirmed deletion; /tmp/interlock-variables-review-ui.js and .log retain assertions and successful CLI exit. Reviewed builder's broader journey summary accurately as reported evidence, plus existing interaction test and static pending/error/navigation handlers. No UI finding.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC13",
+      "status": "gap",
+      "evidence": "Inspected nonempty tests/build/package/format/browser/detector artifacts, their asserted outcomes, test source and isolated trial implementation; original artifacts remain attributed to this candidate. Docs cover scope, delivery, key backup/recovery, captures, retention and redaction limits; pending patch changeset exists. Independent boundary checks expose unhandled D1 wrong-key writes and D3 invalid-target diagnostics, so the accepted failure coverage does not yet pass. Raw prior browser commands were not retained as files; independent focused script/stdout is now saved outside checkout. Full root formatting fails only on documented unrelated untracked artifacts.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    }
+  ],
+  "standardsEvidence": [
+    {
+      "check": "Repository and artifact ownership",
+      "evidence": "Verified accepted intent owns scope/constraints, spec owns D1-D3 and AC1-AC13, plan owns implementation/verification and local-trial instructions. Branch/base/HEAD and clean tracked state independently checked. Current issue #193 fetched read-only through GitHub and agrees with accepted scope. Preserved unrelated files and real .interlock data.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "check": "Standards pass: architecture and regression boundaries",
+      "evidence": "Separate Standards agent inspected storage/runtime/core/server/CLI/MCP/UI integration. Core owns contracts, storage owns protected persistence, runtime owns capture/execution/redaction, clients share server API. No architecture violation or heuristic-only finding. Legacy paths and optional representations inspected against source tests and saved successful full-suite/build/package evidence.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "check": "Standards pass: protected storage and diagnostic security",
+      "evidence": "Independent missing-key negative plus original-key control passed; exact native Fetch delivery/history/export boundary passed. Wrong-key write reproduced with temporary DB/key and fake credentials, and Script NUL diagnostic leak independently re-executed after inspecting proof script. Concrete failures recorded in the two findings; temporary stores were removed and review subprocesses stopped.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "check": "Standards pass: docs, CLI and affected MCP flow",
+      "evidence": "Inspected README, CONTEXT, architecture, scope, variables, node-data, Fetch, agent-workflows, connect-harness, upgrade, prompts, version-cleanup and UI-pattern changes; CLI commands/help and full affected MCP grouped management/authoring/start/inspection/comparison/transfer contracts checked against implementation. HTTP/stdio transport assertions inspected. Recovery and safe-error promises currently contradict the identified defects; no unrelated-MCP comprehensive audit claimed.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "check": "Standards pass: UI and copy",
+      "evidence": "Applied Impeccable context to existing Operate interface, inspected incumbent components/current tokens and actual three-width screenshots. Focused Playwright CLI review passed real controls with retained script/stdout; no direct state injection used. Reported prior browser evidence attributed to builder, not presented as freshly executed. No style-only or filler-copy finding.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    },
+    {
+      "check": "Checks, packaging and formatting evidence",
+      "evidence": "Inspected saved full tests.log with 111 passing files/1310 tests, complete build output through UI/package build success and package smoke's explicit success. Did not rerun unaffected full checks. Inspected changed-format success and root-format log showing unrelated untracked artifacts; independently git diff --check passed. Pending @type_of/interlock patch changeset present. No feature-format finding.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "checked"
+    }
+  ],
+  "findingResolutions": [],
+  "findings": [
+    {
+      "id": "a11b336-store-key-auth",
+      "location": "packages/storage/src/protectedValues.ts:135-147",
+      "details": "[P1] Authenticate an established vault's key before writing any new value revision. write() accepts any owner-only 32-byte key and encrypts without validating that it unlocks this vault. Independent reproduction: create revision 1, replace the key with another valid-length owner-only key, observe locked reads, replace the variable with expectedRevision 1; mutation succeeds as revision/valueRevision 2 and changes protected state. Restoring the original key leaves the current revision locked. This splits retained revisions across incompatible keys and violates D1/AC3 plus documented recovery behavior. Reject wrong-key writes without altering metadata, counters or ciphertext, using an authenticated vault identity/sentinel that remains available even when value records are deleted. Proof: /tmp/interlock-variables-fresh-review-proof.json."
+    },
+    {
+      "id": "a11b336-script-env-diagnostic",
+      "location": "packages/runtime/src/index.ts:2077-2092",
+      "details": "[P1] Validate resolved environment values before passing Secrets to spawn and emit a safe target-specific error. A Secret containing NUL is accepted into the library and delivered to executeScript; Node rejects it with a diagnostic quoting the entire value as an escaped string. redact.text does not match Node's backslash-x00 representation. Independent valid control completes with [REDACTED], while the NUL negative persists escaped plaintext in run.error, execution.error, node.failed events and engine.inspect. This violates AC4 target validation and AC7/D3 no-value diagnostics. Cover Script and Script polling checks and avoid propagating native diagnostics containing submitted values. Proof and replay: /tmp/interlock-review-nul-secret.json and /tmp/interlock-review-nul-secret.mts."
+    }
+  ]
+}

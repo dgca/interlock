@@ -159,7 +159,8 @@ dependency pages. See [variable management](variables.md).
 Storage encrypts both kinds with AES-256-GCM. Each database's vault identity and
 authenticated value envelopes live in SQLite; the random 256-bit key lives in a
 separate owner-only file. Authentication binds the vault, variable, kind, and value
-revision. Metadata reads expose the local key location for backup and recovery,
+revision. A retained authenticated vault verifier rejects wrong-key writes even
+after value records are deleted. Metadata reads expose the local key location for backup and recovery,
 never the key or value envelopes. Default key paths and `INTERLOCK_SECRET_KEY_FILE`
 are described in the management guide. The first value creates a key lazily;
 workflows without variables require none. Missing or invalid established keys are
@@ -185,8 +186,8 @@ injected values. Disabled, deleted, missing, or inaccessible exact revisions fai
 without empty or latest-value fallback. Existing captures are checked again at
 consumption. Simulation substitutes operations without resolving live values.
 
-Known delivered Secret occurrences, including URL-encoded, JSON-escaped, and
-Base64 forms, are scrubbed in returned strings, object keys, scalar results, and
+Known delivered Secret occurrences, including URL-encoded, JSON-escaped, Base64,
+and standard Node-inspected diagnostic forms, are scrubbed in returned strings, object keys, scalar results, and
 errors before contract validation, result routing, failure routing, history, or
 forwarding. Secret-consuming Scripts redact complete bounded stderr before
 retention truncation; excess diagnostic output fails safely. A result that no

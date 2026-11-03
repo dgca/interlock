@@ -216,6 +216,23 @@ it('keeps database ciphertext restartable only with its original safe key, witho
     availability: 'locked',
   });
   writeFileSync(keyFile, Buffer.alloc(32, 7), { mode: 0o600 });
+  const protectedCollections = [
+    'variables',
+    'variableValues',
+    'variableValueCounters',
+    'variableVault',
+    'variableBindings',
+  ];
+  const snapshot = () =>
+    protectedCollections.map((collection) => valid.store.list(collection));
+  const beforeWrongKey = snapshot();
+  expect(() => update(valid, v, { value: 'wrong-key-replacement' })).toThrow(
+    /Protected variable store unavailable/,
+  );
+  expect(() =>
+    create(valid, 'secret', 'wrong-key-new-value', 'wrong_key_create'),
+  ).toThrow(/Protected variable store unavailable/);
+  expect(snapshot()).toEqual(beforeWrongKey);
   expect(() => valid.variables.captureIds([v.id])).toThrow(
     /Protected variable store unavailable/,
   );
@@ -503,6 +520,149 @@ function completeAgent(engine: Engine, id?: string) {
   });
   engine.submit(work.id, claim.token!, {});
 }
+
+it('authenticates vault keys even after all values are deleted and retains recovery with the original key', () => {
+  const { engine, keyFile } = setup(true);
+  const v = create(engine);
+  const key = readFileSync(keyFile);
+  engine.variables.mutate({
+    action: 'delete',
+    id: v.id,
+    expectedRevision: v.revision,
+  });
+  const before = [
+    'variables',
+    'variableValues',
+    'variableValueCounters',
+    'variableVault',
+  ].map((c) => engine.store.list(c));
+  writeFileSync(keyFile, Buffer.alloc(32, 19));
+  expect(() =>
+    create(engine, 'secret', 'never-written', 'new_after_delete'),
+  ).toThrow(/Protected variable store unavailable/);
+  expect(
+    [
+      'variables',
+      'variableValues',
+      'variableValueCounters',
+      'variableVault',
+    ].map((c) => engine.store.list(c)),
+  ).toEqual(before);
+  writeFileSync(keyFile, key);
+  const next = create(
+    engine,
+    'secret',
+    'valid-after-recovery',
+    'new_after_delete',
+  );
+  expect(engine.variables.captureIds([next.id])).toHaveLength(1);
+});
+
+it('bootstraps a missing pre-release key verifier only after authenticating a retained value', () => {
+  const { engine, keyFile } = setup(true);
+  const v = create(engine);
+  const key = readFileSync(keyFile);
+  const vault = engine.store.get<any>('variableVault', 'default');
+  delete vault.check;
+  engine.store.put('variableVault', vault);
+  writeFileSync(keyFile, Buffer.alloc(32, 29));
+  expect(() => update(engine, v, { value: 'not-written' })).toThrow(
+    /Protected variable store unavailable/,
+  );
+  writeFileSync(keyFile, key);
+  const next = update(engine, v, { value: 'valid-replacement' });
+  expect(engine.store.get<any>('variableVault', 'default').check).toBeTruthy();
+  expect(engine.variables.captureIds([next.id])[0].valueRevision).toBe(2);
+});
+
+it.each(['script', 'poll'] as const)(
+  'rejects NUL environment values before native %s diagnostics can disclose them',
+  async (mode) => {
+    const { engine } = setup();
+    const v = create(engine, 'secret', 'nul-sentinel\0credential-tail');
+    const d = mode === 'script' ? script(v.id) : blankDefinition();
+    if (mode === 'poll')
+      d.nodes[1] = nodeSchema.parse({
+        id: 'agent',
+        kind: 'wait',
+        label: 'Poll credential',
+        timing: {
+          kind: 'poll',
+          everyMs: 1000,
+          path: 'ok',
+          equals: true,
+          check: {
+            kind: 'script',
+            language: 'javascript',
+            command: 'return {ok:true};',
+            environment: [{ name: 'TEST_TOKEN', variableId: v.id }],
+          },
+        },
+      });
+    const run = engine.start(publish(engine, d), {}).run;
+    if (mode === 'script') await done(engine, run.id);
+    else
+      await vi.waitFor(() =>
+        expect(
+          engine.run(run.id).executions.find((e) => e.kind === 'wait')?.check
+            ?.error,
+        ).toContain('NUL'),
+      );
+    const inspection = engine.inspect(run.id);
+    const serialized = JSON.stringify(inspection);
+    expect(serialized).not.toContain('nul-sentinel');
+    expect(serialized).not.toContain('credential-tail');
+    expect(serialized).toContain('TEST_TOKEN');
+    expect(serialized).toContain('service_token');
+    expect(serialized).not.toContain('options.env');
+  },
+);
+
+it.each(['nul\0sentinel', 'newline\nsentinel', 'unicode-雪-sentinel'])(
+  'rejects invalid referenced Fetch header values without native value diagnostics',
+  async (value) => {
+    const { engine } = setup();
+    const endpoint = await service();
+    const v = create(engine, 'secret', value);
+    const run = await done(
+      engine,
+      engine.start(publish(engine, fetchDefinition(v.id, endpoint.url)), {}).run
+        .id,
+    );
+    expect(run.status).toBe('failed');
+    expect(run.error).toContain('valid header text');
+    expect(JSON.stringify(engine.inspect(run.id))).not.toContain('sentinel');
+    expect(endpoint.headers).toEqual([]);
+  },
+);
+
+it.each([
+  `diagnostic-sentinel-"'\u0060\\tail`,
+  'diagnostic-sentinel-' + 'x'.repeat(12000),
+])(
+  'scrubs standard Node-inspected diagnostic representations without retaining partial values',
+  async (value) => {
+    const { engine } = setup();
+    const v = create(engine, 'secret', value);
+    const run = await done(
+      engine,
+      engine.start(
+        publish(
+          engine,
+          script(
+            v.id,
+            'console.error({token:process.env.TEST_TOKEN}); throw new Error("control failure");',
+          ),
+        ),
+        {},
+      ).run.id,
+    );
+    const serialized = JSON.stringify(engine.inspect(run.id));
+    expect(run.status).toBe('failed');
+    expect(serialized).toContain('[REDACTED]');
+    expect(serialized).not.toContain('diagnostic-sentinel');
+  },
+);
 
 it('keeps a captured value across server restart and explicit retry after rotation', async () => {
   const { engine, database, keyFile, dir } = setup(true);

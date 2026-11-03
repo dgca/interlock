@@ -21,6 +21,12 @@ import { InterlockError, type VariableKind } from '@interlock/core';
 interface Documents {
   get<T>(collection: string, id: string): T | undefined;
   put(collection: string, value: { id: string }): void;
+  list<T>(collection: string): T[];
+}
+interface Vault {
+  id: string;
+  vaultId: string;
+  check?: { nonce: string; tag: string };
 }
 interface Envelope {
   id: string;
@@ -122,18 +128,71 @@ export class ProtectedValues {
       JSON.stringify([e.vaultId, e.variableId, e.kind, e.valueRevision]),
     );
   }
+  private vaultAad(vaultId: string) {
+    return Buffer.from(
+      JSON.stringify(['interlock-variable-vault-v1', vaultId]),
+    );
+  }
+  private verifier(vaultId: string, key: Buffer): NonNullable<Vault['check']> {
+    const nonce = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', key, nonce, {
+      authTagLength: 16,
+    });
+    cipher.setAAD(this.vaultAad(vaultId));
+    cipher.final();
+    return {
+      nonce: nonce.toString('base64'),
+      tag: cipher.getAuthTag().toString('base64'),
+    };
+  }
+  private decrypt(e: Envelope, key: Buffer): string {
+    const decipher = createDecipheriv(
+      'aes-256-gcm',
+      key,
+      Buffer.from(e.nonce, 'base64'),
+      { authTagLength: 16 },
+    );
+    decipher.setAAD(this.aad(e));
+    decipher.setAuthTag(Buffer.from(e.tag, 'base64'));
+    return Buffer.concat([
+      decipher.update(Buffer.from(e.ciphertext, 'base64')),
+      decipher.final(),
+    ]).toString('utf8');
+  }
+  private verify(vault: Vault, key: Buffer) {
+    try {
+      if (!vault.check) {
+        // Readable pre-release vaults gain a persistent verifier on their next write.
+        const existing = this.documents
+          .list<Envelope>('variableValues')
+          .find((e) => e.vaultId === vault.vaultId);
+        if (!existing) throw this.failure();
+        this.decrypt(existing, key);
+        return;
+      }
+      const decipher = createDecipheriv(
+        'aes-256-gcm',
+        key,
+        Buffer.from(vault.check.nonce, 'base64'),
+        { authTagLength: 16 },
+      );
+      decipher.setAAD(this.vaultAad(vault.vaultId));
+      decipher.setAuthTag(Buffer.from(vault.check.tag, 'base64'));
+      decipher.final();
+    } catch {
+      throw this.failure();
+    }
+  }
   write(
     variableId: string,
     kind: VariableKind,
     valueRevision: number,
     value: string,
   ) {
-    const old = this.documents.get<{ id: string; vaultId: string }>(
-      'variableVault',
-      'default',
-    );
+    const old = this.documents.get<Vault>('variableVault', 'default');
     const vaultId = old?.vaultId ?? randomUUID();
     const key = this.key(vaultId, !old);
+    if (old) this.verify(old, key);
     const nonce = randomBytes(12);
     const e = {
       id: `${variableId}:${valueRevision}`,
@@ -152,10 +211,12 @@ export class ProtectedValues {
       cipher.update(value, 'utf8'),
       cipher.final(),
     ]);
-    if (!old)
-      this.documents.put('variableVault', { id: 'default', vaultId } as {
-        id: string;
-      });
+    if (!old?.check)
+      this.documents.put('variableVault', {
+        id: 'default',
+        vaultId,
+        check: this.verifier(vaultId, key),
+      } as Vault);
     this.documents.put('variableValues', {
       ...e,
       nonce: nonce.toString('base64'),
@@ -178,23 +239,11 @@ export class ProtectedValues {
         'Protected variable revision is missing. Restore the protected store or start a new run after provisioning the value.',
       );
     try {
-      const vault = this.documents.get<{ vaultId: string }>(
-        'variableVault',
-        'default',
-      );
-      if (vault?.vaultId !== e.vaultId) throw this.failure();
-      const decipher = createDecipheriv(
-        'aes-256-gcm',
-        this.key(e.vaultId, false),
-        Buffer.from(e.nonce, 'base64'),
-        { authTagLength: 16 },
-      );
-      decipher.setAAD(this.aad(e));
-      decipher.setAuthTag(Buffer.from(e.tag, 'base64'));
-      return Buffer.concat([
-        decipher.update(Buffer.from(e.ciphertext, 'base64')),
-        decipher.final(),
-      ]).toString('utf8');
+      const vault = this.documents.get<Vault>('variableVault', 'default');
+      if (!vault || vault.vaultId !== e.vaultId) throw this.failure();
+      const key = this.key(e.vaultId, false);
+      this.verify(vault, key);
+      return this.decrypt(e, key);
     } catch {
       throw this.failure();
     }

@@ -29,6 +29,10 @@ environment name and variable reference. JavaScript reads
 `process.env.SERVICE_API_TOKEN`. Bash reads `$SERVICE_API_TOKEN`. These entries
 override matching inherited names. Only explicitly selected library values are
 delivered. Polling Wait checks support the same header and environment controls.
+Environment values cannot contain NUL bytes. Referenced Fetch header values must
+use valid Latin-1 header text without control characters, except horizontal tabs.
+Invalid target values fail with the variable and target names, without quoting
+the value.
 
 Save and publish the workflow. Its definition retains IDs rather than values.
 Variable references are supported in Fetch headers and Script environments only.

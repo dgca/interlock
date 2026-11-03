@@ -234,3 +234,32 @@ The server uses a temporary database, key, and local fake HTTP service. It does
 not change the development library that holds this SDLC run. Stop it with Ctrl-C
 to remove trial data. `INTERLOCK_TRIAL_PORT` selects another local port if needed.
 Local testing and the accepted design do not authorize a merge or release.
+
+## First independent review and repairs
+
+The first fresh review inspected `a11b336bbdb982481728814ec552e7761a30b03a`
+and returned two P1 findings. Its structured result is retained in
+[review-a11b336.json](evidence/review-a11b336.json). The independent UI check has
+actual assertions and output in
+[review-ui-a11b336.script.txt](evidence/review-ui-a11b336.script.txt) and
+[review-ui-a11b336.log](evidence/review-ui-a11b336.log). The original UI, build,
+and package evidence remains attributed to that candidate. UI source is unchanged
+by these repairs; the next review can carry that evidence forward after checking
+its applicability.
+
+- `a11b336-store-key-auth`: storage now authenticates a persistent vault verifier
+  before any value write. Its identity remains after value deletion. Readable
+  pre-release vaults without the verifier authenticate an existing envelope before
+  adding one. Wrong-key update/create and empty-vault tests compare complete
+  protected database state and restore the original key as a valid control.
+- `a11b336-script-env-diagnostic`: native operation preparation rejects NUL in
+  selected Script environments, including polling checks, and rejects invalid
+  selected header text before native APIs can echo it. Errors identify the node,
+  target, and variable without quoting its value. Redaction also recognizes standard
+  Node-inspected string forms, with mixed-quote and long diagnostic controls.
+
+Focused validation passed 61 tests across variables, transports, Fetch, Script,
+and polling suites. The full suite passed 1,319 tests across 111 files; build and
+package smoke checks passed. Logs are retained as `evidence/revision-1-*.log`.
+A fresh review of the committed repairs follows. These are implementation corrections under
+the accepted D1/D3 decisions, not new product choices.

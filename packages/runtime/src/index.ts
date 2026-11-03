@@ -2045,6 +2045,7 @@ export class Engine {
     operation: Extract<WorkflowNode, { kind: 'script' | 'fetch' }> | PollCheck,
     input: Json,
     signal: AbortSignal,
+    label = 'label' in operation ? operation.label : 'Polling check',
   ): Promise<Json> {
     const environment = this.trials.execution(run);
     if (environment && operation.kind === 'fetch')
@@ -2060,6 +2061,25 @@ export class Engine {
     const resolved = this.variables.resolve(run, ids);
     const redact = secretRedaction(resolved.secrets);
     try {
+      const variableName = (id: string) =>
+        run.variableCaptures?.find((c) => c.referenceId === id)?.name ?? id;
+      if (operation.kind === 'fetch') {
+        for (const field of operation.headers) {
+          if (field.value.kind !== 'variable') continue;
+          const value = `${field.value.prefix ?? ''}${resolved.value(field.value.variableId)}${field.value.suffix ?? ''}`;
+          if (/[^\t\x20-\x7e\x80-\xff]/.test(value))
+            throw new InterlockError(
+              `${label}: header ${field.name} cannot use variable ${variableName(field.value.variableId)}. Replace its value with valid header text without control characters or non-Latin-1 characters.`,
+            );
+        }
+      } else {
+        for (const entry of operation.environment ?? []) {
+          if (resolved.value(entry.variableId).includes('\0'))
+            throw new InterlockError(
+              `${label}: environment ${entry.name} cannot use variable ${variableName(entry.variableId)}. Replace its value with text that contains no NUL bytes.`,
+            );
+        }
+      }
       const output =
         operation.kind === 'fetch'
           ? await executeFetch(
@@ -2124,6 +2144,7 @@ export class Engine {
         timing.check,
         execution.input,
         controller.signal,
+        node.label,
       ).then((output) => {
         const status = (output as { status: number }).status;
         if (
