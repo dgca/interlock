@@ -71,6 +71,7 @@ import { assignmentInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 import { RunStarts } from './runStarts.js';
+import { RunHistory } from './runHistory.js';
 import { TrialEnvironments } from './trialEnvironments.js';
 import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
@@ -111,6 +112,7 @@ class ResultProcessingError extends InterlockError {
   }
 }
 export class Engine {
+  readonly history: RunHistory;
   readonly executors: ExecutorManager;
   readonly continuation: Continuation;
   readonly prompts: Prompts;
@@ -192,6 +194,35 @@ export class Engine {
         this.event(this.run(id), 'work.resources', message);
     });
     this.starts = new RunStarts(store);
+    this.history = new RunHistory(
+      store,
+      (ids) => this.starts.deleted(ids),
+      (ids) => {
+        const blockers: string[] = [];
+        if (
+          this.localJobs.size > 0 &&
+          store
+            .runTrees(ids)
+            .some((run) =>
+              run.executions.some((execution) =>
+                this.localJobs.has(execution.id),
+              ),
+            )
+        )
+          blockers.push(
+            'Native operations are still closing. Retry after they stop.',
+          );
+        try {
+          this.executors.assertDelete(ids);
+        } catch (error) {
+          if (!(error instanceof InterlockError)) throw error;
+          blockers.push(error.message);
+        }
+        return blockers;
+      },
+      () =>
+        queueMicrotask(() => this.listeners.forEach((listener) => listener())),
+    );
     this.trials = new TrialEnvironments(store, options.trialRoot, () =>
       this.pump(),
     );
@@ -1308,6 +1339,7 @@ export class Engine {
     const definition = this.definition(run),
       node = definition.nodes.find((n) => n.id === run.cursor)!;
     let execution = run.executions.at(-1);
+    const starting = !execution || terminal(execution.status);
     if (!execution || terminal(execution.status)) {
       execution = {
         id: randomUUID(),
@@ -1353,11 +1385,8 @@ export class Engine {
         if (execution.status === 'waiting') {
           if (node.unclaimedTimeoutMs === undefined) return false;
           const work = this.store
-            .work()
-            .find(
-              (w) =>
-                w.executionId === execution!.id && w.status === 'available',
-            );
+            .work('available', run.id)
+            .find((w) => w.executionId === execution!.id);
           if (
             work?.budgetBlocked ||
             work?.resourceBlocked ||
@@ -1549,9 +1578,12 @@ export class Engine {
         return true;
       }
       if (node.kind === 'script' || node.kind === 'fetch') {
-        if (node.kind === 'fetch' && !execution.request)
+        let changed = starting;
+        if (node.kind === 'fetch' && !execution.request) {
           execution.request = resolveFetch(node, execution.input);
-        this.save(run);
+          changed = true;
+        }
+        if (changed) this.save(run);
         return false;
       }
       if (node.kind === 'workflow' && node.mode === 'detached') {
@@ -1632,7 +1664,7 @@ export class Engine {
             );
           }
         }
-        let changed = false;
+        let changed = starting;
         const concurrency = node.kind !== 'workflow' ? node.concurrency : 1;
         let active = children.filter((c) => !terminal(c.status)).length;
         while (execution.retryChildRunIds?.length && active < concurrency) {
@@ -1733,9 +1765,15 @@ export class Engine {
           );
           return true;
         }
-        execution.status = 'waiting';
-        run.status = 'waiting';
-        this.save(run);
+        if (
+          changed ||
+          execution.status !== 'waiting' ||
+          run.status !== 'waiting'
+        ) {
+          execution.status = 'waiting';
+          run.status = 'waiting';
+          this.save(run);
+        }
         return changed;
       }
       if (node.kind === 'switch') {
@@ -1786,11 +1824,8 @@ export class Engine {
     this.store.transaction(() => {
       this.budgets.refresh();
       this.resources.refresh();
-      for (const work of this.store.work())
-        if (
-          work.status === 'claimed' &&
-          Date.parse(work.leaseUntil!) <= Date.now()
-        ) {
+      for (const work of this.store.work('claimed'))
+        if (Date.parse(work.leaseUntil!) <= Date.now()) {
           work.expiredClaims = [
             ...(work.expiredClaims ?? []),
             {
@@ -2122,14 +2157,8 @@ export class Engine {
       return parent ? within(parent) : false;
     };
     return this.store
-      .work()
-      .filter(
-        (w) =>
-          w.status === 'available' &&
-          !w.budgetBlocked &&
-          !w.resourceBlocked &&
-          within(w.runId),
-      )
+      .work('available')
+      .filter((w) => !w.budgetBlocked && !w.resourceBlocked && within(w.runId))
       .map((work) => this.describeWork(work));
   }
   workSummaries(runId?: string) {

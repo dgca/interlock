@@ -1084,7 +1084,7 @@ export class ExecutorManager {
   assertDelete(runIds: Set<string>) {
     if (
       this.engine.store
-        .list<ManagedExecution>(attemptsCollection)
+        .forRuns<ManagedExecution>(attemptsCollection, runIds)
         .some(
           (r) =>
             runIds.has(r.runId) && (active(r) || r.state === 'interrupted'),

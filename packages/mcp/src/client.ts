@@ -51,6 +51,8 @@ export function createMcpClient(url?: string) {
       publish: client.workflows.publish.mutate,
     },
     runs: {
+      previewHistoryDeletion: client.runs.previewHistoryDeletion.query,
+      deleteHistory: client.runs.deleteHistory.mutate,
       budget: client.runs.budget.query,
       contextGroup: client.runs.contextGroup.query,
       handoffContext: client.runs.handoffContext.mutate,

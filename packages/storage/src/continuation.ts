@@ -58,11 +58,14 @@ export type WorkMetadata = Pick<
   trialEnvironment?: { id: string };
 };
 
+// IDs and JSON references are strings. Unary + removes the CTE column's TEXT
+// affinity so SQLite can search JSON expression indexes without coercion.
+// CROSS JOIN keeps the small scoped tree outside each indexed lookup.
 const tree = `WITH RECURSIVE tree(id, lifecycle) AS (
   SELECT id, id FROM documents WHERE collection = 'runs' AND id = ?
   UNION ALL
   SELECT d.id, CASE WHEN json_extract(d.value, '$.parentMode') = 'detached' THEN d.id ELSE tree.lifecycle END
-  FROM documents d JOIN tree ON json_extract(d.value, '$.parentRunId') = tree.id WHERE d.collection = 'runs'
+  FROM tree CROSS JOIN documents d ON json_extract(d.value, '$.parentRunId') = +tree.id WHERE d.collection = 'runs'
 )`;
 const parse = <T>(rows: Record<string, unknown>[]) =>
   rows.map((row) => JSON.parse(row.value as string) as T);
@@ -96,7 +99,7 @@ export function continuationState(db: DatabaseSync, id: string) {
       .prepare(
         `${tree}
     SELECT json_remove(d.value, '$.input', '$.output', '$.prompt', '$.savedPrompts', '$.executionInstructions', '$.trialEnvironment.workspace', '$.trialEnvironment.baseCommit', '$.trialEnvironment.configurationId', '$.trialEnvironment.policy', '$.outputSchema', '$.token', '$.expiredClaims', '$.holdReceipt', '$.resultRules', '$.hold.reason', '$.hold.checkpointRef', '$.error', '$.context.instructions') AS value
-    FROM documents d JOIN tree ON json_extract(d.value, '$.runId') = tree.id
+    FROM tree CROSS JOIN documents d ON json_extract(d.value, '$.runId') = +tree.id
     WHERE d.collection = 'work' AND json_extract(d.value, '$.status') IN ('available', 'claimed', 'held') ORDER BY d.rowid
   `,
       )

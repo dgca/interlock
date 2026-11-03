@@ -48,12 +48,21 @@ export class Budgets {
     }
     return scope;
   }
-  private evaluations() {
-    const records = this.store
-      .list<BudgetRecord>(collection)
-      .filter((record) => record.budget);
+  private evaluations(targets: Set<string>) {
+    const ancestors = this.store.runAncestors(targets);
+    const family = [
+      ...ancestors,
+      ...this.store.chainRuns(
+        new Set(
+          ancestors.flatMap((run) => (run.chain ? [run.chain.rootRunId] : [])),
+        ),
+      ),
+    ];
+    const records = [...new Set(family.map((run) => run.id))]
+      .map((id) => this.store.get<BudgetRecord>(collection, id))
+      .filter((record): record is BudgetRecord => Boolean(record?.budget));
     if (!records.length) return [];
-    const runs = this.store.runs();
+    const runs = this.store.runTrees(new Set(family.map((run) => run.id)));
     return records.map((record) => {
       const scope = this.scope(record.id, record.budget!, runs);
       return {
@@ -74,7 +83,7 @@ export class Budgets {
       runId,
       revision: local?.revision ?? 0,
       budget: local?.budget ?? null,
-      governing: this.evaluations()
+      governing: this.evaluations(new Set([runId]))
         .filter((evaluation) => evaluation.scope.has(runId))
         .map(({ record, scope, result }) => ({
           runId: record.id,
@@ -124,9 +133,12 @@ export class Budgets {
       );
   }
   refresh() {
-    const evaluations = this.evaluations();
-    for (const work of this.store.work()) {
-      if (work.status !== 'available') continue;
+    const available = this.store.work('available');
+    if (!available.length) return;
+    const evaluations = this.evaluations(
+      new Set(available.map((work) => work.runId)),
+    );
+    for (const work of available) {
       const runIds = evaluations
         .filter(
           ({ scope, result }) =>

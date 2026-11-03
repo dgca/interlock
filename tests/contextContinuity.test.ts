@@ -486,7 +486,11 @@ it('opens a previous-release database unchanged and persists new groups across r
       );
   db.close();
   const e = setup(path);
-  expect(e.store.migration).toEqual({ from: 3, to: 3 });
+  expect(e.store.migration).toMatchObject({
+    from: 3,
+    to: 5,
+    backup: expect.any(String),
+  });
   for (const [collection, records] of Object.entries(previousRelease.documents))
     expect(e.store.list(collection)).toEqual(records);
   const active = e.store.work().find((w) => w.status === 'claimed')!;

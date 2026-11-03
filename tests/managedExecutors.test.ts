@@ -91,6 +91,68 @@ function adapter(
 async function settled(e: Engine, id: string) {
   await vi.waitFor(() => expect(e.run(id).status).toBe('completed'));
 }
+it('cleans up settled managed execution and session history while preserving local profiles', async () => {
+  const e = create();
+  profile(e);
+  e.executors.start([adapter()]);
+  const run = start(e, workflow(e, 'codex').id, {
+    private: 'managed-history-payload',
+  });
+  await settled(e, run.id);
+  const preview = e.history.preview({ rootRunIds: [run.id] }).items[0];
+  expect(preview).toMatchObject({
+    canDelete: true,
+    collections: { managedExecutions: 1, executorSessions: 1 },
+  });
+  expect(JSON.stringify(preview)).not.toContain('managed-history-payload');
+  e.history.delete({
+    roots: [{ runId: run.id, confirmation: preview.confirmation! }],
+    acknowledgeHistoryLoss: true,
+  });
+  for (const collection of ['managedExecutions', 'executorSessions'])
+    expect(e.store.forRuns(collection, new Set([run.id]))).toEqual([]);
+  expect(e.executors.profiles().find((p) => p.id === 'codex')?.enabled).toBe(
+    true,
+  );
+});
+
+it('protects cancelled managed history until the harness stops and its uncertain execution is reconciled', async () => {
+  const e = create();
+  profile(e);
+  let release!: () => void;
+  e.executors.start([
+    adapter('codex', async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      throw new Error('stopped');
+    }),
+  ]);
+  const run = start(e, workflow(e, 'codex').id, null);
+  await vi.waitFor(() =>
+    expect(e.executors.inspect(e.store.work()[0].id).items[0]?.state).toBe(
+      'running',
+    ),
+  );
+  const record = e.executors.inspect(e.store.work()[0].id).items[0];
+  e.cancel(run.id);
+  expect(e.history.preview({ rootRunIds: [run.id] }).items[0].canDelete).toBe(
+    false,
+  );
+  e.executors.stopExecution(record.id);
+  expect(() => e.executors.confirmStopped(record.id, true)).toThrow(
+    'still stopping',
+  );
+  const preview = e.history.preview({ rootRunIds: [run.id] }).items[0];
+  expect(preview.blockers.join(' ')).toContain('active or uncertain');
+  release();
+  await vi.waitFor(() =>
+    expect(() => e.executors.confirmStopped(record.id, true)).not.toThrow(),
+  );
+  expect(e.history.preview({ rootRunIds: [run.id] }).items[0].canDelete).toBe(
+    true,
+  );
+});
 it('discovers models on disabled profiles, caches and refreshes without claiming work', async () => {
   const e = create();
   profile(e, 'codex', { enabled: false });

@@ -256,8 +256,15 @@ export class TrialEnvironments {
   }
   pump(localJobs: Set<string>) {
     if (this.stopped) return;
-    const comparisons = this.store.list<WorkflowComparison>('comparisons');
-    const runs = this.store.runs();
+    const comparisons = this.store.scheduledComparisons(true);
+    if (!comparisons.some((c) => c.trialSetup)) return;
+    const runs = this.store.runTrees(
+      new Set(
+        comparisons.flatMap((c) =>
+          c.samples.flatMap((s) => (s.runId ? [s.runId] : [])),
+        ),
+      ),
+    );
     let reserved = comparisons.reduce(
       (n, c) =>
         n +

@@ -5,6 +5,14 @@ import { isDeepStrictEqual } from 'node:util';
 import { readPath, InterlockError, type RunQuery } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
 import { continuationState } from './continuation.js';
+export type { HistoryRun } from './history.js';
+import {
+  historyRuns,
+  historyInventory,
+  historyReferences,
+  deleteHistoryDocuments,
+  storageSpace,
+} from './history.js';
 import type {
   Run,
   RunAncestry,
@@ -14,6 +22,8 @@ import type {
   RunEvent,
   SavedPrompt,
   DeletedWorkflowVersion,
+  WorkflowComparison,
+  ResourceReservation,
 } from '@interlock/core';
 
 /** One service owns the database. Each runtime operation commits as one transaction. */
@@ -66,6 +76,22 @@ export class Store {
   }
   continuation(id: string) {
     return continuationState(this.db, id);
+  }
+  historyRuns() {
+    return historyRuns(this.db);
+  }
+  historyInventory(ids: Set<string>) {
+    return historyInventory(this.db, ids);
+  }
+  historyReferences(ids: Set<string>) {
+    return historyReferences(this.db, ids);
+  }
+  storageSpace() {
+    return storageSpace(this.db);
+  }
+  deleteHistoryDocuments(ids: Set<string>) {
+    deleteHistoryDocuments(this.db, ids);
+    this.changed('runs');
   }
   batchSize(id: string, executionId: string, path: string) {
     const keys =
@@ -201,11 +227,62 @@ export class Store {
     return this.list<Run>('runs');
   }
   activeRuns(): Run[] {
+    // Separate equalities keep SQLite on the status index even without ANALYZE.
+    // An IN predicate can otherwise choose a scan of every run document.
     return this.db
       .prepare(
-        "SELECT value FROM documents WHERE collection = 'runs' AND json_extract(value, '$.status') IN ('running', 'waiting') ORDER BY rowid",
+        `SELECT value, rowid AS position FROM documents WHERE collection = 'runs' AND json_extract(value, '$.status') = 'running'
+        UNION ALL
+        SELECT value, rowid AS position FROM documents WHERE collection = 'runs' AND json_extract(value, '$.status') = 'waiting'
+        ORDER BY position`,
       )
       .all()
+      .map((row) => JSON.parse(row.value as string));
+  }
+  /** Ancestors include detached parents; callers decide which policies govern. */
+  runAncestors(ids: Set<string>): Run[] {
+    if (!ids.size) return [];
+    return this.db
+      .prepare(
+        `
+      WITH RECURSIVE lineage(id) AS (
+        SELECT value FROM json_each(?)
+        UNION
+        SELECT json_extract(d.value, '$.parentRunId') FROM documents d
+        JOIN lineage ON d.id = lineage.id WHERE d.collection = 'runs'
+        AND json_extract(d.value, '$.parentRunId') IS NOT NULL
+      ) SELECT d.value FROM lineage CROSS JOIN documents d ON d.collection = 'runs' AND d.id = lineage.id
+    `,
+      )
+      .all(JSON.stringify([...ids]))
+      .map((row) => JSON.parse(row.value as string));
+  }
+  chainRuns(roots: Set<string>): Run[] {
+    if (!roots.size) return [];
+    return this.db
+      .prepare(
+        `SELECT value FROM documents WHERE collection = 'runs'
+      AND json_extract(value, '$.chain.rootRunId') IN (SELECT value FROM json_each(?)) ORDER BY rowid
+    `,
+      )
+      .all(JSON.stringify([...roots]))
+      .map((row) => JSON.parse(row.value as string));
+  }
+  runTrees(ids: Set<string>): Run[] {
+    if (!ids.size) return [];
+    // Match continuation's indexed descendant traversal, including JSON affinity.
+    return this.db
+      .prepare(
+        `
+      WITH RECURSIVE tree(id) AS (
+        SELECT value FROM json_each(?)
+        UNION
+        SELECT d.id FROM tree CROSS JOIN documents d ON json_extract(d.value, '$.parentRunId') = +tree.id
+        WHERE d.collection = 'runs'
+      ) SELECT d.value FROM tree CROSS JOIN documents d ON d.collection = 'runs' AND d.id = tree.id ORDER BY d.rowid
+    `,
+      )
+      .all(JSON.stringify([...ids]))
       .map((row) => JSON.parse(row.value as string));
   }
   runAncestry(id: string, cache = new Map<string, RunAncestry>()): RunAncestry {
@@ -345,8 +422,56 @@ export class Store {
     }
     return result;
   }
-  work() {
+  work(status?: WorkRequest['status'], runId?: string): WorkRequest[] {
+    if (status !== undefined || runId !== undefined)
+      return this.db
+        .prepare(
+          `SELECT value FROM documents WHERE collection = 'work'
+        ${status === undefined ? '' : "AND json_extract(value, '$.status') = ?"}
+        ${runId === undefined ? '' : "AND json_extract(value, '$.runId') = ?"} ORDER BY rowid
+      `,
+        )
+        .all(
+          ...(status === undefined ? [] : [status]),
+          ...(runId === undefined ? [] : [runId]),
+        )
+        .map((row) => JSON.parse(row.value as string));
     return this.list<WorkRequest>('work');
+  }
+  resourceAdmissionWork(): WorkRequest[] {
+    return this.db
+      .prepare(
+        `SELECT value FROM documents WHERE collection = 'work'
+      AND (json_extract(value, '$.status') = 'available' OR json_type(value, '$.resourceBlocked') IS NOT NULL) = 1
+      ORDER BY rowid
+    `,
+      )
+      .all()
+      .map((row) => JSON.parse(row.value as string));
+  }
+  scheduledComparisons(includeTrials = false): WorkflowComparison[] {
+    return this.db
+      .prepare(
+        `WITH pending(id) AS (
+      SELECT comparison_id FROM comparison_schedule WHERE execution_pending = 1
+      UNION SELECT comparison_id FROM active_comparison_runs
+      ${includeTrials ? 'UNION SELECT comparison_id FROM comparison_schedule WHERE trial_pending = 1' : ''}
+    ) SELECT d.value FROM pending CROSS JOIN documents d
+      ON d.collection = 'comparisons' AND d.id = pending.id ORDER BY d.rowid
+    `,
+      )
+      .all()
+      .map((row) => JSON.parse(row.value as string));
+  }
+  resourcesForReconciliation(): ResourceReservation[] {
+    return this.db
+      .prepare(
+        `SELECT value FROM documents WHERE collection = 'workResources'
+      AND json_extract(value, '$.state') = 'claimed' ORDER BY rowid
+    `,
+      )
+      .all()
+      .map((row) => JSON.parse(row.value as string));
   }
   latestPromptRevision(id: string): number {
     const row = this.db

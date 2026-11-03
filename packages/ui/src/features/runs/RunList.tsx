@@ -1,4 +1,7 @@
-import { Tabs } from '@mantine/core';
+import { Button, Group, Tabs } from '@mantine/core';
+import { useState } from 'react';
+import { HistoryCleanupDialog } from './HistoryCleanupDialog';
+import type { Action } from '../../lib/useActionFeedback';
 import type { Run } from '@interlock/core';
 import { ArrowUpRight, Activity } from 'lucide-react';
 import layout from '../../components/PageLayout/PageLayout.module.css';
@@ -10,13 +13,18 @@ export function RunList({
   tab,
   onTabChange,
   workflowId,
+  act,
+  workflows,
 }: {
   runs: Run[];
   tab: 'active' | 'history';
   onTabChange: (tab: 'active' | 'history') => void;
   onOpen: (id: string) => void;
   workflowId?: string;
+  act?: Action;
+  workflows?: { id: string; name: string }[];
 }) {
+  const [cleanup, setCleanup] = useState(false);
   const roots = runs.filter((r) =>
     workflowId
       ? r.workflowId === workflowId && !r.batchNodeId
@@ -50,6 +58,13 @@ export function RunList({
           <Tabs.Tab value="history">History {history.length}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value={tab} pt="md">
+          {tab === 'history' && act && (
+            <Group justify="flex-end" mb="md">
+              <Button variant="light" onClick={() => setCleanup(true)}>
+                Clean up history
+              </Button>
+            </Group>
+          )}
           {visible.length ? (
             <div className="run-table">
               <div className="run-row table-heading">
@@ -103,6 +118,28 @@ export function RunList({
           )}
         </Tabs.Panel>
       </Tabs>
+      {cleanup && act && (
+        <HistoryCleanupDialog
+          workflowId={workflowId}
+          workflows={
+            workflows
+              ? workflows.map((workflow) => ({
+                  value: workflow.id,
+                  label: workflow.name,
+                }))
+              : [
+                  ...new Map(
+                    runs.map((run) => [
+                      run.workflowId,
+                      { value: run.workflowId, label: run.workflowName },
+                    ]),
+                  ).values(),
+                ]
+          }
+          act={act}
+          onClose={() => setCleanup(false)}
+        />
+      )}
     </div>
   );
 }

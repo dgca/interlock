@@ -60,6 +60,67 @@ export const migrations: readonly Migration[] = [
       }
     },
   },
+  {
+    version: 4,
+    up(db) {
+      db.exec(`
+        CREATE INDEX work_status ON documents(json_extract(value, '$.status')) WHERE collection = 'work';
+        CREATE INDEX work_run_status ON documents(json_extract(value, '$.runId'), json_extract(value, '$.status')) WHERE collection = 'work';
+        CREATE INDEX work_admission ON documents((json_extract(value, '$.status') = 'available' OR json_type(value, '$.resourceBlocked') IS NOT NULL)) WHERE collection = 'work';
+        CREATE INDEX runs_chain ON documents(json_extract(value, '$.chain.rootRunId')) WHERE collection = 'runs';
+        CREATE INDEX documents_run ON documents(collection, json_extract(value, '$.runId'));
+      `);
+    },
+  },
+  {
+    version: 5,
+    up(db) {
+      db.exec(`
+        CREATE TABLE comparison_schedule (
+          comparison_id TEXT PRIMARY KEY, execution_pending INTEGER NOT NULL, trial_pending INTEGER NOT NULL
+        );
+        CREATE INDEX comparison_execution_pending ON comparison_schedule(execution_pending, comparison_id);
+        CREATE INDEX comparison_trial_pending ON comparison_schedule(trial_pending, comparison_id);
+        CREATE TABLE active_comparison_runs (run_id TEXT PRIMARY KEY, comparison_id TEXT NOT NULL);
+        CREATE INDEX resource_state ON documents(json_extract(value, '$.state')) WHERE collection = 'workResources';
+        CREATE INDEX documents_work ON documents(collection, json_extract(value, '$.workId'));
+      `);
+      const projection = (value: string) => `
+        (json_extract(${value}, '$.status') = 'running' OR
+          (json_extract(${value}, '$.status') = 'cancelled' AND EXISTS (
+            SELECT 1 FROM json_each(${value}, '$.samples') s WHERE json_extract(s.value, '$.observation') IS NULL))),
+        coalesce((json_type(${value}, '$.trialSetup') = 'object' AND
+          (json_extract(${value}, '$.status') = 'running' OR EXISTS (
+            SELECT 1 FROM json_each(${value}, '$.samples') s
+            WHERE json_extract(s.value, '$.trial.cleanup') IN ('pending', 'running')
+              OR json_extract(s.value, '$.trial.preparation') = 'preparing'))), 0)
+      `;
+      db.exec(`INSERT INTO comparison_schedule
+        SELECT d.id, ${projection('d.value')} FROM documents d WHERE d.collection = 'comparisons';`);
+      for (const operation of ['INSERT', 'UPDATE'])
+        db.exec(`CREATE TRIGGER comparison_schedule_${operation.toLowerCase()} AFTER ${operation} ON documents
+          WHEN NEW.collection = 'comparisons' BEGIN
+          INSERT INTO comparison_schedule VALUES (NEW.id, ${projection('NEW.value')})
+          ON CONFLICT(comparison_id) DO UPDATE SET execution_pending = excluded.execution_pending, trial_pending = excluded.trial_pending; END;`);
+      db.exec(`CREATE TRIGGER comparison_schedule_delete AFTER DELETE ON documents
+        WHEN OLD.collection = 'comparisons' BEGIN
+        DELETE FROM comparison_schedule WHERE comparison_id = OLD.id; END;`);
+      const activeComparison = (
+        value: string,
+      ) => `json_extract(${value}, '$.status') IN ('running', 'waiting')
+        AND json_type(${value}, '$.comparison.comparisonId') = 'text'`;
+      db.exec(`INSERT INTO active_comparison_runs SELECT d.id, json_extract(d.value, '$.comparison.comparisonId')
+        FROM documents d WHERE d.collection = 'runs' AND ${activeComparison('d.value')};`);
+      for (const operation of ['INSERT', 'UPDATE'])
+        db.exec(`CREATE TRIGGER active_comparison_${operation.toLowerCase()} AFTER ${operation} ON documents
+          WHEN NEW.collection = 'runs' BEGIN
+          DELETE FROM active_comparison_runs WHERE run_id = NEW.id;
+          INSERT INTO active_comparison_runs SELECT NEW.id, json_extract(NEW.value, '$.comparison.comparisonId')
+            WHERE ${activeComparison('NEW.value')}; END;`);
+      db.exec(`CREATE TRIGGER active_comparison_delete AFTER DELETE ON documents
+        WHEN OLD.collection = 'runs' BEGIN DELETE FROM active_comparison_runs WHERE run_id = OLD.id; END;`);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

@@ -594,7 +594,11 @@ it('adds policies to a published legacy database and preserves consumption acros
       );
   db.close();
   let e = setup(path);
-  expect(e.store.migration).toEqual({ from: 3, to: 3 });
+  expect(e.store.migration).toMatchObject({
+    from: 3,
+    to: 5,
+    backup: expect.any(String),
+  });
   for (const [collection, records] of Object.entries(previousRelease.documents))
     expect(e.store.list(collection)).toEqual(records);
   const c = e.store.work().find((w) => w.status === 'claimed')!;
