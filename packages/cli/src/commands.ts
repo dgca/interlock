@@ -57,6 +57,22 @@ export async function runCommand(argv: string[]) {
   const client = createClient(process.env.INTERLOCK_URL);
   const [command, ...args] = argv;
   switch (command) {
+    case 'run-history': {
+      if (args.length !== 1)
+        throw new Error(
+          'Usage: run-history <json|@file> (action: preview or delete; deletion requires reviewed root confirmations and acknowledgeHistoryLoss:true)',
+        );
+      const { historyRequestSchema } = await import('@interlock/core');
+      const request = historyRequestSchema.parse({
+        request: await parse(args[0]),
+      }).request;
+      if (request.action === 'preview') {
+        const { action: _action, ...input } = request;
+        return client.runs.previewHistoryDeletion.query(input);
+      }
+      const { action: _action, ...input } = request;
+      return client.runs.deleteHistory.mutate(input);
+    }
     case 'simulation':
       if (args.length !== 1) throw new Error('Usage: simulation <json|@file>');
       return client.testbench.simulation.mutate(await parse(args[0]));
@@ -380,6 +396,7 @@ export async function runCommand(argv: string[]) {
           'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file]',
           'runs [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
+          'run-history <json|@file> (action: preview with workflowId/before/rootRunIds and offset/limit; delete requires roots with preview confirmations and acknowledgeHistoryLoss:true; workflows and published versions remain)',
           'context-group <run-id> <group> [options-json|@file] (binding and history; offset, limit)',
           'handoff-context <json|@file> (runId, group, expectedRevision, session, actor, reason, checkpointRef)',
           'budget <run-id> (local revision/policy and governing budget status)',

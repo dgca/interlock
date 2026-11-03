@@ -664,8 +664,48 @@ try {
     (await call('get_run', { id: started.runId })).run.output.number,
     42,
   );
+  const historyPreview = JSON.parse(
+    execFileSync(
+      bin,
+      [
+        'run-history',
+        JSON.stringify({ action: 'preview', rootRunIds: [started.runId] }),
+      ],
+      {
+        cwd: workdir,
+        env: { ...env, INTERLOCK_URL: url },
+        encoding: 'utf8',
+      },
+    ),
+  );
+  assert.equal(historyPreview.items[0].canDelete, true);
+  const historyRemoved = await call('manage_run_history', {
+    request: {
+      action: 'delete',
+      roots: [
+        {
+          runId: started.runId,
+          confirmation: historyPreview.items[0].confirmation,
+        },
+      ],
+      acknowledgeHistoryLoss: true,
+    },
+  });
+  assert.equal(historyRemoved.deletedRoots, 1);
+  assert.equal(
+    (
+      await client.callTool({
+        name: 'get_run',
+        arguments: { id: started.runId },
+      })
+    ).isError,
+    true,
+  );
+  assert(
+    (await call('list_workflows')).some((item) => item.id === workflow.id),
+  );
   console.log(
-    'Packed global and npx installs passed: CLI, UI assets, HTTP and stdio MCP, assignments across restart, JavaScript execution, and persistence.',
+    'Packed global and npx installs passed: CLI, UI assets, HTTP and stdio MCP, assignments across restart, JavaScript execution, persistence, and reviewed history cleanup.',
   );
 } catch (error) {
   console.error(logs);

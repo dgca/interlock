@@ -5,6 +5,14 @@ import { isDeepStrictEqual } from 'node:util';
 import { readPath, InterlockError, type RunQuery } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
 import { continuationState } from './continuation.js';
+export type { HistoryRun } from './history.js';
+import {
+  historyRuns,
+  historyInventory,
+  historyReferences,
+  deleteHistoryDocuments,
+  storageSpace,
+} from './history.js';
 import type {
   Run,
   RunAncestry,
@@ -14,6 +22,8 @@ import type {
   RunEvent,
   SavedPrompt,
   DeletedWorkflowVersion,
+  WorkflowComparison,
+  ResourceReservation,
 } from '@interlock/core';
 
 /** One service owns the database. Each runtime operation commits as one transaction. */
@@ -66,6 +76,22 @@ export class Store {
   }
   continuation(id: string) {
     return continuationState(this.db, id);
+  }
+  historyRuns() {
+    return historyRuns(this.db);
+  }
+  historyInventory(ids: Set<string>) {
+    return historyInventory(this.db, ids);
+  }
+  historyReferences(ids: Set<string>) {
+    return historyReferences(this.db, ids);
+  }
+  storageSpace() {
+    return storageSpace(this.db);
+  }
+  deleteHistoryDocuments(ids: Set<string>) {
+    deleteHistoryDocuments(this.db, ids);
+    this.changed('runs');
   }
   batchSize(id: string, executionId: string, path: string) {
     const keys =
@@ -418,6 +444,29 @@ export class Store {
         `SELECT value FROM documents WHERE collection = 'work'
       AND (json_extract(value, '$.status') = 'available' OR json_type(value, '$.resourceBlocked') IS NOT NULL) = 1
       ORDER BY rowid
+    `,
+      )
+      .all()
+      .map((row) => JSON.parse(row.value as string));
+  }
+  scheduledComparisons(includeTrials = false): WorkflowComparison[] {
+    return this.db
+      .prepare(
+        `WITH pending(id) AS (
+      SELECT comparison_id FROM comparison_schedule WHERE execution_pending = 1
+      ${includeTrials ? 'UNION SELECT comparison_id FROM comparison_schedule WHERE trial_pending = 1' : ''}
+    ) SELECT d.value FROM pending CROSS JOIN documents d
+      ON d.collection = 'comparisons' AND d.id = pending.id ORDER BY d.rowid
+    `,
+      )
+      .all()
+      .map((row) => JSON.parse(row.value as string));
+  }
+  resourcesForReconciliation(): ResourceReservation[] {
+    return this.db
+      .prepare(
+        `SELECT value FROM documents WHERE collection = 'workResources'
+      AND json_extract(value, '$.state') = 'claimed' ORDER BY rowid
     `,
       )
       .all()

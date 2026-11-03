@@ -998,6 +998,7 @@ export {
 } from './testbench.js';
 
 export * from './authoring.js';
+export * from './runHistory.js';
 export {
   evaluationInputSchema,
   evaluationEvidenceSchema,

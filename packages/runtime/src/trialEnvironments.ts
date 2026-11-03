@@ -256,15 +256,7 @@ export class TrialEnvironments {
   }
   pump(localJobs: Set<string>) {
     if (this.stopped) return;
-    const comparisons = this.store
-      .list<WorkflowComparison>('comparisons')
-      .filter(
-        (c) =>
-          c.status !== 'completed' ||
-          c.samples.some(
-            (s) => s.trial && ['pending', 'running'].includes(s.trial.cleanup),
-          ),
-      );
+    const comparisons = this.store.scheduledComparisons(true);
     if (!comparisons.some((c) => c.trialSetup)) return;
     const runs = this.store.runTrees(
       new Set(

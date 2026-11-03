@@ -65,6 +65,7 @@ import { freshContextInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 import { RunStarts } from './runStarts.js';
+import { RunHistory } from './runHistory.js';
 import { TrialEnvironments } from './trialEnvironments.js';
 import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
@@ -105,6 +106,7 @@ class ResultProcessingError extends InterlockError {
   }
 }
 export class Engine {
+  readonly history: RunHistory;
   readonly continuation: Continuation;
   readonly prompts: Prompts;
   readonly versions: VersionCleanup;
@@ -184,6 +186,21 @@ export class Engine {
         this.event(this.run(id), 'work.resources', message);
     });
     this.starts = new RunStarts(store);
+    this.history = new RunHistory(
+      store,
+      (ids) => this.starts.deleted(ids),
+      (ids) =>
+        this.localJobs.size > 0 &&
+        store
+          .runTrees(ids)
+          .some((run) =>
+            run.executions.some((execution) =>
+              this.localJobs.has(execution.id),
+            ),
+          ),
+      () =>
+        queueMicrotask(() => this.listeners.forEach((listener) => listener())),
+    );
     this.trials = new TrialEnvironments(store, options.trialRoot, () =>
       this.pump(),
     );

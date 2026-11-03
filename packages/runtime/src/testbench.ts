@@ -463,9 +463,7 @@ export class Testbench {
   }
   advance() {
     let changed = false;
-    const comparisons = this.store
-      .list<WorkflowComparison>('comparisons')
-      .filter((c) => c.status !== 'completed');
+    const comparisons = this.store.scheduledComparisons();
     if (!comparisons.length) return false;
     const runs = this.store.runTrees(
       new Set(

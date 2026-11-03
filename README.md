@@ -221,7 +221,7 @@ For embedded UI settings, see [Configure the embedded UI](docs/embedded-ui.md).
 
 Interlock listens on `127.0.0.1:4310` and stores workflows and runs in `~/.interlock/interlock.db`. Restarting the server retains saved data. Scripts use the directory where you started Interlock as their working directory.
 
-Run history is retained until explicitly deleted; there is no automatic age or count limit. Idle scheduling uses indexed active-run and assignment lookups, and unchanged waiting steps do not write or wake continuation readers. Retained history still uses disk space, and inspecting large run trees or evaluating their budgets costs more work.
+Use **Runs → History → Clean up history** to preview and delete selected run trees while keeping their workflows and versions. CLI and MCP expose the same [manual history cleanup](docs/history-cleanup.md), including protection reasons and storage figures. There is no automatic age or count limit. Idle scheduling uses indexed active-run and assignment lookups, and unchanged waiting steps do not write or wake continuation readers. Retained history still uses disk space, and inspecting large run trees or evaluating their budgets costs more work.
 
 To change the port, script working directory, or database path:
 

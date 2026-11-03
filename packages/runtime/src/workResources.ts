@@ -23,9 +23,6 @@ export class WorkResources {
     private store: Store,
     private notify: (runId: string, message: string) => void,
   ) {}
-  private records() {
-    return this.store.list<ResourceReservation>(resourceCollection);
-  }
   forWork(workId: string) {
     return this.store
       .forWork<ResourceReservation>(resourceCollection, workId)
@@ -121,7 +118,7 @@ export class WorkResources {
       );
   }
   refresh() {
-    for (const r of this.records()) {
+    for (const r of this.store.resourcesForReconciliation()) {
       if (r.state === 'uncertain') continue;
       const work = this.store.get<WorkRequest>('work', r.workId);
       if (

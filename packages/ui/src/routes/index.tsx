@@ -112,6 +112,7 @@ function WorkflowRoute() {
       runsView={
         <RunList
           runs={context.runs}
+          act={context.act}
           workflowId={workflow.id}
           tab={runTab}
           onTabChange={(tab) =>
@@ -130,12 +131,13 @@ function WorkflowRoute() {
 }
 
 function RunsRoute() {
-  const { runs } = useOutletContext<AppContext>();
+  const { runs, act } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const [search, setSearch] = useSearchParams();
   return (
     <RunList
       runs={runs}
+      act={act}
       tab={search.get('tab') === 'history' ? 'history' : 'active'}
       onTabChange={(tab) =>
         setSearch((previous) => {

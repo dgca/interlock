@@ -45,6 +45,8 @@ import {
   reportUsageSchema,
   usageQuerySchema,
   setBudgetSchema,
+  historyPreviewSchema,
+  historyDeletionSchema,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import {
@@ -431,6 +433,12 @@ export const appRouter = t.router({
       .mutation(({ ctx, input }) => ctx.engine.versions.delete(input)),
   }),
   runs: t.router({
+    previewHistoryDeletion: p
+      .input(historyPreviewSchema)
+      .query(({ ctx, input }) => ctx.engine.history.preview(input)),
+    deleteHistory: p
+      .input(historyDeletionSchema)
+      .mutation(({ ctx, input }) => ctx.engine.history.delete(input)),
     contextGroup: p
       .input(contextGroupQuerySchema)
       .query(({ ctx, input }) => ctx.engine.contextGroups.read(input)),

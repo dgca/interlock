@@ -72,6 +72,39 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    up(db) {
+      db.exec(`
+        CREATE TABLE comparison_schedule (
+          comparison_id TEXT PRIMARY KEY, execution_pending INTEGER NOT NULL, trial_pending INTEGER NOT NULL
+        );
+        CREATE INDEX comparison_execution_pending ON comparison_schedule(execution_pending, comparison_id);
+        CREATE INDEX comparison_trial_pending ON comparison_schedule(trial_pending, comparison_id);
+        CREATE INDEX resource_state ON documents(json_extract(value, '$.state')) WHERE collection = 'workResources';
+      `);
+      const projection = (value: string) => `
+        (json_extract(${value}, '$.status') = 'running' OR
+          (json_extract(${value}, '$.status') = 'cancelled' AND EXISTS (
+            SELECT 1 FROM json_each(${value}, '$.samples') s WHERE json_type(s.value, '$.observation') IS NULL))),
+        coalesce((json_type(${value}, '$.trialSetup') = 'object' AND
+          (json_extract(${value}, '$.status') = 'running' OR EXISTS (
+            SELECT 1 FROM json_each(${value}, '$.samples') s
+            WHERE json_extract(s.value, '$.trial.cleanup') IN ('pending', 'running')
+              OR json_extract(s.value, '$.trial.preparation') = 'preparing'))), 0)
+      `;
+      db.exec(`INSERT INTO comparison_schedule
+        SELECT d.id, ${projection('d.value')} FROM documents d WHERE d.collection = 'comparisons';`);
+      for (const operation of ['INSERT', 'UPDATE'])
+        db.exec(`CREATE TRIGGER comparison_schedule_${operation.toLowerCase()} AFTER ${operation} ON documents
+          WHEN NEW.collection = 'comparisons' BEGIN
+          INSERT INTO comparison_schedule VALUES (NEW.id, ${projection('NEW.value')})
+          ON CONFLICT(comparison_id) DO UPDATE SET execution_pending = excluded.execution_pending, trial_pending = excluded.trial_pending; END;`);
+      db.exec(`CREATE TRIGGER comparison_schedule_delete AFTER DELETE ON documents
+        WHEN OLD.collection = 'comparisons' BEGIN
+        DELETE FROM comparison_schedule WHERE comparison_id = OLD.id; END;`);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

@@ -42,6 +42,8 @@ Database schema 3 adds transactional continuation revisions and a parent-run ind
 
 Database schema 4 adds indexes for assignment status, owning run, resource admission, run chains, and run-scoped documents. Startup backs up an existing database before creating the indexes. Stored documents and run history remain unchanged. Index creation needs additional disk space and takes longer on larger databases; there are no manual conversion steps or new retention limits.
 
+Database schema 5 adds indexed pending-comparison metadata and a reservation-state index. Triggers keep scheduling metadata in the same transaction as comparison writes, including explicit retry and trial cleanup. The upgrade backfills existing comparisons and preserves their documents. Existing databases receive the normal pre-upgrade backup. [Manual history cleanup](history-cleanup.md) becomes available after restart; upgrading itself never deletes history.
+
 Startup checks whether the configured port is occupied before opening the database. A locked database error identifies its path and suggests stopping other instances. Use `lsof -nP -iTCP:4310 -sTCP:LISTEN` to identify the listener, adjusting the port when needed. If a process was suspended with Ctrl+Z, `kill -CONT <pid>` lets it handle a pending termination signal. A separate engine needs both a different port and a different database.
 
 New claims persist optional `claimLeaseSeconds`. Existing claims need no conversion and use 300 seconds when a renewal omits its duration. New claims reuse their original duration instead. To retain the previous renewal behavior, pass `leaseSeconds: 300` explicitly. Summary ancestry is derived from existing runs without a database rewrite.
