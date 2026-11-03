@@ -1,0 +1,22 @@
+{
+  "method": "Real Playwright interactions against an isolated local trial with fake credentials; server requests used only for concurrency setup and read-only export setup.",
+  "passed": [
+    "Secret creation and cleared entry after acknowledgment",
+    "Fetch and Script variable selection through real pickers; draft save and publication",
+    "Script v2 native execution; safe capture revision 1 and redacted output",
+    "Central rotation picked up by unchanged published Fetch v2; safe capture revision 2",
+    "Stale save preserves entered value; Cancel restores focus",
+    "Write acknowledgment followed by a forced refresh failure clears plaintext and sends exactly one write",
+    "Keyboard Enter creates a Secret; unreferenced deletion succeeds",
+    "Disabled variable rejects run startup; re-enable restores availability",
+    "Referenced-variable deletion remains disabled with dependency guidance",
+    "1280px, 900px, and 390px layouts have no horizontal overflow; all five mobile navigation destinations remain reachable",
+    "Portable import rejects implicit binding and accepts explicit compatible local choices"
+  ],
+  "screenshots": [
+    "editor-desktop.png",
+    "editor-intermediate.png",
+    "editor-phone.png"
+  ],
+  "notes": "Expected network errors came from stale revisions, disabled startup, and the intentionally aborted refresh. Screenshot evidence uses viewport capture after layout settles; full-page stitching was discarded. Temporary trial IDs are not production state."
+}

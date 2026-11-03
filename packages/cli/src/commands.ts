@@ -57,6 +57,44 @@ export async function runCommand(argv: string[]) {
   const client = createClient(process.env.INTERLOCK_URL);
   const [command, ...args] = argv;
   switch (command) {
+    case 'variables': {
+      const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: { 'value-stdin': { type: 'boolean' } },
+      });
+      if (
+        positionals.length !== 2 ||
+        !['read', 'manage'].includes(positionals[0])
+      )
+        throw new Error(
+          'Usage: variables <read|manage> <json|@file> [--value-stdin]. Secret values must use stdin.',
+        );
+      const request = await parse(positionals[1]);
+      if (positionals[0] === 'read') {
+        if (values['value-stdin'])
+          throw new Error('--value-stdin requires manage');
+        return client.variables.read.query(request);
+      }
+      if (Object.hasOwn(request, 'value'))
+        throw new Error(
+          'Supply variable values through --value-stdin, never command-line JSON.',
+        );
+      if (values['value-stdin']) {
+        if (!['create', 'update'].includes(request.action))
+          throw new Error('--value-stdin requires create or update');
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for await (const chunk of process.stdin) {
+          const data = Buffer.from(chunk);
+          if ((size += data.length) > 16 * 1024)
+            throw new Error('Variable value must be at most 16 KiB');
+          chunks.push(data);
+        }
+        request.value = Buffer.concat(chunks).toString('utf8');
+      }
+      return client.variables.manage.mutate(request);
+    }
     case 'run-history': {
       if (args.length !== 1)
         throw new Error(
@@ -164,11 +202,15 @@ export async function runCommand(argv: string[]) {
             force: { type: 'boolean' },
             revisions: { type: 'string' },
             'restore-deleted-versions': { type: 'boolean' },
+            'variable-bindings': { type: 'string' },
           },
         });
         return client.workflows.import.mutate({
           bundle: input,
           force: values.force,
+          variableBindings: values['variable-bindings']
+            ? await parse(values['variable-bindings'])
+            : undefined,
           restoreDeletedVersions: values['restore-deleted-versions'],
           draftRevisions: values.revisions
             ? await parse(values.revisions)
@@ -177,6 +219,9 @@ export async function runCommand(argv: string[]) {
       }
       if (args.length !== 1)
         throw new Error('Import options require a workflow bundle');
+      const { assertLegacyVariableFree } =
+        await import('../../core/src/importDocument.js');
+      assertLegacyVariableFree(input);
       return client.workflows.create.mutate(input);
     }
     case 'export':
@@ -384,6 +429,7 @@ export async function runCommand(argv: string[]) {
     default:
       return {
         usage: [
+          'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value; write-only Secret creation/replacement through stdin)',
           'executors [json|@file] (list by default; settings/save_settings for shared concurrency, discover models/efforts, save local profiles, inspect work, respond, retry_model after a model refusal, stop or reconcile an interrupted execution)',
           'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
           'workflow <id>',
@@ -392,7 +438,7 @@ export async function runCommand(argv: string[]) {
           'archive <id>',
           'restore <id>',
           'delete <id> --yes',
-          'import <json|@file> [--force | --revisions JSON] [--restore-deleted-versions] (force changes drafts only; explicit restoration requires original definitions and valid dependencies/ownership)',
+          'import <json|@file> [--force | --revisions JSON] [--restore-deleted-versions] [--variable-bindings json|@file] (format 4 requires explicit local variable bindings/provisioning; force changes drafts only; restoration requires original definitions)',
           'starters (list bundled choices and existing copies)',
           'import-starter <starter-id> [--copy] [--request-id key] (explicit published copy; never starts a run)',
           'export <id>',

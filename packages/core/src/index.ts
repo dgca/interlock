@@ -33,6 +33,13 @@ import { modelTierSchema } from './modelTiers.js';
 import { continuityGroupSchema } from './contextContinuity.js';
 import Ajv from 'ajv';
 import { bindingLeaves } from './valueBindings.js';
+import {
+  variableReferenceSchema,
+  scriptEnvironmentSchema,
+  validateVariableReferences,
+  checkVariableDelivery,
+} from './variables.js';
+export * from './variables.js';
 export {
   bindingLeaves,
   resolveBindingFields,
@@ -87,13 +94,20 @@ const fetchFieldSchema = z.object({
   name: z.string(),
   value: fetchBindingSchema,
 });
+const fetchHeaderSchema = z.object({
+  name: z.string(),
+  value: z.discriminatedUnion('kind', [
+    ...fetchBindingSchema.options,
+    variableReferenceSchema,
+  ]),
+});
 const fetchRequestFields = {
   url: z.string(),
   method: z
     .enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])
     .default('GET'),
   query: z.array(fetchFieldSchema).default([]),
-  headers: z.array(fetchFieldSchema).default([]),
+  headers: z.array(fetchHeaderSchema).default([]),
   body: z
     .discriminatedUnion('kind', [
       z.object({ kind: z.literal('none') }),
@@ -109,17 +123,22 @@ const fetchRequestFields = {
   failOnHttpError: z.boolean().default(true),
 };
 /** A probe a polling Wait runs on the server: a Script or a Fetch, bounded like the matching node. */
-export const pollCheckSchema = z.discriminatedUnion('kind', [
+const pollCheckShapeSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('script'),
     // Omitted language runs as Bash, like Script nodes saved before JavaScript existed.
     language: z.enum(['javascript', 'bash']).optional(),
     command: z.string().min(1),
+    environment: scriptEnvironmentSchema.optional(),
     timeoutMs: z.number().int().min(100).max(120000).default(30000),
   }),
   z.object({ kind: z.literal('fetch'), ...fetchRequestFields }),
 ]);
 export type PollCheck = z.infer<typeof pollCheckSchema>;
+export const pollCheckSchema = z.preprocess(
+  checkVariableDelivery,
+  pollCheckShapeSchema,
+);
 export type ValueBinding =
   | {
       source: 'input' | 'runInput' | 'rootInput' | 'itemInput';
@@ -212,7 +231,7 @@ const onFailureSchema = z
     'Omit or use fail to stop the run. route requires a failed edge and all configured success routes (default without result routing). Failed receives {input, error: {nodeId, executionId, kind: script|fetch, category: execution|http|output, message}, output}. input is the resolved operation input; output is returned JSON or null if unavailable. The success outputSchema does not apply to Failed; its destination validates the envelope. Only operation errors, rejected HTTP statuses and output-contract failures route. Input/request validation, cancellation, step limits, result-routing/output-mapping errors and interrupted operations after restart remain terminal. No automatic retry.',
   );
 
-export const nodeSchema = z.discriminatedUnion('kind', [
+const nodeShapeSchema = z.discriminatedUnion('kind', [
   z.object({ ...nodeBase, kind: z.literal('entry') }),
   z.object({
     ...nodeBase,
@@ -282,6 +301,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
     ...nodeBase,
     kind: z.literal('script'),
     onFailure: onFailureSchema,
+    environment: scriptEnvironmentSchema.optional(),
     // Older saved nodes omit language and must continue to run as Bash.
     language: z.enum(['javascript', 'bash']).optional(),
     command: z.string().min(1),
@@ -361,6 +381,7 @@ export const nodeSchema = z.discriminatedUnion('kind', [
     failurePolicy: z.enum(['all', 'collect']).default('all'),
   }),
 ]);
+export const nodeSchema = z.preprocess(checkVariableDelivery, nodeShapeSchema);
 export type WorkflowNode = z.infer<typeof nodeSchema>;
 export const definitionSchema = z.object({
   agentModel: executorModelSchema
@@ -491,6 +512,7 @@ export interface Run {
   createdAt: string;
   updatedAt: string;
   promptSnapshots?: import('./prompts.js').PromptSnapshot[];
+  variableCaptures?: import('./variables.js').VariableCapture[];
 }
 export interface RunAncestry {
   workflowId: string;
@@ -706,6 +728,7 @@ export function hasTimeoutRoute(node: WorkflowNode): boolean {
 
 export function validateDefinition(input: unknown): WorkflowDefinition {
   const d = definitionSchema.parse(input);
+  validateVariableReferences(d);
   for (const node of d.nodes)
     if (
       node.kind === 'agent' &&

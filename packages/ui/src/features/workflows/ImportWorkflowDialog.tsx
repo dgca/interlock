@@ -7,6 +7,8 @@ import { api, errorMessage } from '../../lib/api';
 import type { Action } from '../../lib/useActionFeedback';
 import { importWorkflowJson } from './importWorkflowJson';
 import styles from './ImportWorkflowDialog.module.css';
+import { VariableImportBindingsEditor } from '../variables/VariableImportBindings';
+import type { VariableImportBindings } from '@interlock/core';
 
 type Source = 'starters' | 'github' | 'file' | 'paste';
 type GithubPreview = Awaited<
@@ -91,6 +93,8 @@ export function ImportWorkflowDialog({
   const [errors, setErrors] = useState<Partial<Record<Source, string>>>({});
   const [loading, setLoading] = useState<Partial<Record<Source, boolean>>>({});
   const [busy, setBusy] = useState(false);
+  const [variableBindings, setVariableBindings] =
+    useState<VariableImportBindings>({});
   const mounted = useRef(true),
     importing = useRef(false),
     githubGeneration = useRef(0),
@@ -208,12 +212,41 @@ export function ImportWorkflowDialog({
   const starter = catalog?.find((s) => s.id === selectedStarter);
   const local =
     source === 'file' || source === 'paste' ? documents[source] : undefined;
+  const requiredVariables = [
+    ...new Map(
+      (source === 'github'
+        ? (github?.items
+            .filter((item) => selected.includes(item.file))
+            .flatMap((item) => item.variables ?? []) ?? [])
+        : (local?.preview.variables ?? [])
+      ).map((v) => [v.id, v]),
+    ).values(),
+  ];
+  const selectedBindings = Object.fromEntries(
+    requiredVariables.flatMap((v) =>
+      variableBindings[v.id] ? [[v.id, variableBindings[v.id]]] : [],
+    ),
+  );
   const finish = (ids: string[]) => {
     onClose();
     onImported?.([...new Set(ids)]);
   };
   const add = async () => {
     if (importing.current) return;
+    if (
+      requiredVariables.some(
+        (v) =>
+          !variableBindings[v.id] ||
+          (variableBindings[v.id].action === 'bind' &&
+            !variableBindings[v.id].variableId),
+      )
+    ) {
+      error(
+        source,
+        'Choose how to provide each required variable before importing.',
+      );
+      return;
+    }
     if (source === 'starters' && starter?.existing && !copy) {
       finish([starter.existing.id]);
       return;
@@ -238,9 +271,13 @@ export function ImportWorkflowDialog({
             const result = await api.workflows.importGithub.mutate({
               source: github.source,
               files: selected,
+              ...(requiredVariables.length
+                ? { variableBindings: selectedBindings }
+                : {}),
             });
             finish(result.rootIds);
-          } else if (local) finish([await importWorkflowJson(local.text)]);
+          } else if (local)
+            finish([await importWorkflowJson(local.text, selectedBindings)]);
         } catch (e) {
           const detail = errorMessage(e);
           const message =
@@ -579,6 +616,12 @@ export function ImportWorkflowDialog({
               )}
             </>
           )}
+          <VariableImportBindingsEditor
+            requirements={requiredVariables}
+            choices={variableBindings}
+            onChange={setVariableBindings}
+            disabled={busy}
+          />
           {errors[source] && (
             <p role="alert" className={styles.error}>
               {errors[source]}

@@ -271,3 +271,16 @@ The optional [improvement starter](workflow-improvement.md) uses a separate expe
 Use `list_workflows` with `source:"starters"` for bounded names, purposes, requirements and known existing copies. It creates nothing and returns no definitions. Import a choice with `import_workflows`, supplying `starterId` and a stable `requestId`. New copies are published without running; existing known copies are returned unchanged. `copy:true` deliberately adds another copy. Reuse the same key after an uncertain response; conflicting reuse or deleted results reject. Bundle replacement flags apply only to portable bundles. See [starter workflows](starter-workflows.md).
 
 Managed model/effort defaults resolve from Agent `model`/`effort`, workflow `agentModel`/`agentEffort`, then local profile defaults. Omission inherits; effort null explicitly uses native defaults. Discover supported effort levels with `manage_executors` action `models`. Unsupported explicit effort leaves work unclaimed. Connected-agent claims retain advisory tiers and native model settings; managed overrides do not control them. See [managed model selection](managed-executors.md#choose-a-model).
+
+## Reference workflow variables
+
+Use `read_variables` to discover safe metadata and `manage_variables` for explicit
+revision-protected management. Prefer browser entry or `interlock variables manage
+... --value-stdin` for credentials. Sending a value through an agent exposes it to
+that agent and transport. Secret values cannot be read back.
+
+Only Fetch headers and Script environment entries, including polling checks,
+receive selected values. They are never implicit Agent context or harness profile
+configuration. Runs retain protected revision references; Batch and chains inherit,
+children capture independently, and comparisons pin before queueing. Missing or
+unavailable values fail safely. See [workflow variables](variables.md).

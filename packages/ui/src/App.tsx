@@ -32,14 +32,17 @@ export function App() {
   const workflowMatch = useMatch('/workflows/:workflowId');
   const runMatch = useMatch('/runs/*');
   const promptMatch = useMatch('/prompts/*');
+  const variableMatch = useMatch('/variables/*');
   const harnessMatch = useMatch('/settings/harnesses');
   const page = harnessMatch
     ? 'harnesses'
-    : promptMatch
-      ? 'prompts'
-      : runMatch
-        ? 'runs'
-        : 'workflows';
+    : variableMatch
+      ? 'variables'
+      : promptMatch
+        ? 'prompts'
+        : runMatch
+          ? 'runs'
+          : 'workflows';
   const [editorDirty, setEditorDirty] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -158,7 +161,9 @@ export function App() {
                 ? paths.runs()
                 : next === 'prompts'
                   ? paths.prompts
-                  : paths.workflows,
+                  : next === 'variables'
+                    ? paths.variables
+                    : paths.workflows,
           )
         }
       />

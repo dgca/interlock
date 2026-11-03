@@ -1,5 +1,12 @@
 # UI interaction patterns
 
+Variables extends the central library/editor pattern. Management reads are safe
+metadata; Secret values have **Set value** and **Replace value**, never reveal.
+Entered Secret text is cleared on acknowledged writes before refreshing views.
+Rejected writes retain edits. Node controls use explicit metadata pickers; import
+preview requires deliberate local binding or provisioning. Mobile navigation keeps
+all five workspace destinations visible.
+
 Interlock uses the Mantine theme in `packages/ui/src/theme/theme.ts` and the shared CSS variables in `packages/ui/src/styles.css`. Node settings provide the reference for section navigation, spacing, and form hierarchy. These patterns extend that visual system.
 
 ## Runs that need a person

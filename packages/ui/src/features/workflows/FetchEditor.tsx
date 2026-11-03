@@ -23,6 +23,17 @@ import { InputPathInput } from './InputPathInput';
 import { TypedValueEditor } from './TypedValueEditor';
 import { FetchUrlInput } from './FetchUrlInput';
 import styles from './FetchEditor.module.css';
+import { VariablePicker } from '../variables/VariablePicker';
+
+function ordinaryFields(fields: FetchField[]): FetchNode['query'] {
+  return fields.map(({ name, value }) => {
+    if (value.kind === 'variable')
+      throw new Error(
+        'Variable references are supported only in Fetch headers.',
+      );
+    return { name, value };
+  });
+}
 
 function Fields({
   label,
@@ -84,19 +95,72 @@ function Fields({
                   onChange={(kind) =>
                     patch(index, {
                       value:
-                        kind === 'input'
-                          ? { kind: 'input', path: '' }
-                          : { kind: 'fixed', value: '' },
+                        kind === 'variable'
+                          ? { kind: 'variable', variableId: '' }
+                          : kind === 'input'
+                            ? { kind: 'input', path: '' }
+                            : { kind: 'fixed', value: '' },
                     })
                   }
                   data={[
                     { value: 'fixed', label: 'Fixed value' },
                     { value: 'input', label: 'From input' },
+                    ...(label === 'Header'
+                      ? [{ value: 'variable', label: 'Variable' }]
+                      : []),
                   ]}
                 />
               </Input.Wrapper>
             </div>
-            {field.value.kind === 'input' ? (
+            {field.value.kind === 'variable' ? (
+              <>
+                <VariablePicker
+                  value={field.value.variableId}
+                  onChange={(variableId) =>
+                    patch(index, {
+                      value: { ...field.value, kind: 'variable', variableId },
+                    })
+                  }
+                />
+                <div className={styles.nameAndSource}>
+                  <TextInput
+                    label="Prefix"
+                    placeholder="Bearer "
+                    value={field.value.prefix ?? ''}
+                    onChange={(e) =>
+                      patch(index, {
+                        value: {
+                          ...field.value,
+                          kind: 'variable',
+                          variableId:
+                            field.value.kind === 'variable'
+                              ? field.value.variableId
+                              : '',
+                          prefix: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                  <TextInput
+                    label="Suffix"
+                    value={field.value.suffix ?? ''}
+                    onChange={(e) =>
+                      patch(index, {
+                        value: {
+                          ...field.value,
+                          kind: 'variable',
+                          variableId:
+                            field.value.kind === 'variable'
+                              ? field.value.variableId
+                              : '',
+                          suffix: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              </>
+            ) : field.value.kind === 'input' ? (
               <InputPathInput
                 label="Input field"
                 aria-label={`${label} input field ${index + 1}`}
@@ -204,7 +268,7 @@ export function FetchEditor({
         fields={node.query}
         inputSchema={inputSchema}
         inputSource={inputSource}
-        onChange={(query) => patch({ query })}
+        onChange={(query) => patch({ query: ordinaryFields(query) })}
       />
       <Fields
         label="Header"
@@ -242,7 +306,9 @@ export function FetchEditor({
           fields={node.body.fields}
           inputSchema={inputSchema}
           inputSource={inputSource}
-          onChange={(fields) => patch({ body: { kind: 'fields', fields } })}
+          onChange={(fields) =>
+            patch({ body: { kind: 'fields', fields: ordinaryFields(fields) } })
+          }
         />
       )}
       {node.body.kind === 'fixed' && (

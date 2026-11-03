@@ -44,6 +44,14 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Prompt capture**: The saved prompt content and revisions selected when a workflow run starts. Batch item runs inherit capture; invoked workflows capture independently.
 
+**Workflow variable**: A centrally managed named configuration value or secret that workflow steps reference for explicit delivery.
+
+**Secret**: A workflow variable whose stored value cannot be read back through management or inspection.
+
+**Variable capture**: The variable identities and value revisions selected for a run. It identifies the values used without exposing their contents.
+
+**Portable variable binding**: An explicit local association between an imported variable identity and a compatible variable in the instance.
+
 **Context policy**: Rules governing the information and capabilities an agent execution receives.
 
 **Work request**: A bounded assignment that a run makes available to an agent executor.

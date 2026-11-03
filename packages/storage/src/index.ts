@@ -1,4 +1,5 @@
 import { attentionWork, attentionAncestors } from './runAttention.js';
+import { ProtectedValues } from './protectedValues.js';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -29,6 +30,7 @@ import type {
 
 /** One service owns the database. Each runtime operation commits as one transaction. */
 export class Store {
+  readonly protectedValues: ProtectedValues;
   private db: DatabaseSync;
   private transactionDepth = 0;
   private listeners = new Set<() => void>();
@@ -116,7 +118,18 @@ export class Store {
     return Number(row?.size ?? 0);
   }
   readonly migration: MigrationResult;
-  constructor(readonly path: string) {
+  constructor(
+    readonly path: string,
+    options: { secretKeyFile?: string } = {},
+  ) {
+    this.protectedValues = new ProtectedValues(
+      this,
+      path,
+      options.secretKeyFile ??
+        (path === ':memory:'
+          ? undefined
+          : process.env.INTERLOCK_SECRET_KEY_FILE),
+    );
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     try {

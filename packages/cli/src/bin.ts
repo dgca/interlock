@@ -37,9 +37,11 @@ Workflow commands: workflows, workflow, starters, import-starter, import, update
 Run commands: runs, run, run-history, work, claim, submit, fail, renew, assignment-size, work-hold, work-resources, cancel, retry
 Usage and budget commands: usage, report-usage, budget, set-budget
 Local harness configuration and execution: executors
+Workflow variables: variables <read|manage> <json|@file> [--value-stdin]
 Run 'interlock commands' for argument syntax.
 
-Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL`);
+Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL, INTERLOCK_SECRET_KEY_FILE
+Variable encryption keys are held separately from the database. Back up keys separately.`);
     return;
   }
   if (argv[0] === 'mcp') {
@@ -56,6 +58,7 @@ Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL`);
     const known = [
       'commands',
       'executors',
+      'variables',
       'workflows',
       'workflow',
       'starters',

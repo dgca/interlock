@@ -2,6 +2,11 @@ import { listStarters, importStarter } from './starters.js';
 import { parseImportDocument } from '../../core/src/importDocument.js';
 import { workResourceRequestSchema } from '@interlock/core';
 import {
+  variableReadSchema,
+  variableMutationSchema,
+  variableImportBindingsSchema,
+} from '@interlock/core';
+import {
   executorOperationSchema,
   executorModelsQuerySchema,
 } from '@interlock/core';
@@ -112,6 +117,27 @@ const updateWorkflowInput = id.extend({
 });
 const claim = z.object({ workId: z.string(), token: z.string() });
 export const appRouter = t.router({
+  variables: t.router({
+    read: p
+      .input(variableReadSchema)
+      .query(({ ctx, input }) => ctx.engine.variables.read(input)),
+    manage: p
+      .input(
+        z.unknown().transform((input, context) => {
+          const parsed = variableMutationSchema.safeParse(input);
+          if (!parsed.success) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              message:
+                'Invalid variable change. Check required fields, name, value size, and expectedRevision. Values were not saved.',
+            });
+            return z.NEVER;
+          }
+          return parsed.data;
+        }),
+      )
+      .mutation(({ ctx, input }) => ctx.engine.variables.mutate(input)),
+  }),
   executors: t.router({
     settings: p.query(({ ctx }) => ctx.engine.executors.settings()),
     models: p
@@ -220,7 +246,7 @@ export const appRouter = t.router({
       .mutation(({ ctx, input }) => importStarter(ctx.engine, input)),
     previewImport: p
       .input(z.object({ document: jsonSchema }))
-      .query(({ input }) => {
+      .query(({ ctx, input }) => {
         const doc = parseImportDocument(input.document);
         if (doc.kind === 'legacy')
           return {
@@ -229,6 +255,7 @@ export const appRouter = t.router({
             workflows: [] as { id: string; name: string; owned: boolean }[],
             prompts: [] as { id: string; name: string }[],
             published: false,
+            variables: [],
           };
         const root = doc.bundle.workflows.find(
           (w) => w.id === doc.bundle.rootId,
@@ -250,6 +277,9 @@ export const appRouter = t.router({
             name: p.name,
           })),
           published: root.versions.length > 0,
+          variables: ctx.engine.variables.previewRequirements(
+            doc.bundle.variables ?? [],
+          ),
         };
       }),
     discoverGithub: p
@@ -263,6 +293,7 @@ export const appRouter = t.router({
           .object({
             source: githubSourceSchema,
             files: z.array(z.string().min(1).max(255)).min(1).max(50),
+            variableBindings: variableImportBindingsSchema.optional(),
           })
           .strict(),
       )
@@ -272,6 +303,7 @@ export const appRouter = t.router({
           input.source,
           input.files,
           ctx.signal ?? signal,
+          input.variableBindings,
         ),
       ),
     export: p
@@ -295,6 +327,7 @@ export const appRouter = t.router({
           force: z.boolean().optional(),
           draftRevisions: z.record(z.number().int().positive()).optional(),
           restoreDeletedVersions: z.boolean().optional(),
+          variableBindings: variableImportBindingsSchema.optional(),
         }),
       )
       .mutation(({ ctx, input }) =>

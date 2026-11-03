@@ -36,6 +36,7 @@ import { InputBindingsEditor } from './InputBindingsEditor';
 import { InputPathInput } from './InputPathInput';
 import { TypedValueEditor } from './TypedValueEditor';
 import { FetchEditor } from './FetchEditor';
+import { EnvironmentEditor } from '../variables/VariablePicker';
 import { WorkflowModeEditor } from './WorkflowModeEditor';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
@@ -478,6 +479,10 @@ export function NodeInspector({
                 language={node.language ?? 'bash'}
                 value={node.command}
                 onChange={(command) => patch({ command })}
+              />
+              <EnvironmentEditor
+                value={node.environment}
+                onChange={(environment) => patch({ environment })}
               />
 
               <p className="hint">
@@ -922,6 +927,12 @@ function PollEditor({
             language={check.language ?? 'bash'}
             value={check.command}
             onChange={(command) => patch({ check: { ...check, command } })}
+          />
+          <EnvironmentEditor
+            value={check.environment}
+            onChange={(environment) =>
+              patch({ check: { ...check, environment } })
+            }
           />
           <p className="hint">
             {check.language === 'javascript'

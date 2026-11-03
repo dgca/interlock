@@ -1,8 +1,9 @@
 # Implement workflow variables
 
-Status: ready for plan review. The user accepted the [specification](spec.md) on
-November 3, 2026. Scope and constraints remain in [intent](intent.md). This plan
-does not change the accepted storage, revision, delivery, or UI decisions.
+Status: plan review permitted progression under the accepted specification. Build
+and its checks are complete; independent review follows on the committed candidate.
+The user accepted the [specification](spec.md) on November 3, 2026. Scope and
+constraints remain in [intent](intent.md).
 
 ## Current facts
 
@@ -170,3 +171,66 @@ accepted criterion. Run the Impeccable detector once after the UI is finished.
 None. Investigation may reveal implementation defects or contradictions, but the
 accepted product and storage decisions do not need another approval merely to
 start construction.
+
+## Build evidence
+
+- AC1 through AC13: `pnpm test` passed 111 files and 1,310 tests. The new variable
+  suite covers protected storage, key recovery failures, complete database rollback,
+  metadata and optimistic edits, native delivery and redaction, unsupported delivery,
+  direct same-kind bindings, portable import, deletion/reprovisioning, disabled use,
+  restart/retry, children, Batch, chains, and queued comparisons. See
+  [tests.log](evidence/tests.log).
+- AC4, AC7, AC10, and AC11: HTTP and stdio variable transport checks passed valid
+  controls and unsafe-input rejection. Invalid mutation bodies are sanitized before
+  SDK validation so enum diagnostics cannot quote supplied credentials. The existing
+  affected transport suites also passed. Discovery grew from 52 tools and 304,132
+  bytes on the running baseline to 54 tools and 316,070 bytes on the candidate.
+  The two grouped tools replace separate per-operation variants; normal reads and
+  dependency/version samples are bounded. New schema volume describes explicit
+  header/environment references, portable requirements, and revision-protected
+  management. No per-provider tools or implicit Agent delivery were added.
+- AC2, AC4, AC5, AC7, AC8, AC9, and AC12: the representative browser journey passed
+  through real controls, including creation, reference selection, save/publication,
+  execution, central rotation without republishing, stale-save preservation, focus
+  restoration, keyboard submission, disable/re-enable, deletion protections, and
+  explicit portable import binding. A forced refresh failure after an acknowledged
+  write cleared Secret entry and produced exactly one mutation. See
+  [browser-checks.json](evidence/browser-checks.json).
+- AC12: inspected viewport captures at 1280, 900, and 390 pixels. No horizontal
+  overflow; all five mobile destinations remain visible. See the
+  [desktop](evidence/editor-desktop.png),
+  [intermediate](evidence/editor-intermediate.png), and
+  [phone](evidence/editor-phone.png) captures. The one completed Impeccable detector
+  pass returned no findings in [ui-detector.json](evidence/ui-detector.json).
+- AC3, AC10, AC11, and AC13: `pnpm build` and the subsequent `pnpm test:package`
+  passed. See [build.log](evidence/build.log) and [package.log](evidence/package.log).
+  No real provider account or user credential store was used.
+- The changed-file formatting check and `git diff --check` passed. Root
+  `pnpm format:check` still reports 393 pre-existing untracked artifact files; these
+  remain untouched. See [changed-format.log](evidence/changed-format.log), with the
+  full root output retained locally at `/tmp/interlock-variables-format-final.log`.
+- Checked README, CONTEXT, architecture, current scope, Fetch and node-data guidance,
+  portable transfer and prompt/version-cleanup documentation, upgrade guidance,
+  connection instructions, CLI help, and the new variable guide. Checked the full
+  affected MCP flow: server instructions, variable reads/writes, definition
+  create/update/edit/validate, startup and safe inspection, comparisons, and transfer.
+  This was not an audit of every unrelated MCP tool.
+
+## Try the feature locally
+
+From the repository, run `pnpm build`, then:
+
+```sh
+pnpm exec tsx .tasks/workflow-variables/serve-trial.ts
+```
+
+Open `http://127.0.0.1:4440/variables`. The trial seeds `service_token` and two
+published native workflows, **Fetch variable trial** and **Script variable trial**.
+Run them, replace the shared value with another fake value, and run the same
+published versions again. Inspect captured revisions and redacted output. Try
+creation, disable/re-enable, and the dependency blocker before deletion.
+
+The server uses a temporary database, key, and local fake HTTP service. It does
+not change the development library that holds this SDLC run. Stop it with Ctrl-C
+to remove trial data. `INTERLOCK_TRIAL_PORT` selects another local port if needed.
+Local testing and the accepted design do not authorize a merge or release.

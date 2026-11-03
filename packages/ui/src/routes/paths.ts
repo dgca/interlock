@@ -3,6 +3,8 @@ import type { RunTab } from '../features/runs/runAttention';
 export const paths = {
   harnesses: '/settings/harnesses',
   prompts: '/prompts',
+  variables: '/variables',
+  variable: (id: string) => `/variables/${encodeURIComponent(id)}`,
   prompt: (id: string) => `/prompts/${encodeURIComponent(id)}`,
   workflows: '/workflows',
   workflow: (id: string) => `/workflows/${encodeURIComponent(id)}`,

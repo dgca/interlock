@@ -5,6 +5,11 @@ import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { nodeSchema, type FetchNode } from '@interlock/core';
 import { FetchEditor } from '../packages/ui/src/features/workflows/FetchEditor';
+const variableRead = vi.hoisted(() => vi.fn());
+vi.mock('../packages/ui/src/lib/api', () => ({
+  api: { variables: { read: { query: variableRead } } },
+  errorMessage: (error: unknown) => String(error),
+}));
 let root: Root, container: HTMLDivElement, latest: FetchNode;
 const scrollIntoView = HTMLElement.prototype.scrollIntoView;
 function Harness() {
@@ -18,6 +23,30 @@ function Harness() {
   });
 }
 beforeEach(() => {
+  const variables = [
+    {
+      id: 'first',
+      name: 'current_token',
+      kind: 'secret',
+      availability: 'ready',
+    },
+    {
+      id: 'second',
+      name: 'other_token',
+      kind: 'secret',
+      availability: 'ready',
+    },
+  ];
+  variableRead.mockReset().mockImplementation(async (request) =>
+    request.action === 'inspect'
+      ? { ...variables.find((v) => v.id === request.id), dependencies: {} }
+      : {
+          items: variables.filter(
+            (v) => !request.search || v.name.includes(request.search),
+          ),
+          total: 2,
+        },
+  );
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -78,6 +107,40 @@ async function input(label: string, value: string) {
     el.dispatchEvent(new Event('input', { bubbles: true }));
   });
 }
+it('keeps other variables selectable when a reference already has a selected display label', async () => {
+  latest.headers = [
+    { name: 'Authorization', value: { kind: 'variable', variableId: 'first' } },
+  ];
+  await render();
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 220));
+  });
+  const picker = container.querySelector<HTMLInputElement>(
+    'input[role="combobox"]',
+  );
+  expect(picker).toBeTruthy();
+  await act(async () => picker!.click());
+  const option = Array.from(
+    document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ).find((el) => el.textContent === 'other_token · Secret');
+  expect(option).toBeTruthy();
+  await act(async () => option!.click());
+  expect(latest.headers[0].value).toMatchObject({
+    kind: 'variable',
+    variableId: 'second',
+  });
+  await act(async () => picker!.click());
+  const current = Array.from(
+    document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ).find((el) => el.textContent === 'other_token · Secret');
+  await act(async () => current!.click());
+  expect(latest.headers[0].value).toMatchObject({ variableId: 'second' });
+  expect(
+    variableRead.mock.calls
+      .filter(([q]) => q.action === 'list')
+      .every(([q]) => !q.search || !q.search.includes(' · ')),
+  ).toBe(true);
+});
 it('previews typed bindings without sending a request or saving sample data', async () => {
   const network = vi.spyOn(globalThis, 'fetch');
   await render();

@@ -141,9 +141,74 @@ Core defines prompt content, optional Agent `promptIds`, and pure instruction co
 
 Every non-Batch workflow run captures the latest prompts referenced anywhere in its own published graph at startup. Batch items inherit the enclosing capture, including delayed dispatch. Invoked workflows, including detached work, capture independently when they start. Loops, claim recovery, retries, and restart retain that run's captures. Saved prompt sections precede node task instructions. Context policy and contracts retain their meanings. Compact storage projections omit captures and saved instruction bodies.
 
-Bundles with deleted version identities use format version 3. Other prompt-bearing bundles use format version 2, including current shared prompt records from exported drafts and all versions; other prompt-free bundles retain version 1. Import preserves IDs, reuses identical local content, and rejects divergent shared content even with force. Re-importing a deleted prompt allocates a current revision above retained local history, preserving old revisions and subsequent edits. Truly new IDs retain the bundle revision. Revision history and run captures are excluded from workflow bundles.
+Variable-bearing bundles use format version 4 with safe requirements and deliberate local binding. Other bundles with deleted version identities use format version 3. Other prompt-bearing bundles use format version 2, including current shared prompt records from exported drafts and all versions; other prompt-free bundles retain version 1. Import preserves IDs, reuses identical local content, and rejects divergent shared content even with force. Re-importing a deleted prompt allocates a current revision above retained local history, preserving old revisions and subsequent edits. Truly new IDs retain the bundle revision. Revision history and run captures are excluded from workflow bundles.
 
 The Prompts library and editor use the shared Mantine theme and navigation protection. Dirty prompt text retains its original save revision across external refreshes. Agent settings provide searchable ordered prompt selection and content inspection above Task instructions. Run inspection shows captured content and revisions.
+
+## Workflow variables
+
+Variables have instance-wide identities, case-insensitively unique names, immutable
+Config or Secret kind, metadata edit revisions, and separate value revisions.
+Direct portable bindings associate imported IDs with same-kind local variables.
+Bindings cannot chain or override a value-owning identity. Ordinary list and inspect
+operations return metadata only; an explicit Config read returns ordinary values.
+Secret read-back is unavailable. The shared API is `variables.read` and
+`variables.manage`; MCP exposes two grouped tools with bounded discovery and
+dependency pages. See [variable management](variables.md).
+
+Storage encrypts both kinds with AES-256-GCM. Each database's vault identity and
+authenticated value envelopes live in SQLite; the random 256-bit key lives in a
+separate owner-only file. Authentication binds the vault, variable, kind, and value
+revision. Metadata reads expose the local key location for backup and recovery,
+never the key or value envelopes. Default key paths and `INTERLOCK_SECRET_KEY_FILE`
+are described in the management guide. The first value creates a key lazily;
+workflows without variables require none. Missing or invalid established keys are
+never regenerated. The file backend supports local macOS and headless Linux; it
+does not isolate the running server from its OS user. Encryption-key rotation is
+not implemented.
+
+Run `variableCaptures` retain only portable and local identities, name, kind, and
+value revision. Ordinary workflow runs capture their own graph at startup. Batch
+items and continue-as-new successors inherit. Invoked workflows, including detached
+children, capture independently. Comparisons capture at most 64 transitive
+references and 1 MiB of values before queueing; both sides and descendants use
+those protected revision references, included in safe configuration identities and
+reports. Arbitrary historical per-side variable selections are unsupported. A
+workflow supports at most 64 distinct references. Metadata edits preserve value
+revisions; replacement allocates a new revision. Revision numbers are not reused
+after deletion and explicit provisioning of the same portable identity.
+
+The native operation path resolves only referenced Fetch headers and Script
+environment entries, including polling checks. Persisted Fetch requests and
+previews retain safe references. Script inputs and Agent assignments do not receive
+injected values. Disabled, deleted, missing, or inaccessible exact revisions fail
+without empty or latest-value fallback. Existing captures are checked again at
+consumption. Simulation substitutes operations without resolving live values.
+
+Known delivered Secret occurrences, including URL-encoded, JSON-escaped, and
+Base64 forms, are scrubbed in returned strings, object keys, scalar results, and
+errors before contract validation, result routing, failure routing, history, or
+forwarding. Secret-consuming Scripts redact complete bounded stderr before
+retention truncation; excess diagnostic output fails safely. A result that no
+longer satisfies its contract fails using the safe result. This protects against
+accidental disclosure, not arbitrary transformations, partial values, or
+disclosures by trusted code outside Interlock. Literal credentials and unrelated
+host environment secrets are not automatically recognized.
+
+Old encrypted revisions remain while a variable exists. Disable rejects future
+consumption by new and retained runs but cannot recall already delivered values.
+Provider revocation is external. Deletion blocks draft and retained published
+references, active captures, and running comparisons. Allowed deletion removes
+current protected revisions; safe history survives and backups may retain
+ciphertext. Later retries requiring a deleted revision fail explicitly.
+
+Portable format 4 includes safe variable requirements across all exported
+definitions and retains format-3 cleanup identities and prompt support. It excludes
+all values, keys, local key paths, and historical captures. Imports require explicit
+same-kind local binding or unset provisioning. Bindings remain outside published
+definitions; conflicting existing bindings reject atomically. Earlier formats
+remain supported for variable-free workflows. Variable-bearing legacy imports must
+be re-exported as format-4 bundles.
 
 ## Timers
 
@@ -234,6 +299,8 @@ React Router owns browser navigation through a shared application layout and chi
 | `/workflows/:workflowId` | Workflow draft editor                                  |
 | `/prompts`               | Saved prompt library                                   |
 | `/prompts/:promptId`     | Saved prompt editor                                    |
+| `/variables`             | Variable metadata library                              |
+| `/variables/:variableId` | Variable editor; `new` creates a variable              |
 | `/runs`                  | Active runs                                            |
 | `/runs?tab=history`      | Run history                                            |
 | `/runs/:runId`           | Run inspector, including child runs                    |

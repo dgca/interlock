@@ -180,6 +180,13 @@ export function configurationSummary(
   return {
     ...sides,
     differences: {
+      ...(baseline.variables || candidate.variables
+        ? {
+            variables:
+              fingerprint(baseline.variables ?? []) !==
+              fingerprint(candidate.variables ?? []),
+          }
+        : {}),
       prompts: ids.filter(
         (id) =>
           fingerprint(baseline.prompts.find((p) => p.id === id) ?? null) !==

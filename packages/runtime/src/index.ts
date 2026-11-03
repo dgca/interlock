@@ -76,6 +76,10 @@ import { RunHistory } from './runHistory.js';
 import { TrialEnvironments } from './trialEnvironments.js';
 import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
+import { Variables } from './variables.js';
+import { secretRedaction } from './secretRedaction.js';
+import { nodeVariableReferences, variableReferences } from '@interlock/core';
+import type { PollCheck } from '@interlock/core';
 import { VersionCleanup } from './versionCleanup.js';
 import { Ownership } from './ownership.js';
 import { Testbench } from './testbench.js';
@@ -117,6 +121,7 @@ export class Engine {
   readonly executors: ExecutorManager;
   readonly continuation: Continuation;
   readonly prompts: Prompts;
+  readonly variables: Variables;
   readonly versions: VersionCleanup;
   readonly ownership: Ownership;
   readonly testbench: Testbench;
@@ -160,6 +165,7 @@ export class Engine {
       (runId, type, message) => this.event(this.run(runId), type, message),
     );
     this.prompts = new Prompts(store);
+    this.variables = new Variables(store);
     this.assignmentSizes = new AssignmentSizes(store, this.prompts, (work) =>
       this.describeWork(work),
     );
@@ -413,6 +419,20 @@ export class Engine {
     if (definition) {
       const workflows = this.store.workflows();
       for (const [i, node] of definition.nodes.entries()) {
+        for (const reference of nodeVariableReferences(node)) {
+          try {
+            this.variables.get(reference);
+          } catch {
+            diagnostics.push({
+              severity: 'error',
+              category: 'publication',
+              code: 'missing_variable',
+              nodeId: node.id,
+              path: `nodes.${i}`,
+              message: `Variable ${reference || '(not selected)'} is missing. Select or provision it in Variables.`,
+            });
+          }
+        }
         if (node.kind === 'agent') {
           for (const [j, promptId] of (node.promptIds ?? []).entries())
             if (!this.store.get('prompts', promptId))
@@ -804,6 +824,8 @@ export class Engine {
   private publishVersion(id: string) {
     const w = this.workflow(id);
     const definition = validateDefinition(w.draft);
+    for (const reference of variableReferences(definition))
+      this.variables.get(reference);
     this.prompts.capture(definition);
     validateWorkflowReferences(w.id, definition, this.store.workflows());
     for (const n of definition.nodes) {
@@ -909,6 +931,28 @@ export class Engine {
                 return prompt;
               })
             : this.prompts.capture(definition),
+      ...(variableReferences(definition).length
+        ? {
+            variableCaptures: this.options.substituteOperation
+              ? []
+              : continuedFrom
+                ? this.variables.capture(
+                    definition,
+                    continuedFrom.variableCaptures ?? [],
+                  )
+                : batchNodeId && parentRunId
+                  ? this.variables.capture(
+                      definition,
+                      this.run(parentRunId).variableCaptures ?? [],
+                    )
+                  : comparison
+                    ? this.variables.capture(
+                        definition,
+                        this.testbench.variablesFor(comparison),
+                      )
+                    : this.variables.capture(definition),
+          }
+        : {}),
     };
     if (
       !parentRunId &&
@@ -1895,21 +1939,12 @@ export class Engine {
             );
           return this.options.substituteOperation
             ? this.options.substituteOperation(node, execution)
-            : node.kind === 'fetch'
-              ? executeFetch(
-                  execution.request!,
-                  node.timeoutMs,
-                  controller.signal,
-                )
-              : executeScript(
-                  node.command,
-                  execution.input,
-                  node.timeoutMs,
-                  environment?.cwd ?? this.cwd,
-                  controller.signal,
-                  node.language,
-                  environment?.env,
-                );
+            : this.localOperation(
+                run,
+                node,
+                execution.input,
+                controller.signal,
+              );
         } catch (error) {
           return Promise.reject(error);
         }
@@ -2005,6 +2040,58 @@ export class Engine {
     this.finish(run, execution, node, execution.input, 'timeout');
     return true;
   }
+  private async localOperation(
+    run: Run,
+    operation: Extract<WorkflowNode, { kind: 'script' | 'fetch' }> | PollCheck,
+    input: Json,
+    signal: AbortSignal,
+  ): Promise<Json> {
+    const environment = this.trials.execution(run);
+    if (environment && operation.kind === 'fetch')
+      throw new InterlockError(
+        'Unsupported Fetch operation in a local Git trial',
+      );
+    const ids =
+      operation.kind === 'fetch'
+        ? operation.headers.flatMap((f) =>
+            f.value.kind === 'variable' ? [f.value.variableId] : [],
+          )
+        : (operation.environment ?? []).map((e) => e.variableId);
+    const resolved = this.variables.resolve(run, ids);
+    const redact = secretRedaction(resolved.secrets);
+    try {
+      const output =
+        operation.kind === 'fetch'
+          ? await executeFetch(
+              resolveFetch(operation, input, resolved.value),
+              operation.timeoutMs,
+              signal,
+            )
+          : await executeScript(
+              operation.command,
+              input,
+              operation.timeoutMs,
+              environment?.cwd ?? this.cwd,
+              signal,
+              operation.language,
+              operation.environment?.length
+                ? {
+                    ...(environment?.env ?? process.env),
+                    ...Object.fromEntries(
+                      operation.environment.map((e) => [
+                        e.name,
+                        resolved.value(e.variableId),
+                      ]),
+                    ),
+                  }
+                : environment?.env,
+              resolved.secrets.length ? redact.text : undefined,
+            );
+      return redact.json(output);
+    } catch (error) {
+      throw new InterlockError(redact.text(message(error)));
+    }
+  }
   /**
    * Run a polling Wait's check when it is due. The check is a server-side job
    * like a Script or Fetch step, but the execution stays `waiting`: a passing
@@ -2032,30 +2119,21 @@ export class Engine {
         throw new InterlockError(
           'Unsupported Fetch probe in a local Git trial',
         );
-      return timing.check.kind === 'fetch'
-        ? executeFetch(
-            resolveFetch(timing.check, execution.input),
-            timing.check.timeoutMs,
-            controller.signal,
-          ).then((output) => {
-            const status = (output as { status: number }).status;
-            if (
-              timing.check.kind === 'fetch' &&
-              timing.check.failOnHttpError &&
-              (status < 200 || status >= 300)
-            )
-              throw new InterlockError(`Fetch returned HTTP ${status}`);
-            return output;
-          })
-        : executeScript(
-            timing.check.command,
-            execution.input,
-            timing.check.timeoutMs,
-            environment?.cwd ?? this.cwd,
-            controller.signal,
-            timing.check.language,
-            environment?.env,
-          );
+      return this.localOperation(
+        run,
+        timing.check,
+        execution.input,
+        controller.signal,
+      ).then((output) => {
+        const status = (output as { status: number }).status;
+        if (
+          timing.check.kind === 'fetch' &&
+          timing.check.failOnHttpError &&
+          (status < 200 || status >= 300)
+        )
+          throw new InterlockError(`Fetch returned HTTP ${status}`);
+        return output;
+      });
     });
     const settle = (result: { output?: Json; error?: string }) => {
       if (this.stopped) return;

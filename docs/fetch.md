@@ -31,6 +31,14 @@ Expand **Request preview** and enter sample input to see the resolved request. P
 
 ## Inspect a response
 
+For centrally managed credentials, select **Variable** as a header's value source.
+Add a literal prefix such as `Bearer ` when needed. Only header values support
+variable references; URLs, query parameters, and bodies do not. Previews and saved
+requests show references, and the server injects the captured value only when
+launching the operation. Secret echoes are redacted before ordinary output and
+failure handling. See [workflow variables](variables.md) for rotation and key
+recovery.
+
 Run inspection shows the resolved HTTP request, elapsed time for the completed step, and the response output. Headers and bodies are persisted with the run, so stored values remain inspectable.
 
 Response headers use lowercase names. JSON and `+json` content types are parsed as JSON; other bodies return UTF-8 text. Empty bodies return null. Invalid declared JSON fails the step. The decoded response body is limited to 5 MiB. The timeout covers both the request and reading its body, and can be configured from 100 milliseconds to 120 seconds. Fetch follows HTTP redirects.

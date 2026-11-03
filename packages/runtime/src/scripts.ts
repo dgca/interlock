@@ -33,6 +33,7 @@ export function executeScript(
   signal?: AbortSignal,
   language: ScriptLanguage = 'bash',
   env?: NodeJS.ProcessEnv,
+  sanitizeError?: (text: string) => string,
 ): Promise<Json> {
   return new Promise((resolve, reject) => {
     signal?.throwIfAborted();
@@ -51,6 +52,8 @@ export function executeScript(
     let stdout = '',
       stderr = '',
       failure: string | undefined;
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
     const kill = () => {
       if (child.pid) {
         try {
@@ -77,7 +80,13 @@ export function executeScript(
       }
     });
     child.stderr.on('data', (chunk) => {
-      stderr = (stderr + chunk).slice(-8192);
+      if (sanitizeError) {
+        stderr += chunk;
+        if (stderr.length > 1024 * 1024) {
+          failure = 'Script error output exceeded 1 MiB';
+          kill();
+        }
+      } else stderr = (stderr + chunk).slice(-8192);
     });
     child.stdin.on('error', () => {
       /* Early process exits are reported by close. */
@@ -90,7 +99,12 @@ export function executeScript(
       clearTimeout(timeout);
       signal?.removeEventListener('abort', abort);
       if (failure || code !== 0)
-        return reject(new Error(failure ?? `Script exited ${code}: ${stderr}`));
+        return reject(
+          new Error(
+            failure ??
+              `Script exited ${code}: ${(sanitizeError ? sanitizeError(stderr) : stderr).slice(-8192)}`,
+          ),
+        );
       try {
         resolve(jsonSchema.parse(JSON.parse(stdout)));
       } catch {
