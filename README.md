@@ -2,7 +2,7 @@
 
 Interlock is a local workflow editor and engine for AI agents. Define a procedure once, combine agent assignments with HTTP requests and JavaScript or Bash steps, and inspect each run in your browser.
 
-Build workflows visually or edit their JSON definitions. Interlock validates inputs and results, runs scripts, and stores progress in SQLite. Your connected agent handles assignments through the Model Context Protocol (MCP).
+Build workflows visually or edit their JSON definitions. Interlock validates inputs and results, runs scripts, and stores progress in SQLite. A connected agent can handle assignments through the Model Context Protocol (MCP), or Interlock can launch a configured Claude Code or Codex harness automatically.
 
 ## Install and run
 
@@ -31,7 +31,7 @@ For a standalone file import, use [workflows/sdlc.json](workflows/sdlc.json). In
 
 For a node-editor reference, the same folder includes [All nodes (demo)](workflows/all-nodes.json), an optional example covering every current node type. Import it and inspect the editors without starting a run. See [Workflow examples](workflows/README.md).
 
-Use a coding agent with access to your Git checkout, files, and development commands. The final review requires a fresh session or an isolated subagent without the implementation conversation. Interlock coordinates the work but does not launch that reviewer itself.
+Use a coding agent with access to your Git checkout, files, and development commands. The final review requires a fresh session or an isolated subagent without the implementation conversation. With connected-agent execution, your agent provides that reviewer. An enabled managed harness can launch a fresh review session.
 
 1. Select **Connect with MCP** in the sidebar.
 2. Follow the instructions for Codex, Claude, OpenCode, or another MCP client.
@@ -50,6 +50,12 @@ Use a coding agent with access to your Git checkout, files, and development comm
 Replace the example request with the change you want. The workflow resolves the target repository and artifact directory, follows that repository's instructions, and asks when a consequential decision remains unresolved. Set `reviewPolicy` to `always` to approve each planning artifact, or `createPr` to `true` to request PR delivery. Your agent's tool approval settings still apply. See [Use the SDLC workflow](docs/sdlc-workflow.md) for inputs, executor requirements, and resuming work.
 
 The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by the same process as the UI and engine. Keep that process running. Upgrading and restarting at the same address preserves your agent configuration. The dialog also provides a stdio fallback for clients that need it. See [Connect a harness](docs/connect-harness.md) for configuration and the assignment loop.
+
+## Run agents automatically
+
+Open **Harnesses** in the sidebar to set the shared concurrent assignment limit, default Limited to 3 with an Unlimited option, and configure an installed Claude Code or Codex executable. Configurations start disabled. Set the working directory, default permissions, model and optional thinking effort, then enable the configuration. Model pickers load native choices and accept custom IDs; Use CLI default retains the harness’s own selection. Choose it in **Workflow settings → Default Agent executor** or override it in an Agent node’s **Execution → Executor** settings, save and publish. Workflow **Agent model** and **Thinking effort** can inherit harness defaults; Agent nodes can override both. Workflow **Agent permissions** can inherit the harness default or select **Read only**, **Standard** or **Full access**. Existing workflows keep connected-agent execution unless you opt in.
+
+Interlock launches ready assignments inside its existing server, including independently started workflows. Permission requests and questions appear in the run inspector; stopping or losing a session requires explicit recovery before retrying. Installation detection makes no model calls and does not verify authentication. See [managed Agent execution](docs/managed-executors.md) for setup, native authentication requirements, MCP/CLI operations and limitations.
 
 ## Create a workflow
 
@@ -134,9 +140,9 @@ Existing workflows can be adopted, reparented or released through MCP while pres
 
 Open **Runs** to find active executions and past results. The live view shows step states and Batch item counts. Select a Batch child step, then an item, to inspect that item's input, output, and errors.
 
-Starting a workflow in the UI does not launch an agent. When an assignment is ready, select **Copy instructions for agent** and paste the instructions into a connected agent conversation. The instructions resume the existing execution. **Waiting for an agent** means work is available; **Agent working** means an executor has claimed it.
+Starting a workflow with connected-agent execution does not launch an agent. When an assignment is ready, select **Copy instructions for agent** and paste the instructions into a connected agent conversation. The instructions resume the existing execution. **Waiting for an agent** means work is available; **Agent working** means an executor has claimed it.
 
-Agent **Model tier** optionally requests Max, Balanced, or Fast capability with either Context setting. Executors choose the model; required session continuity and isolation take precedence. Run inspection separates requested tiers, declared selections, and usage-reported models. See [model tiers](docs/model-tiers.md).
+Connected Agent **Model tier** optionally requests Max, Balanced, or Fast capability with either Context setting. Managed Agents select concrete **Model** and **Thinking effort**, inheriting node → workflow → harness configuration → native defaults. Connected executors choose the model; required session continuity and isolation take precedence. Run inspection separates requested tiers, declared selections, and usage-reported models. See [model tiers](docs/model-tiers.md).
 
 Manual completion of unrestricted current-context assignments keeps claim credentials in page memory. Navigation within Interlock preserves the claim, but reloading or closing the page loses its token. An active lease must expire before the assignment can be reclaimed, and expiry consumes its configured recovery budget. See [manual claims](docs/connect-harness.md#manual-claims-in-the-ui).
 
@@ -259,7 +265,7 @@ JSON arguments also accept `@filename`, such as `interlock start WORKFLOW_ID @in
 
 ## Current scope
 
-Interlock is a local, single-user application. It does not call model APIs or launch agent sessions itself. Agent steps need a connected executor or manual submission; script steps run in the engine.
+Interlock is a local, single-user application. Agent steps use connected executors, manual submission, or opt-in managed Claude Code/Codex sessions; script steps run in the engine. Managed harnesses use their native account and permission configuration.
 
 Agent nodes can opt into [context continuity groups](docs/context-continuity.md) to declare a shared session within a run, with recorded handoffs when the session must change.
 

@@ -6,7 +6,7 @@ Add **SDLC workflow** through **Workflows → Import → Starters → Add to lib
 
 Follow [Connect a harness](connect-harness.md) to connect your agent through MCP. Run the agent in the Git project you want to change, or supply `repoPath` explicitly. The agent needs file access, Git, and the project's development tools. Browser access is needed when the change requires checking actual UI interactions.
 
-The final reviewer must use a new session or an isolated subagent without inherited implementation history. Interlock does not launch sessions or provide model execution. If your agent cannot create an isolated reviewer, continue that assignment in another fresh connected session with access to the same repository. The workflow blocks review when fresh context is unavailable.
+The final reviewer must use a new session or an isolated subagent without inherited implementation history. Connected-agent execution relies on the caller to provide sessions. Optional [managed execution](managed-executors.md) launches fresh sessions through an enabled local profile. If your agent cannot create an isolated reviewer, continue that assignment in another fresh connected session with access to the same repository. The workflow blocks review when fresh context is unavailable.
 
 The starter names no model, provider, required tool implementation, or external skill. Its inline prompts discover repository instructions and relevant checks. Use your agent's normal permissions and model settings.
 

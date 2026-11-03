@@ -1,4 +1,11 @@
 export * from './workResources.js';
+export * from './executors.js';
+import {
+  executorPermissionModeSchema,
+  executorModelSchema,
+  executorEffortSchema,
+  executorReferenceSchema,
+} from './executors.js';
 import { resourceNamesSchema } from './workResources.js';
 export { matchRouting } from './resultRouting.js';
 export * from './simulation.js';
@@ -218,6 +225,23 @@ export const nodeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('agent'),
+    executor: executorReferenceSchema
+      .nullable()
+      .optional()
+      .describe(
+        'Local executor profile override. Omit to inherit the workflow default; null keeps connected-agent execution.',
+      ),
+    model: executorModelSchema
+      .optional()
+      .describe(
+        'Managed model override; omission inherits workflow/harness defaults. Connected agents ignore it.',
+      ),
+    effort: executorEffortSchema
+      .nullable()
+      .optional()
+      .describe(
+        'Managed effort override; omit to inherit, null for native default. Use levels reported for the effective model.',
+      ),
     resources: resourceBindingsSchema
       .optional()
       .describe(
@@ -338,6 +362,27 @@ export const nodeSchema = z.discriminatedUnion('kind', [
 ]);
 export type WorkflowNode = z.infer<typeof nodeSchema>;
 export const definitionSchema = z.object({
+  agentModel: executorModelSchema
+    .optional()
+    .describe(
+      'Default model ID for managed Agents in this workflow. Node model overrides it; omission inherits each harness default. Connected agents keep their own model; explicit unavailable models fail without substitution.',
+    ),
+  agentEffort: executorEffortSchema
+    .nullable()
+    .optional()
+    .describe(
+      'Managed effort default; Agent effort overrides it. Omit to inherit the harness; null uses native defaults.',
+    ),
+  agentPermissions: executorPermissionModeSchema
+    .optional()
+    .describe(
+      'Permission override for managed Agent execution. Omit to use each selected harness default. Connected agents retain their own permissions.',
+    ),
+  executor: executorReferenceSchema
+    .optional()
+    .describe(
+      'Default local executor profile for Agent nodes. Omission preserves connected-agent execution. Configuration and credentials stay local.',
+    ),
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
   nodes: z.array(nodeSchema).min(2),
@@ -454,6 +499,13 @@ export interface RunAncestry {
   rootWorkflowId: string;
 }
 export interface WorkRequest {
+  executor?: string;
+  executorPermissions?: import('./executors.js').ExecutorPermissionMode;
+  executorModel?: string;
+  executorModelSource?: 'node' | 'workflow';
+  executorEffort?: string | null;
+  executorEffortSource?: 'node' | 'workflow';
+  managedExecution?: import('./executors.js').ManagedWorkSummary;
   resources?: string[];
   resourceBlocked?: import('./workResources.js').ResourceBlock;
   resourceReservations?: import('./workResources.js').ResourceOwner[]; // Derived inspection, not stored.

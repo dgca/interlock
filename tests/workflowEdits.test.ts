@@ -1,6 +1,8 @@
 import { afterEach, expect, it } from 'vitest';
 import {
   blankDefinition,
+  applyWorkflowEdits,
+  draftChanges,
   definitionSchema,
   diagnoseDraft,
   nodeSchema,
@@ -934,4 +936,31 @@ it('preserves recursive projection uncertainty and independent known field confl
       }),
     ]),
   );
+});
+
+it('preserves native-default effort resets and removes model overrides through authoring edits', () => {
+  const d = blankDefinition();
+  const agent = d.nodes.find((n) => n.kind === 'agent')!;
+  const result = applyWorkflowEdits(d, [
+    { op: 'update_settings', set: { agentEffort: null } },
+    {
+      op: 'update_node',
+      id: agent.id,
+      set: { model: 'model-id', effort: null },
+    },
+  ]);
+  if (!result.definition) throw Error(JSON.stringify(result.diagnostics));
+  expect(result.definition.agentEffort).toBeNull();
+  expect(draftChanges(d, result.definition).settings).toContain('agentEffort');
+  expect(result.definition.nodes.find((n) => n.kind === 'agent')).toMatchObject(
+    { model: 'model-id', effort: null },
+  );
+  const cleared = applyWorkflowEdits(result.definition, [
+    { op: 'update_settings', unset: ['agentEffort'] },
+    { op: 'update_node', id: agent.id, unset: ['model', 'effort'] },
+  ]);
+  expect(cleared.definition?.agentEffort).toBeUndefined();
+  expect(
+    cleared.definition?.nodes.find((n) => n.kind === 'agent'),
+  ).not.toHaveProperty('effort');
 });

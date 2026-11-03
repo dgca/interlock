@@ -1,4 +1,9 @@
-import { resourceOwnerSchema } from '@interlock/core';
+import {
+  executorReferenceSchema,
+  executorPermissionModeSchema,
+  managedWorkSummarySchema,
+  resourceOwnerSchema,
+} from '@interlock/core';
 import { z } from 'zod';
 import {
   continuitySchema,
@@ -75,6 +80,13 @@ export const workListResponseSchema = z
       z
         .object({
           id: z.string(),
+          executor: executorReferenceSchema.optional(),
+          executorModelSource: z.enum(['node', 'workflow']).optional(),
+          executorEffort: z.string().nullable().optional(),
+          executorEffortSource: z.enum(['node', 'workflow']).optional(),
+          executorPermissions: executorPermissionModeSchema.optional(),
+          executorModel: z.string().optional(),
+          managedExecution: managedWorkSummarySchema.optional(),
           trialEnvironmentId: z.string().optional(),
           runId: z.string(),
           nodeId: z.string(),

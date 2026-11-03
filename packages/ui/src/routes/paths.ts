@@ -1,5 +1,6 @@
 // Resource URLs use stable IDs, independent of names or future folder membership.
 export const paths = {
+  harnesses: '/settings/harnesses',
   prompts: '/prompts',
   prompt: (id: string) => `/prompts/${encodeURIComponent(id)}`,
   workflows: '/workflows',

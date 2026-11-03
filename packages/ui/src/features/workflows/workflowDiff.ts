@@ -146,10 +146,17 @@ export function compareWorkflow(
     ['inputSchema', 'Input contract'],
     ['outputSchema', 'Output contract'],
     ['maxSteps', 'Maximum steps'],
+    ['executor', 'Default Agent executor'],
+    ['agentPermissions', 'Agent permissions'],
+    ['agentModel', 'Agent model'],
+    ['agentEffort', 'Agent thinking effort'],
   ] as const) {
     const before = published?.[key];
     const after = draft[key];
-    if (!published || !sameValue(before, after))
+    if (
+      (before !== undefined || after !== undefined) &&
+      (!published || !sameValue(before, after))
+    )
       workflow.push({
         id: key,
         title,

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
+import { fileURLToPath } from 'node:url';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -196,6 +197,80 @@ try {
     assert(!response.isError, JSON.stringify(response));
     return JSON.parse(response.content[0].text);
   };
+  // Exercise the installed bundle's native transports without accounts or models.
+  const harnessFixture = fileURLToPath(
+    new URL('../tests/fixtures/managed-harness.mjs', import.meta.url),
+  );
+  for (const harness of ['claude-code', 'codex']) {
+    await call('manage_executors', {
+      request: {
+        action: 'save',
+        profile: {
+          id: harness,
+          harness,
+          name: harness,
+          enabled: true,
+          command: harnessFixture,
+          expectedRevision: 0,
+        },
+      },
+    });
+    const managed = await call('create_workflow', {
+      name: 'Packaged ' + harness,
+    });
+    const definition = managed.draft;
+    definition.executor = harness;
+    await call('update_workflow', {
+      id: managed.id,
+      draft: definition,
+      draftRevision: managed.draftRevision,
+    });
+    await call('publish_workflow', { id: managed.id });
+    const run = await call('start_run', {
+      workflowId: managed.id,
+      input: { test: true },
+    });
+    let pending;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const inspection = await call('get_run', { id: run.runId });
+      const assignment = inspection.work[0];
+      if (assignment) {
+        const detail = await call('manage_executors', {
+          request: { action: 'inspect', workId: assignment.id },
+        });
+        if (detail.items[0]?.state === 'needs_human') {
+          pending = detail.items[0];
+          break;
+        }
+      }
+      await delay(50);
+    }
+    assert(pending, 'Packaged ' + harness + ' did not request approval');
+    await call('manage_executors', {
+      request: {
+        action: 'respond',
+        executionId: pending.id,
+        requestId: pending.requests[0].id,
+        answer: { allow: false },
+      },
+    });
+    let finished;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      finished = await call('get_run', { id: run.runId });
+      if (finished.run.status === 'completed') break;
+      await delay(50);
+    }
+    assert.equal(finished.run.status, 'completed');
+    assert.deepEqual(finished.run.output, { ok: false });
+  }
+  const profiles = JSON.parse(
+    execFileSync(bin, ['executors'], {
+      cwd: workdir,
+      env: { ...env, INTERLOCK_URL: url },
+      encoding: 'utf8',
+    }),
+  );
+  assert.equal(profiles.length, 2);
   const choices = await call('list_workflows', { source: 'starters' });
   assert.deepEqual(
     choices.map((s) => s.id),

@@ -86,7 +86,7 @@ The MCP equivalents are `get_run`, `list_work`, `cancel_run`, and `retry_run`. F
 
 Parent-scoped assignment discovery still includes all descendants, including detached work after the parent ends. A terminal parent does not mean its detached descendants finished. Use each independent run's ID to continue its work. Fresh-session assignment instructions target the nearest detached ancestor, or the original root when no detached boundary exists.
 
-Dispatch does not start an agent executor. Agent steps still require a connected harness or manual completion. The server continues to advance automatic steps and timers.
+Agent steps use the invoked workflow’s own executor settings. Configured [managed profiles](managed-executors.md) launch automatically; other steps require a connected harness or manual completion. The server continues to advance automatic steps and timers.
 
 ## Batch and resource limits
 

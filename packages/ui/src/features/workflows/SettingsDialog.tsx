@@ -1,3 +1,4 @@
+import { ExecutorSelect } from '../executors/ExecutorSelect';
 import {
   TextInput,
   Textarea,
@@ -356,11 +357,6 @@ export function SettingsDialog({
                 </p>
               ) : (
                 <>
-                  <p className="hint">
-                    Configure the workflow's inputs, outputs, and execution
-                    limit.
-                  </p>
-
                   <TextInput
                     mb="md"
                     label="Name"
@@ -384,6 +380,24 @@ export function SettingsDialog({
                     }
                   />
 
+                  <ExecutorSelect
+                    value={settings.definition.executor}
+                    workflowPermissions={settings.definition.agentPermissions}
+                    workflowModel={settings.definition.agentModel}
+                    workflowEffort={settings.definition.agentEffort}
+                    onEffortChange={(agentEffort) =>
+                      patchDefinition({ agentEffort })
+                    }
+                    onModelChange={(agentModel) =>
+                      patchDefinition({ agentModel })
+                    }
+                    onPermissionsChange={(agentPermissions) =>
+                      patchDefinition({ agentPermissions })
+                    }
+                    onChange={(executor) =>
+                      patchDefinition({ executor: executor ?? undefined })
+                    }
+                  />
                   <ContractEditor
                     label="Workflow input"
                     value={settings.definition.inputSchema}

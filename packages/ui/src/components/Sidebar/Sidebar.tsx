@@ -1,4 +1,10 @@
-import { GitBranch, Activity, ArrowUpRight, FileText } from 'lucide-react';
+import {
+  GitBranch,
+  Activity,
+  ArrowUpRight,
+  FileText,
+  Settings2,
+} from 'lucide-react';
 import { VERSION } from '../../../../core/src/version';
 import styles from './Sidebar.module.css';
 export function Sidebar({
@@ -8,8 +14,8 @@ export function Sidebar({
   engineHost,
   onConnect,
 }: {
-  page: 'workflows' | 'runs' | 'prompts';
-  onNavigate: (page: 'workflows' | 'runs' | 'prompts') => void;
+  page: 'workflows' | 'runs' | 'prompts' | 'harnesses';
+  onNavigate: (page: 'workflows' | 'runs' | 'prompts' | 'harnesses') => void;
   connected: boolean;
   engineHost?: string;
   onConnect?: () => void;
@@ -26,6 +32,7 @@ export function Sidebar({
             { id: 'workflows', label: 'Workflows', Icon: GitBranch },
             { id: 'runs', label: 'Runs', Icon: Activity },
             { id: 'prompts', label: 'Prompts', Icon: FileText },
+            { id: 'harnesses', label: 'Harnesses', Icon: Settings2 },
           ] as const
         ).map(({ id, label, Icon }) => (
           <button
