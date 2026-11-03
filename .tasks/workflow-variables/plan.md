@@ -263,3 +263,27 @@ and polling suites. The full suite passed 1,319 tests across 111 files; build an
 package smoke checks passed. Logs are retained as `evidence/revision-1-*.log`.
 A fresh review of the committed repairs follows. These are implementation corrections under
 the accepted D1/D3 decisions, not new product choices.
+
+## Second independent review and repair
+
+The fresh review of `562671ece911c2d4f1d142ae1e3dc03fdd5ee340` confirmed both
+original findings resolved, then reproduced `562671e-node-inspected-multiline`.
+Normal Node object logging splits multiline strings into quoted parts with
+context-dependent indentation. Those diagnostics retained the complete fake
+credential. The retained review is [review-562671e.json](evidence/review-562671e.json);
+its independent native proof and source are `evidence/review-562671e-proof.*`.
+
+The repair matches Node multiline layouts with flexible continuation indentation,
+including nested objects, wrapping thresholds and default truncation. It matches
+the complete inspected credential rather than independently masking every line.
+If the complete matcher cannot run, text is replaced with the mask. Added native
+Script regressions cover those layouts, mixed quotes and CRLF, and long multiline
+values. Their inspection checks include ordinary run/error/event history. This
+resolves AC3/AC7/AC13 under the existing D3 decision. No UI, MCP, authoring, transfer,
+or storage changes are included, so earlier applicable evidence retains its
+original candidate attribution.
+
+Focused validation passed 30 variable tests. Full regression passed 1,323 tests
+across 111 files. Build, package smoke, changed-text formatting and diff whitespace
+checks passed. Logs are in `evidence/revision-2-*.log`. A fresh review of the
+committed repair follows. The root formatting baseline remains unchanged.

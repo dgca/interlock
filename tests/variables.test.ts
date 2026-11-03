@@ -639,6 +639,14 @@ it.each(['nul\0sentinel', 'newline\nsentinel', 'unicode-雪-sentinel'])(
 it.each([
   `diagnostic-sentinel-"'\u0060\\tail`,
   'diagnostic-sentinel-' + 'x'.repeat(12000),
+  'diagnostic-sentinel-' + 'a'.repeat(70) + '\n' + 'b'.repeat(70),
+  'diagnostic-sentinel-' + 'a'.repeat(48) + '\n' + 'tail!',
+  `diagnostic-sentinel-"'\u0060\\` +
+    'a'.repeat(70) +
+    '\r\n' +
+    `"'\u0060\\` +
+    'b'.repeat(70),
+  'diagnostic-sentinel-' + ('a'.repeat(100) + '\n').repeat(120),
 ])(
   'scrubs standard Node-inspected diagnostic representations without retaining partial values',
   async (value) => {
@@ -651,7 +659,7 @@ it.each([
           engine,
           script(
             v.id,
-            'console.error({token:process.env.TEST_TOKEN}); throw new Error("control failure");',
+            'console.error({token:process.env.TEST_TOKEN}); console.error({a:{b:{token:process.env.TEST_TOKEN}}}); throw new Error("control failure");',
           ),
         ),
         {},
@@ -661,6 +669,8 @@ it.each([
     expect(run.status).toBe('failed');
     expect(serialized).toContain('[REDACTED]');
     expect(serialized).not.toContain('diagnostic-sentinel');
+    expect(serialized).not.toContain('a'.repeat(40));
+    expect(serialized).not.toContain('b'.repeat(40));
   },
 );
 

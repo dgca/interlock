@@ -1,6 +1,9 @@
 import type { Json } from '@interlock/core';
 import { inspect } from 'node:util';
 
+const escapePattern = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /** Known-value masking is performed before validation, routing, or persistence. */
 export function secretRedaction(secrets: string[]) {
   const variants = [
@@ -24,14 +27,29 @@ export function secretRedaction(secrets: string[]) {
       ]),
     ),
   ].sort((a, b) => b.length - a.length);
+  // Node can split multiline strings into quoted pieces. Object nesting changes
+  // continuation indentation, and can wrap values that fit on one line alone.
+  const inspected = secrets.filter(Boolean).flatMap((value) =>
+    [
+      inspect(value, { breakLength: 1 }),
+      inspect(value, { breakLength: 1, maxStringLength: Infinity }),
+    ]
+      .filter((layout) => layout.includes('\n'))
+      .map((layout) =>
+        layout
+          .split(/\n[ \t]*/)
+          .map(escapePattern)
+          .join('\\n[ \\t]*'),
+      ),
+  );
   // One pass prevents short secrets from matching text in the replacement itself.
   let pattern: RegExp | undefined;
   try {
     pattern = variants.length
       ? new RegExp(
-          variants
-            .map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-            .join('|'),
+          [...new Set([...inspected, ...variants.map(escapePattern)])].join(
+            '|',
+          ),
           'g',
         )
       : undefined;
@@ -45,10 +63,8 @@ export function secretRedaction(secrets: string[]) {
     } catch {
       /* Fall back without exposing a native pattern diagnostic. */
     }
-    return variants.reduce(
-      (result, secret) => result.split(secret).join('[REDACTED]'),
-      value,
-    );
+    // Preserve no diagnostic text if the complete matcher cannot run safely.
+    return '[REDACTED]';
   };
   const json = (value: Json): Json => {
     if (typeof value === 'string') return text(value);

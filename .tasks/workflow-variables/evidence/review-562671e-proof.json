@@ -1,0 +1,94 @@
+{
+  "candidate": "562671ece911c2d4f1d142ae1e3dc03fdd5ee340",
+  "node": "v24.22.1",
+  "temporaryStore": true,
+  "fakeCredentials": true,
+  "checks": [
+    {
+      "name": "missing/wrong-key create/update, all-values-deleted, process-restart boundary and original-key control",
+      "passed": true,
+      "completeProtectedStateUnchanged": true
+    },
+    {
+      "name": "script NUL target failure",
+      "passed": true,
+      "noSecretInRunEventsInspectExport": true
+    },
+    {
+      "name": "poll-script NUL target failure",
+      "passed": true,
+      "noSecretInRunEventsInspectExport": true
+    },
+    {
+      "name": "Fetch and polling Fetch invalid CRLF/NUL/non-Latin-1 target failures",
+      "passed": true,
+      "noNetworkRequests": true
+    },
+    {
+      "name": "Valid Script/Fetch delivery and mixed-quote Node inspected diagnostics controls",
+      "passed": true
+    },
+    {
+      "name": "New boundary: standard Node inspected multiline string in object",
+      "expected": "Mask delivered Secret before persistence",
+      "passed": false,
+      "leakInRun": true,
+      "leakInExecution": true,
+      "leakInEvents": true,
+      "leakInInspection": true,
+      "completeValueRecoverableFromDiagnostic": true,
+      "actualRun": {
+        "id": "21280e21-b048-4123-b539-87ac54f94da0",
+        "workflowId": "fa954663-d5a0-4026-a204-44bbe1a1ced4",
+        "workflowName": "multiline",
+        "version": 1,
+        "status": "failed",
+        "input": {},
+        "cursor": "agent",
+        "value": {},
+        "executions": [
+          {
+            "id": "771e8c36-05aa-44f1-b000-8e792a540a24",
+            "nodeId": "entry",
+            "kind": "entry",
+            "label": "Workflow input",
+            "input": {},
+            "status": "completed",
+            "startedAt": "2026-11-03T17:32:29.798Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "output": {},
+            "port": "default",
+            "completedAt": "2026-11-03T17:32:29.798Z"
+          },
+          {
+            "id": "082721b7-436f-4bfd-aa8e-330931f211b9",
+            "nodeId": "agent",
+            "kind": "script",
+            "label": "multiline",
+            "input": {},
+            "status": "failed",
+            "startedAt": "2026-11-03T17:32:29.799Z",
+            "childRunIds": [],
+            "nextItem": 0,
+            "error": "Script exited 1: {\n  token: 'multiline-secret-sentinel-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n' +\n    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'\n}\nError: expected control failure\n    at script.js:1:53\n    at [eval]:10:1\n    at runScriptInThisContext (node:internal/vm:219:10)\n    at node:internal/process/execution:451:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:449:60)\n    at evalFunction (node:internal/process/execution:92:30)\n    at evalScript (node:internal/process/execution:104:3)\n    at node:internal/main/eval_string:71:3\n",
+            "completedAt": "2026-11-03T17:32:29.822Z"
+          }
+        ],
+        "createdAt": "2026-11-03T17:32:29.798Z",
+        "updatedAt": "2026-11-03T17:32:29.822Z",
+        "promptSnapshots": [],
+        "variableCaptures": [
+          {
+            "referenceId": "991353e2-2421-4c9b-818f-8727fecf8953",
+            "variableId": "991353e2-2421-4c9b-818f-8727fecf8953",
+            "name": "multiline",
+            "kind": "secret",
+            "valueRevision": 1
+          }
+        ],
+        "error": "Script exited 1: {\n  token: 'multiline-secret-sentinel-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n' +\n    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'\n}\nError: expected control failure\n    at script.js:1:53\n    at [eval]:10:1\n    at runScriptInThisContext (node:internal/vm:219:10)\n    at node:internal/process/execution:451:12\n    at [eval]-wrapper:6:24\n    at runScriptInContext (node:internal/process/execution:449:60)\n    at evalFunction (node:internal/process/execution:92:30)\n    at evalScript (node:internal/process/execution:104:3)\n    at node:internal/main/eval_string:71:3\n"
+      }
+    }
+  ]
+}
