@@ -34,7 +34,7 @@ Published assignments retain `executorEffort` and `executorEffortSource`. The re
 
 ## Sessions and permissions
 
-Ungrouped assignments start independent native sessions, including retries. A `current` assignment permits existing context; it does not inherit the conversation that started the workflow. A run-local `context.continuityGroup` reuses a manager-owned native session and serializes work in that group. `fresh` always starts independently and cannot use a continuity group. Existing externally bound groups are not silently adopted.
+Ungrouped assignments start independent native sessions, including retries. A `current` assignment permits existing context; it does not inherit the conversation that started the workflow. A run-local `context.continuityGroup` reuses a manager-owned native session and serializes work in that group. `fresh` always starts independently and cannot use a continuity group. The managed assignment prompt states that isolation is already established, so the native Agent performs the work in that session instead of delegating again to satisfy connected-worker handoff instructions. Existing externally bound groups are not silently adopted.
 
 The profile is captured at first claim, retained on retries and pinned for a continuity group. Later profile edits affect unbound work. The actual native model, when reported, is recorded alongside the resolved executable and directory. Advisory model tiers do not automatically select native models in this release.
 

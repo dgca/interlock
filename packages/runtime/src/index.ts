@@ -67,7 +67,7 @@ import {
   draftLayoutSchema,
   type DraftLayout,
 } from '@interlock/core';
-import { freshContextInstructions } from './agentInstructions.js';
+import { assignmentInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 import { RunStarts } from './runStarts.js';
@@ -2101,25 +2101,11 @@ export class Engine {
         : {}),
       ...(reservations.length ? { resourceReservations: reservations } : {}),
     };
-    const instructions = [
-      ...(work.resources?.length
-        ? [
-            'Exclusive Agent resources: ' +
-              JSON.stringify(work.resources) +
-              '. Stop using them and stop subprocesses before submitting success or reporting failure. Holding, expiry or cancellation may leave reservations uncertain; do not resume resource use with an invalid claim. These reservations coordinate cooperating Agent claims only.',
-          ]
-        : []),
-      ...(work.trialEnvironment
-        ? [
-            `Local Git trial ${work.trialEnvironment.id}. Use only scoped local tools in ${work.trialEnvironment.workspace}. External writes are forbidden by this recipe. Stop all subprocesses before submitting success or failure. The harness must enforce tool scope; this directory is not an OS sandbox. Do not claim the interlock-local-trials skill unless you can honor this policy.`,
-          ]
-        : []),
-      ...(work.context.mode === 'fresh'
-        ? [freshContextInstructions(this.lifecycleRunId(work.runId), work.id)]
-        : []),
-    ];
-    return instructions.length
-      ? { ...work, executionInstructions: instructions.join('\n\n') }
+    const instructions = assignmentInstructions(work, {
+      lifecycleRunId: this.lifecycleRunId(work.runId),
+    });
+    return instructions
+      ? { ...work, executionInstructions: instructions }
       : work;
   }
   private lifecycleRunId(id: string) {

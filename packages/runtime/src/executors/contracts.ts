@@ -1,3 +1,4 @@
+import { assignmentInstructions } from '../agentInstructions.js';
 import type {
   ExecutorAnswer,
   ExecutorProfile,
@@ -49,7 +50,7 @@ export function assignmentPrompt(work: WorkRequest) {
   return [
     work.prompt,
     work.context.instructions,
-    work.executionInstructions,
+    assignmentInstructions(work, { managedSession: true }),
     'Complete this one Interlock assignment. Return a JSON object with one field, result, whose value matches the supplied result schema. The host unwraps result and owns claim, renewal and submission; do not claim or submit this assignment yourself.',
     'Before returning, stop background commands and subprocesses you started. Do not detach daemons or leave work running after this assignment.',
     `Assignment input:\n${JSON.stringify(work.input)}`,
