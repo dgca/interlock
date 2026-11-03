@@ -4,6 +4,10 @@ Interlock uses the Mantine theme in `packages/ui/src/theme/theme.ts` and the sha
 
 ## Runs that need a person
 
+The Runs navigation badge counts runs with pending managed approvals, questions, or recovery confirmation. It clears as decisions resolve. Normal queued assignments, capacity waits, and generic holds do not contribute. The **Needs attention** tab includes cancelled runs that still need recovery. Each row explains the reason and opens the corresponding assignment. Owned descendants count under their nearest top-level or detached run. Detached runs count independently. The filter persists in the URL and survives the return from an assignment.
+
+The shared `runs.attention` API returns only run IDs, reason categories, and the target execution IDs. Indexed reads avoid completed assignment history and omit prompts, input data, request details, and claim tokens. The existing UI refresh and event stream update the count. This query adds no MCP tool or discovery text.
+
 The run summary identifies the action that needs attention. **Review request** or **Review recovery** selects that assignment and focuses its details. Multiple assignments use a bounded menu. Attention in an owned child belongs to the parent run; detached runs retain their own attention state.
 
 The selected step appears beside the graph on wide screens and before the graph on narrow screens. Its assignment comes before input data, usage, and diagnostics. Managed assignments keep prompt/context and step data collapsed initially. Connected-agent assignments retain their prompt and manual completion controls.

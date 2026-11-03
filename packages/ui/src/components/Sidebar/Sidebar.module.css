@@ -134,3 +134,25 @@ footer {
     font-size: 11px;
   }
 }
+
+.navLabel {
+  flex: 1;
+}
+.attentionCount {
+  flex-shrink: 0;
+  min-width: 22px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 600px) {
+  .sidebar nav button {
+    position: relative;
+  }
+  .navLabel {
+    flex: none;
+  }
+  .attentionCount {
+    position: absolute;
+    top: 0;
+    right: 4px;
+  }
+}

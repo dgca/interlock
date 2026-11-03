@@ -1,3 +1,4 @@
+export type { RunAttention, RunAttentionReason } from './runAttention.js';
 export * from './workResources.js';
 export * from './executors.js';
 import {

@@ -1,3 +1,4 @@
+import { Badge } from '@mantine/core';
 import {
   GitBranch,
   Activity,
@@ -9,12 +10,14 @@ import { VERSION } from '../../../../core/src/version';
 import styles from './Sidebar.module.css';
 export function Sidebar({
   page,
+  attentionCount = 0,
   onNavigate,
   connected,
   engineHost,
   onConnect,
 }: {
   page: 'workflows' | 'runs' | 'prompts' | 'harnesses';
+  attentionCount?: number;
   onNavigate: (page: 'workflows' | 'runs' | 'prompts' | 'harnesses') => void;
   connected: boolean;
   engineHost?: string;
@@ -39,9 +42,25 @@ export function Sidebar({
             key={id}
             className={page === id ? styles.active : ''}
             onClick={() => onNavigate(id)}
+            aria-label={
+              id === 'runs' && attentionCount
+                ? `Runs, ${attentionCount} ${attentionCount === 1 ? 'run needs' : 'runs need'} attention`
+                : label
+            }
           >
             <Icon size={16} />
-            {label}
+            <span className={styles.navLabel}>{label}</span>
+            {id === 'runs' && attentionCount > 0 && (
+              <Badge
+                className={styles.attentionCount}
+                color="yellow"
+                variant="light"
+                size="sm"
+                aria-hidden="true"
+              >
+                {attentionCount}
+              </Badge>
+            )}
           </button>
         ))}
       </nav>

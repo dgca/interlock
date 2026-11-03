@@ -123,6 +123,7 @@ export function RunInspector({
         .at(-1);
   const selectedWork = allWork.filter((w) => w.executionId === execution?.id);
   const assignmentScope = (w: (typeof allWork)[number]) => {
+    if (w.runId === run.id) return undefined;
     const item = progress.nodes[w.nodeId]?.items.find(
       (item) => item.run.id === w.runId,
     );

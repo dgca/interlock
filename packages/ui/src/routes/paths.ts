@@ -1,3 +1,4 @@
+import type { RunTab } from '../features/runs/runAttention';
 // Resource URLs use stable IDs, independent of names or future folder membership.
 export const paths = {
   harnesses: '/settings/harnesses',
@@ -5,15 +6,20 @@ export const paths = {
   prompt: (id: string) => `/prompts/${encodeURIComponent(id)}`,
   workflows: '/workflows',
   workflow: (id: string) => `/workflows/${encodeURIComponent(id)}`,
-  runs: (tab: 'active' | 'history' = 'active') =>
-    tab === 'history' ? '/runs?tab=history' : '/runs',
-  workflowRuns: (id: string, tab: 'active' | 'history' = 'active') =>
-    `/workflows/${encodeURIComponent(id)}?view=runs${tab === 'history' ? '&tab=history' : ''}`,
+  runs: (tab: RunTab = 'active') =>
+    tab !== 'active' ? `/runs?tab=${tab}` : '/runs',
+  workflowRuns: (id: string, tab: RunTab = 'active') =>
+    `/workflows/${encodeURIComponent(id)}?view=runs${tab !== 'active' ? `&tab=${tab}` : ''}`,
   run: (
     id: string,
     workflowId?: string,
-    tab: 'active' | 'history' = 'active',
+    tab: RunTab = 'active',
     executionId?: string,
-  ) =>
-    `/runs/${encodeURIComponent(id)}${workflowId ? `?workflow=${encodeURIComponent(workflowId)}&tab=${tab}` : ''}${executionId ? `${workflowId ? '&' : '?'}execution=${encodeURIComponent(executionId)}` : ''}`,
+  ) => {
+    const query = new URLSearchParams();
+    if (workflowId) query.set('workflow', workflowId);
+    if (workflowId || tab !== 'active') query.set('tab', tab);
+    if (executionId) query.set('execution', executionId);
+    return `/runs/${encodeURIComponent(id)}${query.size ? `?${query}` : ''}`;
+  },
 };

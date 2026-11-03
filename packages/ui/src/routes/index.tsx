@@ -1,3 +1,4 @@
+import { runTab as parseRunTab } from '../features/runs/runAttention';
 import {
   Link,
   Navigate,
@@ -65,7 +66,7 @@ function WorkflowRoute() {
   const context = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const [search, setSearch] = useSearchParams();
-  const runTab = search.get('tab') === 'history' ? 'history' : 'active';
+  const runTab = parseRunTab(search.get('tab'));
   const workflow = context.workflows.find((w) => w.id === workflowId);
   if (!context.loaded) return <Loading error={context.loadError} />;
   if (!workflow) return <NotFound title="Workflow not found" />;
@@ -113,6 +114,7 @@ function WorkflowRoute() {
       runsView={
         <RunList
           runs={context.runs}
+          attention={context.attention}
           act={context.act}
           workflows={context.workflows}
           workflowId={workflow.id}
@@ -120,12 +122,14 @@ function WorkflowRoute() {
           onTabChange={(tab) =>
             setSearch((previous) => {
               const next = new URLSearchParams(previous);
-              if (tab === 'history') next.set('tab', tab);
+              if (tab !== 'active') next.set('tab', tab);
               else next.delete('tab');
               return next;
             })
           }
-          onOpen={(id) => void navigate(paths.run(id, workflow.id, runTab))}
+          onOpen={(id, executionId) =>
+            void navigate(paths.run(id, workflow.id, runTab, executionId))
+          }
         />
       }
     />
@@ -133,24 +137,29 @@ function WorkflowRoute() {
 }
 
 function RunsRoute() {
-  const { runs, act, workflows } = useOutletContext<AppContext>();
+  const { runs, attention, act, workflows } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const [search, setSearch] = useSearchParams();
   return (
     <RunList
       runs={runs}
+      attention={attention}
       act={act}
       workflows={workflows}
-      tab={search.get('tab') === 'history' ? 'history' : 'active'}
+      tab={parseRunTab(search.get('tab'))}
       onTabChange={(tab) =>
         setSearch((previous) => {
           const next = new URLSearchParams(previous);
-          if (tab === 'history') next.set('tab', tab);
+          if (tab !== 'active') next.set('tab', tab);
           else next.delete('tab');
           return next;
         })
       }
-      onOpen={(id) => void navigate(paths.run(id))}
+      onOpen={(id, executionId) =>
+        void navigate(
+          paths.run(id, undefined, parseRunTab(search.get('tab')), executionId),
+        )
+      }
     />
   );
 }
@@ -161,7 +170,7 @@ function RunRoute() {
   const navigate = useNavigate();
   const [search] = useSearchParams();
   const workflowId = search.get('workflow') || undefined;
-  const returnTab = search.get('tab') === 'history' ? 'history' : 'active';
+  const returnTab = parseRunTab(search.get('tab'));
   const run = runs.find((r) => r.id === runId);
   const tab =
     run && !['running', 'waiting'].includes(run.status) ? 'history' : 'active';
@@ -180,7 +189,7 @@ function RunRoute() {
         void navigate(
           workflowId
             ? paths.workflowRuns(workflowId, returnTab)
-            : paths.runs(tab),
+            : paths.runs(returnTab === 'attention' ? 'attention' : tab),
         )
       }
     />

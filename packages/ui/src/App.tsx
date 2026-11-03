@@ -5,7 +5,7 @@ import { Button, Group, Modal, Notification, Text } from '@mantine/core';
 import { Outlet, useBlocker, useMatch, useNavigate } from 'react-router';
 import { paths } from './routes/paths';
 import { useActionFeedback } from './lib/useActionFeedback';
-import type { Run, Workflow, SavedPrompt } from '@interlock/core';
+import type { Run, RunAttention, Workflow, SavedPrompt } from '@interlock/core';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { RunDialog } from './features/runs/RunDialog';
 import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
@@ -16,6 +16,7 @@ export type AppContext = {
   workflows: Workflow[];
   prompts: SavedPrompt[];
   runs: Run[];
+  attention: RunAttention[];
   loaded: boolean;
   loadError: string;
   tick: number;
@@ -63,18 +64,21 @@ export function App() {
   const [workflows, setWorkflows] = useState<Workflow[]>([]),
     [prompts, setPrompts] = useState<SavedPrompt[]>([]),
     [runs, setRuns] = useState<Run[]>([]),
+    [attention, setAttention] = useState<RunAttention[]>([]),
     [connected, setConnected] = useState(false),
     [tick, setTick] = useState(0),
     [runDialog, setRunDialog] = useState<Workflow>();
   const refresh = useCallback(async () => {
-    const [w, r, p] = await Promise.all([
+    const [w, r, p, a] = await Promise.all([
       api.workflows.list.query(),
       api.runs.list.query(),
       api.prompts.list.query(),
+      api.runs.attention.query(),
     ]);
     setWorkflows(w);
     setRuns(r);
     setPrompts(p);
+    setAttention(a);
     setConnected(true);
     setLoaded(true);
     setLoadError('');
@@ -123,6 +127,7 @@ export function App() {
     workflows,
     prompts,
     runs,
+    attention,
     loaded,
     loadError,
     tick,
@@ -142,6 +147,7 @@ export function App() {
       <Sidebar
         onConnect={context.onConnect}
         page={page}
+        attentionCount={attention.length}
         connected={connected}
         engineHost={engineHost}
         onNavigate={(next) =>

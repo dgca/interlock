@@ -1,3 +1,4 @@
+import { runAttention } from './runAttention.js';
 import { WorkResources } from './workResources.js';
 import { ExecutorManager } from './executors/manager.js';
 export type {
@@ -985,6 +986,9 @@ export class Engine {
     });
     if (!result.replayed) this.pump();
     return result.id;
+  }
+  runAttention() {
+    return runAttention(this.store);
   }
   inspect(id: string) {
     const run = this.run(id);
