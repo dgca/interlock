@@ -40,6 +40,8 @@ Database schema 2 adds indexes for run discovery by workflow, status, and creati
 
 Database schema 3 adds transactional continuation revisions and a parent-run index. Updating schema 1 or 2 creates a backup before adding this tracking. Existing document records, definitions, version pins, and history are preserved. Existing runs begin at revision zero and acquire a revision when their state or assignments change. Restarting the engine resets continuation cursors; fetch the returned snapshot and continue with its new cursor.
 
+Database schema 4 adds indexes for assignment status, owning run, resource admission, run chains, and run-scoped documents. Startup backs up an existing database before creating the indexes. Stored documents and run history remain unchanged. Index creation needs additional disk space and takes longer on larger databases; there are no manual conversion steps or new retention limits.
+
 Startup checks whether the configured port is occupied before opening the database. A locked database error identifies its path and suggests stopping other instances. Use `lsof -nP -iTCP:4310 -sTCP:LISTEN` to identify the listener, adjusting the port when needed. If a process was suspended with Ctrl+Z, `kill -CONT <pid>` lets it handle a pending termination signal. A separate engine needs both a different port and a different database.
 
 New claims persist optional `claimLeaseSeconds`. Existing claims need no conversion and use 300 seconds when a renewal omits its duration. New claims reuse their original duration instead. To retain the previous renewal behavior, pass `leaseSeconds: 300` explicitly. Summary ancestry is derived from existing runs without a database rewrite.

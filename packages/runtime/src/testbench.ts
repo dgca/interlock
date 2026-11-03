@@ -463,8 +463,17 @@ export class Testbench {
   }
   advance() {
     let changed = false;
-    const comparisons = this.store.list<WorkflowComparison>('comparisons');
-    let runs = this.store.runs();
+    const comparisons = this.store
+      .list<WorkflowComparison>('comparisons')
+      .filter((c) => c.status !== 'completed');
+    if (!comparisons.length) return false;
+    const runs = this.store.runTrees(
+      new Set(
+        comparisons.flatMap((c) =>
+          c.samples.flatMap((s) => (s.runId ? [s.runId] : [])),
+        ),
+      ),
+    );
     let source: ReturnType<ComparisonMetrics['captureSource']> | undefined;
     const captureSource = () =>
       (source ??= this.metrics.captureSource(

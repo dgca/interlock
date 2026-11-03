@@ -70,8 +70,8 @@ const next = [
 it('initializes empty databases and reopens current databases without a backup', () => {
   const file = path();
   const db = open(file);
-  expect(migrate(db, file)).toEqual({ from: 0, to: 3 });
-  expect(migrate(db, file)).toEqual({ from: 3, to: 3 });
+  expect(migrate(db, file)).toEqual({ from: 0, to: 4 });
+  expect(migrate(db, file)).toEqual({ from: 4, to: 4 });
   expect(existsSync(`${file}.backups`)).toBe(false);
 });
 
@@ -218,7 +218,7 @@ it('opens the previous release without rewriting records and executes its publis
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 1,
-    to: 3,
+    to: 4,
     backup: expect.any(String),
   });
   expect(
@@ -227,7 +227,7 @@ it('opens the previous release without rewriting records and executes its publis
         "SELECT name FROM sqlite_schema WHERE type = 'index' AND name LIKE 'runs_%'",
       )
       .all(),
-  ).toHaveLength(4);
+  ).toHaveLength(5);
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
     before,
   );
@@ -267,7 +267,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 2,
-    to: 3,
+    to: 4,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -280,7 +280,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   expect(revision).toBeGreaterThan(0);
   const reopened = new Store(file);
   connections.push(reopened);
-  expect(reopened.migration).toEqual({ from: 3, to: 3 });
+  expect(reopened.migration).toEqual({ from: 4, to: 4 });
   expect(reopened.continuation(run.id).revision).toBe(revision);
   store.remove('runs', run.id);
   expect(

@@ -19,7 +19,7 @@ HTTP MCP invokes the server router in process. The stdio bridge uses the typed H
 
 The client imports the server router type only. It does not bundle or instantiate the engine. The server is the only process that writes application state. MCP adapters and CLI commands can exit without losing runs.
 
-SQLite stores workflow, version, run, assignment, and event documents. Each synchronous engine operation uses a transaction. The runtime scans persisted active runs when advancing work. This favors a small local implementation over a distributed scheduler. It is unsuitable for multiple competing server processes or a large run archive without further indexing and scheduling work.
+SQLite stores workflow, version, run, assignment, and event documents. Each synchronous engine operation uses a transaction. The runtime uses indexed active-run and assignment lookups when advancing work. Budget refresh selects governing ancestors and chain members, then aggregates their retained scope. Comparison scheduling loads sample trees rather than unrelated runs. This favors a small local implementation over a distributed scheduler and does not support multiple competing server processes. History is retained without automatic pruning; large active trees, budget scopes, comparison archives, and explicit history inspection can still increase resource use.
 
 The root `@type_of/interlock` package bundles the server, CLI, and MCP code into `dist/cli.js` and copies the built UI into `dist/ui`. Private workspace packages are implementation modules. Changesets versions the root package; CLI, UI, and MCP versions come from `packages/core/src/version.ts`, which reads the root manifest. See [Release Interlock](releases.md).
 
@@ -210,6 +210,8 @@ The importable evaluation starter is an ordinary workflow over retained comparis
 ## Run continuation
 
 Core defines query contracts; storage projects run, execution, and assignment metadata without loading inputs, outputs (including polling check outputs), prompts, or tokens into the briefing. Schema 3 maintains a global transactional sequence and the latest revision per run through SQLite triggers. Timestamp-only updates do not change revisions. Store notifications wake runtime continuation waits after synchronous writes complete; rolled-back writes cannot change their visible cursor.
+
+Schema 4 indexes assignment status, owning run, resource admission, chain membership, and run-scoped document lookup. Descendant traversal and assignment joins use expression-index searches. Unchanged Workflow/Batch waits and pending Script/Fetch executions do not save or notify on each pump; allocation, completion, deadlines, and admission changes still persist normally.
 
 Runtime aggregates ordinary versus detached lifecycle progress, Batch queued/dispatched counts, active deadlines, and bounded references. Polling blockers expose next-check and timeout times plus latest check metadata. Sorted deadlines distinguish `poll_check` from `poll_timeout` and select the earliest across both. It subscribes before checking the persisted snapshot. Every wait ends within 60 seconds and releases its subscription and timer on response, request abort, or engine shutdown. Waiting holds no database transaction and does not pump execution. Cursors include a server incarnation so restart explicitly resets continuation.
 

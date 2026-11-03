@@ -221,6 +221,8 @@ For embedded UI settings, see [Configure the embedded UI](docs/embedded-ui.md).
 
 Interlock listens on `127.0.0.1:4310` and stores workflows and runs in `~/.interlock/interlock.db`. Restarting the server retains saved data. Scripts use the directory where you started Interlock as their working directory.
 
+Run history is retained until explicitly deleted; there is no automatic age or count limit. Idle scheduling uses indexed active-run and assignment lookups, and unchanged waiting steps do not write or wake continuation readers. Retained history still uses disk space, and inspecting large run trees or evaluating their budgets costs more work.
+
 To change the port, script working directory, or database path:
 
 ```sh

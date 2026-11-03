@@ -60,6 +60,18 @@ export const migrations: readonly Migration[] = [
       }
     },
   },
+  {
+    version: 4,
+    up(db) {
+      db.exec(`
+        CREATE INDEX work_status ON documents(json_extract(value, '$.status')) WHERE collection = 'work';
+        CREATE INDEX work_run_status ON documents(json_extract(value, '$.runId'), json_extract(value, '$.status')) WHERE collection = 'work';
+        CREATE INDEX work_admission ON documents((json_extract(value, '$.status') = 'available' OR json_type(value, '$.resourceBlocked') IS NOT NULL)) WHERE collection = 'work';
+        CREATE INDEX runs_chain ON documents(json_extract(value, '$.chain.rootRunId')) WHERE collection = 'runs';
+        CREATE INDEX documents_run ON documents(collection, json_extract(value, '$.runId'));
+      `);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

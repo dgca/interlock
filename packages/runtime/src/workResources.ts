@@ -142,7 +142,7 @@ export class WorkResources {
         `Attempt ${r.attempt} no longer has an active claim; confirm it stopped before reusing ${r.name}`,
       );
     }
-    for (const work of this.store.work()) {
+    for (const work of this.store.resourceAdmissionWork()) {
       if (work.status !== 'available') {
         if (work.resourceBlocked) {
           work.resourceBlocked = undefined;

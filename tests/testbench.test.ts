@@ -971,7 +971,11 @@ it('opens the published 0.1.18 database unchanged and preserves old claims and J
       );
   db.close();
   const { engine, store } = setup(path);
-  expect(store.migration).toEqual({ from: 3, to: 3 });
+  expect(store.migration).toMatchObject({
+    from: 3,
+    to: 4,
+    backup: expect.any(String),
+  });
   for (const [collection, records] of Object.entries(previousRelease.documents))
     expect(store.list(collection)).toEqual(records);
   engine.pump();
