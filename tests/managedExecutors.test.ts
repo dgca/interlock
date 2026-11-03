@@ -45,7 +45,7 @@ afterEach(async () => {
 });
 const profile = (
   e: Engine,
-  harness: 'codex' | 'claude-code' = 'codex',
+  harness: 'codex' | 'claude-code' | 'pi' = 'codex',
   extra = {},
 ) =>
   save(e, {
@@ -70,7 +70,7 @@ function workflow(
   return w;
 }
 function adapter(
-  id: 'codex' | 'claude-code' = 'codex',
+  id: 'codex' | 'claude-code' | 'pi' = 'codex',
   run?: HarnessAdapter['run'],
 ): HarnessAdapter {
   return {
@@ -274,7 +274,7 @@ it.each([
     });
   },
 );
-it.each(['claude-code', 'codex'] as const)(
+it.each(['claude-code', 'codex', 'pi'] as const)(
   'automatically executes through %s without another worker process',
   async (harness) => {
     const e = create();
@@ -725,9 +725,43 @@ it('holds unexpected harness failures instead of repeating unknown external effe
   expect(e.store.work()[0].status).toBe('held');
   expect(e.run(r.id).status).toBe('waiting');
 });
-function groupedWorkflow(e: Engine) {
+it('records per-attempt Pi usage on every assignment in a continuing session', async () => {
+  const e = create();
+  profile(e, 'pi', { tools: ['git'] });
+  e.executors.start([
+    adapter('pi', async (i) => {
+      i.onSession('pi-native');
+      return {
+        output: i.work.input,
+        usageScope: 'attempt',
+        usage: [
+          {
+            provider: 'fixture',
+            model: 'model',
+            inputTokens: 100,
+            outputTokens: 10,
+          },
+        ],
+      };
+    }),
+  ]);
+  const run = start(e, groupedWorkflow(e, 'pi').id, 1);
+  await settled(e, run.id);
+  const receipts = e.store.list<any>('usageAttempts').filter((u) => u.snapshot);
+  expect(receipts).toHaveLength(2);
+  for (const receipt of receipts)
+    expect(receipt.snapshot.models).toEqual([
+      {
+        provider: 'fixture',
+        model: 'model',
+        inputTokens: 100,
+        outputTokens: 10,
+      },
+    ]);
+});
+function groupedWorkflow(e: Engine, executor = 'codex') {
   const d = blankDefinition();
-  d.executor = 'codex';
+  d.executor = executor;
   const a = d.nodes.find((n) => n.kind === 'agent')!;
   if (a.kind !== 'agent') throw Error();
   a.context = { ...a.context, continuityGroup: 'author', tools: ['git'] };

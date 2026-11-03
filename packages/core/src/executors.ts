@@ -81,7 +81,7 @@ export const executorSettingsUpdateSchema = z
 export const executorProfileSchema = z
   .object({
     id: executorReferenceSchema,
-    harness: z.enum(['claude-code', 'codex']),
+    harness: z.enum(['claude-code', 'codex', 'pi']),
     name: z.string().trim().min(1).max(120),
     enabled: z.boolean().default(false),
     revision: z.number().int().min(0).default(0),
@@ -105,7 +105,7 @@ export const executorProfileSchema = z
       .default('standard')
       .transform((mode) => (mode === 'ask' ? 'standard' : mode))
       .describe(
-        'Default managed Agent permissions. standard uses native approval rules; read-only denies writes; full-access opts into broad access without routine approval stops. Legacy ask means standard. Workflow agentPermissions can override this default.',
+        'Default managed Agent permissions. standard uses the harness-specific approval policy; read-only denies writes; full-access opts into broad access without routine approval stops. Legacy ask means standard. Workflow agentPermissions can override this default.',
       ),
   })
   .strict();
@@ -187,7 +187,7 @@ export const executorOperationSchema = z.discriminatedUnion('action', [
 export const managedWorkSummarySchema = z.object({
   profileId: z.string(),
   executionId: z.string().optional(),
-  harness: z.enum(['claude-code', 'codex']).optional(),
+  harness: z.enum(['claude-code', 'codex', 'pi']).optional(),
   state: z.enum([
     'starting',
     'running',

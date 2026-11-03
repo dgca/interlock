@@ -154,7 +154,7 @@ export class JsonLinesProcess {
   private process;
   private sequence = 0;
   private pending = new Map<
-    number,
+    number | string,
     {
       resolve: (value: any) => void;
       reject: (error: Error) => void;
@@ -165,7 +165,12 @@ export class JsonLinesProcess {
   private exitPromise: Promise<void>;
   private failed?: Error;
   onMessage: (message: any) => void = () => {};
-  constructor(command: string, args: string[], cwd: string) {
+  constructor(
+    command: string,
+    args: string[],
+    cwd: string,
+    private protocol: 'json-rpc' | 'pi' = 'json-rpc',
+  ) {
     this.process = spawnManagedProcess(command, args, {
       cwd,
       env: process.env,
@@ -188,23 +193,23 @@ export class JsonLinesProcess {
         try {
           const msg = JSON.parse(line);
           if (
-            typeof msg.id === 'number' &&
-            !msg.method &&
+            (this.protocol === 'pi' ? msg.type === 'response' : !msg.method) &&
             this.pending.has(msg.id)
           ) {
             const p = this.pending.get(msg.id)!;
             this.pending.delete(msg.id);
             clearTimeout(p.timer);
-            msg.error
+            msg.error || msg.success === false
               ? p.reject(
                   new Error(
-                    String(msg.error.message ?? 'Harness request failed').slice(
-                      0,
-                      2000,
-                    ),
+                    String(
+                      msg.error?.message ??
+                        msg.error ??
+                        'Harness request failed',
+                    ).slice(0, 2000),
                   ),
                 )
-              : p.resolve(msg.result);
+              : p.resolve(this.protocol === 'pi' ? msg.data : msg.result);
           } else this.onMessage(msg);
         } catch (error) {
           this.fail(
@@ -243,7 +248,8 @@ export class JsonLinesProcess {
     this.child.stdin.write(JSON.stringify(message) + '\n');
   }
   request(method: string, params: unknown, timeoutMs = 30000): Promise<any> {
-    const id = ++this.sequence;
+    const sequence = ++this.sequence;
+    const id = this.protocol === 'pi' ? String(sequence) : sequence;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
@@ -251,7 +257,11 @@ export class JsonLinesProcess {
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
       try {
-        this.send({ id, method, params });
+        this.send(
+          this.protocol === 'pi'
+            ? { ...(params as object), id, type: method }
+            : { id, method, params },
+        );
       } catch (error) {
         clearTimeout(timer);
         this.pending.delete(id);

@@ -25,6 +25,12 @@ import {
 } from './permissions';
 import { ModelSettings } from './ModelSettings';
 import { ExecutionSettings } from './ExecutionSettings';
+const harnessNames = { 'claude-code': 'Claude Code', codex: 'Codex', pi: 'Pi' };
+const harnessSetup = {
+  'claude-code': 'https://code.claude.com/docs/en/setup',
+  codex: 'https://developers.openai.com/codex/cli/',
+  pi: 'https://pi.dev/',
+};
 type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
 
 export function Harnesses() {
@@ -198,16 +204,14 @@ function ProfileRow({
             <p
               title={`${profile.model ?? 'CLI default'}${profile.effort ? ` · ${profile.effort} effort` : ''} · ${permissionLabels[profile.permissions]} permissions`}
             >
-              {profile.name !==
-                (profile.harness === 'claude-code' ? 'Claude Code' : 'Codex') &&
-                `${profile.harness === 'claude-code' ? 'Claude Code' : 'Codex'} · `}
+              {profile.name !== harnessNames[profile.harness] &&
+                `${harnessNames[profile.harness]} · `}
               {profile.model ?? 'CLI default'}
               {profile.effort ? ` · ${profile.effort} effort` : ''} ·{' '}
               {permissionLabels[profile.permissions]} permissions
             </p>
-          ) : profile.name !==
-            (profile.harness === 'claude-code' ? 'Claude Code' : 'Codex') ? (
-            <p>{profile.harness === 'claude-code' ? 'Claude Code' : 'Codex'}</p>
+          ) : profile.name !== harnessNames[profile.harness] ? (
+            <p>{harnessNames[profile.harness]}</p>
           ) : null}
         </div>
         <Badge variant="light" color={detected ? 'blue' : 'gray'} tt="none">
@@ -251,11 +255,7 @@ function ProfileRow({
         <p className={styles.guidance}>
           {profile.detection.message}{' '}
           <a
-            href={
-              profile.harness === 'claude-code'
-                ? 'https://code.claude.com/docs/en/setup'
-                : 'https://developers.openai.com/codex/cli/'
-            }
+            href={harnessSetup[profile.harness]}
             target="_blank"
             rel="noreferrer"
           >
@@ -321,7 +321,11 @@ function ProfileRow({
                 label="Default permissions"
                 disabled={busy}
                 inputWrapperOrder={['label', 'input', 'description', 'error']}
-                description={permissionDescriptions[draft.permissions]}
+                description={
+                  draft.harness === 'pi' && draft.permissions === 'standard'
+                    ? 'Allow read tools; ask before commands, file changes, and other tools.'
+                    : permissionDescriptions[draft.permissions]
+                }
                 value={draft.permissions}
                 onChange={(e) =>
                   setDraft({
@@ -408,7 +412,7 @@ function NewProfile({
   onCancel: () => void;
 }) {
   const [name, setName] = useState(''),
-    [harness, setHarness] = useState<'claude-code' | 'codex'>('codex'),
+    [harness, setHarness] = useState<ExecutorProfile['harness']>('codex'),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   return (
@@ -452,6 +456,7 @@ function NewProfile({
           data={[
             { value: 'claude-code', label: 'Claude Code' },
             { value: 'codex', label: 'Codex' },
+            { value: 'pi', label: 'Pi' },
           ]}
         />
       </div>

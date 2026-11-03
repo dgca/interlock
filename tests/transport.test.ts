@@ -2692,6 +2692,24 @@ it.each(['stdio', 'http'])(
         revision: 0,
         detection: { status: 'detected' },
       });
+      expect(localProfiles.find((p: any) => p.id === 'pi')).toMatchObject({
+        harness: 'pi',
+        enabled: false,
+        revision: 0,
+      });
+      expect(
+        await call('manage_executors', {
+          request: {
+            action: 'save',
+            profile: {
+              id: 'pi',
+              harness: 'pi',
+              name: 'Transport Pi',
+              expectedRevision: 0,
+            },
+          },
+        }),
+      ).toMatchObject({ id: 'pi', harness: 'pi', enabled: false, revision: 1 });
       expect(
         await call('manage_executors', {
           request: { action: 'models', profileId: 'codex' },

@@ -29,6 +29,8 @@ export interface HarnessRun {
 export interface HarnessResult {
   output: Json;
   usage?: ModelUsage[];
+  /** Omission means native session cumulative counters. */
+  usageScope?: 'attempt';
 }
 /** Native transports remain inside adapters; neither owns Interlock claims. */
 export interface HarnessAdapter {

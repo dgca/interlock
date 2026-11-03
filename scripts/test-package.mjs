@@ -270,7 +270,10 @@ try {
       encoding: 'utf8',
     }),
   );
-  assert.equal(profiles.length, 2);
+  assert.equal(profiles.length, 3);
+  assert.ok(
+    profiles.some((p) => p.id === 'pi' && p.harness === 'pi' && !p.enabled),
+  );
   const choices = await call('list_workflows', { source: 'starters' });
   assert.deepEqual(
     choices.map((s) => s.id),

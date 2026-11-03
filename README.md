@@ -2,7 +2,7 @@
 
 Interlock is a local workflow editor and engine for AI agents. Define a procedure once, combine agent assignments with HTTP requests and JavaScript or Bash steps, and inspect each run in your browser.
 
-Build workflows visually or edit their JSON definitions. Interlock validates inputs and results, runs scripts, and stores progress in SQLite. A connected agent can handle assignments through the Model Context Protocol (MCP), or Interlock can launch a configured Claude Code or Codex harness automatically.
+Build workflows visually or edit their JSON definitions. Interlock validates inputs and results, runs scripts, and stores progress in SQLite. A connected agent can handle assignments through the Model Context Protocol (MCP), or Interlock can launch a configured Claude Code, Codex, or Pi harness automatically.
 
 ## Install and run
 
@@ -53,7 +53,7 @@ The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by th
 
 ## Run agents automatically
 
-Open **Harnesses** in the sidebar to set the shared concurrent assignment limit, default Limited to 3 with an Unlimited option, and configure an installed Claude Code or Codex executable. Configurations start disabled. Set the working directory, default permissions, model and optional thinking effort, then enable the configuration. Model pickers load native choices and accept custom IDs; Use CLI default retains the harness’s own selection. Choose it in **Workflow settings → Default Agent executor** or override it in an Agent node’s **Execution → Executor** settings, save and publish. Workflow **Agent model** and **Thinking effort** can inherit harness defaults; Agent nodes can override both. Workflow **Agent permissions** can inherit the harness default or select **Read only**, **Standard** or **Full access**. Existing workflows keep connected-agent execution unless you opt in.
+Open **Harnesses** in the sidebar to set the shared concurrent assignment limit, default Limited to 3 with an Unlimited option, and configure an installed Claude Code, Codex, or Pi executable. Configurations start disabled. Set the working directory, default permissions, model and optional thinking effort, then enable the configuration. Model pickers load native choices and accept custom IDs; Use CLI default retains the harness’s own selection. Choose it in **Workflow settings → Default Agent executor** or override it in an Agent node’s **Execution → Executor** settings, save and publish. Workflow **Agent model** and **Thinking effort** can inherit harness defaults; Agent nodes can override both. Workflow **Agent permissions** can inherit the harness default or select **Read only**, **Standard** or **Full access**. Existing workflows keep connected-agent execution unless you opt in.
 
 Interlock launches ready assignments inside its existing server, including independently started workflows. A badge beside **Runs** and the **Needs attention** tab surface approvals, questions, and recovery checks. Permission requests and questions appear in the run inspector; stopping or losing a session requires explicit recovery before retrying. Installation detection makes no model calls and does not verify authentication. See [managed Agent execution](docs/managed-executors.md) for setup, native authentication requirements, MCP/CLI operations and limitations.
 
@@ -267,7 +267,7 @@ JSON arguments also accept `@filename`, such as `interlock start WORKFLOW_ID @in
 
 ## Current scope
 
-Interlock is a local, single-user application. Agent steps use connected executors, manual submission, or opt-in managed Claude Code/Codex sessions; script steps run in the engine. Managed harnesses use their native account and permission configuration.
+Interlock is a local, single-user application. Agent steps use connected executors, manual submission, or opt-in managed Claude Code, Codex, and Pi sessions; script steps run in the engine. Managed harnesses use their native account and permission configuration.
 
 Agent nodes can opt into [context continuity groups](docs/context-continuity.md) to declare a shared session within a run, with recorded handoffs when the session must change.
 

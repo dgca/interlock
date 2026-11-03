@@ -42,6 +42,7 @@ const defaults: ExecutorProfile[] = [
     name: 'Claude Code',
   }),
   executorProfileSchema.parse({ id: 'codex', harness: 'codex', name: 'Codex' }),
+  executorProfileSchema.parse({ id: 'pi', harness: 'pi', name: 'Pi' }),
 ];
 interface Session {
   id: string;
@@ -802,13 +803,15 @@ export class ExecutorManager {
       if (this.stopped || job.abort.signal.aborted) return;
       const usage =
         result.usage &&
-        usageDelta(
-          result.usage,
-          session.nativeId && session.usageUncertain
-            ? null
-            : (session.usage ?? []),
-        );
-      if (result.usage) {
+        (result.usageScope === 'attempt'
+          ? result.usage
+          : usageDelta(
+              result.usage,
+              session.nativeId && session.usageUncertain
+                ? null
+                : (session.usage ?? []),
+            ));
+      if (result.usage && result.usageScope !== 'attempt') {
         session.usage = result.usage;
         session.usageUncertain = false;
         this.engine.store.put(sessionsCollection, session);
