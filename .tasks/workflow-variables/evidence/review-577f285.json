@@ -1,0 +1,164 @@
+{
+  "verdict": "revise",
+  "summary": "Focused fresh review resolves the prior multiline Node diagnostic finding. Native file-backed checks and both separate review passes confirm ordinary/nested, threshold, CRLF, mixed-quote and truncated forms are now masked. One new P1 regression remains: prepended inspected alternatives can mask a prefix of a different complete selected Secret before its longer literal alternative, leaving credential text in persisted history. Both Standards and Spec reviewers independently reproduced that native disclosure.",
+  "baseCommit": "a2112c8507adaab6daa3084ae45214c1edfcc30c",
+  "reviewedCommit": "577f2852d9cfa7c590ae6fe11f7afaaf11ddc317",
+  "priorReviewedCommit": "562671ece911c2d4f1d142ae1e3dc03fdd5ee340",
+  "reviewScope": "focused",
+  "scopeReason": "Verified full baseline, prior and candidate object IDs, branch codex/workflow-variables, merge-base a2112c8507adaab6daa3084ae45214c1edfcc30c and clean tracked worktree. Inspected the complete 11-file intervening delta: two code/test files, plan update and retained review/check artifacts. Runtime redaction remains under accepted D3; intent/spec, storage, capture, transfer, UI, CLI, MCP and shared API source are unchanged. Localized matching corrections permit focused review of masking, native persistence and nearby competing-representation boundaries. Inspected retained proof for applicability before carrying unaffected evidence with original commit attribution. No baseline rewrite, requirement change or cross-cutting architecture change requires full scope.",
+  "specEvidence": [
+    {
+      "criterion": "AC1",
+      "status": "verified",
+      "evidence": "Inspected retained review-a11b336/review-562671e evidence and central management assertions in tests/variables.test.ts. Original checks cover stable IDs, metadata/kind/name contracts, revision separation and lookup. Complete intervening delta leaves core/runtime management and lookup source unchanged, so original evidence remains applicable.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "carried_forward"
+    },
+    {
+      "criterion": "AC2",
+      "status": "verified",
+      "evidence": "Inspected retained review-ui-a11b336.script.txt and .log with actual typing, Enter creation, replacement focus, Cancel clearing/focus restoration, acknowledgment clearing and reopen assertions. Prior management/transport assertions cover metadata-only reads, Config-only explicit reads and revision conflicts; browser-checks.json records refresh-failure/stale-save controls. No management/UI/API changes in the complete delta. These are inspected prior checks, not new interactions.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "carried_forward"
+    },
+    {
+      "criterion": "AC3",
+      "status": "gap",
+      "evidence": "Independent native proof /tmp/interlock-review-577f285-native.{mts,json,log} exits 0 and checks exact selected delivery, redaction before persisted run/execution/errors/events/inspection/export and raw records in seven file-backed native cases, then close/reopen and database-byte sentinel checks. Prior vault-key proof remains applicable because storage is unchanged. However /tmp/interlock-review-577f285-overlap.{mts,json,log} exits 0 asserting the new reachable disclosure: raw complete Secret B is only partly masked when its prefix matches Secret A's inspected representation. Secret B's suffix persists in run/execution/errors/events/inspection/raw records. Finding 577f285-overlapping-representations.",
+      "evidenceCommit": "577f2852d9cfa7c590ae6fe11f7afaaf11ddc317",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC4",
+      "status": "verified",
+      "evidence": "Independently executed all 30 tests/variables.test.ts cases, including valid Fetch/Script controls and invalid selected native-target guards; passing output /tmp/interlock-review-577f285-tests.log. Native proof additionally verifies exact delivered values using in-process digest comparison before reaching its control failure, for Script and polling Script cases. Retained review-562671e proof covers Fetch/polling Fetch no-request CRLF/NUL/non-Latin-1 rejection. Delivery resolution and native validation source is unchanged.",
+      "evidenceCommit": "577f2852d9cfa7c590ae6fe11f7afaaf11ddc317",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC5",
+      "status": "verified",
+      "evidence": "Inspected retained review-562671e proof/source and prior review assertions for immutable exact-revision captures, wrong-key mutation rejection, recovery, rotation/restart/retry, deleted/reprovisioned identities and disabled consumption. The complete intervening delta changes no capture, management or storage implementation. Current 30-test variables suite still includes those controls and passes; original evidence attribution retained.",
+      "evidenceCommit": "562671ece911c2d4f1d142ae1e3dc03fdd5ee340",
+      "source": "carried_forward"
+    },
+    {
+      "criterion": "AC6",
+      "status": "verified",
+      "evidence": "Inspected retained review evidence and current variables test assertions for ordinary/detached child independence, Batch and continue-as-new inheritance, and queued comparison capture. Original tests.log records those passing controls. Allocation, capture inheritance, comparison and simulation/editor resolution paths are untouched by the complete delta, so original evidence remains applicable.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "carried_forward"
+    },
+    {
+      "criterion": "AC7",
+      "status": "gap",
+      "evidence": "Original finding 562671e-node-inspected-multiline now passes native ordinary/nested/array logging, threshold, CRLF/mixed-quote, default-truncation, whitespace, polling and pre-retention-boundary cases in /tmp/interlock-review-577f285-native.{mts,json,log}, including raw persisted records and close/reopen. Separate passes exercise 220 and 768 additional Node forms. But /tmp/interlock-review-577f285-overlap.{mts,json,log} proves a different standard raw echo of a complete selected Secret leaks its suffix before normal history. Prior562671e-vs-current577f285 direct comparison confirms the new regression. Finding 577f285-overlapping-representations.",
+      "evidenceCommit": "577f2852d9cfa7c590ae6fe11f7afaaf11ddc317",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC8",
+      "status": "verified",
+      "evidence": "Inspected retained prior review evidence for dependency blockers, rename identity preservation, disable/re-enable and retained captures, deleted-value retry failure, and actual confirmed UI deletion. All dependency/management/deletion/UI source is unchanged in the complete intervening delta. Retained current variables assertions continue passing. Original checked commit retained.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "carried_forward"
+    },
+    {
+      "criterion": "AC9",
+      "status": "verified",
+      "evidence": "Inspected retained review evidence and existing transfer/binding assertions for format-4 safe requirements, explicit compatible local binding, unset provisioning, no name attachment, direct immutable-kind associations and atomic conflicts. Core/transfer/import/binding source and UI are unchanged by the complete delta; original evidence remains applicable.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "carried_forward"
+    },
+    {
+      "criterion": "AC10",
+      "status": "verified",
+      "evidence": "Inspected prior affected-flow review and actual retained transport pass records covering grouped read/manage discovery, bounded metadata/dependencies, HTTP/stdio safe behavior, authoring/start/inspect/comparison/import guidance and CLI stdin-only writes. No shared API, CLI, MCP definitions or transport contract changes in this revision. Original affected-flow evidence remains applicable; no comprehensive unrelated-MCP audit claimed.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "carried_forward"
+    },
+    {
+      "criterion": "AC11",
+      "status": "verified",
+      "evidence": "Inspected secretRedaction empty-secret early return and localOperation/scripts integration. The correction operates only on selected known Secret text; optional definition/capture fields, omitted-language Bash, variable-free environment behavior and old import formats are untouched. Independent full 30-case variables suite passes; inspected revision-2-tests.log records 111 files/1323 passing tests, build/package logs successful. These saved broad checks were inspected, not rerun.",
+      "evidenceCommit": "577f2852d9cfa7c590ae6fe11f7afaaf11ddc317",
+      "source": "checked"
+    },
+    {
+      "criterion": "AC12",
+      "status": "verified",
+      "evidence": "Inspected actual retained review-ui-a11b336 script/stdout and asserted real-control results for typing, Enter, focus, clearing, reopening, phone overflow/navigation and confirmed deletion, plus browser-checks.json representative journey and prior screenshot inspection. The entire intervening delta contains no UI component, style, route, picker or interaction edits. Original interaction/visual evidence and its commit remain applicable. No UI or detector execution was repeated.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "carried_forward"
+    },
+    {
+      "criterion": "AC13",
+      "status": "gap",
+      "evidence": "Inspected nonempty committed revision-2 full tests/build/package/focused/format logs and their actual summaries, retained prior native proof/source and review, plan repair account and unchanged accepted intent/spec. Fresh proof /tmp/interlock-review-577f285-native.{mts,json,log} uses fake credentials and temporary file DB/key, closes engines and removes data. New overlap boundary /tmp/interlock-review-577f285-overlap.{mts,json,log} independently fails and is not covered by the added single-secret regressions, leaving accepted D3 failure coverage incomplete. Documentation still promises complete known-value masking before history.",
+      "evidenceCommit": "577f2852d9cfa7c590ae6fe11f7afaaf11ddc317",
+      "source": "checked"
+    }
+  ],
+  "standardsEvidence": [
+    {
+      "check": "Repository identity, scope and artifact ownership",
+      "evidence": "Verified exact baseline/prior/candidate, branch and clean tracked tree. Complete 11-file delta inspected including retained prior review/proof, actual new check output and plan. Scope remains intent, behavior remains accepted spec, implementation/evidence remains plan. Original proof stays attributed to its actual candidate. Unrelated untracked artifacts and real .interlock data preserved; no implementation/PR/release mutation.",
+      "evidenceCommit": "577f2852d9cfa7c590ae6fe11f7afaaf11ddc317",
+      "source": "checked"
+    },
+    {
+      "check": "Separate Standards pass: architecture, security and regressions",
+      "evidence": "Standards reviewer inspected complete delta against AGENTS, CONTEXT, architecture and smell baseline. No architectural or heuristic-only finding. Independently ran six native regressions and 220 Node layouts, then independently reproduced new raw overlap suffix persistence in a temporary file DB. New P1 violates architecture.md known delivered Secret masking promise. /tmp/interlock-review-577-standards-overlap.{mts,json,log}.",
+      "evidenceCommit": "577f2852d9cfa7c590ae6fe11f7afaaf11ddc317",
+      "source": "checked"
+    },
+    {
+      "check": "Separate Spec pass: accepted D3 and safe history",
+      "evidence": "Spec reviewer independently exercised 768 standard inspect/%o/%O object/nested/array/long-key/Error forms, then reproduced overlap suffix persistence in own native temporary-file-DB run, exit 0. Raw full Secret B is unchanged before stderr; this is within accepted known-value masking. D3/AC3/AC7 remain violated by new P1. /tmp/interlock-review-577-spec-overlap.{mts,json,log}.",
+      "evidenceCommit": "577f2852d9cfa7c590ae6fe11f7afaaf11ddc317",
+      "source": "checked"
+    },
+    {
+      "check": "Docs and affected agent guidance",
+      "evidence": "Inspected docs/architecture.md and docs/variables.md against runtime matcher and native preparation. Target/recovery guidance remains accurate, but the architecture's known delivered Secret masking promise fails the new competing-representation case. Shared API/CLI/MCP source and schemas unchanged; earlier affected-flow/HTTP/stdio review remains applicable with its original attribution. No unrelated tool-set audit claimed.",
+      "evidenceCommit": "577f2852d9cfa7c590ae6fe11f7afaaf11ddc317",
+      "source": "checked"
+    },
+    {
+      "check": "UI controls and copy applicability",
+      "evidence": "Complete delta has no UI or style changes. Inspected retained actual review-ui-a11b336 script/log for real typing, focus, keyboard submission, clearing, phone navigation and deletion; original browser/static proof remains applicable. No interaction or detector pass re-executed.",
+      "evidenceCommit": "a11b336bbdb982481728814ec552e7761a30b03a",
+      "source": "carried_forward"
+    },
+    {
+      "check": "Validation, packaging and native persistence",
+      "evidence": "Independent 30-case variables suite reports pass in /tmp/interlock-review-577f285-tests.log; six targeted native regressions also independently exit 0. Seven additional file-backed native cases and close/reopen, compile/execute fail-closed controls pass in /tmp/interlock-review-577f285-native.{mts,json,log}. New overlap reproduction exits 0 while asserting persisted leak; direct old/new check confirms regression. Inspected full111-file/1323-test, build and package smoke success in revision-2 logs. git diff --check passed. Root formatting retains documented393unrelatedbaseline; broad build/package checks inspected rather than rerun.",
+      "evidenceCommit": "577f2852d9cfa7c590ae6fe11f7afaaf11ddc317",
+      "source": "checked"
+    }
+  ],
+  "findingResolutions": [
+    {
+      "id": "a11b336-store-key-auth",
+      "status": "resolved",
+      "evidence": "Retained resolution verified at562671ece911c2d4f1d142ae1e3dc03fdd5ee340. Inspected actual review-562671e proof/source asserting complete protected state unchanged for missing/wrong-key writes, final-value deletion and close/reopen, with original-key recovery. Persistent verifier and storage source are unchanged in complete intervening delta; current variables suite passes."
+    },
+    {
+      "id": "a11b336-script-env-diagnostic",
+      "status": "resolved",
+      "evidence": "Retained resolution verified at562671ece911c2d4f1d142ae1e3dc03fdd5ee340. Inspected native proof of safe NUL Script/polling and invalid Fetch/polling target errors with no network requests, plus valid delivery controls. Native validation source unchanged; current variables suite includes these guards and passes. New overlap defect has a separate ID."
+    },
+    {
+      "id": "562671e-node-inspected-multiline",
+      "status": "resolved",
+      "evidence": "Independent native temporary-file-DB proof /tmp/interlock-review-577f285-native.{mts,json,log} passes ordinary/nested/array multiline, wrapping threshold, CRLF/mixed quotes, long/default-truncated forms, whitespace, polling and pre-retention boundary. Exact native receipt is checked before control failure; run/execution/errors/events/inspect/export/raw records remain masked after close/reopen. Both separate passes independently confirm expanded single-secret layouts. New competing-secret precedence regression is tracked separately."
+    }
+  ],
+  "findings": [
+    {
+      "id": "577f285-overlapping-representations",
+      "location": "packages/runtime/src/secretRedaction.ts:49-52",
+      "details": "[P1] Preserve complete longer Secret matches when combining inspected patterns with literals. The new union prepends every inspected pattern ahead of length-sorted literal variants. If selected Secret B starts with the inspected representation of selected Secret A, A's shorter regex consumes that prefix before the complete literal B can match. Independent native reproduction selects A='overlap-small-head\\nshorter-secret-tail' and B=inspect(A,{breakLength:1})+'-longer-credential-unmasked-suffix-920371', then writes B unchanged using process.stderr.write(process.env.LONGER). Persisted run.error, execution.error, events, inspect and raw records contain [REDACTED]-longer-credential-unmasked-suffix-920371. This is a complete known Secret echoed without a runtime transformation; D3/AC3/AC7 require masking it before history. The prior562671e redactor fully masks the same raw B, confirming regression. Preserve full-match coverage across overlapping representations and add a multi-secret native regression. Proof /tmp/interlock-review-577f285-overlap.{mts,json,log} and /tmp/interlock-review-577f285-overlap-baseline.{mts,log}; both separate passes independently reproduced."
+    }
+  ]
+}

@@ -287,3 +287,29 @@ Focused validation passed 30 variable tests. Full regression passed 1,323 tests
 across 111 files. Build, package smoke, changed-text formatting and diff whitespace
 checks passed. Logs are in `evidence/revision-2-*.log`. A fresh review of the
 committed repair follows. The root formatting baseline remains unchanged.
+
+## Third independent review and repair
+
+The fresh review of `577f2852d9cfa7c590ae6fe11f7afaaf11ddc317` confirmed the
+multiline finding resolved, then found `577f285-overlapping-representations`.
+A shorter formatted Secret could consume the beginning of another selected
+Secret before the longer raw value matched. Its untouched suffix remained in
+ordinary history. The recorded review and native fake-credential proof are
+`evidence/review-577f285*`, attributed to that candidate.
+
+The repair computes complete matching coverage before inserting any masks.
+It selects actual longest coverage at each matching offset, checks later starts
+inside covered ranges, and merges overlapping ranges. This does not depend on
+representative indentation lengths or selection order. Replacement text is never
+rescanned. Matcher errors or excessive repeated matching discard the complete
+text rather than retaining possible fragments. Architecture documents that bound.
+
+Native regressions select both competing Secrets in either order and assert safe
+run, execution, event and inspection errors while retaining the ordinary control
+error. Additional coverage checks nested variable indentation and overlapping
+values at different starts, plus safe excessive-match behavior. Focused validation
+passed all 35 variable tests. This closes AC3/AC7/AC13 under existing D3. No UI, MCP,
+CLI, transfer, or storage source changed; earlier evidence remains attributed to
+its original candidate. Full regression passed 1,328 tests across 111 files. Build,
+package smoke, changed-text formatting and whitespace checks passed. Logs are
+`evidence/revision-3-*.log`. A fresh review of the committed repair follows.

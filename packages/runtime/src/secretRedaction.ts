@@ -42,9 +42,10 @@ export function secretRedaction(secrets: string[]) {
           .join('\\n[ \\t]*'),
       ),
   );
-  // One pass prevents short secrets from matching text in the replacement itself.
   let pattern: RegExp | undefined;
+  let layouts: RegExp[] = [];
   try {
+    layouts = [...new Set(inspected)].map((source) => new RegExp(source, 'y'));
     pattern = variants.length
       ? new RegExp(
           [...new Set([...inspected, ...variants.map(escapePattern)])].join(
@@ -55,11 +56,53 @@ export function secretRedaction(secrets: string[]) {
       : undefined;
   } catch {
     /* Native regexp errors may quote their pattern; never propagate them. */
+    pattern = undefined;
   }
   const text = (value: string) => {
     if (!variants.length) return value;
     try {
-      if (pattern) return value.replace(pattern, '[REDACTED]');
+      if (pattern) {
+        // Find complete coverage before replacing anything. A shorter inspected
+        // layout can also be a prefix of a longer literal credential, and
+        // credentials can overlap at different offsets in the same diagnostic.
+        const ranges: [number, number][] = [];
+        let matches = 0;
+        pattern.lastIndex = 0;
+        for (
+          let match = pattern.exec(value);
+          match;
+          match = pattern.exec(value)
+        ) {
+          // Bound repeated/overlapping matching work; discard text on excess.
+          if (++matches > 10000) return '[REDACTED]';
+          const start = match.index;
+          let end = start + match[0].length;
+          for (const literal of variants) {
+            if (literal.length <= end - start) break;
+            if (value.startsWith(literal, start)) {
+              end = start + literal.length;
+              break;
+            }
+          }
+          for (const layout of layouts) {
+            layout.lastIndex = start;
+            if (layout.test(value)) end = Math.max(end, layout.lastIndex);
+          }
+          const previous = ranges.at(-1);
+          if (previous && start <= previous[1])
+            previous[1] = Math.max(previous[1], end);
+          else ranges.push([start, end]);
+          pattern.lastIndex = start + 1;
+        }
+        // Replacement text is never scanned, even with short Secret values.
+        let cursor = 0;
+        const output = ranges.map(([start, end]) => {
+          const before = value.slice(cursor, start);
+          cursor = end;
+          return `${before}[REDACTED]`;
+        });
+        return output.join('') + value.slice(cursor);
+      }
     } catch {
       /* Fall back without exposing a native pattern diagnostic. */
     }

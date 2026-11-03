@@ -187,9 +187,11 @@ without empty or latest-value fallback. Existing captures are checked again at
 consumption. Simulation substitutes operations without resolving live values.
 
 Known delivered Secret occurrences, including URL-encoded, JSON-escaped, Base64,
-and standard Node-inspected diagnostic forms, are scrubbed in returned strings, object keys, scalar results, and
-errors before contract validation, result routing, failure routing, history, or
-forwarding. Secret-consuming Scripts redact complete bounded stderr before
+and standard Node-inspected diagnostic forms, are scrubbed in returned strings,
+object keys, scalar results, and errors before contract validation, result routing,
+failure routing, history, or forwarding. Matching covers overlapping representations
+before inserting masks. A matcher failure or more than 10,000 matches in one string
+replaces that entire string with the mask. Secret-consuming Scripts redact complete bounded stderr before
 retention truncation; excess diagnostic output fails safely. A result that no
 longer satisfies its contract fails using the safe result. This protects against
 accidental disclosure, not arbitrary transformations, partial values, or

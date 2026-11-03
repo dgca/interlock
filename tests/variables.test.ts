@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { inspect } from 'node:util';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import {
@@ -508,6 +509,82 @@ it('masks literal matches once, including numeric values and short overlapping s
     text: '[REDACTED] [REDACTED]',
   });
 });
+
+it.each([false, true])(
+  'masks complete overlapping representations in either selection order (%s)',
+  (reverse) => {
+    const small = 'overlap-small-head\nshorter-secret-tail';
+    const longer = inspect(small, { breakLength: 1 }) + '-unmasked-suffix';
+    const multiline =
+      'diagnostic-sentinel-' + ('a'.repeat(20) + '\n').repeat(8) + 'tail';
+    const diagnostic = inspect({ a: { b: { token: multiline } } });
+    const start = diagnostic.indexOf("'");
+    const end = diagnostic.lastIndexOf("'") + 1;
+    const prefix = diagnostic.slice(start, end - 4);
+    const secrets = [
+      small,
+      longer,
+      multiline,
+      prefix,
+      'first-shared',
+      'shared-last',
+    ];
+    const redact = secretRedaction(reverse ? secrets.reverse() : secrets);
+    expect(redact.text(`before ${longer} after`)).toBe(
+      'before [REDACTED] after',
+    );
+    expect(redact.text(diagnostic)).toBe(
+      diagnostic.slice(0, start) + '[REDACTED]' + diagnostic.slice(end),
+    );
+    expect(redact.text('before first-shared-last after')).toBe(
+      'before [REDACTED] after',
+    );
+  },
+);
+
+it('discards text when repeated secret matches exceed bounded redaction work', () => {
+  expect(secretRedaction(['x']).text('x'.repeat(10001) + 'tail')).toBe(
+    '[REDACTED]',
+  );
+});
+
+it.each([false, true])(
+  'protects native diagnostics for competing selected Secrets (%s)',
+  async (reverse) => {
+    const { engine } = setup();
+    const small = create(
+      engine,
+      'secret',
+      'overlap-small-head\nshorter-secret-tail',
+      'small',
+    );
+    const longer = create(
+      engine,
+      'secret',
+      inspect('overlap-small-head\nshorter-secret-tail', { breakLength: 1 }) +
+        '-unmasked-suffix-sentinel',
+      'longer',
+    );
+    const d = script(
+      longer.id,
+      'process.stderr.write(process.env.TEST_TOKEN); throw new Error("control failure");',
+    );
+    const node = d.nodes[1];
+    if (node.kind !== 'script') throw new Error('Expected Script fixture');
+    node.environment = [
+      { name: 'TEST_TOKEN', variableId: longer.id },
+      { name: 'OTHER_TOKEN', variableId: small.id },
+    ];
+    if (reverse) node.environment.reverse();
+    const run = await done(engine, engine.start(publish(engine, d), {}).run.id);
+    const serialized = JSON.stringify(engine.inspect(run.id));
+    expect(run.status).toBe('failed');
+    expect(serialized).toContain('control failure');
+    expect(serialized).toContain('[REDACTED]');
+    expect(serialized).not.toContain('unmasked-suffix');
+    expect(serialized).not.toContain('overlap-small-head');
+  },
+);
 
 function completeAgent(engine: Engine, id?: string) {
   const work = engine.available(id)[0];
