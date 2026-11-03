@@ -16,6 +16,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
+import { HarnessModelError } from '../packages/runtime/src/executors/contracts';
 import { createClient } from '@interlock/client';
 import { createApp } from '../packages/server/src/app';
 import { nodeSchema, blankDefinition } from '@interlock/core';
@@ -2641,6 +2642,8 @@ it.each(['stdio', 'http'])(
             ],
           }),
           run: async (input) => {
+            if (input.profile.model === 'refused-transport')
+              throw new HarnessModelError('model_not_found');
             input.onSession('transport-native');
             const answer = await input.request({
               kind: 'permission',
@@ -2816,6 +2819,68 @@ it.each(['stdio', 'http'])(
         expect(engine.run(managedRun.runId).status).toBe('completed'),
       );
       expect(engine.run(managedRun.runId).output).toBe(false);
+      {
+        const recoveryDefinition = blankDefinition();
+        recoveryDefinition.executor = 'codex';
+        recoveryDefinition.agentModel = 'refused-transport';
+        const recoveryWorkflow = await call('create_workflow', {
+          name: 'Model recovery',
+          definition: recoveryDefinition,
+        });
+        await call('publish_workflow', { id: recoveryWorkflow.id });
+        const recoveryRun = await call('start_run', {
+          workflowId: recoveryWorkflow.id,
+          input: 1,
+        });
+        let recoveryWork: any;
+        await vi.waitFor(() => {
+          recoveryWork = engine.store
+            .work()
+            .find((w) => w.runId === recoveryRun.runId);
+          expect(recoveryWork?.managedExecution?.state).toBe('needs_model');
+        });
+        const rejection = (
+          await call('manage_executors', {
+            request: { action: 'inspect', workId: recoveryWork.id },
+          })
+        ).items[0];
+        expect(
+          (await call('get_run_briefing', { id: recoveryRun.runId })).next,
+        ).toBe('inspect_executor');
+        await call('manage_executors', {
+          request: {
+            action: 'retry_model',
+            executionId: rejection.id,
+            model: 'transport-model',
+          },
+        });
+        await vi.waitFor(() =>
+          expect(
+            engine.store.work().find((w) => w.id === recoveryWork.id)
+              ?.managedExecution?.state,
+          ).toBe('needs_human'),
+        );
+        const replacement = (
+          await call('manage_executors', {
+            request: { action: 'inspect', workId: recoveryWork.id },
+          })
+        ).items[0];
+        expect(replacement).toMatchObject({
+          modelSource: 'recovery',
+          profile: { model: 'transport-model', effort: null },
+        });
+        await call('manage_executors', {
+          request: {
+            action: 'respond',
+            executionId: replacement.id,
+            requestId: replacement.requests[0].id,
+            answer: { allow: false },
+          },
+        });
+        await vi.waitFor(() =>
+          expect(engine.run(recoveryRun.runId).status).toBe('completed'),
+        );
+      }
       const permissionsDraft = await call('get_workflow', {
         id: managedWorkflow.id,
       });

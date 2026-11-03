@@ -306,8 +306,12 @@ export class Continuation {
       resourceBlocked.some((w) =>
         w.owners.some((o) => o.state === 'uncertain'),
       );
-    const executorAttention = work.find((w) =>
-      ['needs_human', 'interrupted'].includes(w.managedExecution?.state ?? ''),
+    const executorAttention = work.find(
+      (w) =>
+        ['needs_human', 'interrupted'].includes(
+          w.managedExecution?.state ?? '',
+        ) ||
+        (w.managedExecution?.state === 'needs_model' && w.status === 'held'),
     );
     return {
       ...(resourceBlocked.length

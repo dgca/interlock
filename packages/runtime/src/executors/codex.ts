@@ -2,6 +2,9 @@ import { VERSION } from '../../../core/src/version.js';
 import { jsonSchema, type ModelUsage } from '@interlock/core';
 import {
   HarnessResultError,
+  HarnessModelError,
+  HarnessRequestError,
+  isModelRefusal,
   assignmentPrompt,
   resultEnvelope,
   type HarnessAdapter,
@@ -69,6 +72,7 @@ export const codexAdapter: HarnessAdapter = {
     }
   },
   async run(input: HarnessRun) {
+    let taskStarted = false;
     const rpc = new JsonLinesProcess(
       input.command,
       ['app-server', '--listen', 'stdio://'],
@@ -111,6 +115,8 @@ export const codexAdapter: HarnessAdapter = {
           });
         return;
       }
+      if (['item/started', 'item/completed'].includes(message.method))
+        taskStarted = true;
       if (
         message.method === 'item/started' &&
         params.item?.type === 'fileChange'
@@ -328,6 +334,17 @@ export const codexAdapter: HarnessAdapter = {
           'Codex returned an invalid result envelope',
         );
       return { output: jsonSchema.parse(envelope.result), usage };
+    } catch (error) {
+      if (
+        !taskStarted &&
+        (error instanceof HarnessRequestError ||
+          error instanceof HarnessResultError) &&
+        isModelRefusal(error)
+      )
+        throw new HarnessModelError(
+          error instanceof Error ? error.message : String(error),
+        );
+      throw error;
     } finally {
       input.signal.removeEventListener('abort', abort);
       await rpc.close();

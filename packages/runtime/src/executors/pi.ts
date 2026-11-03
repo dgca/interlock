@@ -11,6 +11,9 @@ import {
   assignmentPrompt,
   resultEnvelope,
   HarnessResultError,
+  HarnessModelError,
+  HarnessRequestError,
+  isModelRefusal,
   type HarnessAdapter,
   type HarnessRun,
 } from './contracts.js';
@@ -104,6 +107,7 @@ export const piAdapter: HarnessAdapter = {
   async run(input: HarnessRun) {
     const directory = await mkdtemp(join(tmpdir(), 'interlock-pi-'));
     let rpc: JsonLinesProcess | undefined;
+    let taskStarted = false;
     const abort = () => {
       void rpc?.close().catch(() => {});
     };
@@ -154,7 +158,17 @@ export const piAdapter: HarnessAdapter = {
         ) {
           finalMessage = event.message;
           addUsage(usage, event.message);
+          if (
+            event.message.stopReason !== 'error' &&
+            event.message.stopReason !== 'aborted'
+          )
+            taskStarted = true;
         }
+        if (
+          event.type === 'tool_execution_start' ||
+          event.type === 'tool_execution_end'
+        )
+          taskStarted = true;
         if (event.type === 'tool_execution_start')
           input.onProgress(`Using ${String(event.toolName).slice(0, 160)}`);
         if (event.type === 'extension_ui_request') {
@@ -175,7 +189,7 @@ export const piAdapter: HarnessAdapter = {
             modelId(m) === input.profile.model || m.id === input.profile.model,
         );
         if (matches?.length !== 1)
-          throw new Error(
+          throw new HarnessModelError(
             'Pi model is unavailable or ambiguous; use an exact provider/model ID',
           );
         await rpc.request('set_model', {
@@ -245,6 +259,17 @@ export const piAdapter: HarnessAdapter = {
         usage: [...usage.values()],
         usageScope: 'attempt',
       };
+    } catch (error) {
+      if (
+        !taskStarted &&
+        (error instanceof HarnessRequestError ||
+          error instanceof HarnessResultError) &&
+        isModelRefusal(error)
+      )
+        throw new HarnessModelError(
+          error instanceof Error ? error.message : String(error),
+        );
+      throw error;
     } finally {
       input.signal.removeEventListener('abort', abort);
       try {

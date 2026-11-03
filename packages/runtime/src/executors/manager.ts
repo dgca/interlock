@@ -25,6 +25,7 @@ import {
 import type { Engine } from '../index.js';
 import {
   HarnessResultError,
+  HarnessModelError,
   type HarnessAdapter,
   type HarnessRequest,
 } from './contracts.js';
@@ -55,6 +56,7 @@ interface Session {
   cwd: string;
   nativeId?: string;
   requestedModel?: string;
+  recoveryRequestedEffort?: ExecutorProfile['effort'];
   usage?: ModelUsage[];
   usageUncertain?: boolean;
 }
@@ -121,6 +123,8 @@ export class ExecutorManager {
       }
       case 'stop':
         return this.stopExecution(q.executionId);
+      case 'retry_model':
+        return this.retryModel(q.executionId, q.model);
       case 'reconcile':
         return this.confirmStopped(q.executionId, q.confirmStopped);
     }
@@ -386,7 +390,11 @@ export class ExecutorManager {
   }
   describe(work: WorkRequest): ManagedWorkSummary | undefined {
     const record = this.latest(work.id);
-    if (record && record.attempt === work.attempt)
+    if (
+      record &&
+      record.attempt === work.attempt &&
+      !(record.modelRecovery?.replacementModel && work.status === 'available')
+    )
       return {
         profileId: record.profile.id,
         executionId: record.id,
@@ -486,7 +494,10 @@ export class ExecutorManager {
       return 'This continuity group already uses another model. Use the same model or a separate continuity group.';
     if (
       work.executorEffort !== undefined &&
-      (work.executorEffort ?? null) !== (session.profile.effort ?? null)
+      (work.executorEffort ?? null) !== (session.profile.effort ?? null) &&
+      (!Object.hasOwn(session, 'recoveryRequestedEffort') ||
+        (work.executorEffort ?? null) !==
+          (session.recoveryRequestedEffort ?? null))
     )
       return 'This continuity group already uses another thinking effort. Use the same effort or a separate continuity group.';
   }
@@ -507,6 +518,10 @@ export class ExecutorManager {
   }
   assertClaim(work: WorkRequest) {
     const record = this.latest(work.id);
+    if (record?.state === 'needs_model')
+      throw new InterlockError(
+        'Choose a replacement through retry_model before claiming this assignment',
+      );
     if (record && (active(record) || record.state === 'interrupted'))
       throw new InterlockError(
         'Managed execution is uncertain. Confirm that its old session and subprocesses stopped before claiming again.',
@@ -585,7 +600,9 @@ export class ExecutorManager {
         if (
           !offered.executor ||
           this.jobs.has(offered.id) ||
-          this.latest(offered.id)?.state === 'interrupted'
+          ['interrupted', 'needs_model'].includes(
+            this.latest(offered.id)?.state ?? '',
+          )
         )
           continue;
         const configured = this.profiles().find(
@@ -616,11 +633,14 @@ export class ExecutorManager {
         if (priorSession && this.continuityProblem(offered, priorSession))
           continue;
         const previous = this.latest(offered.id);
-        const profile = parseProfileSnapshot(
+        let profile = parseProfileSnapshot(
           priorSession?.profile ??
             previous?.profile ??
             this.assignmentProfile(offered, configured),
         );
+        const replacement = previous?.modelRecovery?.replacementModel;
+        if (!priorSession && replacement)
+          profile = { ...profile, model: replacement, effort: null };
         const permissionSource =
           priorSession?.permissionSource ??
           previous?.permissionSource ??
@@ -629,7 +649,7 @@ export class ExecutorManager {
             : ('harness' as const));
         const modelSource =
           priorSession?.modelSource ??
-          previous?.modelSource ??
+          (replacement ? ('recovery' as const) : previous?.modelSource) ??
           (offered.executorModel
             ? (offered.executorModelSource ?? 'workflow')
             : profile.model
@@ -638,7 +658,7 @@ export class ExecutorManager {
         if (this.incompatible(offered, profile)) continue;
         const effortSource =
           priorSession?.effortSource ??
-          previous?.effortSource ??
+          (replacement ? ('recovery' as const) : previous?.effortSource) ??
           (offered.executorEffort !== undefined
             ? (offered.executorEffortSource ?? 'workflow')
             : profile.effort
@@ -830,6 +850,18 @@ export class ExecutorManager {
       this.write(r);
     } catch (error) {
       if (this.stopped || job.abort.signal.aborted) return;
+      if (error instanceof HarnessModelError) {
+        try {
+          this.holdForModel(job, session, error);
+        } catch (holdError) {
+          this.interruptJob(
+            job,
+            'Could not hold the rejected model assignment: ' +
+              errorText(holdError),
+          );
+        }
+        return;
+      }
       if (!receivedResult && !(error instanceof HarnessResultError)) {
         this.interruptJob(
           job,
@@ -858,6 +890,118 @@ export class ExecutorManager {
       this.jobs.delete(job.work.id);
       if (!this.stopped) this.schedule();
     }
+  }
+  private holdForModel(job: Job, session: Session, error: Error) {
+    this.engine.store.transaction(() => {
+      const work = this.engine.store.get<WorkRequest>('work', job.work.id);
+      if (
+        work?.status !== 'claimed' ||
+        work.token !== job.work.token ||
+        work.attempt !== job.record.attempt
+      )
+        throw new InterlockError('The assignment claim changed');
+      const held = this.engine.manageWorkHold({
+        action: 'hold',
+        workId: work.id,
+        expectedAttempt: work.attempt,
+        expectedRevision: work.holdRevision ?? 0,
+        token: work.token,
+        actor: 'managed-model-recovery',
+        category: 'other',
+        reason: errorText(error).slice(0, 1000),
+        checkpointRef: `model:${job.record.id}`,
+      });
+      // The adapter returned only after confirming its process group stopped.
+      this.engine.manageWorkResources({
+        action: 'release',
+        workId: work.id,
+        expectedAttempt: work.attempt,
+        actor: 'managed-model-recovery',
+        confirmStopped: true,
+      });
+      session.usageUncertain = true;
+      this.engine.store.put(sessionsCollection, session);
+      job.record.state = 'needs_model';
+      for (const request of job.record.requests)
+        if (request.state === 'pending') request.state = 'cancelled';
+      job.record.error = errorText(error);
+      job.record.endedAt = now();
+      if (!('holdRevision' in held))
+        throw new InterlockError('Model hold was not recorded');
+      job.record.modelRecovery = {
+        sessionKey: job.sessionKey,
+        holdRevision: held.holdRevision,
+      };
+      this.write(job.record);
+    });
+  }
+  assertResume(workId: string) {
+    if (this.latest(workId)?.state === 'needs_model')
+      throw new InterlockError(
+        'Use retry_model to choose a replacement and resume this assignment',
+      );
+  }
+  retryModel(executionId: string, model: string) {
+    // Validate through the same public operation contract as MCP/CLI callers.
+    const q = executorOperationSchema.parse({
+      action: 'retry_model',
+      executionId,
+      model,
+    });
+    if (q.action !== 'retry_model')
+      throw new InterlockError('Invalid model recovery');
+    const result = this.engine.store.transaction(() => {
+      const record = this.engine.store.get<ManagedExecution>(
+        attemptsCollection,
+        q.executionId,
+      );
+      if (record?.modelRecovery?.replacementModel === q.model)
+        return { applied: false };
+      const work =
+        record && this.engine.store.get<WorkRequest>('work', record.workId);
+      const recovery = record?.modelRecovery;
+      if (
+        !record ||
+        record.state !== 'needs_model' ||
+        !recovery ||
+        work?.status !== 'held' ||
+        work.attempt !== record.attempt ||
+        work.holdRevision !== recovery.holdRevision ||
+        work.hold?.checkpointRef !== `model:${record.id}`
+      )
+        throw new InterlockError(
+          'This model request is no longer active. Inspect the assignment.',
+        );
+      if (this.jobs.has(work.id))
+        throw new InterlockError('The rejected execution is still closing');
+      const session = this.engine.store.get<Session>(
+        sessionsCollection,
+        recovery.sessionKey,
+      );
+      if (
+        !session ||
+        [...this.jobs.values()].some((j) => j.sessionKey === session.id)
+      )
+        throw new InterlockError('The native session is unavailable or busy');
+      session.recoveryRequestedEffort ??= session.profile.effort ?? null;
+      session.profile = { ...session.profile, model: q.model, effort: null };
+      session.modelSource = 'recovery';
+      session.effortSource = 'recovery';
+      this.engine.store.put(sessionsCollection, session);
+      record.modelRecovery = { ...recovery, replacementModel: q.model };
+      record.state = 'failed';
+      this.write(record);
+      this.engine.manageWorkHold({
+        action: 'resume',
+        workId: work.id,
+        expectedAttempt: work.attempt,
+        expectedRevision: recovery.holdRevision,
+        actor: 'managed-model-recovery',
+      });
+      return { applied: true };
+    });
+    this.schedule();
+    return result;
   }
   private request(job: Job, input: HarnessRequest): Promise<ExecutorAnswer> {
     if (this.stopped || job.abort.signal.aborted)

@@ -366,7 +366,7 @@ export const definitionSchema = z.object({
   agentModel: executorModelSchema
     .optional()
     .describe(
-      'Default model ID for managed Agents in this workflow. Node model overrides it; omission inherits each harness default. Connected agents keep their own model; explicit unavailable models fail without substitution.',
+      'Default model ID for managed Agents in this workflow. Node model overrides it; omission inherits each harness default. Connected agents keep their own model; explicit model refusals require a replacement selection; no automatic substitution.',
     ),
   agentEffort: executorEffortSchema
     .nullable()

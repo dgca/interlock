@@ -262,9 +262,11 @@ export function RunInspector({
           <div className={styles.attentionActions}>
             {attention.length === 1 ? (
               <Button onClick={() => reviewWork(attention[0])}>
-                {attention[0].managedExecution?.state === 'interrupted'
-                  ? 'Review recovery'
-                  : 'Review request'}
+                {attention[0].managedExecution?.state === 'needs_model'
+                  ? 'Choose a model'
+                  : attention[0].managedExecution?.state === 'interrupted'
+                    ? 'Review recovery'
+                    : 'Review request'}
               </Button>
             ) : (
               <Menu
@@ -284,9 +286,11 @@ export function RunInspector({
                         {assignmentScope(w)
                           ? ` · ${assignmentScope(w)}`
                           : ''} ·{' '}
-                        {w.managedExecution?.state === 'interrupted'
-                          ? 'Recovery'
-                          : 'Response needed'}
+                        {w.managedExecution?.state === 'needs_model'
+                          ? 'Model needed'
+                          : w.managedExecution?.state === 'interrupted'
+                            ? 'Recovery'
+                            : 'Response needed'}
                       </Menu.Item>
                     ))}
                   </ScrollArea.Autosize>

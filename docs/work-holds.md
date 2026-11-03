@@ -33,6 +33,8 @@ Mutations return `applied`, `workId`, `runId`, `status`, `attempt`, and `holdRev
 
 ## Resume after resolving the blocker
 
+Managed model-refusal holds use **Choose a model** in the run inspector or `manage_executors` action `retry_model` with an explicit human-selected model. Generic resume cannot bypass that selection. See [Replace a refused model](managed-executors.md#replace-a-refused-model).
+
 Use the current hold revision and attempt:
 
 ```json
@@ -54,6 +56,8 @@ Available work retains its remaining unclaimed timeout while held. Claimed work 
 ## Inspect blockers and history
 
 `list_work` omits held work. Existing briefings show compact held references and the `external_hold` blocker. `next:inspect_hold` calls for inspection and explicit resolution; compact mutation responses include `heldWork` when needed. Full run inspection includes blocker details and the twenty most recent intervals per affected assignment.
+
+Managed `needs_model` holds instead use `next:inspect_executor` to select a replacement. Their native process cleanup is confirmed before the hold is exposed, and the coordinator releases their resource reservations.
 
 Read older intervals through the same tool:
 

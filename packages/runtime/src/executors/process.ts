@@ -4,6 +4,7 @@ import { constants } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
+import { HarnessRequestError } from './contracts.js';
 
 /** Own the process group, including children that outlive its original leader. */
 export function spawnManagedProcess(
@@ -201,7 +202,7 @@ export class JsonLinesProcess {
             clearTimeout(p.timer);
             msg.error || msg.success === false
               ? p.reject(
-                  new Error(
+                  new HarnessRequestError(
                     String(
                       msg.error?.message ??
                         msg.error ??

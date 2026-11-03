@@ -14,14 +14,16 @@ export function runAttention(store: Store): RunAttention[] {
     const reasons: RunAttentionReason[] =
       assignment.state === 'interrupted'
         ? ['recovery']
-        : [
-            ...(assignment.pendingKinds.includes('permission')
-              ? ['approval' as const]
-              : []),
-            ...(assignment.pendingKinds.includes('question')
-              ? ['question' as const]
-              : []),
-          ];
+        : assignment.state === 'needs_model'
+          ? ['question']
+          : [
+              ...(assignment.pendingKinds.includes('permission')
+                ? ['approval' as const]
+                : []),
+              ...(assignment.pendingKinds.includes('question')
+                ? ['question' as const]
+                : []),
+            ];
     if (!reasons.length) continue;
     let run = runs.get(assignment.runId);
     if (!run) continue;

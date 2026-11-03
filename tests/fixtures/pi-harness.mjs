@@ -63,6 +63,25 @@ async function run(message) {
     if (!message.message.includes('Result envelope schema:'))
       throw Error('Missing result schema');
     response(message, { disposition: 'started' });
+    if (message.message.includes('MALFORMED_MODEL_EVENT')) {
+      process.stdout.write('model_not_found\n');
+      return;
+    }
+    if (message.message.includes('MODEL_REFUSAL')) {
+      if (message.message.includes('LATE_MODEL_REFUSAL'))
+        send({ type: 'tool_execution_start', toolName: 'write' });
+      send({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          stopReason: 'error',
+          errorMessage: 'OpenAI API error (400): {"code":"model_not_found"}',
+          content: [],
+        },
+      });
+      send({ type: 'agent_settled', aborted: false });
+      return;
+    }
     const blocked = await handlers.tool_call(
       { toolName: 'bash', input: { command: 'test command' } },
       {

@@ -3,7 +3,7 @@ import type { Run } from '@interlock/core';
 export type AttentionWork = {
   runId: string;
   executionId: string;
-  state: 'needs_human' | 'interrupted';
+  state: 'needs_human' | 'interrupted' | 'needs_model';
   pendingKinds: ('permission' | 'question')[];
 };
 /** Read the live assignment projection, not historical attempts or task payloads. */
@@ -15,6 +15,8 @@ export function attentionWork(db: DatabaseSync): AttentionWork[] {
       SELECT value FROM documents WHERE collection = 'work' AND json_extract(value, '$.managedExecution.state') = 'needs_human'
       UNION ALL
       SELECT value FROM documents WHERE collection = 'work' AND json_extract(value, '$.managedExecution.state') = 'interrupted'
+      UNION ALL
+      SELECT value FROM documents WHERE collection = 'work' AND json_extract(value, '$.managedExecution.state') = 'needs_model' AND json_extract(value, '$.status') = 'held'
     )
     SELECT json_extract(w.value, '$.runId') AS runId,
       json_extract(w.value, '$.executionId') AS executionId,

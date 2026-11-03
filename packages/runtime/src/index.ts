@@ -2216,6 +2216,7 @@ export class Engine {
     const q = workHoldRequestSchema.parse(input);
     if (q.action === 'history')
       return this.holds.history(q.workId, q.offset, q.limit);
+    if (q.action === 'resume') this.executors.assertResume(q.workId);
     this.pump();
     try {
       return this.store.transaction(() => {

@@ -27,6 +27,7 @@ export const executorSettingSourceSchema = z.enum([
   'workflow',
   'harness',
   'cli',
+  'recovery',
 ]);
 export const executorModelsQuerySchema = z
   .object({
@@ -120,6 +121,7 @@ export type ExecutorState =
   | 'starting'
   | 'running'
   | 'needs_human'
+  | 'needs_model'
   | 'completed'
   | 'failed'
   | 'interrupted';
@@ -178,6 +180,15 @@ export const executorOperationSchema = z.discriminatedUnion('action', [
     .strict(),
   z
     .object({
+      action: z.literal('retry_model'),
+      executionId: z.string().min(1),
+      model: executorModelSchema.describe(
+        'Explicit human-selected replacement for a needs_model execution. Resumes that assignment and its continuity session with native thinking defaults. Does not edit workflows or harness defaults.',
+      ),
+    })
+    .strict(),
+  z
+    .object({
       action: z.literal('reconcile'),
       executionId: z.string().min(1),
       confirmStopped: z.literal(true),
@@ -192,6 +203,7 @@ export const managedWorkSummarySchema = z.object({
     'starting',
     'running',
     'needs_human',
+    'needs_model',
     'completed',
     'failed',
     'interrupted',
@@ -218,6 +230,11 @@ export interface ManagedExecution {
   startedAt: string;
   endedAt?: string;
   error?: string;
+  modelRecovery?: {
+    sessionKey: string;
+    holdRevision: number;
+    replacementModel?: string;
+  };
   requests: ExecutorRequest[];
   logs: { at: string; message: string }[];
   logCount: number;

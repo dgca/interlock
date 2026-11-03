@@ -4,6 +4,10 @@ import { expect, it, vi } from 'vitest';
 import { executorProfileSchema, type WorkRequest } from '@interlock/core';
 import { piAdapter, piPermissions } from '../packages/runtime/src/executors/pi';
 import type { HarnessRun } from '../packages/runtime/src/executors/contracts';
+import {
+  HarnessModelError,
+  HarnessResultError,
+} from '../packages/runtime/src/executors/contracts';
 
 const command = fileURLToPath(
   new URL('./fixtures/pi-harness.mjs', import.meta.url),
@@ -48,6 +52,23 @@ function input(extra: Partial<HarnessRun> = {}): HarnessRun {
   };
 }
 
+it('does not classify a malformed transport event as a model refusal', async () => {
+  await expect(
+    piAdapter.run(
+      input({ work: { ...work, prompt: 'MALFORMED_MODEL_EVENT' } }),
+    ),
+  ).rejects.not.toBeInstanceOf(HarnessModelError);
+});
+it.each(['MODEL_REFUSAL', 'LATE_MODEL_REFUSAL'])(
+  'classifies Pi %s according to whether task actions began',
+  async (prompt) => {
+    await expect(
+      piAdapter.run(input({ work: { ...work, prompt } })),
+    ).rejects.toBeInstanceOf(
+      prompt === 'MODEL_REFUSAL' ? HarnessModelError : HarnessResultError,
+    );
+  },
+);
 it('detects Pi and discovers exact model IDs and native efforts without a task', async () => {
   expect(await piAdapter.detect(command)).toMatchObject({ status: 'detected' });
   expect(await piAdapter.models!(input())).toEqual({
