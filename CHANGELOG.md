@@ -1,5 +1,22 @@
 # @type_of/interlock
 
+## 0.2.11
+
+### Patch Changes
+
+- 5de0cd8: Add automatic Agent execution through an installed Pi harness, with model and thinking-effort discovery, session continuity, permission and question dialogs, usage reporting, and stop/recovery support.
+
+  Known model refusals before task actions now wait for an explicit replacement model instead of repeatedly failing the run or requiring uncertain-process recovery. Retry the assignment in the same run without editing published workflows or harness defaults.
+
+- bc551c0: Make Agent approvals and recovery easier to review, with clearer run status, visible action feedback, guided retry confirmation, a responsive run inspector, and a Runs badge and Needs attention filter for outstanding human decisions.
+- eaa9407: Fix starter discovery and imports failing when the library contains older workflow definitions with unsupported node kinds.
+- 10cf015: Add manual run-history cleanup through Runs history, the CLI, and MCP. Preview selected whole trees and chains by root workflow or age, review protection reasons and data sizes, and explicitly delete history while retaining workflows, published versions, and start-request tombstones. Active descendants, unresolved resources, and retained comparison evidence remain protected. Report removed JSON data separately from reusable database space.
+
+  Keep idle scheduling from parsing completed comparison captures or uncertain resource history. Existing databases receive a backed-up scheduling-index migration on startup; the upgrade preserves stored history.
+
+- 10cf015: Reduce idle CPU use as run history grows by indexing scheduler and continuation queries, scoping budget and comparison maintenance, and avoiding repeated saves and notifications for unchanged waiting steps. Existing databases automatically receive a backed-up index migration on startup; stored history is preserved.
+- 6a0ac9f: Add opt-in automatic Agent execution through local Claude Code and Codex profiles, with workflow defaults, node overrides, native model and thinking-effort pickers with node/workflow/harness inheritance, harness permission defaults with workflow overrides, shared Limited/Unlimited assignment settings, native permission requests and explicit interruption recovery.
+
 ## 0.2.10
 
 ### Patch Changes
