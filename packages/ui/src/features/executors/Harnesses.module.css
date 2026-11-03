@@ -1,0 +1,258 @@
+.page {
+  max-width: 1180px;
+}
+.list {
+  border-top: 1px solid var(--border);
+}
+.sharedSettings {
+  padding: 4px 0 28px;
+}
+.sharedForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: start;
+}
+.sharedCopy {
+  font-size: 12px;
+  max-width: 72ch;
+}
+.sharedLabel {
+  font-size: 14px;
+  font-weight: 600;
+}
+.sharedCopy p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+.sharedControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 2px;
+  flex-wrap: wrap;
+}
+.limitMode {
+  width: 124px;
+}
+.limitValueActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.limitValueActions > button {
+  min-width: 88px;
+}
+.limitInput {
+  width: 88px;
+  flex-shrink: 0;
+}
+.sharedError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+}
+.sharedNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.row {
+  border-bottom: 1px solid var(--border);
+  padding: 24px 0;
+}
+.rowHeading {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+.rowHeading > :global(.mantine-Switch-root),
+.rowHeading > button,
+.rowHeading > :global(.mantine-Badge-root) {
+  flex-shrink: 0;
+}
+.identity {
+  margin-right: auto;
+  min-width: 0;
+}
+.identity h2,
+.newProfile h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+.identity p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icon {
+  color: var(--accent-text);
+  flex-shrink: 0;
+}
+.guidance {
+  margin: 16px 0 0 39px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.configuration {
+  margin: 26px 0 0 39px;
+  padding: 2px 0 0;
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.advanced {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.advanced summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--mantine-color-dark-1);
+  width: fit-content;
+  padding: 4px 0;
+}
+.advanced summary:focus-visible {
+  outline: 2px solid var(--mantine-color-blue-4);
+  outline-offset: 4px;
+  border-radius: var(--mantine-radius-xs);
+}
+.advanced .fields {
+  margin-top: 20px;
+}
+.note,
+.bottom p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  max-width: 70ch;
+}
+.note {
+  margin: 14px 0 0;
+}
+.fieldGroup {
+  border: 0;
+  padding: 0;
+  margin: 28px 0 0;
+  min-width: 0;
+}
+.fieldGroup legend {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 16px;
+}
+
+.errorRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+.errorRow .error {
+  margin: 0;
+}
+.errorRow > button {
+  flex-shrink: 0;
+}
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.bottom {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-top: 18px;
+}
+.bottom p {
+  margin: 0;
+}
+.newProfile {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.newProfile h2 {
+  margin-bottom: 20px;
+}
+.error {
+  color: var(--mantine-color-red-4);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 850px) {
+  .sharedForm {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .page > header {
+    flex-wrap: wrap;
+  }
+  .rowHeading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .identity {
+    flex: 1 0 calc(100% - 40px);
+  }
+  .rowHeading > button {
+    margin-left: auto;
+  }
+  .guidance,
+  .configuration {
+    margin-left: 0;
+  }
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bottom {
+    flex-direction: column;
+    gap: 14px;
+  }
+}
+@media (max-width: 480px) {
+  .sharedError,
+  .errorRow {
+    flex-wrap: wrap;
+  }
+  .page {
+    padding: 0 12px 24px;
+  }
+  .formActions {
+    flex-wrap: wrap;
+  }
+  .formActions > button {
+    flex: 1 1 auto;
+  }
+  .sharedControls {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .limitMode {
+    width: 100%;
+  }
+  .limitValueActions {
+    gap: 8px;
+  }
+}

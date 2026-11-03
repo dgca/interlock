@@ -47,6 +47,9 @@ it.each(['http', 'stdio'])(
       const tools = (await client.listTools()).tools;
       const tool = tools.find((entry) => entry.name === 'manage_run_history')!;
       const discovered = JSON.stringify(tool);
+      console.log(
+        `${mode}: manage_run_history definition ${Buffer.byteLength(discovered)} B, ${tools.length} tools total`,
+      );
       for (const field of [
         'preview',
         'delete',

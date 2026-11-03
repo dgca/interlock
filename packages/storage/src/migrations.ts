@@ -83,6 +83,7 @@ export const migrations: readonly Migration[] = [
         CREATE INDEX comparison_trial_pending ON comparison_schedule(trial_pending, comparison_id);
         CREATE TABLE active_comparison_runs (run_id TEXT PRIMARY KEY, comparison_id TEXT NOT NULL);
         CREATE INDEX resource_state ON documents(json_extract(value, '$.state')) WHERE collection = 'workResources';
+        CREATE INDEX documents_work ON documents(collection, json_extract(value, '$.workId'));
       `);
       const projection = (value: string) => `
         (json_extract(${value}, '$.status') = 'running' OR

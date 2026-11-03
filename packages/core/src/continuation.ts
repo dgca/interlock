@@ -1,4 +1,8 @@
 import { resourceOwnerSchema } from './workResources.js';
+import {
+  executorPermissionModeSchema,
+  managedWorkSummarySchema,
+} from './executors.js';
 import { externalTaskSchema } from './runStarts.js';
 import {
   continuitySchema,
@@ -92,6 +96,13 @@ export const mutationDetailSchema = z
     'Use summary for compact continuation without definitions or execution payloads. full includes the workflow definition, execution history, and input/output payloads.',
   );
 export const continuationWorkSchema = z.object({
+  executor: z.string().optional(),
+  executorModelSource: z.enum(['node', 'workflow']).optional(),
+  executorEffort: z.string().nullable().optional(),
+  executorEffortSource: z.enum(['node', 'workflow']).optional(),
+  executorPermissions: executorPermissionModeSchema.optional(),
+  executorModel: z.string().optional(),
+  managedExecution: managedWorkSummarySchema.optional(),
   resources: z.array(z.string()).max(8).optional(),
   trialEnvironmentId: z.string().optional(),
   id: z.string(),
@@ -174,12 +185,16 @@ export const mutationSummarySchema = z.object({
     'adjust_budget',
     'inspect_hold',
     'inspect_resources',
+    'inspect_executor',
     'wait_for_worker',
     'wait_for_change',
     'inspect_failure',
     'inspect_result',
   ]),
   heldWork: heldWorkSchema.optional(),
+  executorAttention: z
+    .object({ workId: z.string(), profileId: z.string() })
+    .optional(),
   resourceBlocked: z
     .object({
       items: z
@@ -245,6 +260,12 @@ export const submissionSummarySchema = mutationSummarySchema.extend({
 export const nextCallSchema = z
   .discriminatedUnion('tool', [
     z.object({
+      tool: z.literal('manage_executors'),
+      arguments: z.object({
+        request: z.object({ action: z.literal('inspect'), workId: z.string() }),
+      }),
+    }),
+    z.object({
       tool: z.literal('get_run_result'),
       arguments: resultQuerySchema.pick({ id: true }),
     }),
@@ -268,6 +289,17 @@ export function withNextCall<T extends z.infer<typeof mutationSummarySchema>>(
   const id = summary.runId;
   let nextCall: z.infer<typeof nextCallSchema> = null;
   switch (summary.next) {
+    case 'inspect_executor':
+      nextCall = {
+        tool: 'manage_executors',
+        arguments: {
+          request: {
+            action: 'inspect',
+            workId: summary.executorAttention!.workId,
+          },
+        },
+      };
+      break;
     case 'continue_as_new':
       nextCall = {
         tool: 'get_run_briefing',

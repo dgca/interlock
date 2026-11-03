@@ -2621,6 +2621,209 @@ it.each(['stdio', 'http'])(
       expect(
         tools.find((t) => t.name === 'claim_work')?.inputSchema.properties,
       ).toHaveProperty('session');
+      // Managed profiles share the same API and discovery over both transports.
+      expect(tools.some((t) => t.name === 'manage_executors')).toBe(true);
+      engine.executors.start([
+        {
+          id: 'codex',
+          detect: async () => ({
+            status: 'detected',
+            command: '/fake/codex',
+            version: 'transport fixture',
+          }),
+          models: async () => ({
+            models: [
+              {
+                id: 'transport-model',
+                name: 'Transport Model',
+                effortLevels: ['low', 'high'],
+              },
+            ],
+          }),
+          run: async (input) => {
+            input.onSession('transport-native');
+            const answer = await input.request({
+              kind: 'permission',
+              title: 'Transport test permission',
+              detail: 'No command will run',
+            });
+            return { output: answer.allow ?? false };
+          },
+        },
+      ]);
+      expect(
+        await call('manage_executors', { request: { action: 'settings' } }),
+      ).toEqual({ revision: 0, concurrency: 3 });
+      expect(
+        await call('manage_executors', {
+          request: {
+            action: 'save_settings',
+            expectedRevision: 0,
+            concurrency: 5,
+          },
+        }),
+      ).toEqual({ revision: 1, concurrency: 5 });
+      expect(
+        await call('manage_executors', {
+          request: {
+            action: 'save_settings',
+            expectedRevision: 1,
+            concurrency: null,
+          },
+        }),
+      ).toEqual({ revision: 2, concurrency: null });
+      expect(
+        await call('manage_executors', { request: { action: 'settings' } }),
+      ).toEqual({ revision: 2, concurrency: null });
+      expect(
+        await call('manage_executors', {
+          request: {
+            action: 'save_settings',
+            expectedRevision: 2,
+            concurrency: 25,
+          },
+        }),
+      ).toEqual({ revision: 3, concurrency: 25 });
+      const localProfiles = await call('manage_executors', {
+        request: { action: 'list' },
+      });
+      expect(localProfiles.find((p: any) => p.id === 'codex')).toMatchObject({
+        enabled: false,
+        revision: 0,
+        detection: { status: 'detected' },
+      });
+      expect(
+        await call('manage_executors', {
+          request: { action: 'models', profileId: 'codex' },
+        }),
+      ).toMatchObject({ status: 'ready', models: [{ id: 'transport-model' }] });
+      await call('manage_executors', {
+        request: {
+          action: 'save',
+          profile: {
+            id: 'codex',
+            harness: 'codex',
+            name: 'Transport Codex',
+            enabled: true,
+            expectedRevision: 0,
+          },
+        },
+      });
+      const managedDefinition = blankDefinition();
+      managedDefinition.executor = 'codex';
+      const managedWorkflow = await call('create_workflow', {
+        name: 'Managed transport',
+        definition: managedDefinition,
+      });
+      await call('edit_workflow', {
+        id: managedWorkflow.id,
+        draftRevision: managedWorkflow.draftRevision,
+        edits: [
+          {
+            op: 'update_settings',
+            set: {
+              agentPermissions: 'read-only',
+              agentModel: 'transport-model',
+              agentEffort: 'low',
+            },
+          },
+        ],
+      });
+      const managedNode = managedDefinition.nodes.find(
+        (n) => n.kind === 'agent',
+      )!;
+      const beforeNodeEdit = await call('get_workflow', {
+        id: managedWorkflow.id,
+      });
+      await call('edit_workflow', {
+        id: managedWorkflow.id,
+        draftRevision: beforeNodeEdit.draftRevision,
+        edits: [
+          {
+            op: 'update_node',
+            id: managedNode.id,
+            set: { model: 'transport-model', effort: 'high' },
+          },
+        ],
+      });
+      await call('publish_workflow', { id: managedWorkflow.id });
+      const managedRun = await call('start_run', {
+        workflowId: managedWorkflow.id,
+        input: 5,
+      });
+      let managedWork: any;
+      await vi.waitFor(() => {
+        managedWork = engine.store
+          .work()
+          .find((work) => work.runId === managedRun.runId);
+        expect(managedWork?.managedExecution?.state).toBe('needs_human');
+      });
+      const managedInspection = await call('manage_executors', {
+        request: { action: 'inspect', workId: managedWork.id },
+      });
+      const managedAttempt = managedInspection.items[0];
+      expect(
+        (await call('get_run_briefing', { id: managedRun.runId })).claimed
+          .items[0],
+      ).toMatchObject({
+        executorModelSource: 'node',
+        executorEffort: 'high',
+        executorEffortSource: 'node',
+      });
+      expect(managedAttempt).toMatchObject({
+        profile: {
+          permissions: 'read-only',
+          model: 'transport-model',
+          effort: 'high',
+        },
+        modelSource: 'node',
+        effortSource: 'node',
+        permissionSource: 'workflow',
+      });
+      expect(JSON.stringify(managedInspection)).not.toContain(
+        managedWork.token,
+      );
+      expect(
+        (await call('get_run_briefing', { id: managedRun.runId })).next,
+      ).toBe('inspect_executor');
+      await call('manage_executors', {
+        request: {
+          action: 'respond',
+          executionId: managedAttempt.id,
+          requestId: managedAttempt.requests[0].id,
+          answer: { allow: false },
+        },
+      });
+      await vi.waitFor(() =>
+        expect(engine.run(managedRun.runId).status).toBe('completed'),
+      );
+      expect(engine.run(managedRun.runId).output).toBe(false);
+      const permissionsDraft = await call('get_workflow', {
+        id: managedWorkflow.id,
+      });
+      await call('edit_workflow', {
+        id: managedWorkflow.id,
+        draftRevision: permissionsDraft.draftRevision,
+        edits: [
+          {
+            op: 'update_settings',
+            set: {},
+            unset: ['agentPermissions', 'agentModel', 'agentEffort'],
+          },
+        ],
+      });
+      expect(
+        (await call('get_workflow', { id: managedWorkflow.id })).draft
+          .agentPermissions,
+      ).toBeUndefined();
+      expect(
+        (await call('get_workflow', { id: managedWorkflow.id })).draft
+          .agentModel,
+      ).toBeUndefined();
+      expect(
+        (await call('get_workflow', { id: managedWorkflow.id })).draft
+          .agentEffort,
+      ).toBeUndefined();
       console.log(
         `${mode}: ${tools.length} MCP tools, ${Buffer.byteLength(JSON.stringify(tools))} B definitions`,
       );

@@ -192,6 +192,7 @@ it('uses indexed pending metadata and claimed-resource lookups without archive s
   const prepare = vi.spyOn(DatabaseSync.prototype, 'prepare');
   engine.store.scheduledComparisons(true);
   engine.store.resourcesForReconciliation();
+  engine.store.forWork('managedExecutions', 'example-work');
   const calls = prepare.mock.calls.map(([sql], i) => ({
     sql,
     db: prepare.mock.contexts[i] as DatabaseSync,
@@ -201,7 +202,11 @@ it('uses indexed pending metadata and claimed-resource lookups without archive s
     .map(({ sql, db }) =>
       db
         .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-        .all()
+        .all(
+          ...(sql.includes('$.workId')
+            ? ['managedExecutions', 'example-work']
+            : []),
+        )
         .map((r) => r.detail)
         .join('\n'),
     )
@@ -209,5 +214,6 @@ it('uses indexed pending metadata and claimed-resource lookups without archive s
   expect(plans).toContain('comparison_execution_pending');
   expect(plans).toContain('comparison_trial_pending');
   expect(plans).toContain('resource_state');
+  expect(plans).toContain('documents_work');
   expect(plans).not.toContain('(collection=?)');
 });

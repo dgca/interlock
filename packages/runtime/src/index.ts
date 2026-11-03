@@ -1,4 +1,10 @@
 import { WorkResources } from './workResources.js';
+import { ExecutorManager } from './executors/manager.js';
+export type {
+  HarnessAdapter,
+  HarnessRun,
+  HarnessResult,
+} from './executors/contracts.js';
 import {
   resourceNamesSchema,
   workResourceRequestSchema,
@@ -61,7 +67,7 @@ import {
   draftLayoutSchema,
   type DraftLayout,
 } from '@interlock/core';
-import { freshContextInstructions } from './agentInstructions.js';
+import { assignmentInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 import { RunStarts } from './runStarts.js';
@@ -107,6 +113,7 @@ class ResultProcessingError extends InterlockError {
 }
 export class Engine {
   readonly history: RunHistory;
+  readonly executors: ExecutorManager;
   readonly continuation: Continuation;
   readonly prompts: Prompts;
   readonly versions: VersionCleanup;
@@ -136,6 +143,7 @@ export class Engine {
       ) => Promise<Json>;
     } = {},
   ) {
+    this.executors = new ExecutorManager(this, cwd);
     this.simulations = new Simulations(store, cwd);
     this.chains = new RunChains(store);
     this.continuation = new Continuation(store);
@@ -189,15 +197,29 @@ export class Engine {
     this.history = new RunHistory(
       store,
       (ids) => this.starts.deleted(ids),
-      (ids) =>
-        this.localJobs.size > 0 &&
-        store
-          .runTrees(ids)
-          .some((run) =>
-            run.executions.some((execution) =>
-              this.localJobs.has(execution.id),
-            ),
-          ),
+      (ids) => {
+        const blockers: string[] = [];
+        if (
+          this.localJobs.size > 0 &&
+          store
+            .runTrees(ids)
+            .some((run) =>
+              run.executions.some((execution) =>
+                this.localJobs.has(execution.id),
+              ),
+            )
+        )
+          blockers.push(
+            'Native operations are still closing. Retry after they stop.',
+          );
+        try {
+          this.executors.assertDelete(ids);
+        } catch (error) {
+          if (!(error instanceof InterlockError)) throw error;
+          blockers.push(error.message);
+        }
+        return blockers;
+      },
       () =>
         queueMicrotask(() => this.listeners.forEach((listener) => listener())),
     );
@@ -669,6 +691,7 @@ export class Engine {
         throw new InterlockError(
           'Cancel or finish active runs before deleting this workflow.',
         );
+      this.executors.assertDelete(removed);
       for (const work of this.store.work())
         if (removed.has(work.runId)) this.store.remove('work', work.id);
       this.usage.removeRuns(removed);
@@ -676,6 +699,7 @@ export class Engine {
       this.holds.removeRuns(removed);
       this.budgets.removeRuns(removed);
       this.contextGroups.removeRuns(removed);
+      this.executors.removeRuns(removed);
       for (const event of this.store.list<import('@interlock/core').RunEvent>(
         'events',
       ))
@@ -1402,6 +1426,43 @@ export class Engine {
               .sort()
           : undefined;
         const work: WorkRequest = {
+          ...((
+            node.executor === null
+              ? undefined
+              : (node.executor ?? this.definition(run).executor)
+          )
+            ? {
+                executor: node.executor ?? this.definition(run).executor,
+                ...((node.model ?? this.definition(run).agentModel)
+                  ? {
+                      executorModel:
+                        node.model ?? this.definition(run).agentModel,
+                      executorModelSource: node.model
+                        ? ('node' as const)
+                        : ('workflow' as const),
+                    }
+                  : {}),
+                ...(node.effort !== undefined ||
+                this.definition(run).agentEffort !== undefined
+                  ? {
+                      executorEffort:
+                        node.effort !== undefined
+                          ? node.effort
+                          : this.definition(run).agentEffort,
+                      executorEffortSource:
+                        node.effort !== undefined
+                          ? ('node' as const)
+                          : ('workflow' as const),
+                    }
+                  : {}),
+                ...(this.definition(run).agentPermissions
+                  ? {
+                      executorPermissions:
+                        this.definition(run).agentPermissions,
+                    }
+                  : {}),
+              }
+            : {}),
           ...(resources ? { resources } : {}),
           id: randomUUID(),
           runId: run.id,
@@ -1751,6 +1812,7 @@ export class Engine {
     }
   }
   stop() {
+    void this.executors.stop();
     this.trials.stop();
     this.simulations.stop();
     this.continuation.stop();
@@ -2069,27 +2131,16 @@ export class Engine {
       : [];
     work = {
       ...work,
+      ...(this.executors.describe(work)
+        ? { managedExecution: this.executors.describe(work) }
+        : {}),
       ...(reservations.length ? { resourceReservations: reservations } : {}),
     };
-    const instructions = [
-      ...(work.resources?.length
-        ? [
-            'Exclusive Agent resources: ' +
-              JSON.stringify(work.resources) +
-              '. Stop using them and stop subprocesses before submitting success or reporting failure. Holding, expiry or cancellation may leave reservations uncertain; do not resume resource use with an invalid claim. These reservations coordinate cooperating Agent claims only.',
-          ]
-        : []),
-      ...(work.trialEnvironment
-        ? [
-            `Local Git trial ${work.trialEnvironment.id}. Use only scoped local tools in ${work.trialEnvironment.workspace}. External writes are forbidden by this recipe. Stop all subprocesses before submitting success or failure. The harness must enforce tool scope; this directory is not an OS sandbox. Do not claim the interlock-local-trials skill unless you can honor this policy.`,
-          ]
-        : []),
-      ...(work.context.mode === 'fresh'
-        ? [freshContextInstructions(this.lifecycleRunId(work.runId), work.id)]
-        : []),
-    ];
-    return instructions.length
-      ? { ...work, executionInstructions: instructions.join('\n\n') }
+    const instructions = assignmentInstructions(work, {
+      lifecycleRunId: this.lifecycleRunId(work.runId),
+    });
+    return instructions
+      ? { ...work, executionInstructions: instructions }
       : work;
   }
   private lifecycleRunId(id: string) {
@@ -2098,8 +2149,8 @@ export class Engine {
       run = this.run(run.parentRunId);
     return run.id;
   }
-  available(runId?: string) {
-    this.pump();
+  available(runId?: string, options: { advance?: boolean } = {}) {
+    if (options.advance !== false) this.pump();
     const within = (id: string): boolean => {
       if (!runId || id === runId) return true;
       const parent = this.run(id).parentRunId;
@@ -2120,6 +2171,27 @@ export class Engine {
       label: work.label,
       status: work.status,
       context: work.context,
+      ...(work.executor
+        ? {
+            executor: work.executor,
+            ...(work.executorModel
+              ? { executorModel: work.executorModel }
+              : {}),
+            ...(work.executorModelSource
+              ? { executorModelSource: work.executorModelSource }
+              : {}),
+            ...(work.executorEffort !== undefined
+              ? {
+                  executorEffort: work.executorEffort,
+                  executorEffortSource: work.executorEffortSource,
+                }
+              : {}),
+            ...(work.executorPermissions
+              ? { executorPermissions: work.executorPermissions }
+              : {}),
+            managedExecution: this.executors.describe(work),
+          }
+        : {}),
       ...(work.trialEnvironment
         ? { trialEnvironmentId: work.trialEnvironment.id }
         : {}),
@@ -2189,6 +2261,7 @@ export class Engine {
       const work = this.store.get<WorkRequest>('work', workId);
       if (!work || work.status !== 'available')
         throw new InterlockError('Work is not available');
+      this.executors.assertClaim(work);
       this.trials.context(this.run(work.runId));
       if (work.context.mode === 'fresh' && !worker.freshContext)
         throw new InterlockError('This assignment requires fresh context');

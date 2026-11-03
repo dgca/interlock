@@ -73,6 +73,10 @@ export async function runCommand(argv: string[]) {
       const { action: _action, ...input } = request;
       return client.runs.deleteHistory.mutate(input);
     }
+    case 'executors':
+      return client.executors.manage.mutate(
+        args.length ? await parse(args[0]) : { action: 'list' },
+      );
     case 'simulation':
       if (args.length !== 1) throw new Error('Usage: simulation <json|@file>');
       return client.testbench.simulation.mutate(await parse(args[0]));
@@ -380,6 +384,7 @@ export async function runCommand(argv: string[]) {
     default:
       return {
         usage: [
+          'executors [json|@file] (list by default; settings/save_settings for shared concurrency, discover models/efforts, save local profiles, inspect work, respond, stop or reconcile an interrupted execution)',
           'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
           'workflow <id>',
           'update <workflow-id> <json|@file> (metadata or draft replacement; layout:"tidy" arranges with Dagre; draft/layout changes require draftRevision)',

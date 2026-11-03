@@ -4,6 +4,7 @@ import { createClient } from '@interlock/client';
 export function createMcpClient(url?: string) {
   const client = createClient(url);
   return {
+    executors: { manage: client.executors.manage.mutate },
     testbench: {
       simulation: client.testbench.simulation.mutate,
       suites: client.testbench.suites.query,

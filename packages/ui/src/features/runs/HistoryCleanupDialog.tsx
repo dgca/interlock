@@ -266,7 +266,8 @@ export function HistoryCleanupDialog({
             <Text size="xs" c="dimmed">
               Deleted space becomes reusable inside SQLite. The database file
               may need offline compaction to shrink. Start-request tombstones
-              remain; backups and trial files are separate.
+              remain; backups, native harness files and trial files are
+              separate.
             </Text>
           </>
         )}

@@ -14,6 +14,7 @@ export function RunList({
   onTabChange,
   workflowId,
   act,
+  workflows,
 }: {
   runs: Run[];
   tab: 'active' | 'history';
@@ -21,6 +22,7 @@ export function RunList({
   onOpen: (id: string) => void;
   workflowId?: string;
   act?: Action;
+  workflows?: { id: string; name: string }[];
 }) {
   const [cleanup, setCleanup] = useState(false);
   const roots = runs.filter((r) =>
@@ -119,14 +121,21 @@ export function RunList({
       {cleanup && act && (
         <HistoryCleanupDialog
           workflowId={workflowId}
-          workflows={[
-            ...new Map(
-              runs.map((run) => [
-                run.workflowId,
-                { value: run.workflowId, label: run.workflowName },
-              ]),
-            ).values(),
-          ]}
+          workflows={
+            workflows
+              ? workflows.map((workflow) => ({
+                  value: workflow.id,
+                  label: workflow.name,
+                }))
+              : [
+                  ...new Map(
+                    runs.map((run) => [
+                      run.workflowId,
+                      { value: run.workflowId, label: run.workflowName },
+                    ]),
+                  ).values(),
+                ]
+          }
           act={act}
           onClose={() => setCleanup(false)}
         />

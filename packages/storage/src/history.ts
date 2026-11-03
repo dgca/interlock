@@ -38,6 +38,8 @@ const scoped = [
   'workHolds',
   'contextGroups',
   'contextEvents',
+  'managedExecutions',
+  'executorSessions',
 ];
 const where = (direct: boolean) =>
   `collection = ? AND ${direct ? 'id' : "json_extract(value, '$.runId')"} IN (SELECT value FROM json_each(?))`;

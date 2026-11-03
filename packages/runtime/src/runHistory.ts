@@ -11,14 +11,14 @@ import { fingerprint } from './versionIdentity.js';
 const terminal = (run: HistoryRun) =>
   ['completed', 'failed', 'cancelled'].includes(run.status);
 const spaceGuidance =
-  'Removed document bytes are JSON data, not reclaimed file bytes. SQLite reuses deleted space; the file may not shrink. Offline VACUUM can compact it and needs maintenance time and spare disk space. Backups and trial files are separate.';
+  'Removed document bytes are JSON data, not reclaimed file bytes. SQLite reuses deleted space; the file may not shrink. Offline VACUUM can compact it and needs maintenance time and spare disk space. Backups, native harness files and trial files are separate.';
 
 /** Whole-tree history removal, separate from workflow and definition deletion. */
 export class RunHistory {
   constructor(
     private store: Store,
     private markDeleted: (ids: Set<string>) => void,
-    private nativeBusy: (ids: Set<string>) => boolean,
+    private executionBlockers: (ids: Set<string>) => string[],
     private notify: () => void,
   ) {}
 
@@ -120,10 +120,7 @@ export class RunHistory {
         blockers.push(
           'Claimed assignments must finish or be cancelled before cleanup.',
         );
-      if (this.nativeBusy(ids))
-        blockers.push(
-          'Native operations are still closing. Retry after they stop.',
-        );
+      blockers.push(...this.executionBlockers(ids));
       const inventory = this.store.historyInventory(ids);
       return {
         rootRunId: root.id,

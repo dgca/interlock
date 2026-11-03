@@ -1,3 +1,4 @@
+import { ManagedExecutionPanel } from '../executors/ManagedExecutionPanel';
 import { Checkbox, Textarea } from '@mantine/core';
 import { Link } from 'react-router';
 import { useState, useEffect, useSyncExternalStore } from 'react';
@@ -25,6 +26,7 @@ export function WorkPanel({
       ? stored
       : undefined;
   const [stopped, setStopped] = useState(false);
+  const managedRecovery = work.managedExecution?.state === 'interrupted';
   const uncertain =
     work.resourceReservations?.filter((r) => r.state === 'uncertain') ?? [];
   useEffect(() => setStopped(false), [work.id, work.attempt]);
@@ -59,7 +61,10 @@ export function WorkPanel({
             ? 'Budget blocked. Adjust the governing run budget through MCP or the CLI to resume claims.'
             : work.resourceBlocked
               ? 'Waiting for a shared resource.'
-              : 'Waiting for an agent to pick up this assignment.'
+              : (work.managedExecution?.reason ??
+                (work.executor
+                  ? 'Queued for automatic execution.'
+                  : 'Waiting for an agent to pick up this assignment.'))
           : work.status === 'held'
             ? 'Held for an external blocker. Resume explicitly, then obtain a fresh claim.'
             : work.status === 'claimed'
@@ -68,6 +73,9 @@ export function WorkPanel({
                 ? 'Nobody claimed this assignment before its deadline. The run followed Timeout with the original input.'
                 : `Assignment ${work.status}.`}
       </p>
+      {work.executor && (
+        <ManagedExecutionPanel work={work} onRefresh={onRefresh} />
+      )}
       {work.resourceBlocked && (
         <ul style={{ overflowWrap: 'anywhere' }}>
           {work.resourceBlocked.owners.map((owner) => (
@@ -81,7 +89,7 @@ export function WorkPanel({
           ))}
         </ul>
       )}
-      {uncertain.length > 0 && (
+      {uncertain.length > 0 && !managedRecovery && (
         <div>
           <p style={{ overflowWrap: 'anywhere' }}>
             Attempt {uncertain[0].attempt} ended, but these resources remain
@@ -153,7 +161,7 @@ export function WorkPanel({
           </p>
         )}
       <div className="actions">
-        {uncertain.length > 0 && (
+        {uncertain.length > 0 && !managedRecovery && (
           <Button
             variant="primary"
             disabled={busy || !stopped}
@@ -172,7 +180,7 @@ export function WorkPanel({
             Release resources
           </Button>
         )}
-        {work.status === 'held' && (
+        {work.status === 'held' && !managedRecovery && (
           <Button
             disabled={busy}
             onClick={() =>
@@ -283,7 +291,7 @@ export function WorkPanel({
           />
 
           <div className="actions">
-            {uncertain.length > 0 && (
+            {uncertain.length > 0 && !managedRecovery && (
               <Button
                 variant="primary"
                 disabled={busy || !stopped}

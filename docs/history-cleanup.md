@@ -1,6 +1,6 @@
 # Clean up run history
 
-Remove selected run trees without deleting their workflows or published versions. Cleanup is manual and permanent. It removes run values, executions, assignments, events, usage attempts, budgets, holds, and context history. It does not delete backups or trial files.
+Remove selected run trees without deleting their workflows or published versions. Cleanup is manual and permanent. It removes run values, executions, assignments, events, usage attempts, budgets, holds, context history, and settled managed execution/session records. It does not delete local harness profiles, native harness session files, backups or trial files.
 
 ## Use the browser
 
@@ -39,6 +39,8 @@ Filters match root workflows. A child invocation cannot be removed independently
 Finish or cancel active runs and descendants before cleanup. Wait for native operations to close after cancellation. Whole trees and chains retain the history needed by active budget scopes.
 
 Reconcile resource reservations only after their workers stop. Uncertain reservations remain protected after cancellation or expiry. See [resource recovery](work-resources.md).
+
+Managed Agent executions also block cleanup while active or interrupted, even if their run is cancelled. Stop the old harness and subprocesses, then reconcile that exact execution. Cleanup shares the existing managed deletion guard and removes settled attempts and run-local sessions with the tree. See [managed execution recovery](managed-executors.md#stop-and-recover).
 
 Retained comparison sample trees and referenced evaluation runs are protected, including completed experiments. This first version does not cascade through comparison evidence. Incomplete ancestry or chain history also blocks cleanup.
 

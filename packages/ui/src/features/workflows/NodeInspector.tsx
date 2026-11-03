@@ -1,3 +1,4 @@
+import { ExecutorSelect } from '../executors/ExecutorSelect';
 import { AgentResourcesEditor } from './AgentResourcesEditor';
 import { useState } from 'react';
 import {
@@ -221,6 +222,19 @@ export function NodeInspector({
               />
             </NodeSection>
             <NodeSection name="execution">
+              <ExecutorSelect
+                value={node.executor}
+                workflowPermissions={definition?.agentPermissions}
+                workflowModel={definition?.agentModel}
+                workflowEffort={definition?.agentEffort}
+                nodeModel={node.model}
+                nodeEffort={node.effort}
+                onNodeModelChange={(model) => patch({ model })}
+                onNodeEffortChange={(effort) => patch({ effort })}
+                inherit={definition?.executor ?? ''}
+                enabled={active === 'execution'}
+                onChange={(executor) => patch({ executor })}
+              />
               <Radio.Group
                 mb="md"
                 label="Context"
@@ -230,14 +244,14 @@ export function NodeInspector({
                 }
               >
                 <Stack gap="xs" mt="xs">
-                  <Radio value="current" label="Current conversation" />
+                  <Radio value="current" label="Existing context allowed" />
                   <Radio value="fresh" label="Fresh agent session required" />
                 </Stack>
               </Radio.Group>
 
               <p className="hint">
-                Fresh context requires an executor that declares isolation.
-                Interlock cannot erase a caller's conversation.
+                Managed executors start a new session unless a continuity group
+                reuses one. Fresh context requires an independent session.
               </p>
 
               <TextInput
@@ -256,26 +270,30 @@ export function NodeInspector({
                 }
               />
 
-              <NativeSelect
-                mb="md"
-                label="Model tier"
-                description="Executor preference for either Context setting. Required session continuity and isolation take precedence."
-                value={node.context.tier ?? ''}
-                data={[
-                  { value: '', label: 'No preference' },
-                  { value: 'max', label: 'Max' },
-                  { value: 'balanced', label: 'Balanced' },
-                  { value: 'fast', label: 'Fast' },
-                ]}
-                onChange={(event) => {
-                  const { tier: _tier, ...context } = node.context;
-                  patch({
-                    context: event.currentTarget.value
-                      ? { ...context, tier: event.currentTarget.value }
-                      : context,
-                  });
-                }}
-              />
+              {!(node.executor === null
+                ? undefined
+                : (node.executor ?? definition?.executor)) && (
+                <NativeSelect
+                  mb="md"
+                  label="Model tier"
+                  description="Advisory preference for the connected agent. Its harness chooses the actual model."
+                  value={node.context.tier ?? ''}
+                  data={[
+                    { value: '', label: 'No preference' },
+                    { value: 'max', label: 'Max' },
+                    { value: 'balanced', label: 'Balanced' },
+                    { value: 'fast', label: 'Fast' },
+                  ]}
+                  onChange={(event) => {
+                    const { tier: _tier, ...context } = node.context;
+                    patch({
+                      context: event.currentTarget.value
+                        ? { ...context, tier: event.currentTarget.value }
+                        : context,
+                    });
+                  }}
+                />
+              )}
 
               <Textarea
                 mb="md"

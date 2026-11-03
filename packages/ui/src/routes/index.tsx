@@ -12,6 +12,7 @@ import { WorkflowLibrary } from '../features/workflows/WorkflowLibrary';
 import { WorkflowEditor } from '../features/workflows/WorkflowEditor';
 import { RunList } from '../features/runs/RunList';
 import { RunInspector } from '../features/runs/RunInspector';
+import { Harnesses } from '../features/executors/Harnesses';
 import { paths } from './paths';
 import { flushSync } from 'react-dom';
 import { PromptLibrary, PromptEditor } from '../features/prompts/Prompts';
@@ -113,6 +114,7 @@ function WorkflowRoute() {
         <RunList
           runs={context.runs}
           act={context.act}
+          workflows={context.workflows}
           workflowId={workflow.id}
           tab={runTab}
           onTabChange={(tab) =>
@@ -131,13 +133,14 @@ function WorkflowRoute() {
 }
 
 function RunsRoute() {
-  const { runs, act } = useOutletContext<AppContext>();
+  const { runs, act, workflows } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const [search, setSearch] = useSearchParams();
   return (
     <RunList
       runs={runs}
       act={act}
+      workflows={workflows}
       tab={search.get('tab') === 'history' ? 'history' : 'active'}
       onTabChange={(tab) =>
         setSearch((previous) => {
@@ -202,6 +205,7 @@ export const routes: RouteObject[] = [
       { index: true, element: <Navigate to={paths.workflows} replace /> },
       { path: 'workflows', Component: LibraryRoute },
       { path: 'prompts', Component: PromptsRoute },
+      { path: 'settings/harnesses', Component: Harnesses },
       { path: 'prompts/:promptId', Component: PromptRoute },
       { path: 'workflows/:workflowId', Component: WorkflowRoute },
       { path: 'runs', Component: RunsRoute },
