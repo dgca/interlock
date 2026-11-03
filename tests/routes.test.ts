@@ -7,14 +7,22 @@ import { createBrowserRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { routes } from '../packages/ui/src/routes';
 
-const queries = vi.hoisted(() => ({ workflows: vi.fn(), runs: vi.fn() }));
+const queries = vi.hoisted(() => ({
+  workflows: vi.fn(),
+  runs: vi.fn(),
+  attention: vi.fn(),
+}));
+const streamListeners = new Map<string, () => void>();
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
     connection: {
       query: () => Promise.resolve({ engineUrl: 'http://127.0.0.1:4310' }),
     },
     workflows: { list: { query: queries.workflows } },
-    runs: { list: { query: queries.runs } },
+    runs: {
+      list: { query: queries.runs },
+      attention: { query: queries.attention },
+    },
     prompts: { list: { query: () => Promise.resolve([]) } },
   },
   errorMessage: (error: Error) => error.message,
@@ -94,10 +102,14 @@ beforeEach(() => {
   vi.stubGlobal(
     'EventSource',
     class {
-      addEventListener() {}
+      addEventListener(event: string, callback: () => void) {
+        streamListeners.set(event, callback);
+      }
       close() {}
     },
   );
+  streamListeners.clear();
+  queries.attention.mockResolvedValue([]);
   queries.workflows.mockResolvedValue([{ id: 'w1' }, { id: 'a b%?' }]);
   queries.runs.mockResolvedValue([
     {
@@ -289,4 +301,41 @@ it('opens an owned child by direct URL and returns to its owner through the navi
   await click('Save draft');
   await click('Back to library');
   expect(window.location.pathname).toBe('/workflows/parent');
+});
+
+it('shows global human attention, deep-links to its assignment, and preserves the filter on return', async () => {
+  queries.attention.mockResolvedValue([
+    {
+      runId: 'r1',
+      reasons: ['recovery'],
+      target: { runId: 'child', executionId: 'child-execution' },
+    },
+  ]);
+  await mount('/workflows');
+  const badge = container.querySelector(
+    'button[aria-label="Runs, 1 run needs attention"]',
+  );
+  expect(badge?.textContent).toBe('Runs1');
+  await act(async () => router.navigate('/runs?tab=attention'));
+  expect(
+    container.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+  ).toBe('Needs attention 1');
+  const row = container.querySelector('button.run-row') as HTMLButtonElement;
+  expect(row.textContent).toContain('Recovery needed');
+  await act(async () => row.click());
+  expect(window.location.pathname).toBe('/runs/child');
+  expect(new URLSearchParams(window.location.search).get('execution')).toBe(
+    'child-execution',
+  );
+  await click('Back to runs');
+  expect(window.location.search).toBe('?tab=attention');
+  queries.attention.mockResolvedValue([]);
+  await act(async () => {
+    streamListeners.get('change')!();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  });
+  expect(
+    container.querySelector('button[aria-label="Runs, 1 run needs attention"]'),
+  ).toBeNull();
+  expect(container.textContent).toContain('No runs need your attention.');
 });

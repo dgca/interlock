@@ -121,6 +121,14 @@ export const migrations: readonly Migration[] = [
         WHEN OLD.collection = 'runs' BEGIN DELETE FROM active_comparison_runs WHERE run_id = OLD.id; END;`);
     },
   },
+  {
+    version: 6,
+    up(db) {
+      db.exec(
+        `CREATE INDEX work_attention ON documents(json_extract(value, '$.managedExecution.state')) WHERE collection = 'work';`,
+      );
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

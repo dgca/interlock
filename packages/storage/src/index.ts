@@ -1,3 +1,4 @@
+import { attentionWork, attentionAncestors } from './runAttention.js';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -76,6 +77,12 @@ export class Store {
   }
   continuation(id: string) {
     return continuationState(this.db, id);
+  }
+  attentionWork() {
+    return attentionWork(this.db);
+  }
+  attentionAncestors(ids: Set<string>) {
+    return attentionAncestors(this.db, ids);
   }
   historyRuns() {
     return historyRuns(this.db);

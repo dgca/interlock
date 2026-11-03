@@ -23,6 +23,7 @@ beforeEach(() => {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   });
+  rpc.inspect.mockReset();
   rpc.manage.mockReset().mockResolvedValue({ applied: true });
   container = document.createElement('div');
   document.body.append(container);
@@ -84,6 +85,10 @@ async function render(allowOther: boolean) {
     createdAt: new Date().toISOString(),
     executor: 'codex',
   };
+  await mount(work);
+  return { record, work };
+}
+async function mount(work: WorkRequest) {
   await act(async () =>
     root.render(
       h(
@@ -133,5 +138,169 @@ it('keeps single-choice questions within their native options', async () => {
   );
   expect(rpc.manage).toHaveBeenCalledWith(
     expect.objectContaining({ answer: { answers: { language: ['Python'] } } }),
+  );
+});
+
+function button(text: string) {
+  const result = [...container.querySelectorAll('button')].find(
+    (b) => b.textContent?.trim() === text,
+  );
+  expect(result, `Button: ${text}`).toBeDefined();
+  return result!;
+}
+async function permission() {
+  const fixture = await render(false);
+  fixture.record.requests = [
+    {
+      id: 'permission',
+      kind: 'permission',
+      title: 'Review this command',
+      detail: 'echo exact-command',
+      state: 'pending',
+      questions: [],
+    },
+  ];
+  rpc.inspect.mockResolvedValue({
+    items: [fixture.record],
+    total: 1,
+    history: [],
+  });
+  await mount({ ...fixture.work });
+  return fixture;
+}
+it('submits one exact approval, prevents repeated clicks, and shows the recorded outcome', async () => {
+  await permission();
+  let resolve!: (value: unknown) => void;
+  rpc.manage.mockImplementation(
+    () =>
+      new Promise((r) => {
+        resolve = r;
+      }),
+  );
+  await act(async () => {
+    button('Allow once').click();
+    button('Allow once').click();
+  });
+  expect(rpc.manage).toHaveBeenCalledTimes(1);
+  expect(rpc.manage).toHaveBeenCalledWith({
+    action: 'respond',
+    executionId: 'execution:1',
+    requestId: 'permission',
+    answer: { allow: true },
+  });
+  expect(button('Sending decision…').disabled).toBe(true);
+  await act(async () => resolve({ applied: true }));
+  expect(container.textContent).toContain(
+    'Allowed once. The agent can continue with this action.',
+  );
+  expect(container.querySelector('[aria-label="Requested action"]')).toBeNull();
+});
+it('records a denial even if refreshing fails, without offering the same request again', async () => {
+  await permission();
+  rpc.inspect.mockRejectedValue(new Error('Connection lost'));
+  await act(async () => button('Deny').click());
+  expect(rpc.manage).toHaveBeenCalledWith(
+    expect.objectContaining({ answer: { allow: false } }),
+  );
+  expect(container.textContent).toContain(
+    'Denied. The agent will receive your decision.',
+  );
+  expect(container.textContent).toContain(
+    'The action was recorded, but details could not refresh.',
+  );
+  expect(
+    [...container.querySelectorAll('button')].some(
+      (b) => b.textContent === 'Allow once',
+    ),
+  ).toBe(false);
+  expect(button('Reload execution')).toBeDefined();
+});
+it('retains a failed question answer and allows correction and retry', async () => {
+  await render(false);
+  const select = container.querySelector('select')!;
+  await act(async () => {
+    select.value = 'Python';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  rpc.manage.mockRejectedValueOnce(new Error('The request expired'));
+  await act(async () => button('Send answers').click());
+  expect(container.textContent).toContain('The request expired');
+  expect(select.value).toBe('Python');
+  expect(button('Send answers').disabled).toBe(false);
+});
+it('does not claim a new approval when another client already answered the request', async () => {
+  await permission();
+  rpc.manage.mockResolvedValue({ applied: false });
+  await act(async () => button('Allow once').click());
+  expect(container.textContent).toContain('This request was already answered.');
+  expect(container.textContent).not.toContain(
+    'Allowed once. The agent can continue',
+  );
+});
+async function recovery(status: WorkRequest['status'] = 'held') {
+  const fixture = await render(false);
+  fixture.record.state = 'interrupted';
+  fixture.record.requests = [];
+  const work = { ...fixture.work, status };
+  await mount(work);
+  return { ...fixture, work };
+}
+it('requires explicit stop confirmation, scopes recovery to that execution, and resets it for a new attempt', async () => {
+  const { work, record } = await recovery();
+  expect(button('Retry assignment').disabled).toBe(true);
+  expect(container.textContent).toContain('Retrying can repeat those changes.');
+  const checkbox = container.querySelector(
+    'input[type=checkbox]',
+  ) as HTMLInputElement;
+  await act(async () => checkbox.click());
+  expect(button('Retry assignment').disabled).toBe(false);
+  await act(async () => button('Retry assignment').click());
+  expect(rpc.manage).toHaveBeenCalledWith({
+    action: 'reconcile',
+    executionId: 'execution:1',
+    confirmStopped: true,
+  });
+  expect(container.textContent).toContain('Recovery confirmed.');
+  expect(checkbox.checked).toBe(false);
+  await act(async () => checkbox.click());
+  record.attempt = 2;
+  await mount({ ...work, attempt: 2 });
+  expect(
+    (container.querySelector('input[type=checkbox]') as HTMLInputElement)
+      .checked,
+  ).toBe(false);
+  expect(button('Retry assignment').disabled).toBe(true);
+});
+it('offers resource reconciliation without promising to retry a cancelled assignment', async () => {
+  await recovery('cancelled');
+  expect(button('Confirm stopped').disabled).toBe(true);
+  expect(container.textContent).toContain('It does not restart the run.');
+  expect(container.textContent).not.toContain('Retry starts a new attempt');
+});
+it('shows an inspection failure and reloads without starting an agent action', async () => {
+  const { work, record } = await render(false);
+  rpc.inspect.mockRejectedValueOnce(new Error('Inspection unavailable'));
+  await mount({ ...work });
+  expect(container.textContent).toContain('Inspection unavailable');
+  rpc.inspect.mockResolvedValue({ items: [record], total: 1, history: [] });
+  await act(async () => button('Reload execution').click());
+  expect(container.textContent).toContain('Need a decision');
+  expect(rpc.manage).not.toHaveBeenCalled();
+});
+it('shows submission on the deny action rather than implying that approval was selected', async () => {
+  await permission();
+  let resolve!: (value: unknown) => void;
+  rpc.manage.mockImplementation(
+    () =>
+      new Promise((r) => {
+        resolve = r;
+      }),
+  );
+  await act(async () => button('Deny').click());
+  expect(button('Allow once').disabled).toBe(true);
+  expect(button('Sending decision…').disabled).toBe(true);
+  await act(async () => resolve({ applied: true }));
+  expect(container.textContent).toContain(
+    'Denied. The agent will receive your decision.',
   );
 });

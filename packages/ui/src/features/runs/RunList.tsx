@@ -1,14 +1,16 @@
+import { attentionText, type RunTab } from './runAttention';
 import { Button, Group, Tabs } from '@mantine/core';
 import { useState } from 'react';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
 import type { Action } from '../../lib/useActionFeedback';
-import type { Run } from '@interlock/core';
+import type { Run, RunAttention } from '@interlock/core';
 import { ArrowUpRight, Activity } from 'lucide-react';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 import { Badge } from '../../components/Badge/Badge';
 import { ComparisonContext } from './ComparisonContext';
 export function RunList({
   runs,
+  attention = [],
   onOpen,
   tab,
   onTabChange,
@@ -17,9 +19,10 @@ export function RunList({
   workflows,
 }: {
   runs: Run[];
-  tab: 'active' | 'history';
-  onTabChange: (tab: 'active' | 'history') => void;
-  onOpen: (id: string) => void;
+  attention?: RunAttention[];
+  tab: RunTab;
+  onTabChange: (tab: RunTab) => void;
+  onOpen: (id: string, executionId?: string) => void;
   workflowId?: string;
   act?: Action;
   workflows?: { id: string; name: string }[];
@@ -36,25 +39,32 @@ export function RunList({
   const history = roots.filter(
     (run) => !['running', 'waiting'].includes(run.status),
   );
-  const visible = tab === 'active' ? active : history;
+  const attentionById = new Map(attention.map((entry) => [entry.runId, entry]));
+  const needsAttention = roots.filter((run) => attentionById.has(run.id));
+  const visible =
+    tab === 'active' ? active : tab === 'attention' ? needsAttention : history;
   return (
     <div className={layout.page}>
       {!workflowId && (
         <header className={layout.header}>
           <div>
             <h1>Runs</h1>
-            <p>Follow ongoing work and inspect past results.</p>
           </div>
         </header>
       )}
       <Tabs
         value={tab}
         onChange={(value) =>
-          onTabChange(value === 'history' ? 'history' : 'active')
+          onTabChange(
+            value === 'history' || value === 'attention' ? value : 'active',
+          )
         }
       >
-        <Tabs.List>
+        <Tabs.List className="run-tabs">
           <Tabs.Tab value="active">Active {active.length}</Tabs.Tab>
+          <Tabs.Tab value="attention">
+            Needs attention {needsAttention.length}
+          </Tabs.Tab>
           <Tabs.Tab value="history">History {history.length}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value={tab} pt="md">
@@ -78,7 +88,12 @@ export function RunList({
                 <button
                   className="run-row"
                   key={r.id}
-                  onClick={() => onOpen(r.id)}
+                  onClick={() => {
+                    const entry = attentionById.get(r.id);
+                    if (entry)
+                      onOpen(entry.target.runId, entry.target.executionId);
+                    else onOpen(r.id);
+                  }}
                 >
                   <span>
                     <strong>{r.workflowName}</strong>
@@ -94,7 +109,14 @@ export function RunList({
                       </small>
                     )}
                   </span>
-                  <Badge status={r.status} />
+                  <span className="run-status">
+                    <Badge status={r.status} />
+                    {attentionById.has(r.id) && (
+                      <small className="run-attention">
+                        {attentionText(attentionById.get(r.id)!)}
+                      </small>
+                    )}
+                  </span>
                   <span>{new Date(r.createdAt).toLocaleString()}</span>
                   <span>{r.executions.length}</span>
                   <ArrowUpRight size={15} />
@@ -105,14 +127,20 @@ export function RunList({
             <div className="empty">
               <Activity size={28} />
               <h2>
-                {tab === 'active' ? 'No active runs.' : 'No history yet.'}
+                {tab === 'active'
+                  ? 'No active runs.'
+                  : tab === 'attention'
+                    ? 'No runs need your attention.'
+                    : 'No history yet.'}
               </h2>
               <p>
                 {tab === 'active'
                   ? workflowId
                     ? 'Choose Run above to start a published version of this workflow.'
                     : 'Open a published workflow and choose Run to start.'
-                  : 'Completed, failed, and cancelled runs appear here.'}
+                  : tab === 'attention'
+                    ? 'Approval requests, questions, and recovery checks appear here.'
+                    : 'Completed, failed, and cancelled runs appear here.'}
               </p>
             </div>
           )}

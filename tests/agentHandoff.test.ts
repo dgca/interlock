@@ -334,3 +334,79 @@ it('keeps the copy handoff while omitting disabled connection controls and guida
   );
   expect(onConnect).not.toHaveBeenCalled();
 });
+
+it('does not ask a connected agent to take over queued managed assignments', async () => {
+  rpc.work.mockResolvedValue([
+    { id: 'managed-work', runId: 'root-run', executor: 'codex' },
+  ]);
+  await render();
+  expect(container.textContent).not.toContain('Copy instructions for agent');
+});
+it('lets a user return to a pending managed request after inspecting another step', async () => {
+  const store = new Store(':memory:');
+  try {
+    const engine = new Engine(store, process.cwd());
+    const workflow = engine.create('Review', '', blankDefinition());
+    engine.publish(workflow.id);
+    const run = engine.start(workflow.id, {}).run;
+    detail = engine.inspect(run.id);
+    detail.run.id = 'root-run';
+    const assignment = detail.descendantWork[0];
+    assignment.runId = 'root-run';
+    assignment.managedExecution = {
+      profileId: 'codex',
+      state: 'needs_human',
+      pendingRequests: 1,
+    };
+    rpc.work.mockResolvedValue([]);
+    await render();
+    const entryButton = container.querySelector(
+      'button[class*="step"]',
+    ) as HTMLButtonElement;
+    await act(async () => entryButton.click());
+    expect(container.querySelector('aside h2')?.textContent).toBe(
+      'Workflow input',
+    );
+    await click('Review request');
+    expect(container.querySelector('aside h2')?.textContent).toBe(
+      assignment.label,
+    );
+    expect(document.activeElement).toBe(container.querySelector('aside'));
+    engine.stop();
+  } finally {
+    store.close();
+  }
+});
+it('opens an invoked workflow for its own pending request instead of selecting a same-named parent node', async () => {
+  const store = new Store(':memory:');
+  try {
+    const engine = new Engine(store, process.cwd());
+    const child = engine.create('Child review', '', blankDefinition());
+    engine.publish(child.id);
+    const parent = engine.create('Parent', '', workflowCall(child.id));
+    engine.publish(parent.id);
+    const run = engine.start(parent.id, {}).run;
+    detail = engine.inspect(run.id);
+    const originalId = detail.run.id;
+    detail.run.id = 'root-run';
+    for (const childRun of detail.descendants)
+      if (childRun.parentRunId === originalId)
+        childRun.parentRunId = 'root-run';
+    const assignment = detail.descendantWork[0];
+    assignment.managedExecution = {
+      profileId: 'codex',
+      state: 'needs_human',
+      pendingRequests: 1,
+    };
+    rpc.work.mockResolvedValue([]);
+    await render();
+    await click('Review request');
+    expect(onOpen).toHaveBeenCalledWith(
+      assignment.runId,
+      assignment.executionId,
+    );
+    engine.stop();
+  } finally {
+    store.close();
+  }
+});

@@ -44,7 +44,9 @@ it('separates active root executions from history and opens the selected executi
   });
   const open = vi.fn();
   function Harness() {
-    const [tab, setTab] = useState<'active' | 'history'>('active');
+    const [tab, setTab] = useState<'active' | 'attention' | 'history'>(
+      'active',
+    );
     return h(
       MantineProvider,
       {},

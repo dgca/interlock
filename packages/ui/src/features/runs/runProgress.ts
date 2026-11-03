@@ -1,4 +1,8 @@
 import {
+  needsManagedAttention,
+  managedAttentionLabel,
+} from '../executors/managedStatus';
+import {
   readPath,
   type NodeExecution,
   type Run,
@@ -51,7 +55,8 @@ export function runProgress(
       return work.some(
         (assignment) =>
           assignment.executionId === execution.id &&
-          assignment.status === 'claimed',
+          assignment.status === 'claimed' &&
+          !needsManagedAttention(assignment),
       )
         ? 'running'
         : 'waiting';
@@ -138,6 +143,20 @@ export function runProgress(
               )
             ? 'Waiting for a resource'
             : 'Waiting for an agent';
+    if (node.kind === 'agent' && !node.batchId) {
+      const assignment = work.find(
+        (w) => w.executionId === items[0]?.execution?.id,
+      );
+      if (assignment && needsManagedAttention(assignment))
+        label = managedAttentionLabel(assignment);
+      else if (
+        assignment?.executor &&
+        assignment.status === 'available' &&
+        !assignment.resourceBlocked &&
+        !assignment.budgetBlocked
+      )
+        label = 'Queued for automatic execution';
+    }
     if (node.kind === 'wait' && state === 'waiting' && !node.batchId)
       label = 'Waiting for timer';
     if (
@@ -226,8 +245,13 @@ export function runProgress(
     )
   )
     title = 'Held for external blocker';
+  const attention = work.find(
+    (w) => needsManagedAttention(w) && !detachedBoundary(w.runId, run.id, runs),
+  );
+  if (attention && ['running', 'waiting'].includes(run.status))
+    title = managedAttentionLabel(attention);
   if (!['completed', 'cancelled'].includes(run.status) && current)
-    title += ` · ${current.label}`;
+    title += ` · ${attention && ['running', 'waiting'].includes(run.status) ? attention.label : current.label}`;
   return {
     nodes,
     runStates: Object.fromEntries(

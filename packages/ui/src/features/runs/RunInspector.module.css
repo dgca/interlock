@@ -13,9 +13,10 @@
   background: var(--surface);
 }
 .header h2 {
-  font-size: 14px;
-  margin: 7px 0 0;
+  font-size: 16px;
+  margin: 0;
   font-weight: 550;
+  overflow-wrap: anywhere;
 }
 .header :global(.actions) {
   margin-left: auto;
@@ -28,6 +29,7 @@
 .overview {
   flex: 1;
   min-width: 0;
+  order: 0;
   overflow: auto;
 }
 .graph {
@@ -44,25 +46,6 @@
 }
 .unavailableGraph p {
   margin: 0;
-}
-@media (max-width: 800px) {
-  .withoutDefinition .header {
-    flex-wrap: wrap;
-  }
-  .withoutDefinition .body {
-    flex-direction: column;
-    overflow: auto;
-  }
-  .withoutDefinition .overview {
-    flex: none;
-    overflow: visible;
-  }
-  .withoutDefinition .detail {
-    width: auto;
-    overflow: visible;
-    border-left: 0;
-    border-top: 1px solid var(--border);
-  }
 }
 .log {
   padding: 24px 30px;
@@ -85,7 +68,7 @@
   border-color: var(--accent-border);
   background: var(--accent-soft);
 }
-.step > div {
+.stepContent {
   flex: 1;
 }
 .step strong {
@@ -107,7 +90,10 @@
   padding: 6px;
 }
 .detail {
-  width: 360px;
+  width: 42%;
+  min-width: 380px;
+  max-width: 540px;
+  order: 1;
   flex-shrink: 0;
   border-left: 1px solid var(--border);
   background: var(--surface);
@@ -155,15 +141,9 @@
   white-space: nowrap;
 }
 @media (max-width: 1100px) {
-  .detail {
-    width: 290px;
-  }
   .header {
     gap: 7px;
     padding: 12px;
-  }
-  .header button {
-    font-size: 10px;
   }
   .log {
     padding: 20px;
@@ -223,10 +203,10 @@
 
 .detail :global(.inspector-heading) {
   margin-bottom: 0;
-  padding-bottom: 8px;
+  padding: 24px 24px 8px;
 }
 .detail :global(.inspector-fields) {
-  padding-top: 8px;
+  padding: 12px 24px 24px;
 }
 
 .comparison .header {
@@ -245,4 +225,100 @@
   flex-wrap: wrap;
   max-width: 100%;
   min-width: 0;
+}
+
+.header > div:not(:global(.actions)) {
+  min-width: 0;
+}
+.version {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.attentionActions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.detail :global(.work-panel):first-child {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+.detail :global(.work-panel) > :global(.section-heading) {
+  margin-bottom: 16px;
+}
+.stepData {
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.stepData summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.stepData summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+@media (max-width: 1100px) {
+  .header {
+    flex-wrap: wrap;
+  }
+  .header :global(.actions) {
+    flex-wrap: wrap;
+  }
+  .body {
+    flex-direction: column;
+    overflow: auto;
+  }
+  .detail {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    overflow: visible;
+    border-left: 0;
+    border-bottom: 1px solid var(--border);
+    order: 0;
+  }
+  .overview {
+    flex: none;
+    overflow: visible;
+    order: 1;
+  }
+  .graph {
+    height: 340px;
+  }
+}
+@media (max-width: 600px) {
+  .page {
+    height: 100%;
+  }
+  .header,
+  .liveSummary {
+    padding: 16px;
+  }
+  .header :global(.actions) {
+    margin-left: 0;
+  }
+  .detail :global(.inspector-heading) {
+    padding: 20px 16px 8px;
+  }
+  .detail :global(.inspector-fields) {
+    padding: 12px 16px 20px;
+  }
+  .step {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+}
+
+.stepScope {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 8px 0 0;
 }
