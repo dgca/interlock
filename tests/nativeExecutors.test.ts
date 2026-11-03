@@ -4,6 +4,10 @@ import { chmodSync } from 'node:fs';
 import { executorProfileSchema, type WorkRequest } from '@interlock/core';
 import { claudeAdapter } from '../packages/runtime/src/executors/claude';
 import { codexAdapter } from '../packages/runtime/src/executors/codex';
+import {
+  HarnessModelError,
+  HarnessResultError,
+} from '../packages/runtime/src/executors/contracts';
 
 const command = fileURLToPath(
   new URL('./fixtures/managed-harness.mjs', import.meta.url),
@@ -28,6 +32,31 @@ const work: WorkRequest = {
     required: ['ok'],
   },
 };
+it.each([claudeAdapter, codexAdapter])(
+  'classifies an early $id model refusal but preserves ordinary failure after task actions',
+  async (adapter) => {
+    for (const model of ['model-refusal', 'late-model-refusal']) {
+      const result = adapter.run({
+        command,
+        cwd: process.cwd(),
+        work,
+        profile: executorProfileSchema.parse({
+          id: adapter.id,
+          harness: adapter.id,
+          name: adapter.id,
+          model,
+        }),
+        signal: new AbortController().signal,
+        onSession() {},
+        onProgress() {},
+        request: async () => ({ allow: true }),
+      });
+      await expect(result).rejects.toBeInstanceOf(
+        model === 'model-refusal' ? HarnessModelError : HarnessResultError,
+      );
+    }
+  },
+);
 it.each([claudeAdapter, codexAdapter])(
   'discovers $id models without starting a task',
   async (adapter) => {

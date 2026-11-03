@@ -27,6 +27,7 @@ export const executorSettingSourceSchema = z.enum([
   'workflow',
   'harness',
   'cli',
+  'recovery',
 ]);
 export const executorModelsQuerySchema = z
   .object({
@@ -81,7 +82,7 @@ export const executorSettingsUpdateSchema = z
 export const executorProfileSchema = z
   .object({
     id: executorReferenceSchema,
-    harness: z.enum(['claude-code', 'codex']),
+    harness: z.enum(['claude-code', 'codex', 'pi']),
     name: z.string().trim().min(1).max(120),
     enabled: z.boolean().default(false),
     revision: z.number().int().min(0).default(0),
@@ -105,7 +106,7 @@ export const executorProfileSchema = z
       .default('standard')
       .transform((mode) => (mode === 'ask' ? 'standard' : mode))
       .describe(
-        'Default managed Agent permissions. standard uses native approval rules; read-only denies writes; full-access opts into broad access without routine approval stops. Legacy ask means standard. Workflow agentPermissions can override this default.',
+        'Default managed Agent permissions. standard uses the harness-specific approval policy; read-only denies writes; full-access opts into broad access without routine approval stops. Legacy ask means standard. Workflow agentPermissions can override this default.',
       ),
   })
   .strict();
@@ -120,6 +121,7 @@ export type ExecutorState =
   | 'starting'
   | 'running'
   | 'needs_human'
+  | 'needs_model'
   | 'completed'
   | 'failed'
   | 'interrupted';
@@ -178,6 +180,15 @@ export const executorOperationSchema = z.discriminatedUnion('action', [
     .strict(),
   z
     .object({
+      action: z.literal('retry_model'),
+      executionId: z.string().min(1),
+      model: executorModelSchema.describe(
+        'Explicit human-selected replacement for a needs_model execution. Resumes that assignment and its continuity session with native thinking defaults. Does not edit workflows or harness defaults.',
+      ),
+    })
+    .strict(),
+  z
+    .object({
       action: z.literal('reconcile'),
       executionId: z.string().min(1),
       confirmStopped: z.literal(true),
@@ -187,11 +198,12 @@ export const executorOperationSchema = z.discriminatedUnion('action', [
 export const managedWorkSummarySchema = z.object({
   profileId: z.string(),
   executionId: z.string().optional(),
-  harness: z.enum(['claude-code', 'codex']).optional(),
+  harness: z.enum(['claude-code', 'codex', 'pi']).optional(),
   state: z.enum([
     'starting',
     'running',
     'needs_human',
+    'needs_model',
     'completed',
     'failed',
     'interrupted',
@@ -218,6 +230,11 @@ export interface ManagedExecution {
   startedAt: string;
   endedAt?: string;
   error?: string;
+  modelRecovery?: {
+    sessionKey: string;
+    holdRevision: number;
+    replacementModel?: string;
+  };
   requests: ExecutorRequest[];
   logs: { at: string; message: string }[];
   logCount: number;

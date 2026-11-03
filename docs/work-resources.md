@@ -33,6 +33,8 @@ Use `get_run_briefing` when discovery returns no work. `resourceBlocked` lists b
 
 Expiry, cancellation and a hold on claimed work invalidate the claim but do not prove the worker stopped. Interlock keeps its names reserved in `uncertain` state. This persists across restart and blocks both a replacement attempt and unrelated assignments requiring those names. Detached workers retain their normal independent lifetime when a parent is cancelled.
 
+For recognized early managed model refusals, Interlock confirms native cleanup and releases the attempt's reservations automatically. Those assignments wait for [model selection](managed-executors.md#replace-a-refused-model), without requiring stop confirmation.
+
 1. Inspect `resourceBlocked` and `resourceReservations` in the briefing, or call `manage_work_resources` with:
 
    ```json

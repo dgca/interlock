@@ -5,18 +5,37 @@ import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { executorProfileSchema, type WorkRequest } from '@interlock/core';
 import { ManagedExecutionPanel } from '../packages/ui/src/features/executors/ManagedExecutionPanel';
-const rpc = vi.hoisted(() => ({ inspect: vi.fn(), manage: vi.fn() }));
+const rpc = vi.hoisted(() => ({
+  inspect: vi.fn(),
+  manage: vi.fn(),
+  models: vi.fn(),
+}));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
     executors: {
       inspect: { query: rpc.inspect },
       manage: { mutate: rpc.manage },
+      models: { query: rpc.models },
     },
   },
   errorMessage: (e: Error) => e.message,
 }));
 let root: Root, container: HTMLDivElement;
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  Element.prototype.scrollIntoView = vi.fn();
+  rpc.models.mockResolvedValue({
+    status: 'ready',
+    models: [{ id: 'working', name: 'Working model' }],
+    truncated: false,
+  });
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -168,6 +187,38 @@ async function permission() {
   await mount({ ...fixture.work });
   return fixture;
 }
+it('selects a replacement and retries a model hold without a stopped-session confirmation', async () => {
+  const fixture = await render(false);
+  const record = {
+    ...fixture.record,
+    state: 'needs_model',
+    requests: [],
+    error: 'model_not_found',
+  };
+  rpc.inspect.mockResolvedValue({ items: [record], total: 1, history: [] });
+  await mount({ ...fixture.work, status: 'held' });
+  expect(container.textContent).toContain('Choose a replacement model');
+  expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+  expect(button('Retry with selected model').disabled).toBe(true);
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!
+      .click(),
+  );
+  const choice = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((el) => el.textContent?.includes('Working model'))!;
+  expect(choice).toBeDefined();
+  await act(async () => choice.click());
+  await act(async () => button('Retry with selected model').click());
+  expect(rpc.manage).toHaveBeenCalledWith({
+    action: 'retry_model',
+    executionId: record.id,
+    model: 'working',
+  });
+  expect(button('Retry with selected model').disabled).toBe(true);
+  expect(container.textContent).toContain('Replacement recorded');
+});
 it('submits one exact approval, prevents repeated clicks, and shows the recorded outcome', async () => {
   await permission();
   let resolve!: (value: unknown) => void;

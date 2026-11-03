@@ -36,7 +36,9 @@ export function WorkPanel({
   };
   const hasManagedExecution =
     !!work.executor && !!work.managedExecution?.executionId;
-  const managedRecovery = work.managedExecution?.state === 'interrupted';
+  const managedRecovery = ['interrupted', 'needs_model'].includes(
+    work.managedExecution?.state ?? '',
+  );
   const uncertain =
     work.resourceReservations?.filter((r) => r.state === 'uncertain') ?? [];
   useEffect(() => {
@@ -86,6 +88,14 @@ export function WorkPanel({
                 : work.status === 'timed_out'
                   ? 'Nobody claimed this assignment before its deadline. The run followed Timeout with the original input.'
                   : `Assignment ${work.status}.`}
+        </p>
+      )}
+      {hasManagedExecution && work.status === 'available' && (
+        <p className="hint">
+          {work.budgetBlocked
+            ? 'Budget blocked. Adjust the governing run budget to resume claims.'
+            : (work.managedExecution?.reason ??
+              'Queued for automatic execution.')}
         </p>
       )}
       {hasManagedExecution && (

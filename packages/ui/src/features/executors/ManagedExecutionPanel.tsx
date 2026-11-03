@@ -22,12 +22,14 @@ import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import styles from './ManagedExecutionPanel.module.css';
 import { permissionLabels } from './permissions';
+import { ModelPicker } from './ModelPicker';
 
 type Inspection = Awaited<ReturnType<typeof api.executors.inspect.query>>;
 const stateLabels = {
   starting: 'Starting',
   running: 'Working',
   needs_human: 'Waiting for you',
+  needs_model: 'Choose a model',
   completed: 'Completed',
   failed: 'Attempt ended',
   interrupted: 'Recovery needed',
@@ -65,6 +67,8 @@ function Execution({
   const [feedback, setFeedback] = useState('');
   const [answered, setAnswered] = useState<string[]>([]);
   const [reload, setReload] = useState(0);
+  const [model, setModel] = useState<string>();
+  const [modelRetryRecorded, setModelRetryRecorded] = useState(false);
   useEffect(() => {
     if (inFlight.current) return;
     let alive = true;
@@ -161,16 +165,20 @@ function Execution({
           tt="none"
           variant="light"
           color={
-            record.state === 'needs_human' || record.state === 'interrupted'
+            ['needs_human', 'interrupted', 'needs_model'].includes(record.state)
               ? 'yellow'
               : record.state === 'completed'
                 ? 'green'
                 : 'gray'
           }
         >
-          {record.state === 'needs_human' && !pending.length && answered.length
-            ? 'Response sent'
-            : stateLabels[record.state]}
+          {record.state === 'needs_model' && work.status !== 'held'
+            ? 'Attempt ended'
+            : record.state === 'needs_human' &&
+                !pending.length &&
+                answered.length
+              ? 'Response sent'
+              : stateLabels[record.state]}
         </Badge>
       </div>
       <div role="status" aria-live="polite" className={styles.feedback}>
@@ -207,6 +215,57 @@ function Execution({
           }
         />
       ))}
+      {record.state === 'needs_model' && work.status === 'held' && (
+        <section
+          className={styles.recovery}
+          aria-labelledby={`model-${record.id}`}
+        >
+          <div className={styles.noticeTitle}>
+            <RotateCcw size={19} aria-hidden="true" />
+            <h3 id={`model-${record.id}`}>Choose a replacement model</h3>
+          </div>
+          <p className={styles.explanation}>
+            {record.profile.model ?? 'CLI default'}: {record.error}
+          </p>
+          <ModelPicker
+            label="Replacement model"
+            defaultLabel="Choose a model"
+            value={model}
+            onChange={setModel}
+            profileId={record.profile.id}
+            paths={{ command: record.command, cwd: record.cwd }}
+            disabled={!!busy}
+          />
+          <p className={styles.explanation}>
+            Retry this assignment with native thinking defaults. Published
+            workflow and harness defaults stay unchanged.
+            {work.context.continuityGroup &&
+              ' Later assignments in this continuity group use the selected model.'}
+          </p>
+          <Button
+            variant="primary"
+            disabled={!model || !!busy || modelRetryRecorded}
+            aria-busy={busy === 'retry_model'}
+            onClick={() =>
+              void perform(
+                'retry_model',
+                async () => {
+                  const result = await api.executors.manage.mutate({
+                    action: 'retry_model',
+                    executionId: record.id,
+                    model: model!,
+                  });
+                  setModelRetryRecorded(true);
+                  return result;
+                },
+                'Replacement recorded. The assignment is queued for a new attempt.',
+              )
+            }
+          >
+            {busy === 'retry_model' ? 'Queuing…' : 'Retry with selected model'}
+          </Button>
+        </section>
+      )}
       {record.state === 'interrupted' && (
         <section
           className={styles.recovery}
@@ -291,9 +350,11 @@ function Execution({
           </div>
         </section>
       )}
-      {record.error && record.state !== 'interrupted' && (
-        <p className={styles.reason}>{record.error}</p>
-      )}
+      {record.error &&
+        record.state !== 'interrupted' &&
+        !(record.state === 'needs_model' && work.status === 'held') && (
+          <p className={styles.reason}>{record.error}</p>
+        )}
       <details className={styles.details}>
         <summary>
           Execution details
@@ -321,7 +382,7 @@ function Execution({
               <dd>
                 {record.profile.model}
                 {record.modelSource
-                  ? ` · ${record.modelSource === 'node' ? 'node override' : record.modelSource === 'workflow' ? 'workflow override' : record.modelSource === 'harness' ? 'harness default' : 'CLI default'}`
+                  ? ` · ${record.modelSource === 'recovery' ? 'selected for recovery' : record.modelSource === 'node' ? 'node override' : record.modelSource === 'workflow' ? 'workflow override' : record.modelSource === 'harness' ? 'harness default' : 'CLI default'}`
                   : ''}
               </dd>
             </>
@@ -330,7 +391,7 @@ function Execution({
           <dd>
             {record.profile.effort ?? 'Native default'}
             {record.effortSource
-              ? ` · ${record.effortSource === 'node' ? 'node override' : record.effortSource === 'workflow' ? 'workflow override' : record.effortSource === 'harness' ? 'harness default' : 'native default'}`
+              ? ` · ${record.effortSource === 'recovery' ? 'reset for recovery' : record.effortSource === 'node' ? 'node override' : record.effortSource === 'workflow' ? 'workflow override' : record.effortSource === 'harness' ? 'harness default' : 'native default'}`
               : ''}
           </dd>
           {record.sessionId && (

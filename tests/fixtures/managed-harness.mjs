@@ -28,6 +28,50 @@ let waiting = false,
   model = 'test-model';
 const end = (allowed) => {
   if (model === 'wait') return;
+  if (model === 'model-refusal' || model === 'late-model-refusal') {
+    if (codex) {
+      if (model === 'late-model-refusal')
+        send({
+          method: 'item/started',
+          params: {
+            threadId: session,
+            turnId: 'turn',
+            item: { type: 'commandExecution', id: 'action' },
+          },
+        });
+      send({
+        method: 'turn/completed',
+        params: {
+          threadId: session,
+          turn: {
+            id: 'turn',
+            status: 'failed',
+            error: {
+              message: 'The requested model does not exist (model_not_found)',
+            },
+          },
+        },
+      });
+    } else {
+      send({
+        type: 'assistant',
+        session_id: session,
+        error: 'model_not_found',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Model not found' }],
+        },
+      });
+      send({
+        type: 'result',
+        subtype: 'error_during_execution',
+        session_id: session,
+        is_error: true,
+        errors: ['model_not_found'],
+      });
+    }
+    return;
+  }
   const result = { result: { ok: allowed } };
   if (codex) {
     send({
@@ -148,6 +192,10 @@ for await (const line of createInterface({ input: process.stdin })) {
         id: message.id,
         result: { turn: { id: 'turn', status: 'inProgress' } },
       });
+      if (model === 'model-refusal') {
+        end(false);
+        continue;
+      }
       if (model === 'permissions-full-access') {
         end(true);
         continue;
@@ -267,6 +315,10 @@ for await (const line of createInterface({ input: process.stdin })) {
         apiKeySource: 'none',
         permissionMode: 'default',
       });
+      if (model === 'model-refusal') {
+        end(false);
+        continue;
+      }
       if (model.startsWith('permissions-')) {
         const mode = model.slice('permissions-'.length);
         const expected =

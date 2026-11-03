@@ -2,6 +2,8 @@ import { query } from '@anthropic-ai/claude-agent-sdk/core';
 import { jsonSchema, type ModelUsage } from '@interlock/core';
 import {
   HarnessResultError,
+  HarnessModelError,
+  isModelRefusal,
   assignmentPrompt,
   resultEnvelope,
   type HarnessAdapter,
@@ -77,6 +79,8 @@ export const claudeAdapter: HarnessAdapter = {
     }
   },
   async run(input: HarnessRun) {
+    let taskStarted = false;
+    let modelRefused = false;
     const abortController = new AbortController();
     const abort = () => abortController.abort();
     input.signal.addEventListener('abort', abort, { once: true });
@@ -122,6 +126,7 @@ export const claudeAdapter: HarnessAdapter = {
             schema: resultEnvelope(input.work),
           },
           canUseTool: async (name, parameters) => {
+            taskStarted = true;
             if (
               input.profile.permissions === 'read-only' &&
               ![
@@ -219,14 +224,23 @@ export const claudeAdapter: HarnessAdapter = {
             );
           input.onSession(message.session_id, message.model);
         }
-        if (message.type === 'assistant')
+        if (message.type === 'assistant') {
+          if (message.error === 'model_not_found') modelRefused = true;
+          else if (!message.error) taskStarted = true;
           for (const block of message.message.content)
-            if (block.type === 'tool_use')
+            if (block.type === 'tool_use') {
+              taskStarted = true;
               input.onProgress(`Using ${block.name}`);
+            }
+        }
         if (message.type !== 'result') continue;
+        if (message.subtype !== 'success' && modelRefused && !taskStarted)
+          throw new HarnessModelError(
+            'Claude Code rejected the selected model (model_not_found)',
+          );
         if (message.subtype !== 'success')
           throw new HarnessResultError(
-            `Claude Code ended with ${message.subtype}`,
+            `Claude Code ended with ${message.subtype}${'errors' in message ? ': ' + message.errors.join('; ').slice(0, 2000) : ''}`,
           );
         const envelope = message.structured_output;
         if (
@@ -273,6 +287,16 @@ export const claudeAdapter: HarnessAdapter = {
         };
       }
       throw new Error('Claude Code ended without an assignment result');
+    } catch (error) {
+      if (
+        !taskStarted &&
+        error instanceof HarnessResultError &&
+        isModelRefusal(error)
+      )
+        throw new HarnessModelError(
+          error instanceof Error ? error.message : String(error),
+        );
+      throw error;
     } finally {
       input.signal.removeEventListener('abort', abort);
       stream?.close();

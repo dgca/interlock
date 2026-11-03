@@ -19,6 +19,7 @@ import {
   type WorkRequest,
 } from '@interlock/core';
 import { usageDelta } from '../packages/runtime/src/executors/manager';
+import { HarnessModelError } from '../packages/runtime/src/executors/contracts';
 import { exportWorkflows } from '../packages/runtime/src/transfer';
 
 const engines: Engine[] = [],
@@ -45,7 +46,7 @@ afterEach(async () => {
 });
 const profile = (
   e: Engine,
-  harness: 'codex' | 'claude-code' = 'codex',
+  harness: 'codex' | 'claude-code' | 'pi' = 'codex',
   extra = {},
 ) =>
   save(e, {
@@ -70,7 +71,7 @@ function workflow(
   return w;
 }
 function adapter(
-  id: 'codex' | 'claude-code' = 'codex',
+  id: 'codex' | 'claude-code' | 'pi' = 'codex',
   run?: HarnessAdapter['run'],
 ): HarnessAdapter {
   return {
@@ -91,6 +92,190 @@ function adapter(
 async function settled(e: Engine, id: string) {
   await vi.waitFor(() => expect(e.run(id).status).toBe('completed'));
 }
+it('holds a model refusal without spending failures, releases resources and retries only after an explicit model choice', async () => {
+  const e = create();
+  profile(e, 'codex', { model: 'rejected', permissions: 'read-only' });
+  const calls: HarnessRun[] = [];
+  e.executors.start([
+    adapter('codex', async (i) => {
+      calls.push(i);
+      if (i.profile.model === 'rejected') {
+        void i
+          .request({
+            kind: 'question',
+            title: 'Startup question',
+            detail: '',
+            questions: [{ id: 'startup', text: 'Continue?', allowOther: true }],
+          })
+          .catch(() => {});
+        throw new HarnessModelError(
+          'model_not_found' + ' provider details'.repeat(200),
+        );
+      }
+      return { output: i.work.input };
+    }),
+  ]);
+  const w = workflow(e, 'codex', {
+    model: 'rejected',
+    maxAttempts: 1,
+    resources: [{ source: 'literal', value: 'project' }],
+  });
+  const run = start(e, w.id, { value: 1 });
+  await vi.waitFor(() => expect(e.store.work()[0].status).toBe('held'));
+  const work = e.store.work()[0];
+  const record = e.executors.inspect(work.id).items[0];
+  expect(record.state).toBe('needs_model');
+  expect(record.requests[0].state).toBe('cancelled');
+  expect(e.run(run.id).status).toBe('waiting');
+  expect(e.store.list('workResources')).toHaveLength(0);
+  expect(work.heldClaimCount).toBe(1);
+  expect(work.hold!.reason.length).toBeLessThanOrEqual(1000);
+  expect(work.failureCount ?? 0).toBe(0);
+  expect(e.runAttention()).toEqual([
+    {
+      runId: run.id,
+      reasons: ['question'],
+      target: { runId: run.id, executionId: work.executionId },
+    },
+  ]);
+  expect(e.continuation.briefing({ id: run.id, limit: 20 }).next).toBe(
+    'inspect_executor',
+  );
+  expect(() =>
+    e.manageWorkHold({
+      action: 'resume',
+      workId: work.id,
+      expectedAttempt: 1,
+      expectedRevision: work.holdRevision!,
+      actor: 'test',
+    }),
+  ).toThrow('retry_model');
+  expect(
+    await e.executors.manage({
+      action: 'retry_model',
+      executionId: record.id,
+      model: 'replacement',
+    }),
+  ).toEqual({ applied: true });
+  expect(e.runAttention()).toEqual([]);
+  expect(e.executors.retryModel(record.id, 'replacement')).toEqual({
+    applied: false,
+  });
+  await settled(e, run.id);
+  expect(calls).toHaveLength(2);
+  expect(calls[1].profile).toMatchObject({
+    model: 'replacement',
+    effort: null,
+    permissions: 'read-only',
+  });
+  expect(e.executors.profiles().find((p) => p.id === 'codex')?.model).toBe(
+    'rejected',
+  );
+  expect(e.executors.inspect(work.id).items[0]).toMatchObject({
+    modelSource: 'recovery',
+    effortSource: 'recovery',
+  });
+  expect(e.store.get<any>('managedExecutions', record.id).profile.model).toBe(
+    'rejected',
+  );
+});
+it('restores a model hold after restart without uncertain-process recovery or an automatic retry', async () => {
+  const e = create();
+  profile(e);
+  e.executors.start([
+    adapter('codex', async () => {
+      throw new HarnessModelError('model_not_found');
+    }),
+  ]);
+  const run = start(e, workflow(e, 'codex', { maxAttempts: 1 }).id, 1);
+  await vi.waitFor(() => expect(e.store.work()[0].status).toBe('held'));
+  const work = e.store.work()[0],
+    record = e.executors.inspect(work.id).items[0];
+  await e.executors.stop();
+  e.stop();
+  const next = new Engine(e.store, process.cwd());
+  engines.push(next);
+  engines.splice(engines.indexOf(e), 1);
+  const invoke = vi.fn(async (i: HarnessRun) => ({ output: i.work.input }));
+  next.executors.start([adapter('codex', invoke)]);
+  expect(next.executors.inspect(work.id).items[0].state).toBe('needs_model');
+  expect(invoke).not.toHaveBeenCalled();
+  next.executors.retryModel(record.id, 'working');
+  await settled(next, run.id);
+  expect(invoke).toHaveBeenCalledTimes(1);
+});
+it('preserves a continuity session and the requested model/effort intent through manual recovery', async () => {
+  const e = create();
+  profile(e, 'codex', { tools: ['git'], model: 'rejected' });
+  const calls: HarnessRun[] = [];
+  const native = adapter('codex', async (i) => {
+    calls.push(i);
+    i.onSession('same-native');
+    if (i.profile.model === 'rejected')
+      throw new HarnessModelError('model_not_found');
+    return { output: i.work.input };
+  });
+  native.models = async () => ({
+    models: [{ id: 'rejected', name: 'Rejected', effortLevels: ['high'] }],
+  });
+  e.executors.start([native]);
+  const grouped = groupedWorkflow(e, 'codex', {
+    agentModel: 'rejected',
+    agentEffort: 'high',
+  });
+  const run = start(e, grouped.id, 1);
+  await vi.waitFor(() => expect(e.store.work()[0].status).toBe('held'));
+  e.executors.retryModel(
+    e.executors.inspect(e.store.work()[0].id).items[0].id,
+    'replacement',
+  );
+  await settled(e, run.id);
+  expect(calls).toHaveLength(3);
+  expect(calls[0].profile.effort).toBe('high');
+  expect(calls.slice(1).every((i) => i.profile.effort === null)).toBe(true);
+  expect(e.workflow(grouped.id).draft.agentModel).toBe('rejected');
+  expect(calls.slice(1).map((i) => [i.profile.model, i.sessionId])).toEqual([
+    ['replacement', 'same-native'],
+    ['replacement', 'same-native'],
+  ]);
+});
+it('rejects stale or cancelled model recovery and permits cleanup after cancellation', async () => {
+  const e = create();
+  profile(e);
+  e.executors.start([
+    adapter('codex', async () => {
+      throw new HarnessModelError('model_not_found');
+    }),
+  ]);
+  const run = start(e, workflow(e, 'codex').id, 1);
+  await vi.waitFor(() => expect(e.store.work()[0].status).toBe('held'));
+  const work = e.store.work()[0],
+    record = e.executors.inspect(work.id).items[0];
+  e.cancel(run.id);
+  expect(e.runAttention()).toEqual([]);
+  expect(() => e.executors.retryModel(record.id, 'working')).toThrow(
+    'no longer active',
+  );
+  expect(() => e.executors.assertDelete(new Set([run.id]))).not.toThrow();
+});
+it('keeps unknown model-adjacent failures on the existing uncertain-execution path', async () => {
+  const e = create();
+  profile(e);
+  e.executors.start([
+    adapter('codex', async () => {
+      throw new Error('HTTP 401 or transport unavailable');
+    }),
+  ]);
+  const run = start(e, workflow(e, 'codex').id, 1);
+  await vi.waitFor(() =>
+    expect(e.store.work()[0].managedExecution?.state).toBe('interrupted'),
+  );
+  const work = e.store.work()[0];
+  expect(() =>
+    e.executors.retryModel(e.executors.inspect(work.id).items[0].id, 'working'),
+  ).toThrow('no longer active');
+  expect(e.run(run.id).status).toBe('waiting');
+});
 it('cleans up settled managed execution and session history while preserving local profiles', async () => {
   const e = create();
   profile(e);
@@ -274,7 +459,7 @@ it.each([
     });
   },
 );
-it.each(['claude-code', 'codex'] as const)(
+it.each(['claude-code', 'codex', 'pi'] as const)(
   'automatically executes through %s without another worker process',
   async (harness) => {
     const e = create();
@@ -725,9 +910,48 @@ it('holds unexpected harness failures instead of repeating unknown external effe
   expect(e.store.work()[0].status).toBe('held');
   expect(e.run(r.id).status).toBe('waiting');
 });
-function groupedWorkflow(e: Engine) {
+it('records per-attempt Pi usage on every assignment in a continuing session', async () => {
+  const e = create();
+  profile(e, 'pi', { tools: ['git'] });
+  e.executors.start([
+    adapter('pi', async (i) => {
+      i.onSession('pi-native');
+      return {
+        output: i.work.input,
+        usageScope: 'attempt',
+        usage: [
+          {
+            provider: 'fixture',
+            model: 'model',
+            inputTokens: 100,
+            outputTokens: 10,
+          },
+        ],
+      };
+    }),
+  ]);
+  const run = start(e, groupedWorkflow(e, 'pi').id, 1);
+  await settled(e, run.id);
+  const receipts = e.store.list<any>('usageAttempts').filter((u) => u.snapshot);
+  expect(receipts).toHaveLength(2);
+  for (const receipt of receipts)
+    expect(receipt.snapshot.models).toEqual([
+      {
+        provider: 'fixture',
+        model: 'model',
+        inputTokens: 100,
+        outputTokens: 10,
+      },
+    ]);
+});
+function groupedWorkflow(
+  e: Engine,
+  executor = 'codex',
+  defaults: { agentModel?: string; agentEffort?: string } = {},
+) {
   const d = blankDefinition();
-  d.executor = 'codex';
+  d.executor = executor;
+  Object.assign(d, defaults);
   const a = d.nodes.find((n) => n.kind === 'agent')!;
   if (a.kind !== 'agent') throw Error();
   a.context = { ...a.context, continuityGroup: 'author', tools: ['git'] };

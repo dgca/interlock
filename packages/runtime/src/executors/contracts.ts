@@ -29,6 +29,8 @@ export interface HarnessRun {
 export interface HarnessResult {
   output: Json;
   usage?: ModelUsage[];
+  /** Omission means native session cumulative counters. */
+  usageScope?: 'attempt';
 }
 /** Native transports remain inside adapters; neither owns Interlock claims. */
 export interface HarnessAdapter {
@@ -69,3 +71,31 @@ export function resultEnvelope(work: WorkRequest) {
 
 /** A completed native attempt returned an explicit failure or invalid result. */
 export class HarnessResultError extends Error {}
+
+/** Definite model refusal before task actions; thrown only after native cleanup. */
+export class HarnessModelError extends Error {}
+
+/** A native protocol command was explicitly rejected, rather than lost. */
+export class HarnessRequestError extends Error {}
+
+/** Match native errors, never assistant answer text or generic HTTP failures. */
+export function isModelRefusal(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : JSON.stringify(error);
+  return (
+    typeof message === 'string' &&
+    (/\bmodel_(?:not_found|not_available|not_supported|access_denied)\b/i.test(
+      message,
+    ) ||
+      /\b(?:requested )?model\s+["'][^"'\n]{1,200}["']\s+(?:does not exist|is (?:not supported|unavailable))/i.test(
+        message,
+      ) ||
+      /["'][^"'\n]{1,200}["'] model is not supported when using Codex with a ChatGPT account/i.test(
+        message,
+      ))
+  );
+}

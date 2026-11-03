@@ -96,7 +96,7 @@ The development stdio fallback uses absolute paths to the current Node installat
 
 ## Automatic execution
 
-To have Interlock launch installed Claude Code or Codex itself, configure a local profile in **Harnesses**, enable it, then select its reference in the workflow or Agent Execution settings. This is separate from connecting your existing chat through MCP. See [managed Agent execution](managed-executors.md).
+To have Interlock launch installed Claude Code, Codex, or Pi itself, configure a local profile in **Harnesses**, enable it, then select its reference in the workflow or Agent Execution settings. This is separate from connecting your existing chat through MCP. Recognized early model refusals wait for a human replacement through `manage_executors` action `retry_model`; they do not automatically select another model. See [managed Agent execution](managed-executors.md).
 
 ## Complete a run
 

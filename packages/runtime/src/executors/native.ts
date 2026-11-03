@@ -1,3 +1,4 @@
 import { claudeAdapter } from './claude.js';
 import { codexAdapter } from './codex.js';
-export const nativeAdapters = [claudeAdapter, codexAdapter];
+import { piAdapter } from './pi.js';
+export const nativeAdapters = [claudeAdapter, codexAdapter, piAdapter];

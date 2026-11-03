@@ -247,6 +247,48 @@ it('loads saved Unlimited and explains it in workflow settings', async () => {
   expect(container.textContent).toContain('No shared assignment limit');
   expect(container.textContent).not.toContain('Up to null');
 });
+it('shows Pi installation guidance and allows adding a Pi configuration', async () => {
+  rpc.profiles.mockResolvedValue([
+    {
+      ...harnessProfile(),
+      id: 'pi',
+      harness: 'pi',
+      name: 'Pi',
+      detection: { status: 'missing', message: 'pi not found' },
+    },
+  ]);
+  await act(async () => root.render(h(MantineProvider, {}, h(Harnesses))));
+  expect(
+    container.querySelector<HTMLAnchorElement>('a[href="https://pi.dev/"]'),
+  ).not.toBeNull();
+  await act(async () => button('Add configuration').click());
+  const form = container.querySelector<HTMLFormElement>(
+    'form[aria-label="Add harness configuration"]',
+  )!;
+  const select = form.querySelector('select')!;
+  expect([...select.options].map((o) => o.value)).toContain('pi');
+  await act(async () => {
+    select.value = 'pi';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    setInput(form.querySelector<HTMLInputElement>('input')!, 'Pi review');
+  });
+  rpc.manage.mockResolvedValue({});
+  await act(async () =>
+    form.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true }),
+    ),
+  );
+  expect(rpc.manage).toHaveBeenCalledWith({
+    action: 'save',
+    profile: {
+      id: expect.stringMatching(/^pi-/),
+      harness: 'pi',
+      name: 'Pi review',
+      enabled: false,
+      expectedRevision: 0,
+    },
+  });
+});
 it('preserves open configuration edits across refresh and reloads only on explicit recovery', async () => {
   const original = harnessProfile();
   rpc.profiles.mockResolvedValue([original]);
