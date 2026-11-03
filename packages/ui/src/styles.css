@@ -337,3 +337,12 @@ summary {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+@media (max-width: 600px) {
+  .app {
+    flex-direction: column;
+  }
+  .main {
+    height: calc(100dvh - 60px);
+  }
+}

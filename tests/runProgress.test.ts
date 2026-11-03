@@ -73,3 +73,53 @@ it('shows failed input selection without throwing and handles empty Batches', ()
   expect(progress(empty).nodes.batch.label).toBe('0 of 0 finished');
   expect(progress(empty).title).toBe('Completed');
 });
+
+it('distinguishes managed human attention from an agent working without changing the persisted claim', () => {
+  const id = start(blankDefinition(), {});
+  const work = engine.available(id)[0];
+  engine.claim(work.id, worker);
+  const d = engine.inspect(id);
+  const assignment = d.descendantWork[0];
+  assignment.executor = 'codex';
+  assignment.managedExecution = {
+    profileId: 'codex',
+    state: 'needs_human',
+    pendingRequests: 1,
+  };
+  let p = runProgress(d.run, d.definition, d.descendants, [assignment]);
+  expect(p.title).toBe('Waiting for your response · Agent assignment');
+  expect(p.nodes[assignment.nodeId]).toMatchObject({
+    state: 'waiting',
+    label: 'Waiting for your response',
+  });
+  expect(assignment.status).toBe('claimed');
+  assignment.status = 'held';
+  assignment.managedExecution.state = 'interrupted';
+  p = runProgress(d.run, d.definition, d.descendants, [assignment]);
+  expect(p.title).toBe('Recovery needed · Agent assignment');
+  assignment.status = 'available';
+  assignment.managedExecution.state = 'queued';
+  p = runProgress(d.run, d.definition, d.descendants, [assignment]);
+  expect(p.nodes[assignment.nodeId].label).toBe(
+    'Queued for automatic execution',
+  );
+});
+it('surfaces attention in an owned Batch item but excludes detached runs', () => {
+  const id = start();
+  const d = engine.inspect(id);
+  const assignment = d.descendantWork[0];
+  assignment.executor = 'codex';
+  assignment.managedExecution = {
+    profileId: 'codex',
+    state: 'needs_human',
+    pendingRequests: 1,
+  };
+  expect(
+    runProgress(d.run, d.definition, d.descendants, d.descendantWork).title,
+  ).toBe(`Waiting for your response · ${assignment.label}`);
+  const child = d.descendants.find((r) => r.id === assignment.runId)!;
+  child.parentMode = 'detached';
+  expect(
+    runProgress(d.run, d.definition, d.descendants, d.descendantWork).title,
+  ).not.toContain('Waiting for your response');
+});

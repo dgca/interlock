@@ -26,7 +26,7 @@ export function Sidebar({
         Interlock<span className={styles.version}>v{VERSION}</span>
       </div>
       <div className={styles.group}>WORKSPACE</div>
-      <nav>
+      <nav aria-label="Main navigation">
         {(
           [
             { id: 'workflows', label: 'Workflows', Icon: GitBranch },

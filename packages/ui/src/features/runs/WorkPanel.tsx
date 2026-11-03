@@ -26,10 +26,23 @@ export function WorkPanel({
       ? stored
       : undefined;
   const [stopped, setStopped] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyAssignment = () => {
+    setCopied(false);
+    void navigator.clipboard
+      .writeText(JSON.stringify(work, null, 2))
+      .then(() => setCopied(true))
+      .catch((e) => setError(errorMessage(e)));
+  };
+  const hasManagedExecution =
+    !!work.executor && !!work.managedExecution?.executionId;
   const managedRecovery = work.managedExecution?.state === 'interrupted';
   const uncertain =
     work.resourceReservations?.filter((r) => r.state === 'uncertain') ?? [];
-  useEffect(() => setStopped(false), [work.id, work.attempt]);
+  useEffect(() => {
+    setStopped(false);
+    setCopied(false);
+  }, [work.id, work.attempt]);
   const [output, setOutput] = useState('{}'),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
@@ -55,25 +68,27 @@ export function WorkPanel({
         <Bot size={17} />
         <h3>Agent assignment</h3>
       </div>
-      <p className="hint">
-        {work.status === 'available'
-          ? work.budgetBlocked
-            ? 'Budget blocked. Adjust the governing run budget through MCP or the CLI to resume claims.'
-            : work.resourceBlocked
-              ? 'Waiting for a shared resource.'
-              : (work.managedExecution?.reason ??
-                (work.executor
-                  ? 'Queued for automatic execution.'
-                  : 'Waiting for an agent to pick up this assignment.'))
-          : work.status === 'held'
-            ? 'Held for an external blocker. Resume explicitly, then obtain a fresh claim.'
-            : work.status === 'claimed'
-              ? `Claimed by ${work.workerId}. Lease ends ${new Date(work.leaseUntil!).toLocaleTimeString()}.`
-              : work.status === 'timed_out'
-                ? 'Nobody claimed this assignment before its deadline. The run followed Timeout with the original input.'
-                : `Assignment ${work.status}.`}
-      </p>
-      {work.executor && (
+      {!hasManagedExecution && (
+        <p className="hint">
+          {work.status === 'available'
+            ? work.budgetBlocked
+              ? 'Budget blocked. Adjust the governing run budget through MCP or the CLI to resume claims.'
+              : work.resourceBlocked
+                ? 'Waiting for a shared resource.'
+                : (work.managedExecution?.reason ??
+                  (work.executor
+                    ? 'Queued for automatic execution.'
+                    : 'Waiting for an agent to pick up this assignment.'))
+            : work.status === 'held'
+              ? 'Held for an external blocker. Resume explicitly, then obtain a fresh claim.'
+              : work.status === 'claimed'
+                ? `Claimed by ${work.workerId}. Lease ends ${new Date(work.leaseUntil!).toLocaleTimeString()}.`
+                : work.status === 'timed_out'
+                  ? 'Nobody claimed this assignment before its deadline. The run followed Timeout with the original input.'
+                  : `Assignment ${work.status}.`}
+        </p>
+      )}
+      {hasManagedExecution && (
         <ManagedExecutionPanel work={work} onRefresh={onRefresh} />
       )}
       {work.resourceBlocked && (
@@ -103,7 +118,7 @@ export function WorkPanel({
           />
         </div>
       )}
-      {work.hold && (
+      {work.hold && !managedRecovery && (
         <div style={{ overflowWrap: 'anywhere' }}>
           <p>
             <strong>{work.hold.category.replaceAll('_', ' ')}</strong> · held
@@ -198,19 +213,21 @@ export function WorkPanel({
             Resume assignment
           </Button>
         )}
-        <Button
-          onClick={() =>
-            void navigator.clipboard
-              .writeText(JSON.stringify(work, null, 2))
-              .catch((e) => setError(errorMessage(e)))
-          }
-        >
-          <Copy />
-          Copy assignment
-        </Button>
+        {!work.executor && (
+          <Button onClick={copyAssignment}>
+            <Copy />
+            {copied ? 'Assignment copied' : 'Copy assignment'}
+          </Button>
+        )}
       </div>
-      <details open>
+      <details open={work.executor ? undefined : true}>
         <summary>Prompt and context</summary>
+        {work.executor && (
+          <Button onClick={copyAssignment}>
+            <Copy />
+            {copied ? 'Assignment copied' : 'Copy assignment'}
+          </Button>
+        )}
         {work.executionInstructions && (
           <p className="assignment-prompt">{work.executionInstructions}</p>
         )}

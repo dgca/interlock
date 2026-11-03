@@ -1,6 +1,8 @@
+import { Menu, ScrollArea } from '@mantine/core';
 import { nodeKindLabel } from '@interlock/core';
 import type { Action } from '../../lib/useActionFeedback';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { needsManagedAttention } from '../executors/managedStatus';
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -49,6 +51,9 @@ export function RunInspector({
   act: Action;
   onConnect?: () => void;
 }) {
+  const detailRef = useRef<HTMLElement>(null);
+  const focusReview = useRef(false);
+  const [returnMenuFocus, setReturnMenuFocus] = useState(true);
   const [data, setData] = useState<Detail>(),
     [error, setError] = useState(''),
     [selected, setSelected] = useState<{
@@ -56,6 +61,12 @@ export function RunInspector({
       runId?: string;
       executionId?: string;
     }>();
+  useEffect(() => {
+    if (!focusReview.current) return;
+    focusReview.current = false;
+    detailRef.current?.focus();
+    detailRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [selected]);
   const refresh = () => {
     void inspectRun(id)
       .then(setData)
@@ -80,6 +91,10 @@ export function RunInspector({
   const descendants = data.descendants ?? [];
   const allWork = data.descendantWork ?? work;
   const runIndex = new Map([run, ...descendants].map((r) => [r.id, r]));
+  const attention = allWork.filter(
+    (w) =>
+      needsManagedAttention(w) && !detachedBoundary(w.runId, run.id, runIndex),
+  );
   const independent = descendants.filter(
     (r) =>
       r.parentMode === 'detached' && ['running', 'waiting'].includes(r.status),
@@ -106,6 +121,33 @@ export function RunInspector({
       owner?.executions
         .filter((execution) => execution.nodeId === nodeId)
         .at(-1);
+  const selectedWork = allWork.filter((w) => w.executionId === execution?.id);
+  const assignmentScope = (w: (typeof allWork)[number]) => {
+    const item = progress.nodes[w.nodeId]?.items.find(
+      (item) => item.run.id === w.runId,
+    );
+    const owner = runIndex.get(w.runId);
+    return owner?.batchNodeId && item
+      ? `Item ${item.index + 1}`
+      : w.runId !== run.id
+        ? `${owner?.workflowName ?? 'Child run'} · ${w.runId.slice(0, 8)}`
+        : undefined;
+  };
+  const reviewWork = (w: (typeof allWork)[number]) => {
+    const owner = runIndex.get(w.runId);
+    if (owner && owner.id !== run.id && !owner.batchNodeId) {
+      onOpen(owner.id, w.executionId);
+      return;
+    }
+    // Choosing a request moves focus to its details after the menu releases its trap.
+    focusReview.current = true;
+    setReturnMenuFocus(false);
+    setSelected({
+      nodeId: w.nodeId,
+      runId: w.runId,
+      executionId: w.executionId,
+    });
+  };
   const itemRuns =
     node?.kind === 'batch'
       ? (execution?.childRunIds ?? []).flatMap((id) => {
@@ -122,8 +164,8 @@ export function RunInspector({
           <ArrowLeft />
         </Button>
         <div>
-          <span className="eyebrow">RUN INSPECTOR · V{run.version}</span>
           <h2>{run.workflowName}</h2>
+          <span className={styles.version}>Version {run.version}</span>
           <ComparisonContext comparison={run.comparison} />
         </div>
         <Badge status={progress.runStates[run.id] ?? run.status} />
@@ -215,6 +257,43 @@ export function RunInspector({
           <span>Failure handled by parent recovery.</span>
         )}
         {progress.detail && <span>{progress.detail}</span>}
+        {attention.length > 0 && (
+          <div className={styles.attentionActions}>
+            {attention.length === 1 ? (
+              <Button onClick={() => reviewWork(attention[0])}>
+                {attention[0].managedExecution?.state === 'interrupted'
+                  ? 'Review recovery'
+                  : 'Review request'}
+              </Button>
+            ) : (
+              <Menu
+                position="bottom-end"
+                withinPortal
+                returnFocus={returnMenuFocus}
+                onOpen={() => setReturnMenuFocus(true)}
+              >
+                <Menu.Target>
+                  <Button>Review {attention.length} steps</Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <ScrollArea.Autosize mah={280}>
+                    {attention.map((w) => (
+                      <Menu.Item key={w.id} onClick={() => reviewWork(w)}>
+                        {w.label}
+                        {assignmentScope(w)
+                          ? ` · ${assignmentScope(w)}`
+                          : ''} ·{' '}
+                        {w.managedExecution?.state === 'interrupted'
+                          ? 'Recovery'
+                          : 'Response needed'}
+                      </Menu.Item>
+                    ))}
+                  </ScrollArea.Autosize>
+                </Menu.Dropdown>
+              </Menu>
+            )}
+          </div>
+        )}
         {run.status === 'completed' && !run.chain?.nextRunId && (
           <a href="#workflow-result">View result</a>
         )}
@@ -250,126 +329,32 @@ export function RunInspector({
       )}
       {['running', 'waiting'].includes(run.status) &&
         data.availableWork.some(
-          (w) => !detachedBoundary(w.runId, run.id, runIndex),
+          (w) => !w.executor && !detachedBoundary(w.runId, run.id, runIndex),
         ) && (
           <div className={styles.handoff}>
             <AgentHandoff key={run.id} runId={run.id} onConnect={onConnect} />
           </div>
         )}
       <div className={styles.body}>
-        <section className={styles.overview}>
-          <RunUsage id={id} tick={tick} />
-          <div
-            className={`${styles.graph} ${!definition ? styles.unavailableGraph : ''}`}
-          >
-            {definition ? (
-              <RunGraph
-                key={run.id}
-                definition={definition}
-                progress={progress.nodes}
-                selected={nodeId}
-                onSelect={(nodeId) => setSelected({ nodeId })}
-              />
-            ) : (
-              <p className="hint">
-                Published version v{run.version} was removed. Graph inspection
-                and retry are unavailable. Stored results, execution details,
-                events, and child runs remain available.
+        <aside
+          ref={detailRef}
+          tabIndex={-1}
+          aria-label="Selected step"
+          className={styles.detail}
+        >
+          <div className="inspector-heading">
+            <h2>{node?.label ?? execution?.label ?? 'Workflow input'}</h2>
+            {selectedWork[0] && assignmentScope(selectedWork[0]) && (
+              <p className={styles.stepScope}>
+                {assignmentScope(selectedWork[0])}
               </p>
             )}
           </div>
-          <div className={styles.log}>
-            <div className="section-heading">
-              <h3>Execution timeline</h3>
-              <code>{run.id.slice(0, 8)}</code>
-            </div>
-            {run.error && <p className="error-banner">{run.error}</p>}
-            {run.executions.map((e, i) => (
-              <button
-                key={e.id}
-                onClick={() =>
-                  setSelected({
-                    nodeId: e.nodeId,
-                    runId: run.id,
-                    executionId: e.id,
-                  })
-                }
-                className={`${styles.step} ${execution?.id === e.id ? styles.selected : ''}`}
-              >
-                <span className={styles.index}>
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <div>
-                  <strong>{e.label}</strong>
-                  <small>
-                    {nodeKindLabel(e.kind)} ·{' '}
-                    {new Date(e.startedAt).toLocaleTimeString()}
-                  </small>
-                </div>
-                <Badge
-                  status={
-                    e.status === 'waiting' &&
-                    progress.nodes[e.nodeId]?.state === 'running'
-                      ? 'running'
-                      : e.status
-                  }
-                />
-              </button>
-            ))}
-            {children.length > 0 && (
-              <>
-                <h3 className={styles.childTitle}>Child runs</h3>
-                {children.map((child) => (
-                  <button
-                    key={child.id}
-                    className={styles.child}
-                    onClick={() => onOpen(child.id)}
-                  >
-                    <span>
-                      {child.workflowName}
-                      <small>
-                        {child.parentMode === 'detached'
-                          ? 'Started independently · '
-                          : ''}
-                        {child.id.slice(0, 8)}
-                      </small>
-                    </span>
-                    <Badge
-                      status={progress.runStates[child.id] ?? child.status}
-                    />
-                    <ArrowUpRight size={14} />
-                  </button>
-                ))}
-              </>
-            )}
-            <details className={styles.events}>
-              <summary>Run events · {events.length}</summary>
-              {events.map((e) => (
-                <div key={e.id}>
-                  <time>{new Date(e.at).toLocaleTimeString()}</time>
-                  <span>{e.message}</span>
-                </div>
-              ))}
-            </details>
-            {run.status === 'completed' && !run.chain?.nextRunId && (
-              <section id="workflow-result" className={styles.result}>
-                <h3>Workflow result</h3>
-                {typeof run.output === 'string' ? (
-                  <pre>{run.output}</pre>
-                ) : (
-                  <JsonEditor label="Output" value={run.output} />
-                )}
-              </section>
-            )}
-          </div>
-        </section>
-        <aside className={styles.detail}>
-          <div className="inspector-heading">
-            <span className="eyebrow">EXECUTION DETAILS</span>
-            <h2>{node?.label ?? execution?.label ?? 'Workflow input'}</h2>
-          </div>
           <div className="inspector-fields">
-            {nodeProgress && (
+            {selectedWork.map((w) => (
+              <WorkPanel key={w.id} work={w} onRefresh={refresh} />
+            ))}
+            {nodeProgress && !selectedWork.some((w) => w.executor) && (
               <p className={styles.progressLabel}>{nodeProgress.label}</p>
             )}
             {node?.batchId && (
@@ -506,30 +491,139 @@ export function RunInspector({
                 )}
               </>
             )}
-            {(execution || !nodeId) && (
-              <JsonEditor
-                label="Input"
-                value={execution ? execution.input : run.input}
-              />
-            )}
-            {execution?.result !== undefined && (
-              <JsonEditor label="Accepted result" value={execution.result} />
-            )}
-            {execution?.output !== undefined && (
-              <JsonEditor
-                label={
-                  execution.result !== undefined ? 'Forwarded output' : 'Output'
-                }
-                value={execution.output}
-              />
-            )}{' '}
-            {allWork
-              .filter((w) => w.executionId === execution?.id)
-              .map((w) => (
-                <WorkPanel key={w.id} work={w} onRefresh={refresh} />
-              ))}
+            <details
+              className={styles.stepData}
+              open={selectedWork.some((w) => w.executor) ? undefined : true}
+            >
+              <summary>Step data</summary>
+              {(execution || !nodeId) && (
+                <JsonEditor
+                  label="Input"
+                  value={execution ? execution.input : run.input}
+                />
+              )}
+              {execution?.result !== undefined && (
+                <JsonEditor label="Accepted result" value={execution.result} />
+              )}
+              {execution?.output !== undefined && (
+                <JsonEditor
+                  label={
+                    execution.result !== undefined
+                      ? 'Forwarded output'
+                      : 'Output'
+                  }
+                  value={execution.output}
+                />
+              )}{' '}
+            </details>
           </div>
         </aside>
+        <section className={styles.overview}>
+          <div
+            className={`${styles.graph} ${!definition ? styles.unavailableGraph : ''}`}
+          >
+            {definition ? (
+              <RunGraph
+                key={run.id}
+                definition={definition}
+                progress={progress.nodes}
+                selected={nodeId}
+                onSelect={(nodeId) => setSelected({ nodeId })}
+              />
+            ) : (
+              <p className="hint">
+                Published version v{run.version} was removed. Graph inspection
+                and retry are unavailable. Stored results, execution details,
+                events, and child runs remain available.
+              </p>
+            )}
+          </div>
+          <div className={styles.log}>
+            <div className="section-heading">
+              <h3>Execution timeline</h3>
+              <code>{run.id.slice(0, 8)}</code>
+            </div>
+            {run.error && <p className="error-banner">{run.error}</p>}
+            {run.executions.map((e, i) => (
+              <button
+                key={e.id}
+                onClick={() =>
+                  setSelected({
+                    nodeId: e.nodeId,
+                    runId: run.id,
+                    executionId: e.id,
+                  })
+                }
+                className={`${styles.step} ${execution?.id === e.id ? styles.selected : ''}`}
+              >
+                <span className={styles.index}>
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <div className={styles.stepContent}>
+                  <strong>{e.label}</strong>
+                  <small>
+                    {nodeKindLabel(e.kind)} ·{' '}
+                    {new Date(e.startedAt).toLocaleTimeString()}
+                  </small>
+                </div>
+                <Badge
+                  status={
+                    e.status === 'waiting' &&
+                    progress.nodes[e.nodeId]?.state === 'running'
+                      ? 'running'
+                      : e.status
+                  }
+                />
+              </button>
+            ))}
+            {children.length > 0 && (
+              <>
+                <h3 className={styles.childTitle}>Child runs</h3>
+                {children.map((child) => (
+                  <button
+                    key={child.id}
+                    className={styles.child}
+                    onClick={() => onOpen(child.id)}
+                  >
+                    <span>
+                      {child.workflowName}
+                      <small>
+                        {child.parentMode === 'detached'
+                          ? 'Started independently · '
+                          : ''}
+                        {child.id.slice(0, 8)}
+                      </small>
+                    </span>
+                    <Badge
+                      status={progress.runStates[child.id] ?? child.status}
+                    />
+                    <ArrowUpRight size={14} />
+                  </button>
+                ))}
+              </>
+            )}
+            <details className={styles.events}>
+              <summary>Run events · {events.length}</summary>
+              {events.map((e) => (
+                <div key={e.id}>
+                  <time>{new Date(e.at).toLocaleTimeString()}</time>
+                  <span>{e.message}</span>
+                </div>
+              ))}
+            </details>
+            {run.status === 'completed' && !run.chain?.nextRunId && (
+              <section id="workflow-result" className={styles.result}>
+                <h3>Workflow result</h3>
+                {typeof run.output === 'string' ? (
+                  <pre>{run.output}</pre>
+                ) : (
+                  <JsonEditor label="Output" value={run.output} />
+                )}
+              </section>
+            )}
+          </div>
+          <RunUsage id={id} tick={tick} />
+        </section>
       </div>
     </div>
   );
