@@ -1,0 +1,13 @@
+{
+  "runId": "92fcc026-3b36-43c7-991e-e1da4ba4e7d7",
+  "workflowId": "cc973113-577c-4f6c-b5ea-a213605c92cb",
+  "version": 4,
+  "requestId": "issue-193-workflow-variables-sdlc",
+  "repoPath": "/Users/dan/dev/interlock",
+  "taskDir": ".tasks/workflow-variables",
+  "branch": "codex/workflow-variables",
+  "baseCommit": "a2112c8507adaab6daa3084ae45214c1edfcc30c",
+  "reviewPolicy": "auto",
+  "createPr": false,
+  "issue": "https://github.com/dgca/interlock/issues/193"
+}
