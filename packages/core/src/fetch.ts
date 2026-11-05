@@ -5,8 +5,8 @@ export type FetchConfig = Pick<
   FetchNode,
   'url' | 'method' | 'query' | 'headers' | 'body'
 >;
-export type FetchBinding = FetchNode['query'][number]['value'];
-export type FetchField = FetchNode['query'][number];
+export type FetchBinding = FetchNode['headers'][number]['value'];
+export type FetchField = FetchNode['headers'][number];
 export interface FetchRequest {
   url: string;
   method: string;
@@ -34,7 +34,13 @@ function inputField(input: Json, path: string): Json {
   }
   return value;
 }
-function resolve(binding: FetchBinding, input: Json): Json {
+function resolve(
+  binding: FetchBinding,
+  input: Json,
+  variable?: (id: string) => string,
+): Json {
+  if (binding.kind === 'variable')
+    return `${binding.prefix ?? ''}${variable ? variable(binding.variableId) : '[Variable]'}${binding.suffix ?? ''}`;
   return binding.kind === 'fixed'
     ? binding.value
     : inputField(input, binding.path);
@@ -89,7 +95,14 @@ export function validateFetch(node: FetchConfig): void {
         );
       names.add(name);
       if (field.value.kind === 'input') pathParts(field.value.path);
-      else if (label !== 'Body field') scalar(field.value.value, label);
+      else if (field.value.kind === 'variable') {
+        if (label !== 'Header')
+          throw new InterlockError(
+            'Variables are supported only in Fetch headers',
+          );
+        if (!field.value.variableId)
+          throw new InterlockError('Select a variable for the header');
+      } else if (label !== 'Body field') scalar(field.value.value, label);
       if (label === 'Header')
         new Headers({
           [field.name]:
@@ -101,19 +114,26 @@ export function validateFetch(node: FetchConfig): void {
     throw new InterlockError(`${node.method} requests cannot have a body`);
 }
 /** Pure request resolution shared by execution and the sample-input preview. */
-export function resolveFetch(node: FetchConfig, input: Json): FetchRequest {
+export function resolveFetch(
+  node: FetchConfig,
+  input: Json,
+  variable?: (id: string) => string,
+): FetchRequest {
   validateFetch(node);
   const url = new URL(interpolate(node.url, (path) => inputField(input, path)));
   for (const field of node.query)
     url.searchParams.append(
       field.name,
-      scalar(resolve(field.value, input), `Query parameter ${field.name}`),
+      scalar(
+        resolve(field.value, input, variable),
+        `Query parameter ${field.name}`,
+      ),
     );
   const headers = new Headers();
   for (const field of node.headers)
     headers.set(
       field.name,
-      scalar(resolve(field.value, input), `Header ${field.name}`),
+      scalar(resolve(field.value, input, variable), `Header ${field.name}`),
     );
   const body =
     node.body.kind === 'none'

@@ -1,0 +1,9 @@
+
+ RUN  v3.2.7 /Users/dan/dev/interlock
+
+ ✓ tests/variables.test.ts (30 tests) 1975ms
+
+ Test Files  1 passed (1)
+      Tests  30 passed (30)
+   Start at  10:35:08
+   Duration  2.43s (transform 213ms, setup 0ms, collect 317ms, tests 1.97s, environment 0ms, prepare 28ms)

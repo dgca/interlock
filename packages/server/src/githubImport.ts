@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { InterlockError } from '@interlock/core';
+import type { VariableImportBindings } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import {
   inspectImportDocument,
@@ -293,6 +294,7 @@ export class GithubImporter {
           description: inspected.description,
           workflows: inspected.workflows,
           prompts: inspected.prompts,
+          variables: inspected.variables,
           error: '',
         });
       } catch (error) {
@@ -305,6 +307,7 @@ export class GithubImporter {
           description: '',
           workflows: [],
           prompts: [],
+          variables: [],
           error: importErrorMessage(error),
         });
       }
@@ -316,6 +319,7 @@ export class GithubImporter {
     sourceData: GithubSource,
     names: string[],
     signal?: AbortSignal,
+    variableBindings?: VariableImportBindings,
   ) {
     try {
       const source = githubSourceSchema.parse(sourceData);
@@ -342,7 +346,7 @@ export class GithubImporter {
         data.push(document);
       }
       active.throwIfAborted();
-      return importSelection(engine, data);
+      return importSelection(engine, data, variableBindings);
     } catch (error) {
       throw new InterlockError(
         `Nothing imported: ${importErrorMessage(error)}`,

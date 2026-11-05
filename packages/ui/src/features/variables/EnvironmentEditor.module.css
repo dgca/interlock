@@ -1,0 +1,53 @@
+.row {
+  padding-bottom: var(--mantine-spacing-sm);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+.selection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: var(--mantine-spacing-xs);
+  align-items: start;
+}
+
+.selection > button {
+  margin-top: 24px;
+}
+
+.access code {
+  overflow-wrap: anywhere;
+}
+
+.changeName {
+  align-self: flex-start;
+  min-height: 36px;
+  text-align: left;
+}
+
+.manage {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+}
+
+.action {
+  min-height: 36px;
+}
+
+@media (max-width: 48em) {
+  .selection {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  .selection > button {
+    width: 44px;
+    height: 44px;
+    margin-top: 26px;
+  }
+
+  .action,
+  .changeName,
+  .manage {
+    min-height: 44px;
+  }
+}

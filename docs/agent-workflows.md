@@ -343,9 +343,23 @@ Nodes with node-output bindings show a **Reads from [label]** indicator for each
 
 ## Export and import portable bundles
 
-`interlock export WORKFLOW_ID` and MCP `export_workflow` export an `interlock-workflows` bundle with `formatVersion: 1` when no saved prompts are referenced, or `formatVersion: 2` when prompts are included. Exports with deleted-version identity hashes use `formatVersion: 3`, with prompts when needed. Older readers reject format 3. Prompt-bearing bundles require an Interlock version with Prompts support; earlier readers reject version 2. The library and Workflow settings export the same bundle format. Workflow settings includes local draft edits without saving them.
+Use `read_variables` for bounded metadata and dependencies and `manage_variables`
+for revision-protected management. Fetch header references and Script environment
+entries, including polling checks, pin protected revisions at run startup. Values
+are never added implicitly to Agent assignments. Secret read-back is unavailable;
+prefer the local UI or CLI stdin for entry. See [workflow variables](variables.md).
 
-A bundle contains the root workflow, its owned children, owners, and transitive dependencies from drafts and retained published versions. Each record includes a stable ID, name, description, ownership, draft, source draft revision, and retained published versions with original numbers, which may have gaps. Format-3 records also include `deletedVersions` with version numbers, definition hashes, and deletion timestamps. Missing referenced workflows or saved prompts block export. Prompt-bearing format-2 and format-3 bundles include one current prompt record per referenced ID, with name, description, revision, and Markdown content. References in all exported drafts and published versions are included. Prompt revision history and historical run captures are excluded. Runs, claim tokens, and archive flags are excluded. Exporting an owned child includes its owner and siblings to preserve ownership.
+For format 4, supply a `variableBindings` entry for every required ID, with
+`{action:"bind",variableId:"LOCAL_ID"}` or `{action:"provision",name:"local_name"}`.
+Bindings are instance-wide and same-kind; name matching never attaches credentials.
+Provisioning creates an unset value. Missing values block runs. Imports cannot
+redirect existing bindings or rewrite published definitions. After provisioning
+and setting a value, a later import must explicitly select that existing local
+value. CLI import accepts the same choices through `--variable-bindings json|@file`.
+
+`interlock export WORKFLOW_ID` and MCP `export_workflow` export an `interlock-workflows` bundle with `formatVersion: 1` when no saved prompts are referenced, or `formatVersion: 2` when prompts are included. Variable-bearing exports use `formatVersion: 4`, with safe required-variable metadata and no Config or Secret values. They require explicit `variableBindings` on import. Other exports with deleted-version identity hashes use `formatVersion: 3`, with prompts when needed. Older readers reject format 3. Prompt-bearing bundles require an Interlock version with Prompts support; earlier readers reject version 2. The library and Workflow settings export the same bundle format. Workflow settings includes local draft edits without saving them.
+
+A bundle contains the root workflow, its owned children, owners, and transitive dependencies from drafts and retained published versions. Each record includes a stable ID, name, description, ownership, draft, source draft revision, and retained published versions with original numbers, which may have gaps. Format-3 and format-4 records can also include `deletedVersions` with version numbers, definition hashes, and deletion timestamps. Missing referenced workflows or saved prompts block export. Prompt-bearing format-2, format-3, and format-4 bundles include one current prompt record per referenced ID, with name, description, revision, and Markdown content. References in all exported drafts and published versions are included. Prompt revision history and historical run captures are excluded. Runs, claim tokens, and archive flags are excluded. Exporting an owned child includes its owner and siblings to preserve ownership.
 
 ```sh
 interlock export WORKFLOW_ID > workflow.json

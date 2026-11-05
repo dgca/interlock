@@ -10,6 +10,7 @@ import { Sidebar } from './components/Sidebar/Sidebar';
 import { RunDialog } from './features/runs/RunDialog';
 import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
 import { api, errorMessage } from './lib/api';
+import { subscribeToEngineEvents } from './lib/engineEvents';
 import type { Action } from './lib/useActionFeedback';
 
 export type AppContext = {
@@ -32,14 +33,17 @@ export function App() {
   const workflowMatch = useMatch('/workflows/:workflowId');
   const runMatch = useMatch('/runs/*');
   const promptMatch = useMatch('/prompts/*');
+  const variableMatch = useMatch('/variables/*');
   const harnessMatch = useMatch('/settings/harnesses');
   const page = harnessMatch
     ? 'harnesses'
-    : promptMatch
-      ? 'prompts'
-      : runMatch
-        ? 'runs'
-        : 'workflows';
+    : variableMatch
+      ? 'variables'
+      : promptMatch
+        ? 'prompts'
+        : runMatch
+          ? 'runs'
+          : 'workflows';
   const [editorDirty, setEditorDirty] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -103,14 +107,15 @@ export function App() {
         }, 100);
     };
     update();
-    const stream = new EventSource('/events');
-    stream.addEventListener('change', schedule);
-    stream.addEventListener('connected', () => setConnected(true));
-    stream.onerror = () => setConnected(false);
+    const stopEvents = subscribeToEngineEvents({
+      onChange: schedule,
+      onConnect: () => setConnected(true),
+      onError: () => setConnected(false),
+    });
     const interval = setInterval(update, 5000);
     return () => {
       mounted = false;
-      stream.close();
+      stopEvents();
       clearInterval(interval);
       clearTimeout(pending);
     };
@@ -158,7 +163,9 @@ export function App() {
                 ? paths.runs()
                 : next === 'prompts'
                   ? paths.prompts
-                  : paths.workflows,
+                  : next === 'variables'
+                    ? paths.variables
+                    : paths.workflows,
           )
         }
       />

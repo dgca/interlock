@@ -1,6 +1,11 @@
 import { isDeepStrictEqual } from 'node:util';
 import { Store } from '@interlock/storage';
 import { InterlockError, promptIds, blankDefinition } from '@interlock/core';
+import {
+  variableReferences,
+  type VariableImportBindings,
+  type VariableRequirement,
+} from '@interlock/core';
 import { Engine } from './index.js';
 import { importWorkflows } from './transfer.js';
 import {
@@ -44,7 +49,18 @@ export function inspectImportDocument(data: unknown) {
               );
           }
       }
-      importWorkflows(store, document.bundle);
+      importWorkflows(store, document.bundle, {
+        variableBindings: Object.fromEntries(
+          (document.bundle.variables ?? []).map((v, index) => [
+            v.id,
+            // Multiple portable IDs can share a display name in a real bundle.
+            {
+              action: 'provision' as const,
+              name: `preview_variable_${index + 1}`,
+            },
+          ]),
+        ),
+      });
       const root = document.bundle.workflows.find(
         (w) => w.id === document.bundle.rootId,
       )!;
@@ -59,6 +75,7 @@ export function inspectImportDocument(data: unknown) {
           id: p.id,
           name: p.name,
         })),
+        variables: document.bundle.variables ?? [],
       };
     }
     const w = document.workflow;
@@ -66,7 +83,8 @@ export function inspectImportDocument(data: unknown) {
     if (
       w.ownerWorkflowId ||
       definition.nodes.some((n) => n.kind === 'workflow') ||
-      promptIds(definition).length
+      promptIds(definition).length ||
+      variableReferences(definition).length
     )
       throw new InterlockError(
         'Legacy file has dependencies. Export it as a portable bundle including its workflows and saved prompts.',
@@ -78,6 +96,7 @@ export function inspectImportDocument(data: unknown) {
       description: w.description,
       workflows: [],
       prompts: [],
+      variables: [] as VariableRequirement[],
     };
   } finally {
     engine.stop();
@@ -89,6 +108,7 @@ function combineBundles(
   documents: ImportDocument[],
 ): WorkflowBundle | undefined {
   const workflows = new Map<string, WorkflowBundle['workflows'][number]>();
+  const variables = new Map<string, VariableRequirement>();
   const prompts = new Map<
     string,
     NonNullable<WorkflowBundle['prompts']>[number]
@@ -97,6 +117,14 @@ function combineBundles(
   for (const document of documents) {
     if (document.kind !== 'bundle') continue;
     rootId ||= document.bundle.rootId;
+    for (const variable of document.bundle.variables ?? []) {
+      const old = variables.get(variable.id);
+      if (old && !isDeepStrictEqual(old, variable))
+        throw new InterlockError(
+          'Selected files conflict for a variable requirement',
+        );
+      variables.set(variable.id, variable);
+    }
     for (const entry of document.bundle.workflows) {
       const previous = workflows.get(entry.id);
       if (!previous) {
@@ -185,22 +213,27 @@ function combineBundles(
   return rootId
     ? {
         format: 'interlock-workflows',
-        formatVersion: [...workflows.values()].some(
-          (w) => w.deletedVersions?.length,
-        )
-          ? 3
-          : prompts.size
-            ? 2
-            : 1,
+        formatVersion: variables.size
+          ? 4
+          : [...workflows.values()].some((w) => w.deletedVersions?.length)
+            ? 3
+            : prompts.size
+              ? 2
+              : 1,
         rootId,
         workflows: [...workflows.values()],
         ...(prompts.size ? { prompts: [...prompts.values()] } : {}),
+        ...(variables.size ? { variables: [...variables.values()] } : {}),
       }
     : undefined;
 }
 
 /** Strict selected-set import. No replacement options and no workflow execution. */
-export function importSelection(engine: Engine, data: unknown[]) {
+export function importSelection(
+  engine: Engine,
+  data: unknown[],
+  variableBindings?: VariableImportBindings,
+) {
   if (!data.length)
     throw new InterlockError('Select at least one workflow to import');
   const documents = data.map((item) => inspectImportDocument(item).document);
@@ -209,7 +242,7 @@ export function importSelection(engine: Engine, data: unknown[]) {
     let imported: ReturnType<typeof importWorkflows> | undefined;
     if (bundle) {
       try {
-        imported = importWorkflows(engine.store, bundle);
+        imported = importWorkflows(engine.store, bundle, { variableBindings });
       } catch (error) {
         if (
           error instanceof InterlockError &&

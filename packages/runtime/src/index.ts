@@ -76,6 +76,10 @@ import { RunHistory } from './runHistory.js';
 import { TrialEnvironments } from './trialEnvironments.js';
 import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
+import { Variables } from './variables.js';
+import { secretRedaction } from './secretRedaction.js';
+import { nodeVariableReferences, variableReferences } from '@interlock/core';
+import type { PollCheck } from '@interlock/core';
 import { VersionCleanup } from './versionCleanup.js';
 import { Ownership } from './ownership.js';
 import { Testbench } from './testbench.js';
@@ -95,6 +99,9 @@ const terminal = (s: string) =>
   ['completed', 'failed', 'cancelled'].includes(s);
 const message = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+const fetchHttpError = (status: number) =>
+  status < 200 || status >= 300 ? `Fetch returned HTTP ${status}` : undefined;
+type LocalOperationResult = { output: Json; httpError?: string };
 export interface Worker {
   modelSelection?: ModelSelection;
   session?: SessionIdentity;
@@ -117,6 +124,7 @@ export class Engine {
   readonly executors: ExecutorManager;
   readonly continuation: Continuation;
   readonly prompts: Prompts;
+  readonly variables: Variables;
   readonly versions: VersionCleanup;
   readonly ownership: Ownership;
   readonly testbench: Testbench;
@@ -160,6 +168,7 @@ export class Engine {
       (runId, type, message) => this.event(this.run(runId), type, message),
     );
     this.prompts = new Prompts(store);
+    this.variables = new Variables(store);
     this.assignmentSizes = new AssignmentSizes(store, this.prompts, (work) =>
       this.describeWork(work),
     );
@@ -413,6 +422,20 @@ export class Engine {
     if (definition) {
       const workflows = this.store.workflows();
       for (const [i, node] of definition.nodes.entries()) {
+        for (const reference of nodeVariableReferences(node)) {
+          try {
+            this.variables.get(reference);
+          } catch {
+            diagnostics.push({
+              severity: 'error',
+              category: 'publication',
+              code: 'missing_variable',
+              nodeId: node.id,
+              path: `nodes.${i}`,
+              message: `Variable ${reference || '(not selected)'} is missing. Select or provision it in Variables.`,
+            });
+          }
+        }
         if (node.kind === 'agent') {
           for (const [j, promptId] of (node.promptIds ?? []).entries())
             if (!this.store.get('prompts', promptId))
@@ -804,6 +827,8 @@ export class Engine {
   private publishVersion(id: string) {
     const w = this.workflow(id);
     const definition = validateDefinition(w.draft);
+    for (const reference of variableReferences(definition))
+      this.variables.get(reference);
     this.prompts.capture(definition);
     validateWorkflowReferences(w.id, definition, this.store.workflows());
     for (const n of definition.nodes) {
@@ -909,6 +934,28 @@ export class Engine {
                 return prompt;
               })
             : this.prompts.capture(definition),
+      ...(variableReferences(definition).length
+        ? {
+            variableCaptures: this.options.substituteOperation
+              ? []
+              : continuedFrom
+                ? this.variables.capture(
+                    definition,
+                    continuedFrom.variableCaptures ?? [],
+                  )
+                : batchNodeId && parentRunId
+                  ? this.variables.capture(
+                      definition,
+                      this.run(parentRunId).variableCaptures ?? [],
+                    )
+                  : comparison
+                    ? this.variables.capture(
+                        definition,
+                        this.testbench.variablesFor(comparison),
+                      )
+                    : this.variables.capture(definition),
+          }
+        : {}),
     };
     if (
       !parentRunId &&
@@ -1882,7 +1929,7 @@ export class Engine {
       if (node.kind !== 'script' && node.kind !== 'fetch') continue;
       const controller = new AbortController();
       this.localJobs.set(execution.id, controller);
-      const job = (() => {
+      const job: Promise<LocalOperationResult> = (() => {
         try {
           controller.signal.throwIfAborted();
           const environment = this.trials.execution(run);
@@ -1894,29 +1941,28 @@ export class Engine {
               'Unsupported operation in a local Git trial',
             );
           return this.options.substituteOperation
-            ? this.options.substituteOperation(node, execution)
-            : node.kind === 'fetch'
-              ? executeFetch(
-                  execution.request!,
-                  node.timeoutMs,
-                  controller.signal,
-                )
-              : executeScript(
-                  node.command,
-                  execution.input,
-                  node.timeoutMs,
-                  environment?.cwd ?? this.cwd,
-                  controller.signal,
-                  node.language,
-                  environment?.env,
-                );
+            ? this.options
+                .substituteOperation(node, execution)
+                .then((output) => ({
+                  output,
+                  httpError:
+                    node.kind === 'fetch' && node.failOnHttpError
+                      ? fetchHttpError((output as { status: number }).status)
+                      : undefined,
+                }))
+            : this.localOperation(
+                run,
+                node,
+                execution.input,
+                controller.signal,
+              );
         } catch (error) {
           return Promise.reject(error);
         }
       })();
       void job
         .then(
-          (output) => ({ ok: true as const, output }),
+          (operation) => ({ ok: true as const, ...operation }),
           (error) => ({ ok: false as const, error: message(error) }),
         )
         .then((result) => {
@@ -1942,13 +1988,12 @@ export class Engine {
             const output = result.output;
             if (node.kind === 'fetch') {
               current.output = output;
-              const status = (output as { status: number }).status;
-              if (node.failOnHttpError && (status < 200 || status >= 300)) {
+              if (result.httpError) {
                 this.failOperation(
                   latest,
                   current,
                   node,
-                  `Fetch returned HTTP ${status}`,
+                  result.httpError,
                   'http',
                 );
                 return;
@@ -2005,6 +2050,98 @@ export class Engine {
     this.finish(run, execution, node, execution.input, 'timeout');
     return true;
   }
+  private async localOperation(
+    run: Run,
+    operation: Extract<WorkflowNode, { kind: 'script' | 'fetch' }> | PollCheck,
+    input: Json,
+    signal: AbortSignal,
+    label = 'label' in operation ? operation.label : 'Polling check',
+  ): Promise<LocalOperationResult> {
+    const environment = this.trials.execution(run);
+    if (environment && operation.kind === 'fetch')
+      throw new InterlockError(
+        'Unsupported Fetch operation in a local Git trial',
+      );
+    const ids =
+      operation.kind === 'fetch'
+        ? operation.headers.flatMap((f) =>
+            f.value.kind === 'variable' ? [f.value.variableId] : [],
+          )
+        : (operation.environment ?? []).map((e) => e.variableId);
+    const resolved = this.variables.resolve(run, ids);
+    let redact = secretRedaction(resolved.secrets);
+    try {
+      const variableName = (id: string) =>
+        run.variableCaptures?.find((c) => c.referenceId === id)?.name ?? id;
+      if (operation.kind === 'fetch') {
+        const deliveredSecrets = new Set<string>();
+        for (const field of operation.headers) {
+          if (field.value.kind !== 'variable') continue;
+          const { variableId, prefix = '', suffix = '' } = field.value;
+          const value = resolved.value(variableId);
+          if (/[^\t\x20-\x7e\x80-\xff]/.test(prefix + value + suffix))
+            throw new InterlockError(
+              `${label}: header ${field.name} cannot use variable ${variableName(variableId)}. Replace its value with valid header text without control characters or non-Latin-1 characters.`,
+            );
+          if (resolved.secrets.includes(value)) {
+            // Headers trims only outer HTTP whitespace. Literal prefix and
+            // suffix text can keep one side of the secret away from the edge.
+            let delivered = value;
+            if (/^[ \t]*$/.test(prefix))
+              delivered = delivered.replace(/^[ \t]+/, '');
+            if (/^[ \t]*$/.test(suffix))
+              delivered = delivered.replace(/[ \t]+$/, '');
+            if (delivered && delivered !== value)
+              deliveredSecrets.add(delivered);
+          }
+        }
+        if (deliveredSecrets.size)
+          redact = secretRedaction([...resolved.secrets, ...deliveredSecrets]);
+        const response = await executeFetch(
+          resolveFetch(operation, input, resolved.value),
+          operation.timeoutMs,
+          signal,
+          { allowRedirects: !resolved.secrets.length },
+        );
+        const error = operation.failOnHttpError
+          ? fetchHttpError(response.status)
+          : undefined;
+        return {
+          output: redact.json(response),
+          httpError: error ? redact.text(error) : undefined,
+        };
+      }
+      for (const entry of operation.environment ?? []) {
+        if (resolved.value(entry.variableId).includes('\0'))
+          throw new InterlockError(
+            `${label}: environment ${entry.name} cannot use variable ${variableName(entry.variableId)}. Replace its value with text that contains no NUL bytes.`,
+          );
+      }
+      const output = await executeScript(
+        operation.command,
+        input,
+        operation.timeoutMs,
+        environment?.cwd ?? this.cwd,
+        signal,
+        operation.language,
+        operation.environment?.length
+          ? {
+              ...(environment?.env ?? process.env),
+              ...Object.fromEntries(
+                operation.environment.map((e) => [
+                  e.name,
+                  resolved.value(e.variableId),
+                ]),
+              ),
+            }
+          : environment?.env,
+        resolved.secrets.length ? redact.text : undefined,
+      );
+      return { output: redact.json(output) };
+    } catch (error) {
+      throw new InterlockError(redact.text(message(error)));
+    }
+  }
   /**
    * Run a polling Wait's check when it is due. The check is a server-side job
    * like a Script or Fetch step, but the execution stays `waiting`: a passing
@@ -2032,30 +2169,16 @@ export class Engine {
         throw new InterlockError(
           'Unsupported Fetch probe in a local Git trial',
         );
-      return timing.check.kind === 'fetch'
-        ? executeFetch(
-            resolveFetch(timing.check, execution.input),
-            timing.check.timeoutMs,
-            controller.signal,
-          ).then((output) => {
-            const status = (output as { status: number }).status;
-            if (
-              timing.check.kind === 'fetch' &&
-              timing.check.failOnHttpError &&
-              (status < 200 || status >= 300)
-            )
-              throw new InterlockError(`Fetch returned HTTP ${status}`);
-            return output;
-          })
-        : executeScript(
-            timing.check.command,
-            execution.input,
-            timing.check.timeoutMs,
-            environment?.cwd ?? this.cwd,
-            controller.signal,
-            timing.check.language,
-            environment?.env,
-          );
+      return this.localOperation(
+        run,
+        timing.check,
+        execution.input,
+        controller.signal,
+        node.label,
+      ).then(({ output, httpError }) => {
+        if (httpError) throw new InterlockError(httpError);
+        return output;
+      });
     });
     const settle = (result: { output?: Json; error?: string }) => {
       if (this.stopped) return;

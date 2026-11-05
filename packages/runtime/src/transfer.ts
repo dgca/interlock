@@ -11,6 +11,11 @@ import {
   type DeletedWorkflowVersion,
 } from '@interlock/core';
 import { definitionHash } from './versionIdentity.js';
+import { Variables } from './variables.js';
+import {
+  variableReferences,
+  type VariableImportBindings,
+} from '@interlock/core';
 import {
   workflowBundleSchema,
   type WorkflowBundle,
@@ -77,14 +82,26 @@ export function exportWorkflows(
       );
     return snapshotPrompt(prompt);
   });
+  const variables = new Variables(store).requirements([
+    ...new Set(
+      records.flatMap((w) =>
+        [w.draft, ...w.versions.map((v) => v.definition)].flatMap(
+          variableReferences,
+        ),
+      ),
+    ),
+  ]);
   return {
     format: 'interlock-workflows',
-    formatVersion: records.some((w) => w.deletedVersions?.length)
-      ? 3
-      : prompts.length
-        ? 2
-        : 1,
+    formatVersion: variables.length
+      ? 4
+      : records.some((w) => w.deletedVersions?.length)
+        ? 3
+        : prompts.length
+          ? 2
+          : 1,
     ...(prompts.length ? { prompts } : {}),
+    ...(variables.length ? { variables } : {}),
     rootId,
     workflows: records,
   };
@@ -97,10 +114,15 @@ export function importWorkflows(
     force?: boolean;
     draftRevisions?: Record<string, number>;
     restoreDeletedVersions?: boolean;
+    variableBindings?: VariableImportBindings;
   } = {},
 ) {
   const bundle = workflowBundleSchema.parse(data);
   return store.transaction(() => {
+    new Variables(store).importRequirements(
+      bundle.variables ?? [],
+      options.variableBindings,
+    );
     const ids = new Set(bundle.workflows.map((w) => w.id));
     if (ids.size !== bundle.workflows.length || !ids.has(bundle.rootId))
       throw new InterlockError(

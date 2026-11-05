@@ -1,0 +1,361 @@
+$ vitest run
+
+ RUN  v3.2.7 /Users/dan/dev/interlock
+
+stdout | tests/runHistoryTransport.test.ts > previews and removes reviewed history through MCP http, CLI and shared API without changing tool defaults
+http: manage_run_history definition 3299 B, 54 tools total
+
+stderr | tests/mcp-continuation.test.ts > keeps default mutation responses small through MCP http as history grows
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+stdout | tests/trialTransports.test.ts > prepares, claims, inspects and cleans trial samples over MCP http
+MCP discovery: 54 tools, 316070 bytes
+
+stderr | tests/mcp-continuation.test.ts > keeps default mutation responses small through MCP http as history grows
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+stdout | tests/mcp-continuation.test.ts > keeps default mutation responses small through MCP http as history grows
+http: summary start 1128 B, submit 1237 B, full after four submissions 4940636 B
+
+stdout | tests/runHistoryTransport.test.ts > previews and removes reviewed history through MCP stdio, CLI and shared API without changing tool defaults
+stdio: manage_run_history definition 3299 B, 54 tools total
+
+stderr | tests/transport.test.ts > completes a workflow through MCP stdio and the shared HTTP and SQLite interfaces
+unknown format "date-time" ignored in schema at path "#/properties/bundle/properties/workflows/items/properties/deletedVersions/items/properties/deletedAt"
+unknown format "date-time" ignored in schema at path "#/properties/bundle/properties/workflows/items/properties/deletedVersions/items/properties/deletedAt"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "date-time" ignored in schema at path "#/properties/request/anyOf/0/properties/before"
+unknown format "date-time" ignored in schema at path "#/properties/request/anyOf/0/properties/before"
+
+(node:44110) [CLAUDE_SDK_CAN_USE_TOOL_SHADOWED] Warning: canUseTool will not be invoked: permissionMode 'bypassPermissions' auto-approves every tool call (except explicit deny rules) before the callback is consulted. To gate every tool call, use a PreToolUse hook instead.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/runHistoryTransport.test.ts (2 tests) 1219ms
+   ✓ previews and removes reviewed history through MCP http, CLI and shared API without changing tool defaults  558ms
+   ✓ previews and removes reviewed history through MCP stdio, CLI and shared API without changing tool defaults  660ms
+ ✓ tests/nativeExecutors.test.ts (27 tests) 1603ms
+ ✓ tests/trialTransports.test.ts (2 tests) 1570ms
+   ✓ prepares, claims, inspects and cleans trial samples over MCP http  690ms
+   ✓ prepares, claims, inspects and cleans trial samples over MCP stdio  880ms
+ ✓ tests/failure-routes.test.ts (23 tests) 1729ms
+ ✓ tests/runtime.test.ts (26 tests) 1762ms
+   ✓ durable harness execution > kills a running bash script when its run is cancelled  559ms
+   ✓ durable harness execution > kills a running javascript script when its run is cancelled  558ms
+stderr | tests/mcp-continuation.test.ts > keeps default mutation responses small through MCP stdio as history grows
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+stdout | tests/compact-authoring.test.ts > offers compatible authoring modes and schemas over http
+http: authoring summary 159 B text / 134 B structured
+
+stdout | tests/compact-authoring.test.ts > offers compatible authoring modes and schemas over http
+http: full publication 390066 B text
+
+stderr | tests/mcp-continuation.test.ts > keeps default mutation responses small through MCP stdio as history grows
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+ ✓ tests/variables.test.ts (35 tests) 2159ms
+stdout | tests/compact-authoring.test.ts > offers compatible authoring modes and schemas over stdio
+stdio: authoring summary 159 B text / 134 B structured
+
+stdout | tests/compact-authoring.test.ts > offers compatible authoring modes and schemas over stdio
+stdio: full publication 390066 B text
+
+stdout | tests/mcp-continuation.test.ts > keeps default mutation responses small through MCP stdio as history grows
+stdio: summary start 1128 B, submit 1237 B, full after four submissions 4940636 B
+
+ ✓ tests/compact-authoring.test.ts (7 tests) 1190ms
+   ✓ offers compatible authoring modes and schemas over http  352ms
+   ✓ offers compatible authoring modes and schemas over stdio  521ms
+ ✓ tests/fetch.test.ts (13 tests) 1179ms
+   ✓ marks interrupted requests failed on restart and never resends automatically  329ms
+ ✓ tests/piExecutor.test.ts (14 tests) 1103ms
+ ✓ tests/testbench.test.ts (23 tests) 1113ms
+stdout | tests/transport.test.ts > completes a workflow through MCP stdio and the shared HTTP and SQLite interfaces
+stdio: 54 MCP tools, 316070 B definitions
+
+ ✓ tests/evaluation.test.ts (14 tests) 3258ms
+   ✓ imports a valid starter and evaluates actual artifacts with separate grading usage and no winner  303ms
+   ✓ preserves independent evaluations and does not pair incompatible specifications sharing rubric text  454ms
+ ✓ tests/starterImports.test.ts (13 tests) 1252ms
+   ✓ previews legacy and bundle metadata through the shared API without writes, preserving publish/import rules  330ms
+ ✓ tests/mcp-continuation.test.ts (2 tests) 3473ms
+   ✓ keeps default mutation responses small through MCP http as history grows  1355ms
+   ✓ keeps default mutation responses small through MCP stdio as history grows  2118ms
+ ✓ tests/starterTransports.test.ts (3 tests) 1094ms
+   ✓ discovers and explicitly imports starters without adding MCP tools over stdio  577ms
+stdout | tests/comparisonConfigurationsTransport.test.ts > selects, executes and inspects side configurations over http
+http: 54 tools, 316070 B definitions
+
+stderr | tests/workflowFailureTransport.test.ts > routes waited failures through http discovery, execution and CLI inspection
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+ ✓ tests/executorProcesses.test.ts (2 tests) 4180ms
+   ✓ stops descendants even when the harness leader can stay  2082ms
+   ✓ stops descendants even when the harness leader can exit  2097ms
+stderr | tests/workHoldTransport.test.ts > holds, inspects and resumes through http and CLI with bounded discovery
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+stderr | tests/workHoldTransport.test.ts > holds, inspects and resumes through http and CLI with bounded discovery
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+stdout | tests/workHoldTransport.test.ts > holds, inspects and resumes through http and CLI with bounded discovery
+http: 54 MCP tools, 316070 B definitions
+
+stderr | tests/transport.test.ts > completes a workflow through MCP http and the shared HTTP and SQLite interfaces
+unknown format "date-time" ignored in schema at path "#/properties/bundle/properties/workflows/items/properties/deletedVersions/items/properties/deletedAt"
+unknown format "date-time" ignored in schema at path "#/properties/bundle/properties/workflows/items/properties/deletedVersions/items/properties/deletedAt"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "date-time" ignored in schema at path "#/properties/request/anyOf/0/properties/before"
+unknown format "date-time" ignored in schema at path "#/properties/request/anyOf/0/properties/before"
+
+stdout | tests/comparisonConfigurationsTransport.test.ts > selects, executes and inspects side configurations over stdio
+stdio: 54 tools, 316070 B definitions
+
+stderr | tests/workflowFailureTransport.test.ts > routes waited failures through stdio discovery, execution and CLI inspection
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+ ✓ tests/comparisonMetricsTransport.test.ts (2 tests) 920ms
+   ✓ discovers and executes comparison measurement pages over http  338ms
+   ✓ discovers and executes comparison measurement pages over stdio  582ms
+ ✓ tests/comparisonMetrics.test.ts (16 tests) 1150ms
+   ✓ retains whole-comparison metrics and exact offsets when the byte cap shortens pages  662ms
+ ✓ tests/comparisonConfigurationsTransport.test.ts (2 tests) 771ms
+   ✓ selects, executes and inspects side configurations over stdio  502ms
+stderr | tests/runChainTransport.test.ts > continues and cancels run chains through http and CLI
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+stderr | tests/runChainTransport.test.ts > continues and cancels run chains through http and CLI
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+stderr | tests/workHoldTransport.test.ts > holds, inspects and resumes through stdio and CLI with bounded discovery
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+ ✓ tests/workflowFailureTransport.test.ts (2 tests) 876ms
+   ✓ routes waited failures through http discovery, execution and CLI inspection  315ms
+   ✓ routes waited failures through stdio discovery, execution and CLI inspection  560ms
+stderr | tests/workHoldTransport.test.ts > holds, inspects and resumes through stdio and CLI with bounded discovery
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+stdout | tests/workHoldTransport.test.ts > holds, inspects and resumes through stdio and CLI with bounded discovery
+stdio: 54 MCP tools, 316070 B definitions
+
+ ✓ tests/workHoldTransport.test.ts (2 tests) 937ms
+   ✓ holds, inspects and resumes through http and CLI with bounded discovery  414ms
+   ✓ holds, inspects and resumes through stdio and CLI with bounded discovery  523ms
+ ✓ tests/variablesTransport.test.ts (2 tests) 848ms
+   ✓ manages safe variable references across MCP http and the shared API  334ms
+   ✓ manages safe variable references across MCP stdio and the shared API  513ms
+ ✓ tests/runChains.test.ts (17 tests) 896ms
+   ✓ keeps a long automatic chain shallow and advances only one rollover per engine turn  587ms
+stderr | tests/runChainTransport.test.ts > continues and cancels run chains through stdio and CLI
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+stderr | tests/runChainTransport.test.ts > continues and cancels run chains through stdio and CLI
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+
+ ✓ tests/runChainTransport.test.ts (2 tests) 821ms
+   ✓ continues and cancels run chains through http and CLI  370ms
+   ✓ continues and cancels run chains through stdio and CLI  449ms
+ ✓ tests/workResourceTransports.test.ts (2 tests) 738ms
+   ✓ coordinates racing claims and explicit recovery through stdio MCP, shared API and CLI  444ms
+ ✓ tests/timers.test.ts (19 tests) 658ms
+   ✓ counts Batch item steps independently and supports timed branches returning to End  514ms
+ ✓ tests/workflowLayout.test.ts (21 tests) 418ms
+ ✓ tests/idleScheduling.test.ts (8 tests) 450ms
+ ✓ tests/nodeResultsTransport.test.ts (2 tests) 638ms
+   ✓ authors, runs and inspects mapped result branches over MCP stdio  370ms
+ ✓ tests/validationTransport.test.ts (6 tests) 750ms
+   ✓ accepts a 2 MiB UTF-8 request and explains rejection one byte over the limit  523ms
+ ✓ tests/runAttention.test.ts (6 tests) 652ms
+ ✓ tests/nodeResults.test.ts (15 tests) 597ms
+ ✓ tests/sdlcStarter.test.ts (4 tests) 553ms
+stdout | tests/transport.test.ts > completes a workflow through MCP http and the shared HTTP and SQLite interfaces
+http: 54 MCP tools, 316070 B definitions
+
+ ✓ tests/managedExecutors.test.ts (66 tests) 5923ms
+   ✓ keeps the event loop responsive while an ordinary script runs beside managed dispatch  375ms
+   ✓ keeps long assignments alive and renews claims without the retired runtime cutoff  916ms
+stdout | tests/runStartTransports.test.ts > recovers concurrent ordinary starts across MCP http, HTTP and CLI
+MCP discovery: 54 tools, 316070 bytes
+
+ ✓ tests/tidyTransport.test.ts (2 tests) 645ms
+   ✓ authors arranged drafts over stdio and the CLI with revision protection  422ms
+ ✓ tests/startup.test.ts (3 tests) 456ms
+   ✓ suppresses only the SQLite experimental diagnostic in the CLI  449ms
+ ✓ tests/transport.test.ts (3 tests) 6081ms
+   ✓ completes a workflow through MCP stdio and the shared HTTP and SQLite interfaces  3379ms
+   ✓ completes a workflow through MCP http and the shared HTTP and SQLite interfaces  2668ms
+ ✓ tests/comparisonConfigurations.test.ts (11 tests) 560ms
+ ✓ tests/inputBindings.test.ts (16 tests) 546ms
+ ✓ tests/detachedWorkflows.test.ts (18 tests) 443ms
+ ✓ tests/continuation.test.ts (21 tests) 591ms
+ ✓ tests/runStartTransports.test.ts (2 tests) 697ms
+   ✓ recovers concurrent ordinary starts across MCP stdio, HTTP and CLI  419ms
+ ✓ tests/migrations.test.ts (15 tests) 418ms
+ ✓ tests/simulation.test.ts (19 tests) 372ms
+ ✓ tests/workResources.test.ts (25 tests) 276ms
+ ✓ tests/githubImport.test.ts (12 tests) 268ms
+ ✓ tests/budgets.test.ts (15 tests) 276ms
+ ✓ tests/authoringLayout.test.ts (11 tests) 263ms
+ ✓ tests/workHolds.test.ts (17 tests) 265ms
+ ✓ tests/leases.test.ts (10 tests) 200ms
+ ✓ tests/contextContinuity.test.ts (15 tests) 333ms
+ ✓ tests/runHistory.test.ts (8 tests) 190ms
+ ✓ tests/workflowFailureRoutes.test.ts (23 tests) 341ms
+ ✓ tests/runStarts.test.ts (30 tests) 260ms
+ ✓ tests/scripts.test.ts (5 tests) 144ms
+ ✓ tests/backgroundHistory.test.ts (5 tests) 211ms
+ ✓ tests/usage.test.ts (24 tests) 266ms
+ ✓ tests/switch.test.ts (32 tests) 172ms
+ ✓ tests/workflowEdits.test.ts (55 tests) 140ms
+ ✓ tests/versionCleanup.test.ts (22 tests) 230ms
+ ✓ tests/prompts.test.ts (12 tests) 167ms
+ ✓ tests/ownership.test.ts (11 tests) 158ms
+ ✓ tests/comparisonBudgets.test.ts (4 tests) 168ms
+ ✓ tests/lease-recovery.test.ts (7 tests) 128ms
+ ✓ tests/resultRules.test.ts (14 tests) 121ms
+ ✓ tests/assignmentSize.test.ts (7 tests) 116ms
+ ✓ tests/modelTiers.test.ts (7 tests) 126ms
+ ✓ tests/transfer.test.ts (2 tests) 45ms
+ ✓ tests/resultPreflight.test.ts (5 tests) 70ms
+ ✓ tests/runProgress.test.ts (6 tests) 111ms
+ ✓ tests/workflowDeletion.test.ts (12 tests) 96ms
+ ✓ tests/cascadePublish.test.ts (5 tests) 83ms
+ ✓ tests/inputHints.test.ts (6 tests) 30ms
+ ✓ tests/contracts.test.ts (9 tests) 17ms
+ ✓ tests/childWorkflows.test.ts (10 tests) 83ms
+ ✓ tests/uiFeatures.test.ts (10 tests) 2ms
+ ✓ tests/runQuery.test.ts (2 tests) 64ms
+ ✓ tests/rawDefinition.test.ts (6 tests) 17ms
+ ✓ tests/bindingRows.test.ts (3 tests) 4ms
+ ✓ tests/managedAssignmentPrompt.test.ts (1 test) 2ms
+ ✓ tests/canvasGraph.test.ts (22 tests) 13ms
+ ✓ tests/workflowDraftState.test.ts (2 tests) 34ms
+ ✓ tests/workflowDiff.test.ts (5 tests) 9ms
+ ✓ tests/prompt-editor.test.ts (5 tests) 634ms
+ ✓ tests/inputBindingsEditor.test.ts (6 tests) 628ms
+ ✓ tests/import-dialog.test.ts (14 tests) 727ms
+ ✓ tests/routes.test.ts (10 tests) 714ms
+ ✓ tests/workflowModeEditor.test.ts (7 tests) 598ms
+ ✓ tests/fetchEditor.test.ts (5 tests) 1085ms
+   ✓ keeps other variables selectable when a reference already has a selected display label  509ms
+ ✓ tests/executorPermissions.test.ts (13 tests) 1065ms
+ ✓ tests/switchEditor.test.ts (11 tests) 1310ms
+ ✓ tests/batch.test.ts (38 tests) 10825ms
+   ✓ supports 200 items and concurrency 50; rejects invalid input  5841ms
+   ✓ cancels item scripts before their delayed side effects  632ms
+   ✓ processes a 207-item backlog within configured concurrency and independent step budgets  3804ms
+ ✓ tests/batchNodes.test.ts (24 tests) 1557ms
+   ✓ creates a Branch with editable Boolean routes  322ms
+ ✓ tests/connectDialog.test.ts (2 tests) 179ms
+ ✓ tests/historyCleanupDialog.test.ts (2 tests) 331ms
+ ✓ tests/boxZoom.test.ts (9 tests) 98ms
+ ✓ tests/managedExecutionPanel.test.ts (11 tests) 444ms
+ ✓ tests/fetchUrlInput.test.ts (3 tests) 190ms
+ ✓ tests/runUsage.test.ts (5 tests) 239ms
+ ✓ tests/agentHandoff.test.ts (12 tests) 311ms
+ ✓ tests/deleteWorkflowDialog.test.ts (2 tests) 42ms
+ ✓ tests/workPanel.test.ts (10 tests) 344ms
+ ✓ tests/runList.test.ts (2 tests) 66ms
+stderr | tests/workflowEditor.test.ts > tidies nested Batches as one undoable action without rewriting graph semantics
+flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.
+
+stderr | tests/workflowEditor.test.ts > tidies nested Batches as one undoable action without rewriting graph semantics
+flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.
+
+stderr | tests/workflowEditor.test.ts > tidies nested Batches as one undoable action without rewriting graph semantics
+flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.
+
+stderr | tests/workflowEditor.test.ts > tidies nested Batches as one undoable action without rewriting graph semantics
+flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.
+
+ ✓ tests/actionFeedback.test.ts (3 tests) 14ms
+stderr | tests/workflowEditor.test.ts > tidies parallel routes as one undoable action without rewriting graph semantics
+flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.
+
+stderr | tests/workflowEditor.test.ts > tidies parallel routes as one undoable action without rewriting graph semantics
+flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.
+
+ ✓ tests/manualClaims.test.ts (13 tests) 6ms
+stderr | tests/workflowEditor.test.ts > tidies parallel routes as one undoable action without rewriting graph semantics
+flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.
+
+stderr | tests/workflowEditor.test.ts > tidies parallel routes as one undoable action without rewriting graph semantics
+flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.
+
+ ✓ tests/continueAsNewEditor.test.ts (1 test) 50ms
+ ✓ tests/runGraphNavigation.test.ts (4 tests) 23ms
+ ✓ tests/nodeEditorUx.test.ts (30 tests) 2895ms
+   ✓ saves and clears an advisory tier with current context  392ms
+ ✓ tests/workflowEditor.test.ts (40 tests) 2878ms
+   ✓ moves history into the menu at narrow editor widths and preserves undo, redo, and raw-edit guards  321ms
+   ✓ caps history at 50 actions and clears it when loading another draft or reopening  640ms
+ ✓ tests/trialEnvironments.test.ts (24 tests) 12868ms
+   ✓ gates roots until independent fixed-commit checkouts exist, retains evidence, and cleans only trial clones  577ms
+   ✓ provides Agent workspace context separately, gates capabilities, and requires quiescent cleanup after cancellation  483ms
+   ✓ retains new files and uses a clean script environment without copying server credentials  456ms
+   ✓ keeps omitted-language Scripts on the Bash path in the prepared working directory  566ms
+   ✓ rejects tracked symlinks before checkout or work dispatch  340ms
+   ✓ rejects a stale ownership receipt before a claim consumes an attempt  577ms
+   ✓ recovers interrupted cleanup conservatively and lets an explicit quiescent request finish it  677ms
+   ✓ queues repetitions at a fixed commit even after the source checkout changes  1996ms
+   ✓ keeps detached Batch descendants in the sample workspace and waits for their artifacts  605ms
+   ✓ runs polling Script checks in the prepared workspace  536ms
+   ✓ waits for a cancelled native process to close before removing its workspace  506ms
+   ✓ stops an expired Agent sample instead of issuing another attempt into uncertain state  572ms
+   ✓ retains a replaced workspace and never deletes the original source through a symlink  602ms
+   ✓ recovers evidence after workspace removal and rejects replaced artifact control files  491ms
+   ✓ cancels interrupted claimed samples on restart instead of accepting more work  531ms
+   ✓ retains oversized evidence and permits idempotent cleanup after the coordinator reduces it  710ms
+   ✓ runs the importable example in managed trials and fails ordinary starts before changing the fixture  708ms
+   ✓ preserves committed evidence across a partially removed workspace  538ms
+   ✓ reserves global capacity across ordinary and managed comparisons  340ms
+   ✓ requires reconciliation for pending polling Scripts after restart  348ms
+ ✓ tests/pollWait.test.ts (15 tests) 12897ms
+   ✓ checks until the result matches, then merges the check output into its input in one step  1153ms
+   ✓ routes through timeout with the original input when no check passes in time  1549ms
+   ✓ records a failing check and tries again instead of failing the step  1094ms
+   ✓ polls an HTTP endpoint with a Fetch check and reads the response body  1145ms
+   ✓ re-runs an overdue check after reopening the database  1041ms
+   ✓ cancels a polling wait, aborting a check in flight  3708ms
+   ✓ lets the deadline win a slow passing check (pump active: true)  907ms
+   ✓ lets the deadline win a slow passing check (pump active: false)  623ms
+   ✓ records synchronous Fetch binding errors and retries them across restart  1042ms
+ ✓ tests/improvement.test.ts (20 tests) 25445ms
+   ✓ ships a generated importable starter and completes a held-out experiment without changing production  2549ms
+   ✓ retains the baseline when held-out cases regress  2595ms
+   ✓ keeps mismatched trial model visible and never uses acceptance cases  1483ms
+   ✓ keeps unknown grader model visible and never uses acceptance cases  1467ms
+   ✓ keeps unreported cost visible and never uses acceptance cases  1524ms
+   ✓ keeps missing grading visible and never uses acceptance cases  1517ms
+   ✓ keeps disagreement visible and never uses acceptance cases  1321ms
+   ✓ keeps changed budget visible and never uses acceptance cases  953ms
+   ✓ keeps stale production visible and never uses acceptance cases  948ms
+   ✓ keeps duplicate membership visible and never uses acceptance cases  953ms
+   ✓ keeps unfinished cleanup visible and never uses acceptance cases  942ms
+   ✓ keeps unreported grader usage visible and never uses acceptance cases  941ms
+   ✓ reports a quality and cost tradeoff rather than silently relaxing the criterion  926ms
+   ✓ resumes the same candidate and comparisons after an ambiguous dispatch and restart  1693ms
+   ✓ reuses exact version 2 after a lost publication response  1647ms
+   ✓ keeps unfinished coordinator expense pending without treating it as zero  1693ms
+   ✓ accepts fractional semantic scores without confusing them with measurement overflow  1617ms
+
+ Test Files  111 passed (111)
+      Tests  1328 passed (1328)
+   Start at  10:44:31
+   Duration  26.02s (transform 2.78s, setup 0ms, collect 35.42s, tests 141.25s, environment 10.08s, prepare 3.79s)

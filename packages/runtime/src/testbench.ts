@@ -31,6 +31,8 @@ import {
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import { fingerprint } from './versionIdentity.js';
+import { Variables } from './variables.js';
+import { variableReferences, type VariableCapture } from '@interlock/core';
 import {
   captureConfigurations,
   configurationSummary,
@@ -311,7 +313,45 @@ export class Testbench {
         );
       }
     }
-    return { ...captured, suite, blockers };
+    let variableCaptures: VariableCapture[] = [];
+    const library = new Variables(this.store);
+    try {
+      const ids = [
+        ...new Set(
+          captured.pins.flatMap((p) => {
+            const d = this.store.getVersion(
+              p.workflowId,
+              p.version,
+            )?.definition;
+            return d ? variableReferences(d) : [];
+          }),
+        ),
+      ];
+      variableCaptures = library.captureIds(ids);
+      if (ids.length)
+        for (const side of ['baseline', 'candidate'] as const) {
+          const config = captured.configurations[side];
+          const needed = new Set(
+            config.pins.flatMap((p) => {
+              const d = this.store.getVersion(
+                p.workflowId,
+                p.version,
+              )?.definition;
+              return d ? variableReferences(d) : [];
+            }),
+          );
+          config.variables = variableCaptures.filter((v) =>
+            needed.has(v.referenceId),
+          );
+          config.id = fingerprint({
+            id: config.id,
+            variables: config.variables,
+          });
+        }
+    } catch (error) {
+      blockers.push(textError(error));
+    }
+    return { ...captured, suite, blockers, variableCaptures };
   }
 
   preview(input: Input<typeof comparisonPreviewSchema>) {
@@ -334,6 +374,7 @@ export class Testbench {
       rootRunCount: c.suite.cases.length * q.repetitions * 2,
       configurations: configurationSummary(c),
       pins: c.pins,
+      ...(c.variableCaptures?.length ? { variables: c.variableCaptures } : {}),
       prompts: c.prompts.map(({ id, name, revision, content }) => ({
         id,
         name,
@@ -416,6 +457,9 @@ export class Testbench {
         concurrency: q.concurrency,
         pins: captured.pins,
         prompts: captured.prompts,
+        ...(captured.variableCaptures.length
+          ? { variableCaptures: captured.variableCaptures }
+          : {}),
         configurations: captured.configurations,
         ...(q.trialSetup ? { trialSetup: q.trialSetup } : {}),
         ...(q.sampleBudget ? { sampleBudget: q.sampleBudget } : {}),
@@ -434,6 +478,9 @@ export class Testbench {
   }
   promptsFor(context: ComparisonRunContext) {
     return promptsForSide(this.get(context.comparisonId), context.side);
+  }
+  variablesFor(context: ComparisonRunContext) {
+    return this.get(context.comparisonId).variableCaptures ?? [];
   }
   context(c: WorkflowComparison, s: ComparisonSample): ComparisonRunContext {
     return {
@@ -740,6 +787,7 @@ export class Testbench {
       ...this.summary(c, runs),
       metrics: metrics.summary,
       configurations: configurationSummary(c),
+      ...(c.variableCaptures?.length ? { variables: c.variableCaptures } : {}),
       ...(c.trialSetup
         ? {
             trialSetup: {

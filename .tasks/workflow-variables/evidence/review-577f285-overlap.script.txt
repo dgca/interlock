@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import {inspect} from 'node:util';
+import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {Engine} from '/Users/dan/dev/interlock/packages/runtime/src/index.ts';
+import {Store} from '/Users/dan/dev/interlock/packages/storage/src/index.ts';
+import {blankDefinition,nodeSchema} from '/Users/dan/dev/interlock/packages/core/src/index.ts';
+import {secretRedaction} from '/Users/dan/dev/interlock/packages/runtime/src/secretRedaction.ts';
+const shorter='overlap-small-head\n'+'shorter-secret-tail';
+const longer=inspect(shorter,{breakLength:1})+'-longer-credential-unmasked-suffix-920371';
+const direct=secretRedaction([shorter,longer]).text(longer);
+assert(direct.includes('longer-credential-unmasked-suffix-920371'),'No direct overlap leak');
+const dir=mkdtempSync(join(tmpdir(),'interlock-review-overlap-'));
+const store=new Store(join(dir,'proof.db'),{secretKeyFile:join(dir,'key')});const engine=new Engine(store,dir);
+try{
+ const a:any=engine.variables.mutate({action:'create',name:'shorter',kind:'secret',value:shorter});
+ const b:any=engine.variables.mutate({action:'create',name:'longer',kind:'secret',value:longer});
+ const d=blankDefinition();d.nodes[1]=nodeSchema.parse({id:'agent',kind:'script',language:'javascript',label:'Raw overlap output',command:'process.stderr.write(process.env.LONGER); throw Error("control failure");',environment:[{name:'SHORTER',variableId:a.id},{name:'LONGER',variableId:b.id}]});
+ const w=engine.create('Raw overlap output','',d);engine.publish(w.id);const id=engine.start(w.id,{}).run.id;
+ const until=Date.now()+5000;while(engine.run(id).status!=='failed'){assert(Date.now()<until);await new Promise(r=>setTimeout(r,10));}
+ const run=engine.run(id),events=store.events(id),inspection=engine.inspect(id);
+ for(const [label,data] of Object.entries({run,events,inspection,rawRuns:store.list('runs'),rawEvents:store.list('events')}))assert(JSON.stringify(data).includes('longer-credential-unmasked-suffix-920371'),label+' did not retain suffix');
+ const out={candidate:'577f2852d9cfa7c590ae6fe11f7afaaf11ddc317',node:process.version,shorter,longer,direct,run,leakInRun:true,leakInExecution:run.executions.some(e=>e.error?.includes('longer-credential-unmasked-suffix-920371')),leakInEvents:true,leakInInspection:true,leakInRawPersistedRecords:true,fakeCredentials:true,temporaryFileDatabase:true};
+ writeFileSync('/tmp/interlock-review-577f285-overlap.json',JSON.stringify(out,null,2)+'\n');console.log(JSON.stringify(out,null,2));
+}finally{engine.stop();store.close();rmSync(dir,{recursive:true,force:true});}

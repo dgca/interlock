@@ -17,6 +17,10 @@ import { Harnesses } from '../features/executors/Harnesses';
 import { paths } from './paths';
 import { flushSync } from 'react-dom';
 import { PromptLibrary, PromptEditor } from '../features/prompts/Prompts';
+import {
+  VariableLibrary,
+  VariableRoute,
+} from '../features/variables/Variables';
 
 function PromptsRoute() {
   const context = useOutletContext<AppContext>();
@@ -214,6 +218,8 @@ export const routes: RouteObject[] = [
       { index: true, element: <Navigate to={paths.workflows} replace /> },
       { path: 'workflows', Component: LibraryRoute },
       { path: 'prompts', Component: PromptsRoute },
+      { path: 'variables', Component: VariableLibrary },
+      { path: 'variables/:variableId', Component: VariableRoute },
       { path: 'settings/harnesses', Component: Harnesses },
       { path: 'prompts/:promptId', Component: PromptRoute },
       { path: 'workflows/:workflowId', Component: WorkflowRoute },

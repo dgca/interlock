@@ -92,6 +92,12 @@ Output fields have the same supported step kinds as result routing. Switching a 
 
 ## Inspect results
 
+Workflow variables are separate from ordinary input/output data bindings. Use an
+explicit Fetch header or Script environment reference, including polling checks,
+to deliver a centrally managed value. Secret values are not inserted into saved
+step inputs or Agent prompts. Known delivered secrets are redacted before output
+validation, routing, and forwarding. See [workflow variables](variables.md).
+
 Executions keep the forwarded data in `output`. When output fields are configured, they also retain the raw result in `result`. Run inspection shows **Accepted result** and **Forwarded output** separately. A result-processing failure retains its validated operation result for diagnosis and stays terminal rather than taking an operation-failure route.
 
 Use `get_run_result` for bounded reads:

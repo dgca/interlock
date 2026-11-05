@@ -303,6 +303,17 @@ export function RunInspector({
           <a href="#workflow-result">View result</a>
         )}
       </div>
+      {!!run.variableCaptures?.length && (
+        <details className={styles.independent}>
+          <summary>Captured variables</summary>
+          {run.variableCaptures.map((v) => (
+            <p key={v.referenceId}>
+              {v.name} · {v.kind === 'secret' ? 'Secret' : 'Config'} · value
+              revision {v.valueRevision}
+            </p>
+          ))}
+        </details>
+      )}
       {!!run.promptSnapshots?.length && (
         <details className={styles.independent}>
           <summary>Captured prompts</summary>

@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
   ActionIcon,
+  Button as MantineButton,
   Group,
   Menu,
   Stack,
@@ -13,7 +14,6 @@ import {
   ArrowLeft,
   ArrowRight,
   FileText,
-  GitBranch,
   MoreHorizontal,
   Plus,
   Save,
@@ -28,8 +28,8 @@ import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
+import library from '../../components/PageLayout/LibraryList.module.css';
 import styles from './Prompts.module.css';
-import cards from '../workflows/WorkflowLibrary.module.css';
 import editorLayout from '../workflows/WorkflowEditor.module.css';
 
 const fields = ({
@@ -40,33 +40,7 @@ const fields = ({
 const same = (a: PromptContent, b: PromptContent) =>
   JSON.stringify(fields(a)) === JSON.stringify(fields(b));
 
-function PromptMetadata({
-  value,
-  onChange,
-}: {
-  value: PromptContent;
-  onChange: (value: PromptContent) => void;
-}) {
-  return (
-    <Stack>
-      <TextInput
-        label="Name"
-        required
-        maxLength={120}
-        value={value.name}
-        onChange={(e) => onChange({ ...value, name: e.target.value })}
-      />
-      <Textarea
-        label="Description"
-        rows={3}
-        value={value.description}
-        onChange={(e) => onChange({ ...value, description: e.target.value })}
-      />
-    </Stack>
-  );
-}
-
-function InstructionsField({
+function PromptFields({
   value,
   onChange,
   editing = false,
@@ -76,35 +50,35 @@ function InstructionsField({
   editing?: boolean;
 }) {
   return (
-    <Textarea
-      label="Instructions"
-      description={
-        editing
-          ? 'Markdown instructions for future runs, including published workflows. Active runs keep their captured instructions.'
-          : "Markdown instructions added before the Agent node's task instructions."
-      }
-      required
-      autosize
-      minRows={editing ? 20 : 10}
-      maxRows={40}
-      value={value.content}
-      onChange={(e) => onChange({ ...value, content: e.target.value })}
-      styles={{ input: { fontFamily: 'var(--mono)', lineHeight: 1.6 } }}
-    />
-  );
-}
-
-function PromptFields({
-  value,
-  onChange,
-}: {
-  value: PromptContent;
-  onChange: (value: PromptContent) => void;
-}) {
-  return (
-    <Stack>
-      <PromptMetadata value={value} onChange={onChange} />
-      <InstructionsField value={value} onChange={onChange} />
+    <Stack gap="md">
+      <TextInput
+        label="Name"
+        required
+        maxLength={120}
+        value={value.name}
+        onChange={(e) => onChange({ ...value, name: e.target.value })}
+      />
+      <Textarea
+        label="Description"
+        rows={2}
+        value={value.description}
+        onChange={(e) => onChange({ ...value, description: e.target.value })}
+      />
+      <Textarea
+        label="Instructions"
+        description={
+          editing
+            ? 'Markdown instructions for future runs, including published workflows. Active runs keep their captured instructions.'
+            : "Markdown instructions added before the Agent node's task instructions."
+        }
+        required
+        autosize
+        minRows={editing ? 12 : 8}
+        maxRows={40}
+        value={value.content}
+        onChange={(e) => onChange({ ...value, content: e.target.value })}
+        styles={{ input: { fontFamily: 'var(--mono)', lineHeight: 1.6 } }}
+      />
     </Stack>
   );
 }
@@ -128,67 +102,80 @@ export function PromptLibrary({
     .sort((a, b) => a.name.localeCompare(b.name));
   return (
     <div className={layout.page}>
-      <header className={layout.header}>
+      <header className={`${layout.header} ${layout.libraryHeader}`}>
         <h1>Prompts</h1>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={16} />
+        <MantineButton variant="filled" onClick={openCreate}>
+          <Plus />
           New prompt
-        </Button>
+        </MantineButton>
       </header>
-      <div className={styles.toolbar}>
-        <span>
+      <div className={layout.libraryToolbar}>
+        <Text size="xs" c="dimmed">
           {query ? `${visible.length} of ${prompts.length}` : prompts.length}{' '}
           {prompts.length === 1 ? 'prompt' : 'prompts'}
-        </span>
+        </Text>
         <TextInput
           size="xs"
-          className={styles.search}
+          className={layout.librarySearch}
           aria-label="Search prompts"
-          placeholder="Search prompts..."
+          placeholder="Search prompts"
           leftSection={<Search size={15} />}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
-      <div className={cards.grid}>
-        {visible.map((p) => (
-          <article key={p.id} className={`${cards.card} ${styles.promptCard}`}>
-            <div className={cards.cardTop}>
-              <span className={cards.cardIcon}>
-                <FileText size={19} />
-              </span>
-            </div>
-            <div className={cards.cardBody}>
-              <h2>
-                <Link to={paths.prompt(p.id)} className={cards.cardLink}>
-                  {p.name}
+      {visible.length ? (
+        <div className={library.listPanel}>
+          <div
+            className={`${library.columnHead} ${styles.columnHead}`}
+            aria-hidden="true"
+          >
+            <span>Name</span>
+            <span>Revision</span>
+            <span className={library.updated}>Updated</span>
+          </div>
+          <ul className={library.list}>
+            {visible.map((p) => (
+              <li key={p.id}>
+                <Link
+                  to={paths.prompt(p.id)}
+                  className={`${library.row} ${styles.row}`}
+                >
+                  <div className={library.rowIdentity}>
+                    <span className={library.icon} aria-hidden="true">
+                      <FileText size={17} />
+                    </span>
+                    <div className={library.identity}>
+                      <strong>{p.name}</strong>
+                      {p.description && <span>{p.description}</span>}
+                    </div>
+                  </div>
+                  <span className={styles.revision}>Revision {p.revision}</span>
+                  <time className={library.updated} dateTime={p.updatedAt}>
+                    {new Date(p.updatedAt).toLocaleDateString()}
+                  </time>
+                  <ArrowRight
+                    className={library.rowArrow}
+                    size={16}
+                    aria-hidden="true"
+                  />
                 </Link>
-              </h2>
-              <p className={styles.cardDescription}>{p.description}</p>
-            </div>
-            <div className={cards.cardFooter}>
-              <span>Revision {p.revision}</span>
-              <span className={cards.cardArrow} aria-hidden="true">
-                <ArrowRight size={15} />
-              </span>
-            </div>
-          </article>
-        ))}
-        {!query && (
-          <button className={cards.newCard} onClick={openCreate}>
-            <span>
-              <Plus size={23} />
-            </span>
-            Create a prompt<small>Reusable instructions for Agent nodes</small>
-          </button>
-        )}
-      </div>
-      {query && !visible.length && (
-        <div className={styles.empty}>
-          <FileText size={24} />
-          <h2>No matching prompts</h2>
-          <p>Try another name or description.</p>
-          <Button onClick={() => setQuery('')}>Clear search</Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className={library.empty}>
+          <span className={library.icon} aria-hidden="true">
+            {query ? <Search size={17} /> : <FileText size={17} />}
+          </span>
+          <h2>{query ? 'No matching prompts' : 'No prompts yet'}</h2>
+          <MantineButton
+            variant="default"
+            onClick={query ? () => setQuery('') : openCreate}
+          >
+            {query ? 'Clear search' : 'Create a prompt'}
+          </MantineButton>
         </div>
       )}
       {draft && (
@@ -196,6 +183,7 @@ export function PromptLibrary({
           onClose={() => !busy && setDraft(undefined)}
           title="New prompt"
           size={650}
+          classNames={{ header: styles.createHeader, body: styles.createBody }}
         >
           <form
             onSubmit={(e) => {
@@ -217,7 +205,7 @@ export function PromptLibrary({
             <fieldset disabled={busy} className={styles.fields}>
               <PromptFields value={draft} onChange={setDraft} />
             </fieldset>
-            <Group justify="flex-end" mt="lg">
+            <Group justify="flex-end" className={layout.formSection}>
               <Button disabled={busy} onClick={() => setDraft(undefined)}>
                 Cancel
               </Button>
@@ -286,7 +274,7 @@ export function PromptEditor({
     };
   }, [prompt.id, tick]);
   return (
-    <section className={editorLayout.editor}>
+    <section className={`${editorLayout.editor} ${styles.editor}`}>
       <header className={`${editorLayout.header} ${styles.detailHeader}`}>
         <Button
           variant="ghost"
@@ -296,10 +284,7 @@ export function PromptEditor({
         >
           <ArrowLeft />
         </Button>
-        <div className={`${editorLayout.title} ${styles.detailTitle}`}>
-          <span>PROMPT</span>
-          <strong>{baseline.name}</strong>
-        </div>
+        <h1 className={styles.detailTitle}>{baseline.name}</h1>
         <span className={editorLayout.saved}>
           {dirty ? 'Unsaved changes' : 'Saved'} · Revision {baseline.revision}
         </span>
@@ -318,6 +303,7 @@ export function PromptEditor({
           <Button
             form={formId}
             type="submit"
+            variant="primary"
             disabled={
               busy || !dirty || !draft.name.trim() || !draft.content.trim()
             }
@@ -353,7 +339,7 @@ export function PromptEditor({
         </div>
       </header>
       <div className={styles.editorBody}>
-        <div className={styles.editorContent}>
+        <div className={layout.formPage}>
           {dirty && prompt.revision > baseline.revision && (
             <Text role="alert" c="yellow" mb="md">
               This prompt changed elsewhere. Your edits are preserved. Discard
@@ -362,7 +348,7 @@ export function PromptEditor({
           )}
           <form
             id={formId}
-            className={styles.editGrid}
+            className={layout.formCard}
             onSubmit={(e) => {
               e.preventDefault();
               void (async () => {
@@ -380,64 +366,51 @@ export function PromptEditor({
               })();
             }}
           >
-            <aside className={styles.metadata}>
-              <fieldset disabled={busy} className={styles.fields}>
-                <PromptMetadata value={draft} onChange={setDraft} />
-              </fieldset>
-            </aside>
-            <fieldset
-              disabled={busy}
-              className={`${styles.fields} ${styles.instructions}`}
-            >
-              <InstructionsField value={draft} onChange={setDraft} editing />
+            <fieldset disabled={busy} className={styles.fields}>
+              <PromptFields value={draft} onChange={setDraft} editing />
             </fieldset>
-            <section className={styles.usage}>
-              <h2>Used by</h2>
+            <section
+              className={layout.formSection}
+              aria-labelledby={`${formId}-usage`}
+            >
+              <h2 id={`${formId}-usage`}>
+                Used by{' '}
+                {!usageError && (
+                  <span className={layout.referenceCount}>{usage.length}</span>
+                )}
+              </h2>
               {usageError ? (
                 <Text role="alert" c="red" size="sm">
                   {usageError}
                 </Text>
               ) : !usage.length ? (
-                <div className={styles.usageEmpty}>
-                  <GitBranch size={19} />
-                  <p>No workflows use this prompt yet.</p>
-                </div>
+                <Text size="sm" c="dimmed">
+                  No workflows use this prompt yet.
+                </Text>
               ) : (
-                usage.map((w) => (
-                  <article
-                    key={w.workflowId}
-                    className={`${cards.card} ${styles.usageCard}`}
-                  >
-                    <div className={cards.cardTop}>
-                      <span className={cards.cardIcon}>
-                        <GitBranch size={19} />
-                      </span>
-                    </div>
-                    <div className={cards.cardBody}>
-                      <h2>
-                        <Link
-                          to={paths.workflow(w.workflowId)}
-                          className={cards.cardLink}
-                        >
-                          {w.name}
-                        </Link>
-                      </h2>
-                    </div>
-                    <div className={cards.cardFooter}>
-                      <span>
-                        {[
-                          w.draft ? 'Draft' : '',
-                          ...w.versions.map((v) => `v${v} published`),
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
-                      <span className={cards.cardArrow} aria-hidden="true">
-                        <ArrowRight size={15} />
-                      </span>
-                    </div>
-                  </article>
-                ))
+                <ul className={layout.referenceList}>
+                  {usage.map((w) => (
+                    <li key={w.workflowId}>
+                      <Link
+                        to={paths.workflow(w.workflowId)}
+                        className={layout.workflowReference}
+                      >
+                        <span className={layout.referenceName}>
+                          <strong>{w.name}</strong>
+                          <Text component="span" size="xs" c="dimmed">
+                            {[
+                              w.draft ? 'Draft' : '',
+                              ...w.versions.map((v) => `v${v} published`),
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </Text>
+                        </span>
+                        <ArrowRight size={16} aria-hidden="true" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               )}
             </section>
           </form>

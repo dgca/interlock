@@ -152,6 +152,7 @@ export const comparisonSideSchema = z
   .strict();
 export type ComparisonSideSelection = z.infer<typeof comparisonSideSchema>;
 export interface ComparisonConfiguration {
+  variables?: import('./variables.js').VariableCapture[];
   id: string;
   promptSource: 'current' | 'revisions';
   prompts: { id: string; revision: number }[];
@@ -387,6 +388,7 @@ export interface WorkflowComparison {
   concurrency: number;
   pins: ComparisonPin[];
   prompts: PromptSnapshot[];
+  variableCaptures?: import('./variables.js').VariableCapture[];
   /** Absent on legacy comparisons, whose prompt pool is shared by both sides. */
   configurations?: Record<'baseline' | 'candidate', ComparisonConfiguration>;
   samples: ComparisonSample[];

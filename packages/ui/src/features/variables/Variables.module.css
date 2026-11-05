@@ -1,0 +1,210 @@
+.dependencies ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.columnHead,
+.row {
+  grid-template-columns: minmax(0, 1fr) 80px 110px 100px 16px;
+}
+.rowKind {
+  justify-self: start;
+}
+.ready {
+  color: var(--text-secondary);
+}
+.status {
+  color: var(--mantine-color-yellow-4);
+}
+.skeletonIcon {
+  flex-shrink: 0;
+}
+.empty {
+  background: var(--surface);
+}
+.error {
+  color: var(--mantine-color-red-4);
+  overflow-wrap: anywhere;
+}
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-width: 0;
+  overflow: hidden;
+  container: variable-editor / inline-size;
+}
+.editor > .editorHeader {
+  height: auto;
+  min-height: 82px;
+  padding-block: 16px;
+  flex-wrap: wrap;
+}
+.editorTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.editorTitle h1 {
+  margin: 0;
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 550;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editorStatus {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.editorActions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+}
+.editorBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.editorContent {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 32px 46px 40px;
+  width: 100%;
+}
+.editorDisclosures {
+  margin-top: 22px;
+  border-top: 1px solid var(--border);
+}
+.fields {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.valueFields button,
+.valueAction {
+  align-self: flex-start;
+}
+.dependencies {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.dependencies h3 {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--text-secondary);
+}
+.dependencies h3 span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.dependencies li {
+  padding: 10px 0;
+  overflow-wrap: anywhere;
+}
+.dependencies section li + li {
+  border-top: 1px solid var(--border);
+}
+.dependencies > ul > li {
+  padding: 0;
+}
+.portableId {
+  display: block;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.editorDisclosures > details + details {
+  border-top: 1px solid var(--border);
+}
+.editorDisclosures summary {
+  min-height: 44px;
+  padding: 10px 0;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 24px;
+}
+.editorDisclosures .dangerZone > summary {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mantine-color-red-3);
+}
+.dangerActions {
+  padding-bottom: 12px;
+}
+.dangerZone .deleteAction:not(:disabled) {
+  color: var(--mantine-color-red-3);
+  background: transparent;
+}
+.dangerZone .deleteAction:not(:disabled):hover {
+  background: var(--surface-raised);
+}
+@media (max-width: 1050px) {
+  .editorContent {
+    padding: 24px;
+  }
+}
+@container library-list (max-width: 740px) {
+  .columnHead,
+  .row {
+    grid-template-columns: minmax(0, 1fr) 75px 105px 16px;
+  }
+}
+@container variable-editor (max-width: 640px) {
+  .editor > .editorHeader {
+    padding: 12px;
+    gap: 8px;
+  }
+  .editorTitle {
+    flex-basis: calc(100% - 52px);
+  }
+  .backButton {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .editorActions {
+    margin-left: auto;
+  }
+  .editorActions > button {
+    min-height: 44px;
+  }
+  .editorContent {
+    padding: 16px 12px 28px;
+  }
+  .fields button {
+    min-height: 44px;
+  }
+}
+@media (max-width: 600px) {
+  .editor {
+    height: calc(100dvh - 60px);
+  }
+}
+@container library-list (max-width: 480px) {
+  .row {
+    grid-template-columns: 35px max-content minmax(0, 1fr) 16px;
+  }
+  .rowKind {
+    grid-column: 2;
+  }
+  .row > .status,
+  .row > .ready {
+    grid-column: 3;
+  }
+}

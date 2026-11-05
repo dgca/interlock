@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   FileText,
   Settings2,
+  KeyRound,
 } from 'lucide-react';
 import { VERSION } from '../../../../core/src/version';
 import styles from './Sidebar.module.css';
@@ -16,9 +17,11 @@ export function Sidebar({
   engineHost,
   onConnect,
 }: {
-  page: 'workflows' | 'runs' | 'prompts' | 'harnesses';
+  page: 'workflows' | 'runs' | 'prompts' | 'variables' | 'harnesses';
   attentionCount?: number;
-  onNavigate: (page: 'workflows' | 'runs' | 'prompts' | 'harnesses') => void;
+  onNavigate: (
+    page: 'workflows' | 'runs' | 'prompts' | 'variables' | 'harnesses',
+  ) => void;
   connected: boolean;
   engineHost?: string;
   onConnect?: () => void;
@@ -35,6 +38,7 @@ export function Sidebar({
             { id: 'workflows', label: 'Workflows', Icon: GitBranch },
             { id: 'runs', label: 'Runs', Icon: Activity },
             { id: 'prompts', label: 'Prompts', Icon: FileText },
+            { id: 'variables', label: 'Variables', Icon: KeyRound },
             { id: 'harnesses', label: 'Harnesses', Icon: Settings2 },
           ] as const
         ).map(({ id, label, Icon }) => (

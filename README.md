@@ -196,6 +196,14 @@ Use **Switch** to choose among several named routes from one input value. Choose
 
 Use **Fetch** to call an HTTP API through a form. Bind input fields into the URL, query parameters, headers, or JSON body, and preview the resolved request with sample input. The output contains `status`, `headers`, and `body`. See [Fetch requests](docs/fetch.md) for binding rules, response handling, and retries.
 
+Use **Variables** to manage reusable configuration and credentials centrally.
+Select variable references in Fetch headers or Script environment entries,
+including polling checks. Rotating a value updates subsequent runs of published
+workflows without republishing. Secrets use protected storage and have no read-back
+action. Back up the separate encryption key alongside a separately stored database
+backup. See [workflow variables](docs/variables.md) for management, capture,
+redaction, and import requirements.
+
 Individual body fields with a fixed value have typed controls, so text needs no JSON quotes and existing JSON values keep their types.
 
 ### Script nodes
@@ -215,7 +223,7 @@ A thrown error, nonzero exit, timeout, or invalid output fails the script step. 
 
 The library **Import** dialog opens on bundled **Starters** and also accepts pasted JSON, local JSON files, and public GitHub folder links. **Paste JSON** accepts a legacy workflow or portable bundle. Paste the document, choose **Preview workflow**, then **Import workflow** after reviewing it. Invalid JSON and server validation errors keep the text available for correction. Choose **GitHub folder**, paste an HTTPS `github.com/OWNER/REPO/tree/REF/FOLDER` URL, and select **Find workflows**. Review each workflow's description, source file, and dependencies, then select the workflows and choose **Import workflow**, or **Import N workflows** for multiple selections. Branch names containing slashes and commit links are supported. Discovery reads direct JSON files only and pins the preview to a commit. Invalid files remain unselectable and do not hide valid workflows.
 
-GitHub selections import together. Any invalid selection or differing existing draft, metadata, ownership, published version, or saved prompt rejects the whole selection without changing the library. Portable bundles retain their IDs and pins; identical portable reimports are no-ops. Legacy files create a new workflow each time. Import saves definitions and prompts without starting runs. Local files remain available under **Local file** unless disabled by the host. Paste JSON and local files use the same import operations and conflict rules. GitHub import supports public repositories only, with at most 50 direct JSON files and 2 MiB per response or file; requests time out after 60 seconds. Private authentication, recursion, and automatic updates are not supported.
+GitHub selections import together. Any invalid selection or differing existing draft, metadata, ownership, published version, or saved prompt rejects the whole selection without changing the library. Portable bundles retain their IDs and pins; identical portable reimports are no-ops. Legacy files create a new workflow each time. Import saves definitions and prompts without starting runs. Local files remain available under **Local file** unless disabled by the host. Paste JSON and local files use the same import operations and conflict rules. GitHub import supports public repositories only, with at most 50 direct JSON files and 2 MiB per response or file; requests time out after 60 seconds. Private authentication, recursion, and automatic updates are not supported. Variable-bearing format-4 bundles require explicit local binding or unset provisioning in import preview. Neither Config nor Secret values are exported. See [workflow variables](docs/variables.md).
 
 Folder metadata uses GitHub's public API; file downloads use raw GitHub URLs pinned to the resolved commit. Rate-limit feedback includes retry timing when GitHub provides it. If an import response is lost, inspect the library before retrying, especially for legacy files: the import may have completed. A confirmed rejection reports **Nothing imported**. A library refresh failure after success does not undo the import.
 
@@ -306,6 +314,7 @@ The build includes TypeScript checks. Tests cover workflow contracts, runtime be
 - [Scope and limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
 - [Create and reuse saved prompts](docs/prompts.md)
+- [Reuse configuration and credentials](docs/variables.md)
 - [Agent workflow operations, original-input and node-output bindings, and portable bundles](docs/agent-workflows.md)
 - [Fetch requests](docs/fetch.md)
 - [Upgrade and restore a database](docs/upgrading.md)

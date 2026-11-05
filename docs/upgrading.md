@@ -88,3 +88,13 @@ Optional Agent model tiers and claim selections add compatible fields without a 
 ## Bundled starter choices
 
 Upgrades no longer add workflows automatically. Existing workflows, versions and runs remain intact, including earlier seeded SDLC copies. Find opt-in bundled procedures in **Workflows → Import → Starters**, or use `interlock starters`. Deleting a copy leaves it absent until another explicit import. Local copy tracking and import receipts use additive collections without a schema conversion; portable workflow bundles exclude them. See [starter workflows](starter-workflows.md).
+
+## Add workflow variables
+
+Existing workflows and history require no value or key migration. Variable-free
+workflows retain their behavior, and startup creates no encryption key until the
+first variable value is stored. New values use encrypted revision records with a
+separate owner-only key file. Back up that key separately from database backups.
+Portable format 4 contains references and safe requirements, never values or keys.
+Earlier readers cannot use variable references. See [workflow variables](variables.md)
+for provisioning, capture, and restore instructions.
