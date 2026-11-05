@@ -1,7 +1,8 @@
 import { NativeSelect, Stack, Text, TextInput } from '@mantine/core';
-import type {
-  VariableImportBindings,
-  VariableRequirement,
+import {
+  variableImportBindingsSchema,
+  type VariableImportBindings,
+  type VariableRequirement,
 } from '@interlock/core';
 import { VariablePicker } from './VariablePicker';
 
@@ -73,6 +74,12 @@ export function VariableImportBindingsEditor({
                 <TextInput
                   label="Local name"
                   value={choice.name ?? r.name}
+                  error={
+                    !variableImportBindingsSchema.safeParse({ [r.id]: choice })
+                      .success
+                      ? 'Start with a letter or underscore. Use letters, digits, underscores, dots or hyphens, up to 120 characters.'
+                      : undefined
+                  }
                   onChange={(e) =>
                     onChange({
                       ...choices,

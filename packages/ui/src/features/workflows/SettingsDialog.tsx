@@ -131,7 +131,11 @@ export function SettingsDialog({
   const back = () => setContract(undefined);
   const apply = async () => {
     if (creating && !nodeDraft) return;
-    const invalid = form.current?.querySelector<HTMLInputElement>(':invalid');
+    const invalid = Array.from(
+      form.current?.querySelectorAll<
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >('input, textarea, select') ?? [],
+    ).find((control) => control.willValidate && !control.validity.valid);
     if (invalid) {
       const section = invalid
         .closest('[data-node-section]')
@@ -144,7 +148,10 @@ export function SettingsDialog({
       )
         if (ancestor.tagName === 'DETAILS')
           (ancestor as HTMLDetailsElement).open = true;
-      setTimeout(() => invalid.reportValidity(), 0);
+      setTimeout(() => {
+        invalid.focus();
+        invalid.reportValidity();
+      }, 0);
       return;
     }
     try {

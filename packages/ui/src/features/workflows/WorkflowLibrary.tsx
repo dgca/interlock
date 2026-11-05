@@ -52,7 +52,7 @@ export function WorkflowLibrary({
   );
   return (
     <div className={layout.page}>
-      <header className={`${layout.header} ${styles.header}`}>
+      <header className={`${layout.header} ${layout.libraryHeader}`}>
         <div>
           <h1>Workflows</h1>
           <p>Create, organize, and run your workflows.</p>
@@ -87,7 +87,7 @@ export function WorkflowLibrary({
         value={archived ? 'archived' : 'active'}
         onChange={(value) => setArchived(value === 'archived')}
       >
-        <div className={styles.toolbar}>
+        <div className={layout.libraryToolbar}>
           <Tabs.List>
             <Tabs.Tab value="active">
               Active{' '}
@@ -99,6 +99,7 @@ export function WorkflowLibrary({
             <Tabs.Tab value="archived">Archived</Tabs.Tab>
           </Tabs.List>
           <TextInput
+            className={layout.librarySearch}
             size="xs"
             aria-label="Search workflows"
             placeholder="Search workflows..."

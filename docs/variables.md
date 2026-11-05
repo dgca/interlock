@@ -13,9 +13,13 @@ dots, or hyphens, up to 120 characters. Names are unique without case sensitivit
 Kind is fixed after creation. Values are strings of at most 16 KiB. An empty Config
 value is valid. A stored Secret must be nonempty.
 
-Use the CLI stdin path below for multiline secrets. The browser's Secret entry is
-a password field. Saved secrets have no reveal or read-back action. To inspect
-ordinary configuration, open its editor and select **Edit value**.
+The editor's top bar holds **Save changes** and **Discard changes**. Discarding
+restores saved fields and clears any entered Secret replacement. The back arrow
+returns to Variables and asks before discarding unsaved edits.
+
+The value field accepts multiline text for both kinds. A Secret is visible while
+you enter or replace it. After saving, you can replace the value again. Config
+values are visible and editable when you open the variable.
 
 ## Reference a value in a step
 
@@ -24,8 +28,13 @@ variable, then add a literal prefix if needed. For an Authorization bearer token
 enter `Bearer ` with its trailing space as the prefix. The request preview shows a
 reference, not the actual value.
 
-For Script, open **Environment**, select **Add variable**, and enter the process
-environment name and variable reference. JavaScript reads
+For Script, open **Environment variables**, select **Add variable**, and choose a
+saved variable. Its name becomes the process environment name, preserving case.
+Select **Change environment name** if your script expects a different name.
+Names containing dots or hyphens need an environment-safe name; confirm or edit
+the suggested name before applying. Duplicate environment names must be changed.
+Renaming a saved variable or replacing a selected source preserves the existing
+environment name. JavaScript reads
 `process.env.SERVICE_API_TOKEN`. Bash reads `$SERVICE_API_TOKEN`. These entries
 override matching inherited names. Only explicitly selected library values are
 delivered. Polling Wait checks support the same header and environment controls.
@@ -47,12 +56,12 @@ republishing. Existing runs keep their captured value revision through delayed
 steps, retries, and restart. The editor clears entered Secret text after the
 server acknowledges the write, even if a later view refresh fails.
 
-To stop later consumption by existing and new runs, select **Disable use** and
-confirm. Already delivered values cannot be recalled. Cancel running work or
+To stop later consumption by existing and new runs, select **Disable use** under
+**Danger zone** and confirm. Already delivered values cannot be recalled. Cancel running work or
 revoke credentials at their provider when needed. Re-enabling permits existing
 captures to use their original retained revisions again.
 
-Review **Used by workflows** before renaming or deleting. Renames preserve ID-based
+Review **Used by** before renaming or deleting. Renames preserve ID-based
 references. Deletion is blocked by draft or retained published references, active
 runs, and running comparisons. Remove those dependencies first. Allowed deletion
 removes current protected revisions while keeping historical capture metadata.
@@ -131,8 +140,8 @@ and local metadata. MCP **import_workflows** accepts the same `variableBindings`
 
 ## Back up or restore protected values
 
-Open **Storage and recovery** in a variable editor to identify the key file. Back
-up the database and its key separately. Both kinds use authenticated encryption.
+Open **Storage and recovery** below **Danger zone** to identify the key file. Back up
+the database and its key separately. Both kinds use authenticated encryption.
 The server reads the owner-only key automatically when needed; there is no
 password prompt. Keys are created when the first value is stored.
 

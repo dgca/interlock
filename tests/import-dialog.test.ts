@@ -12,9 +12,11 @@ const calls = vi.hoisted(() => ({
   starters: vi.fn(),
   add: vi.fn(),
   preview: vi.fn(),
+  variables: vi.fn(),
 }));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
+    variables: { read: { query: calls.variables } },
     workflows: {
       discoverGithub: { query: calls.discover },
       importGithub: { mutate: calls.import },
@@ -107,6 +109,27 @@ beforeEach(async () => {
   calls.create.mockResolvedValue({ id: 'created' });
   calls.bundle.mockResolvedValue({ rootId: 'bundle' });
   calls.add.mockResolvedValue({ workflow: { id: 'starter' }, created: true });
+  calls.variables.mockImplementation(async (q) =>
+    q.action === 'inspect'
+      ? {
+          id: 'local',
+          name: 'LOCAL_TOKEN',
+          kind: 'secret',
+          availability: 'ready',
+          dependencies: {},
+        }
+      : {
+          items: [
+            {
+              id: 'local',
+              name: 'LOCAL_TOKEN',
+              kind: 'secret',
+              availability: 'ready',
+            },
+          ],
+          total: 1,
+        },
+  );
   calls.preview.mockImplementation(async ({ document }) => ({
     name: document.name ?? 'Bundle',
     description: document.description ?? '',
@@ -368,4 +391,84 @@ it('prevents overlapping imports and explains uncertain GitHub delivery', async 
     'Inspect the library before retrying',
   );
   expect(close).not.toHaveBeenCalled();
+});
+it('requires complete variable choices before enabling a local bundle import', async () => {
+  calls.preview.mockResolvedValue({
+    name: 'Portable',
+    workflows: [],
+    prompts: [],
+    published: true,
+    variables: [{ id: 'portable', name: 'TOKEN', kind: 'secret' }],
+  });
+  const bundle = { format: 'interlock-workflows', name: 'Portable' };
+  await click('Paste JSON');
+  await text(JSON.stringify(bundle), true);
+  await click('Preview workflow');
+  expect(button('Import workflow').disabled).toBe(true);
+  expect(document.body.textContent).toContain(
+    'Choose how to provide 1 required variable',
+  );
+  const select = document.querySelector('select')!;
+  await act(async () => {
+    select.value = 'bind';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(button('Import workflow').disabled).toBe(true);
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 190));
+  });
+  await act(async () =>
+    document.querySelector<HTMLInputElement>('input[role="combobox"]')!.click(),
+  );
+  await act(async () =>
+    document.querySelector<HTMLElement>('[role="option"]')!.click(),
+  );
+  expect(button('Import workflow').disabled).toBe(false);
+  await click('Import workflow');
+  expect(calls.bundle).toHaveBeenCalledWith({
+    bundle,
+    variableBindings: { portable: { action: 'bind', variableId: 'local' } },
+  });
+});
+it('blocks unresolved GitHub requirements and invalid provisioning names without blocking discovery', async () => {
+  calls.discover.mockResolvedValue({
+    ...preview,
+    items: [
+      {
+        ...preview.items[0],
+        variables: [{ id: 'portable', name: 'TOKEN', kind: 'secret' }],
+      },
+    ],
+  });
+  await github();
+  await check();
+  expect(button('Import workflow').disabled).toBe(true);
+  const select = document.querySelector('select')!;
+  await act(async () => {
+    select.value = 'provision';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(button('Import workflow').disabled).toBe(false);
+  const name = [...document.querySelectorAll('input')].find(
+    (e) =>
+      document.querySelector(`label[for="${e.id}"]`)?.textContent ===
+      'Local name',
+  )!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!.call(name, '');
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  expect(button('Import workflow').disabled).toBe(true);
+  expect(calls.import).not.toHaveBeenCalled();
+  expect(name.getAttribute('aria-invalid')).toBe('true');
+  expect(name.getAttribute('aria-describedby')).toBeTruthy();
+  expect(document.body.textContent).toContain(
+    'Start with a letter or underscore.',
+  );
+  expect(document.body.textContent).toContain(
+    'Fix 1 local variable name to enable import.',
+  );
 });

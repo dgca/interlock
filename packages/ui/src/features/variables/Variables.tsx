@@ -1,24 +1,40 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
 import { flushSync } from 'react-dom';
 import {
   Badge,
+  Button as MantineButton,
   Group,
   SegmentedControl,
+  Skeleton,
   Stack,
   Text,
   TextInput,
   Textarea,
+  VisuallyHidden,
 } from '@mantine/core';
-import { ArrowLeft, ArrowRight, KeyRound, Plus, Search } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Braces,
+  KeyRound,
+  Plus,
+  Save,
+  Search,
+} from 'lucide-react';
 import type { AppContext } from '../../App';
-import type { VariableBinding } from '@interlock/core';
+import {
+  variableRequirementSchema,
+  type VariableBinding,
+} from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { Button } from '../../components/Button/Button';
 import { Modal } from '../../components/Modal/Modal';
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
+import library from '../../components/PageLayout/LibraryList.module.css';
+import editorLayout from '../workflows/WorkflowEditor.module.css';
 import styles from './Variables.module.css';
 import { VariablePicker } from './VariablePicker';
 
@@ -32,12 +48,64 @@ const statusName = {
   locked: 'Store locked',
 } as const;
 
+function VariableListSkeleton() {
+  return (
+    <>
+      <VisuallyHidden role="status">Loading variables…</VisuallyHidden>
+      <ul className={library.list} aria-hidden="true">
+        {[1, 2, 3].map((row) => (
+          <li key={row} className={`${library.row} ${styles.row}`}>
+            <div className={library.rowIdentity}>
+              <Skeleton
+                className={styles.skeletonIcon}
+                width={35}
+                height={35}
+                radius={8}
+                animate={false}
+              />
+              <Stack gap={5} w="100%" maw={row === 2 ? 150 : 190}>
+                <Skeleton width="65%" height={12} animate={false} />
+                <Skeleton height={8} animate={false} />
+              </Stack>
+            </div>
+            <Skeleton
+              className={styles.rowKind}
+              width={44}
+              height={12}
+              animate={false}
+            />
+            <Skeleton
+              className={styles.status}
+              width={52}
+              height={10}
+              animate={false}
+            />
+            <Skeleton
+              className={library.updated}
+              width={60}
+              height={10}
+              animate={false}
+            />
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 export function VariableLibrary() {
   const { tick } = useOutletContext<AppContext>();
-  const [data, setData] = useState<Listing>();
+  const [data, setData] = useState<Listing & { search: string }>();
   const [search, setSearch] = useState('');
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState('');
+  const searchInput = useRef<HTMLInputElement>(null);
+  const loading =
+    !error && (!data || (!data.items.length && data.search !== search));
+  const updateSearch = (value: string) => {
+    setSearch(value);
+    setOffset(0);
+  };
   useEffect(() => {
     let active = true;
     const timer = setTimeout(() => {
@@ -45,7 +113,7 @@ export function VariableLibrary() {
         .query({ action: 'list', search, offset })
         .then((r) => {
           if (active && 'items' in r) {
-            setData(r);
+            setData({ ...r, search });
             setError('');
           }
         })
@@ -60,79 +128,144 @@ export function VariableLibrary() {
   }, [tick, search, offset]);
   return (
     <div className={layout.page}>
-      <header className={layout.header}>
+      <header className={`${layout.header} ${layout.libraryHeader}`}>
         <h1>Variables</h1>
-        <Link className={styles.primaryLink} to={paths.variable('new')}>
-          <Plus size={15} />
+        <MantineButton
+          component={Link}
+          variant="filled"
+          to={paths.variable('new')}
+        >
+          <Plus />
           New variable
-        </Link>
+        </MantineButton>
       </header>
-      <div className={styles.toolbar}>
+      <div className={layout.libraryToolbar}>
+        {loading ? (
+          <Skeleton width={65} height={10} animate={false} aria-hidden="true" />
+        ) : (
+          data && (
+            <Text size="xs" c="dimmed">
+              {data.total} {data.total === 1 ? 'variable' : 'variables'}
+            </Text>
+          )
+        )}
         <TextInput
+          ref={searchInput}
+          className={layout.librarySearch}
+          size="xs"
           aria-label="Search variables"
           placeholder="Search variables"
           leftSection={<Search size={15} />}
           value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setOffset(0);
-          }}
+          onChange={(e) => updateSearch(e.target.value)}
         />
-        <Text size="xs" c="dimmed">
-          {data
-            ? `${data.total} ${data.total === 1 ? 'variable' : 'variables'}`
-            : 'Loading…'}
-        </Text>
       </div>
       {error && (
         <p role="alert" className={styles.error}>
           {error}
         </p>
       )}
-      {!data && !error && <p role="status">Loading variables…</p>}
-      {data && !data.items.length ? (
-        <div className={styles.empty}>
-          <KeyRound size={24} />
+      {!loading && data?.search === search && !data.items.length && (
+        <div className={`${library.empty} ${styles.empty}`}>
+          <span className={library.icon} aria-hidden="true">
+            {search ? <Search size={17} /> : <KeyRound size={17} />}
+          </span>
           <h2>{search ? 'No matching variables' : 'No variables yet'}</h2>
-          {!search && <Link to={paths.variable('new')}>Create a variable</Link>}
+          {search ? (
+            <MantineButton
+              variant="default"
+              onClick={() => {
+                updateSearch('');
+                searchInput.current?.focus();
+              }}
+            >
+              Clear search
+            </MantineButton>
+          ) : (
+            <>
+              <Text size="sm" c="dimmed">
+                Reuse settings and credentials across workflows.
+              </Text>
+              <MantineButton
+                component={Link}
+                variant="default"
+                to={paths.variable('new')}
+              >
+                Create a variable
+              </MantineButton>
+            </>
+          )}
         </div>
-      ) : (
-        data && (
-          <>
-            <div className={styles.columnHead}>
+      )}
+      {(loading || !!data?.items.length) && (
+        <>
+          <div className={library.listPanel}>
+            <div
+              className={`${library.columnHead} ${styles.columnHead}`}
+              aria-hidden="true"
+            >
               <span>Name</span>
               <span>Kind</span>
               <span>Status</span>
-              <span>Updated</span>
+              <span className={library.updated}>Updated</span>
             </div>
-            <ul className={styles.list}>
-              {data.items.map((v) => (
-                <li key={v.id}>
-                  <Link to={paths.variable(v.id)} className={styles.row}>
-                    <div className={styles.identity}>
-                      <strong>{v.name}</strong>
-                      {v.description && <span>{v.description}</span>}
-                    </div>
-                    <Badge variant="light" color="gray">
-                      {v.kind === 'secret' ? 'Secret' : 'Config'}
-                    </Badge>
-                    <span
-                      className={
-                        v.availability === 'ready'
-                          ? styles.ready
-                          : styles.status
-                      }
+            {loading ? (
+              <VariableListSkeleton />
+            ) : (
+              <ul className={library.list}>
+                {data?.items.map((v) => (
+                  <li key={v.id}>
+                    <Link
+                      to={paths.variable(v.id)}
+                      className={`${library.row} ${styles.row}`}
                     >
-                      {statusName[v.availability]}
-                    </span>
-                    <time className={styles.updated} dateTime={v.updatedAt}>
-                      {new Date(v.updatedAt).toLocaleDateString()}
-                    </time>
-                    <ArrowRight size={15} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
+                      <div className={library.rowIdentity}>
+                        <span className={library.icon} aria-hidden="true">
+                          {v.kind === 'secret' ? (
+                            <KeyRound size={17} />
+                          ) : (
+                            <Braces size={17} />
+                          )}
+                        </span>
+                        <div className={library.identity}>
+                          <strong>{v.name}</strong>
+                          {v.description && <span>{v.description}</span>}
+                        </div>
+                      </div>
+                      <Badge
+                        className={styles.rowKind}
+                        variant="light"
+                        color="gray"
+                        size="sm"
+                        tt="none"
+                        fw={500}
+                      >
+                        {v.kind === 'secret' ? 'Secret' : 'Config'}
+                      </Badge>
+                      <span
+                        className={
+                          v.availability === 'ready'
+                            ? styles.ready
+                            : styles.status
+                        }
+                      >
+                        {statusName[v.availability]}
+                      </span>
+                      <time className={library.updated} dateTime={v.updatedAt}>
+                        {new Date(v.updatedAt).toLocaleDateString()}
+                      </time>
+                      <ArrowRight
+                        className={library.rowArrow}
+                        size={16}
+                        aria-hidden="true"
+                      />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {data && !loading && (offset > 0 || data.truncated) && (
             <Group justify="space-between" mt="lg">
               <Button
                 disabled={!offset}
@@ -152,8 +285,8 @@ export function VariableLibrary() {
                 Next
               </Button>
             </Group>
-          </>
-        )
+          )}
+        </>
       )}
     </div>
   );
@@ -163,16 +296,26 @@ export function VariableRoute() {
   const { variableId = 'new' } = useParams();
   return <VariableEditor key={variableId} id={variableId} />;
 }
+
 function VariableEditor({ id }: { id: string }) {
   const creating = id === 'new';
+  const formId = useId();
   const { act, onDirty, tick } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const [saved, setSaved] = useState<Inspection>();
   const [name, setName] = useState('');
+  const [nameTouched, setNameTouched] = useState(false);
   const [description, setDescription] = useState('');
   const [kind, setKind] = useState<'secret' | 'config'>('secret');
   const [value, setValue] = useState('');
-  const [editing, setEditing] = useState(creating);
+  const [replacingSecret, setReplacingSecret] = useState(false);
+  const [config, setConfig] = useState<{
+    revision: number | null;
+    value: string;
+  }>();
+  const [configDraft, setConfigDraft] = useState<string>();
+  const [configError, setConfigError] = useState('');
+  const [valueRequired, setValueRequired] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
@@ -185,13 +328,27 @@ function VariableEditor({ id }: { id: string }) {
     binding: VariableBinding;
     target: string;
   }>();
-  const valueInput = useRef<HTMLInputElement>(null);
-  const configInput = useRef<HTMLTextAreaElement>(null);
+  const valueInput = useRef<HTMLTextAreaElement>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
   const replaceButton = useRef<HTMLButtonElement>(null);
+  const nameValidation = variableRequirementSchema.shape.name.safeParse(name);
+  const nameError = nameValidation.success
+    ? ''
+    : nameValidation.error.issues[0].message;
+  useEffect(() => {
+    nameInput.current?.setCustomValidity(nameError);
+  }, [nameError, creating, saved]);
+  const configChanged =
+    configDraft !== undefined &&
+    config !== undefined &&
+    (configDraft !== config.value || config.revision === null);
   const dirty = creating
     ? !!(name || description || value)
     : !!saved &&
-      (name !== saved.name || description !== saved.description || editing);
+      (name !== saved.name ||
+        description !== saved.description ||
+        replacingSecret ||
+        configChanged);
   useBeforeUnloadWarning(dirty);
   useEffect(() => {
     onDirty(dirty);
@@ -202,9 +359,33 @@ function VariableEditor({ id }: { id: string }) {
     let active = true;
     void api.variables.read
       .query({ action: 'inspect', id, offset })
-      .then((r) => {
+      .then(async (r) => {
         if (!active || !('dependencies' in r)) return;
+        let nextConfig: typeof config;
+        let readError = '';
+        if (r.kind === 'config' && r.availability !== 'locked') {
+          if (config?.revision === r.valueRevision) {
+            nextConfig = config;
+          } else if (r.valueRevision === null) {
+            nextConfig = { revision: null, value: '' };
+          } else {
+            try {
+              const result = await api.variables.read.query({
+                action: 'config_value',
+                id,
+              });
+              if ('value' in result)
+                nextConfig = { revision: r.valueRevision, value: result.value };
+            } catch (e) {
+              readError = errorMessage(e);
+            }
+          }
+        }
+        if (!active) return;
         setSaved(r);
+        setConfig(nextConfig);
+        setConfigDraft(undefined);
+        setConfigError(readError);
         setName(r.name);
         setDescription(r.description);
         setKind(r.kind);
@@ -216,14 +397,15 @@ function VariableEditor({ id }: { id: string }) {
     return () => {
       active = false;
     };
-  }, [id, creating, dirty, busy, tick, refresh, offset]);
+  }, [id, creating, dirty, busy, tick, refresh, offset, config]);
   useEffect(() => {
-    if (editing && !creating)
-      (kind === 'secret' ? valueInput.current : configInput.current)?.focus();
-  }, [editing, creating, kind]);
+    if (replacingSecret) valueInput.current?.focus();
+  }, [replacingSecret]);
   const clear = () => {
     setValue('');
-    setEditing(creating);
+    setValueRequired(false);
+    setReplacingSecret(false);
+    setConfigDraft(undefined);
     if (saved) {
       setName(saved.name);
       setDescription(saved.description);
@@ -232,8 +414,9 @@ function VariableEditor({ id }: { id: string }) {
   };
   const save = async () => {
     if (pending.current) return;
-    if (editing && kind === 'secret' && !value && !creating) {
-      setError('Enter a replacement value or cancel the replacement.');
+    if (replacingSecret && !value) {
+      setValueRequired(true);
+      valueInput.current?.focus();
       return;
     }
     pending.current = true;
@@ -258,12 +441,17 @@ function VariableEditor({ id }: { id: string }) {
                     expectedRevision: saved!.revision,
                     name,
                     description,
-                    ...(editing ? { value } : {}),
+                    ...(configChanged
+                      ? { value: configDraft }
+                      : replacingSecret
+                        ? { value }
+                        : {}),
                   },
             );
-            // Acknowledgment clears plaintext before any refresh can fail.
+            // Clear the entered Secret replacement before refreshing the view.
             setValue('');
-            setEditing(false);
+            setReplacingSecret(false);
+            setConfigDraft(undefined);
             if ('name' in result) {
               setName(result.name);
               setDescription(result.description);
@@ -272,8 +460,14 @@ function VariableEditor({ id }: { id: string }) {
               flushSync(() => onDirty(false));
               void navigate(paths.variable(result.id));
             } else {
-              if (saved && 'availability' in result)
+              if (saved && 'availability' in result) {
                 setSaved({ ...saved, ...result });
+                if (configChanged)
+                  setConfig({
+                    revision: result.valueRevision,
+                    value: configDraft!,
+                  });
+              }
               setRefresh((n) => n + 1);
             }
           } catch (e) {
@@ -286,32 +480,6 @@ function VariableEditor({ id }: { id: string }) {
     } finally {
       pending.current = false;
       setBusy(false);
-    }
-  };
-  const startValue = async () => {
-    if (!saved || pending.current) return;
-    if (saved.kind === 'config' && saved.valueRevision !== null) {
-      pending.current = true;
-      setBusy(true);
-      try {
-        const r = await api.variables.read.query({
-          action: 'config_value',
-          id,
-        });
-        if ('value' in r) {
-          setValue(r.value);
-          setEditing(true);
-          setError('');
-        }
-      } catch (e) {
-        setError(errorMessage(e));
-      } finally {
-        pending.current = false;
-        setBusy(false);
-      }
-    } else {
-      setValue('');
-      setEditing(true);
     }
   };
   const change = async () => {
@@ -360,15 +528,64 @@ function VariableEditor({ id }: { id: string }) {
       setBusy(false);
     }
   };
+  const discard = () => {
+    clear();
+    if (creating) {
+      flushSync(() => onDirty(false));
+      void navigate(paths.variables);
+    }
+  };
+  const header = (
+    <header className={`${editorLayout.header} ${styles.editorHeader}`}>
+      <Button
+        variant="ghost"
+        className={styles.backButton}
+        aria-label="Back to variables"
+        disabled={busy}
+        onClick={() => void navigate(paths.variables)}
+      >
+        <ArrowLeft />
+      </Button>
+      <div className={styles.editorTitle}>
+        <h1 title={saved?.name}>
+          {creating ? 'New variable' : (saved?.name ?? 'Variable')}
+        </h1>
+      </div>
+      {saved && (
+        <span className={styles.editorStatus} role="status">
+          {dirty ? 'Unsaved changes' : 'Saved'}
+        </span>
+      )}
+      {(creating || saved) && (
+        <div className={styles.editorActions}>
+          <Button disabled={busy || (!creating && !dirty)} onClick={discard}>
+            {creating ? 'Cancel' : 'Discard changes'}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={busy || !dirty || !name.trim()}
+            type="submit"
+            form={formId}
+          >
+            <Save size={14} />
+            {busy ? 'Saving…' : creating ? 'Create variable' : 'Save changes'}
+          </Button>
+        </div>
+      )}
+    </header>
+  );
   if (!creating && !saved)
     return (
-      <div className={layout.page}>
-        <header className={layout.header}>
-          <h1>Variable</h1>
-          <Link to={paths.variables}>Back to variables</Link>
-        </header>
-        <p role={error ? 'alert' : 'status'}>{error || 'Loading variable…'}</p>
-      </div>
+      <section className={styles.editor}>
+        {header}
+        <div className={styles.editorBody}>
+          <div className={styles.editorContent}>
+            <p role={error ? 'alert' : 'status'}>
+              {error || 'Loading variable…'}
+            </p>
+          </div>
+        </div>
+      </section>
     );
   const blocked =
     !!saved &&
@@ -377,310 +594,366 @@ function VariableEditor({ id }: { id: string }) {
       saved.dependencies.activeRunCount ||
       saved.dependencies.runningComparisonCount
     );
-  return (
-    <div className={layout.page}>
-      <header className={layout.header}>
-        <div className={styles.editorHeading}>
-          <Link to={paths.variables} aria-label="Back to variables">
-            <ArrowLeft size={18} />
-          </Link>
-          <h1>{creating ? 'New variable' : saved?.name}</h1>
-        </div>
-        {!creating && (
-          <Badge variant="light" color="gray">
-            {kind === 'secret' ? 'Secret' : 'Config'}
-          </Badge>
-        )}
-      </header>
-      {error && (
-        <p className={styles.error} role="alert">
-          {error}
-        </p>
-      )}
-      <div className={styles.editorGrid}>
-        <form
-          aria-label="Variable settings"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save();
+
+  const metadataFields = (
+    <Stack gap={12}>
+      <TextInput
+        ref={nameInput}
+        label="Name"
+        required
+        autoFocus={creating}
+        maxLength={120}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onInvalid={() => setNameTouched(true)}
+        error={nameTouched && nameError ? nameError : undefined}
+        description="Use letters, digits, underscores, dots, or hyphens. Names are unique in this instance."
+      />
+      <Textarea
+        label="Description"
+        maxLength={2000}
+        rows={2}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+      />
+    </Stack>
+  );
+  const valueFields = (
+    <Stack gap="sm" className={styles.valueFields}>
+      <Textarea
+        ref={valueInput}
+        label={
+          creating
+            ? kind === 'secret'
+              ? 'Secret value'
+              : 'Config value'
+            : 'New secret value'
+        }
+        autoComplete="off"
+        spellCheck={false}
+        rows={creating ? 4 : 3}
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+          setValueRequired(false);
+        }}
+        error={valueRequired ? 'Enter a replacement value.' : undefined}
+        description={
+          !creating
+            ? 'New runs use the replacement. Existing runs retain their captured revision.'
+            : kind === 'secret'
+              ? 'You can set this later. Saved secrets cannot be read back.'
+              : undefined
+        }
+      />
+      {!creating && (
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setValue('');
+            setValueRequired(false);
+            setError('');
+            setReplacingSecret(false);
+            requestAnimationFrame(() => replaceButton.current?.focus());
           }}
         >
-          <fieldset className={styles.fields} disabled={busy}>
-            <Stack gap="lg">
-              <TextInput
-                label="Name"
-                required
-                autoFocus={creating}
-                maxLength={120}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                description="Use letters, digits, underscores, dots, or hyphens. Names are unique in this instance."
-              />
-              <Textarea
-                label="Description"
-                maxLength={2000}
-                rows={2}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
+          Cancel value change
+        </Button>
+      )}
+    </Stack>
+  );
+
+  return (
+    <section className={styles.editor}>
+      {header}
+      <div className={styles.editorBody}>
+        <div className={layout.formPage}>
+          {error && (
+            <p className={styles.error} role="alert">
+              {error}
+            </p>
+          )}
+          <form
+            id={formId}
+            aria-label="Variable settings"
+            className={layout.formCard}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
+            <fieldset className={styles.fields} disabled={busy}>
               {creating && (
-                <Stack gap={5}>
-                  <Text size="sm" fw={500}>
-                    Kind
-                  </Text>
-                  <SegmentedControl
-                    aria-label="Variable kind"
-                    value={kind}
-                    onChange={(v) => {
-                      setValue('');
-                      setKind(v as 'config' | 'secret');
-                    }}
-                    data={[
-                      { value: 'secret', label: 'Secret' },
-                      { value: 'config', label: 'Config' },
-                    ]}
-                  />
-                  <Text size="xs" c="dimmed">
-                    Config values can appear in run data. Use Secret for
-                    credentials. Changing kind clears the entered value. Kind is
-                    fixed after creation.
-                  </Text>
+                <Stack gap="md">
+                  {metadataFields}
+                  <Stack gap={5}>
+                    <Text size="sm" fw={500}>
+                      Kind
+                    </Text>
+                    <SegmentedControl
+                      aria-label="Variable kind"
+                      value={kind}
+                      onChange={(v) => {
+                        setValue('');
+                        setKind(v as 'config' | 'secret');
+                      }}
+                      data={[
+                        { value: 'secret', label: 'Secret' },
+                        { value: 'config', label: 'Config' },
+                      ]}
+                    />
+                    <Text size="xs" c="dimmed">
+                      Config values can appear in run data. Use Secret for
+                      credentials. Changing kind clears the entered value. Kind
+                      is fixed after creation.
+                    </Text>
+                  </Stack>
+                  {valueFields}
                 </Stack>
               )}
-              <section
-                className={styles.valueSection}
-                aria-label="Value management"
-              >
-                {!creating && (
-                  <Group justify="space-between" mb="md">
-                    <Text size="sm" fw={550}>
-                      {saved?.valueRevision === null
-                        ? 'Value not set'
-                        : kind === 'secret'
-                          ? 'Value set'
-                          : 'Config value set'}
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      {saved?.valueRevision !== null
-                        ? `Value revision ${saved?.valueRevision}`
-                        : ''}
-                    </Text>
-                  </Group>
-                )}
-                {saved?.availability === 'locked' && (
-                  <Text size="sm" c="yellow" mb="sm">
-                    Protected store unavailable. Restore the original key file
-                    or check INTERLOCK_SECRET_KEY_FILE.
-                  </Text>
-                )}
-                {editing ? (
-                  <Stack gap="sm">
-                    {kind === 'secret' ? (
-                      <TextInput
-                        ref={valueInput}
-                        type="password"
-                        autoComplete="new-password"
-                        spellCheck={false}
-                        label={creating ? 'Secret value' : 'New secret value'}
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        description={
-                          creating
-                            ? 'You can set this later. Saved secrets cannot be read back.'
-                            : 'New runs use the replacement. Existing runs retain their captured revision.'
-                        }
-                      />
-                    ) : (
-                      <Textarea
-                        ref={configInput}
-                        label="Config value"
-                        autoComplete="off"
-                        spellCheck={false}
-                        rows={4}
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                      />
-                    )}
-                    {!creating && (
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          setValue('');
-                          setEditing(false);
-                          requestAnimationFrame(() =>
-                            replaceButton.current?.focus(),
-                          );
-                        }}
+              {saved && (
+                <>
+                  <Stack gap="md">
+                    {metadataFields}
+                    <Stack gap={5}>
+                      <Text size="sm" fw={500}>
+                        Kind
+                      </Text>
+                      <Badge
+                        variant="light"
+                        color="gray"
+                        size="sm"
+                        tt="none"
+                        fw={500}
+                        w="fit-content"
                       >
-                        Cancel value change
-                      </Button>
+                        {kind === 'secret' ? 'Secret' : 'Config'}
+                      </Badge>
+                    </Stack>
+                    {kind === 'config' ? (
+                      <Stack gap="xs">
+                        <Textarea
+                          label="Config value"
+                          autoComplete="off"
+                          spellCheck={false}
+                          rows={3}
+                          disabled={!config}
+                          value={configDraft ?? config?.value ?? ''}
+                          error={configError || undefined}
+                          description={
+                            saved.valueRevision === null
+                              ? 'Value not set'
+                              : undefined
+                          }
+                          onChange={(e) => setConfigDraft(e.target.value)}
+                        />
+                        {config?.revision === null &&
+                          configDraft === undefined && (
+                            <Button
+                              className={styles.valueAction}
+                              onClick={() => setConfigDraft('')}
+                            >
+                              Set empty value
+                            </Button>
+                          )}
+                      </Stack>
+                    ) : replacingSecret ? (
+                      valueFields
+                    ) : (
+                      <Group justify="space-between" align="end" gap="sm">
+                        <Stack gap={5}>
+                          <Text size="sm" fw={500}>
+                            Secret value
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            {saved.valueRevision === null
+                              ? 'Value not set.'
+                              : 'Saved secrets cannot be read back.'}
+                          </Text>
+                        </Stack>
+                        <Button
+                          ref={replaceButton}
+                          disabled={saved.availability === 'locked'}
+                          onClick={() => setReplacingSecret(true)}
+                        >
+                          {saved.valueRevision === null
+                            ? 'Set value'
+                            : 'Replace value'}
+                        </Button>
+                      </Group>
+                    )}
+                    {saved.availability === 'locked' && (
+                      <Text size="xs" c="yellow">
+                        Protected store unavailable. Restore the original key
+                        file or check INTERLOCK_SECRET_KEY_FILE.
+                      </Text>
+                    )}
+                    {saved.availability === 'disabled' && (
+                      <Text size="xs" c="yellow">
+                        Disabled. Enable use under Danger zone.
+                      </Text>
                     )}
                   </Stack>
-                ) : (
-                  <Button ref={replaceButton} onClick={() => void startValue()}>
-                    {saved?.valueRevision === null
-                      ? 'Set value'
-                      : kind === 'secret'
-                        ? 'Replace value'
-                        : 'Edit value'}
-                  </Button>
-                )}
-              </section>
-              <Group>
-                <Button
-                  variant="primary"
-                  disabled={busy || !dirty || !name.trim()}
-                  type="submit"
-                >
-                  {busy
-                    ? 'Saving…'
-                    : creating
-                      ? 'Create variable'
-                      : 'Save changes'}
-                </Button>
-                <Button
-                  disabled={busy || !dirty}
-                  onClick={() => {
-                    clear();
-                    if (creating) {
-                      flushSync(() => onDirty(false));
-                      void navigate(paths.variables);
-                    }
-                  }}
-                >
-                  Cancel
-                </Button>
-              </Group>
-            </Stack>
-          </fieldset>
-        </form>
-        {!creating && saved && (
-          <aside className={styles.dependencies}>
-            <h2>
-              Used by workflows <span>{saved.dependencies.total}</span>
-            </h2>
-            {!saved.dependencies.total ? (
-              <Text size="sm" c="dimmed">
-                No draft or retained published references.
-              </Text>
-            ) : (
-              <ul>
-                {saved.dependencies.items.map((w) => (
-                  <li key={w.workflowId}>
-                    <Link to={paths.workflow(w.workflowId)}>{w.name}</Link>
-                    <Text size="xs" c="dimmed">
-                      {[
-                        w.draft ? 'Draft' : '',
-                        w.versionCount
-                          ? `Published ${w.versions.map((v) => `v${v}`).join(', ')}${w.versionsTruncated ? ` and ${w.versionCount - w.versions.length} more` : ''}`
-                          : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </Text>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {(offset > 0 || saved.dependencies.truncated) && (
-              <Group>
-                <Button
-                  disabled={!offset || busy || dirty}
-                  onClick={() => setOffset(Math.max(0, offset - 20))}
-                >
-                  Previous
-                </Button>
-                <Button
-                  disabled={!saved.dependencies.truncated || busy || dirty}
-                  onClick={() => setOffset(offset + 20)}
-                >
-                  More workflows
-                </Button>
-              </Group>
-            )}
-            {!!saved.dependencies.activeRunCount && (
-              <Text size="xs" c="dimmed">
-                {saved.dependencies.activeRunCount} active runs retain a value
-                revision.
-              </Text>
-            )}
-            {!!saved.dependencies.runningComparisonCount && (
-              <Text size="xs" c="dimmed">
-                {saved.dependencies.runningComparisonCount} running comparisons
-                retain a value revision.
-              </Text>
-            )}
-            {!!saved.bindings.total && (
-              <section>
-                <h2>
-                  Portable bindings <span>{saved.bindings.total}</span>
-                </h2>
-                <ul>
-                  {saved.bindings.items.map((binding) => (
-                    <li key={binding.id}>
-                      <code className={styles.portableId}>{binding.id}</code>
-                      <Button
-                        variant="ghost"
-                        disabled={dirty || busy}
-                        onClick={() =>
-                          setRebind({ binding, target: binding.variableId })
-                        }
-                      >
-                        Change binding
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-                {saved.bindings.truncated && (
-                  <Button
-                    disabled={dirty || busy}
-                    onClick={() => setOffset(offset + 20)}
+                  <section
+                    className={layout.formSection}
+                    aria-labelledby={`${formId}-usage`}
                   >
-                    More bindings
-                  </Button>
-                )}
-              </section>
-            )}
-            <details>
-              <summary>Storage and recovery</summary>
-              <Text size="xs" c="dimmed" mt="sm">
-                Back up the database and its key separately. The key unlocks
-                values automatically. Losing it makes stored values
-                unrecoverable.
-              </Text>
-              {saved.storage.keyFile ? (
-                <code className={styles.portableId}>
-                  {saved.storage.keyFile}
-                </code>
-              ) : (
-                <Text size="xs" c="dimmed">
-                  {saved.storage.vaultId
-                    ? 'Temporary in-memory key.'
-                    : 'A key is created when the first value is set.'}
-                </Text>
+                    <h2 id={`${formId}-usage`}>
+                      Used by{' '}
+                      <span className={layout.referenceCount}>
+                        {saved.dependencies.total}
+                      </span>
+                    </h2>
+                    <div className={styles.dependencies}>
+                      {!saved.dependencies.total ? (
+                        <Text size="sm" c="dimmed">
+                          No draft or retained published references.
+                        </Text>
+                      ) : (
+                        <ul className={layout.referenceList}>
+                          {saved.dependencies.items.map((w) => (
+                            <li key={w.workflowId}>
+                              <Link
+                                className={layout.workflowReference}
+                                to={paths.workflow(w.workflowId)}
+                              >
+                                <span className={layout.referenceName}>
+                                  <strong>{w.name}</strong>
+                                  <Text component="span" size="xs" c="dimmed">
+                                    {[
+                                      w.draft ? 'Draft' : '',
+                                      w.versionCount
+                                        ? `Published ${w.versions.map((v) => `v${v}`).join(', ')}${w.versionsTruncated ? ` and ${w.versionCount - w.versions.length} more` : ''}`
+                                        : '',
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </Text>
+                                </span>
+                                <ArrowRight size={16} aria-hidden="true" />
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {(offset > 0 || saved.dependencies.truncated) && (
+                        <Group>
+                          <Button
+                            disabled={!offset || busy || dirty}
+                            onClick={() => setOffset(Math.max(0, offset - 20))}
+                          >
+                            Previous
+                          </Button>
+                          <Button
+                            disabled={
+                              !saved.dependencies.truncated || busy || dirty
+                            }
+                            onClick={() => setOffset(offset + 20)}
+                          >
+                            More workflows
+                          </Button>
+                        </Group>
+                      )}
+                      {!!saved.dependencies.activeRunCount && (
+                        <Text size="xs" c="dimmed">
+                          {saved.dependencies.activeRunCount} active runs retain
+                          a value revision.
+                        </Text>
+                      )}
+                      {!!saved.dependencies.runningComparisonCount && (
+                        <Text size="xs" c="dimmed">
+                          {saved.dependencies.runningComparisonCount} running
+                          comparisons retain a value revision.
+                        </Text>
+                      )}
+                      {!!saved.bindings.total && (
+                        <section>
+                          <h3>
+                            Portable bindings{' '}
+                            <span>{saved.bindings.total}</span>
+                          </h3>
+                          <ul>
+                            {saved.bindings.items.map((binding) => (
+                              <li key={binding.id}>
+                                <code className={styles.portableId}>
+                                  {binding.id}
+                                </code>
+                                <Button
+                                  variant="ghost"
+                                  disabled={dirty || busy}
+                                  onClick={() =>
+                                    setRebind({
+                                      binding,
+                                      target: binding.variableId,
+                                    })
+                                  }
+                                >
+                                  Change binding
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                          {saved.bindings.truncated && (
+                            <Button
+                              disabled={dirty || busy}
+                              onClick={() => setOffset(offset + 20)}
+                            >
+                              More bindings
+                            </Button>
+                          )}
+                        </section>
+                      )}
+                    </div>
+                  </section>
+
+                  <div className={styles.editorDisclosures}>
+                    <details className={styles.dangerZone}>
+                      <summary>Danger zone</summary>
+                      <Group gap={8} className={styles.dangerActions}>
+                        <Button
+                          disabled={dirty || busy}
+                          onClick={() =>
+                            setConfirmation(
+                              saved.enabled ? 'disable' : 'enable',
+                            )
+                          }
+                        >
+                          {saved.enabled ? 'Disable use' : 'Enable use'}
+                        </Button>
+                        <Button
+                          className={styles.deleteAction}
+                          disabled={dirty || busy}
+                          onClick={() => setConfirmation('delete')}
+                        >
+                          Delete variable
+                        </Button>
+                      </Group>
+                    </details>
+                    <details>
+                      <summary>Storage and recovery</summary>
+                      <Text size="xs" c="dimmed">
+                        Back up the database and its key separately. The key
+                        unlocks values automatically. Losing it makes stored
+                        values unrecoverable.
+                      </Text>
+                      {saved.storage.keyFile ? (
+                        <code className={styles.portableId}>
+                          {saved.storage.keyFile}
+                        </code>
+                      ) : (
+                        <Text size="xs" c="dimmed">
+                          {saved.storage.vaultId
+                            ? 'Temporary in-memory key.'
+                            : 'A key is created when the first value is set.'}
+                        </Text>
+                      )}
+                    </details>
+                  </div>
+                </>
               )}
-            </details>
-            <section className={styles.dangerActions}>
-              <h2>Availability</h2>
-              <Text size="sm">{statusName[saved.availability]}</Text>
-              <Button
-                disabled={dirty || busy}
-                onClick={() =>
-                  setConfirmation(saved.enabled ? 'disable' : 'enable')
-                }
-              >
-                {saved.enabled ? 'Disable use' : 'Enable use'}
-              </Button>
-              <Button
-                variant="danger"
-                disabled={dirty || busy}
-                onClick={() => setConfirmation('delete')}
-              >
-                Delete variable
-              </Button>
-            </section>
-          </aside>
-        )}
+            </fieldset>
+          </form>
+        </div>
       </div>
       {(confirmation || rebind) && saved && (
         <Modal
@@ -769,6 +1042,6 @@ function VariableEditor({ id }: { id: string }) {
           </Stack>
         </Modal>
       )}
-    </div>
+    </section>
   );
 }

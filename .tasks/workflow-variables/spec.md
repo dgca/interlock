@@ -327,3 +327,47 @@ The issue authorizes the outcome and leaves storage and runtime design open. The
 user accepted D1, D2, D3, and this proposed contract as a whole in the conversation
 on November 3, 2026. The SDLC run records the actual response at `specGate` before
 planning. No merge or release is authorized by that approval.
+
+## Accepted UI amendment after trial
+
+After trying the feature and rejecting the first broad UI prototype, the user
+approved selecting the saved variable first and checking the resulting interface
+in the trial before merging.
+
+This refines AC12's Script and Script polling controls. The section is labeled
+Environment variables. Choose a saved variable first and use its valid name
+unchanged, preserving case. Show the exact JavaScript or Bash access expression.
+Change environment name is optional. Invalid saved names receive a visible,
+editable safe suggestion; duplicate and invalid target names block Apply with
+field-specific recovery. Existing keys remain stable when a library name changes
+or a source is replaced. Keep the real node settings modal and its existing
+Apply/Save/publish boundaries. No full-page picker or automatic global delivery.
+
+Keep existing portable import binding, with Import disabled until required choices
+are complete. D1–D3, AC4 delivery and draft/publication rules, and AC9 portability
+still apply.
+
+Subsequent actual-UI feedback requests aligning variable detail with workflow
+navigation. The variable editor adopts the existing full-width detail header with
+consistent back-button placement, compact name/kind, saved state and top-bar
+Save/Discard actions. The existing form remains bounded below it and scrolls
+independently. New-variable cancellation and existing-variable discard preserve
+prior behavior; native form submission, secret clearing, Config reads and unsaved
+navigation protection remain intact. This narrows the original management-page
+composition concerns without adopting the rejected broader redesign.
+
+Further actual-UI feedback requires the Variables library's search placement and
+primary control sizing to follow Workflows, while retaining its list. The two
+libraries share header/toolbar/search layout rules and use standard Mantine action
+sizing. Count is left, search is right; pagination appears only when useful. The
+review must compare list and detail pairs together, including intentional
+semantic differences. Existing core name validation is surfaced before mutation
+with native validity/inline recovery. No API or runtime behavior changes.
+
+The variable editor groups metadata, value, workflow references, and recovery in
+one card. Disable and delete actions sit under **Danger zone**. Both value fields
+accept multiline text. A Secret draft is visible while entering or replacing
+it. Saving clears the draft, and reopening the editor provides no Secret read-back.
+The Variables library shows a skeleton while loading, with separate actions for an
+empty library and a search with no results. Prompts adopts the same list and form
+styles, with prompt creation in its existing dialog.

@@ -21,8 +21,116 @@
   color: var(--muted);
   margin: 0;
 }
+.libraryHeader {
+  min-height: 154px;
+}
+.libraryHeader > :first-child {
+  align-self: flex-start;
+}
+.libraryToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  min-height: 37px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 23px;
+}
+.librarySearch {
+  width: 175px;
+  max-width: 100%;
+  margin-left: auto;
+}
+.formPage {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px 44px;
+}
+.formCard {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.formSection {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.formSection > h2 {
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+.referenceCount {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.referenceList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.referenceList > li + li {
+  border-top: 1px solid var(--border);
+}
+.workflowReference {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 7px 4px;
+  text-decoration: none;
+  color: var(--text);
+  font-size: 13px;
+}
+.workflowReference:hover {
+  background: var(--surface-raised);
+}
+.workflowReference:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.workflowReference > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.referenceName {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.referenceName > strong {
+  font-weight: 550;
+}
+@container (max-width: 640px) {
+  .formPage {
+    padding: 20px 16px 34px;
+  }
+  .formCard {
+    padding: 16px;
+  }
+}
 @media (max-width: 1050px) {
   .page {
     padding: 0 24px 24px;
+  }
+}
+@media (max-width: 600px) {
+  .libraryHeader,
+  .libraryHeader > :global(.actions) {
+    flex-wrap: wrap;
+  }
+  .libraryToolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-bottom: 10px;
   }
 }
