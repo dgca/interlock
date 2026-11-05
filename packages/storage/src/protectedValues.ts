@@ -105,7 +105,10 @@ export class ProtectedValues {
     }
     let fd: number | undefined;
     try {
-      fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+      fd = openSync(
+        path,
+        constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+      );
       const info = fstatSync(fd);
       if (
         !info.isFile() ||

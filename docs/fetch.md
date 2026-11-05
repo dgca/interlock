@@ -41,7 +41,11 @@ recovery.
 
 Run inspection shows the resolved HTTP request, elapsed time for the completed step, and the response output. Headers and bodies are persisted with the run, so stored values remain inspectable.
 
-Response headers use lowercase names. JSON and `+json` content types are parsed as JSON; other bodies return UTF-8 text. Empty bodies return null. Invalid declared JSON fails the step. The decoded response body is limited to 5 MiB. The timeout covers both the request and reading its body, and can be configured from 100 milliseconds to 120 seconds. Fetch follows HTTP redirects.
+Response headers use lowercase names. JSON and `+json` content types are parsed as JSON; other bodies return UTF-8 text. Empty bodies return null. Invalid declared JSON fails the step. The decoded response body is limited to 5 MiB. The timeout covers both the request and reading its body, and can be configured from 100 milliseconds to 120 seconds.
+
+Fetch follows HTTP redirects for requests without Secret headers. A request that
+references a Secret stops at a redirect. Use the final URL when sending a Secret
+header. The same rule applies to Fetch polling checks.
 
 HTTP errors retain their parsed response in the failed node execution. To branch on a status instead of failing the step, clear **Fail on HTTP errors** and connect a Condition that reads `status`.
 

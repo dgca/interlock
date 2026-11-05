@@ -5,7 +5,8 @@ export async function executeFetch(
   request: FetchRequest,
   timeoutMs: number,
   signal: AbortSignal,
-): Promise<Json> {
+  { allowRedirects }: { allowRedirects: boolean },
+) {
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(new Error(`Fetch exceeded ${timeoutMs}ms`)),
@@ -20,8 +21,19 @@ export async function executeFetch(
       headers: request.headers,
       body:
         request.body === undefined ? undefined : JSON.stringify(request.body),
+      redirect: allowRedirects ? 'follow' : 'manual',
       signal: controller.signal,
     });
+    if (
+      !allowRedirects &&
+      [301, 302, 303, 307, 308].includes(response.status) &&
+      response.headers.has('location')
+    ) {
+      await response.body?.cancel();
+      throw new Error(
+        'Fetch with a Secret header cannot follow a redirect. Use the final URL.',
+      );
+    }
     const reader = response.body?.getReader();
     const chunks: Uint8Array[] = [];
     let size = 0;

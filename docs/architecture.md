@@ -181,15 +181,18 @@ after deletion and explicit provisioning of the same portable identity.
 
 The native operation path resolves only referenced Fetch headers and Script
 environment entries, including polling checks. Persisted Fetch requests and
-previews retain safe references. Script inputs and Agent assignments do not receive
+previews retain safe references. Fetch requests that reference a Secret stop at
+redirects. Script inputs and Agent assignments do not receive
 injected values. Disabled, deleted, missing, or inaccessible exact revisions fail
 without empty or latest-value fallback. Existing captures are checked again at
 consumption. Simulation substitutes operations without resolving live values.
 
-Known delivered Secret occurrences, including URL-encoded, JSON-escaped, Base64,
-and standard Node-inspected diagnostic forms, are scrubbed in returned strings,
+Known delivered Secret occurrences are scrubbed in returned strings,
 object keys, scalar results, and errors before contract validation, result routing,
-failure routing, history, or forwarding. Matching covers overlapping representations
+failure routing, history, or forwarding. This includes forms trimmed during HTTP
+header normalization, URL-encoded, JSON-escaped, Base64, and standard Node
+diagnostic representations. HTTP failure classification uses the
+actual response status before redaction. Matching covers overlapping representations
 before inserting masks. A matcher failure or more than 10,000 matches in one string
 replaces that entire string with the mask. Secret-consuming Scripts redact complete bounded stderr before
 retention truncation; excess diagnostic output fails safely. A result that no

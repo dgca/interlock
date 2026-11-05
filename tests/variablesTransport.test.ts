@@ -43,6 +43,9 @@ it.each(['http', 'stdio'])(
             }),
       );
       const tools = (await client.listTools()).tools;
+      expect(
+        tools.find((t) => t.name === 'export_workflow')?.description,
+      ).toMatch(/Format 4.*variable requirements/);
       const schemas = tools.filter((t) =>
         ['read_variables', 'manage_variables'].includes(t.name),
       );

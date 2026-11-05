@@ -102,6 +102,8 @@ Inject actual values only for the consuming operation. Saved execution inputs,
 request previews, node definitions, assignments, and diagnostic summaries never
 receive injected Secret values. The persisted Fetch request uses a non-secret
 reference or mask where the actual header is injected in memory.
+Fetch requests that reference a Secret stop at redirects. Use the final URL to
+deliver a Secret to its intended endpoint.
 
 Secret delivery is for configuration and credentials, not for transporting secrets
 through ordinary workflow data. Replace known secret occurrences in operation
@@ -110,6 +112,9 @@ or forwarding. This includes JSON strings and keys, stdout, stderr, Fetch respon
 headers and bodies, and polling check results. Secret-aware output handling must
 not create partial leaks by truncating a known credential before redaction.
 Diagnostics about redaction or invalid bindings must not quote supplied values.
+Match Secret values as delivered after HTTP header normalization as well as their
+stored form. Determine HTTP failure from the response status before redacting
+output and diagnostics.
 
 If redaction changes a result so that it violates its contract, fail with a safe
 error rather than routing on the unredacted result. Ordinary Config output follows

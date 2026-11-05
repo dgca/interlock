@@ -26,7 +26,8 @@ values are visible and editable when you open the variable.
 For Fetch, add a header and select **Variable** as its value source. Choose the
 variable, then add a literal prefix if needed. For an Authorization bearer token,
 enter `Bearer ` with its trailing space as the prefix. The request preview shows a
-reference, not the actual value.
+reference, not the actual value. Use the final URL for Secret headers because
+these requests stop at redirects.
 
 For Script, open **Environment variables**, select **Add variable**, and choose a
 saved variable. Its name becomes the process environment name, preserving case.
@@ -151,9 +152,9 @@ macOS and `$XDG_CONFIG_HOME/interlock/keys` on Linux, falling back to
 key elsewhere, set `INTERLOCK_SECRET_KEY_FILE` to its absolute path before starting
 Interlock. Database backups and portable exports do not include keys.
 
-Restore the original key with owner-only access, mode `0600`. A missing, incorrect,
-permissive, symlinked, or corrupted key leaves the store unavailable. Metadata
-remains inspectable. Interlock does not replace the key or change stored values
+Restore the original key as a regular file with owner-only access, mode `0600`.
+A missing, incorrect, permissive, symlinked, or corrupted key leaves the store
+unavailable. Metadata remains inspectable. Interlock does not replace the key or change stored values
 to recover automatically. If the key is lost, use a new store and provision values
 again. **Replace value** rotates a variable value, not the encryption key.
 

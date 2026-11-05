@@ -99,6 +99,9 @@ const terminal = (s: string) =>
   ['completed', 'failed', 'cancelled'].includes(s);
 const message = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+const fetchHttpError = (status: number) =>
+  status < 200 || status >= 300 ? `Fetch returned HTTP ${status}` : undefined;
+type LocalOperationResult = { output: Json; httpError?: string };
 export interface Worker {
   modelSelection?: ModelSelection;
   session?: SessionIdentity;
@@ -1926,7 +1929,7 @@ export class Engine {
       if (node.kind !== 'script' && node.kind !== 'fetch') continue;
       const controller = new AbortController();
       this.localJobs.set(execution.id, controller);
-      const job = (() => {
+      const job: Promise<LocalOperationResult> = (() => {
         try {
           controller.signal.throwIfAborted();
           const environment = this.trials.execution(run);
@@ -1938,7 +1941,15 @@ export class Engine {
               'Unsupported operation in a local Git trial',
             );
           return this.options.substituteOperation
-            ? this.options.substituteOperation(node, execution)
+            ? this.options
+                .substituteOperation(node, execution)
+                .then((output) => ({
+                  output,
+                  httpError:
+                    node.kind === 'fetch' && node.failOnHttpError
+                      ? fetchHttpError((output as { status: number }).status)
+                      : undefined,
+                }))
             : this.localOperation(
                 run,
                 node,
@@ -1951,7 +1962,7 @@ export class Engine {
       })();
       void job
         .then(
-          (output) => ({ ok: true as const, output }),
+          (operation) => ({ ok: true as const, ...operation }),
           (error) => ({ ok: false as const, error: message(error) }),
         )
         .then((result) => {
@@ -1977,13 +1988,12 @@ export class Engine {
             const output = result.output;
             if (node.kind === 'fetch') {
               current.output = output;
-              const status = (output as { status: number }).status;
-              if (node.failOnHttpError && (status < 200 || status >= 300)) {
+              if (result.httpError) {
                 this.failOperation(
                   latest,
                   current,
                   node,
-                  `Fetch returned HTTP ${status}`,
+                  result.httpError,
                   'http',
                 );
                 return;
@@ -2046,7 +2056,7 @@ export class Engine {
     input: Json,
     signal: AbortSignal,
     label = 'label' in operation ? operation.label : 'Polling check',
-  ): Promise<Json> {
+  ): Promise<LocalOperationResult> {
     const environment = this.trials.execution(run);
     if (environment && operation.kind === 'fetch')
       throw new InterlockError(
@@ -2059,55 +2069,75 @@ export class Engine {
           )
         : (operation.environment ?? []).map((e) => e.variableId);
     const resolved = this.variables.resolve(run, ids);
-    const redact = secretRedaction(resolved.secrets);
+    let redact = secretRedaction(resolved.secrets);
     try {
       const variableName = (id: string) =>
         run.variableCaptures?.find((c) => c.referenceId === id)?.name ?? id;
       if (operation.kind === 'fetch') {
+        const deliveredSecrets = new Set<string>();
         for (const field of operation.headers) {
           if (field.value.kind !== 'variable') continue;
-          const value = `${field.value.prefix ?? ''}${resolved.value(field.value.variableId)}${field.value.suffix ?? ''}`;
-          if (/[^\t\x20-\x7e\x80-\xff]/.test(value))
+          const { variableId, prefix = '', suffix = '' } = field.value;
+          const value = resolved.value(variableId);
+          if (/[^\t\x20-\x7e\x80-\xff]/.test(prefix + value + suffix))
             throw new InterlockError(
-              `${label}: header ${field.name} cannot use variable ${variableName(field.value.variableId)}. Replace its value with valid header text without control characters or non-Latin-1 characters.`,
+              `${label}: header ${field.name} cannot use variable ${variableName(variableId)}. Replace its value with valid header text without control characters or non-Latin-1 characters.`,
             );
+          if (resolved.secrets.includes(value)) {
+            // Headers trims only outer HTTP whitespace. Literal prefix and
+            // suffix text can keep one side of the secret away from the edge.
+            let delivered = value;
+            if (/^[ \t]*$/.test(prefix))
+              delivered = delivered.replace(/^[ \t]+/, '');
+            if (/^[ \t]*$/.test(suffix))
+              delivered = delivered.replace(/[ \t]+$/, '');
+            if (delivered && delivered !== value)
+              deliveredSecrets.add(delivered);
+          }
         }
-      } else {
-        for (const entry of operation.environment ?? []) {
-          if (resolved.value(entry.variableId).includes('\0'))
-            throw new InterlockError(
-              `${label}: environment ${entry.name} cannot use variable ${variableName(entry.variableId)}. Replace its value with text that contains no NUL bytes.`,
-            );
-        }
+        if (deliveredSecrets.size)
+          redact = secretRedaction([...resolved.secrets, ...deliveredSecrets]);
+        const response = await executeFetch(
+          resolveFetch(operation, input, resolved.value),
+          operation.timeoutMs,
+          signal,
+          { allowRedirects: !resolved.secrets.length },
+        );
+        const error = operation.failOnHttpError
+          ? fetchHttpError(response.status)
+          : undefined;
+        return {
+          output: redact.json(response),
+          httpError: error ? redact.text(error) : undefined,
+        };
       }
-      const output =
-        operation.kind === 'fetch'
-          ? await executeFetch(
-              resolveFetch(operation, input, resolved.value),
-              operation.timeoutMs,
-              signal,
-            )
-          : await executeScript(
-              operation.command,
-              input,
-              operation.timeoutMs,
-              environment?.cwd ?? this.cwd,
-              signal,
-              operation.language,
-              operation.environment?.length
-                ? {
-                    ...(environment?.env ?? process.env),
-                    ...Object.fromEntries(
-                      operation.environment.map((e) => [
-                        e.name,
-                        resolved.value(e.variableId),
-                      ]),
-                    ),
-                  }
-                : environment?.env,
-              resolved.secrets.length ? redact.text : undefined,
-            );
-      return redact.json(output);
+      for (const entry of operation.environment ?? []) {
+        if (resolved.value(entry.variableId).includes('\0'))
+          throw new InterlockError(
+            `${label}: environment ${entry.name} cannot use variable ${variableName(entry.variableId)}. Replace its value with text that contains no NUL bytes.`,
+          );
+      }
+      const output = await executeScript(
+        operation.command,
+        input,
+        operation.timeoutMs,
+        environment?.cwd ?? this.cwd,
+        signal,
+        operation.language,
+        operation.environment?.length
+          ? {
+              ...(environment?.env ?? process.env),
+              ...Object.fromEntries(
+                operation.environment.map((e) => [
+                  e.name,
+                  resolved.value(e.variableId),
+                ]),
+              ),
+            }
+          : environment?.env,
+        resolved.secrets.length ? redact.text : undefined,
+      );
+      return { output: redact.json(output) };
     } catch (error) {
       throw new InterlockError(redact.text(message(error)));
     }
@@ -2145,14 +2175,8 @@ export class Engine {
         execution.input,
         controller.signal,
         node.label,
-      ).then((output) => {
-        const status = (output as { status: number }).status;
-        if (
-          timing.check.kind === 'fetch' &&
-          timing.check.failOnHttpError &&
-          (status < 200 || status >= 300)
-        )
-          throw new InterlockError(`Fetch returned HTTP ${status}`);
+      ).then(({ output, httpError }) => {
+        if (httpError) throw new InterlockError(httpError);
         return output;
       });
     });

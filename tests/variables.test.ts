@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -100,11 +101,13 @@ async function done(engine: Engine, id: string) {
 }
 async function service() {
   const headers: string[] = [];
-  const reply = { status: 200 };
+  const reply: { status: number; location?: string } = { status: 200 };
   const server = createServer((req, res) => {
-    const value = req.headers.authorization ?? '';
+    const value =
+      req.headers.authorization ?? String(req.headers['x-api-key'] ?? '');
     headers.push(value);
     res.statusCode = reply.status;
+    if (reply.location) res.setHeader('location', reply.location);
     res.setHeader('content-type', 'application/json');
     res.setHeader('x-echo', value);
     res.end(JSON.stringify({ echo: value }));
@@ -261,6 +264,36 @@ it('keeps database ciphertext restartable only with its original safe key, witho
   expect(() => valid.variables.captureIds([v.id])).toThrow(
     /Protected variable store unavailable/,
   );
+});
+
+it('rejects a named pipe as a key file without blocking the engine', () => {
+  const { dir } = setup();
+  const keyFile = join(dir, 'pipe');
+  execFileSync('mkfifo', ['-m', '600', keyFile]);
+  // Isolate the blocking open so a regression cannot hang the test runner.
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--import',
+      'tsx',
+      '--input-type=module',
+      '-e',
+      `import { Store } from '@interlock/storage';
+     const store = new Store(':memory:', { secretKeyFile: process.argv[1] });
+     try {
+       store.protectedValues.write('probe', 'secret', 1, 'fake value');
+     } catch (error) {
+       console.log(error.message);
+     } finally {
+       store.close();
+     }`,
+      keyFile,
+    ],
+    { timeout: 2000, encoding: 'utf8' },
+  );
+  expect(result.error).toBeUndefined();
+  expect(result.status).toBe(0);
+  expect(result.stdout).toContain('Protected variable store unavailable');
 });
 
 it('rolls back complete protected database state if a metadata write fails', () => {
@@ -485,6 +518,30 @@ it('exports safe requirements and imports only deliberate same-kind direct bindi
   expect(() => unset.start(id, {})).toThrow(/has no value/);
 });
 
+it('previews bundles whose distinct portable IDs share a display name', () => {
+  const { engine } = setup();
+  const v = create(engine);
+  for (const id of ['portable-a', 'portable-b'])
+    engine.variables.mutate({
+      action: 'bind',
+      id,
+      variableId: v.id,
+      kind: 'secret',
+      expectedRevision: 0,
+    });
+  const d = script('portable-a');
+  if (d.nodes[1].kind !== 'script') throw new Error('Expected Script node');
+  d.nodes[1].environment!.push({
+    name: 'SECOND_TOKEN',
+    variableId: 'portable-b',
+  });
+  const bundle = exportWorkflows(engine.store, publish(engine, d));
+  expect(inspectImportDocument(bundle).variables).toEqual([
+    { id: 'portable-a', name: v.name, kind: 'secret' },
+    { id: 'portable-b', name: v.name, kind: 'secret' },
+  ]);
+});
+
 it('never reuses a deleted value revision when the same portable identity is provisioned again', () => {
   const { engine } = setup();
   const v = create(engine);
@@ -692,6 +749,107 @@ it.each(['script', 'poll'] as const)(
     expect(serialized).toContain('TEST_TOKEN');
     expect(serialized).toContain('service_token');
     expect(serialized).not.toContain('options.env');
+  },
+);
+
+it.each([
+  { prefix: '', suffix: '', expected: token },
+  { prefix: 'Bearer ', suffix: '', expected: `Bearer  \t${token}` },
+  { prefix: '', suffix: '.end', expected: `${token}\t .end` },
+])(
+  'redacts the delivered Secret when Fetch trims outer whitespace ($prefix, $suffix)',
+  async ({ prefix, suffix, expected }) => {
+    const { engine } = setup();
+    const endpoint = await service();
+    const v = create(engine, 'secret', ` \t${token}\t `);
+    const d = fetchDefinition(v.id, endpoint.url);
+    const fetch = d.nodes[1];
+    if (fetch.kind !== 'fetch') throw new Error('Expected Fetch node');
+    fetch.headers[0].value = {
+      kind: 'variable',
+      variableId: v.id,
+      prefix,
+      suffix,
+    };
+    const run = await done(engine, engine.start(publish(engine, d), {}).run.id);
+    expect(run.status).toBe('completed');
+    expect(endpoint.headers).toEqual([expected]);
+    expect(JSON.stringify(engine.inspect(run.id))).not.toContain(token);
+  },
+);
+
+it('classifies Fetch and polling HTTP errors before redacting a matching status', async () => {
+  const { engine } = setup();
+  const endpoint = await service();
+  endpoint.reply.status = 401;
+  const v = create(engine, 'secret', '401');
+  const d = fetchDefinition(v.id, endpoint.url);
+  const fetch = d.nodes[1];
+  if (fetch.kind !== 'fetch') throw new Error('Expected Fetch node');
+  fetch.outputSchema = {};
+  fetch.onFailure = 'route';
+  d.edges.push({
+    id: 'failure',
+    source: 'agent',
+    target: 'exit',
+    port: 'failed',
+  });
+  const run = await done(engine, engine.start(publish(engine, d), {}).run.id);
+  expect(run.output).toMatchObject({
+    error: { category: 'http', message: 'Fetch returned HTTP [REDACTED]' },
+    output: { status: '[REDACTED]' },
+  });
+  const poll = blankDefinition();
+  poll.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    kind: 'wait',
+    label: 'Poll credential',
+    timing: {
+      kind: 'poll',
+      everyMs: 1000,
+      path: 'body.echo',
+      equals: 'Bearer [REDACTED]',
+      check: {
+        kind: 'fetch',
+        url: endpoint.url,
+        headers: fetch.headers,
+        failOnHttpError: true,
+      },
+    },
+  });
+  const waiting = engine.start(publish(engine, poll), {}).run;
+  await vi.waitFor(() =>
+    expect(engine.run(waiting.id).executions.at(-1)?.check?.error).toBe(
+      'Fetch returned HTTP [REDACTED]',
+    ),
+  );
+  expect(engine.run(waiting.id).status).toBe('waiting');
+});
+
+it.each(['secret', 'config'] as const)(
+  'keeps %s Fetch headers within their redirect policy',
+  async (kind) => {
+    const { engine } = setup();
+    const initial = await service();
+    const destination = await service();
+    initial.reply.status = 302;
+    initial.reply.location = destination.url;
+    const v = create(engine, kind);
+    const d = fetchDefinition(v.id, initial.url);
+    const fetch = d.nodes[1];
+    if (fetch.kind !== 'fetch') throw new Error('Expected Fetch node');
+    fetch.headers[0].name = 'X-Api-Key';
+    const run = await done(engine, engine.start(publish(engine, d), {}).run.id);
+    expect(initial.headers).toEqual([`Bearer ${token}`]);
+    if (kind === 'secret') {
+      expect(run.status).toBe('failed');
+      expect(run.error).toContain('Use the final URL');
+      expect(destination.headers).toEqual([]);
+      expect(JSON.stringify(engine.inspect(run.id))).not.toContain(token);
+    } else {
+      expect(run.status).toBe('completed');
+      expect(destination.headers).toEqual([`Bearer ${token}`]);
+    }
   },
 );
 

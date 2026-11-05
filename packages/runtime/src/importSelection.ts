@@ -51,9 +51,13 @@ export function inspectImportDocument(data: unknown) {
       }
       importWorkflows(store, document.bundle, {
         variableBindings: Object.fromEntries(
-          (document.bundle.variables ?? []).map((v) => [
+          (document.bundle.variables ?? []).map((v, index) => [
             v.id,
-            { action: 'provision' as const },
+            // Multiple portable IDs can share a display name in a real bundle.
+            {
+              action: 'provision' as const,
+              name: `preview_variable_${index + 1}`,
+            },
           ]),
         ),
       });
