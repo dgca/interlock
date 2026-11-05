@@ -1,5 +1,13 @@
 # @type_of/interlock
 
+## 0.2.12
+
+### Patch Changes
+
+- 82a3e75: Add centrally managed Config and Secret variables with protected storage, explicit Fetch header and Script environment references, safe run captures, deliberate portable bindings, and UI, CLI, and MCP management. The variable editor accepts multiline values for both kinds.
+- 82a3e75: Keep saves responsive with several Interlock tabs open by sharing one browser event connection across them.
+- 82a3e75: Show saved prompts in a list with their revisions and update dates. Group prompt editing fields and workflow references on one card, and align the New prompt dialog with the editor.
+
 ## 0.2.11
 
 ### Patch Changes
