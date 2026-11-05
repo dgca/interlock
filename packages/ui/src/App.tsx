@@ -10,6 +10,7 @@ import { Sidebar } from './components/Sidebar/Sidebar';
 import { RunDialog } from './features/runs/RunDialog';
 import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
 import { api, errorMessage } from './lib/api';
+import { subscribeToEngineEvents } from './lib/engineEvents';
 import type { Action } from './lib/useActionFeedback';
 
 export type AppContext = {
@@ -106,14 +107,15 @@ export function App() {
         }, 100);
     };
     update();
-    const stream = new EventSource('/events');
-    stream.addEventListener('change', schedule);
-    stream.addEventListener('connected', () => setConnected(true));
-    stream.onerror = () => setConnected(false);
+    const stopEvents = subscribeToEngineEvents({
+      onChange: schedule,
+      onConnect: () => setConnected(true),
+      onError: () => setConnected(false),
+    });
     const interval = setInterval(update, 5000);
     return () => {
       mounted = false;
-      stream.close();
+      stopEvents();
       clearInterval(interval);
       clearTimeout(pending);
     };

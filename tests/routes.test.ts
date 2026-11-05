@@ -13,6 +13,12 @@ const queries = vi.hoisted(() => ({
   attention: vi.fn(),
 }));
 const streamListeners = new Map<string, () => void>();
+vi.mock('../packages/ui/src/lib/engineEvents', () => ({
+  subscribeToEngineEvents: ({ onChange }: { onChange: () => void }) => {
+    streamListeners.set('change', onChange);
+    return () => streamListeners.delete('change');
+  },
+}));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
     connection: {
@@ -97,15 +103,6 @@ beforeEach(() => {
       constructor() {
         return transferableAbortController();
       }
-    },
-  );
-  vi.stubGlobal(
-    'EventSource',
-    class {
-      addEventListener(event: string, callback: () => void) {
-        streamListeners.set(event, callback);
-      }
-      close() {}
     },
   );
   streamListeners.clear();
