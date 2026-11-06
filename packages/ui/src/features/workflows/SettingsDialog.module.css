@@ -100,10 +100,6 @@
   margin-right: auto;
   max-width: 440px;
 }
-.nodeSettings > .footer p {
-  max-width: 360px;
-  font-size: 12px;
-}
 .actions {
   display: flex;
   align-items: center;
@@ -115,9 +111,7 @@
   .footer {
     flex-wrap: wrap;
   }
-  .footer p,
-  .nodeSettings > .footer p {
-    order: -1;
+  .footer p {
     width: 100%;
     max-width: none;
   }

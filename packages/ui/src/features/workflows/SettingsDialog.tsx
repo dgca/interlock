@@ -517,10 +517,12 @@ export function SettingsDialog({
                 Delete node
               </MantineButton>
             )}
-          <p className="hint">
-            Changes apply to the draft. Save and publish from the workflow
-            toolbar.
-          </p>
+          {!node && !creating && (
+            <p className="hint">
+              Changes apply to the draft. Save and publish from the workflow
+              toolbar.
+            </p>
+          )}
           <div className={styles.actions}>
             <Button onClick={onClose} disabled={creatingChild}>
               Cancel
