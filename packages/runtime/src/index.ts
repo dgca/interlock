@@ -101,6 +101,12 @@ const message = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 const fetchHttpError = (status: number) =>
   status < 200 || status >= 300 ? `Fetch returned HTTP ${status}` : undefined;
+function scriptEnvironmentId(id: string): string | undefined {
+  // Legacy definitions can contain IDs that exceed portable spawn limits
+  // or cannot be carried losslessly in a process environment.
+  if (id.includes('\0') || Buffer.byteLength(id) > 16 * 1024) return;
+  if (Buffer.from(id).toString() === id) return id;
+}
 type LocalOperationResult = { output: Json; httpError?: string };
 export interface Worker {
   modelSelection?: ModelSelection;
@@ -1392,6 +1398,8 @@ export class Engine {
     let execution = run.executions.at(-1);
     const starting = !execution || terminal(execution.status);
     if (!execution || terminal(execution.status)) {
+      const attempt = run.nextScriptAttempt;
+      delete run.nextScriptAttempt;
       execution = {
         id: randomUUID(),
         nodeId: node.id,
@@ -1402,6 +1410,7 @@ export class Engine {
         startedAt: now(),
         childRunIds: [],
         nextItem: 0,
+        ...(attempt === undefined ? {} : { attempt }),
       };
       run.executions.push(execution);
       this.event(run, 'node.started', node.label);
@@ -1768,6 +1777,7 @@ export class Engine {
             );
             if (node.kind === 'batch') {
               child.workflowName = `${node.label} · item ${execution.nextItem + 1}`;
+              child.batchItemIndex = execution.nextItem;
               this.save(child);
             }
             execution.childRunIds.push(child.id);
@@ -1950,12 +1960,7 @@ export class Engine {
                       ? fetchHttpError((output as { status: number }).status)
                       : undefined,
                 }))
-            : this.localOperation(
-                run,
-                node,
-                execution.input,
-                controller.signal,
-              );
+            : this.localOperation(run, node, execution, controller.signal);
         } catch (error) {
           return Promise.reject(error);
         }
@@ -2050,13 +2055,46 @@ export class Engine {
     this.finish(run, execution, node, execution.input, 'timeout');
     return true;
   }
+  private scriptContextEnvironment(
+    run: Run,
+    execution: NodeExecution,
+  ): NodeJS.ProcessEnv {
+    const batchOwnerId = run.batchNodeId ? run.parentRunId : undefined;
+    let itemIndex = run.batchItemIndex;
+    if (batchOwnerId && itemIndex === undefined) {
+      // Older item runs only retain their position in the owning Batch execution.
+      const batch = this.run(batchOwnerId).executions.findLast(
+        (step) =>
+          step.nodeId === run.batchNodeId && step.childRunIds.includes(run.id),
+      );
+      itemIndex = batch?.childRunIds.indexOf(run.id);
+    }
+    return {
+      INTERLOCK_RUN_ID: run.id,
+      INTERLOCK_ROOT_RUN_ID: run.parentRunId
+        ? this.store.runAncestry(run.id).rootRunId
+        : run.id,
+      INTERLOCK_WORKFLOW_ID: scriptEnvironmentId(run.workflowId),
+      INTERLOCK_WORKFLOW_VERSION: String(run.version),
+      INTERLOCK_NODE_ID: scriptEnvironmentId(execution.nodeId),
+      INTERLOCK_EXECUTION_ID: execution.id,
+      INTERLOCK_ATTEMPT: String(execution.attempt ?? 1),
+      INTERLOCK_BATCH_OWNER_RUN_ID: batchOwnerId,
+      INTERLOCK_BATCH_ITEM_INDEX: itemIndex?.toString(),
+      INTERLOCK_POLL_CHECK_NUMBER:
+        execution.kind === 'wait'
+          ? String((execution.check?.count ?? 0) + 1)
+          : undefined,
+    };
+  }
   private async localOperation(
     run: Run,
     operation: Extract<WorkflowNode, { kind: 'script' | 'fetch' }> | PollCheck,
-    input: Json,
+    execution: NodeExecution,
     signal: AbortSignal,
     label = 'label' in operation ? operation.label : 'Polling check',
   ): Promise<LocalOperationResult> {
+    const { input } = execution;
     const environment = this.trials.execution(run);
     if (environment && operation.kind === 'fetch')
       throw new InterlockError(
@@ -2124,17 +2162,16 @@ export class Engine {
         environment?.cwd ?? this.cwd,
         signal,
         operation.language,
-        operation.environment?.length
-          ? {
-              ...(environment?.env ?? process.env),
-              ...Object.fromEntries(
-                operation.environment.map((e) => [
-                  e.name,
-                  resolved.value(e.variableId),
-                ]),
-              ),
-            }
-          : environment?.env,
+        {
+          ...(environment?.env ?? process.env),
+          ...this.scriptContextEnvironment(run, execution),
+          ...Object.fromEntries(
+            (operation.environment ?? []).map((e) => [
+              e.name,
+              resolved.value(e.variableId),
+            ]),
+          ),
+        },
         resolved.secrets.length ? redact.text : undefined,
       );
       return { output: redact.json(output) };
@@ -2172,7 +2209,7 @@ export class Engine {
       return this.localOperation(
         run,
         timing.check,
-        execution.input,
+        execution,
         controller.signal,
         node.label,
       ).then(({ output, httpError }) => {
@@ -2740,6 +2777,11 @@ export class Engine {
     run.value = Object.hasOwn(execution, 'originalInput')
       ? execution.originalInput!
       : execution.input;
+    if (
+      execution.nodeId === run.cursor &&
+      (execution.kind === 'script' || execution.kind === 'wait')
+    )
+      run.nextScriptAttempt = (execution.attempt ?? 1) + 1;
     // Only dispatched child runs have progress to retain. Initialization
     // failures must resolve bindings and validate input again on retry.
     if (

@@ -38,6 +38,8 @@ Duration and timestamp Waits have one `default` output route. It can appear insi
 
 A Wait can also wait for something slow outside Interlock: an environment bootstrap, a CI run, a job in another system. The slow work runs on its own; the Wait only runs a short **check** on an interval until the check's result matches.
 
+A Script check receives the Wait's execution ID and a check number that starts at 1. See [Script execution context](architecture.md#script-execution-context).
+
 ```json
 {
   "id": "lab-up",
