@@ -85,22 +85,37 @@ export function App() {
   useEffect(() => {
     let mounted = true;
     let streamHealthy = false;
+    let refreshFailed = false;
     let interval: ReturnType<typeof setInterval> | undefined;
     const update = () => {
       if (document.visibilityState === 'hidden') return;
-      void refresh().catch((e) => {
-        if (mounted) {
+      void refresh().then(
+        () => {
+          if (mounted && refreshFailed) {
+            refreshFailed = false;
+            resetPolling();
+          }
+        },
+        (e) => {
+          if (!mounted) return;
           setConnected(false);
           setLoadError(errorMessage(e));
-        }
-      });
+          if (!refreshFailed) {
+            refreshFailed = true;
+            resetPolling();
+          }
+        },
+      );
       setTick((t) => t + 1);
     };
     const resetPolling = () => {
       clearInterval(interval);
       // The stream reports run and work changes. Refresh other views as well.
       if (document.visibilityState !== 'hidden')
-        interval = setInterval(update, streamHealthy ? 60_000 : 5000);
+        interval = setInterval(
+          update,
+          streamHealthy && !refreshFailed ? 60_000 : 5000,
+        );
     };
     let pending: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {

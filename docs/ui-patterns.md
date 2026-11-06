@@ -15,7 +15,7 @@ The Runs navigation badge counts runs with pending managed approvals, questions,
 
 The shared `runs.attention` API returns only run IDs, reason categories, and the target execution IDs. Indexed reads avoid completed assignment history and omit prompts, input data, request details, and claim tokens. The UI uses this query for the navigation badge and includes the same markers in each page of run summaries.
 
-Active, Needs attention, and History each show up to 100 runs per page. The tab counts include all matching runs. The run details link carries the list page so you can return to it from inspection.
+Active, Needs attention, and History each show up to 100 runs per page. The tab counts include all matching runs. The run details link carries the list page so you can return to it from inspection. Pages reflect the latest run order, so rows can move between pages as runs finish or history is removed.
 
 The run summary identifies the action that needs attention. **Review request** or **Review recovery** selects that assignment and focuses its details. Multiple assignments use a bounded menu. Attention in an owned child belongs to the parent run; detached runs retain their own attention state.
 

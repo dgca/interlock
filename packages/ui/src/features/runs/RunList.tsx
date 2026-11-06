@@ -1,6 +1,6 @@
 import { attentionText, type RunTab } from './runAttention';
 import { Button, Group, Tabs, Text } from '@mantine/core';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
 import type { Action } from '../../lib/useActionFeedback';
 import { ArrowUpRight, Activity } from 'lucide-react';
@@ -40,21 +40,44 @@ export function RunList({
     page: Page;
   }>();
   const [error, setError] = useState('');
+  const refresh = useRef<() => void>(undefined);
   useEffect(() => {
     let current = true;
+    let inFlight = false;
+    let queued = false;
     setError('');
-    void api.runs.summaries
-      .query({ tab, workflowId, offset, limit: pageSize })
-      .then((page) => {
-        if (current) setSnapshot({ tab, workflowId, page });
-      })
-      .catch((error) => {
-        if (current) setError(errorMessage(error));
-      });
+    const load = async () => {
+      if (inFlight) {
+        queued = true;
+        return;
+      }
+      inFlight = true;
+      do {
+        queued = false;
+        try {
+          const page = await api.runs.summaries.query({
+            tab,
+            workflowId,
+            offset,
+            limit: pageSize,
+          });
+          if (current) {
+            setSnapshot({ tab, workflowId, page });
+            setError('');
+          }
+        } catch (error) {
+          if (current) setError(errorMessage(error));
+        }
+      } while (current && queued);
+      inFlight = false;
+    };
+    refresh.current = () => void load();
     return () => {
       current = false;
+      refresh.current = undefined;
     };
-  }, [tab, workflowId, offset, tick]);
+  }, [tab, workflowId, offset]);
+  useEffect(() => refresh.current?.(), [tab, workflowId, offset, tick]);
   const scoped = snapshot?.workflowId === workflowId ? snapshot : undefined;
   const lastPage = scoped?.tab === tab ? scoped.page : undefined;
   const page = lastPage?.offset === offset ? lastPage : undefined;
@@ -95,7 +118,14 @@ export function RunList({
               </Button>
             </Group>
           )}
-          {error && <Text role="alert">Could not load runs. {error}</Text>}
+          {error && (
+            <Group>
+              <Text role="alert">Could not load runs. {error}</Text>
+              <Button variant="subtle" onClick={() => refresh.current?.()}>
+                Retry
+              </Button>
+            </Group>
+          )}
           {!page ? (
             !error && <Text role="status">Loading runs…</Text>
           ) : page.items.length ? (
@@ -168,7 +198,7 @@ export function RunList({
               </p>
             </div>
           )}
-          {(offset > 0 || lastPage?.nextOffset != null) && (
+          {(offset > 0 || (counts?.[tab] ?? 0) > pageSize) && (
             <Group
               justify="space-between"
               mt="md"
@@ -183,20 +213,23 @@ export function RunList({
               <Group gap="xs">
                 <Button
                   variant="subtle"
-                  disabled={offset === 0}
-                  onClick={() =>
+                  aria-disabled={offset === 0}
+                  data-disabled={offset === 0 || undefined}
+                  onClick={() => {
+                    if (offset === 0) return;
                     onOffsetChange(
                       page?.items.length === 0
                         ? 0
                         : Math.max(0, offset - pageSize),
-                    )
-                  }
+                    );
+                  }}
                 >
                   Previous
                 </Button>
                 <Button
                   variant="subtle"
-                  disabled={page?.nextOffset == null}
+                  aria-disabled={page?.nextOffset == null}
+                  data-disabled={page?.nextOffset == null || undefined}
                   onClick={() => {
                     if (page?.nextOffset != null)
                       onOffsetChange(page.nextOffset);

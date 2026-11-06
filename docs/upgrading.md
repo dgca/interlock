@@ -50,6 +50,11 @@ New claims persist optional `claimLeaseSeconds`. Existing claims need no convers
 
 Optional Agent `maxLeaseExpiries` separates expiry and explicit-failure budgets for work created with that published setting. Omission keeps the combined attempt budget. Persisted counters and hashed expiry receipts need no database rewrite. Existing assignments without receipts cannot identify an old token as expired. Restart after upgrading to load the new behavior, and refresh cached MCP tool definitions to discover compact authoring options.
 
+Database schema 7 adds an index for the Runs list. Startup backs up the existing
+database before building the index. Run records and execution history stay in
+their original format. Index creation needs additional disk space and may take
+longer on larger histories.
+
 ## Restore a pre-upgrade backup
 
 Restoring replaces database state with the snapshot. Changes made after that snapshot are not included. Stop every server using the database before proceeding.

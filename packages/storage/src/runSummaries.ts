@@ -37,6 +37,9 @@ export function runSummaries(
   const scope = filters.join(' AND ');
   const withAttention =
     'WITH attention_ids AS (SELECT value FROM json_each(?))';
+  // Keep counts and page selection on indexed expressions. Reading value at
+  // this stage would parse large execution payloads outside the selected page.
+  const indexedRuns = 'documents r INDEXED BY runs_summary_filters';
   const counts = db
     .prepare(
       `
@@ -44,14 +47,20 @@ export function runSummaries(
     SELECT count(*) FILTER (WHERE ${active}) AS active,
       count(*) FILTER (WHERE ${attention}) AS attention,
       count(*) FILTER (WHERE ${tabFilter.history}) AS history
-    FROM documents r WHERE ${scope}
+    FROM ${indexedRuns} WHERE ${scope}
   `,
     )
     .get(...parameters) as Record<keyof typeof tabFilter, number>;
   const rows = db
     .prepare(
       `
-    ${withAttention}
+    ${withAttention}, page AS MATERIALIZED (
+      SELECT r.rowid AS position, json_extract(r.value, '$.createdAt') AS createdAt
+      FROM ${indexedRuns} WHERE ${scope}
+        ${query.tab ? `AND ${tabFilter[query.tab]}` : ''}
+      ORDER BY createdAt DESC, position DESC
+      LIMIT ? OFFSET ?
+    )
     SELECT r.id,
       json_extract(r.value, '$.workflowId') AS workflowId,
       json_extract(r.value, '$.workflowName') AS workflowName,
@@ -68,10 +77,8 @@ export function runSummaries(
         (SELECT json_extract(parent.value, '$.workflowName') FROM documents parent
          WHERE parent.collection = 'runs' AND parent.id = json_extract(r.value, '$.parentRunId'))
       END AS parentWorkflowName
-    FROM documents r WHERE ${scope}
-      ${query.tab ? `AND ${tabFilter[query.tab]}` : ''}
-    ORDER BY json_extract(r.value, '$.createdAt') DESC, r.rowid DESC
-    LIMIT ? OFFSET ?
+    FROM page CROSS JOIN documents r ON r.rowid = page.position
+    ORDER BY page.createdAt DESC, page.position DESC
   `,
     )
     .all(...parameters, query.limit, query.offset) as unknown as SummaryRow[];

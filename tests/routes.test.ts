@@ -381,8 +381,16 @@ it('loads history only on the Runs view and restores the page after inspection',
   await mount('/workflows/w1');
   expect(queries.summaries).not.toHaveBeenCalled();
   await act(async () => router.navigate('/runs?tab=history'));
-  await click('Next');
+  const next = [...container.querySelectorAll('button')].find(
+    (button) => button.textContent === 'Next',
+  )!;
+  await act(async () => {
+    next.focus();
+    next.click();
+  });
   expect(window.location.search).toBe('?tab=history&offset=100');
+  expect(document.activeElement).toBe(next);
+  expect(next.getAttribute('aria-disabled')).toBe('true');
   expect(queries.summaries).toHaveBeenLastCalledWith(
     expect.objectContaining({ tab: 'history', offset: 100 }),
   );
@@ -438,4 +446,63 @@ it('backs off with a healthy stream and refreshes on return to a visible tab', a
   } finally {
     vi.restoreAllMocks();
   }
+});
+
+it('retries a failed refresh promptly even while the event stream is healthy', async () => {
+  vi.useFakeTimers();
+  const advance = (ms: number) =>
+    act(async () => vi.advanceTimersByTimeAsync(ms));
+  await mount('/workflows');
+  await act(async () => streamListeners.get('connect')!());
+  await advance(100);
+  queries.workflows.mockClear();
+  queries.workflows.mockRejectedValueOnce(
+    new Error('Temporary request failure'),
+  );
+  await act(async () => streamListeners.get('change')!());
+  await advance(100);
+  expect(queries.workflows).toHaveBeenCalledTimes(1);
+  await advance(5_000);
+  expect(queries.workflows).toHaveBeenCalledTimes(2);
+  await advance(5_000);
+  expect(queries.workflows).toHaveBeenCalledTimes(2);
+});
+
+it('renders a slow summary and coalesces live updates into one follow-up request', async () => {
+  vi.useFakeTimers();
+  const page = {
+    items: [
+      {
+        id: 'r1',
+        workflowId: 'w1',
+        workflowName: 'Completed workflow',
+        version: 1,
+        status: 'completed',
+        createdAt: '2026-01-01T00:00:00Z',
+        executionCount: 3,
+      },
+    ],
+    counts: { active: 0, attention: 0, history: 1 },
+    offset: 0,
+    total: 1,
+    nextOffset: null,
+  };
+  let complete!: (value: typeof page) => void;
+  queries.summaries.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  queries.summaries.mockImplementationOnce(() => new Promise(() => {}));
+  await mount('/runs?tab=history');
+  for (let index = 0; index < 3; index++)
+    await act(async () => {
+      streamListeners.get('change')!();
+      await vi.advanceTimersByTimeAsync(100);
+    });
+  expect(queries.summaries).toHaveBeenCalledTimes(1);
+  await act(async () => complete(page));
+  expect(queries.summaries).toHaveBeenCalledTimes(2);
+  expect(container.textContent).toContain('Completed workflow');
 });

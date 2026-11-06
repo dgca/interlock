@@ -324,13 +324,15 @@ Vite and the built server serve the app for direct page requests. A future host 
 Interlock tabs on the same origin share a browser event stream. One tab holds
 the stream and broadcasts change notices and heartbeats to the others.
 Visible tabs refresh after run and work changes. They use a five-second
-fallback when the stream is unavailable and a 60-second safety refresh while
-it is healthy. Hidden tabs skip automatic refreshes and catch up when visible.
+fallback when the stream is unavailable or a refresh fails. They use a
+60-second safety refresh while the stream is healthy. Hidden tabs skip
+automatic refreshes and catch up when visible.
 
 The global and workflow-specific Runs views use the shared `runs.summaries`
-query. SQLite projects list fields and counts steps without returning execution
-records or payloads. The query accepts an optional workflow ID, status, and
-Runs tab, plus an offset and a limit from 1 to 200 (100 by default). It applies
+query. SQLite uses a metadata index for counts and page selection, then
+projects list fields and step counts for the selected page. The query accepts
+optional filters for workflow ID, status, and Runs tab, plus an offset and
+a limit from 1 to 200 (100 by default). It applies
 the scope before paging, so older active runs and runs needing attention stay
 accessible. The inspector loads run details by ID. `runs.list` and `runs.get`
 continue to serve full records.
