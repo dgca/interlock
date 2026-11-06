@@ -288,8 +288,8 @@ it('selects the latest completed loop visit and nested output path', () => {
   }
 });
 
-it.each(['missing', 'self', 'future'])(
-  'fails node bindings with %s output and preserves the failure on retry',
+it.each(['missing', 'self', 'future', 'invalid path'] as const)(
+  'fails node bindings for %s and preserves the failure on retry',
   (scenario) => {
     const store = new Store(':memory:');
     const engine = new Engine(store, process.cwd());
@@ -305,6 +305,15 @@ it.each(['missing', 'self', 'future'])(
         definition.nodes[1].inputBindings = {
           value: { source: 'node', nodeId: 'receipt', path: '' },
         };
+      if (scenario === 'invalid path')
+        definition.nodes[1].inputBindings = {
+          value: {
+            source: 'node',
+            nodeId: 'decision',
+            path: 'constructor.count',
+            sourceDefault: 0,
+          },
+        };
       const workflow = engine.create('Missing result', '', definition);
       engine.publish(workflow.id);
       const run = engine.start(workflow.id, {}).run;
@@ -314,11 +323,13 @@ it.each(['missing', 'self', 'future'])(
       }
       expect(engine.run(run.id).status).toBe('failed');
       const error = engine.run(run.id).error;
-      expect(error).toContain(
-        scenario === 'missing'
-          ? 'Input has no path'
-          : 'has no completed output',
-      );
+      const errors = {
+        missing: 'Input has no path',
+        self: 'has no completed output',
+        future: 'has no completed output',
+        'invalid path': 'Invalid data path',
+      };
+      expect(error).toContain(errors[scenario]);
       expect(engine.retry(run.id).run).toMatchObject({
         status: 'failed',
         error,

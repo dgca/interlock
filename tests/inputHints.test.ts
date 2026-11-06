@@ -236,3 +236,15 @@ it('includes node source and path defaults as possible input shapes', () => {
     },
   });
 });
+
+it('includes the loop initial value when earlier output has no declared shape', () => {
+  const definition = graph();
+  const node = definition.nodes[1];
+  node.outputSchema = {};
+  node.inputBindings = {
+    count: { source: 'node', nodeId: node.id, path: 'count', sourceDefault: 0 },
+  };
+  expect(nodeInputHint(definition, node).schema.properties).toEqual({
+    count: { anyOf: [{}, { type: 'integer' }] },
+  });
+});

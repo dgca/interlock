@@ -1,9 +1,5 @@
-import {
-  InterlockError,
-  readPath,
-  type Json,
-  type ValueBinding,
-} from './index.js';
+import { InterlockError, type Json, type ValueBinding } from './index.js';
+import { parseDataPath, readPath } from './dataPath.js';
 
 export type PathBinding = Exclude<
   ValueBinding,
@@ -41,7 +37,10 @@ export function resolveBindingFields(
           throw new InterlockError(
             `Binding source "${b.source}" is unavailable`,
           );
-        if (b.sourceDefault !== undefined) return [key, b.sourceDefault];
+        if (b.sourceDefault !== undefined) {
+          parseDataPath(b.path);
+          return [key, b.sourceDefault];
+        }
         throw new InterlockError(
           `Node "${b.nodeId}" has no completed output in this run`,
         );
@@ -106,12 +105,12 @@ export function bindingContract(
   if (binding.source === 'object')
     return bindingsContract(binding.fields, pathContract);
   const selected = pathContract(binding);
-  if (!Object.keys(selected).length) return selected;
+  const sourceDefault =
+    binding.source === 'node' ? binding.sourceDefault : undefined;
+  if (sourceDefault === undefined && !Object.keys(selected).length)
+    return selected;
   const contracts = [selected];
-  for (const value of [
-    binding.default,
-    binding.source === 'node' ? binding.sourceDefault : undefined,
-  ]) {
+  for (const value of [binding.default, sourceDefault]) {
     if (value === undefined) continue;
     const fallback = literalContract(value);
     if (

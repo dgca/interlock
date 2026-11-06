@@ -283,6 +283,21 @@ it('resolves supplied node outputs and leaves missing paths or cross-scope fixtu
     e.assignmentSizes.read({ ...preview, sample: { outputs: {} } }).components
       .input.bytes,
   ).toBe(Buffer.byteLength('{"selected":{"state":"skipped"}}'));
+  const malformed = structuredClone(d);
+  malformed.nodes[1].inputBindings!.selected = {
+    source: 'node',
+    nodeId: 'upstream',
+    path: 'constructor.value',
+    sourceDefault: 0,
+  };
+  const malformedWorkflow = e.create('Invalid path', '', malformed);
+  expect(
+    e.assignmentSizes.read({
+      ...preview,
+      workflowId: malformedWorkflow.id,
+      sample: { outputs: {} },
+    }).unresolved.items[0].reason,
+  ).toBe('path_unresolved');
   const draft = e.workflow(w.id);
   draft.draft.nodes.find((n) => n.id === 'upstream')!.batchId = 'different';
   e.update(w.id, { draft: draft.draft, draftRevision: draft.draftRevision });

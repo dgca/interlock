@@ -703,23 +703,7 @@ export function assertContract(
     throw new InterlockError(`${label}: ${errors.join(' ')}`);
   }
 }
-export function readPath(value: Json, path: string): Json {
-  if (!path || path === '$') return value;
-  let result: Json | undefined = value;
-  for (const key of path.replace(/^\$\./, '').split('.')) {
-    if (['__proto__', 'prototype', 'constructor'].includes(key))
-      throw new InterlockError('Invalid data path');
-    result =
-      result !== null &&
-      typeof result === 'object' &&
-      Object.hasOwn(result, key)
-        ? (result as Record<string, Json>)[key]
-        : undefined;
-  }
-  if (result === undefined)
-    throw new InterlockError(`Input has no path "${path}"`);
-  return result;
-}
+export { readPath } from './dataPath.js';
 export function supportsResultRouting(node: WorkflowNode): boolean {
   return (
     ['agent', 'script', 'fetch'].includes(node.kind) ||
