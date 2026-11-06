@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { TRPCClientError } from '@interlock/client';
 import {
   simulationToolSchema,
+  externalInputRequestSchema,
   workHoldRequestSchema,
   contextGroupQuerySchema,
   contextHandoffSchema,
@@ -322,8 +323,17 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     (input) => client.runs.usage(input),
   );
   tool(
+    'external_input',
+    'Inspect, submit or accept input for a waiting External input step, or hold/release acceptance for a run and its attached descendants. Get runId and executionId from the external_input blocker in get_run_briefing. Status without executionId reads hold state. With executionId, includeValue:true reads pending JSON. Submit with a stable requestId and optional expectedRevision (0 before any submission). Identical replays return the original receipt. Accept the exact current revision. Holds block acceptance; submissions can replace pending values. Release does not accept. Detached runs have separate holds.',
+    { request: externalInputRequestSchema },
+    ({ request }) =>
+      request.action === 'status'
+        ? client.runs.externalInputStatus(request)
+        : client.runs.externalInput(request),
+  );
+  tool(
     'get_run_briefing',
-    'Budget-blocked work is excluded from available and appears in budgetBlocked and blockers; next:adjust_budget means inspect the governing budgets. Resource-blocked work is excluded from available; resourceBlocked identifies owners and resourceReservations retains uncertain ownership even after cancellation. next:inspect_resources requires stopping the exact old attempt before manage_work_resources release. Held work is excluded from available and appears in held and external_hold blockers with category, heldAt, attempt and holdRevision; next:inspect_hold requires explicit resolution. Reasons and checkpoints are omitted. Read a bounded current snapshot without claiming or advancing work. Includes requested identity/version/status and optional startRequestId/externalTask, requested lifecycle progress excluding detached trees, independent progress, available and claimed capability/context summaries without tokens or payloads, blockers, Batch queued/dispatched counts, failures, deadlines, recent execution/result references, and next action. Polling blockers include nextCheckAt, optional timeoutAt, and check count/at/error without probe output. Deadlines distinguish poll_check and poll_timeout; nextDeadline is the earliest across all timer kinds. Run summaries include definitionAvailable. Batch total and queued are null when the definition was removed; dispatched and recorded progress remain available. Each list has items, exact total, and truncated; limit defaults to 20, maximum 100. All descendants are included and lifecycleRunId identifies independent detached boundaries, even after requested completion. Use claim_work for assignment details and get_run_result for selected data. Cursor is scoped to this run and server incarnation; revision orders persisted changes independently of timestamps.',
+    'Budget-blocked work is excluded from available and appears in budgetBlocked and blockers; next:adjust_budget means inspect the governing budgets. Resource-blocked work is excluded from available; resourceBlocked identifies owners and resourceReservations retains uncertain ownership even after cancellation. next:inspect_resources requires stopping the exact old attempt before manage_work_resources release. Held work is excluded from available and appears in held and external_hold blockers with category, heldAt, attempt and holdRevision; next:inspect_hold requires explicit resolution. Reasons and checkpoints are omitted. Read a bounded current snapshot without claiming or advancing work. Includes requested identity/version/status and optional startRequestId/externalTask, requested lifecycle progress excluding detached trees, independent progress, available and claimed capability/context summaries without tokens or payloads, blockers, Batch queued/dispatched counts, failures, deadlines, recent execution/result references, and next action. External input blockers identify the waiting execution and pending revision. Use external_input for status, submission and acceptance. Polling blockers include nextCheckAt, optional timeoutAt, and check count/at/error without probe output. Deadlines distinguish poll_check and poll_timeout; nextDeadline is the earliest across all timer kinds. Run summaries include definitionAvailable. Batch total and queued are null when the definition was removed; dispatched and recorded progress remain available. Each list has items, exact total, and truncated; limit defaults to 20, maximum 100. All descendants are included and lifecycleRunId identifies independent detached boundaries, even after requested completion. Use claim_work for assignment details and get_run_result for selected data. Cursor is scoped to this run and server incarnation; revision orders persisted changes independently of timestamps.',
     briefingQuerySchema.shape,
     (input) => client.runs.briefing(input),
   );

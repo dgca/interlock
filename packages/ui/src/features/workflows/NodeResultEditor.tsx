@@ -62,11 +62,13 @@ export function NodeResultEditor({
         <ContractEditor
           compact
           label={
-            node.kind === 'workflow' && node.mode === 'detached'
-              ? 'Output · Started run'
-              : enabled
-                ? 'Accepted result'
-                : 'Result format'
+            node.kind === 'input'
+              ? 'Submitted value'
+              : node.kind === 'workflow' && node.mode === 'detached'
+                ? 'Output · Started run'
+                : enabled
+                  ? 'Accepted result'
+                  : 'Result format'
           }
           readOnly={node.kind === 'workflow' && node.mode === 'detached'}
           value={

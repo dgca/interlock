@@ -310,6 +310,44 @@ export class Store {
       .all(JSON.stringify([...ids]))
       .map((row) => JSON.parse(row.value as string));
   }
+  /** Nearest held run, stopping at the detached boundary. */
+  externalInputHoldOwner(id: string): string | undefined {
+    const row = this.db
+      .prepare(
+        `WITH RECURSIVE lineage(id, parentId, mode, heldAt, depth) AS (
+        SELECT id, json_extract(value, '$.parentRunId'), json_extract(value, '$.parentMode'),
+          json_extract(value, '$.externalInputHold.heldAt'), 0
+        FROM documents WHERE collection = 'runs' AND id = ?
+        UNION ALL
+        SELECT d.id, json_extract(d.value, '$.parentRunId'), json_extract(d.value, '$.parentMode'),
+          json_extract(d.value, '$.externalInputHold.heldAt'), lineage.depth + 1
+        FROM lineage JOIN documents d ON d.collection = 'runs' AND d.id = lineage.parentId
+        WHERE lineage.mode IS NOT 'detached'
+      )
+      SELECT id FROM lineage WHERE heldAt IS NOT NULL
+      ORDER BY depth LIMIT 1`,
+      )
+      .get(id);
+    return row?.id as string | undefined;
+  }
+  /** Waiting runs whose effective hold can change when an ancestor changes. */
+  attachedExternalInputWaits(id: string): string[] {
+    return this.db
+      .prepare(
+        `WITH RECURSIVE attached(id) AS (
+        SELECT ?
+        UNION ALL
+        SELECT d.id FROM attached CROSS JOIN documents d
+          ON json_extract(d.value, '$.parentRunId') = +attached.id
+        WHERE d.collection = 'runs' AND json_extract(d.value, '$.parentMode') IS NOT 'detached'
+      )
+      SELECT d.id FROM attached JOIN documents d ON d.collection = 'runs' AND d.id = attached.id
+      WHERE json_extract(d.value, '$.status') = 'waiting'
+        AND json_extract(d.value, '$.executions[#-1].kind') = 'input'`,
+      )
+      .all(id)
+      .map((row) => row.id as string);
+  }
   runAncestry(id: string, cache = new Map<string, RunAncestry>()): RunAncestry {
     const cached = cache.get(id);
     if (cached) return cached;

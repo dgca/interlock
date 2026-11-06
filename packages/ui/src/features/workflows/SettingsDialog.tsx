@@ -291,6 +291,7 @@ export function SettingsDialog({
                     <option value="script">Script</option>
                     <option value="fetch">Fetch</option>
                     <option value="wait">Wait</option>
+                    <option value="input">External input</option>
                     <option value="switch">Branch</option>
                     <option value="workflow">Workflow</option>
                     <option value="batch">Batch</option>

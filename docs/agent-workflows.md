@@ -32,6 +32,10 @@ Omitting `detail`, or passing `full`, returns the full workflow record and draft
 
 HTTP and stdio tool discovery includes object-root output schemas for these authoring mutations, `edit_workflow`, `claim_work`, `start_run`, `submit_result`, and `list_work`. A client may omit schemas in its own display; inspect raw `tools/list` when diagnosing discovery.
 
+## Respond to an external-input wait
+
+An `external_input` blocker identifies the exact run and execution waiting for an external answer. Use MCP `external_input` for status, submission, and explicit revision acceptance. Use the receipt to recover after an uncertain response. See [Wait for an external answer](external-input.md).
+
 ## Discover schemas and assignments
 
 For manual history removal, use `manage_run_history` with `request.action:"preview"` before `"delete"`. Preview accepts root workflow and age filters, exact root IDs, and bounded pagination. Show the selected trees, sizes, blockers and irreversible loss, then obtain explicit user agreement. Delete accepts exact per-root confirmations and `acknowledgeHistoryLoss:true`; it rechecks the entire selection atomically. Active trees, unresolved resources and retained comparison/evaluation dependencies remain protected. Start-request tombstones, workflows and published versions survive. Removed JSON bytes do not imply a smaller database file. See [history cleanup](history-cleanup.md) for fields and recovery.

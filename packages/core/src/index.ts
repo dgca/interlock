@@ -23,6 +23,7 @@ export * from './budgets.js';
 export * from './resultValidation.js';
 export * from './resultRules.js';
 export * from './workHolds.js';
+export * from './externalInput.js';
 import { resultRulesSchema, resultRuleProblems } from './resultRules.js';
 export * from './assignmentSize.js';
 export * from './contextContinuity.js';
@@ -341,6 +342,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     }),
     ...fetchRequestFields,
   }),
+  z.object({ ...nodeBase, kind: z.literal('input') }),
   z.object({
     ...nodeBase,
     kind: z.literal('wait'),
@@ -502,6 +504,7 @@ export interface NodeExecution {
   attempt?: number;
   retryChildRunIds?: string[];
   request?: FetchRequest;
+  externalInput?: import('./externalInput.js').ExternalInputMetadata;
   resumeAt?: string;
   /** Polling Wait: when the next check runs, the deadline, and the latest check. */
   nextCheckAt?: string;
@@ -520,6 +523,7 @@ export interface Run {
   externalTask?: import('./runStarts.js').ExternalTask;
   chain?: import('./runChains.js').RunChainLink;
   contextRevision?: number;
+  externalInputHold?: import('./externalInput.js').ExternalInputHold;
   budgetRevision?: number;
   comparison?: import('./testbench.js').ComparisonRunContext;
   id: string;
@@ -641,6 +645,7 @@ export interface RunEvent {
   at: string;
 }
 export class InterlockError extends Error {}
+export class ExternalInputConflict extends InterlockError {}
 export class ResultRejection extends InterlockError {
   constructor(
     readonly resultCheck: import('./resultValidation.js').ResultCheck,
@@ -1000,6 +1005,7 @@ export {
 } from './inputHints.js';
 
 export function nodeKindLabel(kind: WorkflowNode['kind']): string {
+  if (kind === 'input') return 'External input';
   return kind === 'switch' || kind === 'condition'
     ? 'Branch'
     : kind === 'batch'

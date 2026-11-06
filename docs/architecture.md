@@ -234,6 +234,12 @@ Successors preserve the immutable version and first prompt capture but reset run
 
 The engine yields after one rollover per chain per pump and reads only active run documents for execution. This avoids deserializing completed execution histories every tick, while SQLite scans and retained usage/budget aggregation still grow with archive size. See [continue as new](continue-as-new.md) for bounds and operations.
 
+## External input
+
+An External input node waits on its execution ID. The runtime validates submissions against the node's output contract and retains a pending value and request receipts in run-owned records. Explicit acceptance persists the accepted revision, completed execution, and next workflow position in one transaction. The engine pumps downstream work after that transaction commits.
+
+An acceptance hold follows ordinary child and Batch links and stops at detached children. Changes wake the scoped continuation readers that observe the wait. Briefings carry wait and revision metadata. The targeted status operation can return the pending value. HTTP, CLI, and MCP use the shared runtime operations. See [external-input operations](external-input.md).
+
 ## Scripts and interruptions
 
 Scripts run in JavaScript or Bash child processes. New nodes default to JavaScript; definitions without a `language` field retain Bash behavior.

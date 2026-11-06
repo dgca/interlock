@@ -206,6 +206,10 @@ redaction, and import requirements.
 
 Individual body fields with a fixed value have typed controls, so text needs no JSON quotes and existing JSON values keep their types.
 
+### External input
+
+Use an **External input** node to pause a run for an answer from an integration. Set the **Submitted value** contract in **Result**. The integration submits an answer to the waiting execution, then accepts the exact revision to advance the run. See [Wait for an external answer](docs/external-input.md).
+
 ### Script nodes
 
 New script nodes default to JavaScript. Read the incoming JSON value as `input` and return a JSON value for the next node. Top-level `await` is supported:

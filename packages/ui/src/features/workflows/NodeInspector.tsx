@@ -84,6 +84,7 @@ export function NodeInspector({
       switch: 'Branches',
       workflow: 'Workflow',
       wait: 'Wait',
+      input: 'External input',
       batch: 'Batch',
       entry: 'Entry',
       exit: 'Exit',
@@ -132,6 +133,14 @@ export function NodeInspector({
               inputSchema={inputShape}
               inputSource={hint.source}
             />
+          </NodeSection>
+        )}
+        {node.kind === 'input' && (
+          <NodeSection name="work">
+            <p className="hint">
+              The run pauses here. After a caller accepts a submission, its
+              value passes to the next step.
+            </p>
           </NodeSection>
         )}
         {node.kind === 'wait' && (
