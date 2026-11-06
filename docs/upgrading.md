@@ -18,6 +18,10 @@ Read final output with `get_run_result` and failure details with `get_run_briefi
 
 Update saved scripts and agent instructions, restart the upgraded server, and refresh the client's discovered tools if it caches descriptions or schemas. No database migration is needed for this response change.
 
+## Script node timeouts
+
+New Script node definitions that omit `timeoutMs` use 60 seconds. Saved drafts and published versions retain their stored timeouts, including the previous 30-second default. Set `timeoutMs: 30000` explicitly when importing or submitting an older raw definition that needs the previous timing. Definitions with a timeout above 120 seconds require a release that supports the one-hour ceiling.
+
 ## Install an update
 
 1. Stop the running Interlock server with Ctrl+C. Close any other server using the same database.

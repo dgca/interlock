@@ -122,7 +122,7 @@ const fetchRequestFields = {
   timeoutMs: z.number().int().min(100).max(120000).default(30000),
   failOnHttpError: z.boolean().default(true),
 };
-/** A probe a polling Wait runs on the server: a Script or a Fetch, bounded like the matching node. */
+/** A probe a polling Wait runs on the server with a short request or process timeout. */
 const pollCheckShapeSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('script'),
@@ -235,6 +235,7 @@ const nodeBase = {
       'Optional success-result branches for Agent, Script, Fetch or waited Workflow. Match raw validated result before outputBindings; same Switch first-match/fallback semantics. Missing path or unmatched without default fails. Failure/timeout routes remain separate.',
     ),
 };
+export const MAX_SCRIPT_TIMEOUT_MS = 3_600_000;
 export const DEFAULT_BATCH_MAX_ITEMS = 200;
 export const MAX_BATCH_ITEMS = 10_000;
 const onFailureSchema = z
@@ -318,7 +319,12 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     // Older saved nodes omit language and must continue to run as Bash.
     language: z.enum(['javascript', 'bash']).optional(),
     command: z.string().min(1),
-    timeoutMs: z.number().int().min(100).max(120000).default(30000),
+    timeoutMs: z
+      .number()
+      .int()
+      .min(100)
+      .max(MAX_SCRIPT_TIMEOUT_MS)
+      .default(60_000),
   }),
   z.object({
     ...nodeBase,

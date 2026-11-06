@@ -244,9 +244,12 @@ it('suggests text and unknown fields for Wait while allowing another path', asyn
     'customDeadline',
   );
 });
-it.each(['script', 'fetch'])(
-  'edits %s timeouts in seconds and enforces the existing bounds',
-  async (kind) => {
+it.each([
+  ['script', '3601'],
+  ['fetch', '121'],
+])(
+  'edits %s timeouts in seconds and enforces its bounds',
+  async (kind, aboveMaximum) => {
     const { onApply } = await render({
       kind,
       command: 'cat',
@@ -255,7 +258,7 @@ it.each(['script', 'fetch'])(
     });
     expect(field('Timeout').value).toBe('30');
     expect(field('Timeout unit').value).toBe('1000');
-    await fill('Timeout', '121');
+    await fill('Timeout', aboveMaximum);
     await click('Apply changes');
     expect(onApply).not.toHaveBeenCalled();
     await fill('Timeout', '0.05');
@@ -266,6 +269,16 @@ it.each(['script', 'fetch'])(
     expect(onApply.mock.calls[0][0].definition.nodes[0].timeoutMs).toBe(1500);
   },
 );
+it('defaults Script timeouts to one minute and accepts one hour', async () => {
+  const { onApply } = await render({ kind: 'script', command: 'cat' });
+  expect(field('Timeout').value).toBe('1');
+  expect(field('Timeout unit').value).toBe('60000');
+  await select('Timeout unit', '3600000');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timeoutMs).toBe(
+    3_600_000,
+  );
+});
 it('preserves legacy Bash and exact millisecond durations', async () => {
   const { node, onApply } = await render({
     kind: 'script',

@@ -1187,7 +1187,7 @@ it.each(['stdio', 'http'])(
       const persisted = await call('get_workflow', { id: editTarget.id });
       expect(
         persisted.draft.nodes.find((n: { id: string }) => n.id === 'check'),
-      ).toMatchObject({ language: 'javascript' });
+      ).toMatchObject({ language: 'javascript', timeoutMs: 60_000 });
       expect(
         await call('validate_workflow', { id: editTarget.id }),
       ).toMatchObject({ saveable: true, publishable: true });
@@ -1768,6 +1768,7 @@ it.each(['stdio', 'http'])(
         language: 'javascript',
         command: 'throw new Error("offline");',
         onFailure: 'route',
+        timeoutMs: 3_600_000,
       });
       recoveryDefinition.edges.push({
         id: 'failed',
@@ -1788,20 +1789,25 @@ it.each(['stdio', 'http'])(
         expect(() =>
           assertContract(schema, jsonSchema.parse(args), 'recovery definition'),
         ).not.toThrow();
-        const invalid = structuredClone(args);
-        (invalid[parameter] as typeof recoveryDefinition).nodes[1] = {
-          ...recoveryDefinition.nodes[1],
-          onFailure: 'retry',
-        } as any;
-        if (toolName !== 'validate_workflow')
-          expect(() =>
-            assertContract(
-              schema,
-              jsonSchema.parse(invalid),
-              'invalid recovery',
-            ),
-          ).toThrow();
-        else expect((await call(toolName, invalid)).saveable).toBe(false);
+        for (const invalidScript of [
+          { onFailure: 'retry' },
+          { timeoutMs: 3_600_001 },
+        ]) {
+          const invalid = structuredClone(args);
+          Object.assign(
+            (invalid[parameter] as typeof recoveryDefinition).nodes[1],
+            invalidScript,
+          );
+          if (toolName !== 'validate_workflow')
+            expect(() =>
+              assertContract(
+                schema,
+                jsonSchema.parse(invalid),
+                'invalid recovery',
+              ),
+            ).toThrow();
+          else expect((await call(toolName, invalid)).saveable).toBe(false);
+        }
       }
       const recoveryWorkflow = await call('create_workflow', {
         name: 'Recovery',
@@ -1812,6 +1818,11 @@ it.each(['stdio', 'http'])(
           .publishable,
       ).toBe(true);
       await call('publish_workflow', { id: recoveryWorkflow.id });
+      expect(
+        store.getVersion(recoveryWorkflow.id, 1)?.definition.nodes[1],
+      ).toMatchObject({
+        timeoutMs: 3_600_000,
+      });
       const recoveryRun = await call('start_run', {
         detail: 'full',
         workflowId: recoveryWorkflow.id,

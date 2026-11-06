@@ -224,6 +224,8 @@ or `"$INTERLOCK_RUN_ID"` in Bash. Script checks in polling Waits receive the
 same context. See [Script execution context](docs/architecture.md#script-execution-context)
 for execution IDs, retry attempts, and Batch item fields.
 
+New Script nodes default to a 60-second timeout. Set **Timeout** in **Execution** to allow between 100 milliseconds and one hour.
+
 A thrown error, nonzero exit, timeout, or invalid output fails the script step. Scripts are not retried automatically.
 
 The library **Import** dialog opens on bundled **Starters** and also accepts pasted JSON, local JSON files, and public GitHub folder links. **Paste JSON** accepts a legacy workflow or portable bundle. Paste the document, choose **Preview workflow**, then **Import workflow** after reviewing it. Invalid JSON and server validation errors keep the text available for correction. Choose **GitHub folder**, paste an HTTPS `github.com/OWNER/REPO/tree/REF/FOLDER` URL, and select **Find workflows**. Review each workflow's description, source file, and dependencies, then select the workflows and choose **Import workflow**, or **Import N workflows** for multiple selections. Branch names containing slashes and commit links are supported. Discovery reads direct JSON files only and pins the preview to a commit. Invalid files remain unselectable and do not hide valid workflows.
