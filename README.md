@@ -318,6 +318,7 @@ The build includes TypeScript checks. Tests cover workflow contracts, runtime be
 - [Architecture and execution semantics](docs/architecture.md)
 - [Scope and limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
+- [Use the workflow migration skill](docs/connect-harness.md#load-the-workflow-migration-skill)
 - [Create and reuse saved prompts](docs/prompts.md)
 - [Reuse configuration and credentials](docs/variables.md)
 - [Agent workflow operations, original-input and node-output bindings, and portable bundles](docs/agent-workflows.md)

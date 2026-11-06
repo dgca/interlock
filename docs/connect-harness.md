@@ -70,6 +70,12 @@ Choose **Streamable HTTP** and enter `http://127.0.0.1:4310/mcp`. No command, ar
 
 Restart or reconnect your harness after changing configuration. Enable Interlock's tools in its approval settings. Interlock does not modify harness configuration for you.
 
+## Load the workflow migration skill
+
+Copy the entire [`interlock-migrate-workflows` folder](../skill/interlock-migrate-workflows/) into a skill directory your harness scans. The folder is under `skill/` in the repository and the npm package. Keep the `references/` directory with `SKILL.md`.
+
+With Interlock connected, ask the agent to use `interlock-migrate-workflows` to audit a workflow by name or ID. The skill can also guide a draft edit when you request one. Your harness loads the skill. An Interlock Agent node's `skills` field declares a required executor capability.
+
 ## Stdio fallback
 
 Existing stdio configurations remain supported. Select **Legacy stdio** under **Transport** in the connection dialog for client-specific snippets. For globally installed copies, the command is `interlock` with arguments `["mcp"]`. The harness launches this bridge, which connects to the running engine.
