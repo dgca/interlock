@@ -47,6 +47,7 @@ afterEach(async () => {
 async function render(
   config: Record<string, unknown>,
   graph?: WorkflowDefinition,
+  onDelete?: () => void,
 ) {
   const node = nodeSchema.parse({ id: 'step', label: 'Step', ...config });
   const definition =
@@ -70,6 +71,7 @@ async function render(
           workflows: [],
           onApply,
           onClose,
+          onDelete,
         }),
       ),
     ),
@@ -269,6 +271,27 @@ it.each([
     expect(onApply.mock.calls[0][0].definition.nodes[0].timeoutMs).toBe(1500);
   },
 );
+it('keeps deletion in the main node settings section', async () => {
+  const onDelete = vi.fn();
+  await render({ kind: 'agent', prompt: 'Do work' }, undefined, onDelete);
+  const deleteButton = Array.from(container.querySelectorAll('button')).find(
+    (button) => button.textContent === 'Delete node',
+  )!;
+  expect(
+    deleteButton
+      .closest('[data-node-section]')
+      ?.getAttribute('data-node-section'),
+  ).toBe('work');
+  expect(deleteButton.closest('[hidden]')).toBeNull();
+  for (const section of ['Input', 'Result', 'Execution']) {
+    await click(section);
+    expect(deleteButton.closest('[hidden]')).not.toBeNull();
+  }
+  await click('Assignment');
+  await click('Delete node');
+  expect(onDelete).toHaveBeenCalledOnce();
+});
+
 it('defaults Script timeouts to one minute and accepts one hour', async () => {
   const { onApply } = await render({ kind: 'script', command: 'cat' });
   expect(field('Timeout').value).toBe('1');

@@ -1,6 +1,7 @@
 import { ExecutorSelect } from '../executors/ExecutorSelect';
 import { AgentResourcesEditor } from './AgentResourcesEditor';
 import { useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import {
   NodeSettingsSections,
   NodeSection,
@@ -9,6 +10,7 @@ import {
 import { BranchEditor } from './BranchEditor';
 import { NodeResultEditor } from './NodeResultEditor';
 import {
+  Button as MantineButton,
   TextInput,
   TagsInput,
   Switch,
@@ -839,9 +841,18 @@ export function NodeInspector({
           </>
         )}
         {onDelete && node.kind !== 'entry' && node.kind !== 'exit' && (
-          <Button variant="danger" onClick={onDelete}>
-            Delete node
-          </Button>
+          <NodeSection name="work">
+            <div className={styles.deleteAction}>
+              <MantineButton
+                variant="subtle"
+                color="red"
+                leftSection={<Trash2 size={14} aria-hidden />}
+                onClick={onDelete}
+              >
+                Delete node
+              </MantineButton>
+            </div>
+          </NodeSection>
         )}
       </div>
     </NodeSettingsSections>
