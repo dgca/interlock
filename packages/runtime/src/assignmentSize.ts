@@ -126,11 +126,16 @@ export class AssignmentSizes {
                   ? q.sample.outputs[leaf.nodeId]
                   : undefined
                 : q.sample?.[leaf.source];
-            if (source === undefined) {
-              reason = 'source_not_supplied';
-              throw new Error(reason);
-            }
-            return source;
+            if (source !== undefined) return source;
+            // A supplied map describes the completed outputs in this scenario.
+            if (
+              leaf.source === 'node' &&
+              leaf.sourceDefault !== undefined &&
+              q.sample?.outputs
+            )
+              return undefined;
+            reason = 'source_not_supplied';
+            throw new Error(reason);
           });
           fields.push([field, value[field]]);
         } catch {

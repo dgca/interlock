@@ -145,7 +145,13 @@ export type ValueBinding =
       path: string;
       default?: Json;
     }
-  | { source: 'node'; nodeId: string; path: string; default?: Json }
+  | {
+      source: 'node';
+      nodeId: string;
+      path: string;
+      default?: Json;
+      sourceDefault?: Json;
+    }
   | { source: 'literal'; value: Json }
   | { source: 'object'; fields: Record<string, ValueBinding> };
 export type ValueBindingInput =
@@ -154,7 +160,13 @@ export type ValueBindingInput =
       path?: string;
       default?: Json;
     }
-  | { source: 'node'; nodeId: string; path?: string; default?: Json }
+  | {
+      source: 'node';
+      nodeId: string;
+      path?: string;
+      default?: Json;
+      sourceDefault?: Json;
+    }
   | { source: 'literal'; value: Json }
   | { source: 'object'; fields: Record<string, ValueBindingInput> };
 export const valueBindingSchema: z.ZodType<
@@ -173,6 +185,7 @@ export const valueBindingSchema: z.ZodType<
       nodeId: z.string().min(1),
       path: z.string().default(''),
       default: jsonSchema.optional(),
+      sourceDefault: jsonSchema.optional(),
     }),
     z.object({ source: z.literal('literal'), value: jsonSchema }),
     z.object({
@@ -209,7 +222,7 @@ const nodeBase = {
   inputBindings: valueBindingsSchema
     .optional()
     .describe(
-      'Optional replacement input fields. Sources: input, runInput, rootInput, itemInput, node (same-scope completed output), literal {value}, object {fields}. Paths default blank; default applies only to a missing path. Record keys stay literal, including dots; use object for nesting, at most 10 levels. Original inputs remain immutable.',
+      'Replace input fields from input, runInput, rootInput, itemInput, node (same-scope completed output), literal {value}, or object {fields}. Blank paths select the source. default covers missing paths; node sourceDefault covers absent completed output. Keys stay literal; use object for nesting (max 10 levels). Original inputs remain immutable.',
     ),
   outputBindings: valueBindingsSchema
     .optional()
@@ -690,23 +703,7 @@ export function assertContract(
     throw new InterlockError(`${label}: ${errors.join(' ')}`);
   }
 }
-export function readPath(value: Json, path: string): Json {
-  if (!path || path === '$') return value;
-  let result: Json | undefined = value;
-  for (const key of path.replace(/^\$\./, '').split('.')) {
-    if (['__proto__', 'prototype', 'constructor'].includes(key))
-      throw new InterlockError('Invalid data path');
-    result =
-      result !== null &&
-      typeof result === 'object' &&
-      Object.hasOwn(result, key)
-        ? (result as Record<string, Json>)[key]
-        : undefined;
-  }
-  if (result === undefined)
-    throw new InterlockError(`Input has no path "${path}"`);
-  return result;
-}
+export { readPath } from './dataPath.js';
 export function supportsResultRouting(node: WorkflowNode): boolean {
   return (
     ['agent', 'script', 'fetch'].includes(node.kind) ||

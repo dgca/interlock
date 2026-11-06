@@ -454,13 +454,21 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
     if (binding.source === 'object')
       return fieldsShape(node, binding.fields, raw);
     const selected = atPath(bindingSource(node, binding, raw), binding.path);
-    if (!Object.hasOwn(binding, 'default') || binding.default === undefined)
-      return selected;
-    const fallback = shape(literalContract(binding.default!));
-    if (selected.state === 'missing') return fallback;
-    return structuralEqual(selected.schema, fallback.schema)
-      ? selected
-      : unknownShape();
+    let resolved = selected;
+    if (binding.default !== undefined) {
+      const fallback = shape(literalContract(binding.default));
+      if (selected.state === 'missing') resolved = fallback;
+      else if (!structuralEqual(selected.schema, fallback.schema))
+        resolved = unknownShape();
+    }
+    if (
+      binding.source === 'node' &&
+      binding.sourceDefault !== undefined &&
+      resolved.state !== 'missing' &&
+      !structuralEqual(resolved.schema, literalContract(binding.sourceDefault))
+    )
+      return unknownShape();
+    return resolved;
   };
   const fieldsShape = (
     node: WorkflowNode,

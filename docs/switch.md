@@ -38,7 +38,7 @@ The fallback edge uses `"port": "none"` in this example. Omitting an edge's `por
 
 `path` uses dot-separated object keys or array indices. A blank path selects the entire input. The first matching case wins, including when several cases contain equal values. An unmatched value follows `default` when configured. Omit `default` to fail the run with an error identifying the unmatched value and input field, without requiring a fallback edge. Existing definitions with `default` retain their routing behavior. A missing path always fails the step, even with a fallback. An empty case list takes the unmatched action after resolving the path.
 
-Switch passes its complete resolved input through unchanged. Its input and output contracts apply as usual. Optional `inputBindings` can select earlier node outputs or original inputs before comparison. For example, a binding named `selected` with `{"source":"node","nodeId":"manager","path":"next.workflow"}` makes the selected value available at Switch path `selected`. The referenced node must have a completed output in the same execution scope.
+Switch passes its complete resolved input through unchanged. Its input and output contracts apply as usual. Optional `inputBindings` can select earlier node outputs or original inputs before comparison. For example, a binding named `selected` with `{"source":"node","nodeId":"manager","path":"next.workflow"}` makes the selected value available at Switch path `selected`. Set `sourceDefault` if the referenced node may have no completed output in the current run. See [binding rules](node-data.md#build-step-input).
 
 ## Publication and execution
 

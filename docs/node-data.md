@@ -25,7 +25,9 @@ In **Input**, choose **Choose fields** to construct an object. Each field can se
 | `literal`   | The JSON `value` supplied in the binding                        |
 | `object`    | An object constructed from recursive `fields`                   |
 
-Path sources use dot-separated `path` keys or array indices. Blank, `$`, and `$.field` have the same meaning as existing data paths. A path binding may include `default`. The default applies only when the selected field is missing; null, false, zero and empty text remain their existing values. Missing source history, unavailable Batch scope and invalid paths still fail. Earlier-node sources cannot select Entry/Exit or cross runs or Batch groups.
+Path sources use dot-separated `path` keys or array indices. Blank, `$`, and `$.field` have the same meaning as existing data paths. A path binding may include `default` for a missing path in an available source. JSON null, false, zero, and empty text are existing values.
+
+A `node` binding may also include `sourceDefault`. If the referenced node has no completed output in the current run, the binding uses `sourceDefault` as the field value. If the node has completed output, Interlock reads the path from that output and uses `default` if the path is missing. Both defaults accept any JSON value, including null. Without the applicable default, the binding fails. Invalid paths still fail. Publication requires an existing node in the same execution scope and excludes Entry and Exit.
 
 For example, these fields select a request, preserve repository configuration, and supply a fixed policy:
 

@@ -111,7 +111,7 @@ For `collect`, downstream nodes read each record's `.output` after checking `.st
 
 ## Agent work
 
-Optional node input bindings select incoming data or original persisted workflow, root, and Batch item inputs, or the latest completed output of a node in the current run, before input validation. Resolved inputs appear in execution history. See [input bindings](agent-workflows.md#bind-original-input-into-later-steps) for scope and retry semantics.
+Optional node input bindings select incoming data or original persisted workflow, root, and Batch item inputs, or the latest completed output of a node in the current run, before input validation. A node binding can set `sourceDefault` for absent completed output and `default` for a missing path within an available output. Resolved inputs appear in execution history. See [input bindings](agent-workflows.md#bind-original-input-into-later-steps) for scope and retry semantics.
 
 The editor derives optional input hints from draft edges and declared contracts. Explicit node input contracts take precedence. Bindings yield a projected object shape; pass-through nodes can carry an inferred shape forward. Conflicting incoming shapes and unknown source contracts yield no single hint. These hints drive editor suggestions only. They are not stored, do not affect publication, and do not change runtime contract checks unless the author explicitly copies a hint into a node input contract.
 
