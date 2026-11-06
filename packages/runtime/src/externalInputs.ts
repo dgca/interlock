@@ -1,7 +1,7 @@
 import {
   ExternalInputConflict,
   InterlockError,
-  assertContract,
+  assertExternalInputContract,
   externalInputMutationSchema,
   externalInputStatusSchema,
   type ExternalInputMutation,
@@ -146,11 +146,10 @@ export class ExternalInputs {
       request.expectedRevision !== revision
     )
       throw new ExternalInputConflict('External-input revision conflict');
-    assertContract(
+    assertExternalInputContract(
       this.engine.node(run, execution).outputSchema,
       request.value,
       'Submitted value',
-      { ownProperties: true },
     );
     const receipt = {
       runId: run.id,

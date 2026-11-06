@@ -470,6 +470,19 @@ it('validates only own submitted fields and constrains reserved JSON keys throug
   expect(() => engine.publish(invalid.id)).toThrow(/Use patternProperties/);
 
   d.nodes[1].outputSchema = {
+    $ref: '#/examples/0',
+    examples: [d.nodes[1].outputSchema],
+  };
+  const indirect = engine.create('Referenced property declaration', '', d);
+  expect(() => engine.publish(indirect.id)).toThrow(/Use patternProperties/);
+
+  d.nodes[1].outputSchema = { $async: true, type: 'boolean' };
+  const asynchronous = engine.create('Asynchronous contract', '', d);
+  expect(() => engine.publish(asynchronous.id)).toThrow(
+    /must validate synchronously/,
+  );
+
+  d.nodes[1].outputSchema = {
     type: 'object',
     required: ['__proto__'],
     patternProperties: { '^__proto__$': { type: 'boolean' } },

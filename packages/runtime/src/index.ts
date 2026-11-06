@@ -17,6 +17,7 @@ import { Store } from '@interlock/storage';
 import { tidyWorkflow } from '@interlock/core/layout';
 import {
   assertContract,
+  assertExternalInputContract,
   resolveBindingFields,
   matchRouting,
   type PathBinding,
@@ -1320,15 +1321,17 @@ export class Engine {
   ) {
     // Lifecycle routes bypass success-result validation, routing and shaping.
     const timeout = port === 'timeout' && hasTimeoutRoute(node);
-    if (!timeout)
-      assertContract(
+    if (!timeout) {
+      const assertOutput =
+        node.kind === 'input' ? assertExternalInputContract : assertContract;
+      assertOutput(
         node.kind === 'workflow' && node.mode === 'detached'
           ? STARTED_RUN_SCHEMA
           : node.outputSchema,
         output,
         `${node.label} output`,
-        { ownProperties: node.kind === 'input' },
       );
+    }
     let rawResult: Json | undefined;
     if (port === 'default' && (node.routing || node.outputBindings)) {
       try {

@@ -21,7 +21,7 @@ In a workflow definition, set `kind` to `input` and use `outputSchema` for the s
 }
 ```
 
-The submitted-value contract checks the JSON object's own fields. To constrain a field named `__proto__`, use `patternProperties` with the exact pattern `^__proto__$`.
+The submitted-value contract runs synchronously and checks the JSON object's own fields. To constrain a field named `__proto__`, use `patternProperties` with the exact pattern `^__proto__$`.
 
 The ordinary `inputSchema` and input bindings still describe the data arriving from the previous step. Read the current step's input through the usual targeted run result operation if the integration needs that context.
 

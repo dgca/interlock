@@ -24,7 +24,6 @@ export * from './resultValidation.js';
 export * from './resultRules.js';
 export * from './workHolds.js';
 export * from './externalInput.js';
-import { validateExternalInputProperties } from './externalInput.js';
 import { resultRulesSchema, resultRuleProblems } from './resultRules.js';
 export * from './assignmentSize.js';
 export * from './contextContinuity.js';
@@ -33,7 +32,7 @@ export * from './trialEnvironments.js';
 export * from './authoringLayout.js';
 import { modelTierSchema } from './modelTiers.js';
 import { continuityGroupSchema } from './contextContinuity.js';
-import Ajv from 'ajv';
+import Ajv, { type ValidateFunction } from 'ajv';
 import { bindingLeaves } from './valueBindings.js';
 import {
   variableReferenceSchema,
@@ -658,11 +657,39 @@ export class ResultRejection extends InterlockError {
   }
 }
 const ajv = new Ajv({ allErrors: true, strict: false });
-const ownPropertyContracts = new Ajv({
+const externalInputContracts = new Ajv({
   allErrors: true,
   strict: false,
   ownProperties: true,
 });
+const propertiesKeyword = externalInputContracts.getKeyword('properties');
+if (
+  !propertiesKeyword ||
+  propertiesKeyword === true ||
+  !('code' in propertiesKeyword)
+)
+  throw new Error('AJV properties validator is unavailable');
+const generateProperties = propertiesKeyword.code;
+// Fail closed when AJV would skip this name, including inside resolved refs.
+externalInputContracts.removeKeyword('properties').addKeyword({
+  ...propertiesKeyword,
+  code(context, ruleType) {
+    if (Object.hasOwn(context.schema, '__proto__'))
+      throw new InterlockError(
+        'Use patternProperties with "^__proto__$" to constrain the "__proto__" field in a submitted value',
+      );
+    generateProperties(context, ruleType);
+  },
+});
+
+function compileExternalInputContract(schema: Record<string, unknown>) {
+  if (schema.$async === true)
+    throw new InterlockError(
+      'Submitted-value contracts must validate synchronously',
+    );
+  return externalInputContracts.compile(schema);
+}
+
 export function validateContractSchema(schema: Record<string, unknown>) {
   contractSchema.parse(schema);
   ajv.compile(schema);
@@ -671,11 +698,21 @@ export function assertContract(
   schema: Record<string, unknown>,
   value: Json,
   label: string,
-  options?: { ownProperties: boolean },
 ) {
-  const validate = (
-    options?.ownProperties ? ownPropertyContracts : ajv
-  ).compile(schema);
+  assertContractValue(ajv.compile(schema), value, label);
+}
+export function assertExternalInputContract(
+  schema: Record<string, unknown>,
+  value: Json,
+  label: string,
+) {
+  assertContractValue(compileExternalInputContract(schema), value, label);
+}
+function assertContractValue(
+  validate: ValidateFunction,
+  value: Json,
+  label: string,
+) {
   if (!validate(value)) {
     const errors = (validate.errors ?? []).slice(0, 3).map((error) => {
       const segments = error.instancePath
@@ -826,12 +863,8 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
   ajv.compile(d.outputSchema);
   for (const node of d.nodes) {
     ajv.compile(node.inputSchema);
-    if (node.kind === 'input') {
-      validateExternalInputProperties(node.outputSchema);
-      ownPropertyContracts.compile(node.outputSchema);
-    } else {
-      ajv.compile(node.outputSchema);
-    }
+    if (node.kind === 'input') compileExternalInputContract(node.outputSchema);
+    else ajv.compile(node.outputSchema);
   }
   for (const edge of d.edges) {
     if (!ids.has(edge.source) || !ids.has(edge.target))
