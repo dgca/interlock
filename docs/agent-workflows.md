@@ -38,6 +38,8 @@ For manual history removal, use `manage_run_history` with `request.action:"previ
 
 MCP `create_workflow.definition` and `update_workflow.draft` expose the workflow object schema, including node fields and edge handles. Incomplete routes remain saveable drafts. Publication validates graph routes and pinned dependencies. For small changes, `edit_workflow` avoids resending the full graph. `validate_workflow` reports read-only diagnostics for the stored draft or a candidate.
 
+For node configuration and examples, see [author definitions through MCP](connect-harness.md#author-definitions-through-mcp), [workflow definitions and Batch scopes](architecture.md#workflow-definitions), [branch routing](switch.md), and [input and output bindings](node-data.md).
+
 Script, Fetch and waited Workflow calls support `onFailure: "route"` with `default` and `failed` edges through these same tools. Failed receives the fixed `{input,error,output}` contract described in [failure routes](failure-routes.md). The operation stays failed while its run continues. Workflow failures add `error.child` run/version/execution references. Cancelled children and caller input/dispatch errors remain terminal; a handled child cannot be retried independently. Earlier-node bindings select completed outputs only; read the incoming envelope for recovery. Removing the policy through MCP requires explicitly removing its edge. No automatic retry is added, and completed recovery runs cannot be retried.
 
 `start_run.input` and `submit_result.output` accept any JSON value matching the workflow or assignment contract, including objects, arrays, scalars, and null. Pass structured values directly. JSON-looking strings remain strings and are never implicitly parsed.
