@@ -132,10 +132,12 @@ function EnvironmentRow({
 export function EnvironmentEditor({
   value = [],
   language,
+  polling = false,
   onChange,
 }: {
   value?: ScriptEnvironment;
   language?: 'javascript' | 'bash';
+  polling?: boolean;
   onChange: (value: ScriptEnvironment | undefined) => void;
 }) {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -207,6 +209,46 @@ export function EnvironmentEditor({
           Secret output is redacted before it enters run history.
         </Text>
       )}
+      <details className={styles.access}>
+        <summary>Execution context</summary>
+        <Stack gap="xs">
+          <Text size="xs">
+            Read the current run ID with{' '}
+            <Code>
+              {language === 'javascript'
+                ? 'process.env.INTERLOCK_RUN_ID'
+                : '$INTERLOCK_RUN_ID'}
+            </Code>
+            .
+          </Text>
+          <Text size="xs">
+            <Code>INTERLOCK_ROOT_RUN_ID</Code> identifies the outermost run.
+            <br />
+            <Code>INTERLOCK_WORKFLOW_ID</Code> and{' '}
+            <Code>INTERLOCK_WORKFLOW_VERSION</Code> identify the published
+            workflow.
+          </Text>
+          <Text size="xs">
+            <Code>INTERLOCK_NODE_ID</Code> identifies the step.{' '}
+            <Code>INTERLOCK_EXECUTION_ID</Code> changes on each visit or retry.{' '}
+            <Code>INTERLOCK_ATTEMPT</Code> starts at 1 and increases on retry.
+          </Text>
+          <Text size="xs">
+            Batch items also get <Code>INTERLOCK_BATCH_OWNER_RUN_ID</Code> and{' '}
+            <Code>INTERLOCK_BATCH_ITEM_INDEX</Code>. The first item is index 0.
+          </Text>
+          {polling && (
+            <Text size="xs">
+              <Code>INTERLOCK_POLL_CHECK_NUMBER</Code> counts checks within this
+              Wait attempt, starting at 1.
+            </Text>
+          )}
+          <Text size="xs" c="dimmed">
+            Use different names for saved variable bindings to read these
+            values.
+          </Text>
+        </Stack>
+      </details>
     </Stack>
   );
 }

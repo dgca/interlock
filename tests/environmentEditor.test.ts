@@ -27,12 +27,14 @@ let variables: {
 }[];
 let initial: ScriptEnvironment | undefined,
   language: 'javascript' | 'bash' | undefined,
+  polling = false,
   key = 0;
 function Harness() {
   const [value, setValue] = useState(initial);
   return h(EnvironmentEditor, {
     value,
     language,
+    polling,
     onChange: (next) => {
       latest = next;
       setValue(next);
@@ -57,10 +59,12 @@ async function settle() {
 async function render(
   value?: ScriptEnvironment,
   scriptLanguage?: 'javascript' | 'bash',
+  scriptCheck = false,
 ) {
   initial = value;
   latest = value;
   language = scriptLanguage;
+  polling = scriptCheck;
   await act(async () =>
     root.render(h(MantineProvider, {}, h(Harness, { key: ++key }))),
   );
@@ -377,3 +381,20 @@ it.each(['invalid alias', 'unselected search'] as const)(
       );
   },
 );
+
+it('shows the execution context for the selected language and polling mode', async () => {
+  await render(undefined, 'javascript');
+  const scriptHelp = container.querySelector<HTMLDetailsElement>('details')!;
+  expect(scriptHelp.open).toBe(false);
+  await act(async () => scriptHelp.querySelector('summary')!.click());
+  expect(scriptHelp.open).toBe(true);
+  expect(scriptHelp.textContent).toContain('process.env.INTERLOCK_RUN_ID');
+  expect(scriptHelp.textContent).toContain('INTERLOCK_EXECUTION_ID');
+  expect(scriptHelp.textContent).not.toContain('INTERLOCK_POLL_CHECK_NUMBER');
+
+  await render(undefined, 'bash', true);
+  const checkHelp = container.querySelector<HTMLDetailsElement>('details')!;
+  await act(async () => checkHelp.querySelector('summary')!.click());
+  expect(checkHelp.textContent).toContain('$INTERLOCK_RUN_ID');
+  expect(checkHelp.textContent).toContain('INTERLOCK_POLL_CHECK_NUMBER');
+});

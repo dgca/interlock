@@ -931,6 +931,7 @@ function PollEditor({
           />
           <EnvironmentEditor
             language={check.language}
+            polling
             value={check.environment}
             onChange={(environment) =>
               patch({ check: { ...check, environment } })

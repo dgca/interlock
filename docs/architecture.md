@@ -246,6 +246,41 @@ Scripts have time and output limits. Cancellation kills their process group. Shu
 
 Script execution happens outside database transactions. Agent claims and result submission remain available while scripts run. Completed script results are committed before advancing dependent steps.
 
+### Script execution context
+
+Script nodes and Script checks in polling Waits receive these environment
+variables. Read them through `process.env` in JavaScript or shell variables
+in Bash. JavaScript's `input` and Bash's JSON stdin keep their usual format.
+
+| Variable                       | Value                                                                                                                                  |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `INTERLOCK_RUN_ID`             | Run executing the script. Use this ID to inspect the run.                                                                              |
+| `INTERLOCK_ROOT_RUN_ID`        | Outermost ancestor run. A top-level run identifies itself. A detached child keeps its original ancestry.                               |
+| `INTERLOCK_WORKFLOW_ID`        | Workflow whose published definition supplies the step. Batch items use their owner's workflow.                                         |
+| `INTERLOCK_WORKFLOW_VERSION`   | Published version number.                                                                                                              |
+| `INTERLOCK_NODE_ID`            | Step ID in the published definition. For a polling check, this is the Wait node ID.                                                    |
+| `INTERLOCK_EXECUTION_ID`       | Current node execution. Each new visit and explicit retry gets a fresh ID. Checks within the same Wait attempt share its execution ID. |
+| `INTERLOCK_ATTEMPT`            | Attempt within a visit, starting at 1. Explicit retries increment it. A later visit starts at 1.                                       |
+| `INTERLOCK_BATCH_OWNER_RUN_ID` | Run containing the Batch that started this item. Present for Batch item runs.                                                          |
+| `INTERLOCK_BATCH_ITEM_INDEX`   | Zero-based position in the Batch input. Present for Batch item runs.                                                                   |
+| `INTERLOCK_POLL_CHECK_NUMBER`  | Present for polling Script checks. Starts at 1 within each Wait attempt. An interrupted check can reuse its number after restart.      |
+
+Interlock uses `INTERLOCK_` for its own environment variables. Choose names
+outside that prefix for saved variable bindings to avoid collisions. Explicit
+saved bindings take precedence over execution context, which takes precedence
+over matching values inherited from the service environment. The context
+values are strings and carry execution identity only.
+
+A workflow or node ID is omitted if it contains a NUL byte, cannot be
+represented as UTF-8, or exceeds 16 KiB in UTF-8. Existing definitions with
+these IDs can still execute.
+
+If adding context exceeds the OS process launch limit, Interlock uses the
+original environment. This fallback applies only before the Script starts.
+
+A retry of a retained execution without an attempt record treats that
+execution as attempt 1.
+
 ## Usage reporting
 
 Usage contracts and aggregation live in `core`; `runtime` captures each claim and its outcome and accepts separate cumulative executor and observer reports. Observer reports require a retained ended attempt and no claim token. Core selects the observer snapshot when present, otherwise the executor snapshot, for both totals and budget checks. The existing document store persists separate `usageAttempts` records with internal claim-token hashes. Reports can arrive after an attempt ends without restoring execution privileges. Summaries explicitly select one run or all descendants, retain unknown legacy history, and paginate attribution without truncating totals. Accepted updates emit `work.usage_reported` events for UI refresh; usage-only updates do not advance continuation cursors unless budget admission changes. See [usage reporting](usage-reporting.md).

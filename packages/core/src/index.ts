@@ -479,6 +479,8 @@ export interface NodeExecution {
   error?: string;
   childRunIds: string[];
   nextItem: number;
+  /** Script or Wait attempt within a single visit. Omission means the first attempt. */
+  attempt?: number;
   retryChildRunIds?: string[];
   request?: FetchRequest;
   resumeAt?: string;
@@ -510,6 +512,9 @@ export interface Run {
   parentExecutionId?: string;
   // Item runs execute members of this Batch in the same published graph.
   batchNodeId?: string;
+  batchItemIndex?: number;
+  /** Attempt reserved for a Script or Wait step by explicit retry. */
+  nextScriptAttempt?: number;
   status: RunStatus;
   input: Json;
   output?: Json;

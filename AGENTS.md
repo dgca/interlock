@@ -16,6 +16,8 @@ Keep execution rules in `packages/runtime`, contracts and graph validation in `p
 
 New script nodes default to JavaScript. Definitions that omit `language` retain legacy Bash behavior. Preserve both paths when changing script execution or serialization.
 
+Prefix every new environment variable defined by Interlock with `INTERLOCK_`. Preserve names supplied by users or required by external tools.
+
 Raw editing operates on the workflow definition, not the full stored workflow record. Keep draft-save validation separate from publication checks so incomplete graphs can still be saved.
 
 Use the root package version through `packages/core/src/version.ts` for CLI, UI, and MCP version displays. Add changesets for `@type_of/interlock` even when the code changes in a private workspace package. Keep changesets pending in feature PRs. The GitHub release workflow applies versioning in a release PR and publishes after that PR merges.

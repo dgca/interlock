@@ -39,6 +39,8 @@ environment name. JavaScript reads
 `process.env.SERVICE_API_TOKEN`. Bash reads `$SERVICE_API_TOKEN`. These entries
 override matching inherited names. Only explicitly selected library values are
 delivered. Polling Wait checks support the same header and environment controls.
+Choose names outside `INTERLOCK_` for new bindings to avoid shadowing
+[Script execution context](architecture.md#script-execution-context).
 Environment values cannot contain NUL bytes. Referenced Fetch header values must
 use valid Latin-1 header text without control characters, except horizontal tabs.
 Invalid target values fail with the variable and target names, without quoting
