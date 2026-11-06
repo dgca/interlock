@@ -2155,25 +2155,37 @@ export class Engine {
             `${label}: environment ${entry.name} cannot use variable ${variableName(entry.variableId)}. Replace its value with text that contains no NUL bytes.`,
           );
       }
-      const output = await executeScript(
-        operation.command,
-        input,
-        operation.timeoutMs,
-        environment?.cwd ?? this.cwd,
-        signal,
-        operation.language,
-        {
-          ...(environment?.env ?? process.env),
-          ...this.scriptContextEnvironment(run, execution),
-          ...Object.fromEntries(
-            (operation.environment ?? []).map((e) => [
-              e.name,
-              resolved.value(e.variableId),
-            ]),
-          ),
-        },
-        resolved.secrets.length ? redact.text : undefined,
+      const inherited = environment?.env ?? process.env;
+      const bindings = Object.fromEntries(
+        (operation.environment ?? []).map((entry) => [
+          entry.name,
+          resolved.value(entry.variableId),
+        ]),
       );
+      const launch = (env: NodeJS.ProcessEnv) =>
+        executeScript(
+          operation.command,
+          input,
+          operation.timeoutMs,
+          environment?.cwd ?? this.cwd,
+          signal,
+          operation.language,
+          env,
+          resolved.secrets.length ? redact.text : undefined,
+        );
+      const output = await launch({
+        ...inherited,
+        ...this.scriptContextEnvironment(run, execution),
+        ...bindings,
+      }).catch((error: unknown) => {
+        // E2BIG comes from spawn before the Script process can start.
+        if (
+          error instanceof Error &&
+          (error as NodeJS.ErrnoException).code === 'E2BIG'
+        )
+          return launch({ ...inherited, ...bindings });
+        throw error;
+      });
       return { output: redact.json(output) };
     } catch (error) {
       throw new InterlockError(redact.text(message(error)));

@@ -8,6 +8,7 @@ import {
 } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
+import * as scripts from '../packages/runtime/src/scripts';
 import { batchDefinition, itemScript, nestedBatches } from './fixtures/batch';
 import { workflowCall } from './fixtures/detached';
 
@@ -341,6 +342,28 @@ it('preserves an existing workflow variable binding that uses a context name', a
     input: null,
     env: { ...expectedIdentity(run), INTERLOCK_RUN_ID: 'existing-value' },
   });
+});
+
+it('uses the original environment when spawn rejects the added context', async () => {
+  vi.stubEnv('INTERLOCK_RUN_ID', 'inherited-run');
+  vi.stubEnv('INTERLOCK_EXECUTION_ID', undefined);
+  const launch = vi
+    .spyOn(scripts, 'executeScript')
+    .mockRejectedValueOnce(
+      Object.assign(new Error('spawn E2BIG'), { code: 'E2BIG' }),
+    );
+  try {
+    const engine = setup();
+    const definition = script('return process.env.INTERLOCK_RUN_ID;');
+    const { id } = engine.start(publish(engine, definition), null).run;
+    expect((await waitForRun(engine, id)).output).toBe('inherited-run');
+    expect(launch).toHaveBeenCalledTimes(2);
+    expect(launch.mock.calls[0][6]?.INTERLOCK_RUN_ID).toBe(id);
+    expect(launch.mock.calls[1][6]?.INTERLOCK_RUN_ID).toBe('inherited-run');
+    expect(launch.mock.calls[1][6]?.INTERLOCK_EXECUTION_ID).toBeUndefined();
+  } finally {
+    launch.mockRestore();
+  }
 });
 
 it.each([

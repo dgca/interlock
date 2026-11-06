@@ -275,6 +275,9 @@ A workflow or node ID is omitted if it contains a NUL byte, cannot be
 represented as UTF-8, or exceeds 16 KiB in UTF-8. Existing definitions with
 these IDs can still execute.
 
+If adding context exceeds the OS process launch limit, Interlock uses the
+original environment. This fallback applies only before the Script starts.
+
 A retry of a retained execution without an attempt record treats that
 execution as attempt 1.
 
