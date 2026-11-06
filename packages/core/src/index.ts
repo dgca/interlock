@@ -455,6 +455,14 @@ export const runQuerySchema = z.object({
   inputMatch: z.object({ path: z.string(), equals: jsonSchema }).optional(),
 });
 export type RunQuery = z.infer<typeof runQuerySchema>;
+export const runSummaryQuerySchema = runQuerySchema
+  .pick({ workflowId: true, status: true })
+  .extend({
+    tab: z.enum(['active', 'attention', 'history']).optional(),
+    offset: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),
+    limit: z.number().int().min(1).max(200).default(100),
+  });
+export type RunSummaryQuery = z.infer<typeof runSummaryQuerySchema>;
 export interface NodeExecution {
   id: string;
   nodeId: string;
@@ -514,6 +522,23 @@ export interface Run {
   promptSnapshots?: import('./prompts.js').PromptSnapshot[];
   variableCaptures?: import('./variables.js').VariableCapture[];
 }
+export type RunSummary = Pick<
+  Run,
+  | 'id'
+  | 'workflowId'
+  | 'workflowName'
+  | 'version'
+  | 'status'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'parentRunId'
+  | 'parentMode'
+  | 'parentExecutionId'
+  | 'comparison'
+> & {
+  executionCount: number;
+  parentWorkflowName?: string;
+};
 export interface RunAncestry {
   workflowId: string;
   parentRunId?: string;

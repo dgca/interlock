@@ -26,6 +26,7 @@ import {
   workflowEditsSchema,
   jsonSchema,
   runQuerySchema,
+  runSummaryQuerySchema,
   runStartSchema,
   cancelRunSchema,
   InterlockError,
@@ -536,6 +537,23 @@ export const appRouter = t.router({
       .input(runQuerySchema.default({}))
       .query(({ ctx, input }) => ctx.engine.store.findRuns(input)),
     list: p.query(({ ctx }) => ctx.engine.store.runs().reverse()),
+    summaries: p
+      .input(runSummaryQuerySchema.default({}))
+      .query(({ ctx, input }) => {
+        const attention = new Map(
+          ctx.engine.runAttention().map((entry) => [entry.runId, entry]),
+        );
+        const page = ctx.engine.store.runSummaries(input, [
+          ...attention.keys(),
+        ]);
+        return {
+          ...page,
+          items: page.items.map((run) => ({
+            ...run,
+            attention: attention.get(run.id),
+          })),
+        };
+      }),
     attention: p.query(({ ctx }) => ctx.engine.runAttention()),
     get: p.input(id).query(({ ctx, input }) => ctx.engine.inspect(input.id)),
     start: p

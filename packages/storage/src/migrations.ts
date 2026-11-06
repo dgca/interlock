@@ -129,6 +129,22 @@ export const migrations: readonly Migration[] = [
       );
     },
   },
+  {
+    version: 7,
+    up(db) {
+      db.exec(`
+        CREATE INDEX runs_summary_filters ON documents(
+          json_extract(value, '$.workflowId'),
+          json_extract(value, '$.createdAt') DESC,
+          json_extract(value, '$.status'),
+          json_extract(value, '$.parentRunId'),
+          json_extract(value, '$.parentMode'),
+          json_extract(value, '$.batchNodeId'),
+          id
+        ) WHERE collection = 'runs';
+      `);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

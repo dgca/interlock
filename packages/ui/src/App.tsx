@@ -5,7 +5,7 @@ import { Button, Group, Modal, Notification, Text } from '@mantine/core';
 import { Outlet, useBlocker, useMatch, useNavigate } from 'react-router';
 import { paths } from './routes/paths';
 import { useActionFeedback } from './lib/useActionFeedback';
-import type { Run, RunAttention, Workflow, SavedPrompt } from '@interlock/core';
+import type { RunAttention, Workflow, SavedPrompt } from '@interlock/core';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { RunDialog } from './features/runs/RunDialog';
 import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
@@ -16,8 +16,6 @@ import type { Action } from './lib/useActionFeedback';
 export type AppContext = {
   workflows: Workflow[];
   prompts: SavedPrompt[];
-  runs: Run[];
-  attention: RunAttention[];
   loaded: boolean;
   loadError: string;
   tick: number;
@@ -67,20 +65,17 @@ export function App() {
   );
   const [workflows, setWorkflows] = useState<Workflow[]>([]),
     [prompts, setPrompts] = useState<SavedPrompt[]>([]),
-    [runs, setRuns] = useState<Run[]>([]),
     [attention, setAttention] = useState<RunAttention[]>([]),
     [connected, setConnected] = useState(false),
     [tick, setTick] = useState(0),
     [runDialog, setRunDialog] = useState<Workflow>();
   const refresh = useCallback(async () => {
-    const [w, r, p, a] = await Promise.all([
+    const [w, p, a] = await Promise.all([
       api.workflows.list.query(),
-      api.runs.list.query(),
       api.prompts.list.query(),
       api.runs.attention.query(),
     ]);
     setWorkflows(w);
-    setRuns(r);
     setPrompts(p);
     setAttention(a);
     setConnected(true);
@@ -89,32 +84,71 @@ export function App() {
   }, []);
   useEffect(() => {
     let mounted = true;
+    let streamHealthy = false;
+    let refreshFailed = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
     const update = () => {
-      void refresh().catch((e) => {
-        if (mounted) {
+      if (document.visibilityState === 'hidden') return;
+      void refresh().then(
+        () => {
+          if (mounted && refreshFailed) {
+            refreshFailed = false;
+            resetPolling();
+          }
+        },
+        (e) => {
+          if (!mounted) return;
           setConnected(false);
           setLoadError(errorMessage(e));
-        }
-      });
+          if (!refreshFailed) {
+            refreshFailed = true;
+            resetPolling();
+          }
+        },
+      );
       setTick((t) => t + 1);
+    };
+    const resetPolling = () => {
+      clearInterval(interval);
+      // The stream reports run and work changes. Refresh other views as well.
+      if (document.visibilityState !== 'hidden')
+        interval = setInterval(
+          update,
+          streamHealthy && !refreshFailed ? 60_000 : 5000,
+        );
     };
     let pending: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {
+      if (document.visibilityState === 'hidden') return;
       if (!pending)
         pending = setTimeout(() => {
           pending = undefined;
           update();
         }, 100);
     };
-    update();
+    const onVisibility = () => {
+      resetPolling();
+      update();
+    };
+    onVisibility();
     const stopEvents = subscribeToEngineEvents({
       onChange: schedule,
-      onConnect: () => setConnected(true),
-      onError: () => setConnected(false),
+      onConnect: () => {
+        streamHealthy = true;
+        setConnected(true);
+        resetPolling();
+        schedule();
+      },
+      onError: () => {
+        streamHealthy = false;
+        setConnected(false);
+        resetPolling();
+      },
     });
-    const interval = setInterval(update, 5000);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       mounted = false;
+      document.removeEventListener('visibilitychange', onVisibility);
       stopEvents();
       clearInterval(interval);
       clearTimeout(pending);
@@ -131,8 +165,6 @@ export function App() {
   const context: AppContext = {
     workflows,
     prompts,
-    runs,
-    attention,
     loaded,
     loadError,
     tick,

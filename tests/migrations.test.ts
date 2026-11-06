@@ -70,8 +70,8 @@ const next = [
 it('initializes empty databases and reopens current databases without a backup', () => {
   const file = path();
   const db = open(file);
-  expect(migrate(db, file)).toEqual({ from: 0, to: 6 });
-  expect(migrate(db, file)).toEqual({ from: 6, to: 6 });
+  expect(migrate(db, file)).toEqual({ from: 0, to: 7 });
+  expect(migrate(db, file)).toEqual({ from: 7, to: 7 });
   expect(existsSync(`${file}.backups`)).toBe(false);
 });
 
@@ -218,7 +218,7 @@ it('opens the previous release without rewriting records and executes its publis
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 1,
-    to: 6,
+    to: 7,
     backup: expect.any(String),
   });
   expect(
@@ -227,7 +227,7 @@ it('opens the previous release without rewriting records and executes its publis
         "SELECT name FROM sqlite_schema WHERE type = 'index' AND name LIKE 'runs_%'",
       )
       .all(),
-  ).toHaveLength(5);
+  ).toHaveLength(6);
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
     before,
   );
@@ -267,7 +267,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 2,
-    to: 6,
+    to: 7,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -280,12 +280,42 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   expect(revision).toBeGreaterThan(0);
   const reopened = new Store(file);
   connections.push(reopened);
-  expect(reopened.migration).toEqual({ from: 6, to: 6 });
+  expect(reopened.migration).toEqual({ from: 7, to: 7 });
   expect(reopened.continuation(run.id).revision).toBe(revision);
   store.remove('runs', run.id);
   expect(
     db.prepare('SELECT * FROM run_revisions WHERE run_id = ?').get(run.id),
   ).toBeUndefined();
+});
+
+it('adds run summary indexes to schema-6 databases without rewriting records', () => {
+  const file = path();
+  const db = open(file);
+  migrate(db, file, migrations.slice(0, 6));
+  const run = previousRelease.documents.runs[0];
+  db.prepare("INSERT INTO documents VALUES ('runs', ?, ?)").run(
+    run.id,
+    JSON.stringify(run),
+  );
+
+  const store = new Store(file);
+  connections.push(store);
+  expect(store.migration).toMatchObject({
+    from: 6,
+    to: 7,
+    backup: expect.any(String),
+  });
+  expect(store.get('runs', run.id)).toEqual(run);
+  expect(store.runSummaries({ offset: 0, limit: 100 }, []).items).toMatchObject(
+    [{ id: run.id, executionCount: run.executions.length }],
+  );
+  const backup = open(store.migration.backup!);
+  expect(
+    backup.prepare('SELECT max(version) AS version FROM migrations').get(),
+  ).toMatchObject({ version: 6 });
+  expect(
+    backup.prepare('SELECT value FROM documents WHERE id = ?').get(run.id),
+  ).toMatchObject({ value: JSON.stringify(run) });
 });
 
 it('continues claimed work and executes script pins from published 0.1.13 after migration', async () => {

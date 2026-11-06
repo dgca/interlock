@@ -7,6 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { readPath, InterlockError, type RunQuery } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
 import { continuationState } from './continuation.js';
+import { runSummaries } from './runSummaries.js';
 export type { HistoryRun } from './history.js';
 import {
   historyRuns,
@@ -17,6 +18,7 @@ import {
 } from './history.js';
 import type {
   Run,
+  RunSummaryQuery,
   RunAncestry,
   WorkRequest,
   Workflow,
@@ -245,6 +247,9 @@ export class Store {
   }
   runs() {
     return this.list<Run>('runs');
+  }
+  runSummaries(query: RunSummaryQuery, attentionIds: string[]) {
+    return runSummaries(this.db, query, attentionIds);
   }
   activeRuns(): Run[] {
     // Separate equalities keep SQLite on the status index even without ANALYZE.

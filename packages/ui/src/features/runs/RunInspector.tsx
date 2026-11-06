@@ -1,5 +1,5 @@
 import { Menu, ScrollArea } from '@mantine/core';
-import { nodeKindLabel } from '@interlock/core';
+import { nodeKindLabel, type RunStatus } from '@interlock/core';
 import type { Action } from '../../lib/useActionFeedback';
 import { useEffect, useRef, useState } from 'react';
 import { needsManagedAttention } from '../executors/managedStatus';
@@ -45,7 +45,7 @@ export function RunInspector({
 }: {
   id: string;
   tick: number;
-  onBack: () => void;
+  onBack: (status: RunStatus) => void;
   onOpen: (id: string, executionId?: string) => void;
   initialExecutionId?: string;
   act: Action;
@@ -161,7 +161,11 @@ export function RunInspector({
       className={`${styles.page} ${!definition ? styles.withoutDefinition : ''} ${run.comparison ? styles.comparison : ''}`}
     >
       <header className={styles.header}>
-        <Button variant="ghost" onClick={onBack} aria-label="Back to runs">
+        <Button
+          variant="ghost"
+          onClick={() => onBack(run.status)}
+          aria-label="Back to runs"
+        >
           <ArrowLeft />
         </Button>
         <div>
