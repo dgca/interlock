@@ -128,6 +128,8 @@ export class AssignmentSizes {
                 : q.sample?.[leaf.source];
             if (source === undefined) {
               reason = 'source_not_supplied';
+              // A supplied map describes the completed outputs in this scenario.
+              if (leaf.source === 'node' && q.sample?.outputs) return undefined;
               throw new Error(reason);
             }
             return source;

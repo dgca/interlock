@@ -682,7 +682,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'inspect_assignment_size',
-    'Read-only UTF-8 JSON size breakdown without payload values. Choose workId for a captured assignment, or workflowId+nodeId for a draft preview; version selects a published pin. Preview sample provides incoming input, runInput/rootInput/itemInput and latest same-scope node outputs. Missing sources stay unknown. warningBytes defaults to 100000 and is advisory. Counts prompt, context, input, output schema, execution instructions saved prompt metadata and optional trial environment context, excluding envelope/identity fields. No token or billing estimate; no claim or truncation.',
+    'Read-only UTF-8 JSON size breakdown without payload values. Choose workId for a captured assignment, or workflowId+nodeId for a draft preview; version selects a published pin. Preview sample accepts input, runInput/rootInput/itemInput and latest same-scope node outputs. A supplied outputs map uses sourceDefault for absent node IDs when configured. Omitted sources otherwise stay unknown. warningBytes defaults to 100000 and is advisory. Counts prompt, context, input, output schema, execution instructions saved prompt metadata and optional trial environment context, excluding envelope/identity fields. No token or billing estimate; no claim or truncation.',
     assignmentSizeQuerySchema.shape,
     (input) => client.work.size(input),
   );

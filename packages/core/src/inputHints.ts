@@ -24,9 +24,9 @@ const known = (schema: Contract) => Object.keys(schema).length > 0;
 
 /** Resolve only paths whose shape is declared by ordinary object or array schemas. */
 export function contractAtPath(schema: Contract, path: string): Contract {
-  if (!path) return schema;
+  if (!path || path === '$') return schema;
   let current = schema;
-  for (const part of path.split('.')) {
+  for (const part of path.replace(/^\$\./, '').split('.')) {
     if (current.type === 'object') {
       const properties = current.properties;
       if (

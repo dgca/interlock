@@ -1580,6 +1580,12 @@ it.each(['stdio', 'http'])(
           prompt: 'Use the earlier output',
           inputBindings: {
             previous: { source: 'node', nodeId: 'agent', path: '' },
+            count: {
+              source: 'node',
+              nodeId: 'consumer',
+              path: 'count',
+              sourceDefault: 0,
+            },
           },
         }),
       );
@@ -1629,6 +1635,15 @@ it.each(['stdio', 'http'])(
         draftRevision: boundWorkflow.draftRevision,
       });
       await call('publish_workflow', { id: boundWorkflow.id });
+      const preview = await call('inspect_assignment_size', {
+        workflowId: boundWorkflow.id,
+        nodeId: 'consumer',
+        version: 1,
+        sample: { outputs: { agent: { retained: 42 } } },
+      });
+      expect(preview.components.input.bytes).toBe(
+        Buffer.byteLength('{"previous":{"retained":42},"count":0}'),
+      );
       const boundRun = await call('start_run', {
         detail: 'full',
         workflowId: boundWorkflow.id,
@@ -1652,7 +1667,7 @@ it.each(['stdio', 'http'])(
         fields: 'full',
         runId: boundRun.run.id,
       });
-      expect(nextWork.input).toEqual({ previous: { retained: 42 } });
+      expect(nextWork.input).toEqual({ previous: { retained: 42 }, count: 0 });
       expect(
         (await call('get_run', { id: boundRun.run.id })).run.executions.at(-1)
           .input,

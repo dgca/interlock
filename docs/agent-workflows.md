@@ -298,7 +298,7 @@ Set Agent `resources` to up to eight existing value bindings, each resolving to 
 
 ## Bind original input into later steps
 
-Optional `inputBindings` constructs a replacement input object before the node's input contract is checked. Each output field selects a `source` and a dot-separated `path`. Omitted or blank paths select the entire source. Missing paths fail that node. Omitting `inputBindings` retains the previous node's complete output as input. An explicit empty binding object produces an empty object.
+Optional `inputBindings` constructs a replacement input object before the node's input contract is checked. Each output field selects a `source` and a dot-separated `path`. Omitted or blank paths select the entire source. A missing path fails unless the binding supplies a path default. Omitting `inputBindings` retains the previous node's complete output as input. An explicit empty binding object produces an empty object.
 
 | Source      | Value                                                                              |
 | ----------- | ---------------------------------------------------------------------------------- |
@@ -336,9 +336,26 @@ Use `source: "node"` to retain an earlier result across intervening steps, such 
 
 Node bindings read persisted executions of the current run. Inside a Batch, they read only the current item's executions, including inside nested Batches. Unlike `runInput`, they do not walk up to the enclosing workflow. A parent cannot address nodes inside a referenced workflow, and sibling items cannot read each other's results. Publication requires an existing node in the same Batch group or main workflow scope, excluding Entry and Exit. Drafts may retain unresolved references.
 
-In a workflow loop, the latest completed visit wins. Failed, cancelled, waiting, and running executions are ignored. If no completed visit exists, or its output lacks the selected path, the consuming node fails. JSON `null` is a valid completed output. Retries resolve from the same persisted execution history and incoming value. Resolved inputs remain visible in execution history.
+In a workflow loop, the latest completed visit wins. Failed, cancelled, waiting, and running executions are ignored. Retries resolve from the same persisted execution history and incoming value. Resolved inputs remain visible in execution history.
 
-In node settings, the **Input** section groups data selection and validation. **Source** defaults to **Previous step output**. Select **Choose fields** to reveal the field editor. Opening settings or choosing this mode alone leaves input unchanged. **Expected format** edits the input contract, which validates the selected data before execution. **Add input field** adds a named field with **Previous step output** selected by default. Choose **Node output** to select a node by its label and ID in the same execution scope. **Original Batch item** is available inside Batch item paths. Paths select nested fields or array indices; blank selects the whole value.
+To initialize a loop counter, bind the `count` input of a step with ID `count` to its own previous output. Have the step return the incremented count in its `count` output field.
+
+```json
+{
+  "inputBindings": {
+    "count": {
+      "source": "node",
+      "nodeId": "count",
+      "path": "count",
+      "sourceDefault": 0
+    }
+  }
+}
+```
+
+The first visit receives `{"count": 0}`. Later visits read `count` from the last completed output. The same setting covers a source skipped by a branch. To supply a fallback for a missing field in a completed output, set `default` separately.
+
+In node settings, the **Input** section groups data selection and validation. **Source** defaults to **Previous step output**. Select **Choose fields** to reveal the field editor. Opening settings or choosing this mode alone leaves input unchanged. **Expected format** edits the input contract, which validates the selected data before execution. **Add input field** adds a named field with **Previous step output** selected by default. Choose **Node output** to select a node by its label and ID in the same execution scope. **Default if no completed output** sets `sourceDefault` for the selected node. **Original Batch item** is available inside Batch item paths. Paths select nested fields or array indices. A blank path selects the whole value.
 
 When a node has no explicit input contract, the editor suggests a shape from its incoming output contract. It can also describe the object built by input bindings. The suggestion supplies field paths in Condition, Switch, Wait, Batch, Fetch, and binding settings, and guides new Switch case values. You can still type any path. **Use as expected format** copies the suggested shape into the node's input contract if you want runtime validation. The editor does not save inferred contracts automatically. If incoming routes disagree or an incoming source has no declared shape, it does not guess a single incoming shape. Binding fields with unknown sources remain `any`. A timeout route from an Agent carries that Agent's input, not its normal output.
 

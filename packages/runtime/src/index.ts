@@ -1236,7 +1236,7 @@ export class Engine {
       rootInput: root.input,
       itemInput: run.input,
     };
-    return (binding: PathBinding): Json => {
+    return (binding: PathBinding): Json | undefined => {
       if (binding.source === 'itemInput' && !run.batchNodeId)
         throw new InterlockError(
           'itemInput is only available inside a Batch item run',
@@ -1247,11 +1247,7 @@ export class Engine {
           candidate.nodeId === binding.nodeId &&
           candidate.status === 'completed',
       );
-      if (!previous || previous.output === undefined)
-        throw new InterlockError(
-          `Node "${binding.nodeId}" has no completed output in this run`,
-        );
-      return previous.output;
+      return previous?.output;
     };
   }
   private prepareResult(run: Run, node: WorkflowNode, result: Json) {

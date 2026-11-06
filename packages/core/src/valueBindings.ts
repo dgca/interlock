@@ -25,7 +25,7 @@ export function bindingLeaves(
 }
 export function resolveBindingFields(
   fields: Record<string, ValueBinding>,
-  source: (binding: PathBinding) => Json,
+  source: (binding: PathBinding) => Json | undefined,
   depth = 0,
 ): Record<string, Json> {
   if (depth > 10)
@@ -35,7 +35,17 @@ export function resolveBindingFields(
       if (b.source === 'literal') return [key, b.value];
       if (b.source === 'object')
         return [key, resolveBindingFields(b.fields, source, depth + 1)];
-      const value = source(b); // Missing source history is never a defaultable missing path.
+      const value = source(b);
+      if (value === undefined) {
+        if (b.source !== 'node')
+          throw new InterlockError(
+            `Binding source "${b.source}" is unavailable`,
+          );
+        if (b.sourceDefault !== undefined) return [key, b.sourceDefault];
+        throw new InterlockError(
+          `Node "${b.nodeId}" has no completed output in this run`,
+        );
+      }
       try {
         return [key, readPath(value, b.path)];
       } catch (error) {
@@ -96,16 +106,22 @@ export function bindingContract(
   if (binding.source === 'object')
     return bindingsContract(binding.fields, pathContract);
   const selected = pathContract(binding);
-  if (
-    !Object.hasOwn(binding, 'default') ||
-    binding.default === undefined ||
-    !Object.keys(selected).length
-  )
-    return selected;
-  const fallback = literalContract(binding.default!);
-  return JSON.stringify(selected) === JSON.stringify(fallback)
-    ? selected
-    : { anyOf: [selected, fallback] };
+  if (!Object.keys(selected).length) return selected;
+  const contracts = [selected];
+  for (const value of [
+    binding.default,
+    binding.source === 'node' ? binding.sourceDefault : undefined,
+  ]) {
+    if (value === undefined) continue;
+    const fallback = literalContract(value);
+    if (
+      !contracts.some(
+        (schema) => JSON.stringify(schema) === JSON.stringify(fallback),
+      )
+    )
+      contracts.push(fallback);
+  }
+  return contracts.length === 1 ? selected : { anyOf: contracts };
 }
 export function bindingsContract(
   fields: Record<string, ValueBinding>,

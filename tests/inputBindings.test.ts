@@ -342,6 +342,7 @@ it.each(['unknown', 'entry', 'exit', 'other-scope'])(
           source: 'node',
           nodeId: target === 'other-scope' ? 'decision' : target,
           path: '',
+          sourceDefault: null,
         },
       };
       if (target === 'other-scope') definition.nodes[1].batchId = 'batch';
@@ -407,3 +408,140 @@ it.each([1, 2])(
     }
   },
 );
+
+it('initializes a self-bound loop counter and keeps the last completed value across retries', () => {
+  const store = new Store(':memory:');
+  const engine = new Engine(store, process.cwd());
+  try {
+    const definition = definitionSchema.parse({
+      nodes: [
+        { id: 'entry', kind: 'entry', label: 'Input' },
+        {
+          id: 'count',
+          kind: 'agent',
+          label: 'Count',
+          prompt: 'Increment the count.',
+          maxAttempts: 1,
+          inputBindings: {
+            count: {
+              source: 'node',
+              nodeId: 'count',
+              path: 'count',
+              sourceDefault: 0,
+            },
+          },
+        },
+        {
+          id: 'again',
+          kind: 'condition',
+          label: 'Again?',
+          path: 'count',
+          equals: 1,
+        },
+        { id: 'exit', kind: 'exit', label: 'Output' },
+      ],
+      edges: [
+        { id: 'in', source: 'entry', target: 'count' },
+        { id: 'check', source: 'count', target: 'again' },
+        { id: 'loop', source: 'again', port: 'true', target: 'count' },
+        { id: 'out', source: 'again', port: 'false', target: 'exit' },
+      ],
+    });
+    const workflow = engine.create('Count visits', '', definition);
+    engine.publish(workflow.id);
+    const run = engine.start(workflow.id, {}).run;
+    for (const count of [0, 1]) {
+      const work = engine.available(run.id)[0];
+      expect(work.input).toEqual({ count });
+      const claim = engine.claim(work.id, {
+        workerId: 'test',
+        freshContext: false,
+        tools: [],
+        skills: [],
+      });
+      engine.reportFailure(work.id, claim.token!, 'Try again');
+      expect(engine.run(run.id).status).toBe('failed');
+      engine.retry(run.id);
+      expect(engine.available(run.id)[0].input).toEqual({ count });
+      completeWork(engine, run.id, { count: count + 1 });
+    }
+    expect(engine.run(run.id)).toMatchObject({
+      status: 'completed',
+      output: { count: 2 },
+    });
+  } finally {
+    engine.stop();
+    store.close();
+  }
+});
+
+it('uses a source default for a skipped Batch step even when another item completed it', () => {
+  const store = new Store(':memory:');
+  const engine = new Engine(store, process.cwd());
+  try {
+    const definition = batchDefinition(undefined, { concurrency: 1 });
+    definition.nodes.push(
+      nodeSchema.parse({
+        id: 'route',
+        batchId: 'batch',
+        kind: 'condition',
+        label: 'Run work?',
+        path: 'visit',
+        equals: true,
+      }),
+      nodeSchema.parse({
+        id: 'consume',
+        batchId: 'batch',
+        kind: 'agent',
+        label: 'Consume',
+        prompt: 'Use the optional output.',
+        inputBindings: {
+          selected: {
+            source: 'node',
+            nodeId: 'work',
+            path: 'value',
+            sourceDefault: false,
+            default: 'path missing',
+          },
+          whole: { source: 'node', nodeId: 'work', sourceDefault: null },
+        },
+      }),
+    );
+    definition.edges.find((edge) => edge.id === 'item')!.target = 'route';
+    definition.edges.find((edge) => edge.id === 'end')!.source = 'consume';
+    definition.edges.push(
+      { id: 'visit', source: 'route', port: 'true', target: 'work' },
+      { id: 'skip', source: 'route', port: 'false', target: 'consume' },
+      { id: 'forward', source: 'work', port: 'default', target: 'consume' },
+    );
+    const workflow = engine.create('Optional item work', '', definition);
+    engine.publish(workflow.id);
+    const run = engine.start(workflow.id, [
+      { visit: true },
+      { visit: false },
+      { visit: true },
+    ]).run;
+
+    completeWork(engine, run.id, { value: null });
+    const first = { selected: null, whole: { value: null } };
+    expect(engine.available(run.id)[0].input).toEqual(first);
+    completeWork(engine, run.id, first);
+
+    const second = { selected: false, whole: null };
+    expect(engine.available(run.id)[0].input).toEqual(second);
+    completeWork(engine, run.id, second);
+
+    completeWork(engine, run.id, {});
+    const third = { selected: 'path missing', whole: {} };
+    expect(engine.available(run.id)[0].input).toEqual(third);
+    completeWork(engine, run.id, third);
+
+    expect(engine.run(run.id)).toMatchObject({
+      status: 'completed',
+      output: [first, second, third],
+    });
+  } finally {
+    engine.stop();
+    store.close();
+  }
+});

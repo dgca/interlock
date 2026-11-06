@@ -260,3 +260,32 @@ it('switches back to whole previous output without changing the expected format'
   expect(container.querySelector('input')).toBeNull();
   expect(latest.inputBindings).toEqual({});
 });
+
+it('edits the source default independently of the path default', async () => {
+  latest.inputBindings = {
+    count: { source: 'node', nodeId: 'triage', path: 'count', default: 1 },
+  };
+  await render();
+  await select('Node for field 1', 'consumer');
+  const toggle = () =>
+    container.querySelector<HTMLInputElement>(
+      '[aria-label="Use source default for field 1"]',
+    )!;
+  await act(async () => toggle().click());
+  await input('input field 1 source default value', 'initial');
+  expect(latest.inputBindings?.count).toEqual({
+    source: 'node',
+    nodeId: 'consumer',
+    path: 'count',
+    default: 1,
+    sourceDefault: 'initial',
+  });
+  await click('Advanced JSON');
+  expect(JSON.parse(container.querySelector('textarea')!.value)).toEqual(
+    latest.inputBindings,
+  );
+  await click('Use field editor');
+  await act(async () => toggle().click());
+  expect(latest.inputBindings?.count).not.toHaveProperty('sourceDefault');
+  expect(latest.inputBindings?.count).toHaveProperty('default', 1);
+});
