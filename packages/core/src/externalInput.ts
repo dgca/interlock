@@ -1,15 +1,22 @@
 import { z } from 'zod';
-import { jsonSchema } from './index.js';
+import { jsonSchema, type Json } from './index.js';
 import { startRequestIdSchema } from './runStarts.js';
 
 const runId = z.string().min(1);
 const target = { runId, executionId: z.string().min(1) };
 const revision = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+// Validate without rebuilding records. Idempotency hashes must retain every JSON key.
+const submittedJson = z
+  .unknown()
+  .refine(
+    (value): value is Json => jsonSchema.safeParse(value).success,
+    'Expected a JSON value',
+  );
 const submit = z
   .object({
     action: z.literal('submit'),
     ...target,
-    value: z.lazy(() => jsonSchema),
+    value: submittedJson,
     requestId: startRequestIdSchema,
     expectedRevision: revision.optional(),
   })

@@ -1574,7 +1574,11 @@ it.each(['stdio', 'http'])(
         id: 'agent',
         kind: 'input',
         label: 'Approval',
-        outputSchema: { type: 'boolean' },
+        outputSchema: {
+          type: 'object',
+          required: ['approved'],
+          properties: { approved: { type: 'boolean' } },
+        },
       });
       const approvalWorkflow = await call('create_workflow', {
         name: 'External input',
@@ -1599,11 +1603,14 @@ it.each(['stdio', 'http'])(
         runId: approvalRunId,
         executionId: approvalExecutionId,
       };
+      const approvalValue: Json = JSON.parse(
+        '{"approved":true,"__proto__":{"answer":1}}',
+      );
       const submitApproval = {
         action: 'submit',
         ...approvalTarget,
         requestId: 'approval',
-        value: true,
+        value: approvalValue,
         expectedRevision: 0,
       };
       const externalInputTool = tools.find(
@@ -1616,6 +1623,14 @@ it.each(['stdio', 'http'])(
           'external input',
         ),
       ).not.toThrow();
+      const { value: _value, ...withoutApprovalValue } = submitApproval;
+      expect(() =>
+        assertContract(
+          externalInputTool.inputSchema,
+          { request: withoutApprovalValue },
+          'external input',
+        ),
+      ).toThrow();
       const approvalSubmission = await call('external_input', {
         request: submitApproval,
       });
@@ -1628,9 +1643,27 @@ it.each(['stdio', 'http'])(
         ...approvalTarget,
         includeValue: true,
       };
-      expect(
-        await call('external_input', { request: approvalStatus }),
-      ).toMatchObject({ value: true, revision: 1 });
+      const pendingApproval = await call('external_input', {
+        request: approvalStatus,
+      });
+      expect(pendingApproval.revision).toBe(1);
+      expect(JSON.stringify(pendingApproval.value)).toBe(
+        JSON.stringify(approvalValue),
+      );
+      expect(await call('external_input', { request: submitApproval })).toEqual(
+        approvalSubmission,
+      );
+      const changedApproval: Json = JSON.parse(
+        '{"approved":true,"__proto__":{"answer":2}}',
+      );
+      const conflictingApproval = await client.callTool({
+        name: 'external_input',
+        arguments: { request: { ...submitApproval, value: changedApproval } },
+      });
+      expect(conflictingApproval.isError).toBe(true);
+      expect(JSON.stringify(conflictingApproval.content)).toContain(
+        'different value',
+      );
       await expect(
         api.runs.externalInput.mutate({
           ...submitApproval,
@@ -1666,10 +1699,11 @@ it.each(['stdio', 'http'])(
         if (approvalUrl === undefined) delete process.env.INTERLOCK_URL;
         else process.env.INTERLOCK_URL = approvalUrl;
       }
-      expect(engine.run(approvalRunId)).toMatchObject({
-        status: 'completed',
-        output: true,
-      });
+      const completedApproval = engine.run(approvalRunId);
+      expect(completedApproval.status).toBe('completed');
+      expect(JSON.stringify(completedApproval.output)).toBe(
+        JSON.stringify(approvalValue),
+      );
       const boundDefinition = blankDefinition();
       boundDefinition.nodes.splice(
         2,
