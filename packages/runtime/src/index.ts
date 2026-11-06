@@ -1327,6 +1327,7 @@ export class Engine {
           : node.outputSchema,
         output,
         `${node.label} output`,
+        { ownProperties: node.kind === 'input' },
       );
     let rawResult: Json | undefined;
     if (port === 'default' && (node.routing || node.outputBindings)) {

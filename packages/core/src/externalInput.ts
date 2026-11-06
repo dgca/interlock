@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { jsonSchema, type Json } from './index.js';
+import { InterlockError, jsonSchema, type Json } from './index.js';
 import { startRequestIdSchema } from './runStarts.js';
 
 const runId = z.string().min(1);
@@ -64,3 +64,47 @@ export type ExternalInputMetadata = {
   acceptedAt?: string;
 };
 export type ExternalInputHold = { revision: number; heldAt?: string };
+
+// AJV skips this name under properties. Reject a constraint it would ignore.
+export function validateExternalInputProperties(schema: unknown): void {
+  if (Array.isArray(schema)) {
+    schema.forEach(validateExternalInputProperties);
+    return;
+  }
+  if (schema === null || typeof schema !== 'object') return;
+  for (const [keyword, value] of Object.entries(schema)) {
+    if (
+      [
+        'properties',
+        'patternProperties',
+        'definitions',
+        '$defs',
+        'dependencies',
+      ].includes(keyword)
+    ) {
+      if (value === null || typeof value !== 'object') continue;
+      if (keyword === 'properties' && Object.hasOwn(value, '__proto__'))
+        throw new InterlockError(
+          'Use patternProperties with "^__proto__$" to constrain the "__proto__" field in a submitted value',
+        );
+      Object.values(value).forEach(validateExternalInputProperties);
+    } else if (
+      [
+        'items',
+        'additionalItems',
+        'additionalProperties',
+        'propertyNames',
+        'contains',
+        'allOf',
+        'anyOf',
+        'oneOf',
+        'not',
+        'if',
+        'then',
+        'else',
+      ].includes(keyword)
+    ) {
+      validateExternalInputProperties(value);
+    }
+  }
+}

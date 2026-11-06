@@ -150,6 +150,7 @@ export class ExternalInputs {
       this.engine.node(run, execution).outputSchema,
       request.value,
       'Submitted value',
+      { ownProperties: true },
     );
     const receipt = {
       runId: run.id,

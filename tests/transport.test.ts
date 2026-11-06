@@ -1631,6 +1631,15 @@ it.each(['stdio', 'http'])(
           'external input',
         ),
       ).toThrow();
+      expect(() =>
+        assertContract(
+          externalInputTool.inputSchema,
+          {
+            request: { ...submitApproval, requestId: '  ' },
+          },
+          'external input',
+        ),
+      ).toThrow();
       const approvalSubmission = await call('external_input', {
         request: submitApproval,
       });

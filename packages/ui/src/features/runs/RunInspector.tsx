@@ -123,6 +123,10 @@ export function RunInspector({
         .at(-1);
   const waitingForInput =
     execution?.kind === 'input' && execution.status === 'waiting';
+  const progressLabel =
+    execution?.kind === 'input' && !waitingForInput
+      ? execution.status[0].toUpperCase() + execution.status.slice(1)
+      : nodeProgress?.label;
   let holdScope = waitingForInput ? owner : undefined;
   while (
     holdScope &&
@@ -391,8 +395,8 @@ export function RunInspector({
             {selectedWork.map((w) => (
               <WorkPanel key={w.id} work={w} onRefresh={refresh} />
             ))}
-            {nodeProgress && !selectedWork.some((w) => w.executor) && (
-              <p className={styles.progressLabel}>{nodeProgress.label}</p>
+            {progressLabel && !selectedWork.some((w) => w.executor) && (
+              <p className={styles.progressLabel}>{progressLabel}</p>
             )}
             {node?.batchId && (
               <section>
@@ -479,7 +483,7 @@ export function RunInspector({
               <>
                 {(inputHeld ||
                   Boolean(execution.externalInput?.revision) ||
-                  nodeProgress?.label !== 'Waiting for external input') && (
+                  progressLabel !== 'Waiting for external input') && (
                   <p className="hint" role="status">
                     {inputHeld
                       ? 'Acceptance on hold'

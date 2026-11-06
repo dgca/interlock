@@ -433,3 +433,70 @@ it('inherits a hold for a child created after the hold and rejects a mismatched 
   engine.deleteWorkflow(parent);
   expect(engine.store.list('externalInputReceipts')).toEqual([]);
 });
+
+it('validates only own submitted fields and constrains reserved JSON keys through patterns', () => {
+  const engine = open();
+  const d = definition();
+  d.nodes[1].outputSchema = {
+    type: 'object',
+    required: ['toString'],
+    properties: {
+      toString: { type: 'string' },
+      constructor: { type: 'boolean' },
+    },
+  };
+  const { run } = engine.start(publish(engine, d), null);
+  const ids = target(engine, run.id);
+  const submit = { action: 'submit' as const, ...ids, requestId: 'own-fields' };
+  expect(() => engine.externalInputs.mutate({ ...submit, value: {} })).toThrow(
+    /Missing required field "toString"/,
+  );
+  const value = { toString: 'answer' };
+  engine.externalInputs.mutate({ ...submit, value });
+  engine.externalInputs.mutate({
+    action: 'accept',
+    ...ids,
+    expectedRevision: 1,
+  });
+  expect(engine.run(run.id)).toMatchObject({
+    status: 'completed',
+    output: value,
+  });
+
+  d.nodes[1].outputSchema = JSON.parse(
+    '{"type":"object","properties":{"__proto__":{"type":"boolean"}}}',
+  );
+  const invalid = engine.create('Unsupported property declaration', '', d);
+  expect(() => engine.publish(invalid.id)).toThrow(/Use patternProperties/);
+
+  d.nodes[1].outputSchema = {
+    type: 'object',
+    required: ['__proto__'],
+    patternProperties: { '^__proto__$': { type: 'boolean' } },
+    additionalProperties: false,
+  };
+  const other = engine.start(publish(engine, d), null).run;
+  const otherIds = target(engine, other.id);
+  const second = { ...submit, ...otherIds };
+  expect(() => engine.externalInputs.mutate({ ...second, value: {} })).toThrow(
+    /Missing required field "__proto__"/,
+  );
+  expect(() =>
+    engine.externalInputs.mutate({
+      ...second,
+      value: JSON.parse('{"__proto__":123}'),
+    }),
+  ).toThrow(/expects yes\/no/);
+  const reserved = JSON.parse('{"__proto__":true}');
+  expect(
+    engine.externalInputs.mutate({ ...second, value: reserved }),
+  ).toMatchObject({ revision: 1 });
+  engine.externalInputs.mutate({
+    action: 'accept',
+    ...otherIds,
+    expectedRevision: 1,
+  });
+  expect(JSON.stringify(engine.run(other.id).output)).toBe(
+    JSON.stringify(reserved),
+  );
+});

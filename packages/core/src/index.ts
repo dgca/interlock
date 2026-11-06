@@ -24,6 +24,7 @@ export * from './resultValidation.js';
 export * from './resultRules.js';
 export * from './workHolds.js';
 export * from './externalInput.js';
+import { validateExternalInputProperties } from './externalInput.js';
 import { resultRulesSchema, resultRuleProblems } from './resultRules.js';
 export * from './assignmentSize.js';
 export * from './contextContinuity.js';
@@ -657,6 +658,11 @@ export class ResultRejection extends InterlockError {
   }
 }
 const ajv = new Ajv({ allErrors: true, strict: false });
+const ownPropertyContracts = new Ajv({
+  allErrors: true,
+  strict: false,
+  ownProperties: true,
+});
 export function validateContractSchema(schema: Record<string, unknown>) {
   contractSchema.parse(schema);
   ajv.compile(schema);
@@ -665,8 +671,11 @@ export function assertContract(
   schema: Record<string, unknown>,
   value: Json,
   label: string,
+  options?: { ownProperties: boolean },
 ) {
-  const validate = ajv.compile(schema);
+  const validate = (
+    options?.ownProperties ? ownPropertyContracts : ajv
+  ).compile(schema);
   if (!validate(value)) {
     const errors = (validate.errors ?? []).slice(0, 3).map((error) => {
       const segments = error.instancePath
@@ -813,12 +822,17 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
     throw new InterlockError('A workflow needs exactly one entry');
   if (!d.nodes.some((n) => n.kind === 'exit'))
     throw new InterlockError('A workflow needs an exit');
-  for (const schema of [
-    d.inputSchema,
-    d.outputSchema,
-    ...d.nodes.flatMap((n) => [n.inputSchema, n.outputSchema]),
-  ])
-    ajv.compile(schema);
+  ajv.compile(d.inputSchema);
+  ajv.compile(d.outputSchema);
+  for (const node of d.nodes) {
+    ajv.compile(node.inputSchema);
+    if (node.kind === 'input') {
+      validateExternalInputProperties(node.outputSchema);
+      ownPropertyContracts.compile(node.outputSchema);
+    } else {
+      ajv.compile(node.outputSchema);
+    }
+  }
   for (const edge of d.edges) {
     if (!ids.has(edge.source) || !ids.has(edge.target))
       throw new InterlockError('Edge references a missing node');
