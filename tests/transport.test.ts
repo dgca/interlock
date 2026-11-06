@@ -173,7 +173,17 @@ it.each(['stdio', 'http'])(
         draft: smallDraft,
         draftRevision: engine.workflow(w.id).draftRevision,
       });
-      const tools = (await client.listTools()).tools;
+      const toolDiscovery = await client.listTools();
+      const { tools, nextCursor } = toolDiscovery;
+      const instructions = client.getInstructions() ?? '';
+      expect(nextCursor).toBeUndefined();
+      expect(
+        Buffer.byteLength(JSON.stringify(toolDiscovery)),
+      ).toBeLessThanOrEqual(260_000);
+      expect(Buffer.byteLength(instructions)).toBeLessThanOrEqual(10_000);
+      expect(instructions).toContain(
+        'docs/agent-workflows.md#discover-schemas-and-assignments',
+      );
       const testbenchTools = [
         'read_test_suites',
         'save_test_suite',
@@ -1379,29 +1389,16 @@ it.each(['stdio', 'http'])(
         maximum: 3600,
       });
       const createDefinition = tools.find((t) => t.name === 'create_workflow')!
-        .inputSchema.properties!.definition as { description: string };
+        .inputSchema.properties!.definition;
       const updateDefinition = tools.find((t) => t.name === 'update_workflow')!
-        .inputSchema.properties!.draft as { description: string };
-      expect(createDefinition.description).toContain('leaseSeconds');
+        .inputSchema.properties!.draft;
       expect(client.getInstructions()).toContain('work.lease_expired');
-      expect(createDefinition.description).toContain('unclaimedTimeoutMs');
-      expect(createDefinition.description).toContain('31536000000');
-      expect(createDefinition.description).toContain('maxItems');
-      expect(createDefinition.description).toContain('10000');
-      expect(updateDefinition.description).toBe(createDefinition.description);
-      expect(createDefinition.description).toContain('Fetch binding error');
-      expect(createDefinition.description).toContain(
-        'Late results cannot override Timeout',
-      );
       expect(client.getInstructions()).toContain('poll_timeout');
       for (const name of ['get_run_briefing', 'wait_for_run_change'])
         expect(tools.find((tool) => tool.name === name)!.description).toContain(
           'poll_timeout',
         );
-      expect(createDefinition.description).toContain('Switch nodes');
-      expect(createDefinition.description).toContain('Missing paths fail');
       expect(client.getInstructions()).toContain('Routed executions record');
-      expect(createDefinition.description).toContain('Omit default to fail');
       for (const withFallback of [true, false]) {
         const switchDraft = switchDefinition(withFallback);
         for (const [toolName, parameter] of [
@@ -1466,7 +1463,6 @@ it.each(['stdio', 'http'])(
           (await call('import_workflows', { bundle: switchBundle })).changed,
         ).toEqual([]);
       }
-      expect(createDefinition.description).toContain('mode: "wait"');
       expect(client.getInstructions()).toContain(
         'Detached descendants can remain active',
       );
@@ -1573,9 +1569,6 @@ it.each(['stdio', 'http'])(
         ).toBe(executionMode === 'detached' ? 'waiting' : 'cancelled');
         await call('cancel_run', { id: active.children[0].id });
       }
-      expect(createDefinition.description).toContain(
-        'Source node requires nodeId',
-      );
       const boundDefinition = blankDefinition();
       boundDefinition.nodes.splice(
         2,
@@ -1777,8 +1770,6 @@ it.each(['stdio', 'http'])(
           toolName === 'create_workflow'
             ? { name: 'Recovery', [parameter]: recoveryDefinition }
             : { id: w.id, [parameter]: recoveryDefinition };
-        expect(JSON.stringify(schema)).toContain('onFailure');
-        expect(JSON.stringify(schema)).toContain('executionId');
         expect(() =>
           assertContract(schema, jsonSchema.parse(args), 'recovery definition'),
         ).not.toThrow();
@@ -1822,7 +1813,11 @@ it.each(['stdio', 'http'])(
       });
       expect(recoveryHistory.run.output).toMatchObject({
         input: { topic: 'demo' },
-        error: { category: 'execution', kind: 'script' },
+        error: {
+          category: 'execution',
+          kind: 'script',
+          executionId: recoveryHistory.run.executions[1].id,
+        },
       });
       for (const [name, parameter] of [
         ['start_run', 'input'],
