@@ -260,6 +260,7 @@ it('creates a Batch from the ordinary add dialog without a nested definition or 
     'script',
     'fetch',
     'wait',
+    'input',
     'switch',
     'workflow',
     'batch',

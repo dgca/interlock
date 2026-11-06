@@ -20,6 +20,7 @@ import {
   LoaderCircle,
   CircleAlert,
   Clock,
+  Inbox,
   CircleMinus,
 } from 'lucide-react';
 import {
@@ -64,6 +65,7 @@ const icons = {
   exit: ArrowDownToLine,
   agent: Bot,
   wait: Clock,
+  input: Inbox,
   script: Terminal,
   fetch: Globe,
   condition: Split,

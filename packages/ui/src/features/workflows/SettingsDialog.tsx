@@ -1,5 +1,6 @@
 import { ExecutorSelect } from '../executors/ExecutorSelect';
 import {
+  Button as MantineButton,
   TextInput,
   Textarea,
   NativeSelect,
@@ -7,7 +8,7 @@ import {
   SegmentedControl,
 } from '@mantine/core';
 import { useRef, useState } from 'react';
-import { ArrowLeft, Download, Plus } from 'lucide-react';
+import { ArrowLeft, Download, Plus, Trash2 } from 'lucide-react';
 import {
   nodeSchema,
   outgoingPorts,
@@ -291,6 +292,7 @@ export function SettingsDialog({
                     <option value="script">Script</option>
                     <option value="fetch">Fetch</option>
                     <option value="wait">Wait</option>
+                    <option value="input">External input</option>
                     <option value="switch">Branch</option>
                     <option value="workflow">Workflow</option>
                     <option value="batch">Batch</option>
@@ -355,7 +357,6 @@ export function SettingsDialog({
                     )
                   }
                   onChange={setNodeDraft}
-                  onDelete={onDelete}
                 />
               ) : creating ? (
                 <p className="hint">
@@ -502,10 +503,26 @@ export function SettingsDialog({
           </p>
         )}
         <footer className={styles.footer}>
-          <p className="hint">
-            Changes apply to the draft. Save and publish from the workflow
-            toolbar.
-          </p>
+          {onDelete &&
+            node &&
+            !creating &&
+            node.kind !== 'entry' &&
+            node.kind !== 'exit' && (
+              <MantineButton
+                variant="subtle"
+                color="red"
+                leftSection={<Trash2 size={14} aria-hidden />}
+                onClick={onDelete}
+              >
+                Delete node
+              </MantineButton>
+            )}
+          {!node && !creating && (
+            <p className="hint">
+              Changes apply to the draft. Save and publish from the workflow
+              toolbar.
+            </p>
+          )}
           <div className={styles.actions}>
             <Button onClick={onClose} disabled={creatingChild}>
               Cancel

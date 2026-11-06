@@ -1,4 +1,4 @@
-import { Menu, ScrollArea } from '@mantine/core';
+import { CopyButton, Menu, ScrollArea } from '@mantine/core';
 import { nodeKindLabel, type RunStatus } from '@interlock/core';
 import type { Action } from '../../lib/useActionFeedback';
 import { useEffect, useRef, useState } from 'react';
@@ -121,6 +121,27 @@ export function RunInspector({
       owner?.executions
         .filter((execution) => execution.nodeId === nodeId)
         .at(-1);
+  const waitingForInput =
+    execution?.kind === 'input' && execution.status === 'waiting';
+  const progressLabel =
+    execution?.kind === 'input' && !waitingForInput
+      ? execution.status[0].toUpperCase() + execution.status.slice(1)
+      : nodeProgress?.label;
+  let holdScope = waitingForInput ? owner : undefined;
+  while (
+    holdScope &&
+    holdScope.id !== run.id &&
+    !holdScope.externalInputHold?.heldAt &&
+    holdScope.parentMode !== 'detached'
+  ) {
+    holdScope = holdScope.parentRunId
+      ? runIndex.get(holdScope.parentRunId)
+      : undefined;
+  }
+  const inputHeld = Boolean(
+    holdScope?.externalInputHold?.heldAt ||
+    (holdScope?.id === run.id && data.externalInputHeldByRunId),
+  );
   const selectedWork = allWork.filter((w) => w.executionId === execution?.id);
   const assignmentScope = (w: (typeof allWork)[number]) => {
     if (w.runId === run.id) return undefined;
@@ -374,8 +395,8 @@ export function RunInspector({
             {selectedWork.map((w) => (
               <WorkPanel key={w.id} work={w} onRefresh={refresh} />
             ))}
-            {nodeProgress && !selectedWork.some((w) => w.executor) && (
-              <p className={styles.progressLabel}>{nodeProgress.label}</p>
+            {progressLabel && !selectedWork.some((w) => w.executor) && (
+              <p className={styles.progressLabel}>{progressLabel}</p>
             )}
             {node?.batchId && (
               <section>
@@ -457,6 +478,39 @@ export function RunInspector({
                   ? 'Choose an item above to see its data.'
                   : 'This step has not started.'}
               </p>
+            )}
+            {waitingForInput && owner && (
+              <>
+                {(inputHeld ||
+                  Boolean(execution.externalInput?.revision) ||
+                  progressLabel !== 'Waiting for external input') && (
+                  <p className="hint" role="status">
+                    {inputHeld
+                      ? 'Acceptance on hold'
+                      : execution.externalInput?.revision
+                        ? 'Waiting for acceptance'
+                        : 'Waiting for external input'}
+                    {execution.externalInput?.revision
+                      ? ` · Revision ${execution.externalInput.revision} pending`
+                      : ''}
+                  </p>
+                )}
+                <p className="hint">
+                  Waiting since {new Date(execution.startedAt).toLocaleString()}
+                </p>
+                <CopyButton
+                  value={JSON.stringify({
+                    runId: owner.id,
+                    executionId: execution.id,
+                  })}
+                >
+                  {({ copied, copy }) => (
+                    <Button variant="secondary" onClick={copy}>
+                      {copied ? 'Copied' : 'Copy submission target'}
+                    </Button>
+                  )}
+                </CopyButton>
+              </>
             )}
             {execution?.resumeAt && (
               <p className="hint">

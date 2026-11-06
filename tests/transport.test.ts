@@ -1569,6 +1569,150 @@ it.each(['stdio', 'http'])(
         ).toBe(executionMode === 'detached' ? 'waiting' : 'cancelled');
         await call('cancel_run', { id: active.children[0].id });
       }
+      const approvalDefinition = blankDefinition();
+      approvalDefinition.nodes[1] = nodeSchema.parse({
+        id: 'agent',
+        kind: 'input',
+        label: 'Approval',
+        outputSchema: {
+          type: 'object',
+          required: ['approved'],
+          properties: { approved: { type: 'boolean' } },
+        },
+      });
+      const approvalWorkflow = await call('create_workflow', {
+        name: 'External input',
+        definition: approvalDefinition,
+      });
+      await call('publish_workflow', { id: approvalWorkflow.id });
+      const approvalRun = await call('start_run', {
+        workflowId: approvalWorkflow.id,
+        input: null,
+      });
+      expect(approvalRun.nextWork.items).toEqual([]);
+      const approvalBriefing = await call('get_run_briefing', {
+        id: approvalRun.runId,
+      });
+      const { runId: approvalRunId, executionId: approvalExecutionId } =
+        approvalBriefing.blockers.items[0];
+      expect(approvalBriefing.blockers.items[0]).toMatchObject({
+        reason: 'external_input',
+        externalInput: { revision: 0 },
+      });
+      const approvalTarget = {
+        runId: approvalRunId,
+        executionId: approvalExecutionId,
+      };
+      const approvalValue: Json = JSON.parse(
+        '{"approved":true,"__proto__":{"answer":1}}',
+      );
+      const submitApproval = {
+        action: 'submit',
+        ...approvalTarget,
+        requestId: 'approval',
+        value: approvalValue,
+        expectedRevision: 0,
+      };
+      const externalInputTool = tools.find(
+        (tool) => tool.name === 'external_input',
+      )!;
+      expect(() =>
+        assertContract(
+          externalInputTool.inputSchema,
+          { request: submitApproval },
+          'external input',
+        ),
+      ).not.toThrow();
+      const { value: _value, ...withoutApprovalValue } = submitApproval;
+      expect(() =>
+        assertContract(
+          externalInputTool.inputSchema,
+          { request: withoutApprovalValue },
+          'external input',
+        ),
+      ).toThrow();
+      expect(() =>
+        assertContract(
+          externalInputTool.inputSchema,
+          {
+            request: { ...submitApproval, requestId: '  ' },
+          },
+          'external input',
+        ),
+      ).toThrow();
+      const approvalSubmission = await call('external_input', {
+        request: submitApproval,
+      });
+      expect(approvalSubmission).toMatchObject({
+        ...approvalTarget,
+        revision: 1,
+      });
+      const approvalStatus = {
+        action: 'status' as const,
+        ...approvalTarget,
+        includeValue: true,
+      };
+      const pendingApproval = await call('external_input', {
+        request: approvalStatus,
+      });
+      expect(pendingApproval.revision).toBe(1);
+      expect(JSON.stringify(pendingApproval.value)).toBe(
+        JSON.stringify(approvalValue),
+      );
+      expect(await call('external_input', { request: submitApproval })).toEqual(
+        approvalSubmission,
+      );
+      const changedApproval: Json = JSON.parse(
+        '{"approved":true,"__proto__":{"answer":2}}',
+      );
+      const conflictingApproval = await client.callTool({
+        name: 'external_input',
+        arguments: { request: { ...submitApproval, value: changedApproval } },
+      });
+      expect(conflictingApproval.isError).toBe(true);
+      expect(JSON.stringify(conflictingApproval.content)).toContain(
+        'different value',
+      );
+      await expect(
+        api.runs.externalInput.mutate({
+          ...submitApproval,
+          action: 'submit',
+          requestId: 'stale',
+        }),
+      ).rejects.toMatchObject({ data: { code: 'CONFLICT' } });
+      const acceptApproval = {
+        action: 'accept',
+        ...approvalTarget,
+        expectedRevision: 1,
+      };
+      const approvalAcceptance = await call('external_input', {
+        request: acceptApproval,
+      });
+      expect(await call('external_input', { request: acceptApproval })).toEqual(
+        approvalAcceptance,
+      );
+      const approvalUrl = process.env.INTERLOCK_URL;
+      process.env.INTERLOCK_URL = url;
+      try {
+        expect(
+          JSON.parse(
+            JSON.stringify(
+              await runCommand([
+                'external-input',
+                JSON.stringify(approvalStatus),
+              ]),
+            ),
+          ),
+        ).toMatchObject({ acceptance: approvalAcceptance });
+      } finally {
+        if (approvalUrl === undefined) delete process.env.INTERLOCK_URL;
+        else process.env.INTERLOCK_URL = approvalUrl;
+      }
+      const completedApproval = engine.run(approvalRunId);
+      expect(completedApproval.status).toBe('completed');
+      expect(JSON.stringify(completedApproval.output)).toBe(
+        JSON.stringify(approvalValue),
+      );
       const boundDefinition = blankDefinition();
       boundDefinition.nodes.splice(
         2,

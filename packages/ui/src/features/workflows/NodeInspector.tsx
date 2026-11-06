@@ -53,7 +53,6 @@ export function NodeInspector({
   creating = false,
   onOpenWorkflow,
   onChange,
-  onDelete,
   definition,
   onBoundaryChange,
   section,
@@ -69,7 +68,6 @@ export function NodeInspector({
   creating?: boolean;
   onOpenWorkflow?: (id: string) => void;
   onChange: (node: WorkflowNode) => void;
-  onDelete?: () => void;
   definition?: WorkflowDefinition;
   onBoundaryChange?: (schema: WorkflowDefinition['inputSchema']) => void;
 }) {
@@ -84,6 +82,7 @@ export function NodeInspector({
       switch: 'Branches',
       workflow: 'Workflow',
       wait: 'Wait',
+      input: 'External input',
       batch: 'Batch',
       entry: 'Entry',
       exit: 'Exit',
@@ -132,6 +131,14 @@ export function NodeInspector({
               inputSchema={inputShape}
               inputSource={hint.source}
             />
+          </NodeSection>
+        )}
+        {node.kind === 'input' && (
+          <NodeSection name="work">
+            <p className="hint">
+              The run pauses here. After a caller accepts a submission, its
+              value passes to the next step.
+            </p>
           </NodeSection>
         )}
         {node.kind === 'wait' && (
@@ -828,11 +835,6 @@ export function NodeInspector({
               />
             </NodeSection>
           </>
-        )}
-        {onDelete && node.kind !== 'entry' && node.kind !== 'exit' && (
-          <Button variant="danger" onClick={onDelete}>
-            Delete node
-          </Button>
         )}
       </div>
     </NodeSettingsSections>

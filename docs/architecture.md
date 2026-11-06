@@ -66,7 +66,7 @@ A `batch` node owns `itemsPath`, `maxItems`, `concurrency`, and `failurePolicy`.
 
 The workflow stores all nodes and edges in one flat definition. A member node's `batchId` identifies its direct owning Batch; absence means the main workflow. Positions are relative to that owner. An edge's `port` selects its source handle; optional `targetHandle: "default"` selects the ordinary input, as does omission. `targetHandle: "end"` returns a member step's output to its owning Batch. Every item branch must connect to End; a disconnected step is an incomplete draft.
 
-Item paths can contain Agent, Script, Fetch, Wait, Condition, Switch, Workflow, and nested Batch nodes. Each Batch has exactly one `item` route into its direct members. Ordinary routes must remain within the same group. A Batch's `complete` route continues in its enclosing scope; a nested Batch can connect its Out handle to the enclosing Batch's End. Conditions require both branches, each leading to End. Every Switch case and any configured fallback branch must also reach End. An unmatched value without a fallback fails the item and follows the Batch failure policy. Membership is explicit graph data, independent of node positions or overlap. Validation rejects missing owners, circular membership, unreachable members, cross-group edges, Entry or Exit members, and cycles within item paths. Ordinary workflow loops outside item paths remain bounded by the workflow step limit.
+Item paths can contain Agent, Script, Fetch, Wait, External input, Condition, Switch, Workflow, and nested Batch nodes. Each Batch has exactly one `item` route into its direct members. Ordinary routes must remain within the same group. A Batch's `complete` route continues in its enclosing scope; a nested Batch can connect its Out handle to the enclosing Batch's End. Conditions require both branches, each leading to End. Every Switch case and any configured fallback branch must also reach End. An unmatched value without a fallback fails the item and follows the Batch failure policy. Membership is explicit graph data, independent of node positions or overlap. Validation rejects missing owners, circular membership, unreachable members, cross-group edges, Entry or Exit members, and cycles within item paths. Ordinary workflow loops outside item paths remain bounded by the workflow step limit.
 
 Drafts may have missing routes or incomplete paths. Visual and Raw views report graph errors, and publication validates all routes, contracts, scopes, and referenced versions.
 
@@ -234,6 +234,12 @@ Successors preserve the immutable version and first prompt capture but reset run
 
 The engine yields after one rollover per chain per pump and reads only active run documents for execution. This avoids deserializing completed execution histories every tick, while SQLite scans and retained usage/budget aggregation still grow with archive size. See [continue as new](continue-as-new.md) for bounds and operations.
 
+## External input
+
+An External input node waits on its execution ID. The runtime validates submissions against the node's output contract and retains a pending value and request receipts in run-owned records. Explicit acceptance persists the accepted revision, completed execution, and next workflow position in one transaction. The engine pumps downstream work after that transaction commits.
+
+An acceptance hold follows ordinary child and Batch links and stops at detached children. Changes wake the scoped continuation readers that observe the wait. Briefings carry wait and revision metadata. The targeted status operation can return the pending value. HTTP, CLI, and MCP use the shared runtime operations. See [external-input operations](external-input.md).
+
 ## Scripts and interruptions
 
 Scripts run in JavaScript or Bash child processes. New nodes default to JavaScript; definitions without a `language` field retain Bash behavior.
@@ -303,7 +309,7 @@ The UI uses tRPC requests and server-sent notifications, with periodic refresh a
 
 ## Workflow testbench
 
-Fixture simulations use `testbench.simulation` and one grouped MCP tool. The runtime captures a published version and case revision, then drives a private in-memory Engine with a mandatory Script/Fetch substitution provider and synthetic Agent claims. Live execution retains the original executors. Workflow/Batch/Wait nodes and Agent timers reject before simulation. Separate `workflowSimulations` documents hold captures, receipts, checks and compact traces; they never enter live runs, work or usage collections. Startup marks unfinished reports interrupted. Active simulations block workflow deletion until cleanup; deletion removes their history. No database format conversion is required. See [simulation scope and operations](workflow-simulation.md).
+Fixture simulations use `testbench.simulation` and one grouped MCP tool. The runtime captures a published version and case revision, then drives a private in-memory Engine with a mandatory Script/Fetch substitution provider and synthetic Agent claims. Live execution retains the original executors. Workflow, Batch, Wait, and External input nodes are rejected before simulation, as are Agent timers. Separate `workflowSimulations` documents hold captures, receipts, checks and compact traces; they never enter live runs, work or usage collections. Startup marks unfinished reports interrupted. Active simulations block workflow deletion until cleanup; deletion removes their history. No database format conversion is required. See [simulation scope and operations](workflow-simulation.md).
 
 Core owns suite/case/assertion contracts and pure check evaluation. Runtime coordinates revisioned suites and captured comparisons around ordinary runs. SQLite document collections `testSuites` and `comparisons` preserve snapshots, queued sample IDs, dependency hashes, prompt content, observations and judgments without rewriting existing records or changing schema 3. Optional run `comparison` metadata carries case/side/repetition context through descendants and compact run views.
 
@@ -376,7 +382,7 @@ The UI resolves host and URL feature settings once in `main.tsx`, before creatin
 
 Mantine provides dialogs, form controls, tabs, menus, and status badges. The shared theme in `packages/ui/src/theme/theme.ts` defines the dark palette and component defaults. Canvas colors reference those tokens through CSS variables. CSS Modules handle product layouts and React Flow nodes.
 
-Use Mantine components directly for standard controls. Keep shared components for Interlock behavior, such as JSON validation, contract editing, action variants, and status-to-color mapping. Settings dialogs hold local edits until Apply changes; contract editing uses a page within that dialog. Cancel discards the settings edit, including applied contract changes.
+Use Mantine components directly for standard controls. Keep shared components for Interlock behavior, such as JSON validation, contract editing, action variants, and status-to-color mapping. Settings dialogs hold local edits until Apply changes. Contract editing uses a page within that dialog. **Delete node** appears at the left of the shared settings footer for deletable nodes. Cancel discards the settings edit, including applied contract changes.
 
 The workflow editor holds a draft shared by Visual and Raw views. Raw JSON must parse, match the definition structure, and contain no unknown definition fields before saving. Raw edits require Save or Discard before returning to Visual. Graph validation errors can remain in a saved draft but block publication. The server performs the final publication validation, including referenced child workflow versions.
 

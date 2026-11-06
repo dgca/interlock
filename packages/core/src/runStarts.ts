@@ -6,7 +6,7 @@ export const startRequestIdSchema = z
   .string()
   .min(1)
   .max(120)
-  .refine((v) => /\S/.test(v), 'Use a nonblank caller-generated request key');
+  .regex(/\S/, 'Use a nonblank caller-generated request key');
 export const externalTaskIdentitySchema = z
   .object({
     system: z.string().trim().min(1).max(64),
