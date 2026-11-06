@@ -265,11 +265,11 @@ in Bash. JavaScript's `input` and Bash's JSON stdin keep their usual format.
 | `INTERLOCK_BATCH_ITEM_INDEX`   | Zero-based position in the Batch input. Present for Batch item runs.                                                                   |
 | `INTERLOCK_POLL_CHECK_NUMBER`  | Present for polling Script checks. Starts at 1 within each Wait attempt. An interrupted check can reuse its number after restart.      |
 
-These values are strings. Execution context overrides inherited service
-environment values with the same names. Explicit saved variable bindings keep
-precedence for existing workflows. Choose different names for those bindings
-to read the execution context. Interlock provides execution identity without
-adding credentials or payloads to these variables.
+Interlock uses `INTERLOCK_` for its own environment variables. Choose names
+outside that prefix for saved variable bindings to avoid collisions. Explicit
+saved bindings take precedence over execution context, which takes precedence
+over matching values inherited from the service environment. The context
+values are strings and carry execution identity only.
 
 A workflow or node ID is omitted if it contains a NUL byte, cannot be
 represented as UTF-8, or exceeds 16 KiB in UTF-8. Existing definitions with

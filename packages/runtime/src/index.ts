@@ -2058,7 +2058,7 @@ export class Engine {
   private scriptContextEnvironment(
     run: Run,
     execution: NodeExecution,
-  ): NodeJS.ProcessEnv {
+  ): Record<`INTERLOCK_${string}`, string | undefined> {
     const batchOwnerId = run.batchNodeId ? run.parentRunId : undefined;
     let itemIndex = run.batchItemIndex;
     if (batchOwnerId && itemIndex === undefined) {

@@ -103,3 +103,11 @@ separate owner-only key file. Back up that key separately from database backups.
 Portable format 4 contains references and safe requirements, never values or keys.
 Earlier readers cannot use variable references. See [workflow variables](variables.md)
 for provisioning, capture, and restore instructions.
+
+## Script execution context
+
+Interlock provides execution context to Scripts and Script checks using
+`INTERLOCK_` environment variables. If a script reads a service-supplied
+variable that now has a [context name](architecture.md#script-execution-context),
+move that value to a name outside `INTERLOCK_` and update the script.
+Explicit saved variable bindings keep precedence.
