@@ -115,7 +115,9 @@
   .footer {
     flex-wrap: wrap;
   }
-  .footer p {
+  .footer p,
+  .nodeSettings > .footer p {
+    order: -1;
     width: 100%;
     max-width: none;
   }

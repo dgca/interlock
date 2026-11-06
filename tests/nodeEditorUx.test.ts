@@ -271,23 +271,21 @@ it.each([
     expect(onApply.mock.calls[0][0].definition.nodes[0].timeoutMs).toBe(1500);
   },
 );
-it('keeps deletion in the main node settings section', async () => {
+it('keeps one delete action in the shared node settings footer', async () => {
   const onDelete = vi.fn();
   await render({ kind: 'agent', prompt: 'Do work' }, undefined, onDelete);
-  const deleteButton = Array.from(container.querySelectorAll('button')).find(
-    (button) => button.textContent === 'Delete node',
-  )!;
-  expect(
-    deleteButton
-      .closest('[data-node-section]')
-      ?.getAttribute('data-node-section'),
-  ).toBe('work');
-  expect(deleteButton.closest('[hidden]')).toBeNull();
+  const deleteButtons = () =>
+    Array.from(container.querySelectorAll('button')).filter(
+      (button) => button.textContent === 'Delete node',
+    );
+  const [deleteButton] = deleteButtons();
+  expect(deleteButton?.closest('footer')).toBeTruthy();
+  expect(deleteButtons()).toEqual([deleteButton]);
   for (const section of ['Input', 'Result', 'Execution']) {
     await click(section);
-    expect(deleteButton.closest('[hidden]')).not.toBeNull();
+    expect(deleteButtons()).toEqual([deleteButton]);
+    expect(deleteButton.closest('[hidden]')).toBeNull();
   }
-  await click('Assignment');
   await click('Delete node');
   expect(onDelete).toHaveBeenCalledOnce();
 });

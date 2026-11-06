@@ -1,7 +1,6 @@
 import { ExecutorSelect } from '../executors/ExecutorSelect';
 import { AgentResourcesEditor } from './AgentResourcesEditor';
 import { useState } from 'react';
-import { Trash2 } from 'lucide-react';
 import {
   NodeSettingsSections,
   NodeSection,
@@ -10,7 +9,6 @@ import {
 import { BranchEditor } from './BranchEditor';
 import { NodeResultEditor } from './NodeResultEditor';
 import {
-  Button as MantineButton,
   TextInput,
   TagsInput,
   Switch,
@@ -55,7 +53,6 @@ export function NodeInspector({
   creating = false,
   onOpenWorkflow,
   onChange,
-  onDelete,
   definition,
   onBoundaryChange,
   section,
@@ -71,7 +68,6 @@ export function NodeInspector({
   creating?: boolean;
   onOpenWorkflow?: (id: string) => void;
   onChange: (node: WorkflowNode) => void;
-  onDelete?: () => void;
   definition?: WorkflowDefinition;
   onBoundaryChange?: (schema: WorkflowDefinition['inputSchema']) => void;
 }) {
@@ -839,20 +835,6 @@ export function NodeInspector({
               />
             </NodeSection>
           </>
-        )}
-        {onDelete && node.kind !== 'entry' && node.kind !== 'exit' && (
-          <NodeSection name="work">
-            <div className={styles.deleteAction}>
-              <MantineButton
-                variant="subtle"
-                color="red"
-                leftSection={<Trash2 size={14} aria-hidden />}
-                onClick={onDelete}
-              >
-                Delete node
-              </MantineButton>
-            </div>
-          </NodeSection>
         )}
       </div>
     </NodeSettingsSections>
