@@ -1,4 +1,7 @@
-import { runTab as parseRunTab } from '../features/runs/runAttention';
+import {
+  runTab as parseRunTab,
+  type RunTab,
+} from '../features/runs/runAttention';
 import {
   Link,
   Navigate,
@@ -14,7 +17,7 @@ import { WorkflowEditor } from '../features/workflows/WorkflowEditor';
 import { RunList } from '../features/runs/RunList';
 import { RunInspector } from '../features/runs/RunInspector';
 import { Harnesses } from '../features/executors/Harnesses';
-import { paths } from './paths';
+import { paths, runOffset } from './paths';
 import { flushSync } from 'react-dom';
 import { PromptLibrary, PromptEditor } from '../features/prompts/Prompts';
 import {
@@ -65,12 +68,35 @@ function Loading({ error }: { error: string }) {
   );
 }
 
+function useRunPage() {
+  const [search, setSearch] = useSearchParams();
+  const page = {
+    tab: parseRunTab(search.get('tab')),
+    offset: runOffset(search.get('offset')),
+    onTabChange: (tab: RunTab) =>
+      setSearch((previous) => {
+        const next = new URLSearchParams(previous);
+        if (tab !== 'active') next.set('tab', tab);
+        else next.delete('tab');
+        next.delete('offset');
+        return next;
+      }),
+    onOffsetChange: (offset: number) =>
+      setSearch((previous) => {
+        const next = new URLSearchParams(previous);
+        if (offset > 0) next.set('offset', String(offset));
+        else next.delete('offset');
+        return next;
+      }),
+  };
+  return { search, setSearch, page };
+}
+
 function WorkflowRoute() {
   const { workflowId } = useParams();
   const context = useOutletContext<AppContext>();
   const navigate = useNavigate();
-  const [search, setSearch] = useSearchParams();
-  const runTab = parseRunTab(search.get('tab'));
+  const { search, setSearch, page } = useRunPage();
   const workflow = context.workflows.find((w) => w.id === workflowId);
   if (!context.loaded) return <Loading error={context.loadError} />;
   if (!workflow) return <NotFound title="Workflow not found" />;
@@ -117,22 +143,15 @@ function WorkflowRoute() {
       }
       runsView={
         <RunList
-          runs={context.runs}
-          attention={context.attention}
+          {...page}
+          tick={context.tick}
           act={context.act}
           workflows={context.workflows}
           workflowId={workflow.id}
-          tab={runTab}
-          onTabChange={(tab) =>
-            setSearch((previous) => {
-              const next = new URLSearchParams(previous);
-              if (tab !== 'active') next.set('tab', tab);
-              else next.delete('tab');
-              return next;
-            })
-          }
           onOpen={(id, executionId) =>
-            void navigate(paths.run(id, workflow.id, runTab, executionId))
+            void navigate(
+              paths.run(id, workflow.id, page.tab, executionId, page.offset),
+            )
           }
         />
       }
@@ -141,27 +160,18 @@ function WorkflowRoute() {
 }
 
 function RunsRoute() {
-  const { runs, attention, act, workflows } = useOutletContext<AppContext>();
+  const { tick, act, workflows } = useOutletContext<AppContext>();
   const navigate = useNavigate();
-  const [search, setSearch] = useSearchParams();
+  const { page } = useRunPage();
   return (
     <RunList
-      runs={runs}
-      attention={attention}
+      {...page}
+      tick={tick}
       act={act}
       workflows={workflows}
-      tab={parseRunTab(search.get('tab'))}
-      onTabChange={(tab) =>
-        setSearch((previous) => {
-          const next = new URLSearchParams(previous);
-          if (tab !== 'active') next.set('tab', tab);
-          else next.delete('tab');
-          return next;
-        })
-      }
       onOpen={(id, executionId) =>
         void navigate(
-          paths.run(id, undefined, parseRunTab(search.get('tab')), executionId),
+          paths.run(id, undefined, page.tab, executionId, page.offset),
         )
       }
     />
@@ -170,14 +180,12 @@ function RunsRoute() {
 
 function RunRoute() {
   const { runId } = useParams();
-  const { tick, act, onConnect, runs } = useOutletContext<AppContext>();
+  const { tick, act, onConnect } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const [search] = useSearchParams();
   const workflowId = search.get('workflow') || undefined;
   const returnTab = parseRunTab(search.get('tab'));
-  const run = runs.find((r) => r.id === runId);
-  const tab =
-    run && !['running', 'waiting'].includes(run.status) ? 'history' : 'active';
+  const offset = runOffset(search.get('offset'));
   return (
     <RunInspector
       key={runId}
@@ -187,15 +195,21 @@ function RunRoute() {
       onConnect={onConnect}
       initialExecutionId={search.get('execution') ?? undefined}
       onOpen={(id, executionId) =>
-        void navigate(paths.run(id, workflowId, returnTab, executionId))
+        void navigate(paths.run(id, workflowId, returnTab, executionId, offset))
       }
-      onBack={() =>
+      onBack={(status) => {
+        const tab =
+          returnTab === 'attention'
+            ? 'attention'
+            : status === 'running' || status === 'waiting'
+              ? 'active'
+              : 'history';
         void navigate(
           workflowId
-            ? paths.workflowRuns(workflowId, returnTab)
-            : paths.runs(returnTab === 'attention' ? 'attention' : tab),
-        )
-      }
+            ? paths.workflowRuns(workflowId, returnTab, offset)
+            : paths.runs(tab, tab === returnTab ? offset : 0),
+        );
+      }}
     />
   );
 }

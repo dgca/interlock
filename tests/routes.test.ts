@@ -9,14 +9,20 @@ import { routes } from '../packages/ui/src/routes';
 
 const queries = vi.hoisted(() => ({
   workflows: vi.fn(),
-  runs: vi.fn(),
+  summaries: vi.fn(),
   attention: vi.fn(),
 }));
 const streamListeners = new Map<string, () => void>();
 vi.mock('../packages/ui/src/lib/engineEvents', () => ({
-  subscribeToEngineEvents: ({ onChange }: { onChange: () => void }) => {
+  subscribeToEngineEvents: ({
+    onChange,
+    onConnect,
+    onError,
+  }: Record<'onChange' | 'onConnect' | 'onError', () => void>) => {
     streamListeners.set('change', onChange);
-    return () => streamListeners.delete('change');
+    streamListeners.set('connect', onConnect);
+    streamListeners.set('error', onError);
+    return () => streamListeners.clear();
   },
 }));
 vi.mock('../packages/ui/src/lib/api', () => ({
@@ -26,7 +32,7 @@ vi.mock('../packages/ui/src/lib/api', () => ({
     },
     workflows: { list: { query: queries.workflows } },
     runs: {
-      list: { query: queries.runs },
+      summaries: { query: queries.summaries },
       attention: { query: queries.attention },
     },
     prompts: { list: { query: () => Promise.resolve([]) } },
@@ -75,7 +81,11 @@ vi.mock('../packages/ui/src/features/runs/RunInspector', () => ({
       {},
       `Run ${id}`,
       h('button', { onClick: () => onOpen('child') }, 'Child run'),
-      h('button', { onClick: onBack }, 'Back to runs'),
+      h(
+        'button',
+        { onClick: () => onBack(id === 'r1' ? 'completed' : 'waiting') },
+        'Back to runs',
+      ),
     ),
 }));
 vi.mock('../packages/ui/src/features/runs/RunDialog', () => ({
@@ -90,6 +100,7 @@ let container: HTMLDivElement;
 let router: ReturnType<typeof createBrowserRouter>;
 
 beforeEach(() => {
+  vi.clearAllMocks();
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -108,23 +119,35 @@ beforeEach(() => {
   streamListeners.clear();
   queries.attention.mockResolvedValue([]);
   queries.workflows.mockResolvedValue([{ id: 'w1' }, { id: 'a b%?' }]);
-  queries.runs.mockResolvedValue([
-    {
+  queries.summaries.mockImplementation(async ({ tab }) => {
+    const [attention] = await queries.attention();
+    const run = {
       id: 'r1',
       workflowId: 'w1',
       status: 'completed',
       workflowName: 'Completed workflow',
       version: 1,
       createdAt: new Date().toISOString(),
-      executions: [],
-    },
-  ]);
+      executionCount: 0,
+      attention,
+    };
+    const items =
+      tab === 'history' || (tab === 'attention' && attention) ? [run] : [];
+    return {
+      items,
+      counts: { active: 0, attention: attention ? 1 : 0, history: 1 },
+      offset: 0,
+      total: items.length,
+      nextOffset: null,
+    };
+  });
 });
 afterEach(async () => {
   if (root) await act(async () => root.unmount());
   router?.dispose();
   container?.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 async function mount(path?: string) {
   if (path) window.history.replaceState(null, '', path);
@@ -335,4 +358,84 @@ it('shows global human attention, deep-links to its assignment, and preserves th
     container.querySelector('button[aria-label="Runs, 1 run needs attention"]'),
   ).toBeNull();
   expect(container.textContent).toContain('No runs need your attention.');
+});
+
+it('loads history only on the Runs view and restores the page after inspection', async () => {
+  queries.summaries.mockImplementation(async ({ offset }) => ({
+    items: [
+      {
+        id: 'r1',
+        workflowId: 'w1',
+        workflowName: 'Completed workflow',
+        version: 1,
+        status: 'completed',
+        createdAt: '2026-01-01T00:00:00Z',
+        executionCount: 3,
+      },
+    ],
+    counts: { active: 0, attention: 0, history: 101 },
+    offset,
+    total: 101,
+    nextOffset: offset === 0 ? 100 : null,
+  }));
+  await mount('/workflows/w1');
+  expect(queries.summaries).not.toHaveBeenCalled();
+  await act(async () => router.navigate('/runs?tab=history'));
+  await click('Next');
+  expect(window.location.search).toBe('?tab=history&offset=100');
+  expect(queries.summaries).toHaveBeenLastCalledWith(
+    expect.objectContaining({ tab: 'history', offset: 100 }),
+  );
+  expect(container.textContent).toContain('101 to 101 of 101');
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('button.run-row')!.click(),
+  );
+  await click('Back to runs');
+  expect(window.location.search).toBe('?tab=history&offset=100');
+  await click('Previous');
+  expect(window.location.search).toBe('?tab=history');
+});
+
+it('backs off with a healthy stream and refreshes on return to a visible tab', async () => {
+  vi.useFakeTimers();
+  let visibility: DocumentVisibilityState = 'visible';
+  vi.spyOn(document, 'visibilityState', 'get').mockImplementation(
+    () => visibility,
+  );
+  const advance = (ms: number) =>
+    act(async () => vi.advanceTimersByTimeAsync(ms));
+  try {
+    await mount('/workflows');
+    expect(queries.workflows).toHaveBeenCalledTimes(1);
+    await advance(5_000);
+    expect(queries.workflows).toHaveBeenCalledTimes(2);
+    await act(async () => streamListeners.get('connect')!());
+    await advance(100);
+    queries.workflows.mockClear();
+    await advance(10_000);
+    expect(queries.workflows).not.toHaveBeenCalled();
+    await advance(50_000);
+    expect(queries.workflows).toHaveBeenCalledTimes(1);
+    queries.workflows.mockClear();
+    await act(async () => streamListeners.get('change')!());
+    await advance(100);
+    expect(queries.workflows).toHaveBeenCalledTimes(1);
+    visibility = 'hidden';
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      streamListeners.get('change')!();
+      streamListeners.get('error')!();
+    });
+    await advance(20_000);
+    expect(queries.workflows).toHaveBeenCalledTimes(1);
+    visibility = 'visible';
+    await act(async () =>
+      document.dispatchEvent(new Event('visibilitychange')),
+    );
+    expect(queries.workflows).toHaveBeenCalledTimes(2);
+    await advance(5_000);
+    expect(queries.workflows).toHaveBeenCalledTimes(3);
+  } finally {
+    vi.restoreAllMocks();
+  }
 });

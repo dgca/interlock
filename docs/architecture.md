@@ -322,8 +322,18 @@ Vite and the built server serve the app for direct page requests. A future host 
 [UI interaction patterns](ui-patterns.md) documents run attention, approval, recovery, and browser review conventions.
 
 Interlock tabs on the same origin share a browser event stream. One tab holds
-the stream and broadcasts change notices to the others. Each tab also polls
-for updates, so it can refresh when browser coordination is unavailable.
+the stream and broadcasts change notices and heartbeats to the others.
+Visible tabs refresh after run and work changes. They use a five-second
+fallback when the stream is unavailable and a 60-second safety refresh while
+it is healthy. Hidden tabs skip automatic refreshes and catch up when visible.
+
+The global and workflow-specific Runs views use the shared `runs.summaries`
+query. SQLite projects list fields and counts steps without returning execution
+records or payloads. The query accepts an optional workflow ID, status, and
+Runs tab, plus an offset and a limit from 1 to 200 (100 by default). It applies
+the scope before paging, so older active runs and runs needing attention stay
+accessible. The inspector loads run details by ID. `runs.list` and `runs.get`
+continue to serve full records.
 
 The UI resolves host and URL feature settings once in `main.tsx`, before creating the browser router. A React context supplies the immutable feature snapshot to App and WorkflowLibrary. These owners pass optional callbacks to child components; an absent callback hides its action and related guidance. Paste JSON and local-file imports share the same JSON dispatch to the existing workflow create and bundle import operations. See [embedded UI configuration](embedded-ui.md).
 

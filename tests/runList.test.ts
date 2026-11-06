@@ -3,10 +3,16 @@ import { act, createElement as h, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
 import { expect, it, vi } from 'vitest';
-import type { Run } from '@interlock/core';
+import type { RunSummary } from '@interlock/core';
 import { RunList } from '../packages/ui/src/features/runs/RunList';
 
-it('separates active root executions from history and opens the selected execution', async () => {
+const query = vi.hoisted(() => vi.fn());
+vi.mock('../packages/ui/src/lib/api', () => ({
+  api: { runs: { summaries: { query } } },
+  errorMessage: (error: Error) => error.message,
+}));
+
+it('renders active and history pages and opens the selected run', async () => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -18,30 +24,34 @@ it('separates active root executions from history and opens the selected executi
       ({
         id: status,
         workflowId: 'workflow',
-        input: null,
-        value: null,
-        cursor: 'entry',
         updatedAt: new Date().toISOString(),
         workflowName: status + ' workflow',
         status,
         version: 1,
         createdAt: new Date().toISOString(),
-        executions: [],
-      }) as Run,
+        executionCount: 0,
+      }) as RunSummary,
   );
-  runs.push({
-    ...runs[0],
-    id: 'child',
-    workflowName: 'Child item',
-    parentRunId: 'running',
-  });
   runs.push({
     ...runs[0],
     id: 'detached',
     workflowName: 'Independent investigation',
     parentRunId: 'completed',
+    parentWorkflowName: 'completed workflow',
     parentMode: 'detached',
   });
+  query.mockImplementation(async ({ tab }) => ({
+    items:
+      tab === 'active'
+        ? runs.filter(
+            (run) => run.status === 'running' || run.status === 'waiting',
+          )
+        : runs.slice(2, 5),
+    counts: { active: 3, attention: 0, history: 3 },
+    offset: 0,
+    nextOffset: null,
+    total: 3,
+  }));
   const open = vi.fn();
   function Harness() {
     const [tab, setTab] = useState<'active' | 'attention' | 'history'>(
@@ -50,7 +60,15 @@ it('separates active root executions from history and opens the selected executi
     return h(
       MantineProvider,
       {},
-      h(RunList, { runs, onOpen: open, tab, onTabChange: setTab }),
+      h(RunList, {
+        tick: 0,
+        offset: 0,
+        onOffsetChange: vi.fn(),
+        workflows: [],
+        onOpen: open,
+        tab,
+        onTabChange: setTab,
+      }),
     );
   }
   const container = document.createElement('div');
@@ -66,7 +84,6 @@ it('separates active root executions from history and opens the selected executi
         (name) => name.textContent,
       ),
     ).not.toContain('completed workflow');
-    expect(panel().textContent).not.toContain('Child item');
     expect(panel().textContent).toContain('Independent investigation');
     expect(panel().textContent).toContain(
       'Started independently · from completed workflow',
@@ -94,7 +111,7 @@ it('separates active root executions from history and opens the selected executi
   }
 });
 
-it('scopes runs to one workflow, including workflow invocations but excluding Batch items', async () => {
+it('requests the selected workflow and opens its invocation', async () => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -102,15 +119,12 @@ it('scopes runs to one workflow, including workflow invocations but excluding Ba
     removeEventListener: vi.fn(),
   });
   const base = {
-    input: null,
-    value: null,
-    cursor: 'entry',
     updatedAt: new Date().toISOString(),
     workflowId: 'selected',
     status: 'completed',
     version: 1,
     createdAt: new Date().toISOString(),
-    executions: [],
+    executionCount: 0,
   };
   const runs = [
     { ...base, id: 'root', workflowName: 'Selected root' },
@@ -120,20 +134,14 @@ it('scopes runs to one workflow, including workflow invocations but excluding Ba
       workflowName: 'Selected invocation',
       parentRunId: 'other',
     },
-    {
-      ...base,
-      id: 'item',
-      workflowName: 'Batch item',
-      parentRunId: 'root',
-      batchNodeId: 'batch',
-    },
-    {
-      ...base,
-      id: 'other',
-      workflowName: 'Other workflow',
-      workflowId: 'other',
-    },
-  ] as Run[];
+  ] as RunSummary[];
+  query.mockResolvedValue({
+    items: runs,
+    counts: { active: 0, attention: 0, history: 2 },
+    offset: 0,
+    nextOffset: null,
+    total: 2,
+  });
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
@@ -145,7 +153,10 @@ it('scopes runs to one workflow, including workflow invocations but excluding Ba
           MantineProvider,
           { env: 'test' },
           h(RunList, {
-            runs,
+            tick: 0,
+            offset: 0,
+            onOffsetChange: vi.fn(),
+            workflows: [],
             workflowId: 'selected',
             tab: 'history',
             onTabChange: vi.fn(),
@@ -160,8 +171,9 @@ it('scopes runs to one workflow, including workflow invocations but excluding Ba
     expect(rows).toHaveLength(2);
     expect(container.textContent).toContain('Selected root');
     expect(container.textContent).toContain('Selected invocation');
-    expect(container.textContent).not.toContain('Batch item');
-    expect(container.textContent).not.toContain('Other workflow');
+    expect(query).toHaveBeenLastCalledWith(
+      expect.objectContaining({ workflowId: 'selected', tab: 'history' }),
+    );
     await act(async () => rows[1].click());
     expect(open).toHaveBeenCalledWith('invocation');
   } finally {
