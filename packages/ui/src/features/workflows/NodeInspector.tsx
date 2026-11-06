@@ -23,6 +23,7 @@ import {
 import {
   DEFAULT_BATCH_MAX_ITEMS,
   MAX_BATCH_ITEMS,
+  MAX_SCRIPT_TIMEOUT_MS,
   nodeInputHint,
   type WorkflowDefinition,
   type Workflow,
@@ -498,7 +499,7 @@ export function NodeInspector({
                 key={`script-timeout-${node.id}`}
                 label="Timeout"
                 min={100}
-                max={120_000}
+                max={MAX_SCRIPT_TIMEOUT_MS}
                 value={node.timeoutMs}
                 onChange={(timeoutMs) => patch({ timeoutMs })}
               />

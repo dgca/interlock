@@ -40,6 +40,8 @@ MCP `create_workflow.definition` and `update_workflow.draft` expose the workflow
 
 For node configuration and examples, see [author definitions through MCP](connect-harness.md#author-definitions-through-mcp), [workflow definitions and Batch scopes](architecture.md#workflow-definitions), [branch routing](switch.md), and [input and output bindings](node-data.md).
 
+Set `timeoutMs` on a Script node to allow 100 to 3,600,000 milliseconds. Omission uses 60,000. Polling checks use a separate timeout with a 30,000-millisecond default and a 120,000-millisecond maximum. See [polling Waits](timers.md#polling-waits).
+
 Scripts and polling Script checks can read `INTERLOCK_RUN_ID` directly from
 their environment to inspect the current run. See [Script execution context](architecture.md#script-execution-context).
 

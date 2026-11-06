@@ -61,7 +61,7 @@ A Script check receives the Wait's execution ID and a check number that starts a
 }
 ```
 
-- `check` is a Script (`command`, optional `language`, `timeoutMs` from 100 through 120,000 ms) or a Fetch (`url`, `method`, `query`, `headers`, `body`, `timeoutMs`, `failOnHttpError`) with the same rules and bounds as the matching node. It receives the step input: a Script reads it on stdin or as `input`; a Fetch binds it into the request.
+- `check` is a Script (`command`, optional `language`, `timeoutMs`) or a Fetch (`url`, `method`, `query`, `headers`, `body`, `timeoutMs`, `failOnHttpError`). Both check types default to a 30-second timeout and accept 100 milliseconds through 120 seconds. A Script reads the step input on stdin or as `input`. A Fetch binds it into the request.
 - The server runs the first check as soon as the step starts, then every `everyMs` milliseconds (1,000 through 365 days; default 60,000) after each check finishes. No worker is involved.
 - The step continues when the check output at `path` structurally equals `equals`, as a Condition compares. The output is the step input with the check output merged over it when both are objects; otherwise it is the check output alone. The output contract applies to that value. A matched check whose completion output violates the contract fails the step; its successful check output remains available for inspection.
 - A check that fails (non-zero exit, check timeout, a Fetch binding or request error, or an HTTP error with `failOnHttpError`) is recorded on the execution and runs again at the next interval. A passing check whose output has no value at `path` fails the step, as a missing path fails a Condition.
