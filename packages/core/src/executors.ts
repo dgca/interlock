@@ -104,6 +104,50 @@ export const harnessNameSchema = z.enum([
 ]);
 export type HarnessName = z.infer<typeof harnessNameSchema>;
 
+export const continueOnMissingResultSchema = z
+  .object({
+    maxTurns: z.number().int().min(0).max(10).default(0),
+    message: z.string().trim().min(1).max(4000).optional(),
+  })
+  .strict();
+export type ContinueOnMissingResult = z.infer<
+  typeof continueOnMissingResultSchema
+>;
+
+export const transientRetrySchema = z
+  .object({
+    maxRetries: z.number().int().min(0).max(10).default(0),
+    windowMs: z.number().int().min(0).max(86_400_000).default(300_000),
+    initialBackoffMs: z.number().int().min(0).max(60_000).default(1000),
+  })
+  .strict();
+export type TransientRetry = z.infer<typeof transientRetrySchema>;
+
+export const errorClassSchema = z.enum([
+  'transient',
+  'permanent',
+  'missing_result',
+]);
+export type ErrorClass = z.infer<typeof errorClassSchema>;
+
+export const recoveryActionSchema = z.enum([
+  'continue',
+  'retry',
+  'escalate',
+  'fail',
+]);
+export type RecoveryAction = z.infer<typeof recoveryActionSchema>;
+
+export const recoveryEventSchema = z
+  .object({
+    errorClass: errorClassSchema,
+    messageExcerpt: z.string().max(500),
+    action: recoveryActionSchema,
+    at: z.string(),
+  })
+  .strict();
+export type RecoveryEvent = z.infer<typeof recoveryEventSchema>;
+
 export const executorProfileSchema = z
   .object({
     id: executorReferenceSchema,
@@ -148,6 +192,8 @@ export const executorProfileSchema = z
     stopUrl: z.string().trim().min(1).max(4096).optional(),
     archiveCommand: z.string().trim().min(1).max(4096).optional(),
     archiveUrl: z.string().trim().min(1).max(4096).optional(),
+    continueOnMissingResult: continueOnMissingResultSchema.optional(),
+    transientRetry: transientRetrySchema.optional(),
   })
   .strict();
 export type ExecutorProfile = z.infer<typeof executorProfileSchema>;
@@ -252,6 +298,7 @@ export const managedWorkSummarySchema = z.object({
   ]),
   reason: z.string().optional(),
   pendingRequests: z.number().int().nonnegative().optional(),
+  recoveryEvents: z.array(recoveryEventSchema).optional(),
 });
 /** Local execution provenance. Never contains a claim token or credentials. */
 export interface ManagedExecution {
@@ -275,6 +322,7 @@ export interface ManagedExecution {
     holdRevision: number;
     replacementModel?: string;
   };
+  recoveryEvents?: RecoveryEvent[];
   requests: ExecutorRequest[];
   logs: { at: string; message: string }[];
   logCount: number;
@@ -287,4 +335,5 @@ export interface ManagedWorkSummary {
   state: ExecutorState | 'queued' | 'blocked';
   reason?: string;
   pendingRequests?: number;
+  recoveryEvents?: RecoveryEvent[];
 }

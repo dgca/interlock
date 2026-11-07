@@ -11,6 +11,8 @@ import {
   executorModelSchema,
   executorEffortSchema,
   executorReferenceSchema,
+  continueOnMissingResultSchema,
+  transientRetrySchema,
 } from './executors.js';
 import { resourceNamesSchema } from './workResources.js';
 export { matchRouting } from './resultRouting.js';
@@ -333,6 +335,8 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
         'Claim duration in seconds. An explicit claim override wins; omission uses this published node setting, then 300 seconds. Workers must renew before expiry. Expiry consumes the separate maxLeaseExpiries budget when configured, otherwise the combined maxAttempts budget.',
       ),
     unclaimedTimeoutMs: z.number().int().min(1).max(31_536_000_000).optional(),
+    continueOnMissingResult: continueOnMissingResultSchema.optional(),
+    transientRetry: transientRetrySchema.optional(),
   }),
   z.object({
     ...nodeBase,
@@ -464,6 +468,8 @@ export const definitionSchema = z.object({
     .describe(
       'Default local executor profile for Agent nodes. Omission preserves connected-agent execution. Configuration and credentials stay local.',
     ),
+  continueOnMissingResult: continueOnMissingResultSchema.optional(),
+  transientRetry: transientRetrySchema.optional(),
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
   nodes: z.array(nodeSchema).min(2),

@@ -41,7 +41,7 @@ export const workflowEditsSchema = z
   .array(z.lazy(() => jsonSchema))
   .max(100)
   .describe(
-    'Ordered list, at most 100 edits. Each edit has op: add_node with node; update_node with id, set and optional unset; remove_node with id; add_edge with edge; update_edge with id, set and optional unset; remove_edge with id; or update_settings with set and optional unset. Updates replace named fields shallowly. IDs and node kinds cannot change. Settings are inputSchema, outputSchema, maxSteps, executor, agentPermissions, agentModel, agentEffort. Agent model/effort override workflow defaults. agentModel/agentEffort set workflow defaults; omission inherits harness settings. Null effort uses native defaults. executor is a local profile reference. agentPermissions overrides managed Agent defaults with read-only, standard or full-access; unset inherits each harness default. Unknown fields reject the indexed operation. Node/edge objects use the workflow definition format. Added scripts default to JavaScript; existing omitted language retains Bash.',
+    'Ordered list, at most 100 edits. Each edit has op: add_node with node; update_node with id, set and optional unset; remove_node with id; add_edge with edge; update_edge with id, set and optional unset; remove_edge with id; or update_settings with set and optional unset. Updates replace named fields shallowly. IDs and node kinds cannot change. Settings are inputSchema, outputSchema, maxSteps, executor, agentPermissions, agentModel, agentEffort, continueOnMissingResult, transientRetry. Agent model/effort override workflow defaults. agentModel/agentEffort set workflow defaults; omission inherits harness settings. Null effort uses native defaults. executor is a local profile reference. agentPermissions overrides managed Agent defaults with read-only, standard or full-access; unset inherits each harness default. Unknown fields reject the indexed operation. Node/edge objects use the workflow definition format. Added scripts default to JavaScript; existing omitted language retains Bash.',
   );
 function parseStrict<S extends z.ZodTypeAny>(
   schema: S,
@@ -106,6 +106,8 @@ export function draftChanges(
       'agentPermissions',
       'agentModel',
       'agentEffort',
+      'continueOnMissingResult',
+      'transientRetry',
     ].filter(
       (key) =>
         !structuralEqual(
@@ -215,6 +217,12 @@ export function applyWorkflowEdits(
             ? { agentPermissions: definition.agentPermissions }
             : {}),
           ...(definition.executor ? { executor: definition.executor } : {}),
+          ...(definition.continueOnMissingResult
+            ? { continueOnMissingResult: definition.continueOnMissingResult }
+            : {}),
+          ...(definition.transientRetry
+            ? { transientRetry: definition.transientRetry }
+            : {}),
           inputSchema: definition.inputSchema,
           outputSchema: definition.outputSchema,
           maxSteps: definition.maxSteps,
@@ -225,6 +233,8 @@ export function applyWorkflowEdits(
             agentPermissions: true,
             agentModel: true,
             agentEffort: true,
+            continueOnMissingResult: true,
+            transientRetry: true,
             inputSchema: true,
             outputSchema: true,
             maxSteps: true,
@@ -235,6 +245,8 @@ export function applyWorkflowEdits(
         delete definition.agentPermissions;
         delete definition.agentModel;
         delete definition.agentEffort;
+        delete definition.continueOnMissingResult;
+        delete definition.transientRetry;
         Object.assign(definition, nextSettings);
       }
     } catch (error) {
