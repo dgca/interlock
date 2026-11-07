@@ -16,3 +16,46 @@ Risks: timezone/DST semantics belong to the parser and deterministic tests. Nest
 Step 1 covers S1/S2/S5. Steps 2 and 5 cover S3-S9. Steps 3/6 cover S1/S9/S11. Step 4 covers S8/S10. Build owns deterministic tests and required repository checks. Independent review owns exact-head diff review and targeted boundary checks. Parent UI review owns fresh rendered assessment.
 
 Representative real-control journey S1/S2/S10: open workflow Schedules, Add schedule, enter interval/name/literal JSON and binding, create disabled, inspect acknowledgement, enable the exact schedule, reopen and save a policy, inspect history/run link, disable and delete exact trigger. Expected: published-only enable, field errors retain edits, focus returns to inspection, phone selection focuses heading, mutation success remains acknowledged after injected refresh failure. A valid save/control precedes rejected-save and refresh-failure cases. S5 rollback test injects a failed trigger write after creating the run, compares complete trigger/run/receipt/fire state, then retries successfully. S3 queue test holds an active predecessor, accepts one queued successor, suppresses a third fire, and promotes successor after predecessor failure. S4 recovery test compares same fixture under skip/run_once, preserving a single bounded recovery attempt after multiple missed slots.
+
+## Implemented checks and handoff
+
+Required checks pass at source commit `4349fb5ec0f0993267371ef345e9fc27cddc8576`, rebased onto main `7b29dcae81403be62833d2caa2075c625abc894d`. The original task baseline remains `dcba6b6ff490d6a8d709a39233e56fddced3d944`; review can separate upstream #237/#238 changes with the rebased main comparison. The final artifact-only commit carries this source evidence without changing product files.
+
+| Criteria | Build evidence and observed result |
+| --- | --- |
+| S1 | Shared API and MCP create/update/enable/disable/delete, packaged CLI create/inspect/cron preview/delete, real UI create disabled, enable exact ID, edit/reopen, disable/delete. All pass. |
+| S2 | 25 schedule tests cover interval minimum, five-field grammar, invalid zone, metadata paths, literal templates and DST. Real controls rejected invalid JSON, cron and zone, then saved corrected values. Mantine clamps an interval below 30 seconds on blur; API tests establish rejection at the shared boundary. |
+| S3 | Skip/queue/allow tests include queued capacity, one pending successor, failure-terminal promotion and continue-as-new chain overlap. All pass. |
+| S4/S6 | Deterministic clocks cover multi-slot gaps, both missed policies, re-enable/timing reset, independent library/workflow holds, a hold covering a slot between ticks and a hold ending before the slot. All pass. Final correction uses persisted hold intervals, not whether a tick saw the hold active. |
+| S5 | Full protected-state rollback after injected trigger write failure, file-backed reopen, competing Store connections and genuinely concurrent independent scheduler processes all retain one slot fire/run/RunStarts receipt. All pass. |
+| S7 | Failed admission without any run row, terminal failures observed once, default no pause, success reset, neutral cancellation and automatic pause/re-enable all pass. Actual runtime fixtures show failure pause and pending admission lag independently of run rows. |
+| S8 | Paging/200-settled retention, missing run history and independent attention counts pass. Actual UI shows two schedule alerts with zero run alerts, accessible “2 items need attention,” exact schedule links, a real run link and missing schedule list recovery. |
+| S9 | Format-5 disabled exports/imports, forced disabled import, identity conflict and old bundle import all pass. Imported configuration has no fire history. |
+| S10 | Actual controls at 1440/900/390 cover save/reopen, rejection retaining text, acknowledged save plus failed refresh, read-only retry, real second-page revision conflict and explicit reload, Back/Keep editing retention and narrow inspection focus. Fifteen runtime PNGs were opened and inspected; the original ten design fixture PNGs remain separately preserved. Impeccable detector returned no findings. |
+| S11 | Full suite 128 files/1541 tests, pnpm build, installed package smoke and pnpm format:check all pass. HTTP and stdio transport discovery/operations pass. Checked README, CONTEXT, architecture, v1, agent workflows, schedules, variables, prompts, work holds, idempotent starts and history cleanup, CLI command/help and the affected MCP workflow. |
+
+Evidence is in [checks/provenance.json](checks/provenance.json), the saved check logs, and [actual browser results](ui/runtime-evidence/browser-checks.json). Original check commits are retained. Carried UI evidence is explicit: later source changes affect the missing-schedule read, the schedule-only empty panel and persisted pause-slot classification, each separately checked. Fresh independent UI review is still required. No rendered human approval or physical screen-reader session is claimed.
+
+The affected MCP audit covers read/manage triggers, start/admission, applicable pause inspection, workflow export/import and deletion, run inspection/history/attention and their shared schemas/defaults/errors. This is not an audit of every MCP tool. Two grouped tools keep configuration/history on demand. List responses omit input templates and bindings; inspect is explicit. Discovery is 59 tools, approximately 267.6 kB; server instructions are 9979 bytes. The tool-definition guard is 270 kB, raised from 260 kB to cover schedule contracts and portable bundle schema. Main's compact import/delete descriptions were retained during rebase, and redundant cross-tool guidance was removed to keep the existing 10 kB instruction bound.
+
+The installed CLI dispatcher originally omitted the newly added schedule command. The package smoke test exposed that boundary; the dispatcher/help now accept schedules and the existing pause/resume/pause-holds commands, and package smoke exercises schedule CLI plus the bundled cron parser. A real create exposed an unsaved-navigation guard racing the acknowledged save; the success path now clears it synchronously before selecting the saved schedule. Failed writes retain their guard and edits.
+
+## Fresh UI review recipe
+
+Wait for the independent review's build to complete before capturing UI assets. From this checkout:
+
+```sh
+pnpm exec tsx .tasks/issue-236/ui/runtime-server.ts
+```
+
+The fixture starts production `packages/ui/dist` on loopback port 5197, creates its own temporary SQLite database and prints a selected schedule URL. `/tmp/issue236-ui-context.json` records the generated workflow, draft workflow and trigger IDs. It seeds one due slot, then executes the actual runtime. In another process:
+
+```sh
+pnpm exec tsx .tasks/issue-236/ui/runtime-states.ts
+```
+
+This adds real admission-failure/automatic-pause and capacity-queue/lag fixtures in that same isolated database, and writes their generated IDs to `/tmp/issue236-ui-states.json`. Inspect the printed normal schedule URL, the draft workflow's Schedules tab and `/runs?tab=attention`. Use the generated IDs for direct schedule links. Browser scripts under `ui/runtime-evidence` retain the exact original fixture URLs as evidence, not universal replay IDs. Do not point either fixture script at a user database. Stop only this fixture process and remove its printed temporary directory after review.
+
+Author cleanup stopped browser `issue236-runtime` and its isolated server, then removed only its own temporary database directories. The handoff, original design prototype, representative images and proof remain committed for final human review. No shared engine configuration, schedules, pauses or user `.interlock` data changed.
+
+Artifact staging check: `git check-ignore` found the selected task images were not ignored. Normal explicit staging is sufficient. No node_modules, dist, database, browser cache or generated vendor files are included.

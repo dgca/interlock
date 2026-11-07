@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 /Users/dan/dev/interlock-worktrees/issue-236
+
+ ✓ tests/workflowTriggers.test.ts (25 tests) 422ms
+
+ Test Files  1 passed (1)
+      Tests  25 passed (25)
+   Start at  04:21:48
+   Duration  949ms (transform 249ms, setup 0ms, collect 369ms, tests 422ms, environment 0ms, prepare 29ms)
+

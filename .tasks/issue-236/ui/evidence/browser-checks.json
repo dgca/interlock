@@ -1,0 +1,90 @@
+{
+  "status": "passed",
+  "runId": "e45a3f5d-2885-4e7c-8754-8361ccca722b",
+  "scope": "Fixture UI only; no engine, database, real writes, scheduler, or cron calculation.",
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 900,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "checks": [
+    "Blank name rejected beside field",
+    "Interval under 30 seconds rejected",
+    "Malformed input remains visible with validation",
+    "Metadata binding has explicit destination",
+    "Create saves disabled and selects new schedule",
+    "Enable confirmation identifies exact schedule",
+    "Disable consequence preserves existing runs",
+    "Delete confirmation identifies exact schedule",
+    "Delete removes only selected schedule",
+    "Rejected save retains local edits",
+    "Cancel restores focus to Edit schedule",
+    "Acknowledged mutation survives failed refresh",
+    "Acknowledged mutation dialog closes despite refresh failure",
+    "Read-only refresh recovery works",
+    "Enable does not release workflow holds",
+    "Workflow holds remain after enable",
+    "Schedule attention available through Runs navigation",
+    "Auto-pause recovery explains consequence",
+    "Re-enable resolves automatic pause",
+    "Draft workflow permits disabled save and blocks enable",
+    "Load error has working retry",
+    "Never-fired schedule has explicit missing-data state",
+    "Excessive lag remains visibly enabled",
+    "Phone document has no horizontal overflow",
+    "Phone modal has no horizontal overflow",
+    "Phone modal footer remains visible",
+    "Phone policy radios work",
+    "Five-field cron validation",
+    "Invalid IANA zone validation",
+    "Global Needs attention preserves existing Runs tabs",
+    "Inspect schedule returns to exact schedule",
+    "Narrow schedule selection focuses inspection heading",
+    "Field correction clears that field error"
+  ],
+  "mechanicalDetector": {
+    "command": "impeccable detect --json .tasks/issue-236/ui/prototype/main.tsx .tasks/issue-236/ui/prototype/prototype.css",
+    "findings": []
+  },
+  "limits": [
+    "Cron validation is field-count and IANA-zone only.",
+    "Fire history and upcoming times are fixtures.",
+    "No real screen-reader or production API session.",
+    "Sidebar imported unchanged; production must broaden count aria label to items."
+  ],
+  "evidence": {
+    "auto-paused-900.png": "361c074b5488364c1c5dd2db451834373f609f5966c2b2901e877d0925c692fc",
+    "cron-900.png": "7002f238235cc456daaf1e25da1b57c70aa4d18db12dbae4167d4406e4e82cea",
+    "draft-empty-390.png": "1720ebf1500f166a92cfffbd69f999d1a3180f156498cf546e84c31f9e012fa7",
+    "input-bindings-900.png": "d329994d891e7dbcd336fdc531fbc648262bec9a0b0d9c3ba1e210dde1fba913",
+    "needs-attention-1440.png": "12e8745ca6aee68f4807a482f8175e9f6cd89a1b8b03ac59958b9188b7b505cd",
+    "policies-1440.png": "6b999098713d78868f0584e25f91d1ec1bd276653532bb844113a76fcf4d1c7a",
+    "policies-390.png": "bfc4997dd8b00e2239fae9a91e50a094e8b0cb115479ed49883a3c59d2fe67e0",
+    "save-failure-1440.png": "c0a2c9278e0eb9d8f67dfcc07a3fb3cda3f61bb9a6136571fcd2ee01233a9fcf",
+    "schedules-1440.png": "93e4aa7e986926f3a25cc078b6de5afce1c0a3df737adb47f65b0d5fc2d38c03",
+    "schedules-390.png": "0f263e36b1a1c9163bc395969ad59198c2df5df621228981b520a9bad958fcca"
+  },
+  "recordedAt": "2026-11-07T10:35:26.821153+00:00",
+  "prototypeFiles": {
+    "prototype/checks.js": "08f4e0d8ee26f9a71ef99cd4df73b8d83c57984a15e8312028aeb9611473ba6f",
+    "prototype/index.html": "60d3339a999c8bf2ca3f72c79e573ed9b3d3c69719e7a8c0a31216cdf5fd56d2",
+    "prototype/main.tsx": "a0099a59a5ae084abfeed2f0f3ef8da0b24e99ef654c016c9282f79e7cf02a77",
+    "prototype/prototype.css": "974ef39d613a78e86d4cd80485cad099bf70e3ed38a6f38fe7bff5b214f6200f",
+    "prototype/vite.config.ts": "7563bd40533c1a595881eac61fa7f65b8e439311fcf7093035c4f9f085ad97a3"
+  },
+  "cleanup": {
+    "browser": "ui236 closed",
+    "server": "5196 stopped",
+    "temporaryCache": "removed",
+    "database": "none created"
+  }
+}

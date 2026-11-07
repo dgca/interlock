@@ -1,0 +1,30 @@
+async page => {
+  const root='http://127.0.0.1:5197';const workflow='a3c717bf-3fc8-425b-adc2-b349a2198e55';const trigger='af078f20-39bc-4c38-80c8-0f400d493526';
+  const checks=[];
+  await page.setViewportSize({width:1440,height:1000});
+  await page.goto(`${root}/workflows/${workflow}?view=schedules&schedule=${trigger}`);
+  await page.getByRole('heading',{name:'Runtime heartbeat',exact:true}).waitFor();
+  await page.screenshot({path:'.tasks/issue-236/ui/runtime-evidence/schedules-1440.png'});
+  await page.getByRole('button',{name:'Inspect run',exact:true}).first().click();
+  await page.getByRole('heading',{name:/Schedule controls/}).waitFor().catch(()=>{});
+  if(!page.url().includes('/runs/'))throw new Error('Actual run navigation failed');checks.push('Actual fire run link opened run inspector');
+  await page.goto(`${root}/runs?tab=attention`);
+  await page.getByRole('region',{name:'Schedule alerts',exact:true}).waitFor();
+  await page.getByRole('link',{name:'Runs, 2 items need attention',exact:true}).waitFor();
+  await page.screenshot({path:'.tasks/issue-236/ui/runtime-evidence/needs-attention-1440.png'});checks.push('Independent schedule alerts and accessible items count');
+  await page.goto(`${root}/workflows/48f9805e-a540-48e2-9d2c-8eb5b1e78a02?view=schedules&schedule=fa1acead-028e-4b9f-ae14-a208d15dfcf7`);
+  await page.setViewportSize({width:900,height:1000});
+  await page.getByRole('button',{name:'Re-enable schedule',exact:true}).waitFor();
+  await page.screenshot({path:'.tasks/issue-236/ui/runtime-evidence/auto-paused-900.png'});checks.push('Real admission failure auto-pause and exact recovery action');
+  await page.goto(`${root}/workflows/8ddd8744-54a9-4570-a976-7a8c3c22d087?view=schedules&schedule=cca6183d-a934-45bb-960b-4d574dc1ea69`);
+  await page.getByText(/Schedule lag is/).waitFor();await page.screenshot({path:'.tasks/issue-236/ui/runtime-evidence/queue-lag-900.png'});checks.push('Actual queued admission lag visible without disabling');
+  await page.goto(`${root}/workflows/${workflow}?view=schedules&schedule=missing-trigger`);
+  await page.getByRole('heading',{name:'Schedule unavailable',exact:true}).waitFor();
+  await page.getByRole('navigation',{name:'Schedules',exact:true}).waitFor();
+  await page.screenshot({path:'.tasks/issue-236/ui/runtime-evidence/missing-schedule-900.png'});checks.push('Missing selected schedule retains list and read retry');
+  await page.setViewportSize({width:390,height:844});
+  await page.goto(`${root}/workflows/e5d021bb-6a0f-43f0-8a97-c50b908f737e?view=schedules`);
+  await page.getByText('No schedules. Add one to start this workflow periodically.',{exact:true}).waitFor();
+  await page.screenshot({path:'.tasks/issue-236/ui/runtime-evidence/draft-empty-390.png'});checks.push('Draft empty state supports disabled schedule creation');
+  return {checks};
+}

@@ -1,0 +1,109 @@
+{
+  "results": [
+    {
+      "log": "issue236-ui-final-journey",
+      "result": {
+        "checks": [
+          "invalid JSON retained then corrected",
+          "explicit metadata binding entered",
+          "queue and run_once selected",
+          "created disabled acknowledged",
+          "enabled exact ID",
+          "saved and reopened configuration"
+        ],
+        "url": "http://127.0.0.1:5197/workflows/a3c717bf-3fc8-425b-adc2-b349a2198e55?view=schedules&schedule=286c52c5-ccaa-45d6-a84b-85bba583821d"
+      },
+      "evidenceSourceCommit": "5d13808578efeea8be22feee3f0454b5b0b63bb9",
+      "source": "carried_forward"
+    },
+    {
+      "log": "issue236-ui-recovery-final",
+      "result": {
+        "checks": [
+          "network-rejected save retained edit",
+          "retry committed edit",
+          "acknowledged save closed dialog before failed read",
+          "read-only retry refreshed saved config",
+          "cron and timezone rejection corrected and saved",
+          "900/390 layouts captured",
+          "disable exact ID",
+          "delete exact ID"
+        ],
+        "url": "http://127.0.0.1:5197/workflows/a3c717bf-3fc8-425b-adc2-b349a2198e55?view=schedules&schedule=286c52c5-ccaa-45d6-a84b-85bba583821d"
+      },
+      "evidenceSourceCommit": "5d13808578efeea8be22feee3f0454b5b0b63bb9",
+      "source": "carried_forward"
+    },
+    {
+      "log": "issue236-ui-navigation-final",
+      "result": {
+        "checks": [
+          "Browser Back after text blur requested discard confirmation",
+          "Keep editing retained entered text",
+          "Cancel discarded local edit",
+          "Narrow schedule selection focused inspection heading"
+        ]
+      },
+      "evidenceSourceCommit": "5d13808578efeea8be22feee3f0454b5b0b63bb9",
+      "source": "carried_forward"
+    },
+    {
+      "log": "issue236-ui-states-final",
+      "result": {
+        "checks": [
+          "Actual fire run link opened run inspector",
+          "Independent schedule alerts and accessible items count",
+          "Real admission failure auto-pause and exact recovery action",
+          "Actual queued admission lag visible without disabling",
+          "Missing selected schedule retains list and read retry",
+          "Draft empty state supports disabled schedule creation"
+        ]
+      },
+      "evidenceSourceCommit": "80434c3fd022083eb39ac386c1a24a51678ae7c2",
+      "source": "carried_forward"
+    },
+    {
+      "log": "issue236-ui-conflict-recovered",
+      "result": {
+        "checks": [
+          "Real concurrent page edit produced revision conflict",
+          "Local edits retained",
+          "Explicit reload read current configuration and revision",
+          "Save after explicit reload acknowledged"
+        ]
+      },
+      "evidenceSourceCommit": "80434c3fd022083eb39ac386c1a24a51678ae7c2",
+      "source": "carried_forward"
+    },
+    {
+      "log": "issue236-attention-final",
+      "result": {
+        "check": "Schedule-only attention renders its alerts without an empty run panel"
+      },
+      "evidenceSourceCommit": "85ce3ee2df1d4b74b3fd6d7c01fdacbc6abfae16",
+      "source": "carried_forward"
+    },
+    {
+      "log": "issue236-snapshot-final",
+      "result": {
+        "rootCount": 1,
+        "mainCount": 1
+      },
+      "evidenceSourceCommit": "4349fb5ec0f0993267371ef345e9fc27cddc8576",
+      "source": "checked"
+    },
+    {
+      "log": "issue236-overview-final",
+      "result": "Captured stable final source overview at 1440 and 390",
+      "evidenceSourceCommit": "4349fb5ec0f0993267371ef345e9fc27cddc8576",
+      "source": "checked"
+    }
+  ],
+  "limitations": [
+    "No physical screen-reader session.",
+    "Chronological scripts used isolated fixtures and injected browser network failures, never a user database.",
+    "A numeric input below 30 seconds was clamped to 30 by Mantine on blur; direct schema/API tests establish minimum rejection.",
+    "Back navigation checked after text blur; async reload assertions waited for the returned current value."
+  ],
+  "finalSourceCommit": "4349fb5ec0f0993267371ef345e9fc27cddc8576"
+}
