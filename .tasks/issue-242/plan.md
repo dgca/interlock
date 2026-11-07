@@ -27,3 +27,14 @@ The coordinator assigns a separate fresh reviewer to inspect the complete baseli
 ## Delivery
 
 Delivery follows only a passing fresh review at the exact candidate commit. The coordinator directs rebasing, CI, PR creation using the repository template, merge, and worktree cleanup. A changed candidate needs renewed review as required by the workflow.
+
+## Build results
+
+- AC1: `tests/stepResources.test.ts` checks valid declarations and rejects duplicate, empty, excess, invalid-scope, and non-poll Wait requirements. Draft creation remains separate from publication.
+- AC2–AC4: the same suite checks atomic mixed Agent/Script/Fetch contention, bounded execution blockers, a real Script that waits beyond its timeout before launch, polling deadline suspension, and release between probes. Injecting the second reservation write failure leaves the complete prior ownership set unchanged and launches no operation.
+- AC5–AC6: the suite checks Script/Fetch/poll restart uncertainty, queued restart safety, exact uncertain release, active-release rejection, stale callback isolation, and authenticated background recovery. The 25 existing Agent resource tests and 18 background Script tests also pass. Named-pause coverage proves a polling deadline resumes wall-clock behavior when contention ends during a pause.
+- AC7: checked README, the required architecture/resources/v1 docs, timers, agent workflow guidance, and CLI help. Updated affected descriptions for server instructions, briefings, resource inspection/release, Script reconciliation, and cancellation. Reviewed authoring schemas, full inspection, discovery/claim, retry, submission/failure/renewal, and history deletion guidance against the shared API. This is an affected-flow review, not an audit of the complete MCP tool set.
+- AC8: `pnpm test` passed 1,594 tests in 134 files. `pnpm build` passed TypeScript, UI, and package bundling. `pnpm format:check` passed. Proof logs are `/tmp/interlock-242-test.log`, `/tmp/interlock-242-build.log`, and `/tmp/interlock-242-format.log` outside the checkout. The build retains its existing large-chunk advisory.
+- HTTP and stdio transport tests passed identical discovery contracts, including both resource target shapes. Discovery remains at 60 tools and 282,261 bytes, within existing bounds. No tool was added; deterministic targets and owner identities extend the existing bounded, on-demand operation.
+- Human UI verification is deferred by the coordinator's explicit instruction. Existing run progress labels distinguish resource waits, and the owner label covers Agent and deterministic owners. No new UI authoring flow or layout was added.
+- Package smoke testing is not required for this change to execution behavior and CLI help; packaging, CLI startup, and versions are unchanged.

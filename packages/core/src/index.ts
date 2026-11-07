@@ -388,7 +388,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     resources: resourceBindingsSchema
       .optional()
       .describe(
-        'Exclusive library-wide resource names, resolved from existing value bindings at assignment creation. Each must resolve to a distinct nonblank string of at most 120 characters. Agent claims only; no Script/Fetch or OS isolation.',
+        'Exclusive library-wide resource names, resolved from existing value bindings at assignment creation. Each must resolve to a distinct nonblank string of at most 120 characters. Cooperating Agent and deterministic steps only; no OS isolation.',
       ),
     resultRules: resultRulesSchema.optional(),
     prompt: z.string(),
@@ -427,6 +427,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('script'),
+    resources: resourceBindingsSchema.optional(),
     cwd: cwdBindingSchema
       .optional()
       .describe(
@@ -453,6 +454,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('fetch'),
+    resources: resourceBindingsSchema.optional(),
     onFailure: onFailureSchema,
     outputSchema: contractSchema.default({
       type: 'object',
@@ -473,6 +475,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('wait'),
+    resources: resourceBindingsSchema.optional(),
     timing: z
       .discriminatedUnion('kind', [
         z.object({
@@ -649,6 +652,11 @@ export interface NodeExecution {
   status: RunStatus;
   startedAt: string;
   completedAt?: string;
+  resources?: string[];
+  resourceAttempt?: number;
+  resourceActive?: boolean;
+  resourceBlocked?: import('./workResources.js').ResourceBlock;
+  operationStartedAt?: string;
   error?: string;
   childRunIds: string[];
   nextItem: number;
@@ -1078,12 +1086,16 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
   }
   for (const node of d.nodes) {
     const resourceBindings =
-      node.kind === 'agent'
+      'resources' in node
         ? Object.fromEntries(
             (node.resources ?? []).map((b, i) => [String(i), b]),
           )
         : {};
-    if (node.kind === 'agent' && node.resources?.length) {
+    if ('resources' in node && node.resources?.length) {
+      if (node.kind === 'wait' && !isPollWait(node))
+        throw new InterlockError(
+          `${node.label}: only polling Waits support resources`,
+        );
       if (node.resources.some((b) => b.source === 'object'))
         throw new InterlockError(
           `${node.label}: resource bindings must resolve to names, not objects`,

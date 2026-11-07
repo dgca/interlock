@@ -57,6 +57,11 @@ export function runProgress(
   const stateOf = (owner: Run, execution?: NodeExecution): ProgressState => {
     if (!execution)
       return owner.status === 'cancelled' ? 'cancelled' : 'pending';
+    if (
+      execution.resourceBlocked &&
+      ['running', 'waiting'].includes(execution.status)
+    )
+      return 'waiting';
     if (execution.status !== 'waiting') return execution.status;
     if (execution.kind === 'agent')
       return work.some(
@@ -220,6 +225,12 @@ export function runProgress(
           .filter(Boolean)
           .join(' · ');
     }
+    if (
+      !node.batchId &&
+      items[0]?.execution?.resourceBlocked &&
+      state === 'waiting'
+    )
+      label = 'Waiting for a resource';
     nodes[node.id] = { state, label, items, total, finished };
   }
   const current = run.executions.at(-1);
@@ -263,6 +274,8 @@ export function runProgress(
     )
   )
     title = 'Held for external blocker';
+  if (title === 'Waiting' && current?.resourceBlocked)
+    title = 'Waiting for a resource';
   const attention = work.find(
     (w) => needsManagedAttention(w) && !detachedBoundary(w.runId, run.id, runs),
   );

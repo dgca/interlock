@@ -22,7 +22,8 @@ export const resourceNamesSchema = z
   });
 export const resourceOwnerSchema = z.object({
   name: resourceNameSchema,
-  workId: z.string(),
+  workId: z.string().optional(),
+  executionId: z.string().optional(),
   runId: z.string(),
   attempt: z.number().int().positive(),
   state: z.enum(['claimed', 'uncertain']),
@@ -38,26 +39,42 @@ export interface ResourceReservation extends ResourceOwner {
 export interface ResourceBlock {
   owners: ResourceOwner[];
   remainingMs?: number;
+  since?: string;
 }
-export const workResourceRequestSchema = z.discriminatedUnion('action', [
+const executionTarget = {
+  runId: z.string().min(1),
+  executionId: z.string().min(1),
+};
+const releaseFields = {
+  expectedAttempt: z
+    .number()
+    .int()
+    .positive()
+    .max(Number.MAX_SAFE_INTEGER - 1),
+  confirmStopped: z
+    .literal(true)
+    .describe(
+      'Attest that this exact attempt and its subprocesses have stopped using every reserved resource. Cancellation or interruption alone is insufficient.',
+    ),
+  actor: z.string().trim().min(1).max(200),
+};
+export const workResourceRequestSchema = z.union([
   z
     .object({ action: z.literal('inspect'), workId: z.string().min(1) })
     .strict(),
+  z.object({ action: z.literal('inspect'), ...executionTarget }).strict(),
   z
     .object({
       action: z.literal('release'),
       workId: z.string().min(1),
-      expectedAttempt: z
-        .number()
-        .int()
-        .positive()
-        .max(Number.MAX_SAFE_INTEGER - 1),
-      confirmStopped: z
-        .literal(true)
-        .describe(
-          'Attest that this exact old attempt and its subprocesses have stopped using all reserved resources. Cancellation or expiry alone is insufficient.',
-        ),
-      actor: z.string().trim().min(1).max(200),
+      ...releaseFields,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('release'),
+      ...executionTarget,
+      ...releaseFields,
     })
     .strict(),
 ]);

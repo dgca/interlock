@@ -174,7 +174,7 @@ Archive a workflow to move it out of the active library, or restore it later. **
 
 Add a **Wait** node to pause for a duration or until a timestamp from input. The duration editor accepts milliseconds, seconds, minutes, hours, or days. Wait passes its input through unchanged and stores its deadline in SQLite. Cancel stops the wait; restarting resumes it from the original deadline.
 
-To wait for something slow outside Interlock, such as an environment bootstrap or a CI run, choose **When a check passes**. The server runs a Script or Fetch check on an interval against the step input until the chosen output field equals the expected value, then continues with the input merged with the check output. The slow work runs outside the node; a check is a short probe, so a restart only repeats the check. An optional deadline aborts an in-flight check and routes the original input through **Timeout**. Disabling the deadline removes its connection when editor changes are applied. See [timers](docs/timers.md#polling-waits).
+To wait for something slow outside Interlock, such as an environment bootstrap or a CI run, choose **When a check passes**. The server runs a Script or Fetch check on an interval against the step input until the chosen output field equals the expected value, then continues with the input merged with the check output. The slow work runs outside the node; a check is a short probe, so a restart can repeat the check. If it declares resources, uncertain interrupted ownership must be reconciled first. An optional deadline aborts an in-flight check and routes the original input through **Timeout**. Disabling the deadline removes its connection when editor changes are applied. See [timers](docs/timers.md#polling-waits).
 
 Agent settings include **Claim lease** (10 seconds to one hour, five minutes when unset). Workers can override this duration and must renew before expiry. Enable **Separate lease expiry budget** to count missed renewals separately from reported failures; reaching either limit fails the run. See [claim duration and expiry](docs/agent-workflows.md#claim-duration-and-expiry).
 
@@ -194,7 +194,7 @@ Optional `start_run.requestId` recovers the original run after repeated delivery
 
 ### Coordinate shared resources
 
-Agent nodes can require exclusive named resources so cooperating assignments share a checkout, browser or device without overlapping claims. Expiry and cancellation retain uncertain reservations until the executor confirms it stopped. See [Agent resources](docs/work-resources.md) for scope, settings and recovery.
+Agent, Script, Fetch, and polling Wait nodes can require exclusive named resources so cooperating steps share a checkout, browser, or device without overlap. Operations wait before launching, without spending execution timeouts. Interruption and cancellation retain uncertain reservations until the owner confirms it stopped. See [step resources](docs/work-resources.md) for scope, settings, and recovery.
 
 ### Resume an agent run
 

@@ -167,7 +167,10 @@ export class Continuation {
     }));
     const deadlines = [
       ...state.executions
-        .filter((e) => e.kind === 'wait' && e.status === 'waiting')
+        .filter(
+          (e) =>
+            e.kind === 'wait' && e.status === 'waiting' && !e.resourceBlocked,
+        )
         .flatMap((e) => {
           const deadlines: {
             runId: string;
@@ -227,7 +230,8 @@ export class Continuation {
                     ? 'claimed_work'
                     : assignment?.budgetBlocked
                       ? 'budget_blocked'
-                      : assignment?.resourceBlocked
+                      : assignment?.resourceBlocked ||
+                          execution?.resourceBlocked
                         ? 'resource_blocked'
                         : assignment?.cwdBlocked
                           ? 'cwd_blocked'
@@ -253,8 +257,11 @@ export class Continuation {
           ...(assignment?.budgetBlocked
             ? { budgetRunIds: assignment.budgetBlocked.runIds }
             : {}),
-          ...(assignment?.resourceBlocked
-            ? { resourceOwners: assignment.resourceBlocked.owners }
+          ...((assignment?.resourceBlocked ?? execution?.resourceBlocked)
+            ? {
+                resourceOwners: (assignment?.resourceBlocked ??
+                  execution?.resourceBlocked)!.owners,
+              }
             : {}),
           ...(assignment?.cwdBlocked
             ? { cwdBlocked: assignment.cwdBlocked }
@@ -332,13 +339,28 @@ export class Continuation {
         completedAt: e.completedAt,
         hasOutput: Boolean(e.hasOutput),
       }));
-    const resourceBlocked = work
+    const resourceBlocked: {
+      workId?: string;
+      executionId?: string;
+      runId: string;
+      owners: import('@interlock/core').ResourceOwner[];
+    }[] = work
       .filter((w) => w.status === 'available' && w.resourceBlocked)
       .map((w) => ({
         workId: w.id,
         runId: w.runId,
         owners: w.resourceBlocked!.owners,
       }));
+    for (const execution of state.executions)
+      if (
+        execution.resourceBlocked &&
+        ['running', 'waiting'].includes(execution.status)
+      )
+        resourceBlocked.push({
+          executionId: execution.id,
+          runId: execution.runId,
+          owners: execution.resourceBlocked.owners,
+        });
     const uncertain = this.store
       .forRuns<ResourceReservation>(
         resourceCollection,

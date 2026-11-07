@@ -125,7 +125,7 @@ export function WorkPanel({
               <code>{owner.name}</code> ·{' '}
               <Link to={'/runs/' + owner.runId}>Owning run</Link>
               {owner.state === 'uncertain'
-                ? ' · confirmation that the agent stopped is required'
+                ? ' · confirmation that the owner stopped is required'
                 : ' · in use'}
             </li>
           ))}

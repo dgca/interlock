@@ -211,7 +211,8 @@ export const mutationSummarySchema = z.object({
       items: z
         .array(
           z.object({
-            workId: z.string(),
+            workId: z.string().optional(),
+            executionId: z.string().optional(),
             runId: z.string(),
             owners: z.array(resourceOwnerSchema).max(8),
           }),

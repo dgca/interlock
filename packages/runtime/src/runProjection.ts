@@ -167,6 +167,15 @@ export function projectRun(
         'Claim waiting for a shared resource',
         work.createdAt ?? at,
       );
+    else if (current?.resourceBlocked)
+      wait(
+        'resource',
+        current.resourceBlocked.owners.some((o) => o.state === 'uncertain')
+          ? 'person'
+          : 'engine',
+        'Step waiting for a shared resource',
+        current.resourceBlocked.since ?? at,
+      );
     else if (work?.status === 'available')
       wait(
         work.executor ? 'managed_launch' : 'claim_queue',

@@ -508,7 +508,7 @@ export async function runCommand(argv: string[]) {
           'import-starter <starter-id> [--copy] [--request-id key] (explicit published copy; never starts a run)',
           'export <id>',
           'publish <id> [--cascade]',
-          'work-resources <json|@file> (inspect reservations or release an exact uncertain attempt after stop confirmation)',
+          'work-resources <json|@file> (inspect by workId or runId+executionId; release exact uncertain attempt after stop confirmation)',
           'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous]',
           'runs [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
