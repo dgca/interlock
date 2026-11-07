@@ -201,7 +201,6 @@ export interface WorkflowTrigger extends ScheduleConfig {
   autoPaused?: { at: string; reason: string };
   lastLagMs?: number;
   lastCheckedAt?: string;
-  heldSince?: string;
 }
 export interface ScheduleFire {
   id: string;

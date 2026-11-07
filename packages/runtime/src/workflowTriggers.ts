@@ -216,7 +216,6 @@ export class WorkflowTriggers {
           trigger.anchorAt = at;
           trigger.nextFireAt = nextScheduleSlot(trigger.timing, at);
           trigger.lastLagMs = undefined;
-          trigger.heldSince = undefined;
         }
       } else if (q.action === 'enable') {
         this.assertTarget(trigger);
@@ -298,23 +297,17 @@ export class WorkflowTriggers {
       for (const id of settledTriggers) this.store.trimScheduleFires(id);
       for (const trigger of this.store.workflowTriggers()) {
         if (!trigger.enabled || trigger.autoPaused) continue;
-        if (this.store.pauseHolds(trigger.workflowId).length) {
-          if (!trigger.heldSince) {
-            trigger.heldSince = at;
-            this.store.put('workflowTriggers', trigger);
-          }
-          continue;
-        }
-        if (trigger.nextFireAt > at) {
-          if (trigger.heldSince) {
-            trigger.heldSince = undefined;
-            this.store.put('workflowTriggers', trigger);
-          }
-          continue;
-        }
-        const missed =
-          !!trigger.heldSince ||
-          Date.parse(at) - Date.parse(trigger.nextFireAt) > 5000;
+        if (this.store.pauseHolds(trigger.workflowId).length) continue;
+        if (trigger.nextFireAt > at) continue;
+        const due = Date.parse(trigger.nextFireAt);
+        const heldAtSlot = this.store
+          .pauseHolds(trigger.workflowId, true)
+          .some(
+            (hold) =>
+              Date.parse(hold.createdAt) <= due &&
+              (!hold.releasedAt || Date.parse(hold.releasedAt) > due),
+          );
+        const missed = heldAtSlot || Date.parse(at) - due > 5000;
         const slot = missed
           ? latestScheduleSlot(trigger.timing, at, trigger.anchorAt)
           : trigger.nextFireAt;
@@ -372,7 +365,6 @@ export class WorkflowTriggers {
           trigger.anchorAt,
         );
         trigger.lastCheckedAt = at;
-        trigger.heldSince = undefined;
         this.store.put('scheduleFires', fire);
         this.store.put('workflowTriggers', trigger);
         this.store.trimScheduleFires(trigger.id);

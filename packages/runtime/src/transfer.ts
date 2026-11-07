@@ -370,7 +370,6 @@ export function importWorkflows(
           consecutiveFailures: 0,
           autoPaused: undefined,
           lastLagMs: undefined,
-          heldSince: undefined,
         });
       }
     const all = store.workflows();

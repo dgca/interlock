@@ -640,3 +640,42 @@ it('serializes genuinely concurrent scheduler processes on the same SQLite slot'
     });
   }
 });
+
+it.each(['skip', 'run_once'] as const)(
+  'applies %s to a hold covering the slot between scheduler ticks',
+  (policy) => {
+    const e = setup(),
+      w = workflow(e),
+      t = create(e, w.id, { missedFirePolicy: policy });
+    vi.setSystemTime(Date.parse(base) + 29500);
+    const h = e.pauses.create({
+      target: { scope: 'workflow', workflowId: w.id },
+      actor: 'short',
+      reason: 'Short hold',
+    });
+    vi.setSystemTime(Date.parse(base) + 31500);
+    e.pauses.resume(h.id);
+    at(e, 32000);
+    expect(e.store.runs()).toHaveLength(policy === 'skip' ? 0 : 1);
+    expect(fires(e, t)[0].outcome).toBe(
+      policy === 'skip' ? 'skipped_missed' : 'started',
+    );
+  },
+);
+it('does not miss a slot merely because a hold ended before that slot', () => {
+  const e = setup(),
+    w = workflow(e),
+    t = create(e, w.id);
+  vi.setSystemTime(Date.parse(base) + 10000);
+  const h = e.pauses.create({
+    target: { scope: 'library' },
+    actor: 'early',
+    reason: 'Earlier hold',
+  });
+  e.pump();
+  vi.setSystemTime(Date.parse(base) + 20000);
+  e.pauses.resume(h.id);
+  at(e, 30000);
+  expect(e.store.runs()).toHaveLength(1);
+  expect(fires(e, t)[0].outcome).toBe('started');
+});
