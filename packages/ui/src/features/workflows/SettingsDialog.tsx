@@ -8,7 +8,7 @@ import {
   SegmentedControl,
 } from '@mantine/core';
 import { useRef, useState } from 'react';
-import { ArrowLeft, Download, Plus, Trash2 } from 'lucide-react';
+import { Download, Plus, Trash2 } from 'lucide-react';
 import {
   nodeSchema,
   outgoingPorts,
@@ -17,6 +17,7 @@ import {
   type WorkflowNode,
 } from '@interlock/core';
 import { Modal } from '../../components/Modal/Modal';
+import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
 import { Button } from '../../components/Button/Button';
 import {
   ContractEditor,
@@ -53,9 +54,11 @@ export function SettingsDialog({
   onOpenWorkflow,
   workflowId,
   canExport = true,
+  returnFocusTo,
 }: Settings & {
   workflowId?: string;
   canExport?: boolean;
+  returnFocusTo?: () => HTMLElement | null;
   onCreateChild?: (
     name: string,
     settings: Settings,
@@ -129,7 +132,18 @@ export function SettingsDialog({
   const form = useRef<HTMLDivElement>(null);
   const patchDefinition = (patch: Partial<WorkflowDefinition>) =>
     setSettings((s) => ({ ...s, definition: { ...s.definition, ...patch } }));
-  const back = () => setContract(undefined);
+  const contractTrigger = useRef<HTMLElement | null>(null);
+  const openContract = (page: ContractPage) => {
+    contractTrigger.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    setContract(page);
+  };
+  const back = () => {
+    setContract(undefined);
+    requestAnimationFrame(() => contractTrigger.current?.focus());
+  };
   const apply = async () => {
     if (creating && !nodeDraft) return;
     const invalid = Array.from(
@@ -242,230 +256,230 @@ export function SettingsDialog({
           'Workflow settings'
         )
       }
+      returnFocusTo={returnFocusTo}
+      backLabel={contract ? 'Back to settings' : undefined}
       onClose={creatingChild ? () => {} : contract ? back : onClose}
-      size={nodeDraft && !contract ? 880 : 960}
-      className={nodeDraft && !contract ? styles.nodeDialog : undefined}
-      classNames={
-        nodeDraft && !contract
-          ? { header: styles.header, body: styles.body }
-          : undefined
-      }
+      size={contract ? 960 : nodeDraft ? 880 : 720}
+      height={nodeDraft && !contract ? 820 : undefined}
+      busy={creatingChild}
     >
       {contract && (
-        <>
-          <Button variant="ghost" onClick={back}>
-            <ArrowLeft />
-            Back to settings
-          </Button>
-          <ContractForm
-            value={contract.value}
-            onClose={back}
-            onApply={(schema) => {
-              contract.onApply(schema);
-              back();
-            }}
-          />
-        </>
+        <ContractForm
+          value={contract.value}
+          onClose={back}
+          onApply={(schema) => {
+            contract.onApply(schema);
+            back();
+          }}
+        />
       )}
-      <div
-        hidden={Boolean(contract)}
-        className={nodeDraft ? styles.nodeSettings : undefined}
-      >
-        <div
-          ref={form}
-          className={nodeDraft ? styles.nodeContent : styles.content}
-        >
-          <fieldset
-            disabled={creatingChild}
-            style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
-            className={nodeDraft ? styles.nodeFields : undefined}
+      <div hidden={Boolean(contract)} className={styles.settings}>
+        <ModalBody flush={Boolean(nodeDraft)}>
+          <div
+            ref={form}
+            className={nodeDraft ? styles.nodeContent : undefined}
           >
-            <ContractNavigation.Provider value={setContract}>
-              {creating && (
-                <div className={styles.typeChooser}>
-                  <NativeSelect
-                    label="Node type"
-                    value={nodeDraft?.kind ?? ''}
-                    onChange={(e) => chooseType(e.target.value)}
-                  >
-                    <option value="agent">Agent</option>
-                    <option value="script">Script</option>
-                    <option value="fetch">Fetch</option>
-                    <option value="wait">Wait</option>
-                    <option value="input">External input</option>
-                    <option value="switch">Branch</option>
-                    <option value="workflow">Workflow</option>
-                    <option value="batch">Batch</option>
-                  </NativeSelect>
-                  {nodeDraft && (
-                    <p className="hint">{nodeDescriptions[nodeDraft.kind]}</p>
+            <fieldset
+              disabled={creatingChild}
+              style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+              className={nodeDraft ? styles.nodeFields : undefined}
+            >
+              <ContractNavigation.Provider value={openContract}>
+                {creating && (
+                  <div className={styles.typeChooser}>
+                    <NativeSelect
+                      label="Node type"
+                      value={nodeDraft?.kind ?? ''}
+                      onChange={(e) => chooseType(e.target.value)}
+                    >
+                      <option value="agent">Agent</option>
+                      <option value="script">Script</option>
+                      <option value="fetch">Fetch</option>
+                      <option value="wait">Wait</option>
+                      <option value="input">External input</option>
+                      <option value="switch">Branch</option>
+                      <option value="workflow">Workflow</option>
+                      <option value="batch">Batch</option>
+                    </NativeSelect>
+                    {nodeDraft && (
+                      <p className="hint">{nodeDescriptions[nodeDraft.kind]}</p>
+                    )}
+                  </div>
+                )}
+                {creating &&
+                  nodeDraft?.kind === 'workflow' &&
+                  onCreateChild && (
+                    <div className={styles.workflowSource}>
+                      <Input.Wrapper label="Workflow source" mb="md">
+                        <SegmentedControl
+                          mt={4}
+                          style={{ display: 'flex', width: 'fit-content' }}
+                          aria-label="Workflow source"
+                          value={targetMode}
+                          onChange={setTargetMode}
+                          disabled={creatingChild}
+                          data={[
+                            {
+                              value: 'existing',
+                              label: 'Use existing workflow',
+                            },
+                            { value: 'child', label: 'Create child workflow' },
+                          ]}
+                        />
+                      </Input.Wrapper>
+                      {targetMode === 'child' && (
+                        <TextInput
+                          label="Child workflow name"
+                          mb="md"
+                          required
+                          maxLength={120}
+                          value={childName}
+                          disabled={creatingChild}
+                          onChange={(e) => setChildName(e.target.value)}
+                        />
+                      )}
+                    </div>
                   )}
-                </div>
-              )}
-              {creating && nodeDraft?.kind === 'workflow' && onCreateChild && (
-                <div className={styles.workflowSource}>
-                  <Input.Wrapper label="Workflow source" mb="md">
-                    <SegmentedControl
-                      mt={4}
-                      style={{ display: 'flex', width: 'fit-content' }}
-                      aria-label="Workflow source"
-                      value={targetMode}
-                      onChange={setTargetMode}
-                      disabled={creatingChild}
-                      data={[
-                        { value: 'existing', label: 'Use existing workflow' },
-                        { value: 'child', label: 'Create child workflow' },
-                      ]}
-                    />
-                  </Input.Wrapper>
-                  {targetMode === 'child' && (
-                    <TextInput
-                      label="Child workflow name"
-                      mb="md"
-                      required
-                      maxLength={120}
-                      value={childName}
-                      disabled={creatingChild}
-                      onChange={(e) => setChildName(e.target.value)}
-                    />
-                  )}
-                </div>
-              )}
-              {nodeDraft ? (
-                <NodeInspector
-                  section={nodeSection}
-                  onSectionChange={setNodeSection}
-                  prompts={prompts}
-                  node={nodeDraft}
-                  creating={creating}
-                  workflowId={workflowId}
-                  hideWorkflowTarget={
-                    creating && targetMode === 'child' && Boolean(onCreateChild)
-                  }
-                  onOpenWorkflow={
-                    JSON.stringify(nodeDraft) === JSON.stringify(node)
-                      ? onOpenWorkflow
-                      : undefined
-                  }
-                  workflows={workflows}
-                  definition={settings.definition}
-                  onBoundaryChange={(schema) =>
-                    patchDefinition(
-                      nodeDraft.kind === 'entry'
-                        ? { inputSchema: schema }
-                        : { outputSchema: schema },
-                    )
-                  }
-                  onChange={setNodeDraft}
-                />
-              ) : creating ? (
-                <p className="hint">
-                  Choose the type of step you want to add, then configure it
-                  here.
-                </p>
-              ) : (
-                <>
-                  <TextInput
-                    mb="md"
-                    label="Name"
-                    required
-                    value={settings.name}
-                    onChange={(e) =>
-                      setSettings((s) => ({ ...s, name: e.target.value }))
+                {nodeDraft ? (
+                  <NodeInspector
+                    section={nodeSection}
+                    onSectionChange={setNodeSection}
+                    prompts={prompts}
+                    node={nodeDraft}
+                    creating={creating}
+                    workflowId={workflowId}
+                    hideWorkflowTarget={
+                      creating &&
+                      targetMode === 'child' &&
+                      Boolean(onCreateChild)
                     }
-                  />
-
-                  <Textarea
-                    mb="md"
-                    label="Description"
-                    rows={4}
-                    value={settings.description}
-                    onChange={(e) =>
-                      setSettings((s) => ({
-                        ...s,
-                        description: e.target.value,
-                      }))
-                    }
-                  />
-
-                  <ExecutorSelect
-                    value={settings.definition.executor}
-                    workflowPermissions={settings.definition.agentPermissions}
-                    workflowModel={settings.definition.agentModel}
-                    workflowEffort={settings.definition.agentEffort}
-                    onEffortChange={(agentEffort) =>
-                      patchDefinition({ agentEffort })
-                    }
-                    onModelChange={(agentModel) =>
-                      patchDefinition({ agentModel })
-                    }
-                    onPermissionsChange={(agentPermissions) =>
-                      patchDefinition({ agentPermissions })
-                    }
-                    onChange={(executor) =>
-                      patchDefinition({ executor: executor ?? undefined })
-                    }
-                  />
-                  <ContractEditor
-                    label="Workflow input"
-                    value={settings.definition.inputSchema}
-                    onChange={(inputSchema) => patchDefinition({ inputSchema })}
-                  />
-                  <ContractEditor
-                    label="Workflow output"
-                    value={settings.definition.outputSchema}
-                    onChange={(outputSchema) =>
-                      patchDefinition({ outputSchema })
-                    }
-                  />
-
-                  <TextInput
-                    mb="md"
-                    label="Maximum steps per run"
-                    description="Each Batch item has its own budget. Waiting uses one step, regardless of duration. Entry, Exit, and repeated visits count too."
-                    type="number"
-                    min={2}
-                    max={1000}
-                    required
-                    value={settings.definition.maxSteps}
-                    onChange={(e) =>
-                      patchDefinition({ maxSteps: Number(e.target.value) })
-                    }
-                  />
-
-                  <Button
-                    disabled={!canExport}
-                    title={
-                      !canExport
-                        ? 'Export with owned children is not available yet'
+                    onOpenWorkflow={
+                      JSON.stringify(nodeDraft) === JSON.stringify(node)
+                        ? onOpenWorkflow
                         : undefined
                     }
-                    onClick={() => {
-                      if (!workflowId) {
-                        download(`${settings.name}.json`, settings);
-                        return;
+                    workflows={workflows}
+                    definition={settings.definition}
+                    onBoundaryChange={(schema) =>
+                      patchDefinition(
+                        nodeDraft.kind === 'entry'
+                          ? { inputSchema: schema }
+                          : { outputSchema: schema },
+                      )
+                    }
+                    onChange={setNodeDraft}
+                  />
+                ) : creating ? (
+                  <p className="hint">
+                    Choose the type of step you want to add, then configure it
+                    here.
+                  </p>
+                ) : (
+                  <>
+                    <TextInput
+                      mb="md"
+                      label="Name"
+                      required
+                      value={settings.name}
+                      onChange={(e) =>
+                        setSettings((s) => ({ ...s, name: e.target.value }))
                       }
-                      void api.workflows.exportDraft
-                        .mutate({
-                          id: workflowId,
-                          name: settings.name,
-                          description: settings.description,
-                          draft: settings.definition,
-                        })
-                        .then((bundle) => {
-                          download(`${settings.name}.json`, bundle);
-                        })
-                        .catch((error) => setError(error.message));
-                    }}
-                  >
-                    <Download />
-                    Export workflow
-                  </Button>
-                </>
-              )}
-            </ContractNavigation.Provider>
-          </fieldset>
-        </div>
+                    />
+
+                    <Textarea
+                      mb="md"
+                      label="Description"
+                      rows={4}
+                      value={settings.description}
+                      onChange={(e) =>
+                        setSettings((s) => ({
+                          ...s,
+                          description: e.target.value,
+                        }))
+                      }
+                    />
+
+                    <ExecutorSelect
+                      value={settings.definition.executor}
+                      workflowPermissions={settings.definition.agentPermissions}
+                      workflowModel={settings.definition.agentModel}
+                      workflowEffort={settings.definition.agentEffort}
+                      onEffortChange={(agentEffort) =>
+                        patchDefinition({ agentEffort })
+                      }
+                      onModelChange={(agentModel) =>
+                        patchDefinition({ agentModel })
+                      }
+                      onPermissionsChange={(agentPermissions) =>
+                        patchDefinition({ agentPermissions })
+                      }
+                      onChange={(executor) =>
+                        patchDefinition({ executor: executor ?? undefined })
+                      }
+                    />
+                    <ContractEditor
+                      label="Workflow input"
+                      value={settings.definition.inputSchema}
+                      onChange={(inputSchema) =>
+                        patchDefinition({ inputSchema })
+                      }
+                    />
+                    <ContractEditor
+                      label="Workflow output"
+                      value={settings.definition.outputSchema}
+                      onChange={(outputSchema) =>
+                        patchDefinition({ outputSchema })
+                      }
+                    />
+
+                    <TextInput
+                      mb="md"
+                      label="Maximum steps per run"
+                      description="Each Batch item has its own budget. Waiting uses one step, regardless of duration. Entry, Exit, and repeated visits count too."
+                      type="number"
+                      min={2}
+                      max={1000}
+                      required
+                      value={settings.definition.maxSteps}
+                      onChange={(e) =>
+                        patchDefinition({ maxSteps: Number(e.target.value) })
+                      }
+                    />
+
+                    <Button
+                      disabled={!canExport}
+                      title={
+                        !canExport
+                          ? 'Export with owned children is not available yet'
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (!workflowId) {
+                          download(`${settings.name}.json`, settings);
+                          return;
+                        }
+                        void api.workflows.exportDraft
+                          .mutate({
+                            id: workflowId,
+                            name: settings.name,
+                            description: settings.description,
+                            draft: settings.definition,
+                          })
+                          .then((bundle) => {
+                            download(`${settings.name}.json`, bundle);
+                          })
+                          .catch((error) => setError(error.message));
+                      }}
+                    >
+                      <Download />
+                      Export workflow
+                    </Button>
+                  </>
+                )}
+              </ContractNavigation.Provider>
+            </fieldset>
+          </div>
+        </ModalBody>
         {node &&
           nodeDraft &&
           settings.definition.edges.some(
@@ -474,10 +488,7 @@ export function SettingsDialog({
               outgoingPorts(node).includes(edge.port) &&
               !outgoingPorts(nodeDraft).includes(edge.port),
           ) && (
-            <p
-              className={`hint ${nodeDraft ? styles.feedback : ''}`}
-              role="status"
-            >
+            <p className={`hint ${styles.feedback}`} role="status">
               Applying these changes removes connections for:{' '}
               {[
                 ...new Set(
@@ -495,56 +506,56 @@ export function SettingsDialog({
             </p>
           )}
         {error && (
-          <p
-            role="alert"
-            className={`error-text ${nodeDraft ? styles.feedback : ''}`}
-          >
+          <p role="alert" className={`error-text ${styles.feedback}`}>
             {error}
           </p>
         )}
-        <footer className={styles.footer}>
-          {onDelete &&
-            node &&
-            !creating &&
-            node.kind !== 'entry' &&
-            node.kind !== 'exit' && (
-              <MantineButton
-                variant="subtle"
-                color="red"
-                leftSection={<Trash2 size={14} aria-hidden />}
-                onClick={onDelete}
-              >
-                Delete node
-              </MantineButton>
-            )}
-          {!node && !creating && (
-            <p className="hint">
-              Changes apply to the draft. Save and publish from the workflow
-              toolbar.
-            </p>
-          )}
-          <div className={styles.actions}>
-            <Button onClick={onClose} disabled={creatingChild}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={apply}
-              disabled={creatingChild || (creating && !nodeDraft)}
-            >
-              {creatingChild
-                ? 'Creating…'
-                : creating &&
-                    nodeDraft?.kind === 'workflow' &&
-                    targetMode === 'child' &&
-                    onCreateChild
-                  ? 'Save and create child'
-                  : creating
-                    ? 'Add node'
-                    : 'Apply changes'}
-            </Button>
-          </div>
-        </footer>
+        <ModalFooter
+          aside={
+            <>
+              {onDelete &&
+                node &&
+                !creating &&
+                node.kind !== 'entry' &&
+                node.kind !== 'exit' && (
+                  <MantineButton
+                    variant="subtle"
+                    color="red"
+                    leftSection={<Trash2 size={14} aria-hidden />}
+                    onClick={onDelete}
+                  >
+                    Delete node
+                  </MantineButton>
+                )}
+              {!node && !creating && (
+                <p className="hint">
+                  Changes apply to the draft. Save and publish from the workflow
+                  toolbar.
+                </p>
+              )}
+            </>
+          }
+        >
+          <Button onClick={onClose} disabled={creatingChild}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={apply}
+            disabled={creatingChild || (creating && !nodeDraft)}
+          >
+            {creatingChild
+              ? 'Creating…'
+              : creating &&
+                  nodeDraft?.kind === 'workflow' &&
+                  targetMode === 'child' &&
+                  onCreateChild
+                ? 'Save and create child'
+                : creating
+                  ? 'Add node'
+                  : 'Apply changes'}
+          </Button>
+        </ModalFooter>
       </div>
     </Modal>
   );

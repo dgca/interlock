@@ -155,12 +155,6 @@ pre {
   margin-left: auto;
   color: var(--muted);
 }
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 9px;
-  margin-top: 25px;
-}
 .error-text {
   color: #edaa95;
   font-size: 11px;
@@ -174,11 +168,16 @@ pre {
   color: #edb99c;
   overflow-wrap: anywhere;
 }
+.engine-warning {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+}
 .action-toast {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  z-index: 1100;
+  z-index: 100;
   width: min(380px, calc(100vw - 40px));
   box-shadow: 0 8px 28px #0005;
 }
@@ -215,9 +214,11 @@ summary {
   text-align: left;
   color: var(--muted);
   font-size: 11px;
+}
+button.run-row {
   cursor: pointer;
 }
-.run-row:hover {
+button.run-row:hover {
   background: var(--surface-hover);
 }
 .run-row:last-child {
@@ -341,9 +342,12 @@ summary {
 @media (max-width: 600px) {
   .app {
     flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
   }
   .main {
-    height: calc(100dvh - 60px);
+    height: auto;
+    min-height: 0;
   }
 }
 
@@ -353,11 +357,17 @@ summary {
   align-items: flex-start;
   gap: 6px;
 }
+.run-status .run-wait-reason,
 .run-status .run-attention {
-  color: var(--mantine-color-yellow-3);
   font-size: 11px;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+.run-status .run-wait-reason {
+  color: var(--muted);
+}
+.run-status .run-attention {
+  color: var(--mantine-color-yellow-3);
 }
 
 .run-tabs {
@@ -381,7 +391,7 @@ summary {
   .run-row.table-heading > span:nth-child(n + 3) {
     display: none;
   }
-  .run-row:not(.table-heading) > span:nth-child(4)::after {
+  button.run-row > span:nth-child(4)::after {
     content: ' steps';
   }
 }

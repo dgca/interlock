@@ -12,6 +12,7 @@ import {
   type Contract,
 } from '@interlock/core';
 import { Modal } from '../Modal/Modal';
+import { ModalBody, ModalFooter } from '../Modal/ModalLayout';
 import { Button } from '../Button/Button';
 import { FieldEditor } from './FieldEditor';
 import styles from './ContractEditor.module.css';
@@ -156,154 +157,161 @@ export function ContractForm({
   };
   return (
     <>
-      <Tabs
-        value={mode}
-        onChange={(value) => {
-          if (value === 'fields' || value === 'advanced' || value === 'example')
-            switchMode(value);
-        }}
-        mb="lg"
-      >
-        <Tabs.List>
-          <Tabs.Tab
-            value="fields"
-            disabled={issues.length > 0 || Boolean(parseError)}
-            leftSection={<List size={15} />}
-          >
-            Fields
-          </Tabs.Tab>
-          <Tabs.Tab value="advanced" leftSection={<Braces size={15} />}>
-            Advanced JSON
-          </Tabs.Tab>
-          <Tabs.Tab value="example" leftSection={<WandSparkles size={15} />}>
-            Generate from example JSON
-          </Tabs.Tab>
-        </Tabs.List>
-        <Tabs.Panel value={mode} pt="lg">
-          <div ref={body} className={styles.layout}>
-            <section className={styles.editing}>
-              {mode === 'example' ? (
-                <>
-                  <h3>Start with a result you would expect</h3>
-                  <p className="hint">
-                    This creates a replacement draft. Review it before applying.
-                    Examples reveal structure, but cannot establish which fields
-                    are always required.
-                  </p>
+      <ModalBody>
+        <Tabs
+          value={mode}
+          onChange={(value) => {
+            if (
+              value === 'fields' ||
+              value === 'advanced' ||
+              value === 'example'
+            )
+              switchMode(value);
+          }}
+          classNames={{ tab: styles.modeTab, tabSection: styles.modeIcon }}
+          mb="lg"
+        >
+          <Tabs.List aria-label="Contract editor mode">
+            <Tabs.Tab
+              value="fields"
+              disabled={issues.length > 0 || Boolean(parseError)}
+              leftSection={<List size={15} />}
+            >
+              Fields
+            </Tabs.Tab>
+            <Tabs.Tab value="advanced" leftSection={<Braces size={15} />}>
+              JSON Schema
+            </Tabs.Tab>
+            <Tabs.Tab value="example" leftSection={<WandSparkles size={15} />}>
+              From example
+            </Tabs.Tab>
+          </Tabs.List>
+          <Tabs.Panel value={mode} pt="lg">
+            <div ref={body} className={styles.layout}>
+              <section className={styles.editing}>
+                {mode === 'example' ? (
+                  <>
+                    <h3>Start with a result you would expect</h3>
+                    <p className="hint">
+                      This creates a replacement draft. Review it before
+                      applying. Examples reveal structure, but cannot establish
+                      which fields are always required.
+                    </p>
 
-                  <Textarea
-                    mb="md"
-                    label="Example JSON"
-                    aria-label="Example JSON"
-                    styles={{ input: { fontFamily: 'var(--mono)' } }}
-                    rows={14}
-                    value={example}
-                    placeholder={
-                      '{\n  "findings": "...",\n  "sources": [{"title": "Docs", "url": "https://example.com"}]\n}'
-                    }
-                    onChange={(e) => setExample(e.target.value)}
-                  />
-
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      try {
-                        if (example.length > 100000)
-                          throw new Error(
-                            'Use an example smaller than 100 KB.',
-                          );
-                        const inferred = inferContract(JSON.parse(example));
-                        setDraft(inferred.schema);
-                        setRaw(JSON.stringify(inferred.schema, null, 2));
-                        setNotes(inferred.notes);
-                        setMode(
-                          visualIssues(inferred.schema).length
-                            ? 'advanced'
-                            : 'fields',
-                        );
-                        setError('');
-                      } catch (e) {
-                        setError((e as Error).message);
+                    <Textarea
+                      mb="md"
+                      label="Example JSON"
+                      aria-label="Example JSON"
+                      styles={{ input: { fontFamily: 'var(--mono)' } }}
+                      rows={14}
+                      value={example}
+                      placeholder={
+                        '{\n  "findings": "...",\n  "sources": [{"title": "Docs", "url": "https://example.com"}]\n}'
                       }
-                    }}
-                  >
-                    Generate draft
-                  </Button>
-                </>
-              ) : mode === 'advanced' ? (
-                <>
-                  {issues.length > 0 && (
-                    <div className={styles.notice}>
-                      <strong>Preserved in advanced mode</strong>
-                      <p>
-                        This contract uses features the field editor cannot
-                        represent. Its full schema stays intact.
-                      </p>
-                      <ul>
-                        {issues.slice(0, 5).map((issue) => (
-                          <li key={issue}>{issue}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                      onChange={(e) => setExample(e.target.value)}
+                    />
 
-                  <Textarea
-                    mb="md"
-                    label="JSON Schema"
-                    aria-label="Advanced JSON Schema"
-                    styles={{ input: { fontFamily: 'var(--mono)' } }}
-                    rows={22}
-                    value={raw}
-                    spellCheck={false}
-                    onChange={(e) => {
-                      setRaw(e.target.value);
-                      setError('');
-                    }}
-                  />
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        try {
+                          if (example.length > 100000)
+                            throw new Error(
+                              'Use an example smaller than 100 KB.',
+                            );
+                          const inferred = inferContract(JSON.parse(example));
+                          setDraft(inferred.schema);
+                          setRaw(JSON.stringify(inferred.schema, null, 2));
+                          setNotes(inferred.notes);
+                          setMode(
+                            visualIssues(inferred.schema).length
+                              ? 'advanced'
+                              : 'fields',
+                          );
+                          setError('');
+                        } catch (e) {
+                          setError((e as Error).message);
+                        }
+                      }}
+                    >
+                      Generate draft
+                    </Button>
+                  </>
+                ) : mode === 'advanced' ? (
+                  <>
+                    {issues.length > 0 && (
+                      <div className={styles.notice}>
+                        <strong>Preserved in advanced mode</strong>
+                        <p>
+                          This contract uses features the field editor cannot
+                          represent. Its full schema stays intact.
+                        </p>
+                        <ul>
+                          {issues.slice(0, 5).map((issue) => (
+                            <li key={issue}>{issue}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
-                  {parseError && <p className="error-text">{parseError}</p>}
-                </>
-              ) : (
-                <FieldEditor schema={draft} onChange={setDraft} />
-              )}
-            </section>
-            <aside className={styles.preview}>
-              <span className="eyebrow">EXAMPLE VALUE</span>
-              <p className="hint">
-                An illustrative value, updated as you edit. Field descriptions
-                guide the agent; required fields may still use an explicit
-                “unknown” choice.
-              </p>
-              {!issues.length && !parseError ? (
-                <pre aria-label="Example value">
-                  {JSON.stringify(contractExample(candidate), null, 2)}
-                </pre>
-              ) : (
+                    <Textarea
+                      mb="md"
+                      label="JSON Schema"
+                      aria-label="Advanced JSON Schema"
+                      styles={{ input: { fontFamily: 'var(--mono)' } }}
+                      rows={22}
+                      value={raw}
+                      spellCheck={false}
+                      onChange={(e) => {
+                        setRaw(e.target.value);
+                        setError('');
+                      }}
+                    />
+
+                    {parseError && <p className="error-text">{parseError}</p>}
+                  </>
+                ) : (
+                  <FieldEditor schema={draft} onChange={setDraft} />
+                )}
+              </section>
+              <aside className={styles.preview}>
+                <span className="eyebrow">EXAMPLE VALUE</span>
                 <p className="hint">
-                  Preview is available for contracts supported by the field
-                  editor.
+                  An illustrative value, updated as you edit. Field descriptions
+                  guide the agent; required fields may still use an explicit
+                  “unknown” choice.
                 </p>
-              )}
-              {notes.length > 0 && (
-                <div className={styles.notice}>
-                  <strong>Review these assumptions</strong>
-                  <ul>
-                    {notes.map((note) => (
-                      <li key={note}>{note}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </aside>
-          </div>
-        </Tabs.Panel>
-      </Tabs>
-      {error && (
-        <p className="error-text" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="modal-actions">
+                {!issues.length && !parseError ? (
+                  <pre aria-label="Example value">
+                    {JSON.stringify(contractExample(candidate), null, 2)}
+                  </pre>
+                ) : (
+                  <p className="hint">
+                    Preview is available for contracts supported by the field
+                    editor.
+                  </p>
+                )}
+                {notes.length > 0 && (
+                  <div className={styles.notice}>
+                    <strong>Review these assumptions</strong>
+                    <ul>
+                      {notes.map((note) => (
+                        <li key={note}>{note}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </aside>
+            </div>
+          </Tabs.Panel>
+        </Tabs>
+        {error && (
+          <p className="error-text" role="alert">
+            {error}
+          </p>
+        )}
+      </ModalBody>
+      <ModalFooter>
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="primary"
@@ -312,7 +320,7 @@ export function ContractForm({
         >
           Apply contract
         </Button>
-      </div>
+      </ModalFooter>
     </>
   );
 }

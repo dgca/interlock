@@ -1076,6 +1076,15 @@ export class Engine {
     const run = this.run(id);
     const handledFailure = this.handledWorkflowFailure(run);
     const allRuns = this.store.runs();
+    if (run.batchNodeId && run.parentRunId && !run.parentExecutionId) {
+      const invocation = allRuns
+        .find((parent) => parent.id === run.parentRunId)
+        ?.executions.find((step) => step.childRunIds.includes(run.id));
+      if (invocation) {
+        run.parentExecutionId = invocation.id;
+        run.batchItemIndex ??= invocation.childRunIds.indexOf(run.id);
+      }
+    }
     const ids = new Set([id]);
     let changed = true;
     while (changed) {
@@ -1820,6 +1829,7 @@ export class Engine {
             if (node.kind === 'batch') {
               child.workflowName = `${node.label} · item ${execution.nextItem + 1}`;
               child.batchItemIndex = execution.nextItem;
+              child.parentExecutionId = execution.id;
               this.save(child);
             }
             execution.childRunIds.push(child.id);

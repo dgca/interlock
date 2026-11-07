@@ -71,10 +71,12 @@ beforeEach(async () => {
         h(HistoryCleanupDialog, {
           workflows: [{ value: 'workflow', label: 'Research' }],
           onClose: vi.fn(),
-          act: async (fn) => {
+          act: async (fn, _success, onError) => {
             try {
               await fn();
-            } catch {}
+            } catch (error) {
+              onError?.((error as Error).message);
+            }
           },
         }),
       ),

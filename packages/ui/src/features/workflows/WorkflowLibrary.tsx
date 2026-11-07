@@ -44,6 +44,24 @@ export function WorkflowLibrary({
   }, [importing]);
   const [deleting, setDeleting] = useState<Workflow>();
   const [importedIds, setImportedIds] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
+  const createPending = useRef(false);
+  const create = async () => {
+    if (createPending.current) return;
+    createPending.current = true;
+    setCreating(true);
+    try {
+      await act(async () => {
+        const workflow = await api.workflows.create.mutate({
+          name: 'Untitled workflow',
+        });
+        onOpen(workflow.id);
+      }, 'Workflow created.');
+    } finally {
+      createPending.current = false;
+      setCreating(false);
+    }
+  };
   const visible = workflows.filter(
     (w) =>
       !w.ownerWorkflowId &&
@@ -69,17 +87,12 @@ export function WorkflowLibrary({
           </Button>
           <Button
             variant="primary"
-            onClick={() =>
-              void act(async () => {
-                const w = await api.workflows.create.mutate({
-                  name: 'Untitled workflow',
-                });
-                onOpen(w.id);
-              }, 'Workflow created.')
-            }
+            disabled={creating}
+            aria-busy={creating}
+            onClick={() => void create()}
           >
             <Plus />
-            New workflow
+            {creating ? 'Creating…' : 'New workflow'}
           </Button>
         </div>
       </header>
@@ -284,6 +297,9 @@ export function WorkflowLibrary({
       {deleting && (
         <DeleteWorkflowDialog
           workflow={deleting}
+          hasChildren={workflows.some(
+            (child) => child.ownerWorkflowId === deleting.id,
+          )}
           act={act}
           onClose={() => setDeleting(undefined)}
           onDeleted={() => setDeleting(undefined)}

@@ -1,3 +1,4 @@
+import { LoadingSkeleton } from '../../components/LoadingSkeleton/LoadingSkeleton';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   ActionIcon,
@@ -199,7 +200,7 @@ export function ModelPicker({
             )}
             {loading && (
               <Combobox.Empty>
-                <Loader size="xs" /> Loading models…
+                <LoadingSkeleton label="Loading models…" />
               </Combobox.Empty>
             )}
             {!loading && catalog?.status === 'ready' && !models.length && (

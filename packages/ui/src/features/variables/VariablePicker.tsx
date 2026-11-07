@@ -1,3 +1,4 @@
+import { LoadingSkeleton } from '../../components/LoadingSkeleton/LoadingSkeleton';
 import { useEffect, useRef, useState } from 'react';
 import { Select, Stack, Text } from '@mantine/core';
 import { api, errorMessage } from '../../lib/api';
@@ -129,7 +130,7 @@ export function VariablePicker({
         ? optionLabel(selected)
         : selection?.referenceId === value && selection.error
           ? 'Variable unavailable'
-          : 'Loading variable…',
+          : 'Selected variable',
       description: selected?.description ?? '',
     });
   const selectedLabel = options.find((option) => option.value === value)?.label;
@@ -191,7 +192,11 @@ export function VariablePicker({
         }}
         placeholder="Select a variable"
         nothingFoundMessage={
-          loading ? 'Loading variables…' : 'No matching variables'
+          loading ? (
+            <LoadingSkeleton label="Loading variables…" />
+          ) : (
+            'No matching variables'
+          )
         }
         error={
           (required && !value && selectionInvalid ? selectionError : '') ||

@@ -162,9 +162,9 @@ async function mount(path?: string) {
   );
 }
 async function click(label: string) {
-  const button = [...document.querySelectorAll('button')].find(
-    (b) => b.textContent === label,
-  )!;
+  const button = [
+    ...document.querySelectorAll<HTMLElement>('button, nav a'),
+  ].find((b) => b.textContent === label)!;
   expect(button, label).toBeTruthy();
   await act(async () => button.click());
 }
@@ -221,7 +221,7 @@ it('keeps a deep link while data loads and shows missing resources without redir
     }),
   );
   await mount('/workflows/missing');
-  expect(container.textContent).toContain('Loading workflows');
+  expect(container.textContent).toContain('Loading workflow…');
   expect(container.textContent).not.toContain('Open workflow');
   await act(async () => resolve([]));
   expect(container.textContent).toContain('Workflow not found');
@@ -333,7 +333,7 @@ it('shows global human attention, deep-links to its assignment, and preserves th
   ]);
   await mount('/workflows');
   const badge = container.querySelector(
-    'button[aria-label="Runs, 1 run needs attention"]',
+    'a[aria-label="Runs, 1 run needs attention"]',
   );
   expect(badge?.textContent).toBe('Runs1');
   await act(async () => router.navigate('/runs?tab=attention'));
@@ -355,7 +355,7 @@ it('shows global human attention, deep-links to its assignment, and preserves th
     await new Promise((resolve) => setTimeout(resolve, 150));
   });
   expect(
-    container.querySelector('button[aria-label="Runs, 1 run needs attention"]'),
+    container.querySelector('a[aria-label="Runs, 1 run needs attention"]'),
   ).toBeNull();
   expect(container.textContent).toContain('No runs need your attention.');
 });
@@ -381,9 +381,9 @@ it('loads history only on the Runs view and restores the page after inspection',
   await mount('/workflows/w1');
   expect(queries.summaries).not.toHaveBeenCalled();
   await act(async () => router.navigate('/runs?tab=history'));
-  const next = [...container.querySelectorAll('button')].find(
-    (button) => button.textContent === 'Next',
-  )!;
+  const next = [
+    ...container.querySelectorAll<HTMLElement>('button, nav a'),
+  ].find((button) => button.textContent === 'Next')!;
   await act(async () => {
     next.focus();
     next.click();

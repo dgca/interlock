@@ -45,12 +45,6 @@
   border: 0;
   min-width: 0;
 }
-.createHeader {
-  padding: 20px;
-}
-.createBody {
-  padding: 4px 20px 20px;
-}
 .selection {
   padding: 12px 14px;
   border: 1px solid var(--border);
@@ -73,11 +67,5 @@
 @media (max-width: 600px) {
   section.editor {
     height: calc(100dvh - 60px);
-  }
-  .createHeader {
-    padding: 16px;
-  }
-  .createBody {
-    padding: 4px 16px 16px;
   }
 }

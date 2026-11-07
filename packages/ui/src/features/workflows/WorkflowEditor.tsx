@@ -35,6 +35,8 @@ import {
   type WorkflowDefinition,
 } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
+import { Modal } from '../../components/Modal/Modal';
+import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
 import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 import { parseRawDefinition } from './rawDefinition';
 import { SettingsDialog, type Settings } from './SettingsDialog';
@@ -53,6 +55,10 @@ import { tidyWorkflowElk } from './workflowLayoutElk';
 import { TidyControl } from './TidyControl';
 import { api } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
+// Keep the workflow toolbar and lower canvas controls outside fitted node bounds.
+const editorFitView = {
+  padding: { top: '82px', right: '24px', bottom: '162px', left: '24px' },
+} as const;
 const nodeTypes = { workflow: FlowNode };
 const edgeTypes = { loop: LoopEdge, ortho: OrthoEdge };
 export function WorkflowEditor({
@@ -87,6 +93,7 @@ export function WorkflowEditor({
   const owner = workflows.find((w) => w.id === workflow.ownerWorkflowId);
   const hasChildren = workflows.some((w) => w.ownerWorkflowId === workflow.id);
   const [deleting, setDeleting] = useState(false);
+  const [confirmReload, setConfirmReload] = useState(false);
   const [review, setReview] = useState<{
     draft: WorkflowDefinition;
     revision: number;
@@ -124,7 +131,7 @@ export function WorkflowEditor({
     if (!fitAfterTidy.current) return;
     fitAfterTidy.current = false;
     const frame = requestAnimationFrame(() => {
-      void flowRef.current?.fitView({ padding: 0.22, duration: 180 });
+      void flowRef.current?.fitView({ ...editorFitView, duration: 180 });
     });
     return () => cancelAnimationFrame(frame);
   }, [draft]);
@@ -142,7 +149,7 @@ export function WorkflowEditor({
   }, [draft]);
   const applyTidy = (before: WorkflowDefinition, next: WorkflowDefinition) => {
     if (JSON.stringify(next) === JSON.stringify(before)) {
-      void flowRef.current?.fitView({ padding: 0.22, duration: 180 });
+      void flowRef.current?.fitView({ ...editorFitView, duration: 180 });
       return;
     }
     fitAfterTidy.current = true;
@@ -150,6 +157,7 @@ export function WorkflowEditor({
   };
   const [revision, setRevision] = useState(workflow.draftRevision),
     [selected, setSelected] = useState<Set<string>>(new Set());
+  const workflowActions = useRef<HTMLButtonElement>(null);
   const [editing, setEditing] = useState<{
     node?: WorkflowNode;
     creating?: boolean;
@@ -513,32 +521,29 @@ export function WorkflowEditor({
           <ArrowLeft />
         </Button>
         <div className={styles.title}>
-          <span>
-            {owner ? (
-              <>
-                <button
-                  className={styles.ownerLink}
-                  title={owner.name}
-                  onClick={() => onOpenWorkflow?.(owner.id)}
-                >
-                  {owner.name}
-                </button>{' '}
-                / CHILD WORKFLOW
-              </>
-            ) : (
-              'WORKFLOW'
-            )}
-          </span>
+          {owner && (
+            <span>
+              <button
+                className={styles.ownerLink}
+                title={owner.name}
+                onClick={() => onOpenWorkflow?.(owner.id)}
+              >
+                {owner.name}
+              </button>
+            </span>
+          )}
           <strong title={name}>{name}</strong>
+          <div
+            className={styles.draftStatus}
+            role="status"
+            data-dirty={dirty || undefined}
+          >
+            {dirty ? 'Unsaved changes' : 'Draft saved'} ·{' '}
+            {workflow.latestVersion
+              ? `v${workflow.latestVersion} published`
+              : 'Unpublished'}
+          </div>
         </div>
-        <span
-          className={styles.saved}
-          hidden={editorWidth > 0 && editorWidth < 1000}
-        >
-          {dirty
-            ? 'Unsaved changes'
-            : `Draft saved · ${workflow.latestVersion ? `v${workflow.latestVersion} published` : 'unpublished'}`}
-        </span>
         <div className={styles.headerActions}>
           {section === 'editor' && (
             <>
@@ -638,6 +643,7 @@ export function WorkflowEditor({
                 variant="subtle"
                 color="gray"
                 aria-label="Workflow actions"
+                ref={workflowActions}
                 disabled={Boolean(pending)}
               >
                 <MoreHorizontal size={19} />
@@ -758,16 +764,7 @@ export function WorkflowEditor({
               This workflow changed elsewhere. Your edits are still here. Load
               the latest draft before saving or publishing.
             </span>
-            <Button
-              onClick={() => {
-                if (
-                  window.confirm(
-                    'Discard your local edits and load the latest draft?',
-                  )
-                )
-                  loadLatest();
-              }}
-            >
+            <Button onClick={() => setConfirmReload(true)}>
               Load latest draft
             </Button>
           </div>
@@ -776,6 +773,7 @@ export function WorkflowEditor({
           <div
             ref={boxZoom.containerRef}
             {...boxZoom.handlers}
+            data-raw-view={view === 'raw' || undefined}
             className={`${styles.canvasWrap} ${navigationStyles.viewport} ${boxZoom.active ? navigationStyles.boxZoomReady : ''}`}
           >
             <div className={styles.canvasToolbar}>
@@ -1001,6 +999,7 @@ export function WorkflowEditor({
                     setEditing({ node: n.data.node });
                   }}
                   {...canvasNavigation(boxZoom.active)}
+                  fitViewOptions={editorFitView}
                   selectionOnDrag={!boxZoom.active}
                   selectionKeyCode={boxZoom.active ? null : 'Shift'}
                   nodesDraggable={!boxZoom.active}
@@ -1020,7 +1019,10 @@ export function WorkflowEditor({
                   }
                 >
                   <Background color="var(--canvas-dot)" gap={22} size={1} />
-                  <Controls showInteractive={false}>
+                  <Controls
+                    showInteractive={false}
+                    fitViewOptions={editorFitView}
+                  >
                     <TidyControl
                       disabled={!canTidy || arranging}
                       arranging={arranging}
@@ -1076,6 +1078,32 @@ export function WorkflowEditor({
           {runsView}
         </Tabs.Panel>
       </Tabs>
+      {confirmReload && remoteChanged && (
+        <Modal
+          title="Load the latest draft?"
+          onClose={() => setConfirmReload(false)}
+        >
+          <ModalBody>
+            <p>
+              This discards your local edits and opens the latest saved draft.
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={() => setConfirmReload(false)}>
+              Keep editing
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setConfirmReload(false);
+                loadLatest();
+              }}
+            >
+              Discard and load draft
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
       {review && (
         <PublishReviewDialog
           workflowId={workflow.id}
@@ -1118,7 +1146,9 @@ export function WorkflowEditor({
       {deleting && (
         <DeleteWorkflowDialog
           workflow={workflow}
+          hasChildren={hasChildren}
           act={act}
+          returnFocusTo={() => workflowActions.current}
           onClose={() => setDeleting(false)}
           onDeleted={onDeleted}
         />
@@ -1135,6 +1165,22 @@ export function WorkflowEditor({
           workflows={workflows}
           workflowId={workflow.id}
           canExport={true}
+          returnFocusTo={() => {
+            const id = editing.node?.id;
+            if (!id) return editing.creating ? null : workflowActions.current;
+            const card = Array.from(
+              editorRef.current?.querySelectorAll<HTMLElement>(
+                '.react-flow__node[data-id]',
+              ) ?? [],
+            ).find((element) => element.dataset.id === id);
+            return (
+              card?.querySelector<HTMLElement>(
+                'button[aria-label^="Edit "], button.nodrag',
+              ) ??
+              card ??
+              null
+            );
+          }}
           onOpenWorkflow={onOpenWorkflow}
           onCreateChild={
             !workflow.ownerWorkflowId && !workflow.archived && onOpenWorkflow
