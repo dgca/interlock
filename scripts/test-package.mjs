@@ -74,6 +74,7 @@ try {
   const env = {
     ...process.env,
     PATH: `${join(prefix, 'bin')}:${process.env.PATH}`,
+    INTERLOCK_SECRET_KEY_FILE: join(temp, 'secret.key'),
   };
   assert.equal(
     execFileSync(bin, ['--version'], {
@@ -517,8 +518,89 @@ try {
     workerId: 'package-http-smoke',
     leaseSeconds: 3600,
   });
+  const backgroundWorkflow = await call('create_workflow', {
+    name: 'Packed background recovery',
+    definition: {
+      nodes: [
+        { id: 'entry', kind: 'entry', label: 'Input' },
+        {
+          id: 'script',
+          kind: 'script',
+          label: 'Offline work',
+          language: 'javascript',
+          executionMode: 'background',
+          timeoutMs: 10000,
+          command:
+            "require('node:fs').appendFileSync('background-effects','x'); await new Promise(r=>setTimeout(r,500)); return {recovered:true};",
+        },
+        { id: 'exit', kind: 'exit', label: 'Output' },
+      ],
+      edges: [
+        { id: 'a', source: 'entry', target: 'script' },
+        { id: 'b', source: 'script', target: 'exit' },
+      ],
+    },
+  });
+  await call('publish_workflow', { id: backgroundWorkflow.id });
+  const backgroundRun = await call('start_run', {
+    workflowId: backgroundWorkflow.id,
+    input: null,
+    detail: 'full',
+  });
+  const backgroundExecution = backgroundRun.run.executions.find(
+    (step) => step.kind === 'script',
+  );
+  let backgroundState;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    backgroundState = await call('manage_script', {
+      request: {
+        action: 'inspect',
+        runId: backgroundRun.run.id,
+        executionId: backgroundExecution.id,
+      },
+    });
+    if (backgroundState.background.state === 'running') break;
+    await delay(50);
+  }
+  assert.equal(backgroundState.background.state, 'running');
+  const cliBackground = JSON.parse(
+    execFileSync(
+      bin,
+      [
+        'script',
+        JSON.stringify({
+          action: 'inspect',
+          runId: backgroundRun.run.id,
+          executionId: backgroundExecution.id,
+        }),
+      ],
+      { cwd: workdir, env: { ...env, INTERLOCK_URL: url }, encoding: 'utf8' },
+    ),
+  );
+  assert.equal(cliBackground.executionId, backgroundExecution.id);
   await stop();
   await start('npx');
+  let recoveredBackground;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    recoveredBackground = await call('get_run', { id: backgroundRun.run.id });
+    if (recoveredBackground.run.status === 'completed') break;
+    await delay(50);
+  }
+  assert.equal(
+    recoveredBackground.run.status,
+    'completed',
+    JSON.stringify(recoveredBackground.run),
+  );
+  assert.deepEqual(recoveredBackground.run.output, { recovered: true });
+  assert.equal(
+    recoveredBackground.run.executions.filter((step) => step.kind === 'script')
+      .length,
+    1,
+  );
+  assert.equal(
+    await readFile(join(workdir, 'background-effects'), 'utf8'),
+    'x',
+  );
   const restartedConnection = (
     await fetch(`${url}/trpc/connection`).then((r) => r.json())
   ).result.data;
@@ -791,7 +873,7 @@ try {
     (await call('list_workflows')).some((item) => item.id === workflow.id),
   );
   console.log(
-    'Packed global and npx installs passed: CLI, UI assets, HTTP and stdio MCP, assignments across restart, JavaScript execution, persistence, and reviewed history cleanup.',
+    'Packed global and npx installs passed: CLI, UI assets, HTTP and stdio MCP, assignments across restart, JavaScript execution, supervised background recovery without replay, persistence, and reviewed history cleanup.',
   );
 } catch (error) {
   console.error(logs);

@@ -250,7 +250,17 @@ JavaScript receives `input` and must return a JSON value. The runner wraps the c
 
 Both languages inherit the service environment and OS permissions. Script execution is not sandboxed. Installed copies default to the directory where `interlock` starts; development defaults to the checkout. `--workdir` on the installed CLI or `INTERLOCK_WORKDIR` overrides the working directory.
 
-A Script node's `timeoutMs` defaults to 60,000 milliseconds and accepts integers from 100 to 3,600,000. Scripts also have output limits. Cancellation kills their process group. Shutdown stops local script processes. On restart, persisted interrupted script executions become failures because their side effects are uncertain. Interlock never automatically replays them. An explicit retry can repeat side effects, so inspect the failed step first.
+A Script node's `timeoutMs` defaults to 60,000 milliseconds and accepts integers from 100 to 3,600,000. Scripts also have output limits. Omitted `executionMode` or `"foreground"` retains the server-owned runner. Cancellation kills its process group, shutdown stops it, and restart marks an interrupted execution failed. Interlock never automatically replays interrupted operations. An explicit retry can repeat effects.
+
+Opt into `executionMode: "background"` or the editor's **Background execution** switch for a local supervisor that survives server shutdown. This requires a file-backed database on the same host and user account. The server persists launch intent before spawning; the supervisor owns the Script process group, absolute deadline and encrypted progress/result receipts beside the database in `<database>.scripts/`. Command, input, environment and per-execution encryption key travel through stdin. The existing protected-value vault stores the key. Keep the database, spool and original vault key together for recovery. Workflow exports exclude these local execution records.
+
+Restart reconnects to the same run and execution. OS PID, process start identity and an unpredictable execution token identify a live supervisor. Authenticated terminal receipts can be recovered after the supervisor exits. The existing guarded settlement transaction validates the JSON result, applies optional failure routing and advances once. No missing launch or result record authorizes a replay. Missing, corrupt or mismatched evidence marks the execution `uncertain` and fails terminally. After inspecting the original process group and external effects, an operator must confirm `stopped:true` with a reason through `runs.script`, CLI `interlock script`, or MCP `manage_script` before explicit retry can create a new execution. This guard also covers failed attached descendants resumed by a Workflow or Batch parent retry. Completed children are retained, and detached runs keep their independent lifecycle.
+
+Cancellation writes a durable stop request to the verified supervisor, which kills its Script process group. A stop during the launch handshake is recorded for the original supervisor before it starts the Script. `stop` also cancels the owning run. Use `inspect` afterward to confirm cleanup; an unverifiable supervisor requires explicit stopped reconciliation. Server shutdown only disconnects background monitoring. Deadlines remain enforced offline. Polling Script checks keep their existing server-owned behavior.
+
+Run inspection includes `execution.background` with state, deadline, supervisor PID/start identity and at most 8 KiB of recent stderr progress. JavaScript console logs use stderr; stdout remains one JSON value with a 1 MiB limit. Secret-consuming Scripts suppress live stderr until completion, then apply the existing complete-buffer redaction before tail selection. Their buffered stderr is bounded to 1 MiB and encrypted on disk. Non-secret progress retains a bounded tail. Success data is redacted before validation and persistence, as with foreground Scripts. Owner-only spool files, their protected encryption keys and launch records are retained separately from run history; deleting run history does not remove them. Spool retention is not automatic. History deletion blocks unfinished or uncertain background executions until outcome inspection or explicit stopped reconciliation.
+
+This mode does not survive host loss, guarantee transactional external effects, or manage detached processes that leave the Script's process group. If a supervisor disappears without a valid result, inspect effects and recover explicitly.
 
 Script execution happens outside database transactions. Agent claims and result submission remain available while scripts run. Completed script results are committed before advancing dependent steps.
 
@@ -283,8 +293,10 @@ A workflow or node ID is omitted if it contains a NUL byte, cannot be
 represented as UTF-8, or exceeds 16 KiB in UTF-8. Existing definitions with
 these IDs can still execute.
 
-If adding context exceeds the OS process launch limit, Interlock uses the
-original environment. This fallback applies only before the Script starts.
+For foreground Scripts, if adding context exceeds the OS process launch limit,
+Interlock uses the original environment. This fallback applies only before the
+Script starts. The background supervisor records Script child-launch errors as
+operation failures; a missing supervisor leaves an uncertain outcome.
 
 A retry of a retained execution without an attempt record treats that
 execution as attempt 1.

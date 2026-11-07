@@ -1,3 +1,4 @@
+import { scriptOperationSchema } from '@interlock/core';
 import { listStarters, importStarter } from './starters.js';
 import { parseImportDocument } from '../../core/src/importDocument.js';
 import { workResourceRequestSchema } from '@interlock/core';
@@ -487,6 +488,9 @@ export const appRouter = t.router({
       .mutation(({ ctx, input }) => ctx.engine.versions.delete(input)),
   }),
   runs: t.router({
+    script: p
+      .input(scriptOperationSchema)
+      .mutation(({ ctx, input }) => ctx.engine.manageScript(input)),
     externalInputStatus: p
       .input(externalInputStatusSchema)
       .query(({ ctx, input }) => ctx.engine.externalInputs.status(input)),

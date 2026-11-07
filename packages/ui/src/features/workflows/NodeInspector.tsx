@@ -474,6 +474,20 @@ export function NodeInspector({
                 value={node.timeoutMs}
                 onChange={(timeoutMs) => patch({ timeoutMs })}
               />
+              <Switch
+                mt="md"
+                mb="md"
+                label="Background execution"
+                description="Keeps running across server restarts and recovers its result. Uncertain outcomes require explicit recovery."
+                checked={node.executionMode === 'background'}
+                onChange={(event) =>
+                  patch({
+                    executionMode: event.currentTarget.checked
+                      ? 'background'
+                      : 'foreground',
+                  })
+                }
+              />
             </NodeSection>
           </>
         )}

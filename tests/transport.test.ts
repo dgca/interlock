@@ -1466,6 +1466,63 @@ it.each(['stdio', 'http'])(
       expect(client.getInstructions()).toContain(
         'Detached descendants can remain active',
       );
+      const scriptTool = tools.find((tool) => tool.name === 'manage_script')!;
+      expect(scriptTool.description).toContain('stopped:true');
+      for (const action of ['inspect', 'stop'])
+        assertContract(
+          scriptTool.inputSchema,
+          { request: { action, runId: 'run', executionId: 'execution' } },
+          'Script operation',
+        );
+      assertContract(
+        scriptTool.inputSchema,
+        {
+          request: {
+            action: 'reconcile',
+            runId: 'run',
+            executionId: 'execution',
+            stopped: true,
+            reason: 'Processes stopped and effects inspected',
+          },
+        },
+        'Script recovery',
+      );
+      expect(() =>
+        assertContract(
+          scriptTool.inputSchema,
+          {
+            request: {
+              action: 'reconcile',
+              runId: 'run',
+              executionId: 'execution',
+              stopped: false,
+              reason: 'Unsafe',
+            },
+          },
+          'Script recovery',
+        ),
+      ).toThrow();
+      const backgroundDraft = blankDefinition();
+      backgroundDraft.nodes[1] = nodeSchema.parse({
+        id: 'agent',
+        label: 'Background',
+        kind: 'script',
+        executionMode: 'background',
+        language: 'javascript',
+        command: 'return 1;',
+      });
+      assertContract(
+        tools.find((tool) => tool.name === 'create_workflow')!.inputSchema,
+        jsonSchema.parse({ name: 'Background', definition: backgroundDraft }),
+        'Background authoring',
+      );
+      const missingScript = await client.callTool({
+        name: 'manage_script',
+        arguments: {
+          request: { action: 'inspect', runId: w.id, executionId: 'missing' },
+        },
+      });
+      expect(missingScript.isError).toBe(true);
       expect(tools.find((t) => t.name === 'cancel_run')!.description).toContain(
         'stops at detached',
       );

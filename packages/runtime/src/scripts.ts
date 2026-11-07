@@ -3,7 +3,7 @@ import { jsonSchema, type Json, type WorkflowNode } from '@interlock/core';
 
 type ScriptLanguage = Extract<WorkflowNode, { kind: 'script' }>['language'];
 
-function javascriptRunner(command: string) {
+export function javascriptRunner(command: string) {
   const source = `(async function(input, require) {\n${command}\n})`;
   return `
 const input = JSON.parse(require('node:fs').readFileSync(0, 'utf8'));

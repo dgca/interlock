@@ -1,3 +1,8 @@
+export {
+  scriptOperationSchema,
+  type ScriptOperation,
+  type BackgroundScript,
+} from './backgroundScripts.js';
 export type { RunAttention, RunAttentionReason } from './runAttention.js';
 export * from './workResources.js';
 export * from './executors.js';
@@ -243,7 +248,7 @@ const onFailureSchema = z
   .enum(['fail', 'route'])
   .optional()
   .describe(
-    'Omit or use fail to stop the run. route requires a failed edge and all configured success routes (default without result routing). Failed receives {input, error: {nodeId, executionId, kind: script|fetch, category: execution|http|output, message}, output}. input is the resolved operation input; output is returned JSON or null if unavailable. The success outputSchema does not apply to Failed; its destination validates the envelope. Only operation errors, rejected HTTP statuses and output-contract failures route. Input/request validation, cancellation, step limits, result-routing/output-mapping errors and interrupted operations after restart remain terminal. No automatic retry.',
+    'Omit or use fail to stop the run. route requires a failed edge and all configured success routes (default without result routing). Failed receives {input, error: {nodeId, executionId, kind: script|fetch, category: execution|http|output, message}, output}. input is the resolved operation input; output is returned JSON or null if unavailable. The success outputSchema does not apply to Failed; its destination validates the envelope. Only operation errors, rejected HTTP statuses and output-contract failures route. Input/request validation, cancellation, step limits, result-routing/output-mapping errors and uncertain interruptions remain terminal. Background Scripts recover authenticated outcomes after restart; foreground interruptions remain terminal. No automatic retry.',
   );
 
 const nodeShapeSchema = z.discriminatedUnion('kind', [
@@ -316,6 +321,12 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     ...nodeBase,
     kind: z.literal('script'),
     onFailure: onFailureSchema,
+    executionMode: z
+      .enum(['foreground', 'background'])
+      .optional()
+      .describe(
+        'Background opts into local supervision across server restarts. Uncertain outcomes require explicit stopped reconciliation before retry. Polling checks remain foreground.',
+      ),
     environment: scriptEnvironmentSchema.optional(),
     // Older saved nodes omit language and must continue to run as Bash.
     language: z.enum(['javascript', 'bash']).optional(),
@@ -504,6 +515,7 @@ export interface NodeExecution {
   attempt?: number;
   retryChildRunIds?: string[];
   request?: FetchRequest;
+  background?: import('./backgroundScripts.js').BackgroundScript;
   externalInput?: import('./externalInput.js').ExternalInputMetadata;
   resumeAt?: string;
   /** Polling Wait: when the next check runs, the deadline, and the latest check. */

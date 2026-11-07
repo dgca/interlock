@@ -43,7 +43,7 @@ The success output contract does not apply to the failure envelope. The destinat
 
 The operation stays `failed` in history, with its error, available raw output, completion time, and `port: "failed"`. The run can continue and finish `completed`. Run inspection identifies the Failed route, and the testbench can check a recorded failed route. Earlier-node bindings select only completed executions, so recovery should read the incoming envelope. A completed recovery run cannot be explicitly retried.
 
-Input-contract errors, missing input bindings, invalid Fetch request resolution, step limits, and graph errors remain terminal. Cancellation never follows recovery. A server interruption still fails pending Script and Fetch operations with an instruction to inspect external effects before explicitly retrying. An operation timeout can leave uncertain external effects too; recovery is not proof that an external write did not happen. The engine never automatically replays it.
+Input-contract errors, missing input bindings, invalid Fetch request resolution, step limits, and graph errors remain terminal. Cancellation never follows recovery. A server interruption still fails pending foreground Script and Fetch operations with an instruction to inspect external effects before explicitly retrying. An operation timeout can leave uncertain external effects too; recovery is not proof that an external write did not happen. The engine never automatically replays it.
 
 Inside a Batch, both routes must stay in the item scope and reach End. Routing directly to that Batch's End returns the envelope as the item's successful result. Unhandled item failures retain the Batch's `all` or `collect` policy. Recovery loops outside Batch item paths count against the existing step limit.
 
@@ -99,3 +99,5 @@ Route-enabled allocation and caller links commit together, and routing uses a sa
 Agent attempts and claim correction, detached runs, and polling Wait checks retain their existing behavior. Automatic retry, backoff, and executor fallback remain outside this feature.
 
 With [result routing](node-data.md), connect every configured success branch and the independent `failed` port. Result-routing or output-mapping errors stay terminal; they do not represent a failed operation and do not take Failed. Failure envelopes bypass success-result routing and mapping.
+
+Background Scripts recover authenticated durable outcomes after restart. Their operation errors, offline timeouts and output-contract failures use the same Failed envelope. Cancellation and uncertain recovery evidence stay terminal. Use [explicit Script recovery](architecture.md#scripts-and-interruptions) before retrying uncertainty.
