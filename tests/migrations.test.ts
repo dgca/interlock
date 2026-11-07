@@ -70,10 +70,47 @@ const next = [
 it('initializes empty databases and reopens current databases without a backup', () => {
   const file = path();
   const db = open(file);
-  expect(migrate(db, file)).toEqual({ from: 0, to: 8 });
+  expect(migrate(db, file)).toEqual({ from: 0, to: 9 });
   expect(db.prepare('PRAGMA synchronous').get()).toEqual({ synchronous: 2 });
-  expect(migrate(db, file)).toEqual({ from: 8, to: 8 });
+  expect(migrate(db, file)).toEqual({ from: 9, to: 9 });
   expect(existsSync(`${file}.backups`)).toBe(false);
+});
+
+it('indexes queued comparison roots during schema-8 upgrade without rewriting run documents', () => {
+  const file = path(),
+    db = open(file);
+  migrate(db, file, migrations.slice(0, 8));
+  const run = {
+    id: 'queued-root',
+    status: 'queued',
+    comparison: { comparisonId: 'comparison' },
+    admission: { priority: 7 },
+  };
+  db.prepare('INSERT INTO documents VALUES (?, ?, ?)').run(
+    'runs',
+    run.id,
+    JSON.stringify(run),
+  );
+  expect(db.prepare('SELECT * FROM active_comparison_runs').all()).toEqual([]);
+  const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
+  expect(migrate(db, file)).toMatchObject({
+    from: 8,
+    to: 9,
+    backup: expect.any(String),
+  });
+  expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
+    before,
+  );
+  expect(db.prepare('SELECT * FROM active_comparison_runs').all()).toEqual([
+    { run_id: run.id, comparison_id: 'comparison' },
+  ]);
+  expect(
+    db
+      .prepare(
+        "SELECT id FROM documents INDEXED BY runs_admission_queue WHERE collection='runs' AND json_extract(value,'$.status')='queued'",
+      )
+      .all(),
+  ).toEqual([{ id: run.id }]);
 });
 
 it.each([
@@ -237,7 +274,7 @@ it('opens the previous release without rewriting records and executes its publis
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 1,
-    to: 8,
+    to: 9,
     backup: expect.any(String),
   });
   expect(
@@ -246,7 +283,7 @@ it('opens the previous release without rewriting records and executes its publis
         "SELECT name FROM sqlite_schema WHERE type = 'index' AND name LIKE 'runs_%'",
       )
       .all(),
-  ).toHaveLength(6);
+  ).toHaveLength(7);
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
     before,
   );
@@ -286,7 +323,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 2,
-    to: 8,
+    to: 9,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -299,7 +336,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   expect(revision).toBeGreaterThan(0);
   const reopened = new Store(file);
   connections.push(reopened);
-  expect(reopened.migration).toEqual({ from: 8, to: 8 });
+  expect(reopened.migration).toEqual({ from: 9, to: 9 });
   expect(reopened.continuation(run.id).revision).toBe(revision);
   store.remove('runs', run.id);
   expect(
@@ -321,7 +358,7 @@ it('adds run summary indexes to schema-6 databases without rewriting records', (
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 6,
-    to: 8,
+    to: 9,
     backup: expect.any(String),
   });
   expect(store.get('runs', run.id)).toEqual(run);

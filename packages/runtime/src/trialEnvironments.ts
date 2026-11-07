@@ -27,7 +27,8 @@ export const trialReserved = (s: ComparisonSample) =>
     s.trial &&
     ['preparing', 'ready'].includes(s.trial.preparation),
   );
-const active = (r: Run) => r.status === 'running' || r.status === 'waiting';
+const active = (r: Run) =>
+  r.status === 'queued' || r.status === 'running' || r.status === 'waiting';
 const now = () => new Date().toISOString();
 const errorText = (e: unknown) =>
   (e instanceof Error ? e.message : String(e)).slice(0, 512);

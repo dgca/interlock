@@ -175,7 +175,14 @@ export const mutationSummarySchema = z.object({
     .describe(
       'Continuation lifecycle ID. Use with the returned cursor for wait_for_run_change.',
     ),
-  runStatus: z.enum(['running', 'waiting', 'completed', 'failed', 'cancelled']),
+  runStatus: z.enum([
+    'queued',
+    'running',
+    'waiting',
+    'completed',
+    'failed',
+    'cancelled',
+  ]),
   cursor: z.string(),
   nextWork: z.object({
     items: z.array(continuationWorkSchema).max(100),

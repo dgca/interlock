@@ -153,6 +153,29 @@ export const migrations: readonly Migration[] = [
       );
     },
   },
+  {
+    version: 9,
+    up(db) {
+      db.exec(`
+        DROP TRIGGER active_comparison_insert;
+        DROP TRIGGER active_comparison_update;
+        DELETE FROM active_comparison_runs;
+        INSERT INTO active_comparison_runs SELECT id, json_extract(value, '$.comparison.comparisonId')
+        FROM documents WHERE collection = 'runs'
+          AND json_extract(value, '$.status') IN ('queued', 'running', 'waiting')
+          AND json_type(value, '$.comparison.comparisonId') = 'text';
+        CREATE INDEX runs_admission_queue ON documents(coalesce(json_extract(value, '$.admission.priority'), 0) DESC)
+          WHERE collection = 'runs' AND json_extract(value, '$.status') = 'queued';
+      `);
+      for (const operation of ['INSERT', 'UPDATE'])
+        db.exec(`CREATE TRIGGER active_comparison_${operation.toLowerCase()} AFTER ${operation} ON documents
+          WHEN NEW.collection = 'runs' BEGIN
+          DELETE FROM active_comparison_runs WHERE run_id = NEW.id;
+          INSERT INTO active_comparison_runs SELECT NEW.id, json_extract(NEW.value, '$.comparison.comparisonId')
+            WHERE json_extract(NEW.value, '$.status') IN ('queued', 'running', 'waiting')
+            AND json_type(NEW.value, '$.comparison.comparisonId') = 'text'; END;`);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

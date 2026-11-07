@@ -78,6 +78,7 @@ import { assignmentInstructions } from './agentInstructions.js';
 import { executeFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 import { RunStarts } from './runStarts.js';
+import { RunAdmission } from './runAdmission.js';
 import { RunHistory } from './runHistory.js';
 import { TrialEnvironments } from './trialEnvironments.js';
 import { Continuation } from './continuation.js';
@@ -953,6 +954,7 @@ export class Engine {
     batchNodeId?: string,
     comparison?: import('@interlock/core').ComparisonRunContext,
     continuedFrom?: Run,
+    startOptions?: RunStartOptions,
   ): Run {
     const w = this.workflow(workflowId);
     // Preserve existing dispatch-time failures for invalid nested pins; cleanup
@@ -988,6 +990,12 @@ export class Engine {
       : undefined;
     const time = now();
     const run: Run = {
+      ...(startOptions?.requestId !== undefined
+        ? { startRequestId: startOptions.requestId }
+        : {}),
+      ...(startOptions?.externalTask
+        ? { externalTask: startOptions.externalTask }
+        : {}),
       ...(comparison ? { comparison } : {}),
       ...(continuedFrom?.externalTask
         ? { externalTask: continuedFrom.externalTask }
@@ -1051,8 +1059,13 @@ export class Engine {
       rollover.continueAsNew
     )
       this.chains.start(run, rollover.continueAsNew.maxRuns);
+    new RunAdmission(this.store).queue(run, definition, startOptions);
     this.save(run);
-    this.event(run, 'run.started', `Started ${w.name} v${version}`);
+    this.event(
+      run,
+      run.status === 'queued' ? 'run.queued' : 'run.started',
+      `${run.status === 'queued' ? 'Queued' : 'Started'} ${w.name} v${version}`,
+    );
     return run;
   }
   start(
@@ -1095,6 +1108,20 @@ export class Engine {
       budget,
       ...metadata,
     });
+    if (
+      q.onActiveExternalTask &&
+      q.onActiveExternalTask !== 'allow' &&
+      !q.externalTask
+    )
+      throw new InterlockError('onActiveExternalTask requires externalTask');
+    if (
+      q.after?.some(
+        (reference) =>
+          'requestId' in reference && reference.requestId === q.requestId,
+      )
+    )
+      throw new InterlockError('A start cannot depend on its own requestId');
+    const afterCommit: (() => void)[] = [];
     const result = this.starts.resolve(q, () => {
       const w = this.workflow(q.workflowId);
       if (
@@ -1102,22 +1129,58 @@ export class Engine {
         (w.ownerWorkflowId && this.workflow(w.ownerWorkflowId).archived)
       )
         throw new InterlockError('Restore this workflow before starting it');
+      // Validate before task policy mutations. Replays deliberately skip this callback.
+      this.versions.assertRunnable(
+        { workflowId: q.workflowId, version: q.version ?? w.latestVersion },
+        true,
+      );
+      assertContract(
+        this.definition({
+          workflowId: q.workflowId,
+          version: q.version ?? w.latestVersion,
+        }).inputSchema,
+        q.input,
+        'Workflow input',
+      );
+      const policy = q.onActiveExternalTask ?? 'allow';
+      const matching =
+        q.externalTask && policy !== 'allow'
+          ? this.store
+              .activeRuns()
+              .filter(
+                (run) =>
+                  run.externalTask?.system === q.externalTask!.system &&
+                  run.externalTask?.id === q.externalTask!.id,
+              )
+          : [];
+      if (matching.length && policy === 'reuse')
+        return { run: matching[0], reused: true };
+      if (matching.length && policy === 'reject')
+        throw new InterlockError(
+          'An active run already exists for externalTask',
+        );
       const run = this.newRun(
         q.workflowId,
         q.version ?? w.latestVersion,
         q.input,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        q,
       );
-      if (q.requestId !== undefined) run.startRequestId = q.requestId;
-      if (q.externalTask) run.externalTask = q.externalTask;
-      if (q.requestId !== undefined || q.externalTask) this.save(run);
       if (q.budget)
         this.budgets.set({
           runId: run.id,
           expectedRevision: 0,
           budget: q.budget,
         });
-      return run;
+      if (policy === 'cancel_previous')
+        for (const previous of matching)
+          this.cancelTree(previous.id, afterCommit);
+      return { run, reused: false };
     });
+    for (const effect of afterCommit) effect();
     if (!result.replayed) this.pump();
     return result.id;
   }
@@ -1494,7 +1557,11 @@ export class Engine {
     this.event(run, 'node.completed', execution.label);
   }
   private advance(run: Run): boolean {
-    if (terminal(run.status) || this.pauses.applicable(run.workflowId).length)
+    if (
+      run.status === 'queued' ||
+      terminal(run.status) ||
+      this.pauses.applicable(run.workflowId).length
+    )
       return false;
     const definition = this.definition(run),
       node = definition.nodes.find((n) => n.id === run.cursor)!;
@@ -2057,6 +2124,12 @@ export class Engine {
         this.budgets.refresh();
         this.resources.refresh();
         changed = this.testbench.advance();
+        if (
+          new RunAdmission(this.store).promote((run) =>
+            this.event(run, 'run.admitted', 'Start admitted'),
+          )
+        )
+          changed = true;
         // Earlier advances can cancel or resume descendants in this same pass.
         for (const { id } of this.store.activeRuns()) {
           const candidate = this.run(id);
@@ -3107,28 +3180,35 @@ export class Engine {
       background: execution.background,
     };
   }
-  private cancelTree(id: string) {
+  private cancelTree(id: string, afterCommit?: (() => void)[]) {
     const run = this.run(id);
     if (terminal(run.status)) return;
     for (const child of this.store
       .runs()
       .filter((r) => r.parentRunId === id && r.parentMode !== 'detached'))
-      this.cancelTree(child.id);
+      this.cancelTree(child.id, afterCommit);
     run.status = 'cancelled';
     const execution = run.executions.at(-1);
-    if (
-      execution?.background &&
-      ['launching', 'running'].includes(execution.background.state)
-    ) {
-      try {
-        this.backgroundScripts.stop(run.id, execution.id);
-      } catch {
-        execution.background.state = 'uncertain';
-        execution.error =
-          'Background stop could not verify the supervisor. Inspect processes and reconcile stopped.';
+    const stop = () => {
+      if (
+        execution?.background &&
+        ['launching', 'running'].includes(execution.background.state)
+      ) {
+        try {
+          this.backgroundScripts.stop(run.id, execution.id);
+        } catch {
+          execution.background.state = 'uncertain';
+          execution.error =
+            'Background stop could not verify the supervisor. Inspect processes and reconcile stopped.';
+          if (afterCommit) this.save(run);
+        }
       }
-    }
-    if (execution) this.localJobs.get(execution.id)?.abort();
+      if (execution) this.localJobs.get(execution.id)?.abort();
+    };
+    // Atomic task replacement must commit cancellation and its receipt before
+    // requesting external stops. A rolled-back start leaves the old job alone.
+    if (afterCommit) afterCommit.push(stop);
+    else stop();
     if (execution && !terminal(execution.status))
       execution.status = 'cancelled';
     for (const work of this.store

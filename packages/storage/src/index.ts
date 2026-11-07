@@ -268,12 +268,24 @@ export class Store {
   runSummaries(query: RunSummaryQuery, attentionIds: string[]) {
     return runSummaries(this.db, query, attentionIds);
   }
+  queuedRuns(): Run[] {
+    return this.db
+      .prepare(
+        `SELECT value FROM documents INDEXED BY runs_admission_queue
+      WHERE collection = 'runs' AND json_extract(value, '$.status') = 'queued'
+      ORDER BY coalesce(json_extract(value, '$.admission.priority'), 0) DESC, rowid`,
+      )
+      .all()
+      .map((row) => JSON.parse(row.value as string));
+  }
   activeRuns(): Run[] {
     // Separate equalities keep SQLite on the status index even without ANALYZE.
     // An IN predicate can otherwise choose a scan of every run document.
     return this.db
       .prepare(
-        `SELECT value, rowid AS position FROM documents WHERE collection = 'runs' AND json_extract(value, '$.status') = 'running'
+        `SELECT value, rowid AS position FROM documents WHERE collection = 'runs' AND json_extract(value, '$.status') = 'queued'
+        UNION ALL
+        SELECT value, rowid AS position FROM documents WHERE collection = 'runs' AND json_extract(value, '$.status') = 'running'
         UNION ALL
         SELECT value, rowid AS position FROM documents WHERE collection = 'runs' AND json_extract(value, '$.status') = 'waiting'
         ORDER BY position`,

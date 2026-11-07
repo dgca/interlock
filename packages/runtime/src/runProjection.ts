@@ -1,7 +1,8 @@
 import type { Run, RunProjection, RunWaiting } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 
-const active = (status: string) => status === 'running' || status === 'waiting';
+const active = (status: string) =>
+  status === 'queued' || status === 'running' || status === 'waiting';
 type Branch = {
   runId: string;
   nodeId: string;
@@ -28,7 +29,29 @@ export function projectRun(
   const runs = new Map(state.runs.map((r) => [r.id, r]));
   if (override) runs.set(override.id, { ...override, lifecycleRunId: id });
   const root = runs.get(id);
-  if (!root || !active(root.status)) return empty;
+  if (!root) return empty;
+  if (root.status === 'queued')
+    return {
+      stage: null,
+      actor: 'engine',
+      waiting: {
+        kind: 'admission_queue',
+        since: root.admission?.queuedAt ?? root.createdAt,
+        detail: {
+          runId: root.id,
+          nodeId: root.cursor,
+          position: root.admission?.position ?? 1,
+          priority: root.admission?.priority ?? 0,
+          blockers: root.admission?.blockers ?? [],
+          message:
+            `Queue position ${root.admission?.position ?? 1}${root.admission?.blockers.length ? ': ' + root.admission.blockers.join('; ') : ''}`.slice(
+              0,
+              500,
+            ),
+        },
+      },
+    };
+  if (!active(root.status)) return empty;
   const branches: Branch[] = [],
     leaves: Branch[] = [];
   const seen = new Set<string>();
@@ -88,7 +111,18 @@ export function projectRun(
       work?.status === 'claimed' ||
       ((current?.kind === 'script' || current?.kind === 'fetch') &&
         current.status === 'running');
-    if (pauses.length && !inFlight) {
+    if (run.status === 'queued') {
+      wait(
+        'admission_queue',
+        'engine',
+        `Queue position ${run.admission?.position ?? 1}: ${run.admission?.blockers.join('; ') ?? ''}`,
+        run.admission?.queuedAt ?? at,
+      );
+      branch.stage = undefined;
+      branch.waiting!.detail.position = run.admission?.position ?? 1;
+      branch.waiting!.detail.priority = run.admission?.priority ?? 0;
+      branch.waiting!.detail.blockers = run.admission?.blockers ?? [];
+    } else if (pauses.length && !inFlight) {
       wait(
         'pause',
         'person',

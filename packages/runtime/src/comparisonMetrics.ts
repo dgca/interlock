@@ -302,6 +302,7 @@ export class ComparisonMetrics {
         (s) => s.observation && s.observation.status !== 'not_started',
       );
       const counts = {
+        queued: 0,
         running: 0,
         waiting: 0,
         completed: 0,

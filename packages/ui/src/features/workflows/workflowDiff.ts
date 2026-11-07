@@ -146,6 +146,8 @@ export function compareWorkflow(
     ['inputSchema', 'Input contract'],
     ['outputSchema', 'Output contract'],
     ['maxSteps', 'Maximum steps'],
+    ['maxActiveRuns', 'Maximum active runs'],
+    ['excludeStages', 'Excluded admission stages'],
     ['executor', 'Default Agent executor'],
     ['agentPermissions', 'Agent permissions'],
     ['agentModel', 'Agent model'],

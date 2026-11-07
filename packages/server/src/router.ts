@@ -547,7 +547,13 @@ export const appRouter = t.router({
           input.version,
           input.limit,
           input.budget,
-          { requestId: input.requestId, externalTask: input.externalTask },
+          {
+            requestId: input.requestId,
+            externalTask: input.externalTask,
+            priority: input.priority,
+            after: input.after,
+            onActiveExternalTask: input.onActiveExternalTask,
+          },
         ),
       ),
     briefing: p
@@ -599,17 +605,21 @@ export const appRouter = t.router({
       }),
     attention: p.query(({ ctx }) => ctx.engine.runAttention()),
     get: p.input(id).query(({ ctx, input }) => ctx.engine.inspect(input.id)),
-    start: p
-      .input(runStartSchema)
-      .mutation(({ ctx, input }) =>
-        ctx.engine.start(
-          input.workflowId,
-          input.input,
-          input.version,
-          input.budget,
-          { requestId: input.requestId, externalTask: input.externalTask },
-        ),
+    start: p.input(runStartSchema).mutation(({ ctx, input }) =>
+      ctx.engine.start(
+        input.workflowId,
+        input.input,
+        input.version,
+        input.budget,
+        {
+          requestId: input.requestId,
+          externalTask: input.externalTask,
+          priority: input.priority,
+          after: input.after,
+          onActiveExternalTask: input.onActiveExternalTask,
+        },
       ),
+    ),
     cancel: p
       .input(cancelRunSchema)
       .mutation(({ ctx, input }) => ctx.engine.cancel(input.id, input.scope)),

@@ -153,6 +153,11 @@ export const executorProfileSchema = z
     id: executorReferenceSchema,
     harness: harnessNameSchema,
     name: z.string().trim().min(1).max(120),
+    concurrency: executorConcurrencySchema
+      .optional()
+      .describe(
+        'Profile managed assignment cap alongside the global limit. Omit or null for no profile cap. Changes affect new dispatch only.',
+      ),
     enabled: z.boolean().default(false),
     revision: z.number().int().min(0).default(0),
     command: z.string().trim().min(1).max(4096).optional(),

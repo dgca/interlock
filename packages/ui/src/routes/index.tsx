@@ -318,7 +318,9 @@ function RunRoute() {
           const tab =
             returnTab === 'attention'
               ? 'attention'
-              : status === 'running' || status === 'waiting'
+              : status === 'queued' ||
+                  status === 'running' ||
+                  status === 'waiting'
                 ? 'active'
                 : 'history';
           void navigate(

@@ -1300,7 +1300,58 @@ it('keeps exclusive resource coordination with Unlimited', async () => {
   await settled(e, a.id);
   await settled(e, b.id);
 });
-it('persists revision-checked shared settings and ignores retired profile limits', async () => {
+it('caps each profile without starving other profiles under the shared limit', async () => {
+  const e = create();
+  e.executors.saveSettings({ expectedRevision: 0, concurrency: 3 });
+  profile(e, 'codex', { concurrency: 1 });
+  profile(e, 'claude-code', { concurrency: 2 });
+  const calls: HarnessRun[] = [],
+    finish: (() => void)[] = [];
+  const run: HarnessAdapter['run'] = async (input) => {
+    calls.push(input);
+    await new Promise<void>((resolve) => {
+      finish.push(resolve);
+      input.signal.addEventListener('abort', () => resolve(), { once: true });
+    });
+    return { output: input.work.input };
+  };
+  e.executors.start([adapter('codex', run), adapter('claude-code', run)]);
+  const a = workflow(e, 'codex'),
+    b = workflow(e, 'claude-code');
+  const runs = [
+    start(e, a.id, 1),
+    start(e, a.id, 2),
+    start(e, a.id, 3),
+    start(e, b.id, 4),
+    start(e, b.id, 5),
+    start(e, b.id, 6),
+  ];
+  await vi.waitFor(() => expect(calls).toHaveLength(3));
+  expect(calls.map((c) => c.profile.id)).toEqual([
+    'codex',
+    'claude-code',
+    'claude-code',
+  ]);
+  expect(
+    e.available().filter((w) => w.executor === 'codex')[0].managedExecution
+      ?.reason,
+  ).toContain('profile assignment slot');
+  const current = e.executors.profiles().find((p) => p.id === 'codex')!;
+  const { revision, ...fields } = current;
+  e.executors.saveProfile({
+    ...fields,
+    expectedRevision: revision,
+    concurrency: 2,
+  });
+  finish[1]();
+  await vi.waitFor(() => expect(calls).toHaveLength(4));
+  expect(calls[3].profile.id).toBe('codex');
+  expect(calls[0].profile.concurrency).toBe(1);
+  expect(calls[3].profile.concurrency).toBe(2);
+  for (const r of runs) e.cancel(r.id);
+});
+
+it('persists revision-checked shared and profile concurrency settings', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'interlock-execution-settings-'));
   dirs.push(dir);
   const path = join(dir, 'state.db'),
@@ -1328,9 +1379,10 @@ it('persists revision-checked shared settings and ignores retired profile limits
     }),
     concurrency: 1,
   });
-  expect(
-    e.executors.profiles().find((p) => p.id === 'codex'),
-  ).not.toHaveProperty('concurrency');
+  expect(e.executors.profiles().find((p) => p.id === 'codex')).toHaveProperty(
+    'concurrency',
+    1,
+  );
   e.executors.saveSettings({
     expectedRevision: 1,
     concurrency: Number.MAX_SAFE_INTEGER,

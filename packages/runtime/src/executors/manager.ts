@@ -231,9 +231,29 @@ export class ExecutorManager {
     this.schedule();
     return result;
   }
+  private pendingLaunches = new Map<string, string>();
+  private occupancy(profileId?: string) {
+    const occupied = new Map<string, string>();
+    for (const job of this.jobs.values())
+      occupied.set(job.work.id, job.record.profile.id);
+    for (const [id, profile] of this.pendingLaunches) occupied.set(id, profile);
+    for (const [id, session] of this.launchedWork) {
+      const work = this.engine.store.get<WorkRequest>('work', id);
+      if (work && ['available', 'claimed'].includes(work.status))
+        occupied.set(id, session.profile.id);
+    }
+    return [...occupied.values()].filter((id) => !profileId || id === profileId)
+      .length;
+  }
+  private profileAtCapacity(profileId: string) {
+    const cap = this.profiles().find(
+      (profile) => profile.id === profileId,
+    )?.concurrency;
+    return cap != null && this.occupancy(profileId) >= cap;
+  }
   private atCapacity() {
     const limit = this.settings().concurrency;
-    return limit !== null && this.jobs.size >= limit;
+    return limit !== null && this.occupancy() >= limit;
   }
   saveProfile(input: ExecutorProfileUpdate) {
     const q = executorProfileUpdateSchema.parse(input);
@@ -526,9 +546,11 @@ export class ExecutorManager {
           : 'queued',
       ...(reason
         ? { reason }
-        : this.atCapacity()
-          ? { reason: 'Waiting for a shared Agent assignment slot' }
-          : {}),
+        : this.profileAtCapacity(work.executor)
+          ? { reason: 'Waiting for this profile assignment slot' }
+          : this.atCapacity()
+            ? { reason: 'Waiting for a shared Agent assignment slot' }
+            : {}),
     };
   }
   private incompatible(work: ManagedAssignment, profile: ExecutorProfile) {
@@ -701,10 +723,14 @@ export class ExecutorManager {
     try {
       this.checkJobs();
       // Observing ready work must not pump the engine and notify our own subscription.
-      for (const offered of this.engine.available(undefined, {
+      for (const captured of this.engine.available(undefined, {
         advance: false,
       })) {
         if (this.atCapacity() || this.stopped) break;
+        const offered = this.engine
+          .available(undefined, { advance: false })
+          .find((work) => work.id === captured.id);
+        if (!offered) continue;
         // A preceding launcher may have awaited its response since discovery.
         // Recheck pause admission before dispatching another captured assignment.
         if (
@@ -725,7 +751,8 @@ export class ExecutorManager {
         const configured = this.profiles().find(
           (p) => p.id === offered.executor,
         );
-        if (!configured?.enabled) continue;
+        if (!configured?.enabled || this.profileAtCapacity(configured.id))
+          continue;
         const adapter = this.adapters.get(configured.harness);
         if (!adapter) continue;
 
@@ -759,7 +786,12 @@ export class ExecutorManager {
             : undefined;
           const logicalSession = binding?.session?.sessionId ?? randomUUID();
           try {
-            await this.launchCustom(offered, configured, cwd, logicalSession);
+            this.pendingLaunches.set(offered.id, configured.id);
+            try {
+              await this.launchCustom(offered, configured, cwd, logicalSession);
+            } finally {
+              this.pendingLaunches.delete(offered.id);
+            }
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
             const record: ManagedExecution = {
@@ -886,6 +918,7 @@ export class ExecutorManager {
         }
         // Settings can change while native executable detection is pending.
         if (this.atCapacity() || this.stopped) break;
+        if (this.profileAtCapacity(configured.id)) continue;
         let work: WorkRequest;
         try {
           work = this.engine.claim(offered.id, {
@@ -2285,14 +2318,13 @@ export function usageDelta(
   });
 }
 
-/** Retired draft profile limits do not override the current shared execution settings. */
+/** Preserve captured profile settings while ignoring the retired timeout draft field. */
 function parseProfileSnapshot(value: unknown): ExecutorProfile {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const {
-      timeoutMs: _retiredTimeout,
-      concurrency: _retiredConcurrency,
-      ...current
-    } = value as Record<string, unknown>;
+    const { timeoutMs: _retiredTimeout, ...current } = value as Record<
+      string,
+      unknown
+    >;
     return executorProfileSchema.parse(current);
   }
   return executorProfileSchema.parse(value);

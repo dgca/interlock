@@ -1,7 +1,8 @@
 import type { RunSummary, RunSummaryQuery } from '@interlock/core';
 import type { DatabaseSync } from 'node:sqlite';
 
-const active = "json_extract(r.value, '$.status') IN ('running', 'waiting')";
+const active =
+  "json_extract(r.value, '$.status') IN ('queued', 'running', 'waiting')";
 const attention = 'r.id IN (SELECT value FROM attention_ids)';
 const tabFilter = { active, attention, history: `NOT (${active})` };
 const currentStep = "json_extract(r.value, '$.executions[#-1].kind')";
