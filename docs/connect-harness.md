@@ -271,6 +271,10 @@ When an assignment declares `context.continuityGroup`, use its `continuity.sessi
 
 Groups are local to the assignment's run, including when work is discovered from a parent briefing. Child workflows and Batch items have independent bindings. Fresh reviewers stay outside the author group. These checks enforce declarations, not actual session creation or isolation. See [context continuity](context-continuity.md) for examples and recovery rules.
 
+## Custom harness launchers and claim tickets
+
+When an assignment is dispatched through a managed custom harness in Delegated Launcher mode (`mode: "launcher"`), Interlock executes the configured launch command or HTTP endpoint and generates an ephemeral `claimTicket`. The launched external agent session must present this one-time ticket in `claimTicket` when calling `claim_work(workId, claimTicket, ...)`. Any claimant without the ticket is rejected, preventing race conditions or unauthorized external workers from taking the delegated assignment. See [custom harnesses](managed-executors.md#custom-harnesses).
+
 Agent executors can [check candidate results before submission](result-preflight.md) without renewing claims or advancing runs. Submission rechecks live state and returns bounded correction diagnostics when a result is rejected.
 
 [Assignment size diagnostics](assignment-size.md) show UTF-8 byte contributions and advisory warnings before claims. Agent previews accept sample inputs and upstream outputs, with unresolved values marked unknown. Payload values are omitted from reports.

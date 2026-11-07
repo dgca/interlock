@@ -125,6 +125,7 @@ export interface Worker {
   freshContext: boolean;
   tools: string[];
   skills: string[];
+  claimTicket?: string;
 }
 
 class ResultProcessingError extends InterlockError {
@@ -2676,7 +2677,7 @@ export class Engine {
       if (work.cwdBlocked) {
         throw new InterlockError(work.cwdBlocked.reason);
       }
-      this.executors.assertClaim(work);
+      this.executors.assertClaim(work, worker);
       this.trials.context(this.run(work.runId));
       if (work.context.mode === 'fresh' && !worker.freshContext)
         throw new InterlockError('This assignment requires fresh context');

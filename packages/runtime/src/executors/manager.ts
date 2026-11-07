@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { isAbsolute } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -22,7 +23,7 @@ import {
   type WorkRequest,
   type ModelUsage,
 } from '@interlock/core';
-import type { Engine } from '../index.js';
+import type { Engine, Worker } from '../index.js';
 import { validateDirectoryContainment } from '../workingDirectory.js';
 
 // Inspection needs assignment identity and configuration, never task payloads.
@@ -47,6 +48,21 @@ import {
   type HarnessAdapter,
   type HarnessRequest,
 } from './contracts.js';
+import { buildTokenMap, interpolateTokens } from './custom.js';
+
+interface LauncherSession {
+  idempotencyKey: string;
+  workId: string;
+  runId: string;
+  profile: ExecutorProfile;
+  claimTicket: string;
+  sessionId: string;
+  cwd: string;
+  status: 'working' | 'idle' | 'needs_attention' | 'ended';
+  launchedAt: string;
+  lastStatusAt: number;
+  archived: boolean;
+}
 
 const profilesCollection = 'executorProfiles',
   attemptsCollection = 'managedExecutions',
@@ -106,6 +122,20 @@ export class ExecutorManager {
     string,
     { at: number; result: Awaited<ReturnType<HarnessAdapter['detect']>> }
   >();
+  private claimTickets = new Map<
+    string,
+    {
+      ticket: string;
+      workId: string;
+      runId: string;
+      profileId: string;
+      idempotencyKey: string;
+      issuedAt: string;
+      used: boolean;
+    }
+  >();
+  private launchedWork = new Map<string, LauncherSession>();
+  private launchIdempotency = new Map<string, LauncherSession>();
   private running = false;
   private stopped = false;
   private scheduled = false;
@@ -197,7 +227,12 @@ export class ExecutorManager {
   }
   saveProfile(input: ExecutorProfileUpdate) {
     const q = executorProfileUpdateSchema.parse(input);
-    for (const path of [q.command, q.cwd, ...(q.allowedRoots ?? [])])
+    const pathsToCheck = [
+      q.harness !== 'custom' ? q.command : undefined,
+      q.cwd,
+      ...(q.allowedRoots ?? []),
+    ];
+    for (const path of pathsToCheck)
       if (path && !isAbsolute(path))
         throw new InterlockError(
           'Executable, working directory, and allowed root overrides must be absolute paths',
@@ -556,7 +591,28 @@ export class ExecutorManager {
         reason: `Thinking effort ${profile.effort} is not supported by ${profile.model}. Choose a supported level or use native default.`,
       };
   }
-  assertClaim(work: WorkRequest) {
+  assertClaim(work: WorkRequest, worker?: Worker) {
+    const ticketRecord = this.claimTickets.get(work.id);
+    if (ticketRecord) {
+      if (!worker?.claimTicket) {
+        throw new InterlockError(
+          'A claim ticket is required to claim this delegated assignment',
+        );
+      }
+      if (worker.claimTicket !== ticketRecord.ticket) {
+        throw new InterlockError('Invalid claim ticket');
+      }
+      if (ticketRecord.used) {
+        throw new InterlockError('Claim ticket has already been used');
+      }
+      ticketRecord.used = true;
+      return;
+    } else if (worker?.claimTicket) {
+      throw new InterlockError(
+        'No claim ticket was issued for this assignment',
+      );
+    }
+
     const record = this.latest(work.id);
     if (record?.state === 'needs_model')
       throw new InterlockError(
@@ -652,6 +708,61 @@ export class ExecutorManager {
         if (!configured?.enabled) continue;
         const adapter = this.adapters.get(configured.harness);
         if (!adapter) continue;
+
+        if (configured.harness === 'custom' && configured.mode === 'launcher') {
+          if (this.launchedWork.has(offered.id)) continue;
+          const candidateCwd =
+            offered.trialEnvironment?.workspace ??
+            offered.resolvedCwd ??
+            configured.cwd ??
+            this.defaultCwd;
+          let cwd: string;
+          try {
+            const profileRoots = configured.allowedRoots ?? [];
+            const serverRoots = this.settings().allowedRoots ?? [];
+            const rootsToCheck = [...profileRoots, ...serverRoots];
+            cwd = validateDirectoryContainment(
+              candidateCwd,
+              rootsToCheck.length ? rootsToCheck : undefined,
+            );
+          } catch (err) {
+            offered.cwdBlocked = {
+              reason: `Managed executor "${configured.id}": ${err instanceof Error ? err.message : String(err)}`,
+              path: candidateCwd,
+            };
+            this.engine.store.put('work', offered);
+            continue;
+          }
+          const group = offered.context.continuityGroup;
+          const binding = group
+            ? this.engine.contextGroups.describe(offered.runId, group)
+            : undefined;
+          const logicalSession = binding?.session?.sessionId ?? randomUUID();
+          try {
+            await this.launchCustom(offered, configured, cwd, logicalSession);
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            const record: ManagedExecution = {
+              id: `${offered.id}:${offered.attempt}`,
+              workId: offered.id,
+              runId: offered.runId,
+              attempt: offered.attempt,
+              state: 'failed',
+              profile: configured,
+              command:
+                configured.launchCommand || configured.command || 'launch',
+              cwd,
+              startedAt: now(),
+              endedAt: now(),
+              error: errorMsg,
+              requests: [],
+              logs: [{ at: now(), message: `Launch failed: ${errorMsg}` }],
+              logCount: 1,
+            };
+            this.write(record);
+          }
+          continue;
+        }
         const group = offered.context.continuityGroup;
         const binding = group
           ? this.engine.contextGroups.describe(offered.runId, group)
@@ -861,6 +972,448 @@ export class ExecutorManager {
           this.interruptJob(job, 'The claim could not be renewed.');
         }
       }
+    }
+    for (const [workId, session] of this.launchedWork.entries()) {
+      const current = this.engine.store.get<WorkRequest>('work', workId);
+      const run = this.engine.store.get<import('@interlock/core').Run>(
+        'runs',
+        session.runId,
+      );
+      if (
+        (session.profile.statusCommand || session.profile.statusUrl) &&
+        Date.now() - session.lastStatusAt > 2000
+      ) {
+        session.lastStatusAt = Date.now();
+        void this.pollLauncherStatus(session).catch(() => {});
+      }
+      const runEnded =
+        run && ['completed', 'failed', 'cancelled'].includes(run.status);
+      const workEnded =
+        current &&
+        ['completed', 'failed', 'cancelled'].includes(current.status);
+      if ((runEnded || workEnded) && !session.archived) {
+        session.archived = true;
+        void this.archiveLauncherSession(session).catch(() => {});
+      }
+    }
+  }
+  private async launchCustom(
+    work: WorkRequest,
+    profile: ExecutorProfile,
+    cwd: string,
+    logicalSession: string,
+  ) {
+    const idempotencyKey = `${work.id}:${work.attempt}`;
+    const existing = this.launchIdempotency.get(idempotencyKey);
+    if (existing) {
+      this.launchedWork.set(work.id, existing);
+      return existing;
+    }
+
+    const claimTicket = randomUUID();
+    const tokenMap = buildTokenMap(work, cwd, {
+      claimTicket,
+      sessionId: logicalSession,
+    });
+
+    const launchPayload = {
+      idempotencyKey,
+      workId: work.id,
+      runId: work.runId,
+      attempt: work.attempt,
+      claimTicket,
+      prompt: work.prompt,
+      input: work.input,
+      outputSchema: work.outputSchema,
+      cwd,
+      model: profile.model,
+      effort: profile.effort,
+      permissions: profile.permissions,
+      sessionName: `interlock-${work.runId}-${work.id}`,
+      sessionId: logicalSession,
+    };
+
+    let remoteSessionId: string | undefined;
+
+    if (profile.transport === 'http') {
+      if (!profile.launchUrl) {
+        throw new Error(
+          `Custom profile "${profile.id}" in launcher HTTP mode requires launchUrl`,
+        );
+      }
+      const url = interpolateTokens(profile.launchUrl, tokenMap);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
+      if (profile.headers) {
+        for (const [k, v] of Object.entries(profile.headers)) {
+          headers[k] = interpolateTokens(v, tokenMap);
+        }
+      }
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(launchPayload),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(
+          `Launcher HTTP launch failed (${res.status}): ${errText.slice(0, 500)}`,
+        );
+      }
+      const data = await res.json().catch(() => ({}));
+      remoteSessionId = (data as any)?.sessionId;
+    } else {
+      const cmd = profile.launchCommand || profile.command;
+      if (!cmd) {
+        throw new Error(
+          `Custom profile "${profile.id}" in launcher subprocess mode requires launchCommand`,
+        );
+      }
+      const interpolatedCmd = interpolateTokens(cmd, tokenMap);
+      const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
+      if (profile.env) {
+        for (const [k, v] of Object.entries(profile.env)) {
+          resolvedEnv[k] = interpolateTokens(v, tokenMap);
+        }
+      }
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(interpolatedCmd, {
+          cwd,
+          env: resolvedEnv,
+          shell: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        let stdoutData = '';
+        let stderrData = '';
+        child.stdout.on('data', (d) => {
+          stdoutData += d.toString();
+        });
+        child.stderr.on('data', (d) => {
+          stderrData += d.toString();
+        });
+        child.on('error', reject);
+        child.on('close', (code) => {
+          if (code !== 0) {
+            reject(
+              new Error(
+                `Launch command failed with code ${code}: ${stderrData}`,
+              ),
+            );
+          } else {
+            try {
+              const parsed = JSON.parse(stdoutData.trim());
+              remoteSessionId = parsed.sessionId;
+            } catch {}
+            resolve();
+          }
+        });
+        child.stdin.write(JSON.stringify(launchPayload));
+        child.stdin.end();
+      });
+    }
+
+    const sessionRecord: LauncherSession = {
+      idempotencyKey,
+      workId: work.id,
+      runId: work.runId,
+      profile,
+      claimTicket,
+      sessionId: remoteSessionId || logicalSession,
+      cwd,
+      status: 'working',
+      launchedAt: now(),
+      lastStatusAt: Date.now(),
+      archived: false,
+    };
+
+    const record: ManagedExecution = {
+      id: `${work.id}:${work.attempt}`,
+      workId: work.id,
+      runId: work.runId,
+      attempt: work.attempt,
+      state: 'running',
+      profile,
+      permissionSource: 'harness',
+      command: profile.launchCommand || profile.command || 'launch',
+      cwd,
+      sessionId: remoteSessionId || logicalSession,
+      startedAt: now(),
+      requests: [],
+      logs: [
+        {
+          at: now(),
+          message: `Launched ${profile.name} (ticket: ${claimTicket})`,
+        },
+      ],
+      logCount: 1,
+    };
+    this.write(record);
+
+    this.claimTickets.set(work.id, {
+      ticket: claimTicket,
+      workId: work.id,
+      runId: work.runId,
+      profileId: profile.id,
+      idempotencyKey,
+      issuedAt: now(),
+      used: false,
+    });
+
+    this.launchedWork.set(work.id, sessionRecord);
+    this.launchIdempotency.set(idempotencyKey, sessionRecord);
+    return sessionRecord;
+  }
+  private async pollLauncherStatus(session: LauncherSession) {
+    const tokenMap = {
+      INTERLOCK_WORK_ID: session.workId,
+      INTERLOCK_RUN_ID: session.runId,
+      INTERLOCK_CWD: session.cwd,
+      INTERLOCK_CLAIM_TOKEN: session.claimTicket,
+      INTERLOCK_CLAIM_TICKET: session.claimTicket,
+      INTERLOCK_SESSION_ID: session.sessionId,
+    };
+    let newStatus: string | undefined;
+
+    if (session.profile.statusUrl) {
+      const url = interpolateTokens(session.profile.statusUrl, tokenMap);
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (session.profile.headers) {
+        for (const [k, v] of Object.entries(session.profile.headers)) {
+          headers[k] = interpolateTokens(v, tokenMap);
+        }
+      }
+      try {
+        const res = await fetch(url, { method: 'GET', headers });
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          newStatus =
+            (data as any)?.status ??
+            (typeof data === 'string' ? data : undefined);
+        }
+      } catch {}
+    } else if (session.profile.statusCommand) {
+      const cmd = interpolateTokens(session.profile.statusCommand, tokenMap);
+      const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
+      if (session.profile.env) {
+        for (const [k, v] of Object.entries(session.profile.env)) {
+          resolvedEnv[k] = interpolateTokens(v, tokenMap);
+        }
+      }
+      try {
+        const output = await new Promise<string>((resolve, reject) => {
+          const child = spawn(cmd, {
+            cwd: session.cwd,
+            env: resolvedEnv,
+            shell: true,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+          let stdoutData = '';
+          child.stdout.on('data', (d) => {
+            stdoutData += d.toString();
+          });
+          child.on('error', reject);
+          child.on('close', (code) => {
+            if (code === 0) resolve(stdoutData.trim());
+            else reject(new Error(`Exit ${code}`));
+          });
+        });
+        try {
+          const parsed = JSON.parse(output);
+          newStatus = parsed.status ?? parsed;
+        } catch {
+          newStatus = output;
+        }
+      } catch {}
+    }
+
+    if (
+      newStatus &&
+      ['working', 'idle', 'needs_attention', 'ended'].includes(newStatus)
+    ) {
+      session.status = newStatus as
+        'working' | 'idle' | 'needs_attention' | 'ended';
+      const record = this.latest(session.workId);
+      if (record) {
+        if (newStatus === 'ended' && record.state === 'running') {
+          record.state = 'completed';
+          record.endedAt = now();
+          this.write(record);
+        } else {
+          this.log(record, `Status updated: ${newStatus}`);
+        }
+      }
+      if (
+        (newStatus === 'idle' || newStatus === 'needs_attention') &&
+        (session.profile.messageCommand || session.profile.messageUrl)
+      ) {
+        void this.sendLauncherMessage(
+          session,
+          `Assignment ${session.workId} is ${newStatus}`,
+        ).catch(() => {});
+      }
+    }
+  }
+  private async sendLauncherMessage(session: LauncherSession, message: string) {
+    const tokenMap = {
+      INTERLOCK_WORK_ID: session.workId,
+      INTERLOCK_RUN_ID: session.runId,
+      INTERLOCK_CWD: session.cwd,
+      INTERLOCK_CLAIM_TOKEN: session.claimTicket,
+      INTERLOCK_CLAIM_TICKET: session.claimTicket,
+      INTERLOCK_SESSION_ID: session.sessionId,
+      INTERLOCK_INPUT: message,
+    };
+    const payload = {
+      workId: session.workId,
+      runId: session.runId,
+      sessionId: session.sessionId,
+      message,
+    };
+
+    if (session.profile.messageUrl) {
+      const url = interpolateTokens(session.profile.messageUrl, tokenMap);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
+      if (session.profile.headers) {
+        for (const [k, v] of Object.entries(session.profile.headers)) {
+          headers[k] = interpolateTokens(v, tokenMap);
+        }
+      }
+      await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    } else if (session.profile.messageCommand) {
+      const cmd = interpolateTokens(session.profile.messageCommand, tokenMap);
+      const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
+      if (session.profile.env) {
+        for (const [k, v] of Object.entries(session.profile.env)) {
+          resolvedEnv[k] = interpolateTokens(v, tokenMap);
+        }
+      }
+      await new Promise<void>((resolve) => {
+        const child = spawn(cmd, {
+          cwd: session.cwd,
+          env: resolvedEnv,
+          shell: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        child.on('close', () => resolve());
+        child.on('error', () => resolve());
+        child.stdin.write(JSON.stringify(payload));
+        child.stdin.end();
+      });
+    }
+  }
+  private async archiveLauncherSession(session: LauncherSession) {
+    const tokenMap = {
+      INTERLOCK_WORK_ID: session.workId,
+      INTERLOCK_RUN_ID: session.runId,
+      INTERLOCK_CWD: session.cwd,
+      INTERLOCK_CLAIM_TOKEN: session.claimTicket,
+      INTERLOCK_CLAIM_TICKET: session.claimTicket,
+      INTERLOCK_SESSION_ID: session.sessionId,
+    };
+    const payload = {
+      workId: session.workId,
+      runId: session.runId,
+      sessionId: session.sessionId,
+    };
+
+    if (session.profile.archiveUrl) {
+      const url = interpolateTokens(session.profile.archiveUrl, tokenMap);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
+      if (session.profile.headers) {
+        for (const [k, v] of Object.entries(session.profile.headers)) {
+          headers[k] = interpolateTokens(v, tokenMap);
+        }
+      }
+      await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    } else if (session.profile.archiveCommand) {
+      const cmd = interpolateTokens(session.profile.archiveCommand, tokenMap);
+      const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
+      if (session.profile.env) {
+        for (const [k, v] of Object.entries(session.profile.env)) {
+          resolvedEnv[k] = interpolateTokens(v, tokenMap);
+        }
+      }
+      await new Promise<void>((resolve) => {
+        const child = spawn(cmd, {
+          cwd: session.cwd,
+          env: resolvedEnv,
+          shell: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        child.on('close', () => resolve());
+        child.on('error', () => resolve());
+        child.stdin.write(JSON.stringify(payload));
+        child.stdin.end();
+      });
+    }
+  }
+  private async stopLauncherSession(session: LauncherSession) {
+    const tokenMap = {
+      INTERLOCK_WORK_ID: session.workId,
+      INTERLOCK_RUN_ID: session.runId,
+      INTERLOCK_CWD: session.cwd,
+      INTERLOCK_CLAIM_TOKEN: session.claimTicket,
+      INTERLOCK_CLAIM_TICKET: session.claimTicket,
+      INTERLOCK_SESSION_ID: session.sessionId,
+    };
+    const payload = {
+      workId: session.workId,
+      runId: session.runId,
+      sessionId: session.sessionId,
+    };
+
+    if (session.profile.stopUrl) {
+      const url = interpolateTokens(session.profile.stopUrl, tokenMap);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
+      if (session.profile.headers) {
+        for (const [k, v] of Object.entries(session.profile.headers)) {
+          headers[k] = interpolateTokens(v, tokenMap);
+        }
+      }
+      await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    } else if (session.profile.stopCommand) {
+      const cmd = interpolateTokens(session.profile.stopCommand, tokenMap);
+      const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
+      if (session.profile.env) {
+        for (const [k, v] of Object.entries(session.profile.env)) {
+          resolvedEnv[k] = interpolateTokens(v, tokenMap);
+        }
+      }
+      await new Promise<void>((resolve) => {
+        const child = spawn(cmd, {
+          cwd: session.cwd,
+          env: resolvedEnv,
+          shell: true,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        child.on('close', () => resolve());
+        child.on('error', () => resolve());
+        child.stdin.write(JSON.stringify(payload));
+        child.stdin.end();
+      });
     }
   }
   private async execute(job: Job, adapter: HarnessAdapter, session: Session) {
@@ -1258,6 +1811,12 @@ export class ExecutorManager {
       executionId,
     );
     if (!record) throw new InterlockError('Execution not found');
+    const launcherSession = this.launchedWork.get(record.workId);
+    if (launcherSession) {
+      void this.stopLauncherSession(launcherSession).catch(() => {});
+      this.interrupted(record, 'Execution stopped by the user.');
+      return { stopping: true };
+    }
     const job = this.jobs.get(record.workId);
     if (!job || job.record.id !== executionId)
       throw new InterlockError('This execution is not running on this server');

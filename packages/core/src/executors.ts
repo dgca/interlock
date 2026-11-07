@@ -40,9 +40,7 @@ export const executorModelsQuerySchema = z
       })
       .strict()
       .optional()
-      .describe(
-        'Optional unsaved executable/directory settings. When supplied, omitted paths use native/server defaults.',
-      ),
+      .describe('Optional unsaved executable/directory settings.'),
   })
   .strict();
 export interface HarnessModel {
@@ -64,9 +62,7 @@ export const executorConcurrencySchema = z
   .min(1)
   .max(Number.MAX_SAFE_INTEGER)
   .nullable()
-  .describe(
-    'Shared managed Agent assignment limit. A positive whole number sets the limit; null means Unlimited and removes only this shared cap.',
-  );
+  .describe('Shared managed Agent assignment limit. null means Unlimited.');
 export const allowedRootSchema = z
   .string()
   .trim()
@@ -84,7 +80,7 @@ export const executorSettingsSchema = z
       .array(allowedRootSchema)
       .optional()
       .describe(
-        'Server-wide allowed root directories for dynamic cwd binding. Paths must be absolute.',
+        'Server-wide allowed root directories for dynamic cwd binding.',
       ),
   })
   .strict();
@@ -96,14 +92,22 @@ export const executorSettingsUpdateSchema = z
       .array(allowedRootSchema)
       .optional()
       .describe(
-        'Server-wide allowed root directories for dynamic cwd binding. Paths must be absolute.',
+        'Server-wide allowed root directories for dynamic cwd binding.',
       ),
   })
   .strict();
+export const harnessNameSchema = z.enum([
+  'claude-code',
+  'codex',
+  'pi',
+  'custom',
+]);
+export type HarnessName = z.infer<typeof harnessNameSchema>;
+
 export const executorProfileSchema = z
   .object({
     id: executorReferenceSchema,
-    harness: z.enum(['claude-code', 'codex', 'pi']),
+    harness: harnessNameSchema,
     name: z.string().trim().min(1).max(120),
     enabled: z.boolean().default(false),
     revision: z.number().int().min(0).default(0),
@@ -112,20 +116,12 @@ export const executorProfileSchema = z
     allowedRoots: z
       .array(allowedRootSchema)
       .optional()
-      .describe(
-        'Allowed root directories for dynamic cwd binding. Paths must be absolute.',
-      ),
-    model: executorModelSchema
-      .optional()
-      .describe(
-        'Default model ID; node model and workflow agentModel override it. Omission uses the native CLI default.',
-      ),
+      .describe('Allowed root directories for dynamic cwd binding.'),
+    model: executorModelSchema.optional().describe('Default model ID.'),
     effort: executorEffortSchema
       .nullable()
       .optional()
-      .describe(
-        'Default effort for a selected model; omit or null for native defaults. Model discovery reports supported levels.',
-      ),
+      .describe('Default effort for a selected model.'),
     tools: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
     skills: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
     permissions: z
@@ -133,8 +129,25 @@ export const executorProfileSchema = z
       .default('standard')
       .transform((mode) => (mode === 'ask' ? 'standard' : mode))
       .describe(
-        'Default managed Agent permissions. standard uses the harness-specific approval policy; read-only denies writes; full-access opts into broad access without routine approval stops. Legacy ask means standard. Workflow agentPermissions can override this default.',
+        'Default managed permissions: standard, read-only, or full-access.',
       ),
+    mode: z.enum(['direct', 'launcher']).optional(),
+    transport: z.enum(['subprocess', 'http']).optional(),
+    timeoutSeconds: z.number().int().positive().optional(),
+    env: z.record(z.string()).optional(),
+    headers: z.record(z.string()).optional(),
+    turnCommand: z.string().trim().min(1).max(4096).optional(),
+    turnUrl: z.string().trim().min(1).max(4096).optional(),
+    launchCommand: z.string().trim().min(1).max(4096).optional(),
+    launchUrl: z.string().trim().min(1).max(4096).optional(),
+    statusCommand: z.string().trim().min(1).max(4096).optional(),
+    statusUrl: z.string().trim().min(1).max(4096).optional(),
+    messageCommand: z.string().trim().min(1).max(4096).optional(),
+    messageUrl: z.string().trim().min(1).max(4096).optional(),
+    stopCommand: z.string().trim().min(1).max(4096).optional(),
+    stopUrl: z.string().trim().min(1).max(4096).optional(),
+    archiveCommand: z.string().trim().min(1).max(4096).optional(),
+    archiveUrl: z.string().trim().min(1).max(4096).optional(),
   })
   .strict();
 export type ExecutorProfile = z.infer<typeof executorProfileSchema>;
@@ -210,7 +223,7 @@ export const executorOperationSchema = z.discriminatedUnion('action', [
       action: z.literal('retry_model'),
       executionId: z.string().min(1),
       model: executorModelSchema.describe(
-        'Explicit human-selected replacement for a needs_model execution. Resumes that assignment and its continuity session with native thinking defaults. Does not edit workflows or harness defaults.',
+        'Explicit human-selected replacement for a needs_model execution.',
       ),
     })
     .strict(),
@@ -225,7 +238,7 @@ export const executorOperationSchema = z.discriminatedUnion('action', [
 export const managedWorkSummarySchema = z.object({
   profileId: z.string(),
   executionId: z.string().optional(),
-  harness: z.enum(['claude-code', 'codex', 'pi']).optional(),
+  harness: harnessNameSchema.optional(),
   state: z.enum([
     'starting',
     'running',

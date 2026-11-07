@@ -99,6 +99,15 @@
   color: var(--accent-text);
   flex-shrink: 0;
 }
+.customIcon {
+  color: var(--mantine-color-violet-4, #b197fc);
+  flex-shrink: 0;
+}
+.customBadge {
+  background: var(--mantine-color-violet-9, #2b1d38);
+  color: var(--mantine-color-violet-3, #d0bfff);
+  border: 1px solid var(--mantine-color-violet-7, #7048e8);
+}
 .guidance {
   margin: 16px 0 0 39px;
   font-size: 13px;
