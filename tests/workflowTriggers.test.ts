@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -577,4 +578,65 @@ it('reenables with explicit missed policy and reanchors timing edits', () => {
   expect(updated.nextFireAt).toBe(
     new Date(Date.parse(base) + 240000).toISOString(),
   );
+});
+
+it('serializes genuinely concurrent scheduler processes on the same SQLite slot', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'interlock-schedule-race-'));
+  dirs.push(dir);
+  const path = join(dir, 'state.db'),
+    e = setup(path),
+    w = workflow(e),
+    t = create(e, w.id);
+  vi.useRealTimers();
+  const script = `import {Engine} from '@interlock/runtime';import {Store} from '@interlock/storage';
+    const OriginalDate=Date;const at=${JSON.stringify(Date.parse(base) + 30000)};
+    globalThis.Date=class extends OriginalDate {constructor(...args){super(...(args.length?args:[at]));}static now(){return at;}};
+    const store=new Store(${JSON.stringify(path)}),engine=new Engine(store,process.cwd());
+    process.on('message',()=>{try{engine.pump();}catch(error){console.error(error);process.exitCode=1;}finally{engine.stop();store.close();process.disconnect();}});
+    process.send({ready:true});`;
+  const workers = [0, 1].map(() =>
+    spawn(
+      process.execPath,
+      ['--import', 'tsx', '--input-type=module', '-e', script],
+      { cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe', 'ipc'] },
+    ),
+  );
+  try {
+    await Promise.all(
+      workers.map(
+        (child) =>
+          new Promise<void>((resolve, reject) => {
+            child.once('message', () => resolve());
+            child.once('error', reject);
+            child.once('exit', (code) => {
+              if (code)
+                reject(new Error(`Scheduler exited before ready: ${code}`));
+            });
+          }),
+      ),
+    );
+    const exits = workers.map(
+      (child) =>
+        new Promise<void>((resolve, reject) => {
+          let stderr = '';
+          child.stderr?.on('data', (data) => {
+            stderr += data;
+          });
+          child.once('exit', (code) =>
+            code === 0
+              ? resolve()
+              : reject(new Error(stderr || `Scheduler exit ${code}`)),
+          );
+        }),
+    );
+    workers.forEach((child) => child.send({ tick: true }));
+    await Promise.all(exits);
+    expect(e.store.runs()).toHaveLength(1);
+    expect(e.store.list('runStarts')).toHaveLength(1);
+    expect(fires(e, t)).toHaveLength(1);
+  } finally {
+    workers.forEach((child) => {
+      if (child.exitCode === null) child.kill('SIGTERM');
+    });
+  }
 });

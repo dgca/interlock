@@ -1,3 +1,4 @@
+import { flushSync } from 'react-dom';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router';
@@ -146,9 +147,11 @@ export function Schedules({
     setSuccess('');
     try {
       const result = await api.triggers.manage.mutate(request);
-      onDirty(false);
-      setEditing(undefined);
-      setConfirm(undefined);
+      flushSync(() => {
+        onDirty(false);
+        setEditing(undefined);
+        setConfirm(undefined);
+      });
       setSuccess(
         request.action === 'delete'
           ? 'Schedule deleted. Existing runs remain.'
