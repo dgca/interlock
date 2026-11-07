@@ -399,14 +399,13 @@ it('preserves dirty edits after an external update and offers explicit recovery'
   expect(container.textContent).toContain('changed elsewhere');
   expect(button('Save').disabled).toBe(true);
   expect(button('Review & publish').disabled).toBe(true);
-  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
   await click('Load latest draft');
+  await click('Keep editing');
   expect(container.querySelector('[data-raw]')?.textContent).toContain('60');
-  confirm.mockReturnValue(true);
   await click('Load latest draft');
+  await click('Discard and load draft');
   expect(container.querySelector('[data-raw]')?.textContent).toContain('75');
   expect(button('Review & publish').disabled).toBe(false);
-  confirm.mockRestore();
 });
 
 it('saves local changes before publishing and restores actions after a failure', async () => {
@@ -875,9 +874,8 @@ it('caps history at 50 actions and clears it when loading another draft or reope
   expect(button('Undo').disabled).toBe(true);
   workflow = { ...workflow, draftRevision: 2 };
   await render();
-  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
   await click('Load latest draft');
-  confirm.mockRestore();
+  await click('Discard and load draft');
   expect(button('Undo').disabled).toBe(true);
   expect(button('Redo').disabled).toBe(true);
   await click(`Move ${id}`);

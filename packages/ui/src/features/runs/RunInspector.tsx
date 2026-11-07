@@ -1,3 +1,7 @@
+import {
+  LoadingSkeleton,
+  Placeholder,
+} from '../../components/LoadingSkeleton/LoadingSkeleton';
 import { CopyButton, Menu, ScrollArea } from '@mantine/core';
 import { nodeKindLabel, type RunStatus } from '@interlock/core';
 import type { Action } from '../../lib/useActionFeedback';
@@ -20,6 +24,8 @@ import { runProgress } from './runProgress';
 import { detachedBoundary } from './runScope';
 import { AgentHandoff } from './AgentHandoff';
 import { WorkPanel } from './WorkPanel';
+import { ActionError } from '../../components/ActionError/ActionError';
+import { manualClaims } from './manualClaims';
 import styles from './RunInspector.module.css';
 import { ComparisonContext } from './ComparisonContext';
 import { RunUsage } from './RunUsage';
@@ -53,6 +59,11 @@ export function RunInspector({
 }) {
   const detailRef = useRef<HTMLElement>(null);
   const focusReview = useRef(false);
+  const resultDrafts = useRef(new Map<string, string>());
+  const retryPending = useRef(false);
+  const [retrying, setRetrying] = useState(false);
+  const [retryRequested, setRetryRequested] = useState(false);
+  const [retryError, setRetryError] = useState('');
   const [returnMenuFocus, setReturnMenuFocus] = useState(true);
   const [data, setData] = useState<Detail>(),
     [error, setError] = useState(''),
@@ -85,9 +96,82 @@ export function RunInspector({
       active = false;
     };
   }, [id, tick]);
+  useEffect(() => {
+    if (!data) return;
+    const drafts = resultDrafts.current;
+    const active = new Set(
+      (data.descendantWork ?? data.work)
+        .filter(
+          (work) =>
+            work.status === 'claimed' &&
+            manualClaims.get(work.id)?.attempt === work.attempt &&
+            manualClaims.get(work.id)?.workerId === work.workerId,
+        )
+        .map((work) => `${work.id}:${work.attempt}`),
+    );
+    for (const key of drafts.keys()) if (!active.has(key)) drafts.delete(key);
+  }, [data]);
   if (!data || data.run.id !== id)
-    return <div className="content-page">{error || 'Loading run…'}</div>;
+    return error ? (
+      <div className="content-page" role="alert">
+        {error}
+      </div>
+    ) : (
+      <LoadingSkeleton label="Loading run…" className={styles.page}>
+        <header className={styles.header}>
+          <Placeholder h={28} w={32} />
+          <div>
+            <Placeholder h={16} w="min(42vw, 200px)" />
+            <Placeholder mt={8} h={10} w={60} />
+          </div>
+        </header>
+        <div className={styles.liveSummary}>
+          <Placeholder h={15} w="min(55vw, 220px)" />
+        </div>
+        <div className={styles.body}>
+          <div className={styles.detail}>
+            <div className="inspector-heading">
+              <Placeholder h={16} w="55%" />
+            </div>
+            <div className="inspector-fields">
+              <Placeholder h={100} />
+            </div>
+          </div>
+          <div className={styles.overview}>
+            <div className={styles.graph}>
+              <Placeholder mt="xl" mx="auto" h={72} w="min(42%, 180px)" />
+            </div>
+          </div>
+        </div>
+      </LoadingSkeleton>
+    );
   const { run, definition, events, children, work } = data;
+  const select = (target: NonNullable<typeof selected>, focus = false) => {
+    focusReview.current =
+      focus || window.matchMedia?.('(max-width: 1100px)').matches;
+    setSelected(target);
+  };
+  const retry = async () => {
+    if (retryPending.current) return;
+    retryPending.current = true;
+    setRetrying(true);
+    setRetryRequested(false);
+    setRetryError('');
+    try {
+      await act(
+        async () => {
+          await api.runs.retry.mutate({ id });
+          setRetryRequested(true);
+          refresh();
+        },
+        undefined,
+        setRetryError,
+      );
+    } finally {
+      retryPending.current = false;
+      setRetrying(false);
+    }
+  };
   const descendants = data.descendants ?? [];
   const allWork = data.descendantWork ?? work;
   const runIndex = new Map([run, ...descendants].map((r) => [r.id, r]));
@@ -110,7 +194,7 @@ export function RunInspector({
   const nodeProgress = nodeId ? progress.nodes[nodeId] : undefined;
   const owner = selected?.runId
     ? [run, ...descendants].find((owner) => owner.id === selected.runId)
-    : node?.batchId
+    : node?.batchId !== run.batchNodeId && node?.batchId
       ? undefined
       : run;
   const execution = selected?.executionId
@@ -162,13 +246,15 @@ export function RunInspector({
       return;
     }
     // Choosing a request moves focus to its details after the menu releases its trap.
-    focusReview.current = true;
     setReturnMenuFocus(false);
-    setSelected({
-      nodeId: w.nodeId,
-      runId: w.runId,
-      executionId: w.executionId,
-    });
+    select(
+      {
+        nodeId: w.nodeId,
+        runId: w.runId,
+        executionId: w.executionId,
+      },
+      true,
+    );
   };
   const itemRuns =
     node?.kind === 'batch'
@@ -239,16 +325,9 @@ export function RunInspector({
             </Button>
           )}
           {run.status === 'failed' && definition && !data.handledFailure && (
-            <Button
-              onClick={() =>
-                void act(async () => {
-                  await api.runs.retry.mutate({ id });
-                  refresh();
-                }, 'Run retry started.')
-              }
-            >
+            <Button disabled={retrying} onClick={() => void retry()}>
               <RotateCcw />
-              Retry failed step
+              {retrying ? 'Requesting retry…' : 'Retry failed step'}
             </Button>
           )}
           {['running', 'waiting'].includes(run.status) && (
@@ -283,6 +362,7 @@ export function RunInspector({
           <span>Failure handled by parent recovery.</span>
         )}
         {progress.detail && <span>{progress.detail}</span>}
+        {retryRequested && <span>Retry requested.</span>}
         {attention.length > 0 && (
           <div className={styles.attentionActions}>
             {attention.length === 1 ? (
@@ -328,6 +408,7 @@ export function RunInspector({
           <a href="#workflow-result">View result</a>
         )}
       </div>
+      <ActionError message={retryError} />
       {!!run.variableCaptures?.length && (
         <details className={styles.independent}>
           <summary>Captured variables</summary>
@@ -392,9 +473,21 @@ export function RunInspector({
             )}
           </div>
           <div className="inspector-fields">
-            {selectedWork.map((w) => (
-              <WorkPanel key={w.id} work={w} onRefresh={refresh} />
-            ))}
+            {selectedWork.map((w) => {
+              const key = `${w.id}:${w.attempt}`;
+              return (
+                <WorkPanel
+                  key={w.id}
+                  work={w}
+                  onRefresh={refresh}
+                  draft={resultDrafts.current.get(key)}
+                  onDraftChange={(value) => {
+                    if (value === undefined) resultDrafts.current.delete(key);
+                    else resultDrafts.current.set(key, value);
+                  }}
+                />
+              );
+            })}
             {progressLabel && !selectedWork.some((w) => w.executor) && (
               <p className={styles.progressLabel}>{progressLabel}</p>
             )}
@@ -470,7 +563,9 @@ export function RunInspector({
                 ) : null;
               })}
             {owner && owner.id !== run.id && (
-              <Button onClick={() => onOpen(owner.id)}>Open item run</Button>
+              <Button onClick={() => onOpen(owner.id, execution?.id)}>
+                Open item run
+              </Button>
             )}
             {selected && !execution && (
               <p className="hint">
@@ -550,7 +645,10 @@ export function RunInspector({
               <p className="hint">Followed route {execution.port}.</p>
             )}
             {execution?.error && (
-              <p className="error-banner">{execution.error}</p>
+              <details>
+                <summary>Error details</summary>
+                <pre className={styles.errorDetails}>{execution.error}</pre>
+              </details>
             )}
             {execution?.request && (
               <>
@@ -602,7 +700,7 @@ export function RunInspector({
                 definition={definition}
                 progress={progress.nodes}
                 selected={nodeId}
-                onSelect={(nodeId) => setSelected({ nodeId })}
+                onSelect={(nodeId) => select({ nodeId })}
               />
             ) : (
               <p className="hint">
@@ -617,17 +715,26 @@ export function RunInspector({
               <h3>Execution timeline</h3>
               <code>{run.id.slice(0, 8)}</code>
             </div>
-            {run.error && <p className="error-banner">{run.error}</p>}
+            {run.error &&
+              !run.executions.some(
+                (execution) => execution.error === run.error,
+              ) && (
+                <details>
+                  <summary>Run error details</summary>
+                  <pre className={styles.errorDetails}>{run.error}</pre>
+                </details>
+              )}
             {run.executions.map((e, i) => (
               <button
                 key={e.id}
                 onClick={() =>
-                  setSelected({
+                  select({
                     nodeId: e.nodeId,
                     runId: run.id,
                     executionId: e.id,
                   })
                 }
+                aria-pressed={execution?.id === e.id}
                 className={`${styles.step} ${execution?.id === e.id ? styles.selected : ''}`}
               >
                 <span className={styles.index}>

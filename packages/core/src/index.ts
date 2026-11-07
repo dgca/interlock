@@ -566,6 +566,15 @@ export type RunSummary = Pick<
 > & {
   executionCount: number;
   parentWorkflowName?: string;
+  waitReason?:
+    | 'held'
+    | 'agent'
+    | 'managed'
+    | 'claimed'
+    | 'external_input'
+    | 'external_review'
+    | 'timer'
+    | 'child';
 };
 export interface RunAncestry {
   workflowId: string;

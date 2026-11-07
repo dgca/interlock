@@ -28,7 +28,6 @@ let root: Root;
 let container: HTMLDivElement;
 const scrollIntoView = HTMLElement.prototype.scrollIntoView;
 const dirty = vi.fn();
-let error = '';
 const prompt: SavedPrompt = {
   id: 'p1',
   name: 'Review',
@@ -38,11 +37,11 @@ const prompt: SavedPrompt = {
   createdAt: '',
   updatedAt: '',
 };
-const action: Action = async (fn) => {
+const action: Action = async (fn, _success, onError) => {
   try {
     await fn();
   } catch (e) {
-    error = (e as Error).message;
+    if (onError) onError((e as Error).message);
   }
 };
 beforeEach(() => {
@@ -69,7 +68,6 @@ beforeEach(() => {
   );
   HTMLElement.prototype.scrollIntoView = vi.fn();
   dirty.mockReset();
-  error = '';
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -234,7 +232,9 @@ it('preserves dirty text and its save revision across refresh and stale failure,
       content: 'My unsaved instructions',
     }),
   );
-  expect(error).toContain('Reload before saving');
+  expect(container.querySelector('form [role="alert"]')?.textContent).toContain(
+    'Reload before saving',
+  );
   expect(container.querySelectorAll('textarea')[1].value).toBe(
     'My unsaved instructions',
   );

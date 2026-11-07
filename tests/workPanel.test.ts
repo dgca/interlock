@@ -35,6 +35,7 @@ function display() {
       {},
       h(WorkPanel, {
         work: (({ token, ...rest }) => rest)(work),
+        onDraftChange: () => {},
         onRefresh: () => {
           work = engine.inspect(work.runId).work.find((w) => w.id === work.id)!;
           display();

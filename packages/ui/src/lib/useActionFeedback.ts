@@ -4,6 +4,7 @@ import { errorMessage } from './api';
 export type Action = <T>(
   fn: () => Promise<T>,
   success?: string | ((result: T) => string),
+  onError?: (message: string) => void,
 ) => Promise<void>;
 
 export function useActionFeedback(refresh: () => Promise<void>) {
@@ -26,12 +27,13 @@ export function useActionFeedback(refresh: () => Promise<void>) {
     );
     return () => clearTimeout(timer);
   }, [feedback]);
-  const act: Action = async (fn, success) => {
+  const act: Action = async (fn, success, onError) => {
     let result;
     try {
       result = await fn();
     } catch (error) {
-      notify('error', errorMessage(error));
+      if (onError) onError(errorMessage(error));
+      else notify('error', errorMessage(error));
       return;
     }
     if (success)

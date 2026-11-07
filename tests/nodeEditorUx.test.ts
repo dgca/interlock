@@ -639,3 +639,30 @@ it('keeps Agent routing optional and prefers an enum result field when enabled',
     },
   });
 });
+
+it('preserves the configured Wait duration when returning from polling', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: { kind: 'duration', ms: 1000 },
+  });
+  await act(async () =>
+    container.querySelector<HTMLInputElement>('input[value="poll"]')!.click(),
+  );
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>('input[value="duration"]')!
+      .click(),
+  );
+  await click('Apply changes');
+  expect(onApply).toHaveBeenCalledWith(
+    expect.objectContaining({
+      definition: expect.objectContaining({
+        nodes: expect.arrayContaining([
+          expect.objectContaining({
+            timing: { kind: 'duration', ms: 1000 },
+          }),
+        ]),
+      }),
+    }),
+  );
+});

@@ -8,21 +8,21 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { VERSION } from '../../../../core/src/version';
+import { Link } from 'react-router';
+import { paths } from '../../routes/paths';
 import styles from './Sidebar.module.css';
 export function Sidebar({
   page,
   attentionCount = 0,
-  onNavigate,
   connected,
+  connectionError,
   engineHost,
   onConnect,
 }: {
   page: 'workflows' | 'runs' | 'prompts' | 'variables' | 'harnesses';
   attentionCount?: number;
-  onNavigate: (
-    page: 'workflows' | 'runs' | 'prompts' | 'variables' | 'harnesses',
-  ) => void;
   connected: boolean;
+  connectionError: boolean;
   engineHost?: string;
   onConnect?: () => void;
 }) {
@@ -35,17 +35,38 @@ export function Sidebar({
       <nav aria-label="Main navigation">
         {(
           [
-            { id: 'workflows', label: 'Workflows', Icon: GitBranch },
-            { id: 'runs', label: 'Runs', Icon: Activity },
-            { id: 'prompts', label: 'Prompts', Icon: FileText },
-            { id: 'variables', label: 'Variables', Icon: KeyRound },
-            { id: 'harnesses', label: 'Harnesses', Icon: Settings2 },
+            {
+              id: 'workflows',
+              label: 'Workflows',
+              Icon: GitBranch,
+              to: paths.workflows,
+            },
+            { id: 'runs', label: 'Runs', Icon: Activity, to: paths.runs() },
+            {
+              id: 'prompts',
+              label: 'Prompts',
+              Icon: FileText,
+              to: paths.prompts,
+            },
+            {
+              id: 'variables',
+              label: 'Variables',
+              Icon: KeyRound,
+              to: paths.variables,
+            },
+            {
+              id: 'harnesses',
+              label: 'Harnesses',
+              Icon: Settings2,
+              to: paths.harnesses,
+            },
           ] as const
-        ).map(({ id, label, Icon }) => (
-          <button
+        ).map(({ id, label, Icon, to }) => (
+          <Link
             key={id}
             className={page === id ? styles.active : ''}
-            onClick={() => onNavigate(id)}
+            to={to}
+            aria-current={page === id ? 'page' : undefined}
             aria-label={
               id === 'runs' && attentionCount
                 ? `Runs, ${attentionCount} ${attentionCount === 1 ? 'run needs' : 'runs need'} attention`
@@ -65,23 +86,27 @@ export function Sidebar({
                 {attentionCount}
               </Badge>
             )}
-          </button>
+          </Link>
         ))}
       </nav>
-      {onConnect && (
-        <div className={styles.note}>
+      <div className={styles.utilities}>
+        {onConnect && (
           <button className={styles.connect} onClick={onConnect}>
             Connect with MCP <ArrowUpRight size={12} />
           </button>
-        </div>
-      )}
-      <footer>
-        <i className={connected ? styles.online : styles.offline} />
-        <div>
-          {connected ? 'Local engine connected' : 'Connecting to engine'}
-          {engineHost && <small>{engineHost}</small>}
-        </div>
-      </footer>
+        )}
+        <footer role="status">
+          <i className={connected ? styles.online : styles.offline} />
+          <div>
+            {connected
+              ? 'Local engine connected'
+              : connectionError
+                ? 'Engine unavailable'
+                : 'Connecting to engine'}
+            {engineHost && <small>{engineHost}</small>}
+          </div>
+        </footer>
+      </div>
     </aside>
   );
 }

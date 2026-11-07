@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   Badge,
   NativeSelect,
@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { executorProfileSchema, type ExecutorProfile } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
+import { ActionError } from '../../components/ActionError/ActionError';
+import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 import styles from './Harnesses.module.css';
@@ -33,7 +35,33 @@ const harnessSetup = {
 };
 type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
 
-export function Harnesses() {
+type DirtySetting = (id: string, dirty: boolean) => void;
+
+export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
+  const [dirtySettings, setDirtySettings] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const trackDirty = useCallback<DirtySetting>((id, dirty) => {
+    setDirtySettings((current) => {
+      if (current.has(id) === dirty) return current;
+      const next = new Set(current);
+      if (dirty) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+  const dirty = dirtySettings.size > 0;
+  useBeforeUnloadWarning(dirty);
+  useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
+  useEffect(() => () => onDirty?.(false), [onDirty]);
+  const limitDirty = useCallback(
+    (dirty: boolean) => trackDirty('limit', dirty),
+    [trackDirty],
+  );
+  const newDirty = useCallback(
+    (dirty: boolean) => trackDirty('new', dirty),
+    [trackDirty],
+  );
   const request = useRef(0);
   const [profiles, setProfiles] = useState<Profile[]>(),
     [error, setError] = useState(''),
@@ -75,7 +103,7 @@ export function Harnesses() {
           {checking ? 'Checking…' : 'Check installations'}
         </Button>
       </header>
-      <ExecutionSettings />
+      <ExecutionSettings onDirty={limitDirty} />
       {error && (
         <div className={styles.errorRow}>
           <p role="alert" className={styles.error}>
@@ -96,7 +124,12 @@ export function Harnesses() {
       ) : (
         <div className={styles.list}>
           {profiles.map((p) => (
-            <ProfileRow key={p.id} profile={p} refresh={() => refresh()} />
+            <ProfileRow
+              key={p.id}
+              profile={p}
+              refresh={() => refresh()}
+              onDirty={trackDirty}
+            />
           ))}
         </div>
       )}
@@ -116,6 +149,7 @@ export function Harnesses() {
       </div>
       {adding && (
         <NewProfile
+          onDirty={newDirty}
           onCancel={() => setAdding(false)}
           onSave={async () => {
             setAdding(false);
@@ -133,8 +167,10 @@ function configuration(profile: Profile): ExecutorProfile {
 function ProfileRow({
   profile,
   refresh,
+  onDirty,
 }: {
   profile: Profile;
+  onDirty: DirtySetting;
   refresh: () => Promise<Profile[] | undefined>;
 }) {
   const editorId = useId();
@@ -157,6 +193,10 @@ function ProfileRow({
   const changed =
     JSON.stringify({ ...draft, revision: 0 }) !==
     JSON.stringify({ ...configuration(profile), revision: 0 });
+  const dirty = open && changed;
+  const dirtyId = 'profile:' + profile.id;
+  useEffect(() => onDirty(dirtyId, dirty), [onDirty, dirtyId, dirty]);
+  useEffect(() => () => onDirty(dirtyId, false), [onDirty, dirtyId]);
   const cancel = () => {
     setDraft(configuration(profile));
     setOpen(false);
@@ -264,9 +304,7 @@ function ProfileRow({
         </p>
       )}
       {error && !open && (
-        <p role="alert" className={styles.error}>
-          {error}
-        </p>
+        <ActionError message={error} className={styles.error} />
       )}
       {open && (
         <form
@@ -407,7 +445,9 @@ function ProfileRow({
 function NewProfile({
   onSave,
   onCancel,
+  onDirty,
 }: {
+  onDirty: (dirty: boolean) => void;
   onSave: () => Promise<void>;
   onCancel: () => void;
 }) {
@@ -415,6 +455,9 @@ function NewProfile({
     [harness, setHarness] = useState<ExecutorProfile['harness']>('codex'),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
+  const dirty = name.length > 0 || harness !== 'codex';
+  useEffect(() => onDirty(dirty), [dirty, onDirty]);
+  useEffect(() => () => onDirty(false), [onDirty]);
   return (
     <form
       aria-label="Add harness configuration"
@@ -460,11 +503,7 @@ function NewProfile({
           ]}
         />
       </div>
-      {error && (
-        <p role="alert" className={styles.error}>
-          {error}
-        </p>
-      )}
+      {error && <ActionError message={error} className={styles.error} />}
       <div className={styles.formActions}>
         <Button onClick={onCancel} disabled={busy}>
           Cancel

@@ -1,9 +1,10 @@
 import { ManagedExecutionPanel } from '../executors/ManagedExecutionPanel';
 import { Checkbox, Textarea } from '@mantine/core';
 import { Link } from 'react-router';
-import { useState, useEffect, useSyncExternalStore } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { Bot, Copy } from 'lucide-react';
 import { Button } from '../../components/Button/Button';
+import { ActionError } from '../../components/ActionError/ActionError';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 import { api, errorMessage } from '../../lib/api';
 import type { WorkRequest } from '@interlock/core';
@@ -11,9 +12,13 @@ import { manualClaims } from './manualClaims';
 export function WorkPanel({
   work,
   onRefresh,
+  draft,
+  onDraftChange,
 }: {
   work: Omit<WorkRequest, 'token'>;
   onRefresh: () => void;
+  draft?: string;
+  onDraftChange: (value?: string) => void;
 }) {
   const stored = useSyncExternalStore(manualClaims.subscribe, () =>
     manualClaims.get(work.id),
@@ -45,9 +50,19 @@ export function WorkPanel({
     setStopped(false);
     setCopied(false);
   }, [work.id, work.attempt]);
-  const [output, setOutput] = useState('{}'),
+  const [entered, setEntered] = useState<{ attempt: number; value: string }>(),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
+  const output =
+    entered?.attempt === work.attempt ? entered.value : (draft ?? '{}');
+  const resultInput = useRef<HTMLTextAreaElement>(null);
+  const focusResult = useRef(false);
+  useEffect(() => {
+    if (claim && !busy && focusResult.current) {
+      focusResult.current = false;
+      resultInput.current?.focus();
+    }
+  }, [claim, busy]);
   useEffect(() => {
     manualClaims.observe(work);
   }, [work, stored]);
@@ -229,8 +244,31 @@ export function WorkPanel({
             {copied ? 'Assignment copied' : 'Copy assignment'}
           </Button>
         )}
+        {work.status === 'available' &&
+          !work.budgetBlocked &&
+          !work.resourceBlocked &&
+          work.context.mode === 'current' &&
+          !work.context.continuityGroup &&
+          !work.context.tools.length &&
+          !work.context.skills.length && (
+            <Button
+              disabled={busy}
+              onClick={() =>
+                void perform(async () => {
+                  const claimed = await api.work.claim.mutate({
+                    workId: work.id,
+                    workerId: 'manual-ui',
+                  });
+                  focusResult.current = true;
+                  manualClaims.remember(claimed);
+                })
+              }
+            >
+              Claim for manual completion
+            </Button>
+          )}
       </div>
-      <details open={work.executor ? undefined : true}>
+      <details>
         <summary>Prompt and context</summary>
         {work.executor && (
           <Button onClick={copyAssignment}>
@@ -259,29 +297,6 @@ export function WorkPanel({
           rows={6}
         />
       </details>
-      {work.status === 'available' &&
-        !work.budgetBlocked &&
-        !work.resourceBlocked &&
-        work.context.mode === 'current' &&
-        !work.context.continuityGroup &&
-        !work.context.tools.length &&
-        !work.context.skills.length && (
-          <Button
-            disabled={busy}
-            onClick={() =>
-              void perform(async () =>
-                manualClaims.remember(
-                  await api.work.claim.mutate({
-                    workId: work.id,
-                    workerId: 'manual-ui',
-                  }),
-                ),
-              )
-            }
-          >
-            Claim for manual completion
-          </Button>
-        )}
       {work.context.continuityGroup && (
         <p className="hint">
           Continuity group: {work.context.continuityGroup}.{' '}
@@ -311,10 +326,15 @@ export function WorkPanel({
           <Textarea
             mb="md"
             label="Result JSON"
+            ref={resultInput}
             styles={{ input: { fontFamily: 'var(--mono)' } }}
             rows={8}
             value={output}
-            onChange={(e) => setOutput(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setEntered({ attempt: work.attempt, value });
+              onDraftChange(value);
+            }}
           />
 
           <div className="actions">
@@ -362,6 +382,7 @@ export function WorkPanel({
                     token: manualClaims.token(work.id),
                     output: JSON.parse(output),
                   });
+                  onDraftChange();
                   manualClaims.forget(work.id);
                 })
               }
@@ -371,11 +392,7 @@ export function WorkPanel({
           </div>
         </>
       )}
-      {error && (
-        <p className="error-text" role="alert">
-          {error}
-        </p>
-      )}
+      <ActionError message={error} />
     </section>
   );
 }

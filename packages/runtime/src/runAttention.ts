@@ -15,7 +15,7 @@ export function runAttention(store: Store): RunAttention[] {
       assignment.state === 'interrupted'
         ? ['recovery']
         : assignment.state === 'needs_model'
-          ? ['question']
+          ? ['model']
           : [
               ...(assignment.pendingKinds.includes('permission')
                 ? ['approval' as const]

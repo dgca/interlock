@@ -1,6 +1,6 @@
 import { ExecutorSelect } from '../executors/ExecutorSelect';
 import { AgentResourcesEditor } from './AgentResourcesEditor';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   NodeSettingsSections,
   NodeSection,
@@ -41,7 +41,7 @@ import { EnvironmentEditor } from '../variables/EnvironmentEditor';
 import { WorkflowModeEditor } from './WorkflowModeEditor';
 import { Button } from '../../components/Button/Button';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
-import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
+import { ScriptCode } from './ScriptCode';
 import { PromptPicker } from '../prompts/PromptPicker';
 import styles from './NodeInspector.module.css';
 export function NodeInspector({
@@ -73,6 +73,7 @@ export function NodeInspector({
 }) {
   const [localSection, setLocalSection] = useState<NodeSectionName>('work');
   const active = section ?? localSection;
+  const waitModes = useRef<Partial<Record<WaitTiming['kind'], WaitTiming>>>({});
   const workLabel = (
     {
       agent: 'Assignment',
@@ -154,27 +155,25 @@ export function NodeInspector({
                   { value: 'until', label: 'At a time from input' },
                   { value: 'poll', label: 'When a check passes' },
                 ]}
-                onChange={(kind) =>
+                onChange={(value) => {
+                  const kind = value as WaitTiming['kind'];
+                  waitModes.current[node.timing.kind] = node.timing;
                   patch({
                     timing:
-                      kind === 'duration'
+                      waitModes.current[kind] ??
+                      (kind === 'duration'
                         ? { kind, ms: 60_000 }
                         : kind === 'until'
                           ? { kind, path: '' }
                           : {
                               kind,
                               everyMs: 60_000,
-                              check: {
-                                kind: 'script',
-                                language: 'javascript',
-                                command: 'return { ready: true };',
-                                timeoutMs: 30_000,
-                              },
+                              check: defaultScriptCheck,
                               path: 'ready',
                               equals: true,
-                            },
-                  })
-                }
+                            }),
+                  });
+                }}
               />
             </Input.Wrapper>
             {node.timing.kind === 'duration' ? (
@@ -452,42 +451,7 @@ export function NodeInspector({
         {node.kind === 'script' && (
           <>
             <NodeSection name="work">
-              <Input.Wrapper label="Language" mb="md">
-                <SegmentedControl
-                  mt={4}
-                  style={{ display: 'flex', width: 'fit-content' }}
-                  aria-label="Language"
-                  value={node.language ?? 'bash'}
-                  onChange={(language) => {
-                    const starter =
-                      node.language === 'javascript' ? 'return input;' : 'cat';
-                    patch({
-                      language,
-                      command:
-                        node.command === starter
-                          ? language === 'javascript'
-                            ? 'return input;'
-                            : 'cat'
-                          : node.command,
-                    });
-                  }}
-                  data={[
-                    { value: 'javascript', label: 'JavaScript' },
-                    { value: 'bash', label: 'Bash' },
-                  ]}
-                />
-              </Input.Wrapper>
-
-              <CodeEditor
-                label={
-                  node.language === 'javascript'
-                    ? 'JavaScript code'
-                    : 'Bash command'
-                }
-                language={node.language ?? 'bash'}
-                value={node.command}
-                onChange={(command) => patch({ command })}
-              />
+              <ScriptCode value={node} onChange={patch} />
               <EnvironmentEditor
                 language={node.language}
                 value={node.environment}
@@ -841,10 +805,14 @@ export function NodeInspector({
   );
 }
 
-type PollTiming = Extract<
-  Extract<WorkflowNode, { kind: 'wait' }>['timing'],
-  { kind: 'poll' }
->;
+type WaitTiming = Extract<WorkflowNode, { kind: 'wait' }>['timing'];
+type PollTiming = Extract<WaitTiming, { kind: 'poll' }>;
+const defaultScriptCheck = {
+  kind: 'script',
+  language: 'javascript',
+  command: 'return { ready: true };',
+  timeoutMs: 30_000,
+} as const;
 const blankFetchCheck: PollCheck = {
   kind: 'fetch',
   url: '',
@@ -871,6 +839,7 @@ function PollEditor({
   const patch = (value: Partial<PollTiming>) =>
     onChange({ ...timing, ...value });
   const check = timing.check;
+  const checks = useRef<Partial<Record<PollCheck['kind'], PollCheck>>>({});
   return (
     <>
       <Input.Wrapper label="Check" mb="md">
@@ -883,54 +852,23 @@ function PollEditor({
             { value: 'script', label: 'Script' },
             { value: 'fetch', label: 'Fetch' },
           ]}
-          onChange={(kind) =>
+          onChange={(value) => {
+            const kind = value as PollCheck['kind'];
+            checks.current[check.kind] = check;
             patch({
               check:
-                kind === check.kind
-                  ? check
-                  : kind === 'fetch'
-                    ? blankFetchCheck
-                    : {
-                        kind: 'script',
-                        language: 'javascript',
-                        command: 'return { ready: true };',
-                        timeoutMs: 30_000,
-                      },
-            })
-          }
+                checks.current[kind] ??
+                (kind === 'fetch' ? blankFetchCheck : defaultScriptCheck),
+            });
+          }}
         />
       </Input.Wrapper>
       {check.kind === 'script' ? (
         <>
-          <Input.Wrapper label="Language" mb="md">
-            <SegmentedControl
-              mt={4}
-              style={{ display: 'flex', width: 'fit-content' }}
-              aria-label="Check language"
-              value={check.language ?? 'bash'}
-              onChange={(language) =>
-                patch({
-                  check: {
-                    ...check,
-                    language: language as 'javascript' | 'bash',
-                  },
-                })
-              }
-              data={[
-                { value: 'javascript', label: 'JavaScript' },
-                { value: 'bash', label: 'Bash' },
-              ]}
-            />
-          </Input.Wrapper>
-          <CodeEditor
-            label={
-              check.language === 'javascript'
-                ? 'Check JavaScript code'
-                : 'Check Bash command'
-            }
-            language={check.language ?? 'bash'}
-            value={check.command}
-            onChange={(command) => patch({ check: { ...check, command } })}
+          <ScriptCode
+            polling
+            value={check}
+            onChange={(value) => patch({ check: { ...check, ...value } })}
           />
           <EnvironmentEditor
             language={check.language}

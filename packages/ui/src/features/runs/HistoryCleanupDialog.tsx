@@ -4,7 +4,6 @@ import {
   Button,
   Checkbox,
   Group,
-  Modal,
   Select,
   SimpleGrid,
   Stack,
@@ -12,8 +11,11 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
+import { Modal } from '../../components/Modal/Modal';
+import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
 import { api, errorMessage } from '../../lib/api';
 import type { Action } from '../../lib/useActionFeedback';
+import styles from './HistoryCleanupDialog.module.css';
 
 type Preview = Awaited<
   ReturnType<typeof api.runs.previewHistoryDeletion.query>
@@ -89,8 +91,8 @@ export function HistoryCleanupDialog({
     const request = ++generation.current;
     setBusy(true);
     setError('');
-    await act(async () => {
-      try {
+    await act(
+      async () => {
         const result = await api.runs.deleteHistory.mutate({
           roots: preview.items
             .filter((item) => selected.includes(item.rootRunId))
@@ -107,95 +109,90 @@ export function HistoryCleanupDialog({
           setAcknowledged(false);
         }
         return result;
-      } catch (e) {
+      },
+      undefined,
+      (message) => {
         if (request === generation.current) {
-          setError(errorMessage(e));
+          setError(message);
           setPreview(undefined);
           setSelected([]);
         }
-        throw e;
-      } finally {
-        if (request === generation.current) setBusy(false);
-      }
-    });
+      },
+    );
+    if (request === generation.current) setBusy(false);
   };
   return (
-    <Modal
-      opened
-      onClose={onClose}
-      title="Clean up run history"
-      size="xl"
-      centered
-      closeOnClickOutside={!busy}
-      closeOnEscape={!busy}
-      withCloseButton={!busy}
-    >
-      <Stack>
-        <Text size="sm">
-          Remove selected run trees and their values, assignments, usage, and
-          audit history. Workflows and published versions remain.
-        </Text>
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <Select
-            label="Root workflow"
-            placeholder="All workflows"
-            clearable
-            data={workflows}
-            value={workflow}
-            disabled={busy || Boolean(workflowId)}
-            onChange={(value) => {
-              invalidate();
-              setWorkflow(value);
-            }}
-          />
-          <TextInput
-            label="Last updated before"
-            type="datetime-local"
-            value={before}
-            disabled={busy}
-            onChange={(event) => {
-              invalidate();
-              setBefore(event.currentTarget.value);
-            }}
-          />
-        </SimpleGrid>
-        <Text size="xs" c="dimmed">
-          Filters apply to whole trees, including detached descendants and
-          rollover chains. Protected history cannot be selected.
-        </Text>
-        <Group>
-          <Button variant="light" loading={busy} onClick={() => void load()}>
-            Preview history
-          </Button>
-        </Group>
-        {error && (
-          <Alert color="red" role="alert">
-            {error}
-          </Alert>
-        )}
-        {preview && (
-          <>
-            <Text size="sm">
-              Showing {preview.items.length ? preview.offset + 1 : 0}–
-              {preview.offset + preview.items.length} of {preview.total} trees.{' '}
-              {selected.length} selected.
-            </Text>
-            {preview.items.length ? (
-              <Table.ScrollContainer minWidth={560} type="native">
-                <Table verticalSpacing="sm">
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Select</Table.Th>
-                      <Table.Th>Run tree</Table.Th>
-                      <Table.Th>Last updated</Table.Th>
-                      <Table.Th>Runs</Table.Th>
-                      <Table.Th>JSON data</Table.Th>
+    <Modal onClose={onClose} title="Clean up run history" size="xl" busy={busy}>
+      <ModalBody>
+        <Stack>
+          <Text size="sm">
+            Remove selected run trees and their values, assignments, usage, and
+            audit history. Workflows and published versions remain.
+          </Text>
+          <SimpleGrid cols={{ base: 1, sm: 2 }}>
+            <Select
+              label="Root workflow"
+              placeholder="All workflows"
+              clearable
+              data={workflows}
+              value={workflow}
+              disabled={busy || Boolean(workflowId)}
+              onChange={(value) => {
+                invalidate();
+                setWorkflow(value);
+              }}
+            />
+            <TextInput
+              label="Last updated before"
+              type="datetime-local"
+              value={before}
+              disabled={busy}
+              onChange={(event) => {
+                invalidate();
+                setBefore(event.currentTarget.value);
+              }}
+            />
+          </SimpleGrid>
+          <Text size="xs" c="dimmed">
+            Filters apply to whole trees, including detached descendants and
+            rollover chains. Protected history cannot be selected.
+          </Text>
+          <Group>
+            <Button variant="light" loading={busy} onClick={() => void load()}>
+              Preview history
+            </Button>
+          </Group>
+          {error && (
+            <Alert color="red" role="alert">
+              {error}
+            </Alert>
+          )}
+          {preview && (
+            <>
+              <Text size="sm">
+                Showing {preview.items.length ? preview.offset + 1 : 0}–
+                {preview.offset + preview.items.length} of {preview.total}{' '}
+                trees. {selected.length} selected.
+              </Text>
+              {preview.items.length ? (
+                <Table
+                  className={styles.table}
+                  role="table"
+                  verticalSpacing="sm"
+                >
+                  <Table.Thead role="rowgroup">
+                    <Table.Tr role="row">
+                      <Table.Th role="columnheader">Select</Table.Th>
+                      <Table.Th role="columnheader">Run tree</Table.Th>
+                      <Table.Th role="columnheader">Last updated</Table.Th>
+                      <Table.Th role="columnheader">Runs</Table.Th>
+                      <Table.Th role="columnheader">JSON data</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
-                  <Table.Tbody>
+                  <Table.Tbody role="rowgroup">
                     {preview.items.map((item) => (
-                      <Table.Tr key={item.rootRunId}>
-                        <Table.Td>
+                      <Table.Tr role="row" key={item.rootRunId}>
+                        <Table.Td role="cell">
                           <Checkbox
                             aria-label={`Select run tree ${item.rootRunId}`}
                             disabled={!item.canDelete || busy}
@@ -211,7 +208,7 @@ export function HistoryCleanupDialog({
                             }}
                           />
                         </Table.Td>
-                        <Table.Td>
+                        <Table.Td role="cell">
                           <Text size="sm" fw={500}>
                             {item.workflowName}
                           </Text>
@@ -224,83 +221,109 @@ export function HistoryCleanupDialog({
                             </Text>
                           ))}
                         </Table.Td>
-                        <Table.Td>
+                        <Table.Td role="cell">
                           <Text size="xs">
+                            <span
+                              className={styles.mobileLabel}
+                              aria-hidden="true"
+                            >
+                              Last updated ·{' '}
+                            </span>
                             {new Date(item.updatedAt).toLocaleString()}
                           </Text>
                         </Table.Td>
-                        <Table.Td>{item.runCount}</Table.Td>
-                        <Table.Td>{bytes(item.documentBytes)}</Table.Td>
+                        <Table.Td role="cell">
+                          <span
+                            className={styles.mobileLabel}
+                            aria-hidden="true"
+                          >
+                            Runs ·{' '}
+                          </span>
+                          {item.runCount}
+                        </Table.Td>
+                        <Table.Td role="cell">
+                          <span
+                            className={styles.mobileLabel}
+                            aria-hidden="true"
+                          >
+                            JSON data ·{' '}
+                          </span>
+                          {bytes(item.documentBytes)}
+                        </Table.Td>
                       </Table.Tr>
                     ))}
                   </Table.Tbody>
                 </Table>
-              </Table.ScrollContainer>
-            ) : (
-              <Text size="sm">No run trees match these filters.</Text>
-            )}
-            {(preview.offset > 0 || preview.nextOffset !== null) && (
-              <Group>
-                <Button
-                  variant="subtle"
-                  disabled={busy || preview.offset === 0}
-                  onClick={() => void load(Math.max(0, preview.offset - 20))}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="subtle"
-                  disabled={busy || preview.nextOffset === null}
-                  onClick={() => void load(preview.nextOffset!)}
-                >
-                  Next
-                </Button>
-              </Group>
-            )}
-            <Checkbox
-              label="I understand that deleting the selected history is permanent."
-              checked={acknowledged}
-              disabled={busy || !selected.length}
-              onChange={(event) => setAcknowledged(event.currentTarget.checked)}
-            />
-            <Text size="xs" c="dimmed">
-              Deleted space becomes reusable inside SQLite. The database file
-              may need offline compaction to shrink. Start-request tombstones
-              remain; backups, native harness files and trial files are
-              separate.
-            </Text>
-          </>
-        )}
-        {removed && (
-          <Alert color="green" title="History removed" role="status">
-            <Text size="sm">
-              Deleted {removed.deletedRuns} runs from {removed.deletedRoots}{' '}
-              trees and {bytes(removed.removedDocumentBytes)} of JSON data.
-            </Text>
-            <Text size="sm">
-              Database allocation: {bytes(removed.storage.databaseBytes)}.
-              Reusable pages: {bytes(removed.storage.reusableBytes)}. File size
-              may not shrink until offline compaction. Workflows, versions, and{' '}
-              {removed.retainedStartReceipts} start-request tombstones remain.
-            </Text>
-          </Alert>
-        )}
-        <Group justify="flex-end">
-          <Button variant="subtle" disabled={busy} onClick={onClose}>
-            {removed ? 'Done' : 'Cancel'}
-          </Button>
-          {preview && (
-            <Button
-              color="red"
-              disabled={busy || !acknowledged || !selected.length}
-              loading={busy}
-              onClick={() => void remove()}
-            >
-              Delete selected history
-            </Button>
+              ) : (
+                <Text size="sm">No run trees match these filters.</Text>
+              )}
+              {(preview.offset > 0 || preview.nextOffset !== null) && (
+                <Group>
+                  <Button
+                    variant="subtle"
+                    disabled={busy || preview.offset === 0}
+                    onClick={() => void load(Math.max(0, preview.offset - 20))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="subtle"
+                    disabled={busy || preview.nextOffset === null}
+                    onClick={() => void load(preview.nextOffset!)}
+                  >
+                    Next
+                  </Button>
+                </Group>
+              )}
+              <Checkbox
+                label="I understand that deleting the selected history is permanent."
+                checked={acknowledged}
+                disabled={busy || !selected.length}
+                onChange={(event) =>
+                  setAcknowledged(event.currentTarget.checked)
+                }
+              />
+              <Text size="xs" c="dimmed">
+                Deleted space becomes reusable inside SQLite. The database file
+                may need offline compaction to shrink. Start-request tombstones
+                remain; backups, native harness files and trial files are
+                separate.
+              </Text>
+            </>
           )}
-        </Group>
-      </Stack>
+          {removed && (
+            <Alert color="green" title="History removed" role="status">
+              <Text size="sm">
+                Deleted {removed.deletedRuns} runs from {removed.deletedRoots}{' '}
+                trees and {bytes(removed.removedDocumentBytes)} of JSON data.
+              </Text>
+              <Text size="sm">
+                Database allocation: {bytes(removed.storage.databaseBytes)}.
+                Reusable pages: {bytes(removed.storage.reusableBytes)}. File
+                size may not shrink until offline compaction. Workflows,
+                versions, and {removed.retainedStartReceipts} start-request
+                tombstones remain.
+              </Text>
+            </Alert>
+          )}
+        </Stack>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="default" disabled={busy} onClick={onClose}>
+          {removed ? 'Done' : 'Cancel'}
+        </Button>
+        {preview && (
+          <Button
+            color="red"
+            variant="light"
+            disabled={busy || !acknowledged || !selected.length}
+            loading={busy}
+            onClick={() => void remove()}
+          >
+            Delete selected history
+          </Button>
+        )}
+      </ModalFooter>
     </Modal>
   );
 }

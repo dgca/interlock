@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
   ActionIcon,
   Badge,
@@ -18,6 +18,7 @@ import {
 import type { Workflow } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { Modal } from '../../components/Modal/Modal';
+import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
 import type { Action } from '../../lib/useActionFeedback';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import styles from './WorkflowChildren.module.css';
@@ -37,6 +38,7 @@ export function WorkflowChildren({
   act: Action;
   disabled: boolean;
 }) {
+  const createFormId = useId();
   const [name, setName] = useState('');
   const [archived, setArchived] = useState(false);
   const [query, setQuery] = useState('');
@@ -239,65 +241,71 @@ export function WorkflowChildren({
       {creating && (
         <Modal
           title="New child workflow"
+          busy={busy}
           onClose={() => {
             if (!busy) setCreating(false);
           }}
         >
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              if (!name.trim() || busy || !canCreate) return;
-              setBusy(true);
-              setError('');
-              try {
-                await onCreate(name.trim());
-                setCreating(false);
-              } catch (e) {
-                setError((e as Error).message);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <p className={styles.dialogIntro}>
-              Create a helper that belongs to <strong>{workflow.name}</strong>.
-            </p>
-            <TextInput
-              label="Child workflow name"
-              placeholder="e.g. Gather evidence"
-              required
-              maxLength={120}
-              value={name}
-              disabled={busy || disabled}
-              onChange={(e) => setName(e.target.value)}
-              data-autofocus
-            />
-            <p className={styles.dialogHint}>
-              This saves the parent draft, then opens the child editor. Add a
-              Workflow node in the parent when you're ready to use it.
-            </p>
-            {error && (
-              <p role="alert" className="error-text">
-                {error}
+          <ModalBody>
+            <form
+              id={createFormId}
+              onSubmit={async (event) => {
+                event.preventDefault();
+                if (!name.trim() || busy || !canCreate) return;
+                setBusy(true);
+                setError('');
+                try {
+                  await onCreate(name.trim());
+                  setCreating(false);
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <p className={styles.dialogIntro}>
+                Create a helper that belongs to <strong>{workflow.name}</strong>
+                .
               </p>
-            )}
-            <div className={styles.dialogActions}>
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() => setCreating(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={!name.trim() || !canCreate || busy}
-              >
-                {busy ? 'Creating…' : 'Save and create child'}
-              </Button>
-            </div>
-          </form>
+              <TextInput
+                label="Child workflow name"
+                placeholder="e.g. Gather evidence"
+                required
+                maxLength={120}
+                value={name}
+                disabled={busy || disabled}
+                onChange={(e) => setName(e.target.value)}
+                data-autofocus
+              />
+              <p className={styles.dialogHint}>
+                This saves the parent draft, then opens the child editor. Add a
+                Workflow node in the parent when you're ready to use it.
+              </p>
+              {error && (
+                <p role="alert" className="error-text">
+                  {error}
+                </p>
+              )}
+            </form>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => setCreating(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form={createFormId}
+              variant="primary"
+              disabled={!name.trim() || !canCreate || busy}
+            >
+              {busy ? 'Creating…' : 'Save and create child'}
+            </Button>
+          </ModalFooter>
         </Modal>
       )}
       {deleting && (

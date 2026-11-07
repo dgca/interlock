@@ -1,4 +1,4 @@
-import { Alert } from '@mantine/core';
+import { Alert, Group } from '@mantine/core';
 import { useState } from 'react';
 import { Bot, Copy } from 'lucide-react';
 import { Button } from '../../components/Button/Button';
@@ -37,6 +37,7 @@ export function AgentHandoff({
       title="Waiting for an agent"
       color="blue"
       role="status"
+      styles={{ wrapper: { minWidth: 0 }, body: { minWidth: 0 } }}
     >
       <p>
         Interlock has prepared an assignment. Ask your connected agent to
@@ -44,13 +45,13 @@ export function AgentHandoff({
         {onConnect &&
           ' Connecting an agent does not automatically pick up work.'}
       </p>
-      <div className="actions">
+      <Group gap="xs">
         <Button onClick={() => void copy()}>
           <Copy />
           {copied ? 'Instructions copied' : 'Copy instructions for agent'}
         </Button>
         {onConnect && <Button onClick={onConnect}>Connect an agent</Button>}
-      </div>
+      </Group>
       {error && (
         <p role="alert" className="error-text">
           {error}

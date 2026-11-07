@@ -1,3 +1,7 @@
+import {
+  LoadingSkeleton,
+  FormPlaceholder,
+} from '../../components/LoadingSkeleton/LoadingSkeleton';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
 import { flushSync } from 'react-dom';
@@ -31,6 +35,8 @@ import { api, errorMessage } from '../../lib/api';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { Button } from '../../components/Button/Button';
 import { Modal } from '../../components/Modal/Modal';
+import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
+import { ActionError } from '../../components/ActionError/ActionError';
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 import library from '../../components/PageLayout/LibraryList.module.css';
@@ -331,6 +337,7 @@ function VariableEditor({ id }: { id: string }) {
   const valueInput = useRef<HTMLTextAreaElement>(null);
   const nameInput = useRef<HTMLInputElement>(null);
   const replaceButton = useRef<HTMLButtonElement>(null);
+  const returnToValue = useRef(false);
   const nameValidation = variableRequirementSchema.shape.name.safeParse(name);
   const nameError = nameValidation.success
     ? ''
@@ -400,7 +407,11 @@ function VariableEditor({ id }: { id: string }) {
   }, [id, creating, dirty, busy, tick, refresh, offset, config]);
   useEffect(() => {
     if (replacingSecret) valueInput.current?.focus();
-  }, [replacingSecret]);
+    else if (!busy && returnToValue.current) {
+      returnToValue.current = false;
+      replaceButton.current?.focus();
+    }
+  }, [replacingSecret, busy]);
   const clear = () => {
     setValue('');
     setValueRequired(false);
@@ -425,57 +436,54 @@ function VariableEditor({ id }: { id: string }) {
     try {
       await act(
         async () => {
-          try {
-            const result = await api.variables.manage.mutate(
-              creating
-                ? {
-                    action: 'create',
-                    name,
-                    description,
-                    kind,
-                    ...(kind === 'config' || value ? { value } : {}),
-                  }
-                : {
-                    action: 'update',
-                    id,
-                    expectedRevision: saved!.revision,
-                    name,
-                    description,
-                    ...(configChanged
-                      ? { value: configDraft }
-                      : replacingSecret
-                        ? { value }
-                        : {}),
-                  },
-            );
-            // Clear the entered Secret replacement before refreshing the view.
-            setValue('');
-            setReplacingSecret(false);
-            setConfigDraft(undefined);
-            if ('name' in result) {
-              setName(result.name);
-              setDescription(result.description);
+          const result = await api.variables.manage.mutate(
+            creating
+              ? {
+                  action: 'create',
+                  name,
+                  description,
+                  kind,
+                  ...(kind === 'config' || value ? { value } : {}),
+                }
+              : {
+                  action: 'update',
+                  id,
+                  expectedRevision: saved!.revision,
+                  name,
+                  description,
+                  ...(configChanged
+                    ? { value: configDraft }
+                    : replacingSecret
+                      ? { value }
+                      : {}),
+                },
+          );
+          // Clear the entered Secret replacement before refreshing the view.
+          returnToValue.current = replacingSecret;
+          setValue('');
+          setReplacingSecret(false);
+          setConfigDraft(undefined);
+          if ('name' in result) {
+            setName(result.name);
+            setDescription(result.description);
+          }
+          if (creating && 'name' in result) {
+            flushSync(() => onDirty(false));
+            void navigate(paths.variable(result.id));
+          } else {
+            if (saved && 'availability' in result) {
+              setSaved({ ...saved, ...result });
+              if (configChanged)
+                setConfig({
+                  revision: result.valueRevision,
+                  value: configDraft!,
+                });
             }
-            if (creating && 'name' in result) {
-              flushSync(() => onDirty(false));
-              void navigate(paths.variable(result.id));
-            } else {
-              if (saved && 'availability' in result) {
-                setSaved({ ...saved, ...result });
-                if (configChanged)
-                  setConfig({
-                    revision: result.valueRevision,
-                    value: configDraft!,
-                  });
-              }
-              setRefresh((n) => n + 1);
-            }
-          } catch (e) {
-            setError(errorMessage(e));
-            throw e;
+            setRefresh((n) => n + 1);
           }
         },
         creating ? 'Variable created.' : 'Variable saved.',
+        setError,
       );
     } finally {
       pending.current = false;
@@ -490,38 +498,34 @@ function VariableEditor({ id }: { id: string }) {
     try {
       await act(
         async () => {
-          try {
-            if (rebind)
-              await api.variables.manage.mutate({
-                action: 'bind',
-                id: rebind.binding.id,
-                variableId: rebind.target,
-                kind: rebind.binding.kind,
-                expectedRevision: rebind.binding.revision,
-              });
-            else if (confirmation === 'delete')
-              await api.variables.manage.mutate({
-                action: 'delete',
-                id,
-                expectedRevision: saved.revision,
-              });
-            else
-              await api.variables.manage.mutate({
-                action: 'update',
-                id,
-                expectedRevision: saved.revision,
-                enabled: confirmation === 'enable',
-              });
-            setConfirmation(undefined);
-            setRebind(undefined);
-            if (confirmation === 'delete') void navigate(paths.variables);
-            else setRefresh((n) => n + 1);
-          } catch (e) {
-            setError(errorMessage(e));
-            throw e;
-          }
+          if (rebind)
+            await api.variables.manage.mutate({
+              action: 'bind',
+              id: rebind.binding.id,
+              variableId: rebind.target,
+              kind: rebind.binding.kind,
+              expectedRevision: rebind.binding.revision,
+            });
+          else if (confirmation === 'delete')
+            await api.variables.manage.mutate({
+              action: 'delete',
+              id,
+              expectedRevision: saved.revision,
+            });
+          else
+            await api.variables.manage.mutate({
+              action: 'update',
+              id,
+              expectedRevision: saved.revision,
+              enabled: confirmation === 'enable',
+            });
+          setConfirmation(undefined);
+          setRebind(undefined);
+          if (confirmation === 'delete') void navigate(paths.variables);
+          else setRefresh((n) => n + 1);
         },
         rebind ? 'Binding updated.' : 'Variable updated.',
+        setError,
       );
     } finally {
       pending.current = false;
@@ -580,9 +584,18 @@ function VariableEditor({ id }: { id: string }) {
         {header}
         <div className={styles.editorBody}>
           <div className={styles.editorContent}>
-            <p role={error ? 'alert' : 'status'}>
-              {error || 'Loading variable…'}
-            </p>
+            {error ? (
+              <p role="alert">{error}</p>
+            ) : (
+              <div className={layout.formPage}>
+                <LoadingSkeleton
+                  label="Loading variable…"
+                  className={layout.formCard}
+                >
+                  <FormPlaceholder />
+                </LoadingSkeleton>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -668,10 +681,8 @@ function VariableEditor({ id }: { id: string }) {
       {header}
       <div className={styles.editorBody}>
         <div className={layout.formPage}>
-          {error && (
-            <p className={styles.error} role="alert">
-              {error}
-            </p>
+          {!confirmation && !rebind && (
+            <ActionError message={error} className={styles.error} />
           )}
           <form
             id={formId}
@@ -966,6 +977,7 @@ function VariableEditor({ id }: { id: string }) {
                   ? 'Disable use'
                   : 'Enable use'
           }
+          busy={busy}
           onClose={() => {
             if (!busy) {
               setConfirmation(undefined);
@@ -973,73 +985,71 @@ function VariableEditor({ id }: { id: string }) {
             }
           }}
         >
-          <Stack>
-            {rebind ? (
-              <>
+          <ModalBody>
+            <Stack>
+              {rebind ? (
+                <>
+                  <Text size="sm">
+                    New runs using this portable identity will use the selected
+                    local variable. Existing runs retain their original capture.
+                    Review the workflow dependencies before changing it.
+                  </Text>
+                  <code className={styles.portableId}>{rebind.binding.id}</code>
+                  <VariablePicker
+                    label="Local variable"
+                    kind={rebind.binding.kind}
+                    value={rebind.target}
+                    onChange={(target) => setRebind({ ...rebind, target })}
+                  />
+                </>
+              ) : confirmation === 'delete' ? (
                 <Text size="sm">
-                  New runs using this portable identity will use the selected
-                  local variable. Existing runs retain their original capture.
-                  Review the workflow dependencies before changing it.
+                  {blocked
+                    ? 'This variable is still referenced. Remove draft and retained published references and finish active runs or comparisons before deletion.'
+                    : 'Delete this variable and its protected value revisions? Historical metadata remains. Backups may retain encrypted values.'}
                 </Text>
-                <code className={styles.portableId}>{rebind.binding.id}</code>
-                <VariablePicker
-                  label="Local variable"
-                  kind={rebind.binding.kind}
-                  value={rebind.target}
-                  onChange={(target) => setRebind({ ...rebind, target })}
-                />
-              </>
-            ) : confirmation === 'delete' ? (
-              <Text size="sm">
-                {blocked
-                  ? 'This variable is still referenced. Remove draft and retained published references and finish active runs or comparisons before deletion.'
-                  : 'Delete this variable and its protected value revisions? Historical metadata remains. Backups may retain encrypted values.'}
-              </Text>
-            ) : (
-              <Text size="sm">
-                {confirmation === 'disable'
-                  ? 'New runs and later steps in existing runs cannot use this variable. Values already delivered to an operation cannot be recalled. Cancel active work or revoke the credential at its provider when needed.'
-                  : 'Existing captures can use their original retained revision again. New runs capture the current value.'}
-              </Text>
-            )}
-            {error && (
-              <Text role="alert" c="red" size="sm">
-                {error}
-              </Text>
-            )}
-            <Group justify="flex-end">
-              <Button
-                disabled={busy}
-                onClick={() => {
-                  setConfirmation(undefined);
-                  setRebind(undefined);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant={confirmation === 'delete' ? 'danger' : 'primary'}
-                disabled={
-                  busy ||
-                  (confirmation === 'delete' && blocked) ||
-                  (!!rebind &&
-                    (!rebind.target ||
-                      rebind.target === rebind.binding.variableId))
-                }
-                onClick={() => void change()}
-              >
-                {busy
-                  ? 'Saving…'
-                  : rebind
-                    ? 'Change binding'
-                    : confirmation === 'delete'
-                      ? 'Delete variable'
-                      : confirmation === 'disable'
-                        ? 'Disable use'
-                        : 'Enable use'}
-              </Button>
-            </Group>
-          </Stack>
+              ) : (
+                <Text size="sm">
+                  {confirmation === 'disable'
+                    ? 'New runs and later steps in existing runs cannot use this variable. Values already delivered to an operation cannot be recalled. Cancel active work or revoke the credential at its provider when needed.'
+                    : 'Existing captures can use their original retained revision again. New runs capture the current value.'}
+                </Text>
+              )}
+              <ActionError message={error} className={styles.error} />
+            </Stack>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                setConfirmation(undefined);
+                setRebind(undefined);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={confirmation === 'delete' ? 'danger' : 'primary'}
+              disabled={
+                busy ||
+                (confirmation === 'delete' && blocked) ||
+                (!!rebind &&
+                  (!rebind.target ||
+                    rebind.target === rebind.binding.variableId))
+              }
+              onClick={() => void change()}
+            >
+              {busy
+                ? 'Saving…'
+                : rebind
+                  ? 'Change binding'
+                  : confirmation === 'delete'
+                    ? 'Delete variable'
+                    : confirmation === 'disable'
+                      ? 'Disable use'
+                      : 'Enable use'}
+            </Button>
+          </ModalFooter>
         </Modal>
       )}
     </section>

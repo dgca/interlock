@@ -360,7 +360,7 @@ Vite and the built server serve the app for direct page requests. A future host 
 
 ## UI components
 
-[UI interaction patterns](ui-patterns.md) documents run attention, approval, recovery, and browser review conventions.
+[UI interaction patterns](ui-patterns.md) documents dialog layout, loading states, run attention, approval, recovery, and browser review conventions.
 
 Interlock tabs on the same origin share a browser event stream. One tab holds
 the stream and broadcasts change notices and heartbeats to the others.
@@ -371,7 +371,7 @@ automatic refreshes and catch up when visible.
 
 The global and workflow-specific Runs views use the shared `runs.summaries`
 query. SQLite uses a metadata index for counts and page selection, then
-projects list fields and step counts for the selected page. The query accepts
+projects list fields, step counts, and available wait reasons for the selected page. The query accepts
 optional filters for workflow ID, status, and Runs tab, plus an offset and
 a limit from 1 to 200 (100 by default). It applies
 the scope before paging, so older active runs and runs needing attention stay
@@ -384,11 +384,11 @@ Mantine provides dialogs, form controls, tabs, menus, and status badges. The sha
 
 Use Mantine components directly for standard controls. Keep shared components for Interlock behavior, such as JSON validation, contract editing, action variants, and status-to-color mapping. Settings dialogs hold local edits until Apply changes. Contract editing uses a page within that dialog. **Delete node** appears at the left of the shared settings footer for deletable nodes. Cancel discards the settings edit, including applied contract changes.
 
-The workflow editor holds a draft shared by Visual and Raw views. Raw JSON must parse, match the definition structure, and contain no unknown definition fields before saving. Raw edits require Save or Discard before returning to Visual. Graph validation errors can remain in a saved draft but block publication. The server performs the final publication validation, including referenced child workflow versions.
+The workflow editor holds a draft shared by Visual and Raw views. Raw JSON must parse, match the definition structure, and contain no unknown definition fields before saving. Raw edits require Save or Discard before returning to Visual. The action bar stays visible as the Raw editor scrolls. Graph validation errors can remain in a saved draft but block publication. The server performs the final publication validation, including referenced child workflow versions.
 
 The editor's Review & publish dialog compares the effective draft with the latest immutable published definition through the existing versions query. It groups structural changes to nodes, routes, workflow contracts, and settings, with layout changes separate. Node IDs and source ports identify nodes and routes; edge IDs and JSON object key order do not count as changes. The dialog displays the first publication and unchanged drafts explicitly. It does not compare mutable workflow name or description because published versions store definitions only. Confirming runs the editor's existing save and publish calls. A newer draft revision or published version requires a fresh review.
 
-The workflow editor and run inspection canvases share design tool navigation controls: scroll to pan and pinch to zoom. Dragging with the middle mouse button pans, as does holding Space and dragging. Hold Command or Control to zoom by scrolling while keeping the arrow cursor. The magnifying-glass cursor is reserved for holding Z to zoom to an area. Run graphs remain read-only, and clicking a node opens its execution details. In the editor, dragging empty canvas space selects nodes, and dragging a node moves it. Selecting an edge raises it above the nodes, thickens it in the accent color, outlines its source and target, and dims the rest of the graph. Selection stays local to the editor and is not saved in the workflow definition.
+The workflow editor and run inspection canvases share design tool navigation controls: scroll to pan and pinch to zoom. Dragging with the middle mouse button pans, as does holding Space and dragging. Hold Command or Control to zoom by scrolling while keeping the arrow cursor. The magnifying-glass cursor is reserved for holding Z to zoom to an area. Run graphs remain read-only. Click a node or focus it and press Enter or Space to open its execution details. In the editor, dragging empty canvas space selects nodes, and dragging a node moves it. Selecting an edge raises it above the nodes, thickens it in the accent color, outlines its source and target, and dims the rest of the graph. Selection stays local to the editor and is not saved in the workflow definition.
 
 An edge whose target sits entirely left of its source routes through a separate lane above or below the cards between its endpoints. It takes the side that already carries fewer loops over that span and prefers below on a tie. The vertical segments use available gaps beside the endpoint cards.
 
@@ -398,7 +398,7 @@ Holding plain Z outside text fields and dialogs enables area zoom. A primary-but
 
 Editor Undo and Redo keep up to 50 snapshots of the definition, name, and description in memory. Drag gestures and settings applications each form one history step. Canvas deletion removes selected nodes, Batch descendants, and affected edges together. Selection, viewport changes, and collapse state stay outside history. Saving updates the saved baseline and revision without clearing history; loading an external draft resets it. Unmounting the editor ends the session. Published versions are never changed by history navigation.
 
-The editor header adapts to the editor's available width, including when embedded in a side panel. Below 700 pixels, Save draft and Review & publish use shorter labels, and Undo and Redo move into Workflow actions. Their keyboard shortcuts remain available. Below 480 pixels, Save, Publish, and Run use icons with accessible names and hover titles. Long workflow names truncate and show their full text on hover. The canvas toolbar and Raw view actions wrap in narrow editors without making the whole editor scroll horizontally.
+The editor header keeps the workflow name, draft status, and latest publication together. It adapts to the editor's available width, including when embedded in a side panel. Below 700 pixels, Save draft and Review & publish use shorter labels, and Undo and Redo move into Workflow actions. Their keyboard shortcuts remain available. Below 480 pixels, Save, Publish, and Run use icons with accessible names and hover titles. Long workflow names truncate and show their full text on hover. The canvas toolbar and Raw view actions wrap in narrow editors without making the whole editor scroll horizontally.
 
 Raw text keeps its own typing history. Save beneath the raw editor persists the parsed definition and records one workflow history step only after the save succeeds. Discard restores the raw session baseline from entry or the last successful save, without discarding prior visual edits. Text typed during a pending save remains available afterward. Unapplied raw edits, open settings, active drags, and pending saves or publication disable workflow Undo and Redo. Keyboard shortcuts leave text fields and settings dialogs to handle their own input.
 

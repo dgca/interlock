@@ -10,7 +10,11 @@ import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import styles from './Harnesses.module.css';
 
-export function ExecutionSettings() {
+export function ExecutionSettings({
+  onDirty,
+}: {
+  onDirty?: (dirty: boolean) => void;
+}) {
   const inputId = useId();
   const [settings, setSettings] =
     useState<Awaited<ReturnType<typeof api.executors.settings.query>>>();
@@ -42,6 +46,8 @@ export function ExecutionSettings() {
     mode === 'unlimited' ||
     (typeof value === 'number' && Number.isSafeInteger(value) && value >= 1);
   const concurrency = mode === 'unlimited' ? null : value;
+  const dirty = !!settings && concurrency !== settings.concurrency;
+  useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
   return (
     <section
       id="concurrency"

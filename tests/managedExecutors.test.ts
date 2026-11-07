@@ -134,7 +134,7 @@ it('holds a model refusal without spending failures, releases resources and retr
   expect(e.runAttention()).toEqual([
     {
       runId: run.id,
-      reasons: ['question'],
+      reasons: ['model'],
       target: { runId: run.id, executionId: work.executionId },
     },
   ]);
