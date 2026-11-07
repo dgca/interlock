@@ -1,0 +1,98 @@
+
+ RUN  v3.2.7 /Users/dan/dev/interlock-worktrees/issue-236
+
+ ❯ tests/workflowTriggers.test.ts (28 tests | 1 failed) 450ms
+   × UI236-R5 returns explicit duration bounds at the shared validation boundary 5ms
+     → expected [ { code: 'too_small', …(6) } ] to deeply equal ArrayContaining{…}
+   ✓ validates five-field cron, IANA zone, minimum interval, bindings and literal templates 14ms
+   ✓ uses the same cron calculation for preview and runtime, including DST transitions 24ms
+   ✓ defaults disabled, enforces published enable, independent revisions and bound starts 7ms
+   ✓ collapses downtime without a burst under skip 4ms
+   ✓ collapses downtime without a burst under run_once 8ms
+   ✓ honors multiple named holds and makes a single run_once recovery after release 7ms
+   ✓ implements overlap skip against active and queued predecessors 7ms
+   ✓ implements overlap queue against active and queued predecessors 12ms
+   ✓ implements overlap allow against active and queued predecessors 14ms
+   ✓ treats capacity queues as overlap and allows only one schedule pending run 21ms
+   ✓ atomically persists input, receipt, run, fire and next slot or rolls all protected state back 6ms
+   ✓ deduplicates across competing stores and restart, preserving deterministic slot receipts 13ms
+   ✓ counts terminal failures once, auto-pauses visibly and re-enables without releasing holds 7ms
+   ✓ does not pause by default, resets on completed runs and treats cancellation as neutral 21ms
+   ✓ shows admission failures without run rows and late admission lag without disabling 10ms
+   ✓ preserves disabled schedules on portable transfer, guards identity and keeps old bundles valid 6ms
+   ✓ deletes only schedule/fire data and retains existing run and receipts 5ms
+   ✓ serves shared CRUD/read/preview/attention with bounded schemas 3ms
+   ✓ tracks continue-as-new schedule chains until their final terminal outcome 16ms
+   ✓ pages and trims settled fires, keeps unresolved rows and handles missing run history 27ms
+   ✓ reenables with explicit missed policy and reanchors timing edits 6ms
+   ✓ serializes genuinely concurrent scheduler processes on the same SQLite slot 158ms
+   ✓ applies skip to a hold covering the slot between scheduler ticks 3ms
+   ✓ applies run_once to a hold covering the slot between scheduler ticks 5ms
+   ✓ does not miss a slot merely because a hold ended before that slot 5ms
+   ✓ 45758202-R1 preserves originating admission when a chain successor is queued=false 15ms
+   ✓ 45758202-R1 preserves originating admission when a chain successor is queued=true 19ms
+ ❯ tests/schedules.test.ts (5 tests | 1 failed) 390ms
+   × UI236-R5 explains the duration minimum beside a fractional-minute interval and allows correction 195ms
+     → expected 'Number must be greater than or equal …' to be 'Use an interval of at least 30 second…' // Object.is equality
+   ✓ UI236-R2 associates invalid zone feedback with the zone field while keeping valid cron clear 45ms
+   ✓ UI236-R3 explicit conflict reload resets invalid raw JSON even when server JSON is unchanged 73ms
+   ✓ UI236-R4 leaving a kept-mounted schedule view dismisses its draft and reopening starts from persisted values 53ms
+   ✓ UI236-R1 retains attention offset across unrelated run ticks and clamps after the last page disappears 23ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/schedules.test.ts > UI236-R5 explains the duration minimum beside a fractional-minute interval and allows correction
+AssertionError: expected 'Number must be greater than or equal …' to be 'Use an interval of at least 30 second…' // Object.is equality
+
+Expected: "Use an interval of at least 30 seconds."
+Received: "Number must be greater than or equal to 30000"
+
+ ❯ tests/schedules.test.ts:182:89
+    180|   const every = input('Every');
+    181|   expect(every.getAttribute('aria-invalid')).toBe('true');
+    182|   expect(document.getElementById(every.getAttribute('aria-describedby'…
+       |                                                                                         ^
+    183|   expect(rpc.manage).not.toHaveBeenCalled();
+    184|   await fill(every, '0.5');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/workflowTriggers.test.ts > UI236-R5 returns explicit duration bounds at the shared validation boundary
+AssertionError: expected [ { code: 'too_small', …(6) } ] to deeply equal ArrayContaining{…}
+
+- Expected
++ Received
+
+- ArrayContaining [
+-   ObjectContaining {
+-     "message": "Use an interval of at least 30 seconds.",
++ [
++   {
++     "code": "too_small",
++     "exact": false,
++     "inclusive": true,
++     "message": "Number must be greater than or equal to 30000",
++     "minimum": 30000,
+      "path": [
+        "intervalMs",
+      ],
++     "type": "number",
+    },
+  ]
+
+ ❯ tests/workflowTriggers.test.ts:106:54
+    104|     const parsed = scheduleTimingSchema.safeParse({type: 'interval', i…
+    105|     expect(parsed.success).toBe(false);
+    106|     if (!parsed.success) expect(parsed.error.issues).toEqual(expect.ar…
+       |                                                      ^
+    107|   }
+    108| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 31 passed (33)
+   Start at  05:35:11
+   Duration  1.19s (transform 398ms, setup 0ms, collect 813ms, tests 840ms, environment 234ms, prepare 58ms)
+
