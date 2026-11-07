@@ -114,7 +114,7 @@ The **Tidy** icon sits below **Fit View** in the canvas controls and runs your l
 
 ### Compare workflow behavior
 
-Use the MCP [workflow testbench](docs/workflow-testbench.md) to save representative cases, preview and execute two published versions, and inspect execution, assertion and quality results alongside timing, reported cost and evaluation coverage. Existing Runs views label each comparison, case, baseline/candidate side and repetition, with counterpart navigation. These are real runs using connected executors and normal Script/Fetch actions. Comparison configuration stays in MCP, including optional exact per-side prompt revisions and requested executor/environment references. Reports distinguish those requests from declared and usage-reported models. Publication remains separate.
+Use the MCP [workflow testbench](docs/workflow-testbench.md) to save representative cases, preview and execute two published versions, and inspect execution, assertion and quality results alongside timing, reported cost and evaluation coverage. Existing Runs views label each comparison, case, baseline/candidate side and repetition, with counterpart navigation. These are real runs using managed or connected executors and normal Script and Fetch actions. Comparison configuration stays in MCP, including optional exact per-side prompt revisions and requested executor/environment references. Reports distinguish those requests from declared and usage-reported models. Publication remains separate.
 
 For trusted local repository work, use [managed Git trials](docs/local-git-trials.md) to prepare a separate checkout per sample, route Scripts and Agent assignments to it, retain evidence and track cleanup. External executors must prevent outbound writes; the recipe is not an OS sandbox.
 
@@ -324,7 +324,7 @@ The build includes TypeScript checks. Tests cover workflow contracts, runtime be
 - [Architecture and execution semantics](docs/architecture.md)
 - [Scope and limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
-- [Use the workflow migration skill](docs/connect-harness.md#load-the-workflow-migration-skill)
+- [Load workflow skills](docs/connect-harness.md#load-workflow-skills)
 - [Create and reuse saved prompts](docs/prompts.md)
 - [Reuse configuration and credentials](docs/variables.md)
 - [Agent workflow operations, original-input and node-output bindings, and portable bundles](docs/agent-workflows.md)
