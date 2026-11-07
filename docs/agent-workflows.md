@@ -319,18 +319,19 @@ Pass `leaseSeconds: 300` explicitly when a renewal should grant five minutes reg
 
 MCP `list_runs` and the shared API `runs.find` return summaries in descending creation order. The default limit is 50, with a maximum of 1000. Equal timestamps use descending insertion order.
 
-Available filters include `requestId`, `externalTask:{system,id}`, `workflowId`, `status`, `rootOnly`, `chainRootRunId`, and `inputMatch: {path, equals}`. Optional `startRequestId` and `externalTask` appear in summaries and inspection. Status accepts `running`, `waiting`, `completed`, `failed`, or `cancelled`. `rootOnly` defaults to false, which includes nested Workflow and Batch item runs. A summary includes IDs, workflow name, version, status, timestamps, cursor, input, `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, `rootWorkflowId`, and `batchNodeId`. Root IDs follow the same rules as work summaries. Use `get_run` for execution details.
+Available filters include `requestId`, `externalTask:{system,id}`, `workflowId`, `status`, `rootOnly`, `chainRootRunId`, `tags`, and `inputMatch: {path, equals}`. Optional `startRequestId`, `externalTask`, and `tags` appear in summaries and inspection. Status accepts `queued`, `running`, `waiting`, `completed`, `failed`, or `cancelled`. `rootOnly` defaults to false, which includes nested Workflow and Batch item runs. A summary includes IDs, workflow name, version, status, timestamps, cursor, input, `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, `rootWorkflowId`, and `batchNodeId`. Root IDs follow the same rules as work summaries. Use `get_run` for execution details.
 
-Paths use dot-separated object keys or array indices. A blank path selects the complete input. Equality compares JSON structure, including object values independently of key order. Missing paths do not match, even when `equals` is null. Workflow, status, and creation ordering have database indexes. Arbitrary input-path matching scans the selected candidates until the limit is reached.
+Paths use dot-separated object keys or array indices. A blank path selects the complete input. Equality compares JSON structure, including object values independently of key order. Missing paths do not match, even when `equals` is null. Workflow, status, and creation ordering have database indexes. Tag filters use indexed exact key/value pairs and require every supplied pair. See [tag bounds and inheritance](idempotent-run-starts.md#tag-and-filter-runs). Arbitrary input-path matching scans the selected candidates until the limit is reached.
 
 ```sh
 interlock runs --workflow WORKFLOW_ID --status waiting --root-only --limit 20
+interlock runs --tag repo=dgca/interlock --tag batch=factory-7
 interlock runs --input-path thread_ts --equals '"1787334538.500319"' --limit 10
 ```
 
 Without flags, `interlock runs` retains its full history dump. The shared `runs.list` endpoint also retains its original response.
 
-Use `start_run.requestId` for atomic redelivery safety. External-task lookup does not reserve a task: distinct keys can create concurrent attempts. A dispatcher requiring one active task owner must still serialize admission or maintain its own reservation. See [start identity and retention](idempotent-run-starts.md).
+Use `start_run.requestId` for atomic redelivery safety. External-task lookup does not reserve a task: distinct keys can create concurrent attempts. Use an atomic `onActiveExternalTask` start policy when one active task owner is required. See [start identity and retention](idempotent-run-starts.md).
 
 ## Coordinate shared Agent resources
 

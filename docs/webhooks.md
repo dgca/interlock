@@ -15,6 +15,7 @@ The following create request signs the raw body, takes delivery identity and eve
   "config": {
     "kind": "webhook",
     "name": "Issue intake",
+    "tags": { "repo": "dgca/interlock", "source": "webhook" },
     "authentication": {
       "secretId": "SECRET_VARIABLE_ID",
       "header": "x-signature",
@@ -51,6 +52,8 @@ The following create request signs the raw body, takes delivery identity and eve
 `WORKFLOW_ID` and `SECRET_VARIABLE_ID` are local identities. The example expects an event whose `issue.id` is a string and whose `issue.url` is an HTTP or HTTPS URL. An empty body path selects the entire parsed body. Paths otherwise use dot-separated object keys or array indices, with no JSONPath expressions or prototype keys.
 
 A binding selects a body path, a header name, or a literal JSON value. `action.bindings` maps destination paths into the input template. At most 64 paths may be supplied. Paths must not overlap, and bindings require an object input template. A missing required source rejects the delivery.
+
+Optional top-level `config.tags` captures static tags for `action.type: "start"`, with the [ordinary tag bounds](idempotent-run-starts.md#tag-and-filter-runs). Tags are configuration, not body or header bindings. Other actions preserve the target run's existing tags. Active-task reuse keeps the reused run's tags.
 
 ## Authentication and signed time
 

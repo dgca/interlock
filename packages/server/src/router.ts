@@ -667,6 +667,7 @@ export const appRouter = t.router({
           {
             requestId: input.requestId,
             externalTask: input.externalTask,
+            tags: input.tags,
             priority: input.priority,
             after: input.after,
             onActiveExternalTask: input.onActiveExternalTask,
@@ -737,6 +738,7 @@ export const appRouter = t.router({
         {
           requestId: input.requestId,
           externalTask: input.externalTask,
+          tags: input.tags,
           priority: input.priority,
           after: input.after,
           onActiveExternalTask: input.onActiveExternalTask,

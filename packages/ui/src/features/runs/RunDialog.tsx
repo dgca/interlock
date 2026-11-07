@@ -16,6 +16,7 @@ import {
 import { Button } from '../../components/Button/Button';
 import { SchemaInput } from '../../components/SchemaInput/SchemaInput';
 import { api, errorMessage } from '../../lib/api';
+import { TagFields, tagsFromRows, type TagRow } from './RunTags';
 function sample(schema: Record<string, any>): Json {
   if (schema.default !== undefined) return schema.default;
   if (schema.enum?.length) return schema.enum[0];
@@ -44,6 +45,7 @@ export function RunDialog({
 }) {
   const fieldsRef = useRef<HTMLDivElement>(null);
   const [raw, setRaw] = useState(false);
+  const [tags, setTags] = useState<TagRow[]>([]);
   const [versionPolicy, setVersionPolicy] =
     useState<RunVersionPolicy>('pinned');
   const [versions, setVersions] = useState<WorkflowVersion[]>([]),
@@ -160,6 +162,12 @@ export function RunDialog({
                   onChange={(e) => setInput(e.target.value)}
                 />
               )}
+              <details style={{ marginBottom: 16 }}>
+                <summary>Tags{tags.length ? ` (${tags.length})` : ''}</summary>
+                <div style={{ marginTop: 12 }}>
+                  <TagFields rows={tags} onChange={setTags} showLabel={false} />
+                </div>
+              </details>
             </div>
             <details>
               <summary>Input contract</summary>
@@ -188,6 +196,7 @@ export function RunDialog({
             const invalid =
               fieldsRef.current?.querySelector<HTMLInputElement>(':invalid');
             if (invalid) {
+              invalid.closest('details')?.setAttribute('open', '');
               invalid.reportValidity();
               return;
             }
@@ -198,6 +207,7 @@ export function RunDialog({
                 version,
                 versionPolicy,
                 input: JSON.parse(input),
+                tags: tagsFromRows(tags),
               });
               onStarted(result.run.id);
             } catch (e) {

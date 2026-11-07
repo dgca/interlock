@@ -64,6 +64,7 @@ export class Continuation {
       stage: snapshot.run.stage,
       waiting: snapshot.run.waiting,
       actor: snapshot.run.actor,
+      ...(snapshot.run.tags !== undefined ? { tags: snapshot.run.tags } : {}),
       ...(snapshot.run.startRequestId !== undefined
         ? { startRequestId: snapshot.run.startRequestId }
         : {}),

@@ -33,6 +33,7 @@ import { ComparisonContext } from './ComparisonContext';
 import { RunUsage } from './RunUsage';
 import { RunVersionDialog } from './RunVersionDialog';
 import { runProjectionText } from './runProjectionText';
+import { RunTags } from './RunTags';
 const stallLabels = {
   unclaimedStallMs: 'Unclaimed stall',
   claimedIdleStallMs: 'Claimed idle stall',
@@ -370,6 +371,12 @@ export function RunInspector({
           </Button>
         </div>
       </header>
+      {Object.keys(run.tags ?? {}).length > 0 && (
+        <details className={styles.tags}>
+          <summary>Tags ({Object.keys(run.tags!).length})</summary>
+          <RunTags tags={run.tags} />
+        </details>
+      )}
       {versionDialog && (
         <RunVersionDialog
           key={id}

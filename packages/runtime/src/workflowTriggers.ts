@@ -284,6 +284,7 @@ export class WorkflowTriggers {
           trigger.kind === 'schedule' &&
           q.config.kind === 'schedule' &&
           !isDeepStrictEqual(trigger.timing, q.config.timing);
+        delete trigger.tags;
         Object.assign(trigger, q.config);
         if (changed && trigger.kind === 'schedule') {
           trigger.anchorAt = at;

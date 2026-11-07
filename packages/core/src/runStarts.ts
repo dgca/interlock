@@ -3,6 +3,8 @@ import { jsonSchema } from './index.js';
 import { budgetPolicySchema } from './budgets.js';
 import { runVersionPolicySchema } from './runVersions.js';
 
+import { runTagsSchema } from './runTags.js';
+
 export const startRequestIdSchema = z
   .string()
   .min(1)
@@ -66,6 +68,7 @@ export const runStartOptionsSchema = z
         'Library-wide ordinary-start key. Identical retries recover the original run without advancing it; conflicting reuse or deleted history rejects. Use a new key for a new attempt.',
       ),
     externalTask: externalTaskSchema.optional(),
+    tags: runTagsSchema.optional(),
     priority: z
       .number()
       .int()

@@ -35,6 +35,7 @@ import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 import { api, errorMessage } from '../../lib/api';
 import { paths } from '../../routes/paths';
 import styles from './Schedules.module.css';
+import { RunTags, TagFields, tagRows, tagsFromRows } from '../runs/RunTags';
 
 type Inspection = Awaited<ReturnType<typeof api.triggers.inspect.query>>;
 type Trigger = Inspection['trigger'];
@@ -372,6 +373,7 @@ export function Schedules({
                 <Text size="sm" mt="sm">
                   {cadence(trigger)} · {state(trigger)}
                 </Text>
+                <RunTags tags={trigger.tags} />
                 {trigger.autoPaused && (
                   <Alert color="red" mt="md">
                     {trigger.autoPaused.reason}. Review recent outcomes, then
@@ -959,9 +961,12 @@ function EventEditor({
   onReload?: () => Promise<EventConfig>;
 }) {
   const [config, setConfig] = useState(initial);
+  const [tags, setTags] = useState(() => tagRows(initial.tags));
   const [error, setError] = useState('');
   const [issues, setIssues] = useState<Record<string, string>>({});
-  const dirty = JSON.stringify(config) !== JSON.stringify(initial);
+  const dirty =
+    JSON.stringify(config) !== JSON.stringify(initial) ||
+    JSON.stringify(tags) !== JSON.stringify(tagRows(initial.tags));
   const completedOnly =
     config.events.length === 1 && config.events[0] === 'completed';
   const terminalOnly = config.events.every((event) =>
@@ -987,7 +992,16 @@ function EventEditor({
     setError('');
   };
   const submit = () => {
-    const parsed = eventConfigSchema.safeParse(config);
+    let parsed;
+    try {
+      parsed = eventConfigSchema.safeParse({
+        ...config,
+        tags: tagsFromRows(tags),
+      });
+    } catch (error) {
+      setError(errorMessage(error));
+      return;
+    }
     if (!parsed.success) {
       setIssues(
         Object.fromEntries(
@@ -1112,6 +1126,11 @@ function EventEditor({
               disabled={!terminalOnly}
               onChange={(e) => field('waitForQuiescence', e.target.checked)}
             />
+            <TagFields
+              rows={tags}
+              onChange={setTags}
+              description="Applied to handler runs. Source run tags remain in the event payload. Up to 16 tags, 64 characters per key or value."
+            />
             <NumberInput
               label="Maximum trigger depth"
               description="A trigger already in the causal chain is always suppressed."
@@ -1170,6 +1189,7 @@ function EventEditor({
               void onReload()
                 .then((current) => {
                   setConfig(current);
+                  setTags(tagRows(current.tags));
                   setIssues({});
                   setError('');
                 })
@@ -1253,7 +1273,9 @@ function WebhookEditor({
         <Text size="sm" mb="md">
           Select a Secret variable ID for authentication. Sign the exact raw
           body and every referenced header, including delivery ID and timestamp.
-          Input delivery submits a pending revision for explicit acceptance.
+          Input delivery submits a pending revision for explicit acceptance. For
+          start actions, optional top-level tags set run metadata, with up to 16
+          keys and 64 characters per key or value.
         </Text>
         <fieldset
           disabled={pending}
@@ -1335,13 +1357,16 @@ function ScheduleEditor({
   onDirty: (dirty: boolean) => void;
 }) {
   const [config, setConfig] = useState(initial);
+  const [tags, setTags] = useState(() => tagRows(initial.tags));
   const [section, setSection] = useState<Section>('timing');
   const [error, setError] = useState('');
   const [issues, setIssues] = useState<Record<string, string>>({});
   const [jsonValid, setJsonValid] = useState(true);
   const [jsonReset, setJsonReset] = useState(0);
   const dirty =
-    JSON.stringify(config) !== JSON.stringify(initial) || !jsonValid;
+    JSON.stringify(config) !== JSON.stringify(initial) ||
+    !jsonValid ||
+    JSON.stringify(tags) !== JSON.stringify(tagRows(initial.tags));
   useBeforeUnloadWarning(dirty);
   useEffect(() => {
     onDirty(dirty);
@@ -1385,7 +1410,17 @@ function ScheduleEditor({
   };
   const submit = async () => {
     setError('');
-    const parsed = scheduleConfigSchema.safeParse(config);
+    let parsed;
+    try {
+      parsed = scheduleConfigSchema.safeParse({
+        ...config,
+        tags: tagsFromRows(tags),
+      });
+    } catch (error) {
+      setSection('input');
+      setError(errorMessage(error));
+      return;
+    }
     if (!jsonValid) {
       setSection('input');
       setError('Enter valid JSON before saving.');
@@ -1585,6 +1620,9 @@ function ScheduleEditor({
             </Stack>
           )}
           <div hidden={section !== 'input'}>
+            <div style={{ marginBottom: 20 }}>
+              <TagFields rows={tags} onChange={setTags} />
+            </div>
             <JsonEditor
               key={jsonReset}
               label="JSON input template"
@@ -1722,6 +1760,7 @@ function ScheduleEditor({
                     void onReload()
                       .then((current) => {
                         setConfig(current);
+                        setTags(tagRows(current.tags));
                         setJsonReset((value) => value + 1);
                         setJsonValid(true);
                         setIssues({});

@@ -13,6 +13,7 @@ Call MCP `start_run` with the task's original input and a stable key for this at
   "workflowId": "WORKFLOW_ID",
   "input": { "task": "Review issue 181" },
   "requestId": "github:dgca/interlock:181:attempt-1",
+  "tags": { "repo": "dgca/interlock", "batch": "factory-7" },
   "externalTask": {
     "system": "github",
     "id": "dgca/interlock#181",
@@ -24,7 +25,7 @@ Call MCP `start_run` with the task's original input and a stable key for this at
 
 After an uncertain response, repeat the same creation arguments and key. Full and summary responses can differ; they still identify the same original run. A replay reads its current retained state without advancing timers, expiring claims, retrying failed steps or creating more work. Use the returned ID with existing inspection, continuation and claim tools to continue execution.
 
-A `requestId` is an opaque, nonblank string of 1–120 characters. Case and whitespace are significant. Prefer a UUID or a stable delivery/attempt identifier. Ordinary-start keys are library-wide, across workflows, and separate from comparison request IDs. Reusing a committed key for another workflow, input, version intent, budget or task reference rejects without creating anything. Errors do not copy the original input.
+A `requestId` is an opaque, nonblank string of 1–120 characters. Case and whitespace are significant. Prefer a UUID or a stable delivery/attempt identifier. Ordinary-start keys are library-wide, across workflows, and separate from comparison request IDs. Reusing a committed key for another workflow, input, version intent, budget, tags, or task reference rejects without creating anything. Errors do not copy the original input.
 
 A deliberate new attempt uses a new key. The default active-task policy allows concurrent attempts. Set `onActiveExternalTask` to atomically reuse, reject, or cancel prior active attempts for the same task. Arbitrary Script, Fetch, and Agent effects still do not execute exactly once.
 
@@ -75,7 +76,7 @@ The receipt fingerprint includes:
 
 - Workflow ID and original JSON input, with object key order ignored.
 - Requested version intent. An omitted version means "select latest for this new start" and remains distinct from an explicit version number.
-- The parsed optional budget and external task metadata.
+- The parsed optional budget, tags, and external task metadata. Supplied `tags: {}` remains distinct from omitted tags.
 - Supplied `priority`, `after`, `onActiveExternalTask`, and `versionPolicy` options. Omitted options remain distinct from explicit values.
 
 If the original request omitted `version`, repeating it still returns the original run after newer versions are published. Replacing that omission with its resolved version number is a conflicting request. Current prompt edits and library archive state do not change an accepted start's identity or its captured prompt content.
@@ -108,6 +109,20 @@ Use MCP `list_runs` or shared `runs.find`:
 
 The task filter requires its exact system and ID, without the URL. Existing status, workflow, chain and input filters can be combined. Lookup does not reserve a task. Use an atomic active-task start policy when needed. A start key appears as `startRequestId` on its original run only. Continue-as-new successors inherit `externalTask`, but the same key always returns the original predecessor; follow its chain links to the current successor. Ordinary nested/detached children retain their existing ancestry and do not acquire task ownership or a new start key.
 
+## Tag and filter runs
+
+Optional `tags` stores non-secret `Record<string, string>` metadata separately from workflow input. It accepts at most 16 entries. Keys contain 1 through 64 characters, and values contain 0 through 64 characters. Keys and values are exact and case-sensitive, without trimming. Empty values are valid. Tags participate in the start fingerprint, including the distinction between omitted tags and an explicit empty object. Property order does not affect identity.
+
+Runs capture tags when created. An active-task `reuse` result keeps the existing run's tags. Retrying a step preserves them. Workflow invocations, detached children, Batch items, and continue-as-new successors inherit the initiating run's tags. They do not change task ownership or acquire a start request key. Event handlers use their trigger's configured tags; source tags remain available in the event input.
+
+MCP `list_runs`, shared `runs.find`, and the paginated `runs.summaries` query accept `tags` with the same bounds. Every supplied pair must match. Missing keys and different values do not match; an empty filter imposes no restriction. SQLite indexes tag key/value pairs before applying ordering and pagination. Tags appear on run summaries, full inspection, compact mutations, and briefing run metadata. The Runs UI provides the same exact-pair filter.
+
+```json
+{ "tags": { "repo": "dgca/interlock", "batch": "factory-7" }, "limit": 20 }
+```
+
+Run tags support grouping through existing queries. General M10 performance reports and tag-based cost aggregation are not implemented. Existing usage inspection and workflow comparison reports keep their current scopes.
+
 ## Recover after deletion or restart
 
 Receipts survive ordinary server restart. Replays do not require the latest library definition or prompt revisions to remain available. Explicitly removed definitions still produce the existing `definitionAvailable:false` inspection behavior for retained historical runs.
@@ -123,13 +138,14 @@ Direct database edits that remove both run and receipt, restoring a backup from 
 Save non-secret task metadata in `task.json` and, if needed, a policy in `budget.json`:
 
 ```sh
-interlock start WORKFLOW_ID '{"task":"Review issue 181"}' --request-id github:dgca/interlock:181:attempt-1 --external-task @task.json --budget @budget.json --summary
+interlock start WORKFLOW_ID '{"task":"Review issue 181"}' --request-id github:dgca/interlock:181:attempt-1 --external-task @task.json --budget @budget.json --tag repo=dgca/interlock --tag batch=factory-7 --summary
 interlock runs --request-id github:dgca/interlock:181:attempt-1
+interlock runs --tag repo=dgca/interlock --tag batch=factory-7
 interlock runs --external-task '{"system":"github","id":"dgca/interlock#181"}' --root-only
 ```
 
-Inline JSON and `@file` work for task metadata and budgets. Omit `--summary` for full inspection; it does not change request identity. The optional positional version retains its existing meaning.
+Inline JSON and `@file` work for task metadata and budgets. Repeat `--tag KEY=VALUE` for each tag on starts or run queries. Values can contain `=` and can be empty; duplicate keys reject. Omit `--summary` for full inspection; it does not change request identity. The optional positional version retains its existing meaning.
 
-Shared `runs.start` and `runs.startSummary` accept `requestId`, `externalTask`, `priority`, `after`, and `onActiveExternalTask` beside their existing fields. Direct Engine callers can supply `{requestId, externalTask, priority, after, onActiveExternalTask}` as the final optional options argument after `budget`, preserving existing positional calls. Shared and MCP result references, cancellation, claims, budgets, ordinary/detached lifecycles and explicit retries keep their existing rules.
+Shared `runs.start` and `runs.startSummary` accept `requestId`, `externalTask`, `tags`, `priority`, `after`, and `onActiveExternalTask` beside their existing fields. Direct Engine callers can supply `{requestId, externalTask, tags, priority, after, onActiveExternalTask}` as the final optional options argument after `budget`, preserving existing positional calls. Shared and MCP result references, cancellation, claims, budgets, ordinary/detached lifecycles and explicit retries keep their existing rules.
 
 Schedule fires use the same atomic RunStarts receipts with `schedule:<triggerId>:<slotIso>` and captured input/published version. Overlap queue waits for prior schedule runs to become terminal even on failure; public `after` dependencies retain success-only behavior. See [workflow schedules](schedules.md).

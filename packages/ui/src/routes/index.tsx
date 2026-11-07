@@ -12,7 +12,7 @@ import {
   type RouteObject,
 } from 'react-router';
 import { App, type AppContext } from '../App';
-import { paths, runOffset } from './paths';
+import { paths, runOffset, runTagFilter } from './paths';
 import { flushSync } from 'react-dom';
 import { lazy, Suspense, useState } from 'react';
 import { Button, Center, Loader } from '@mantine/core';
@@ -193,6 +193,16 @@ function useRunPage() {
   const page = {
     tab: parseRunTab(search.get('tab')),
     offset: runOffset(search.get('offset')),
+    tags: runTagFilter(search.get('tags')),
+    onTagsChange: (tags?: Record<string, string>) =>
+      setSearch((previous) => {
+        const next = new URLSearchParams(previous);
+        if (tags && Object.keys(tags).length)
+          next.set('tags', JSON.stringify(tags));
+        else next.delete('tags');
+        next.delete('offset');
+        return next;
+      }),
     onTabChange: (tab: RunTab) =>
       setSearch((previous) => {
         const next = new URLSearchParams(previous);
@@ -289,6 +299,7 @@ function WorkflowRoute() {
                     page.tab,
                     executionId,
                     page.offset,
+                    page.tags,
                   ),
                 )
               }
@@ -313,7 +324,14 @@ function RunsRoute() {
         workflows={workflows}
         onOpen={(id, executionId) =>
           void navigate(
-            paths.run(id, undefined, page.tab, executionId, page.offset),
+            paths.run(
+              id,
+              undefined,
+              page.tab,
+              executionId,
+              page.offset,
+              page.tags,
+            ),
           )
         }
       />
@@ -329,6 +347,7 @@ function RunRoute() {
   const workflowId = search.get('workflow') || undefined;
   const returnTab = parseRunTab(search.get('tab'));
   const offset = runOffset(search.get('offset'));
+  const tags = runTagFilter(search.get('tags'));
   return (
     <Suspense fallback={<RouteLoading label="Loading run…" />}>
       <RunInspector
@@ -340,7 +359,7 @@ function RunRoute() {
         initialExecutionId={search.get('execution') ?? undefined}
         onOpen={(id, executionId) =>
           void navigate(
-            paths.run(id, workflowId, returnTab, executionId, offset),
+            paths.run(id, workflowId, returnTab, executionId, offset, tags),
           )
         }
         onBack={(status) => {
@@ -354,8 +373,8 @@ function RunRoute() {
                 : 'history';
           void navigate(
             workflowId
-              ? paths.workflowRuns(workflowId, returnTab, offset)
-              : paths.runs(tab, tab === returnTab ? offset : 0),
+              ? paths.workflowRuns(workflowId, returnTab, offset, tags)
+              : paths.runs(tab, tab === returnTab ? offset : 0, tags),
           );
         }}
       />

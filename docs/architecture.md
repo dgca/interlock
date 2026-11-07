@@ -409,7 +409,7 @@ automatic refreshes and catch up when visible.
 The global and workflow-specific Runs views use the shared `runs.summaries`
 query. SQLite uses a metadata index for counts and page selection, then
 projects list fields, step counts, and available wait reasons for the selected page. The query accepts
-optional filters for workflow ID, status, and Runs tab, plus an offset and
+optional filters for workflow ID, status, exact tag pairs, and Runs tab, plus an offset and
 a limit from 1 to 200 (100 by default). It applies
 the scope before paging, so older active runs and runs needing attention stay
 accessible. The inspector loads run details by ID. `runs.list` and `runs.get`
@@ -522,6 +522,12 @@ Workflow `maxActiveRuns` and optional `excludeStages` gate starts at the publish
 Queued runs capture prompts, protected variable revisions, budgets, and request receipts before execution, with no node or assignment until admission. The queued status participates in active queries, comparison scheduling, continuation counts, cancellation and deletion protections. A dedicated partial priority index supports queue scans. An additive migration updates active-comparison triggers without rewriting historical run documents. Queue position and dependency/capacity/pause blockers use the shared admission_queue waiting projection with engine actor. Storage changes wake scoped continuation readers.
 
 Ordinary active-task policies run in the same transaction as receipt resolution and startup. Reuse returns a retained active match read-only. Reject creates no state. Replacement validation precedes cancellation, which retains existing uncertain ownership and detached boundaries. Native stop requests run after the receipt transaction commits, so rollback leaves the prior job active. See [start policy and dependency contracts](idempotent-run-starts.md).
+
+## Run tags
+
+Core `runTagsSchema` bounds non-secret run metadata to 16 string pairs, with keys of 1 through 64 characters and values of 0 through 64. Values are exact and case-sensitive. Runtime captures tags on ordinary starts and schedule, webhook-start, and lifecycle-event dispatch. Tags inherit through Workflow invocations, detached children, Batch items, and continue-as-new chains. Event handlers capture their own trigger tags, with source tags in their event input.
+
+Storage maintains an indexed tag table transactionally with run documents, including migration backfill and deletion. `runs.find` and `runs.summaries` require every supplied key/value pair before limiting or paging. Full records, compact summaries, and briefings expose captured tags. UI, CLI, and MCP use the shared contracts. Supplied tags participate in ordinary-start identity; omission preserves existing receipt fingerprints. General performance reports and tag cost aggregation remain outside this increment. See [tag contracts and examples](idempotent-run-starts.md#tag-and-filter-runs).
 
 ## Ordinary start receipts
 

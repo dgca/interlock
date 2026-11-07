@@ -18,6 +18,8 @@ Library and workflow named holds block fires and queued promotion. Re-enabling a
 
 Each fire commits its captured input, published version, run receipt, outcome and next slot atomically. Its RunStarts request ID is `schedule:<triggerId>:<slotIso>`. Restart or competing fire attempts cannot start another run for the same slot. This start guarantee does not make multiple competing server processes supported for other engine execution.
 
+Optional `config.tags` captures static run tags on every accepted fire, with the [ordinary 16-pair and 64-character bounds](idempotent-run-starts.md#tag-and-filter-runs). Updating tags affects future runs. Existing runs keep their capture. Tags transfer with trigger configuration.
+
 ## Inspect and recover
 
 Inspection shows last fire, next slot, failure count, applicable holds, fire lag and recent outcomes. Queued outcomes retain acceptance time and eventual admission time. Lag measures scheduled slot to actual admission, including queued waiting. At 60 seconds or more, an enabled schedule creates an independent **Needs attention** item. Lag does not disable the schedule; a later on-time accepted fire clears measured lag.
@@ -34,7 +36,7 @@ Read operations are `list`, `inspect`, `preview`, and `attention`. Writes are `c
 
 ```sh
 interlock triggers read '{"action":"list","workflowId":"WORKFLOW_ID"}'
-interlock triggers manage '{"action":"create","workflowId":"WORKFLOW_ID","config":{"name":"Heartbeat","timing":{"type":"interval","intervalMs":120000},"input":{},"overlapPolicy":"skip","missedFirePolicy":"skip"}}'
+interlock triggers manage '{"action":"create","workflowId":"WORKFLOW_ID","config":{"name":"Heartbeat","timing":{"type":"interval","intervalMs":120000},"input":{},"tags":{"repo":"dgca/interlock"},"overlapPolicy":"skip","missedFirePolicy":"skip"}}'
 interlock triggers read '{"action":"inspect","id":"TRIGGER_ID"}'
 interlock triggers manage '{"action":"enable","id":"TRIGGER_ID","expectedRevision":1}'
 interlock triggers read '{"action":"preview","timing":{"type":"cron","expression":"0 9 * * 1-5","timeZone":"America/Denver"}}'
