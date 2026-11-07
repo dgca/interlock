@@ -203,3 +203,30 @@ it('shows the selected observer source and measurements in claim attribution', a
   expect(row).toContain('observer-model');
   expect(row).not.toContain('executor-model');
 });
+
+it('renders run-level observer streams distinctly from attempt attribution', () => {
+  engine.usage.report({
+    source: 'observer',
+    runId: id,
+    streamId: 'session-external',
+    snapshot: {
+      sequence: 1,
+      final: true,
+      models: [
+        {
+          provider: 'test',
+          model: 'session-orchestrator',
+          inputTokens: 350,
+          outputTokens: 75,
+        },
+      ],
+    },
+  });
+  return render().then(async () => {
+    expect(container.textContent).toContain('Input tokens: 350');
+    expect(container.textContent).toContain('Output tokens: 75');
+    expect(container.textContent).toContain(
+      'Run-level usage (session-external)',
+    );
+  });
+});

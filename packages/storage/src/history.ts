@@ -35,6 +35,7 @@ const scoped = [
   'work',
   'events',
   'usageAttempts',
+  'runUsage',
   'workHolds',
   'stalls',
   'activeClockHolds',

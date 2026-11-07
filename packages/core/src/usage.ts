@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import type { ModelTier, ModelSelection } from './modelTiers.js';
+import {
+  sessionIdentitySchema,
+  type SessionIdentity,
+} from './contextContinuity.js';
+
+export const RUN_USAGE_GRACE_MS = 60 * 60 * 1000;
 
 const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const positive = count.refine((n) => n > 0, 'Must be positive');
@@ -62,13 +68,16 @@ export const usageSnapshotSchema = z
   });
 export const reportUsageSchema = z
   .object({
-    workId: z.string().min(1),
-    attempt: positive,
+    workId: z.string().min(1).optional(),
+    attempt: positive.optional(),
+    runId: z.string().min(1).optional(),
+    streamId: z.string().trim().min(1).max(200).optional(),
+    session: sessionIdentitySchema.optional(),
     source: z
       .enum(['executor', 'observer'])
       .default('executor')
       .describe(
-        'Executor uses its claim token; observer requires a retained ended attempt and no token.',
+        'Executor uses its claim token; observer requires an ended attempt or active/recent run and no token.',
       ),
     token: z
       .string()
@@ -80,18 +89,87 @@ export const reportUsageSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.source === 'executor' && value.token === undefined)
+    const isRunLevel = value.runId !== undefined;
+    const isAttemptLevel = value.workId !== undefined;
+
+    if (!isRunLevel && !isAttemptLevel) {
       context.addIssue({
         code: 'custom',
-        path: ['token'],
-        message: 'Executor usage requires the claim token',
+        path: ['runId'],
+        message: 'Either workId and attempt, or runId must be provided',
       });
-    if (value.source === 'observer' && value.token !== undefined)
+      return;
+    }
+
+    if (isRunLevel && isAttemptLevel) {
       context.addIssue({
         code: 'custom',
-        path: ['token'],
-        message: 'Observer usage must omit the claim token',
+        path: ['runId'],
+        message:
+          'Provide either workId and attempt for attempt usage, or runId for run usage, not both',
       });
+      return;
+    }
+
+    if (isAttemptLevel) {
+      if (value.attempt === undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: ['attempt'],
+          message: 'attempt is required when workId is provided',
+        });
+      }
+      if (value.streamId !== undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: ['streamId'],
+          message: 'streamId is only supported for run-level observer reports',
+        });
+      }
+      if (value.session !== undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: ['session'],
+          message: 'session is only supported for run-level observer reports',
+        });
+      }
+      if (value.source === 'executor' && value.token === undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: ['token'],
+          message: 'Executor usage requires the claim token',
+        });
+      }
+      if (value.source === 'observer' && value.token !== undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: ['token'],
+          message: 'Observer usage must omit the claim token',
+        });
+      }
+    } else {
+      if (value.attempt !== undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: ['attempt'],
+          message: 'attempt is not permitted for run-level usage',
+        });
+      }
+      if (value.source !== 'observer') {
+        context.addIssue({
+          code: 'custom',
+          path: ['source'],
+          message: 'Run-level usage reporting requires source: "observer"',
+        });
+      }
+      if (value.token !== undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: ['token'],
+          message: 'Run-level observer usage must omit the claim token',
+        });
+      }
+    }
   });
 export const usageQuerySchema = z
   .object({
@@ -117,6 +195,15 @@ export const usageQuerySchema = z
 export type ModelUsage = z.infer<typeof modelUsageSchema>;
 export type UsageSnapshot = z.infer<typeof usageSnapshotSchema>;
 export interface UsageReport {
+  snapshot: UsageSnapshot;
+  reportedAt: string;
+}
+export interface RunUsageReport {
+  id: string;
+  runId: string;
+  streamId: string;
+  session?: SessionIdentity;
+  source: 'observer';
   snapshot: UsageSnapshot;
   reportedAt: string;
 }
@@ -149,6 +236,32 @@ export interface UsageAttempt {
   reportedAt?: string;
   snapshot?: UsageSnapshot;
   observerReport?: UsageReport;
+}
+export interface UsageGroup {
+  key: string;
+  runId?: string;
+  nodeId?: string | null;
+  label?: string;
+  workerId?: string | null;
+  workId?: string | null;
+  attempt?: number | null;
+  streamId?: string;
+  outcome?: UsageOutcome;
+  claimedAt?: string | null;
+  endedAt?: string | null;
+  wallMs?: number | null;
+  pausedMs?: number | null;
+  activeMs?: number | null;
+  source?: 'executor' | 'observer' | null;
+  reportedAt?: string | null;
+  snapshot?: UsageSnapshot | null;
+  reports?: {
+    executor: { snapshot: UsageSnapshot; reportedAt: string | null } | null;
+    observer: { snapshot: UsageSnapshot; reportedAt: string } | null;
+  };
+  requestedTier?: ModelTier | null;
+  modelSelection?: ModelSelection | null;
+  totals: ReturnType<typeof summarizeUsage>;
 }
 /** Select one complete source snapshot per attempt for both totals and budgets. */
 export function selectedUsageReport(attempt: UsageAttempt) {
@@ -188,13 +301,19 @@ export function summarizeUsageMetric(
     overflow,
   };
 }
-export function summarizeUsage(attempts: UsageAttempt[]) {
+export function summarizeUsage(
+  attempts: UsageAttempt[],
+  runReports: RunUsageReport[] = [],
+) {
   const reports = attempts.map(selectedUsageReport);
-  const models = reports.flatMap(
-    (report) => report?.snapshot.models ?? [undefined],
-  );
+  const models = [
+    ...reports.flatMap((report) => report?.snapshot.models ?? [undefined]),
+    ...runReports.flatMap((report) => report.snapshot.models),
+  ];
   const final =
-    attempts.length > 0 && reports.every((report) => report?.snapshot.final);
+    (attempts.length > 0 || runReports.length > 0) &&
+    reports.every((report) => report?.snapshot.final) &&
+    runReports.every((report) => report.snapshot.final);
   const outcomes: Record<UsageOutcome, number> = {
     claimed: 0,
     held: 0,
@@ -234,6 +353,9 @@ export function summarizeUsage(attempts: UsageAttempt[]) {
     attempts: attempts.length,
     reportedAttempts: reports.filter(Boolean).length,
     finalAttempts: reports.filter((report) => report?.snapshot.final).length,
+    runStreams: runReports.length,
+    finalRunStreams: runReports.filter((report) => report.snapshot.final)
+      .length,
     outcomes,
     tokens,
     costs,

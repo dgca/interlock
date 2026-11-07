@@ -642,9 +642,255 @@ it('retains observer precedence when an executor reports late, across restart an
     expect(resumed.usage.report(observer)).toMatchObject({ applied: false });
     resumed.deleteWorkflow(workflow.id);
     expect(reopened.list('usageAttempts')).toEqual([]);
+    expect(reopened.list('runUsage')).toEqual([]);
   } finally {
     resumed.stop();
     reopened.close();
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+it('accepts run-level observer reports, enforces cumulative monotonic updates, and supports multi-stream isolation', () => {
+  const { engine, run, report } = fixture();
+  // Attempt usage
+  report(1, [model], true);
+
+  // Run-level observer report stream 1
+  const runReport1 = {
+    source: 'observer' as const,
+    runId: run.id,
+    streamId: 'session-alpha',
+    session: { executorId: 'claude', sessionId: 'sess-1' },
+    snapshot: {
+      sequence: 1,
+      final: false,
+      models: [
+        {
+          provider: 'test',
+          model: 'overhead-model',
+          inputTokens: 50,
+          outputTokens: 10,
+        },
+      ],
+    },
+  };
+  expect(engine.usage.report(runReport1)).toMatchObject({
+    runId: run.id,
+    streamId: 'session-alpha',
+    source: 'observer',
+    sequence: 1,
+    applied: true,
+  });
+
+  // Idempotent duplicate
+  expect(engine.usage.report(runReport1)).toMatchObject({
+    applied: false,
+    sequence: 1,
+  });
+
+  // Conflicting payload with same sequence
+  expect(() =>
+    engine.usage.report({
+      ...runReport1,
+      snapshot: {
+        ...runReport1.snapshot,
+        models: [
+          {
+            provider: 'test',
+            model: 'overhead-model',
+            inputTokens: 60,
+          },
+        ],
+      },
+    }),
+  ).toThrow('A different usage snapshot already uses this sequence');
+
+  // Stale sequence
+  expect(() =>
+    engine.usage.report({
+      ...runReport1,
+      snapshot: { ...runReport1.snapshot, sequence: 0 },
+    }),
+  ).toThrow();
+
+  // Cumulative violation: decreasing tokens
+  expect(() =>
+    engine.usage.report({
+      ...runReport1,
+      snapshot: {
+        sequence: 2,
+        final: false,
+        models: [
+          {
+            provider: 'test',
+            model: 'overhead-model',
+            inputTokens: 40,
+            outputTokens: 10,
+          },
+        ],
+      },
+    }),
+  ).toThrow('Cumulative usage cannot remove or decrease inputTokens');
+
+  // Valid cumulative update
+  expect(
+    engine.usage.report({
+      ...runReport1,
+      snapshot: {
+        sequence: 2,
+        final: true,
+        models: [
+          {
+            provider: 'test',
+            model: 'overhead-model',
+            inputTokens: 75,
+            outputTokens: 15,
+          },
+        ],
+      },
+    }),
+  ).toMatchObject({ applied: true, sequence: 2 });
+
+  // Stream 2 on same run (isolation)
+  const runReport2 = {
+    source: 'observer' as const,
+    runId: run.id,
+    streamId: 'session-beta',
+    snapshot: {
+      sequence: 1,
+      final: true,
+      models: [
+        {
+          provider: 'test',
+          model: 'beta-model',
+          inputTokens: 25,
+          outputTokens: 5,
+        },
+      ],
+    },
+  };
+  expect(engine.usage.report(runReport2)).toMatchObject({
+    applied: true,
+    streamId: 'session-beta',
+  });
+
+  // Cannot modify final stream
+  expect(() =>
+    engine.usage.report({
+      ...runReport2,
+      snapshot: {
+        sequence: 2,
+        final: true,
+        models: [
+          {
+            provider: 'test',
+            model: 'beta-model',
+            inputTokens: 30,
+            outputTokens: 10,
+          },
+        ],
+      },
+    }),
+  ).toThrow('Final usage cannot be changed');
+
+  // Check get_run_usage totals and grouping
+  const read = engine.usage.read({ runId: run.id, groupBy: 'attempt' });
+  expect(read.totals).toMatchObject({
+    attempts: 1,
+    reportedAttempts: 1,
+    finalAttempts: 1,
+    runStreams: 2,
+    finalRunStreams: 2,
+    tokens: {
+      // 100 from attempt + 75 from stream 1 + 25 from stream 2 = 200
+      inputTokens: { value: 200, coverage: 'complete' },
+      // 20 from attempt + 15 from stream 1 + 5 from stream 2 = 40
+      outputTokens: { value: 40, coverage: 'complete' },
+    },
+  });
+
+  // Verify group entries
+  expect(read.groups).toHaveLength(3); // 1 attempt + 2 run reports
+  expect(read.groups.find((g) => g.streamId === 'session-alpha')).toMatchObject(
+    {
+      key: `run:${run.id}:session-alpha`,
+      label: 'Run-level usage (session-alpha)',
+      workerId: 'claude',
+      attempt: null,
+      workId: null,
+      source: 'observer',
+    },
+  );
+  expect(read.groups.find((g) => g.streamId === 'session-beta')).toMatchObject({
+    key: `run:${run.id}:session-beta`,
+    label: 'Run-level usage (session-beta)',
+    workerId: null,
+    attempt: null,
+    workId: null,
+    source: 'observer',
+  });
+
+  // Test groupBy: 'node'
+  const nodeRead = engine.usage.read({ runId: run.id, groupBy: 'node' });
+  expect(nodeRead.groups).toHaveLength(3);
+  expect(
+    nodeRead.groups.some(
+      (g) => g.nodeId === null && g.label?.includes('session-alpha'),
+    ),
+  ).toBe(true);
+
+  // Test groupBy: 'worker'
+  const workerRead = engine.usage.read({ runId: run.id, groupBy: 'worker' });
+  // worker 'author' (attempt), worker 'claude' (stream 1), worker null (stream 2)
+  expect(workerRead.groups.some((g) => g.workerId === 'claude')).toBe(true);
+});
+
+it('accepts run-level observer reports within the 1-hour grace window after run ends, and rejects afterwards', () => {
+  vi.useFakeTimers();
+  const { engine, run, work } = fixture();
+  engine.submit(work.id, work.token!, {});
+
+  const finishedRun = engine.run(run.id);
+  expect(finishedRun.status).toBe('completed');
+
+  const reportPayload = {
+    source: 'observer' as const,
+    runId: run.id,
+    snapshot: {
+      sequence: 1,
+      final: true,
+      models: [
+        {
+          provider: 'test',
+          model: 'late-model',
+          inputTokens: 10,
+          outputTokens: 5,
+        },
+      ],
+    },
+  };
+
+  // 30 minutes after completion: still within 1-hour window
+  vi.advanceTimersByTime(30 * 60 * 1000);
+  expect(engine.usage.report(reportPayload)).toMatchObject({ applied: true });
+
+  // Advance past 1 hour (70 minutes total)
+  vi.advanceTimersByTime(40 * 60 * 1000);
+  expect(() =>
+    engine.usage.report({
+      ...reportPayload,
+      snapshot: {
+        sequence: 2,
+        final: true,
+        models: [
+          {
+            provider: 'test',
+            model: 'late-model',
+            inputTokens: 20,
+            outputTokens: 10,
+          },
+        ],
+      },
+    }),
+  ).toThrow('within 1 hour after it ends');
 });
