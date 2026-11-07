@@ -12,32 +12,90 @@ import {
   type RouteObject,
 } from 'react-router';
 import { App, type AppContext } from '../App';
-import { WorkflowLibrary } from '../features/workflows/WorkflowLibrary';
-import { WorkflowEditor } from '../features/workflows/WorkflowEditor';
-import { RunList } from '../features/runs/RunList';
-import { RunInspector } from '../features/runs/RunInspector';
-import { Harnesses } from '../features/executors/Harnesses';
 import { paths, runOffset } from './paths';
 import { flushSync } from 'react-dom';
-import { useState } from 'react';
-import { Button } from '@mantine/core';
+import { lazy, Suspense, useState } from 'react';
+import { Button, Center, Loader } from '@mantine/core';
 import { RouteSkeleton, type LoadingSubject } from './RouteSkeleton';
-import { PromptLibrary, PromptEditor } from '../features/prompts/Prompts';
-import {
-  VariableLibrary,
-  VariableRoute,
-} from '../features/variables/Variables';
+
+const WorkflowLibrary = lazy(() =>
+  import('../features/workflows/WorkflowLibrary').then((m) => ({
+    default: m.WorkflowLibrary,
+  })),
+);
+const WorkflowEditor = lazy(() =>
+  import('../features/workflows/WorkflowEditor').then((m) => ({
+    default: m.WorkflowEditor,
+  })),
+);
+const RunList = lazy(() =>
+  import('../features/runs/RunList').then((m) => ({
+    default: m.RunList,
+  })),
+);
+const RunInspector = lazy(() =>
+  import('../features/runs/RunInspector').then((m) => ({
+    default: m.RunInspector,
+  })),
+);
+const Harnesses = lazy(() =>
+  import('../features/executors/Harnesses').then((m) => ({
+    default: m.Harnesses,
+  })),
+);
+const PromptLibrary = lazy(() =>
+  import('../features/prompts/Prompts').then((m) => ({
+    default: m.PromptLibrary,
+  })),
+);
+const PromptEditor = lazy(() =>
+  import('../features/prompts/Prompts').then((m) => ({
+    default: m.PromptEditor,
+  })),
+);
+const VariableLibrary = lazy(() =>
+  import('../features/variables/Variables').then((m) => ({
+    default: m.VariableLibrary,
+  })),
+);
+const VariableRoute = lazy(() =>
+  import('../features/variables/Variables').then((m) => ({
+    default: m.VariableRoute,
+  })),
+);
+
+function RouteLoading({ label = 'Loading…' }: { label?: string }) {
+  return (
+    <Center
+      h="100%"
+      style={{ minHeight: 200 }}
+      role="status"
+      aria-label={label}
+    >
+      <Loader size="md" />
+    </Center>
+  );
+}
 
 function HarnessesRoute() {
   const { onDirty } = useOutletContext<AppContext>();
-  return <Harnesses onDirty={onDirty} />;
+  return (
+    <Suspense fallback={<RouteLoading label="Loading harnesses…" />}>
+      <Harnesses onDirty={onDirty} />
+    </Suspense>
+  );
 }
 
 function PromptsRoute() {
   const context = useOutletContext<AppContext>();
   if (!context.loaded) return <Loading subject="prompts" />;
-  return <PromptLibrary prompts={context.prompts} act={context.act} />;
+  return (
+    <Suspense fallback={<RouteSkeleton subject="prompts" />}>
+      <PromptLibrary prompts={context.prompts} act={context.act} />
+    </Suspense>
+  );
 }
+
 function PromptRoute() {
   const { promptId } = useParams();
   const context = useOutletContext<AppContext>();
@@ -45,13 +103,15 @@ function PromptRoute() {
   if (!context.loaded) return <Loading subject="prompt" />;
   if (!prompt) return <NotFound title="Prompt not found" />;
   return (
-    <PromptEditor
-      key={prompt.id}
-      prompt={prompt}
-      act={context.act}
-      onDirty={context.onDirty}
-      tick={context.tick}
-    />
+    <Suspense fallback={<RouteSkeleton subject="prompt" />}>
+      <PromptEditor
+        key={prompt.id}
+        prompt={prompt}
+        act={context.act}
+        onDirty={context.onDirty}
+        tick={context.tick}
+      />
+    </Suspense>
   );
 }
 
@@ -60,11 +120,29 @@ function LibraryRoute() {
   const navigate = useNavigate();
   if (!loaded) return <Loading subject="workflows" />;
   return (
-    <WorkflowLibrary
-      workflows={workflows}
-      act={act}
-      onOpen={(id) => void navigate(paths.workflow(id))}
-    />
+    <Suspense fallback={<RouteSkeleton subject="workflows" />}>
+      <WorkflowLibrary
+        workflows={workflows}
+        act={act}
+        onOpen={(id) => void navigate(paths.workflow(id))}
+      />
+    </Suspense>
+  );
+}
+
+function VariablesRoute() {
+  return (
+    <Suspense fallback={<RouteLoading label="Loading variables…" />}>
+      <VariableLibrary />
+    </Suspense>
+  );
+}
+
+function VariableItemRoute() {
+  return (
+    <Suspense fallback={<RouteLoading label="Loading variable…" />}>
+      <VariableRoute />
+    </Suspense>
   );
 }
 
@@ -125,61 +203,71 @@ function WorkflowRoute() {
   if (!context.loaded) return <Loading subject="workflow" />;
   if (!workflow) return <NotFound title="Workflow not found" />;
   return (
-    <WorkflowEditor
-      key={workflow.id}
-      workflow={workflow}
-      workflows={context.workflows}
-      prompts={context.prompts}
-      act={context.act}
-      onDirty={context.onDirty}
-      onSaved={context.onSaved}
-      onRun={context.onRun}
-      onBack={() =>
-        void navigate(
-          workflow.ownerWorkflowId
-            ? paths.workflow(workflow.ownerWorkflowId)
-            : paths.workflows,
-        )
-      }
-      onOpenWorkflow={(id) => void navigate(paths.workflow(id))}
-      onDeleted={() => {
-        flushSync(() => context.onDirty(false));
-        void navigate(
-          workflow.ownerWorkflowId
-            ? paths.workflow(workflow.ownerWorkflowId)
-            : paths.workflows,
-        );
-      }}
-      section={
-        search.get('view') === 'runs'
-          ? 'runs'
-          : search.get('view') === 'children' && !workflow.ownerWorkflowId
-            ? 'children'
-            : 'editor'
-      }
-      onSectionChange={(section) =>
-        setSearch((previous) => {
-          const next = new URLSearchParams(previous);
-          if (section !== 'editor') next.set('view', section);
-          else next.delete('view');
-          return next;
-        })
-      }
-      runsView={
-        <RunList
-          {...page}
-          tick={context.tick}
-          act={context.act}
-          workflows={context.workflows}
-          workflowId={workflow.id}
-          onOpen={(id, executionId) =>
-            void navigate(
-              paths.run(id, workflow.id, page.tab, executionId, page.offset),
-            )
-          }
-        />
-      }
-    />
+    <Suspense fallback={<RouteSkeleton subject="workflow" />}>
+      <WorkflowEditor
+        key={workflow.id}
+        workflow={workflow}
+        workflows={context.workflows}
+        prompts={context.prompts}
+        act={context.act}
+        onDirty={context.onDirty}
+        onSaved={context.onSaved}
+        onRun={context.onRun}
+        onBack={() =>
+          void navigate(
+            workflow.ownerWorkflowId
+              ? paths.workflow(workflow.ownerWorkflowId)
+              : paths.workflows,
+          )
+        }
+        onOpenWorkflow={(id) => void navigate(paths.workflow(id))}
+        onDeleted={() => {
+          flushSync(() => context.onDirty(false));
+          void navigate(
+            workflow.ownerWorkflowId
+              ? paths.workflow(workflow.ownerWorkflowId)
+              : paths.workflows,
+          );
+        }}
+        section={
+          search.get('view') === 'runs'
+            ? 'runs'
+            : search.get('view') === 'children' && !workflow.ownerWorkflowId
+              ? 'children'
+              : 'editor'
+        }
+        onSectionChange={(section) =>
+          setSearch((previous) => {
+            const next = new URLSearchParams(previous);
+            if (section !== 'editor') next.set('view', section);
+            else next.delete('view');
+            return next;
+          })
+        }
+        runsView={
+          <Suspense fallback={<RouteLoading label="Loading runs…" />}>
+            <RunList
+              {...page}
+              tick={context.tick}
+              act={context.act}
+              workflows={context.workflows}
+              workflowId={workflow.id}
+              onOpen={(id, executionId) =>
+                void navigate(
+                  paths.run(
+                    id,
+                    workflow.id,
+                    page.tab,
+                    executionId,
+                    page.offset,
+                  ),
+                )
+              }
+            />
+          </Suspense>
+        }
+      />
+    </Suspense>
   );
 }
 
@@ -188,17 +276,19 @@ function RunsRoute() {
   const navigate = useNavigate();
   const { page } = useRunPage();
   return (
-    <RunList
-      {...page}
-      tick={tick}
-      act={act}
-      workflows={workflows}
-      onOpen={(id, executionId) =>
-        void navigate(
-          paths.run(id, undefined, page.tab, executionId, page.offset),
-        )
-      }
-    />
+    <Suspense fallback={<RouteLoading label="Loading runs…" />}>
+      <RunList
+        {...page}
+        tick={tick}
+        act={act}
+        workflows={workflows}
+        onOpen={(id, executionId) =>
+          void navigate(
+            paths.run(id, undefined, page.tab, executionId, page.offset),
+          )
+        }
+      />
+    </Suspense>
   );
 }
 
@@ -211,30 +301,34 @@ function RunRoute() {
   const returnTab = parseRunTab(search.get('tab'));
   const offset = runOffset(search.get('offset'));
   return (
-    <RunInspector
-      key={runId}
-      id={runId!}
-      tick={tick}
-      act={act}
-      onConnect={onConnect}
-      initialExecutionId={search.get('execution') ?? undefined}
-      onOpen={(id, executionId) =>
-        void navigate(paths.run(id, workflowId, returnTab, executionId, offset))
-      }
-      onBack={(status) => {
-        const tab =
-          returnTab === 'attention'
-            ? 'attention'
-            : status === 'running' || status === 'waiting'
-              ? 'active'
-              : 'history';
-        void navigate(
-          workflowId
-            ? paths.workflowRuns(workflowId, returnTab, offset)
-            : paths.runs(tab, tab === returnTab ? offset : 0),
-        );
-      }}
-    />
+    <Suspense fallback={<RouteLoading label="Loading run…" />}>
+      <RunInspector
+        key={runId}
+        id={runId!}
+        tick={tick}
+        act={act}
+        onConnect={onConnect}
+        initialExecutionId={search.get('execution') ?? undefined}
+        onOpen={(id, executionId) =>
+          void navigate(
+            paths.run(id, workflowId, returnTab, executionId, offset),
+          )
+        }
+        onBack={(status) => {
+          const tab =
+            returnTab === 'attention'
+              ? 'attention'
+              : status === 'running' || status === 'waiting'
+                ? 'active'
+                : 'history';
+          void navigate(
+            workflowId
+              ? paths.workflowRuns(workflowId, returnTab, offset)
+              : paths.runs(tab, tab === returnTab ? offset : 0),
+          );
+        }}
+      />
+    </Suspense>
   );
 }
 
@@ -256,8 +350,8 @@ export const routes: RouteObject[] = [
       { index: true, element: <Navigate to={paths.workflows} replace /> },
       { path: 'workflows', Component: LibraryRoute },
       { path: 'prompts', Component: PromptsRoute },
-      { path: 'variables', Component: VariableLibrary },
-      { path: 'variables/:variableId', Component: VariableRoute },
+      { path: 'variables', Component: VariablesRoute },
+      { path: 'variables/:variableId', Component: VariableItemRoute },
       { path: 'settings/harnesses', Component: HarnessesRoute },
       { path: 'prompts/:promptId', Component: PromptRoute },
       { path: 'workflows/:workflowId', Component: WorkflowRoute },

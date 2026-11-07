@@ -25,6 +25,7 @@ export default defineConfig({
         manualChunks: {
           flow: ['@xyflow/react'],
           mantine: ['@mantine/core', '@mantine/hooks'],
+          core: ['@interlock/core'],
         },
       },
     },
