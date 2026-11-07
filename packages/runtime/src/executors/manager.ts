@@ -13,6 +13,7 @@ import {
   executorEffortSchema,
   executorSettingsSchema,
   executorSettingsUpdateSchema,
+  resolveProvider,
   elapsedExcludingPausesMs,
   type ExecutorModels,
   tokenFields,
@@ -203,12 +204,16 @@ export class ExecutorManager {
       revision: number;
       concurrency: number | null;
       allowedRoots?: string[];
+      providerPrefixes?: Record<string, string>;
     }>('executorSettings', 'shared');
     const roots = stored?.allowedRoots ?? this.engine.getAllowedRoots();
     return executorSettingsSchema.parse({
       revision: stored?.revision ?? 0,
       concurrency: stored ? stored.concurrency : 3,
       ...(roots && roots.length > 0 ? { allowedRoots: roots } : {}),
+      ...(stored?.providerPrefixes
+        ? { providerPrefixes: stored.providerPrefixes }
+        : {}),
     });
   }
   saveSettings(input: unknown) {
@@ -221,10 +226,16 @@ export class ExecutorManager {
       const currentRoots = this.settings().allowedRoots;
       const roots =
         q.allowedRoots !== undefined ? q.allowedRoots : currentRoots;
+      const currentPrefixes = this.settings().providerPrefixes;
+      const providerPrefixes =
+        q.providerPrefixes !== undefined ? q.providerPrefixes : currentPrefixes;
       const next = executorSettingsSchema.parse({
         revision: q.expectedRevision + 1,
         concurrency: q.concurrency,
         ...(roots && roots.length > 0 ? { allowedRoots: roots } : {}),
+        ...(providerPrefixes && Object.keys(providerPrefixes).length > 0
+          ? { providerPrefixes }
+          : {}),
       });
       this.engine.store.put('executorSettings', { id: 'shared', ...next });
       return next;
@@ -516,7 +527,13 @@ export class ExecutorManager {
       session?.requestedModel ??
       record.profile.model ??
       null;
-    const provider = usage?.[0]?.provider ?? null;
+    const provider =
+      usage?.[0]?.provider ??
+      resolveProvider({
+        model: actualModel,
+        profile: record.profile,
+        prefixOverrides: this.settings().providerPrefixes,
+      });
 
     return {
       profileId: record.profile.id,
@@ -794,6 +811,7 @@ export class ExecutorManager {
         if (
           !offered.executor ||
           offered.cwdBlocked ||
+          offered.providerDiversityBlocked ||
           this.jobs.has(offered.id) ||
           ['interrupted', 'needs_model'].includes(
             this.latest(offered.id)?.state ?? '',

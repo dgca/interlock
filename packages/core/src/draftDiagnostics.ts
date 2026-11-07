@@ -125,6 +125,25 @@ export function diagnoseDraft(input: unknown): {
         `${node.label}: fresh context cannot use a continuity group`,
         { nodeId: node.id },
       );
+    if (node.kind === 'agent' && node.distinctProviderFrom) {
+      node.distinctProviderFrom.forEach((upstreamId, j) => {
+        if (upstreamId === node.id) {
+          add(
+            'self_distinct_provider',
+            `nodes.${i}.distinctProviderFrom.${j}`,
+            `${node.label}: distinctProviderFrom cannot reference itself`,
+            { nodeId: node.id },
+          );
+        } else if (!d.nodes.some((n) => n.id === upstreamId)) {
+          add(
+            'missing_distinct_provider_node',
+            `nodes.${i}.distinctProviderFrom.${j}`,
+            `${node.label}: distinctProviderFrom references unknown node "${upstreamId}"`,
+            { nodeId: node.id },
+          );
+        }
+      });
+    }
   });
   const contracts: [string, Record<string, unknown>, string?][] = [
     ['inputSchema', d.inputSchema],
