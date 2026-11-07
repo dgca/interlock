@@ -1,3 +1,4 @@
+import { batchDefinition } from './fixtures/batch';
 import { afterEach, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -474,4 +475,107 @@ it('keeps paused input discovery actionable and bounds status hold details', () 
   const status = e.externalInputs.status({ action: 'status', runId: r.id });
   expect(status.pauses).toHaveLength(20);
   expect(status.pauseCount).toBe(21);
+});
+it('reconnects an already running background Script during pause without replay after restart', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'interlock-pause-background-'));
+  dirs.push(dir);
+  const path = join(dir, 'test.db'),
+    ready = join(dir, 'ready'),
+    release = join(dir, 'release');
+  const command = `const fs=await import('node:fs'); fs.appendFileSync(${JSON.stringify(ready)},'x'); while(!fs.existsSync(${JSON.stringify(release)})) await new Promise(r=>setTimeout(r,10)); return 17;`;
+  let e = open(path);
+  const w = publish(
+      e,
+      step({
+        kind: 'script',
+        language: 'javascript',
+        executionMode: 'background',
+        command,
+        timeoutMs: 5000,
+      }),
+    ),
+    r = e.start(w, null).run;
+  await vi.waitFor(() => expect(existsSync(ready)).toBe(true));
+  const h = hold(e, w);
+  e.stop();
+  e.store.close();
+  engines.pop();
+  e = open(path);
+  e.pump();
+  writeFileSync(release, 'release');
+  await vi.waitFor(
+    () => expect(e.run(r.id).executions.at(-1)?.status).toBe('completed'),
+    { timeout: 3000 },
+  );
+  expect(e.run(r.id).cursor).toBe('exit');
+  expect(
+    e.continuation.briefing({ id: r.id, limit: 20 }).run.waiting?.kind,
+  ).toBe('pause');
+  resume(e, h.id);
+  expect(e.run(r.id).output).toBe(17);
+  const { readFileSync } = await import('node:fs');
+  expect(readFileSync(ready, 'utf8')).toBe('x');
+});
+it.each([true, false])(
+  'preserves unclaimed time across resource/pause overlap, pause released first: %s',
+  (pauseFirst) => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-11-01T00:00:00Z');
+    const e = open(),
+      d = step({
+        kind: 'agent',
+        prompt: 'Go',
+        resources: [{ source: 'literal', value: 'shared' }],
+        unclaimedTimeoutMs: 1000,
+      });
+    d.edges.push({
+      id: 'timeout',
+      source: 'agent',
+      port: 'timeout',
+      target: 'exit',
+    });
+    const w = publish(e, d),
+      owner = e.start(w, null).run,
+      ow = e.available(owner.id)[0],
+      c = e.claim(ow.id, worker),
+      r = e.start(w, null).run;
+    expect(e.store.work('available', r.id)[0].resourceBlocked).toBeDefined();
+    const h = hold(e, w);
+    vi.advanceTimersByTime(3000);
+    if (pauseFirst) resume(e, h.id);
+    e.submit(ow.id, c.token!, {});
+    if (!pauseFirst) resume(e, h.id);
+    vi.advanceTimersByTime(999);
+    e.pump();
+    expect(e.run(r.id).status).toBe('waiting');
+    vi.advanceTimersByTime(1);
+    e.pump();
+    expect(e.run(r.id).status).toBe('completed');
+  },
+);
+
+it('pauses Batch item claims and stops further item dispatch until resume', () => {
+  const e = open(),
+    w = publish(
+      e,
+      batchDefinition(
+        nodeSchema.parse({
+          id: 'item',
+          kind: 'agent',
+          label: 'Item',
+          prompt: 'Go',
+        }),
+        { concurrency: 1 },
+      ),
+    ),
+    r = e.start(w, [1, 2, 3]).run;
+  const work = e.available(r.id)[0],
+    c = e.claim(work.id, worker),
+    h = hold(e, w);
+  e.submit(work.id, c.token!, {});
+  expect(e.available(r.id)).toEqual([]);
+  expect(e.run(r.id).executions.at(-1)?.childRunIds).toHaveLength(1);
+  resume(e, h.id);
+  expect(e.available(r.id)).toHaveLength(1);
+  expect(e.run(r.id).executions.at(-1)?.childRunIds).toHaveLength(2);
 });

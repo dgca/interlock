@@ -2073,7 +2073,7 @@ export class Engine {
       if (
         !execution ||
         this.localJobs.has(execution.id) ||
-        this.pauses.applicable(run.workflowId).length
+        (this.pauses.applicable(run.workflowId).length && !execution.background)
       )
         continue;
       if (execution.kind === 'wait') {

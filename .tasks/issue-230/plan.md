@@ -22,3 +22,5 @@ Build owns relevant tests, pnpm test, pnpm build, pnpm test:package, and pnpm fo
 - Schedules, inbound webhooks, doctor, automatic retry windows, stall monitoring and total Agent execution deadlines remain deferred. Existing ownership leases and in-flight native operation timeouts keep their safety semantics. Active-time calculations are available for future execution policies.
 
 Independent UI review and SDLC fresh final review remain with the parent coordinator. Build does not claim either review or open/push a PR.
+
+The final runtime pass also covers Batch dispatch, both pause/resource release orders, and reconnecting a real running background Script after restart while paused. Existing supervisor monitoring remains allowed because it cannot launch a new process; the following step remains gated. Pause changes now emit current projection events so open run views update without reload.
