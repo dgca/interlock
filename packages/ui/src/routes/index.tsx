@@ -48,6 +48,11 @@ const Harnesses = lazy(() =>
     default: m.Harnesses,
   })),
 );
+const Diagnostics = lazy(() =>
+  import('../features/diagnostics/Diagnostics').then((m) => ({
+    default: m.Diagnostics,
+  })),
+);
 const PromptLibrary = lazy(() =>
   import('../features/prompts/Prompts').then((m) => ({
     default: m.PromptLibrary,
@@ -87,6 +92,14 @@ function HarnessesRoute() {
   return (
     <Suspense fallback={<RouteLoading label="Loading harnesses…" />}>
       <Harnesses onDirty={onDirty} />
+    </Suspense>
+  );
+}
+
+function DiagnosticsRoute() {
+  return (
+    <Suspense fallback={<RouteLoading label="Loading diagnostics…" />}>
+      <Diagnostics />
     </Suspense>
   );
 }
@@ -371,6 +384,11 @@ export const routes: RouteObject[] = [
       { path: 'variables', Component: VariablesRoute },
       { path: 'variables/:variableId', Component: VariableItemRoute },
       { path: 'settings/harnesses', Component: HarnessesRoute },
+      { path: 'settings/diagnostics', Component: DiagnosticsRoute },
+      {
+        path: 'diagnostics',
+        Component: () => <Navigate to="/settings/diagnostics" replace />,
+      },
       { path: 'prompts/:promptId', Component: PromptRoute },
       { path: 'workflows/:workflowId', Component: WorkflowRoute },
       { path: 'runs', Component: RunsRoute },

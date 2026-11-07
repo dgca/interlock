@@ -1,6 +1,8 @@
 import { EventTriggers } from './eventTriggers.js';
 import { RunVersions } from './runVersions.js';
 import { modelReferences } from '@interlock/core';
+import { runDoctor } from './doctor.js';
+import type { DoctorOptions, DoctorReport } from '@interlock/core';
 import {
   sourceQuiescence,
   uncertainClaimCollection,
@@ -689,6 +691,9 @@ export class Engine {
     const run = this.store.get<Run>('runs', id);
     if (!run) throw new InterlockError('Run not found');
     return run;
+  }
+  doctor(options?: DoctorOptions): Promise<DoctorReport> {
+    return runDoctor(this, options);
   }
   private arrangeDraft(definition: WorkflowDefinition, layout?: DraftLayout) {
     const parsed = definitionSchema.parse(definition);
@@ -4416,3 +4421,5 @@ export class Engine {
     return this.inspect(id);
   }
 }
+
+export { runDoctor } from './doctor.js';

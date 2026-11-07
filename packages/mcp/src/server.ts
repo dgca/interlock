@@ -57,6 +57,8 @@ import {
   reportUsageSchema,
   usageQuerySchema,
   setBudgetSchema,
+  doctorOptionsSchema,
+  doctorReportSchema,
 } from '@interlock/core';
 import {
   mcpMutationDetailSchema,
@@ -159,6 +161,13 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
       },
     );
   }
+  tool(
+    'doctor',
+    'Read-only health and readiness check for storage integrity, disk space, enabled harness binaries, active triggers, blockers, and workflow dependencies. Optional live:true probes enabled harness model connectivity.',
+    doctorOptionsSchema,
+    (options) => client.system.doctor(options),
+    doctorReportSchema,
+  );
   tool(
     'workflow_simulation',
     'Simulate a published workflow with ordered case fixtures; no model calls, scripts or network effects. action:run requires suiteId, suiteRevision, caseId, version, unique requestId; retries recover report. Returns immediately; poll action:get with id, offset, limit (default 20/max 100). Reports provide simulated contract/routing evidence with route coverage metrics, not live comparison baselines. Supports Entry, Exit, Agent, Script, Fetch, Condition, Switch, Wait (virtual clock duration/polling), and waited Workflow nodes; detached workflows, Batch, and continue-as-new Exits reject before execution. Agent unclaimed timeouts (timedOut) and onFailure:route branches are simulated. Outcomes consume matching fixtures in order. Expected Agent rejection preserves claim for correcting fixture. Max 4 active simulations. action:list filters workflowId with offset/limit. action:capture returns definition, case, prompts, and output. action:cancel stops simulation; restart marks unfinished reports interrupted. Simulation history is local and removed with its workflow.',

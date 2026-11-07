@@ -13,6 +13,7 @@ export function runOffset(value: string | null) {
 
 // Resource URLs use stable IDs, independent of names or future folder membership.
 export const paths = {
+  diagnostics: '/settings/diagnostics',
   harnesses: '/settings/harnesses',
   prompts: '/prompts',
   variables: '/variables',

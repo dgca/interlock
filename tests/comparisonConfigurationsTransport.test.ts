@@ -40,7 +40,7 @@ it.each(['http', 'stdio'])(
             }),
       );
       const tools = (await client.listTools()).tools;
-      expect(tools).toHaveLength(62);
+      expect(tools).toHaveLength(63);
       console.log(
         `${mode}: ${tools.length} tools, ${Buffer.byteLength(JSON.stringify(tools))} B definitions`,
       );

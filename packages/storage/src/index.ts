@@ -111,6 +111,20 @@ export class Store {
   storageSpace() {
     return storageSpace(this.db);
   }
+  quickCheck(): string[] {
+    const rows = this.db.prepare('PRAGMA quick_check').all() as {
+      quick_check?: string;
+    }[];
+    return rows.map((r) => r.quick_check ?? String(r));
+  }
+  recentWebhookRejections(sinceIso: string): number {
+    const row = this.db
+      .prepare(
+        "SELECT count(*) as count FROM documents WHERE collection = 'webhookDeliveries' AND json_extract(value, '$.outcome') = 'rejected' AND json_extract(value, '$.receivedAt') >= ?",
+      )
+      .get(sinceIso) as { count?: number } | undefined;
+    return row?.count ?? 0;
+  }
   deleteHistoryDocuments(ids: Set<string>) {
     deleteHistoryDocuments(this.db, ids);
     this.changed('runs');

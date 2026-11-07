@@ -302,6 +302,18 @@ Executors can report measured token usage and costs for each claim attempt. Meas
 
 JSON arguments also accept `@filename`, such as `interlock start WORKFLOW_ID @input.json`. Run `interlock commands` for the full command list or `interlock --help` for server options.
 
+### System health and readiness check
+
+Run `interlock doctor` to verify system readiness before starting work or unattended pipelines:
+
+```sh
+interlock doctor
+interlock doctor --json
+interlock doctor --live
+```
+
+`interlock doctor` performs read-only diagnostics across SQLite integrity, schema version, free disk space, history size, enabled harness binaries and allowed roots, active trigger lag, pause holds, uncertain resource reservations, work stalls, and published workflow variable dependencies. Adding `--live` performs a live model connectivity check on enabled harnesses. The CLI exits with code 0 on passing/warning checks and code 1 on failure. These diagnostics are also accessible via UI **Diagnostics**, MCP `doctor`, and the shared API `system.doctor`.
+
 ## Current scope
 
 Interlock is a local, single-user application. Agent steps use connected executors, manual submission, or opt-in managed Claude Code, Codex, and Pi sessions; script steps run in the engine. Managed harnesses use their native account and permission configuration.

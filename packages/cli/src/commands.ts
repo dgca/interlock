@@ -12,6 +12,8 @@ import {
   runVersionPreviewSchema,
   runVersionApplySchema,
   runVersionPolicySchema,
+  type DoctorReport,
+  type DiagnosticCategory,
 } from '@interlock/core';
 const parse = async (value: string | undefined) => {
   if (value === undefined) throw new Error('Missing JSON argument');
@@ -536,9 +538,20 @@ export async function runCommand(argv: string[]) {
       return client.runs.script.mutate(await parse(args[0]));
     case 'retry':
       return client.runs.retry.mutate({ id: args[0] });
+    case 'doctor': {
+      const { values } = parseArgs({
+        args,
+        options: {
+          live: { type: 'boolean' },
+          json: { type: 'boolean' },
+        },
+      });
+      return client.system.doctor.query({ live: values.live });
+    }
     default:
       return {
         usage: [
+          'doctor [--live] [--json] (read-only system health and readiness check; returns non-zero on failure)',
           'triggers <read|manage> <json|@file> (schedule/webhook/event configuration, paged fires/deliveries and attention; mutations use expectedRevision; create/import disabled; schedules alias retained)',
           'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value; write-only Secret creation/replacement through stdin)',
           'stalls [json|@file] (settings by default; configure with expectedRevision/policy, inspect with runId/offset/limit)',
@@ -599,4 +612,46 @@ export function commandError(error: unknown) {
     : error instanceof Error
       ? error.message
       : String(error);
+}
+
+export async function runDoctorCommand(options: { live?: boolean } = {}) {
+  const client = createClient(process.env.INTERLOCK_URL);
+  return await client.system.doctor.query({ live: options.live });
+}
+
+export function formatDoctorReport(report: DoctorReport): string {
+  const lines: string[] = [
+    'Interlock Doctor',
+    `Checked at: ${report.checkedAt}`,
+    '',
+  ];
+
+  const categories: DiagnosticCategory[] = [
+    'system',
+    'harnesses',
+    'triggers',
+    'blockers',
+    'workflows',
+  ];
+
+  for (const cat of categories) {
+    const catChecks = report.checks.filter((c) => c.category === cat);
+    if (catChecks.length === 0) continue;
+    lines.push(`[${cat}]`);
+    for (const check of catChecks) {
+      const icon =
+        check.status === 'ok' ? '✓' : check.status === 'warn' ? '⚠' : '✗';
+      lines.push(`  ${icon} ${check.name}: ${check.message}`);
+      if (check.status !== 'ok' && check.remediation) {
+        lines.push(`    Remediation: ${check.remediation}`);
+      }
+    }
+    lines.push('');
+  }
+
+  lines.push(
+    `Summary: ${report.summary.ok} passing, ${report.summary.warn} warning(s), ${report.summary.fail} failing`,
+  );
+  lines.push(`Overall status: ${report.status.toUpperCase()}`);
+  return lines.join('\n');
 }
