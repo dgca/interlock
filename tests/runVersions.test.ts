@@ -125,6 +125,7 @@ function protectedState(e: Engine) {
       'contextGroups',
       'contextEvents',
       'runBudgets',
+      'runChains',
       'runVersionEvents',
     ].map((c) => [c, e.store.list(c)]),
   );
@@ -526,6 +527,156 @@ it('rejects upgrades that change continue-as-new limits and leaves the old chain
     blockers: expect.arrayContaining([expect.stringMatching(/chain|continu/i)]),
   });
   expect(e.inspect(run.id).chain?.maxRuns).toBe(2);
+});
+
+it.each(['swap', 'add', 'remove'] as const)(
+  'rejects a same-cap %s of continuing Exit settings and preserves the original exit behavior',
+  (change) => {
+    const e = setup(),
+      d = definition();
+    d.nodes.push(
+      nodeSchema.parse({
+        id: 'choose',
+        kind: 'switch',
+        label: 'Choose',
+        path: 'again',
+        cases: [{ port: 'again', equals: true }],
+        default: 'done',
+      }),
+      nodeSchema.parse({
+        id: 'continue',
+        kind: 'exit',
+        label: 'Continue',
+        continueAsNew: { maxRuns: 2 },
+      }),
+    );
+    d.edges.find((edge) => edge.source === 'entry')!.target = 'choose';
+    d.edges.push(
+      { id: 'again', source: 'choose', port: 'again', target: 'continue' },
+      { id: 'done', source: 'choose', port: 'done', target: 'agent' },
+    );
+    if (change === 'remove') {
+      const exit = d.nodes.find((node) => node.id === 'exit')!;
+      if (exit.kind === 'exit') exit.continueAsNew = { maxRuns: 2 };
+    }
+    const prompt = e.prompts.create({
+      name: 'Chain capture',
+      description: '',
+      content: 'Original chain instructions',
+    });
+    for (const node of d.nodes)
+      if (node.kind === 'agent') node.promptIds = [prompt.id];
+    const id = publish(e, d),
+      run = e.start(id, { again: false }).run;
+    e.prompts.update(prompt.id, 1, {
+      ...prompt,
+      content: 'Later chain instructions',
+    });
+    newer(e, id, (target) => {
+      for (const node of target.nodes) {
+        if (node.kind !== 'exit') continue;
+        if (node.id === 'exit') {
+          if (change === 'remove') delete node.continueAsNew;
+          else node.continueAsNew = { maxRuns: 2 };
+        }
+        if (node.id === 'continue' && change === 'swap')
+          delete node.continueAsNew;
+      }
+    });
+    complete(e, run.id, { again: false });
+    const work = e.claim(e.available(run.id)[0].id, worker);
+    policy(e, run.id);
+    const hold = e.pauses.create({
+      target: { scope: 'library' },
+      actor: 'test',
+      reason: 'Exit boundary',
+    });
+    e.submit(work.id, work.token!, { again: false });
+    expect(e.run(run.id).cursor).toBe('exit');
+    const before = protectedState(e),
+      preview = e.runVersions.preview({ runId: run.id, version: 2 });
+    expect(preview).toMatchObject({
+      canApply: false,
+      blockers: ['Continue-as-new configuration must remain unchanged'],
+    });
+    expect(protectedState(e)).toEqual(before);
+    expect(() =>
+      e.runVersions.apply({
+        runId: run.id,
+        version: 2,
+        confirmation: preview.confirmation,
+        reason: 'Changed Exit selection',
+      }),
+    ).toThrow(/Continue-as-new configuration/);
+    expect(protectedState(e)).toEqual(before);
+    e.pauses.resume(hold.id);
+    e.pump();
+    const finished = e.run(run.id);
+    expect(finished.version).toBe(1);
+    expect(finished.versionRevision).toBe(1);
+    expect(finished.promptSnapshots).toEqual(run.promptSnapshots);
+    expect(finished.promptSnapshots?.[0].revision).toBe(1);
+    expect(finished.versionChanges ?? []).toEqual([]);
+    expect(finished.versionBlocker?.reasons).toEqual([
+      'Continue-as-new configuration must remain unchanged',
+    ]);
+    expect(finished.status).toBe('completed');
+    expect(Boolean(finished.chain?.nextRunId)).toBe(change === 'remove');
+    expect(e.inspect(run.id).chain?.maxRuns).toBe(2);
+    if (finished.chain?.nextRunId) {
+      const successor = e.run(finished.chain.nextRunId);
+      expect(successor).toMatchObject({
+        version: 1,
+        versionPolicy: 'latest-compatible',
+        chain: { index: 2, previousRunId: run.id },
+      });
+      expect(successor.promptSnapshots).toEqual(run.promptSnapshots);
+      expect(e.inspect(run.id).chain?.runCount).toBe(2);
+    } else {
+      expect(e.store.runs()).toHaveLength(1);
+      expect(e.inspect(run.id).chain?.runCount).toBe(1);
+    }
+  },
+);
+
+it('allows unchanged continuing Exit settings in a different declaration order and keeps normal termination', () => {
+  const e = setup(),
+    d = definition();
+  d.nodes.push(
+    nodeSchema.parse({
+      id: 'choose',
+      kind: 'switch',
+      label: 'Choose',
+      path: 'again',
+      cases: [{ port: 'again', equals: true }],
+      default: 'done',
+    }),
+    nodeSchema.parse({
+      id: 'continue',
+      kind: 'exit',
+      label: 'Continue',
+      continueAsNew: { maxRuns: 2 },
+    }),
+  );
+  d.edges.find((edge) => edge.source === 'entry')!.target = 'choose';
+  d.edges.push(
+    { id: 'again', source: 'choose', port: 'again', target: 'continue' },
+    { id: 'done', source: 'choose', port: 'done', target: 'agent' },
+  );
+  const id = publish(e, d),
+    run = e.start(id, { again: false }).run;
+  newer(e, id, (target) => target.nodes.reverse());
+  const hold = boundary(e, run.id, { again: false });
+  move(e, run.id, 2);
+  e.pauses.resume(hold.id);
+  complete(e, run.id, { again: false });
+  expect(e.run(run.id)).toMatchObject({
+    version: 2,
+    status: 'completed',
+    output: { again: false },
+  });
+  expect(e.run(run.id).chain?.nextRunId).toBeUndefined();
+  expect(e.inspect(run.id).chain).toMatchObject({ maxRuns: 2, runCount: 1 });
 });
 
 it('protects the current binding for cleanup and permits obsolete execution definitions after a move', () => {

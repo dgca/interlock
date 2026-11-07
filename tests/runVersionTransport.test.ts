@@ -3,7 +3,12 @@ import { serve } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { assertContract, blankDefinition, jsonSchema } from '@interlock/core';
+import {
+  assertContract,
+  blankDefinition,
+  jsonSchema,
+  nodeSchema,
+} from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { createClient } from '@interlock/client';
@@ -87,6 +92,15 @@ it.each(['http', 'stdio'])(
       expect(client.getInstructions()).toContain(
         'existing assignments finish unchanged',
       );
+      expect(
+        tools.find((entry) => entry.name === 'publish_workflow')!.description,
+      ).toContain('poll Waits with timing.timeoutMs');
+      expect(Buffer.byteLength(JSON.stringify(discovery))).toBeLessThanOrEqual(
+        300_000,
+      );
+      expect(
+        Buffer.byteLength(client.getInstructions() ?? ''),
+      ).toBeLessThanOrEqual(10_000);
       const call = async (name: string, args: Record<string, unknown>) => {
         const result = await client.callTool({ name, arguments: args });
         expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
@@ -94,6 +108,79 @@ it.each(['http', 'stdio'])(
         expect(result.structuredContent).toEqual(data);
         return data;
       };
+      const polling = blankDefinition();
+      polling.nodes = polling.nodes.map((node) =>
+        node.kind === 'agent'
+          ? nodeSchema.parse({
+              id: node.id,
+              label: 'Unlimited poll',
+              kind: 'wait',
+              timing: {
+                kind: 'poll',
+                everyMs: 1000,
+                check: {
+                  kind: 'script',
+                  language: 'javascript',
+                  command: 'return { ready: false };',
+                  timeoutMs: 100,
+                },
+                path: 'ready',
+                equals: true,
+              },
+            })
+          : node,
+      );
+      const pollWorkflow = await call('create_workflow', {
+        name: 'Polling route contract',
+        definition: polling,
+        detail: 'summary',
+      });
+      expect(
+        await call('validate_workflow', { id: pollWorkflow.id }),
+      ).toMatchObject({ publishable: true });
+      expect(
+        await call('publish_workflow', {
+          id: pollWorkflow.id,
+          detail: 'summary',
+        }),
+      ).toMatchObject({ latestVersion: 1 });
+      const timeoutRoute = structuredClone(polling);
+      timeoutRoute.edges.push({
+        id: 'poll-timeout',
+        source: 'agent',
+        port: 'timeout',
+        target: 'exit',
+      });
+      const rejectedRoute = await call('validate_workflow', {
+        id: pollWorkflow.id,
+        definition: timeoutRoute,
+      });
+      expect(rejectedRoute).toMatchObject({ publishable: false });
+      expect(JSON.stringify(rejectedRoute.diagnostics)).toMatch(
+        /timeout|route/i,
+      );
+      const pollNode = timeoutRoute.nodes.find((node) => node.kind === 'wait')!;
+      if (pollNode.kind !== 'wait' || pollNode.timing.kind !== 'poll')
+        throw new Error('Expected polling Wait');
+      pollNode.timing.timeoutMs = 1000;
+      expect(
+        await call('validate_workflow', {
+          id: pollWorkflow.id,
+          definition: timeoutRoute,
+        }),
+      ).toMatchObject({ publishable: true });
+      await call('update_workflow', {
+        id: pollWorkflow.id,
+        draft: timeoutRoute,
+        draftRevision: pollWorkflow.draftRevision,
+        detail: 'summary',
+      });
+      expect(
+        await call('publish_workflow', {
+          id: pollWorkflow.id,
+          detail: 'summary',
+        }),
+      ).toMatchObject({ latestVersion: 2 });
       const definition = blankDefinition();
       const workflow = engine.create('Version operations', '', definition);
       engine.publish(workflow.id);

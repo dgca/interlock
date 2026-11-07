@@ -17,12 +17,14 @@ import { fingerprint } from './versionIdentity.js';
 
 const active = (status: string) =>
   ['queued', 'running', 'waiting'].includes(status);
-const chainConfig = (definition: WorkflowDefinition) => {
-  const node = definition.nodes.find(
-    (node) => node.kind === 'exit' && node.continueAsNew,
+const chainConfig = (definition: WorkflowDefinition) =>
+  Object.fromEntries(
+    definition.nodes.flatMap((node) =>
+      node.kind === 'exit' && node.continueAsNew
+        ? [[node.id, node.continueAsNew]]
+        : [],
+    ),
   );
-  return node?.kind === 'exit' ? (node.continueAsNew?.maxRuns ?? null) : null;
-};
 
 /** Changes only a run's future execution binding, never an existing visit. */
 export class RunVersions {
