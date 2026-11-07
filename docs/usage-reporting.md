@@ -120,3 +120,5 @@ Receipts survive restart, retries, and published-definition cleanup. Deleting a 
 ## Usage in workflow comparisons
 
 [Comparison measurements](workflow-testbench.md#compare-measurements) freeze the observed trial's run and attempt inventory. Reports read current receipts for those original attempts, including late observer reports, with an as-of time. A later explicit retry does not add its work to the original measurement. Ordinary `get_run_usage` still describes current run history, including retries; its scope can therefore differ from a frozen comparison. Missing legacy inventories and deleted receipts remain unknown.
+
+Attempt groups include `wallMs`, `pausedMs`, and `activeMs`, with null values when historical claim time is unknown. Active milliseconds subtract overlapping applicable library/workflow pause intervals once. They describe elapsed time excluding declared pauses, not measured model activity.

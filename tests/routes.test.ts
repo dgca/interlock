@@ -31,6 +31,11 @@ vi.mock('../packages/ui/src/lib/engineEvents', () => ({
 }));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
+    pauses: {
+      list: {
+        query: () => Promise.resolve({ items: [], total: 0, nextOffset: null }),
+      },
+    },
     connection: {
       query: () => Promise.resolve({ engineUrl: 'http://127.0.0.1:4310' }),
     },

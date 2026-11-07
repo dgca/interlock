@@ -651,6 +651,7 @@ export interface WorkRequest {
   resultRules?: import('./resultRules.js').ResultRule[];
   modelSelection?: import('./modelTiers.js').ModelSelection;
   continuity?: import('./contextContinuity.js').ContextContinuity;
+  pauseBlocked?: import('./pauseHolds.js').PauseBlock;
   budgetBlocked?: import('./budgets.js').BudgetBlock;
   id: string;
   runId: string;
@@ -1229,3 +1230,5 @@ export {
 
 export { nextCallSchema, withNextCall } from './continuation.js';
 export * from './runProjection.js';
+
+export * from './pauseHolds.js';

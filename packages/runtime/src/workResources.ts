@@ -162,6 +162,7 @@ export class WorkResources {
           owners,
           remainingMs:
             work.resourceBlocked?.remainingMs ??
+            work.pauseBlocked?.remainingMs ??
             work.budgetBlocked?.remainingMs ??
             (work.availableUntil
               ? Math.max(0, Date.parse(work.availableUntil) - Date.now())
@@ -172,6 +173,7 @@ export class WorkResources {
         if (!work.resourceBlocked) continue;
         if (
           !work.budgetBlocked &&
+          !work.pauseBlocked &&
           work.resourceBlocked.remainingMs !== undefined
         )
           work.availableUntil = new Date(

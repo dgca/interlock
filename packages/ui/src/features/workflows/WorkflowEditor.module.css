@@ -582,3 +582,11 @@
 .bindingSources span {
   color: var(--muted);
 }
+
+.editor[data-compact] .header {
+  flex-wrap: wrap;
+}
+.editor[data-compact] .headerActions {
+  width: 100%;
+  justify-content: flex-end;
+}

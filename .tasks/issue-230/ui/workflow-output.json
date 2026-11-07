@@ -1,0 +1,26 @@
+{
+  "runId": "7eaea61e-5b68-4d61-ad34-c97b37785cae",
+  "runStatus": "completed",
+  "output": {
+    "status": "ready",
+    "artifactPath": "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/ui-design.md",
+    "summary": "Rendered pause-control design is ready under existing authorization. Library/workflow controls, independent exact-ID hold release, actor/reason entry, pause waiting, responsive layouts and recovery are specified. Fifteen fixture interaction checks pass; production source is unchanged.",
+    "prototypePath": "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/prototype",
+    "evidenceRefs": [
+      "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/source-snapshot.json",
+      "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/decision.md",
+      "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/evidence/baseline-workflow-1440.png",
+      "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/evidence/proposal-workflow-1440.png",
+      "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/evidence/proposal-holds-1440.png",
+      "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/evidence/proposal-release-error-1440.png",
+      "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/evidence/proposal-add-pause-1440.png",
+      "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/evidence/proposal-run-1440.png",
+      "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/evidence/proposal-workflow-390.png",
+      "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/evidence/proposal-holds-390.png",
+      "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/evidence/interaction-verification.log",
+      "/Users/dan/dev/interlock-worktrees/issue-230/.tasks/issue-230/ui/evidence/cleanup.json"
+    ],
+    "decisionSource": "existing_authorization",
+    "humanResponse": ""
+  }
+}

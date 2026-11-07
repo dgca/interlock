@@ -1,3 +1,8 @@
+import {
+  pauseCreateSchema,
+  pauseListSchema,
+  pauseResumeSchema,
+} from '@interlock/core';
 import { scriptOperationSchema } from '@interlock/core';
 import { listStarters, importStarter } from './starters.js';
 import { parseImportDocument } from '../../core/src/importDocument.js';
@@ -609,6 +614,19 @@ export const appRouter = t.router({
       .input(cancelRunSchema)
       .mutation(({ ctx, input }) => ctx.engine.cancel(input.id, input.scope)),
     retry: p.input(id).mutation(({ ctx, input }) => ctx.engine.retry(input.id)),
+  }),
+  pauses: t.router({
+    list: p
+      .input(pauseListSchema)
+      .query(({ ctx, input }) => ctx.engine.pauses.list(input)),
+    pause: p
+      .input(pauseCreateSchema)
+      .mutation(({ ctx, input }) => ctx.engine.pauses.create(input)),
+    resume: p.input(pauseResumeSchema).mutation(({ ctx, input }) => {
+      const result = ctx.engine.pauses.resume(input.id);
+      ctx.engine.pump();
+      return result;
+    }),
   }),
   work: t.router({
     resources: p

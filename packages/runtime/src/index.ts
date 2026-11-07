@@ -1,3 +1,4 @@
+import { PauseHolds } from './pauseHolds.js';
 import { BackgroundScripts, UncertainScript } from './backgroundScripts.js';
 import { scriptOperationSchema, type ScriptOperation } from '@interlock/core';
 import { runAttention } from './runAttention.js';
@@ -150,6 +151,7 @@ export class Engine {
   private readonly chains: RunChains;
   readonly budgets: Budgets;
   readonly assignmentSizes: AssignmentSizes;
+  readonly pauses: PauseHolds;
   readonly holds: WorkHolds;
   readonly externalInputs: ExternalInputs;
   private readonly resources: WorkResources;
@@ -172,6 +174,13 @@ export class Engine {
       ) => Promise<Json>;
     } = {},
   ) {
+    this.pauses = new PauseHolds(store, (run, hold) =>
+      this.event(
+        run,
+        hold.releasedAt ? 'execution.pause_released' : 'execution.paused',
+        `${hold.actor}: ${hold.releasedAt ? 'released pause' : 'paused'} ${hold.id}`,
+      ),
+    );
     this.backgroundScripts = new BackgroundScripts(store);
     this.executors = new ExecutorManager(this, cwd);
     this.simulations = new Simulations(store, cwd);
@@ -194,6 +203,7 @@ export class Engine {
       save: (run) => this.save(run),
       event: (run, type, message) => this.event(run, type, message),
       pump: () => this.pump(),
+      assertUnpaused: (run) => this.pauses.assert(run),
     });
     this.holds = new WorkHolds(
       store,
@@ -1481,7 +1491,8 @@ export class Engine {
     this.event(run, 'node.completed', execution.label);
   }
   private advance(run: Run): boolean {
-    if (terminal(run.status)) return false;
+    if (terminal(run.status) || this.pauses.applicable(run.workflowId).length)
+      return false;
     const definition = this.definition(run),
       node = definition.nodes.find((n) => n.id === run.cursor)!;
     let execution = run.executions.at(-1);
@@ -2020,6 +2031,7 @@ export class Engine {
   pump() {
     if (this.stopped) return;
     this.store.transaction(() => {
+      this.pauses.refresh();
       this.budgets.refresh();
       this.resources.refresh();
       for (const work of this.store.work('claimed'))
@@ -2058,7 +2070,12 @@ export class Engine {
     });
     for (const run of this.store.activeRuns()) {
       const execution = run.executions.at(-1);
-      if (!execution || this.localJobs.has(execution.id)) continue;
+      if (
+        !execution ||
+        this.localJobs.has(execution.id) ||
+        this.pauses.applicable(run.workflowId).length
+      )
+        continue;
       if (execution.kind === 'wait') {
         if (run.status === 'waiting' && execution.status === 'waiting')
           this.runPollCheck(run, execution);
@@ -2566,6 +2583,7 @@ export class Engine {
       .work('available')
       .filter(
         (w) =>
+          !w.pauseBlocked &&
           !w.budgetBlocked &&
           !w.resourceBlocked &&
           !w.cwdBlocked &&
@@ -2677,6 +2695,7 @@ export class Engine {
       if (work.cwdBlocked) {
         throw new InterlockError(work.cwdBlocked.reason);
       }
+      this.pauses.assert(this.run(work.runId));
       this.executors.assertClaim(work, worker);
       this.trials.context(this.run(work.runId));
       if (work.context.mode === 'fresh' && !worker.freshContext)

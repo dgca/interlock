@@ -1,3 +1,4 @@
+import { PauseBanner } from '../pauses/PauseControls';
 import {
   LoadingSkeleton,
   Placeholder,
@@ -223,10 +224,12 @@ export function RunInspector({
       ? runIndex.get(holdScope.parentRunId)
       : undefined;
   }
-  const inputHeld = Boolean(
-    holdScope?.externalInputHold?.heldAt ||
-    (holdScope?.id === run.id && data.externalInputHeldByRunId),
-  );
+  const inputHeld =
+    run.waiting?.kind === 'pause' ||
+    Boolean(
+      holdScope?.externalInputHold?.heldAt ||
+      (holdScope?.id === run.id && data.externalInputHeldByRunId),
+    );
   const selectedWork = allWork.filter((w) => w.executionId === execution?.id);
   const assignmentScope = (w: (typeof allWork)[number]) => {
     if (w.runId === run.id) return undefined;
@@ -350,9 +353,14 @@ export function RunInspector({
           </Button>
         </div>
       </header>
+      <PauseBanner workflowId={run.workflowId} run />
       <div className={styles.liveSummary} role="status" aria-live="polite">
         <strong>
-          {run.chain?.nextRunId ? 'Continued as new' : progress.title}
+          {run.chain?.nextRunId
+            ? 'Continued as new'
+            : run.waiting?.kind === 'pause'
+              ? 'Paused'
+              : progress.title}
         </strong>
         {run.chain && data.chain && (
           <span>

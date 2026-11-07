@@ -30,6 +30,8 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Wait**: A step that pauses until a persisted deadline and passes its input through unchanged, or re-runs a check on a schedule until its result matches and continues with that result merged into the input.
 
+**Pause hold**: An independent named library or workflow record that blocks execution at boundaries. Progress requires zero applicable holds. Release names one exact ID. In-flight work may finish, while pending external-input submissions remain accepted.
+
 **External input**: A step that waits for a caller to accept a specific revision of submitted JSON and then forwards that value.
 
 **Branch**: A step that compares one input path against ordered cases and passes its input unchanged through the first matching route. Unmatched values fail the run unless a fallback route is configured.

@@ -151,6 +151,20 @@ export class Store {
       .get(collection, id);
     return row ? (JSON.parse(row.value as string) as T) : undefined;
   }
+  pauseHolds(
+    workflowId?: string,
+    includeReleased = false,
+  ): import('@interlock/core').PauseHold[] {
+    return this.db
+      .prepare(
+        `SELECT value FROM documents WHERE collection = 'pauseHolds'
+      AND (? OR json_type(value, '$.releasedAt') IS NULL)
+      AND (json_extract(value, '$.scope') = 'library' OR json_extract(value, '$.workflowId') = ?)
+      ORDER BY json_extract(value, '$.createdAt'), id`,
+      )
+      .all(includeReleased ? 1 : 0, workflowId ?? null)
+      .map((row) => JSON.parse(row.value as string));
+  }
   list<T>(collection: string): T[] {
     return this.db
       .prepare(

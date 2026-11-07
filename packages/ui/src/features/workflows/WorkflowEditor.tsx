@@ -1,3 +1,4 @@
+import { WorkflowPauseButton, PauseBanner } from '../pauses/PauseControls';
 import type { Action } from '../../lib/useActionFeedback';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { flushSync } from 'react-dom';
@@ -113,7 +114,7 @@ export function WorkflowEditor({
   const [measureEditor, { width: editorWidth }] =
     useResizeObserver<HTMLDivElement>();
   const editorRootRef = useMergedRef(editorRef, measureEditor);
-  const compactHeader = editorWidth > 0 && editorWidth < 700;
+  const compactHeader = editorWidth > 0 && editorWidth < 900;
   const iconOnlyHeader = editorWidth > 0 && editorWidth < 480;
   const flowRef = useRef<ReactFlowInstance<CanvasNode> | null>(null);
   const fitAfterTidy = useRef(false);
@@ -545,6 +546,11 @@ export function WorkflowEditor({
           </div>
         </div>
         <div className={styles.headerActions}>
+          <WorkflowPauseButton
+            workflowId={workflow.id}
+            name={workflow.name}
+            compact={iconOnlyHeader}
+          />
           {section === 'editor' && (
             <>
               {!compactHeader && (
@@ -703,6 +709,7 @@ export function WorkflowEditor({
           </Menu>
         </div>
       </header>
+      <PauseBanner workflowId={workflow.id} name={workflow.name} />
       {owner && (
         <div className={styles.conflict}>
           <span>

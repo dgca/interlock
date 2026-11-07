@@ -1,0 +1,6 @@
+### Result
+"900px editor actions wrap below workflow name"
+### Ran Playwright code
+```js
+await (async page=>{await page.setViewportSize({width:900,height:900});await page.waitForFunction(()=>document.querySelector('[data-compact]')!==null);await page.screenshot({path:'.tasks/issue-230/verification/workflow-900.png'});return '900px editor actions wrap below workflow name';})(page);
+```

@@ -1,0 +1,10 @@
+{
+  "changedSourcePaths": [],
+  "taskPortsClosed": {
+    "4413": true,
+    "5183": true
+  },
+  "fixtureDatabaseRemoved": true,
+  "browserSession": "issue230ui closed",
+  "scope": "Only artifacts in .tasks/issue-230/ui were created."
+}

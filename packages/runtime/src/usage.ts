@@ -1,3 +1,4 @@
+import { elapsedExcludingPausesMs } from '@interlock/core';
 import { isDeepStrictEqual } from 'node:util';
 import {
   InterlockError,
@@ -7,6 +8,7 @@ import {
   summarizeUsage,
   tokenFields,
   usageQuerySchema,
+  type Run,
   type UsageAttempt,
   type UsageOutcome,
   type UsageQuery,
@@ -206,6 +208,22 @@ export class Usage {
     return attempts;
   }
 
+  private attemptTime(attempt: UsageAttempt): {
+    wallMs: number | null;
+    pausedMs: number | null;
+    activeMs: number | null;
+  } {
+    if (!attempt.claimedAt)
+      return { wallMs: null, pausedMs: null, activeMs: null };
+    return elapsedExcludingPausesMs(
+      Date.parse(attempt.claimedAt),
+      Date.parse(attempt.endedAt ?? new Date().toISOString()),
+      this.store.pauseHolds(
+        this.store.get<Run>('runs', attempt.runId)!.workflowId,
+        true,
+      ),
+    );
+  }
   read(input: UsageQuery) {
     const query = usageQuerySchema.parse(input);
     const runs = this.store.runs();
@@ -283,6 +301,7 @@ export class Usage {
                   outcome: first.outcome,
                   claimedAt: first.claimedAt,
                   endedAt: first.endedAt ?? null,
+                  ...this.attemptTime(first),
                   source: selected?.source ?? null,
                   reportedAt: selected?.reportedAt ?? null,
                   snapshot: selected?.snapshot ?? null,

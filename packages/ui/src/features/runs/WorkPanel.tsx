@@ -88,14 +88,16 @@ export function WorkPanel({
       {!hasManagedExecution && (
         <p className="hint">
           {work.status === 'available'
-            ? work.budgetBlocked
-              ? 'Budget blocked. Adjust the governing run budget through MCP or the CLI to resume claims.'
-              : work.resourceBlocked
-                ? 'Waiting for a shared resource.'
-                : (work.managedExecution?.reason ??
-                  (work.executor
-                    ? 'Queued for automatic execution.'
-                    : 'Waiting for an agent to pick up this assignment.'))
+            ? work.pauseBlocked
+              ? 'Execution paused. Review the applicable pause holds above before claiming.'
+              : work.budgetBlocked
+                ? 'Budget blocked. Adjust the governing run budget through MCP or the CLI to resume claims.'
+                : work.resourceBlocked
+                  ? 'Waiting for a shared resource.'
+                  : (work.managedExecution?.reason ??
+                    (work.executor
+                      ? 'Queued for automatic execution.'
+                      : 'Waiting for an agent to pick up this assignment.'))
             : work.status === 'held'
               ? 'Held for an external blocker. Resume explicitly, then obtain a fresh claim.'
               : work.status === 'claimed'
@@ -192,6 +194,7 @@ export function WorkPanel({
         </p>
       )}
       {work.status === 'available' &&
+        !work.pauseBlocked &&
         !work.budgetBlocked &&
         !work.resourceBlocked &&
         work.availableUntil && (
@@ -252,7 +255,7 @@ export function WorkPanel({
           !work.context.tools.length &&
           !work.context.skills.length && (
             <Button
-              disabled={busy}
+              disabled={busy || !!work.pauseBlocked}
               onClick={() =>
                 void perform(async () => {
                   const claimed = await api.work.claim.mutate({

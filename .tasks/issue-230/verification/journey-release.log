@@ -1,0 +1,12 @@
+### Result
+"Keep-hold focus, failed release/retry, exact single release, remaining holds and desktop/mobile captured"
+### Ran Playwright code
+```js
+await (async page => {const d=page.getByRole('dialog');await d.getByRole('button',{name:'Release…',exact:true}).first().click();if(await d.getByRole('button',{name:'Keep hold',exact:true}).evaluate(el=>el!==document.activeElement))throw Error('Keep hold did not receive focus');await d.getByText('2 other applicable holds remain. Execution stays paused.',{exact:true}).waitFor();await page.route('**/trpc/pauses.resume*',route=>route.abort());await d.getByRole('button',{name:'Release hold',exact:true}).click();await d.getByRole('alert').waitFor();await page.screenshot({path:'.tasks/issue-230/verification/release-error-desktop.png'});await page.unroute('**/trpc/pauses.resume*');await d.getByRole('button',{name:'Release hold',exact:true}).click();await d.getByText('2 applicable holds',{exact:true}).waitFor();if(await d.getByRole('button',{name:'Release…',exact:true}).first().evaluate(el=>el!==document.activeElement))throw Error('Next release did not receive focus');await d.getByRole('button',{name:'Done',exact:true}).click();await page.getByText('Workflow paused · 1 hold · Review release configuration',{exact:true}).waitFor();await page.screenshot({path:'.tasks/issue-230/verification/workflow-desktop.png'});await page.setViewportSize({width:390,height:844});await page.screenshot({path:'.tasks/issue-230/verification/workflow-mobile.png'});await page.getByRole('button',{name:'Pauses · 2',exact:true}).click();await page.screenshot({path:'.tasks/issue-230/verification/holds-mobile.png'});return 'Keep-hold focus, failed release/retry, exact single release, remaining holds and desktop/mobile captured';})(page);
+```
+### Page
+- Page URL: http://127.0.0.1:5184/workflows/6895f99f-b9a9-4f49-8368-0dd37994c8e5
+- Page Title: Interlock
+- Console: 1 errors, 0 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-11-07T07-49-14-639Z.log#L10

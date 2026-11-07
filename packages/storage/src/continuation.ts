@@ -45,6 +45,7 @@ export type WorkMetadata = Pick<
   | 'leaseSeconds'
   | 'leaseUntil'
   | 'availableUntil'
+  | 'pauseBlocked'
   | 'budgetBlocked'
   | 'resources'
   | 'resourceBlocked'

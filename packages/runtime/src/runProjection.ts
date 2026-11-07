@@ -79,7 +79,20 @@ export function projectRun(
       };
     };
     const managed = work?.managedExecution;
-    if (work?.cwdBlocked)
+    const pauses = store.pauseHolds(run.workflowId);
+    const inFlight =
+      work?.status === 'claimed' ||
+      ((current?.kind === 'script' || current?.kind === 'fetch') &&
+        current.status === 'running');
+    if (pauses.length && !inFlight) {
+      wait(
+        'pause',
+        'person',
+        `${pauses.length} pause hold${pauses.length === 1 ? '' : 's'}: ${pauses.map((h) => h.reason).join('; ')}`,
+        pauses[0].createdAt,
+      );
+      branch.waiting!.detail.pauseCount = pauses.length;
+    } else if (work?.cwdBlocked)
       wait(
         'human_request',
         'person',

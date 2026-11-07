@@ -47,7 +47,7 @@ it.each(['http', 'stdio'])(
             }),
       );
       const tools = (await client.listTools()).tools;
-      expect(tools).toHaveLength(56);
+      expect(tools).toHaveLength(57);
       const schema = JSON.stringify(
         tools.find((t) => t.name === 'read_workflow_comparisons')?.inputSchema,
       );

@@ -106,6 +106,7 @@ export class WorkHolds {
         work.status === 'claimed'
           ? this.unclaimedMs(work)
           : (work.budgetBlocked?.remainingMs ??
+            work.pauseBlocked?.remainingMs ??
             work.resourceBlocked?.remainingMs ??
             (work.availableUntil
               ? Math.max(0, Date.parse(work.availableUntil) - atMs)
@@ -150,9 +151,14 @@ export class WorkHolds {
       work.workerId = undefined;
       work.modelSelection = undefined;
       work.claimLeaseSeconds = undefined;
+      if (work.pauseBlocked) work.pauseBlocked.remainingMs = remainingMs;
       if (work.resourceBlocked) work.resourceBlocked.remainingMs = remainingMs;
       if (work.budgetBlocked) work.budgetBlocked.remainingMs = remainingMs;
-      else if (!work.resourceBlocked && remainingMs !== undefined)
+      else if (
+        !work.resourceBlocked &&
+        !work.pauseBlocked &&
+        remainingMs !== undefined
+      )
         work.availableUntil = new Date(atMs + remainingMs).toISOString();
       this.notify(
         work.runId,
