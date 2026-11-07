@@ -1,4 +1,9 @@
 import {
+  scheduleMutationSchema,
+  scheduleReadSchema,
+  scheduleTimingSchema,
+} from '@interlock/core';
+import {
   pauseCreateSchema,
   pauseListSchema,
   pauseResumeSchema,
@@ -127,6 +132,56 @@ const updateWorkflowInput = id.extend({
 });
 const claim = z.object({ workId: z.string(), token: z.string() });
 export const appRouter = t.router({
+  triggers: t.router({
+    read: p
+      .input(scheduleReadSchema)
+      .query(({ ctx, input }) => ctx.engine.triggers.read(input)),
+    list: p
+      .input(
+        z.object({
+          workflowId: z.string().optional(),
+          offset: z.number().int().min(0).default(0),
+          limit: z.number().int().min(1).max(100).default(20),
+        }),
+      )
+      .query(({ ctx, input }) =>
+        ctx.engine.triggers.list(input.workflowId, input.offset, input.limit),
+      ),
+    inspect: p
+      .input(
+        z.object({
+          id: z.string().min(1),
+          offset: z.number().int().min(0).default(0),
+          limit: z.number().int().min(1).max(100).default(20),
+        }),
+      )
+      .query(({ ctx, input }) =>
+        ctx.engine.triggers.inspect(input.id, input.offset, input.limit),
+      ),
+    preview: p
+      .input(z.object({ timing: scheduleTimingSchema }))
+      .query(({ ctx, input }) => ctx.engine.triggers.preview(input.timing)),
+    attention: p
+      .input(
+        z
+          .object({
+            workflowId: z.string().optional(),
+            offset: z.number().int().min(0).default(0),
+            limit: z.number().int().min(1).max(100).default(20),
+          })
+          .default({}),
+      )
+      .query(({ ctx, input }) =>
+        ctx.engine.triggers.attention(
+          input.workflowId,
+          input.offset,
+          input.limit,
+        ),
+      ),
+    manage: p.input(scheduleMutationSchema).mutation(({ ctx, input }) => {
+      return ctx.engine.triggers.mutate(input);
+    }),
+  }),
   variables: t.router({
     read: p
       .input(variableReadSchema)
@@ -596,6 +651,11 @@ export const appRouter = t.router({
         ]);
         return {
           ...page,
+          scheduleAttentionCount: ctx.engine.triggers.attention(
+            input.workflowId,
+            0,
+            1,
+          ).total,
           items: page.items.map((run) => ({
             ...run,
             ...ctx.engine.projectRun(run.id),

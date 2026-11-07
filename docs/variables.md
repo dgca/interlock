@@ -76,7 +76,7 @@ before trying again. The failed save does not overwrite another editor's changes
 
 ## Import workflows that require variables
 
-Use a format-4 portable bundle for variable references. Exports contain safe
+Use a format-4 or schedule-bearing format-5 portable bundle for variable references. Exports contain safe
 requirements and references, never Config or Secret values or encryption keys.
 Earlier bundle formats remain supported for workflows without variables.
 

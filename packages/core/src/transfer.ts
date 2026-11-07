@@ -1,3 +1,4 @@
+import { scheduleConfigSchema } from './workflowTriggers.js';
 import { z } from 'zod';
 import { definitionSchema } from './index.js';
 import { savedPromptSchema, promptIds } from './prompts.js';
@@ -12,6 +13,7 @@ export const workflowBundleSchema = z
       z.literal(2),
       z.literal(3),
       z.literal(4),
+      z.literal(5),
     ]),
     variables: z.array(variableRequirementSchema).max(4096).optional(),
     prompts: z.array(savedPromptSchema).optional(),
@@ -23,6 +25,17 @@ export const workflowBundleSchema = z
           name: z.string().trim().min(1).max(120),
           description: z.string(),
           ownerWorkflowId: z.string().nullable(),
+          schedules: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  config: scheduleConfigSchema,
+                  enabled: z.boolean().default(false),
+                })
+                .strict(),
+            )
+            .optional(),
           draft: definitionSchema,
           draftRevision: z.number().int().positive(),
           deletedVersions: z.array(deletedVersionSchema).optional(),
@@ -37,6 +50,14 @@ export const workflowBundleSchema = z
       .min(1),
   })
   .superRefine((bundle, ctx) => {
+    if (
+      bundle.formatVersion < 5 &&
+      bundle.workflows.some((w) => w.schedules?.length)
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Schedules require bundle formatVersion 5',
+      });
     const references = new Set(
       bundle.workflows.flatMap((w) =>
         [w.draft, ...w.versions.map((v) => v.definition)].flatMap(
@@ -49,7 +70,7 @@ export const workflowBundleSchema = z
       required.size !== (bundle.variables?.length ?? 0) ||
       [...references].some((id) => !required.has(id)) ||
       [...required].some((id) => !references.has(id)) ||
-      ((required.size || references.size) && bundle.formatVersion !== 4)
+      ((required.size || references.size) && bundle.formatVersion < 4)
     )
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

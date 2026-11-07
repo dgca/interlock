@@ -22,7 +22,7 @@ All run summaries, full run/descendant inspection, briefings, compact start/subm
 
 Person applies only when every active waited leaf requires intervention. A branch that can progress takes precedence, then agent before engine, then the stage tie order. External input uses agent because an integration can submit and accept automatically. Read briefing blocker lists to see branches omitted by the single waiting choice. Claimed connected work uses agent with null waiting; native execution uses engine.
 
-Polling detail includes deadlines and `lastCheck` with count, at, optional error capped at 500 characters, and optional JSON output text capped at 512 characters. `truncated` indicates an incomplete preview; use full inspection for the original output. `pause` and `admission_queue` are reserved kinds and are not emitted on this baseline. Existing `waitReason` stays compatible. Historical events can omit projection fields; new events capture them when recorded.
+Polling detail includes deadlines and `lastCheck` with count, at, optional error capped at 500 characters, and optional JSON output text capped at 512 characters. `truncated` indicates an incomplete preview; use full inspection for the original output. `pause` reports applicable named holds and `admission_queue` reports queued start blockers. Existing `waitReason` stays compatible. Historical events can omit projection fields; new events capture them when recorded.
 
 ## Manage run budgets
 
@@ -420,6 +420,8 @@ Provisioning creates an unset value. Missing values block runs. Imports cannot
 redirect existing bindings or rewrite published definitions. After provisioning
 and setting a value, a later import must explicitly select that existing local
 value. CLI import accepts the same choices through `--variable-bindings json|@file`.
+
+Schedule-bearing exports use `formatVersion: 5`, with configuration always disabled and no fire history. Imports always disable included schedules, including forced imports. Use `read_workflow_triggers` and `manage_workflow_triggers` for explicit later inspection and activation. See [workflow schedules](schedules.md).
 
 `interlock export WORKFLOW_ID` and MCP `export_workflow` export an `interlock-workflows` bundle with `formatVersion: 1` when no saved prompts are referenced, or `formatVersion: 2` when prompts are included. Variable-bearing exports use `formatVersion: 4`, with safe required-variable metadata and no Config or Secret values. They require explicit `variableBindings` on import. Other exports with deleted-version identity hashes use `formatVersion: 3`, with prompts when needed. Older readers reject format 3. Prompt-bearing bundles require an Interlock version with Prompts support; earlier readers reject version 2. The library and Workflow settings export the same bundle format. Workflow settings includes local draft edits without saving them.
 

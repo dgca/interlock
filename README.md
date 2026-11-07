@@ -390,3 +390,7 @@ Agent result checks can require output paths or compare them with captured assig
 Use **Pause library** or **Pause workflow** to add independent [pause holds](docs/work-holds.md). CLI `interlock pause`, `pause-holds`, and `resume HOLD_ID`, MCP `manage_pause`, and the shared API use the same persistent gate. Release only your exact hold ID; all applicable holds must clear before execution resumes. In-flight work can finish and pending input revisions remain accepted.
 
 Agent assignments can [hold for external blockers](docs/work-holds.md) and resume with a fresh claim, without consuming failure or expiry allowances. Run inspection separates wall time from declared hold intervals.
+
+### Periodic workflow starts
+
+Manage durable interval or five-field cron schedules from each workflow's **Schedules** tab, `interlock schedules`, or MCP `read_workflow_triggers` and `manage_workflow_triggers`. New and imported schedules start disabled. Fires use idempotent starts, honor library/workflow named holds and admission limits, and expose missed fires, lag and optional automatic failure pause in inspection and **Needs attention**. See [workflow schedules](docs/schedules.md) for policies, input bindings and CLI examples.

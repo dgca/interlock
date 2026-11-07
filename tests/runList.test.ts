@@ -8,7 +8,14 @@ import { RunList } from '../packages/ui/src/features/runs/RunList';
 
 const query = vi.hoisted(() => vi.fn());
 vi.mock('../packages/ui/src/lib/api', () => ({
-  api: { runs: { summaries: { query } } },
+  api: {
+    triggers: {
+      attention: {
+        query: () => Promise.resolve({ items: [], total: 0, nextOffset: null }),
+      },
+    },
+    runs: { summaries: { query } },
+  },
   errorMessage: (error: Error) => error.message,
 }));
 

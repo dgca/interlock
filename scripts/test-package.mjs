@@ -386,6 +386,43 @@ try {
   assert.equal(publishedEvaluator.latestVersion, 1);
   assert.equal(publishedEvaluator.name, 'Evaluate workflow comparison');
 
+  const scheduleWorkflow = await call('create_workflow', {
+    name: 'Packaged schedule',
+  });
+  const cliSchedule = (request) =>
+    JSON.parse(
+      execFileSync(bin, ['schedules', 'manage', JSON.stringify(request)], {
+        cwd: workdir,
+        env: { ...env, INTERLOCK_URL: url },
+        encoding: 'utf8',
+      }),
+    );
+  const packagedSchedule = cliSchedule({
+    action: 'create',
+    workflowId: scheduleWorkflow.id,
+    config: {
+      name: 'Packaged heartbeat',
+      timing: {
+        type: 'cron',
+        expression: '0 9 * * 1-5',
+        timeZone: 'America/Denver',
+      },
+    },
+  }).trigger;
+  assert.equal(packagedSchedule.enabled, false);
+  const preview = await call('read_workflow_triggers', {
+    request: { action: 'preview', timing: packagedSchedule.timing },
+  });
+  assert.equal(preview.upcoming.length, 3);
+  const config = await call('read_workflow_triggers', {
+    request: { action: 'inspect', id: packagedSchedule.id },
+  });
+  assert.equal(config.trigger.name, 'Packaged heartbeat');
+  cliSchedule({
+    action: 'delete',
+    id: packagedSchedule.id,
+    expectedRevision: packagedSchedule.revision,
+  });
   const workflow = await call('create_workflow', {
     name: 'Packed install smoke',
     layout: 'tidy',

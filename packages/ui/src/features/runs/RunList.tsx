@@ -1,3 +1,4 @@
+import { ScheduleAlerts } from '../schedules/Schedules';
 import {
   LoadingSkeleton,
   Placeholder,
@@ -109,13 +110,21 @@ export function RunList({
             Active{counts && ` ${counts.active}`}
           </Tabs.Tab>
           <Tabs.Tab value="attention">
-            Needs attention{counts && ` ${counts.attention}`}
+            Needs attention
+            {counts &&
+              ` ${counts.attention + (scoped?.page.scheduleAttentionCount ?? 0)}`}
           </Tabs.Tab>
           <Tabs.Tab value="history">
             History{counts && ` ${counts.history}`}
           </Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value={tab} pt="md">
+          {tab === 'attention' && (
+            <ScheduleAlerts
+              key={`${workflowId ?? 'all'}:${tick}`}
+              workflowId={workflowId}
+            />
+          )}
           {tab === 'history' && act && (
             <Group justify="flex-end" mb="md">
               <Button variant="light" onClick={() => setCleanup(true)}>

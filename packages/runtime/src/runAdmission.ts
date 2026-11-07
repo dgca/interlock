@@ -20,7 +20,9 @@ export class RunAdmission {
   ) {
     if (
       run.batchNodeId ||
-      (!definition.maxActiveRuns && !options.after?.length)
+      (!definition.maxActiveRuns &&
+        !options.after?.length &&
+        !(run.schedule?.waitForPrevious && run.schedule.previousRunIds.length))
     )
       return;
     run.status = 'queued';
@@ -46,6 +48,23 @@ export class RunAdmission {
       const blockers: string[] = [];
       if (this.store.pauseHolds(run.workflowId).length)
         blockers.push('Workflow admission is paused');
+      if (run.schedule?.waitForPrevious) {
+        for (const id of run.schedule.previousRunIds) {
+          let previous = this.store.get<Run>('runs', id);
+          const seen = new Set<string>();
+          while (previous?.chain?.nextRunId && !seen.has(previous.id)) {
+            seen.add(previous.id);
+            previous = this.store.get<Run>('runs', previous.chain.nextRunId);
+          }
+          if (
+            previous &&
+            ['queued', 'running', 'waiting'].includes(previous.status)
+          )
+            blockers.push(
+              `Schedule predecessor ${previous.id}: ${previous.status}`,
+            );
+        }
+      }
       for (const dependency of admission.after) {
         const ref = dependency.reference;
         if (!dependency.runId) {

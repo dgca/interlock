@@ -1,0 +1,1122 @@
+import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router';
+import {
+  Alert,
+  Badge,
+  Button,
+  Checkbox,
+  Group,
+  NumberInput,
+  Radio,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+import {
+  scheduleConfigSchema,
+  type ScheduleConfig,
+  type ScheduleMutation,
+  type Workflow,
+} from '@interlock/core';
+import { Modal } from '../../components/Modal/Modal';
+import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
+import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
+import { api, errorMessage } from '../../lib/api';
+import { paths } from '../../routes/paths';
+import styles from './Schedules.module.css';
+
+type Inspection = Awaited<ReturnType<typeof api.triggers.inspect.query>>;
+type Trigger = Inspection['trigger'];
+type Listing = Awaited<ReturnType<typeof api.triggers.list.query>>;
+const initialConfig: ScheduleConfig = {
+  kind: 'schedule',
+  name: '',
+  timing: { type: 'interval', intervalMs: 120000 },
+  input: {},
+  bindings: {},
+  overlapPolicy: 'skip',
+  missedFirePolicy: 'skip',
+  pauseAfterConsecutiveFailures: null,
+};
+const configOf = (t: Trigger): ScheduleConfig => ({
+  kind: t.kind,
+  name: t.name,
+  timing: t.timing,
+  input: t.input,
+  bindings: t.bindings,
+  overlapPolicy: t.overlapPolicy,
+  missedFirePolicy: t.missedFirePolicy,
+  pauseAfterConsecutiveFailures: t.pauseAfterConsecutiveFailures,
+});
+const timestamp = (at?: string) =>
+  at
+    ? new Date(at).toLocaleString(undefined, { timeZoneName: 'short' })
+    : 'Never';
+const cadence = (t: Pick<ScheduleConfig, 'timing'>) =>
+  t.timing.type === 'interval'
+    ? `Every ${t.timing.intervalMs / 1000} seconds`
+    : `${t.timing.expression} · ${t.timing.timeZone}`;
+const state = (t: Pick<Trigger, 'autoPaused' | 'enabled'>) =>
+  !t.enabled ? 'Disabled' : t.autoPaused ? 'Automatically paused' : 'Enabled';
+
+export function Schedules({
+  workflow,
+  tick,
+  visible,
+  onDirty,
+}: {
+  workflow: Workflow;
+  tick: number;
+  visible: boolean;
+  onDirty: (dirty: boolean) => void;
+}) {
+  const [search, setSearch] = useSearchParams();
+  const selected = search.get('schedule');
+  const navigate = useNavigate();
+  const [listing, setListing] = useState<Listing>();
+  const [inspection, setInspection] = useState<Inspection>();
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [editing, setEditing] = useState<'new' | Trigger>();
+  const [confirm, setConfirm] = useState<'enable' | 'disable' | 'delete'>();
+  const [pending, setPending] = useState(false);
+  const inFlight = useRef(false);
+  const [fireOffset, setFireOffset] = useState(0);
+  const [listOffset, setListOffset] = useState(0);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const refreshGeneration = useRef(0);
+  const focusSelection = useRef(false);
+  const select = (id: string) => {
+    focusSelection.current = true;
+    setFireOffset(0);
+    setSearch((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set('schedule', id);
+      return next;
+    });
+  };
+  const refresh = useCallback(async () => {
+    const generation = ++refreshGeneration.current;
+    const [list, detail] = await Promise.all([
+      api.triggers.list.query({
+        workflowId: workflow.id,
+        offset: listOffset,
+        limit: 20,
+      }),
+      selected
+        ? api.triggers.inspect.query({ id: selected, offset: fireOffset })
+        : Promise.resolve(undefined),
+    ]);
+    if (generation !== refreshGeneration.current) return;
+    if (detail && detail.trigger.workflowId !== workflow.id)
+      throw new Error('Schedule belongs to another workflow');
+    setListing(list);
+    setInspection(detail);
+    setError('');
+  }, [workflow.id, selected, fireOffset, listOffset]);
+  useEffect(() => {
+    if (!visible) return;
+    let current = true;
+    void refresh().catch((e) => {
+      if (current) setError(errorMessage(e));
+    });
+    return () => {
+      current = false;
+    };
+  }, [refresh, tick, visible]);
+  const trigger =
+    inspection?.trigger.id === selected ? inspection.trigger : undefined;
+  useEffect(() => {
+    if (trigger && focusSelection.current) {
+      focusSelection.current = false;
+      if (window.innerWidth < 1100) {
+        heading.current?.focus();
+        heading.current?.scrollIntoView({ block: 'start' });
+      }
+    }
+  }, [trigger?.id]);
+  const mutate = async (request: ScheduleMutation) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setPending(true);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await api.triggers.manage.mutate(request);
+      onDirty(false);
+      setEditing(undefined);
+      setConfirm(undefined);
+      setSuccess(
+        request.action === 'delete'
+          ? 'Schedule deleted. Existing runs remain.'
+          : request.action === 'create'
+            ? 'Schedule created disabled.'
+            : `Schedule ${request.action === 'update' ? 'saved' : request.action === 'enable' ? 'enabled' : 'disabled'}.`,
+      );
+      if (result.trigger) {
+        const saved = result.trigger;
+        if (inspection?.trigger.id === saved.id)
+          setInspection({
+            ...inspection,
+            trigger: { ...inspection.trigger, ...saved },
+          });
+        if (request.action === 'create') {
+          select(saved.id);
+          return;
+        }
+      } else {
+        setInspection(undefined);
+        setListing((previous) =>
+          previous
+            ? {
+                ...previous,
+                total: Math.max(0, previous.total - 1),
+                items: previous.items.filter(
+                  (t) => t.id !== ('id' in request ? request.id : undefined),
+                ),
+              }
+            : previous,
+        );
+        setSearch((previous) => {
+          const next = new URLSearchParams(previous);
+          next.delete('schedule');
+          return next;
+        });
+        return;
+      }
+      try {
+        await refresh();
+      } catch (e) {
+        setError(`Change saved. Inspection may be stale. ${errorMessage(e)}`);
+      }
+    } catch (e) {
+      throw e;
+    } finally {
+      inFlight.current = false;
+      setPending(false);
+    }
+  };
+  return (
+    <section className={styles.page} aria-label="Workflow schedules">
+      <div className={styles.heading}>
+        <h2>
+          Schedules
+          {listing && (
+            <Text span size="sm" c="dimmed">
+              {' '}
+              {listing.total}
+            </Text>
+          )}
+        </h2>
+        <Button
+          leftSection={<Plus size={15} />}
+          onClick={() => setEditing('new')}
+        >
+          Add schedule
+        </Button>
+      </div>
+      <Text size="xs" c="dimmed" mb="lg">
+        {workflow.latestVersion
+          ? `Schedules start the latest published version, currently v${workflow.latestVersion}. Draft edits do not affect scheduled runs.`
+          : 'Publish this workflow before enabling a schedule. You can create a disabled schedule now.'}
+      </Text>
+      {success && (
+        <Alert mb="md" role="status" color="green">
+          {success}
+        </Alert>
+      )}
+      {error && (
+        <Alert mb="md" color="red" role="alert">
+          {error}
+          <Button
+            variant="subtle"
+            onClick={() =>
+              void refresh().catch((e) => setError(errorMessage(e)))
+            }
+          >
+            Retry refresh
+          </Button>
+        </Alert>
+      )}
+      {!listing ? (
+        <Text role="status">Loading schedules…</Text>
+      ) : listing.total === 0 ? (
+        <Text size="sm">
+          No schedules. Add one to start this workflow periodically.
+        </Text>
+      ) : (
+        <div className={styles.grid}>
+          <nav className={styles.list} aria-label="Schedules">
+            {listing.items.map((t) => (
+              <button
+                key={t.id}
+                className={styles.item}
+                aria-current={selected === t.id}
+                onClick={() => select(t.id)}
+              >
+                <Group justify="space-between">
+                  <strong>{t.name}</strong>
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color={t.autoPaused ? 'red' : t.enabled ? 'green' : 'gray'}
+                  >
+                    {state(t)}
+                  </Badge>
+                </Group>
+                <Text size="xs">{cadence(t)}</Text>
+                <small>
+                  {t.autoPaused
+                    ? t.autoPaused.reason
+                    : `Next slot ${timestamp(t.nextFireAt)}`}
+                </small>
+              </button>
+            ))}
+            {listOffset > 0 && (
+              <Button
+                variant="subtle"
+                onClick={() => setListOffset((n) => Math.max(0, n - 20))}
+              >
+                Previous schedules
+              </Button>
+            )}
+            {listing.nextOffset !== null && (
+              <Button
+                variant="subtle"
+                onClick={() => setListOffset(listing.nextOffset!)}
+              >
+                More schedules
+              </Button>
+            )}
+          </nav>
+          <article className={styles.detail}>
+            {!trigger ? (
+              <h3 ref={heading} tabIndex={-1}>
+                {selected
+                  ? error
+                    ? 'Schedule unavailable'
+                    : 'Loading schedule…'
+                  : 'Select a schedule'}
+              </h3>
+            ) : (
+              <>
+                <Group justify="space-between" align="flex-start">
+                  <div>
+                    <h3 ref={heading} tabIndex={-1}>
+                      {trigger.name}
+                    </h3>
+                    <code>{trigger.id}</code>
+                  </div>
+                  <Button
+                    variant="default"
+                    leftSection={<Pencil size={14} />}
+                    onClick={() => setEditing(trigger)}
+                  >
+                    Edit schedule
+                  </Button>
+                </Group>
+                <Text size="sm" mt="sm">
+                  {cadence(trigger)} · {state(trigger)}
+                </Text>
+                {trigger.autoPaused && (
+                  <Alert color="red" mt="md">
+                    {trigger.autoPaused.reason}. Review recent outcomes, then
+                    re-enable this schedule.
+                  </Alert>
+                )}
+                {trigger.enabled && trigger.excessiveLag && (
+                  <Alert color="yellow" mt="md">
+                    Schedule lag is {Math.floor(trigger.lagMs / 1000)} seconds,
+                    above the 60-second threshold. This alert does not disable
+                    the schedule.
+                  </Alert>
+                )}
+                {trigger.holdCount > 0 && (
+                  <Alert mt="md" color="yellow">
+                    {trigger.holdCount} named pause{' '}
+                    {trigger.holdCount === 1 ? 'hold blocks' : 'holds block'}{' '}
+                    scheduled starts. Enabling this schedule does not release
+                    them.
+                    {trigger.holds.map((h) => (
+                      <Text size="xs" key={h.id}>
+                        {h.actor}: {h.reason} · {h.id}
+                      </Text>
+                    ))}
+                  </Alert>
+                )}
+                <dl className={styles.metrics}>
+                  <div>
+                    <dt>Last fire</dt>
+                    <dd>{timestamp(trigger.lastFireAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Next slot</dt>
+                    <dd>
+                      {timestamp(trigger.nextFireAt)}
+                      {(!trigger.enabled || trigger.autoPaused) && (
+                        <Text size="xs" c="dimmed">
+                          No starts while{' '}
+                          {trigger.autoPaused
+                            ? 'automatically paused'
+                            : 'disabled'}
+                        </Text>
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Fire lag</dt>
+                    <dd>
+                      {trigger.lastLagMs === undefined && trigger.lagMs === 0
+                        ? 'Not measured'
+                        : `${Math.floor(trigger.lagMs / 1000)} seconds`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Consecutive failures</dt>
+                    <dd>
+                      {trigger.consecutiveFailures}
+                      {trigger.pauseAfterConsecutiveFailures
+                        ? ` / ${trigger.pauseAfterConsecutiveFailures} before pause`
+                        : ' · automatic pause off'}
+                    </dd>
+                  </div>
+                </dl>
+                <Text fw={600} size="sm">
+                  Policies
+                </Text>
+                <dl className={styles.policies}>
+                  <dt>Overlapping runs</dt>
+                  <dd>
+                    {trigger.overlapPolicy === 'skip'
+                      ? 'Skip this fire'
+                      : trigger.overlapPolicy === 'queue'
+                        ? 'Queue at most one run'
+                        : 'Allow another run'}
+                  </dd>
+                  <dt>Missed fires</dt>
+                  <dd>
+                    {trigger.missedFirePolicy === 'skip'
+                      ? 'Skip to the next slot'
+                      : 'Run once, then continue'}
+                  </dd>
+                </dl>
+                <details className={styles.disclosure}>
+                  <summary>Run input and bindings</summary>
+                  <pre>
+                    {JSON.stringify(
+                      { input: trigger.input, bindings: trigger.bindings },
+                      null,
+                      2,
+                    )}
+                  </pre>
+                </details>
+                <Group mb="lg">
+                  <Button
+                    variant={
+                      trigger.enabled && !trigger.autoPaused
+                        ? 'default'
+                        : 'filled'
+                    }
+                    disabled={!trigger.canEnable && !trigger.enabled}
+                    onClick={() =>
+                      setConfirm(
+                        trigger.enabled && !trigger.autoPaused
+                          ? 'disable'
+                          : 'enable',
+                      )
+                    }
+                  >
+                    {trigger.autoPaused
+                      ? 'Re-enable schedule'
+                      : trigger.enabled
+                        ? 'Disable schedule'
+                        : 'Enable schedule'}
+                  </Button>
+                  {trigger.enabled && trigger.autoPaused && (
+                    <Button
+                      variant="default"
+                      onClick={() => setConfirm('disable')}
+                    >
+                      Disable schedule
+                    </Button>
+                  )}
+                  <Button
+                    variant="subtle"
+                    color="red"
+                    leftSection={<Trash2 size={14} />}
+                    onClick={() => setConfirm('delete')}
+                  >
+                    Delete schedule
+                  </Button>
+                </Group>
+                {!trigger.canEnable && (
+                  <Text size="xs" c="dimmed" mb="md">
+                    Restore the workflow and retain a published version before
+                    enabling.
+                  </Text>
+                )}
+                <Text fw={600} size="sm">
+                  Recent fires
+                </Text>
+                <Text size="xs" c="dimmed" mt={4}>
+                  Started and queued describe admission, not successful
+                  completion.
+                </Text>
+                <ul className={styles.fires}>
+                  {inspection?.fires.items.map((f) => (
+                    <li className={styles.fire} key={f.id}>
+                      <div>
+                        <strong>{f.outcome.replaceAll('_', ' ')}</strong>
+                        <small>Scheduled {timestamp(f.scheduledAt)}</small>
+                        <small>
+                          Attempted {timestamp(f.firedAt)}
+                          {f.admittedAt
+                            ? ` · Admitted ${timestamp(f.admittedAt)}`
+                            : ''}
+                        </small>
+                        {f.runStatus && <small>Run {f.runStatus}</small>}
+                        {f.error && (
+                          <Text size="xs" c="red">
+                            {f.error}
+                          </Text>
+                        )}
+                      </div>
+                      <div>
+                        {f.runId && f.runAvailable ? (
+                          <Button
+                            variant="subtle"
+                            size="xs"
+                            onClick={() =>
+                              void navigate(paths.run(f.runId!, workflow.id))
+                            }
+                          >
+                            Inspect run
+                          </Button>
+                        ) : (
+                          <Text size="xs" c="dimmed">
+                            {f.runId ? 'Run unavailable' : 'No run'}
+                          </Text>
+                        )}
+                        {f.lagMs !== undefined && (
+                          <small>Lag {Math.floor(f.lagMs / 1000)}s</small>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {!inspection?.fires.total && (
+                  <Text size="sm" c="dimmed">
+                    No fires yet.
+                  </Text>
+                )}
+                <Group justify="space-between">
+                  {fireOffset > 0 && (
+                    <Button
+                      variant="subtle"
+                      onClick={() => setFireOffset((n) => Math.max(0, n - 20))}
+                    >
+                      Newer fires
+                    </Button>
+                  )}
+                  {inspection?.fires.nextOffset !== null &&
+                    inspection?.fires.nextOffset !== undefined && (
+                      <Button
+                        variant="subtle"
+                        onClick={() =>
+                          setFireOffset(inspection.fires.nextOffset!)
+                        }
+                      >
+                        Older fires
+                      </Button>
+                    )}
+                </Group>
+              </>
+            )}
+          </article>
+        </div>
+      )}
+      {editing && (
+        <ScheduleEditor
+          key={editing === 'new' ? 'new' : editing.id}
+          initial={editing === 'new' ? initialConfig : configOf(editing)}
+          pending={pending}
+          onDirty={onDirty}
+          onClose={() => setEditing(undefined)}
+          onReload={
+            editing === 'new'
+              ? undefined
+              : async () => {
+                  const current = await api.triggers.inspect.query({
+                    id: editing.id,
+                  });
+                  setEditing(current.trigger);
+                  return configOf(current.trigger);
+                }
+          }
+          onSave={(config) =>
+            mutate(
+              editing === 'new'
+                ? { action: 'create', workflowId: workflow.id, config }
+                : {
+                    action: 'update',
+                    id: editing.id,
+                    expectedRevision: editing.revision,
+                    config,
+                  },
+            )
+          }
+        />
+      )}
+      {confirm && trigger && (
+        <Modal
+          title={`${confirm === 'enable' && trigger.autoPaused ? 'Re-enable' : confirm[0].toUpperCase() + confirm.slice(1)} schedule`}
+          busy={pending}
+          onClose={() => {
+            setConfirm(undefined);
+            setError('');
+          }}
+        >
+          <ModalBody>
+            <Text size="sm">{trigger.name}</Text>
+            <Text size="xs" c="dimmed">
+              {trigger.id}
+            </Text>
+            <Text size="sm" mt="md">
+              {confirm === 'delete'
+                ? 'Delete this schedule and its fire history. Existing runs remain.'
+                : confirm === 'disable'
+                  ? 'Stop future fires. Existing active and queued runs remain.'
+                  : `${trigger.missedFirePolicy === 'run_once' ? 'Enabling can immediately attempt the latest missed slot once.' : 'Missed slots are skipped until the next future slot.'} Named pause holds still apply.`}
+            </Text>
+            {error && (
+              <Text role="alert" c="red" mt="md">
+                {error}
+              </Text>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="default"
+              disabled={pending}
+              onClick={() => setConfirm(undefined)}
+            >
+              Cancel
+            </Button>
+            <Button
+              color={confirm === 'delete' ? 'red' : undefined}
+              loading={pending}
+              onClick={() =>
+                void mutate({
+                  action: confirm,
+                  id: trigger.id,
+                  expectedRevision: trigger.revision,
+                }).catch((e) => setError(errorMessage(e)))
+              }
+            >
+              {confirm === 'delete'
+                ? 'Delete schedule'
+                : confirm === 'disable'
+                  ? 'Disable schedule'
+                  : trigger.autoPaused
+                    ? 'Re-enable schedule'
+                    : 'Enable schedule'}
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
+    </section>
+  );
+}
+
+type Section = 'timing' | 'input' | 'policies';
+function ScheduleEditor({
+  initial,
+  pending,
+  onClose,
+  onSave,
+  onDirty,
+  onReload,
+}: {
+  initial: ScheduleConfig;
+  pending: boolean;
+  onClose: () => void;
+  onSave: (config: ScheduleConfig) => Promise<void>;
+  onReload?: () => Promise<ScheduleConfig>;
+  onDirty: (dirty: boolean) => void;
+}) {
+  const [config, setConfig] = useState(initial);
+  const [section, setSection] = useState<Section>('timing');
+  const [error, setError] = useState('');
+  const [issues, setIssues] = useState<Record<string, string>>({});
+  const [jsonValid, setJsonValid] = useState(true);
+  const dirty =
+    JSON.stringify(config) !== JSON.stringify(initial) || !jsonValid;
+  useBeforeUnloadWarning(dirty);
+  useEffect(() => {
+    onDirty(dirty);
+    return () => onDirty(false);
+  }, [dirty, onDirty]);
+  const [unit, setUnit] = useState('seconds');
+  const [upcoming, setUpcoming] = useState<string[]>([]);
+  const [previewError, setPreviewError] = useState('');
+  const previewKey = JSON.stringify(config.timing);
+  useEffect(() => {
+    let current = true;
+    setUpcoming([]);
+    setPreviewError('');
+    const timer = setTimeout(() => {
+      void api.triggers.preview
+        .query({ timing: config.timing })
+        .then((p) => {
+          if (current) setUpcoming(p.upcoming);
+        })
+        .catch((e) => {
+          if (current) setPreviewError(errorMessage(e));
+        });
+    }, 250);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [previewKey]);
+  const field = <K extends keyof ScheduleConfig>(
+    key: K,
+    value: ScheduleConfig[K],
+  ) => {
+    setConfig((c) => ({ ...c, [key]: value }));
+    setIssues((previous) => {
+      const next = { ...previous };
+      delete next[key];
+      return next;
+    });
+    setError('');
+  };
+  const submit = async () => {
+    setError('');
+    const parsed = scheduleConfigSchema.safeParse(config);
+    if (!jsonValid) {
+      setSection('input');
+      setError('Enter valid JSON before saving.');
+      return;
+    }
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      for (const issue of parsed.error.issues)
+        errors[String(issue.path[0] ?? 'input')] = issue.message;
+      setIssues(errors);
+      setSection(
+        errors.name || errors.timing
+          ? 'timing'
+          : errors.input || errors.bindings
+            ? 'input'
+            : 'policies',
+      );
+      return;
+    }
+    setIssues({});
+    try {
+      await onSave(parsed.data);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
+  return (
+    <Modal
+      title={initial.name ? 'Edit schedule' : 'Add schedule'}
+      size={700}
+      height={690}
+      busy={pending}
+      onClose={onClose}
+    >
+      <ModalBody>
+        <fieldset
+          disabled={pending}
+          style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+        >
+          <nav className={styles.sections} aria-label="Schedule settings">
+            {(['timing', 'input', 'policies'] as const).map((s) => (
+              <Button
+                key={s}
+                variant={section === s ? 'light' : 'subtle'}
+                aria-current={section === s}
+                onClick={() => setSection(s)}
+              >
+                {s === 'timing'
+                  ? 'Timing'
+                  : s === 'input'
+                    ? 'Run input'
+                    : 'Policies'}
+                {(s === 'timing' && (issues.name || issues.timing)) ||
+                (s === 'input' && (issues.input || issues.bindings)) ||
+                (s === 'policies' && issues.pauseAfterConsecutiveFailures)
+                  ? ' · Error'
+                  : ''}
+              </Button>
+            ))}
+          </nav>
+          {section === 'timing' && (
+            <Stack gap="md">
+              <TextInput
+                label="Schedule name"
+                value={config.name}
+                error={issues.name}
+                onChange={(e) => field('name', e.target.value)}
+                autoFocus
+              />
+              <Radio.Group
+                label="Timing"
+                value={config.timing.type}
+                onChange={(type) =>
+                  field(
+                    'timing',
+                    type === 'interval'
+                      ? { type: 'interval', intervalMs: 120000 }
+                      : {
+                          type: 'cron',
+                          expression: '*/2 * * * *',
+                          timeZone:
+                            Intl.DateTimeFormat().resolvedOptions().timeZone,
+                        },
+                  )
+                }
+              >
+                <Group mt="xs">
+                  <Radio value="interval" label="Fixed interval" />
+                  <Radio value="cron" label="Cron" />
+                </Group>
+              </Radio.Group>
+              {config.timing.type === 'interval' ? (
+                <Group align="flex-start" grow>
+                  <NumberInput
+                    label="Every"
+                    value={
+                      config.timing.intervalMs /
+                      (unit === 'hours'
+                        ? 3600000
+                        : unit === 'minutes'
+                          ? 60000
+                          : 1000)
+                    }
+                    min={unit === 'seconds' ? 30 : undefined}
+                    error={issues.timing}
+                    onChange={(value) =>
+                      field('timing', {
+                        type: 'interval',
+                        intervalMs:
+                          Number(value) *
+                          (unit === 'hours'
+                            ? 3600000
+                            : unit === 'minutes'
+                              ? 60000
+                              : 1000),
+                      })
+                    }
+                  />
+                  <Select
+                    label="Unit"
+                    value={unit}
+                    data={['seconds', 'minutes', 'hours']}
+                    onChange={(v) => setUnit(v ?? 'seconds')}
+                    allowDeselect={false}
+                  />
+                </Group>
+              ) : (
+                <>
+                  <TextInput
+                    label="Cron expression"
+                    description="Exactly five fields: minute hour day month weekday"
+                    value={config.timing.expression}
+                    error={issues.timing}
+                    onChange={(e) =>
+                      field('timing', {
+                        ...(config.timing as Extract<
+                          ScheduleConfig['timing'],
+                          { type: 'cron' }
+                        >),
+                        expression: e.target.value,
+                      })
+                    }
+                  />
+                  <TextInput
+                    label="IANA time zone"
+                    value={config.timing.timeZone}
+                    onChange={(e) =>
+                      field('timing', {
+                        ...(config.timing as Extract<
+                          ScheduleConfig['timing'],
+                          { type: 'cron' }
+                        >),
+                        timeZone: e.target.value,
+                      })
+                    }
+                  />
+                </>
+              )}
+              <Text size="xs" c="dimmed">
+                Minimum interval: 30 seconds. Timing changes reset the slot
+                anchor.
+              </Text>
+              <div>
+                <Text size="sm" fw={600}>
+                  Next three times
+                </Text>
+                {previewError ? (
+                  <Text size="xs" c="red">
+                    {previewError}
+                  </Text>
+                ) : (
+                  upcoming.map((at) => (
+                    <Text size="xs" key={at}>
+                      {config.timing.type === 'cron'
+                        ? new Date(at).toLocaleString(undefined, {
+                            timeZone: config.timing.timeZone,
+                            timeZoneName: 'short',
+                          })
+                        : timestamp(at)}
+                    </Text>
+                  ))
+                )}
+                <Text size="xs" c="dimmed" mt="xs">
+                  Server calculation for these timing settings. Runtime
+                  inspection shows the persisted next slot.
+                </Text>
+              </div>
+            </Stack>
+          )}
+          <div hidden={section !== 'input'}>
+            <JsonEditor
+              label="JSON input template"
+              value={config.input}
+              onChange={(input) => field('input', input)}
+              onValidityChange={setJsonValid}
+            />
+            {issues.input && (
+              <Text c="red" size="xs">
+                {issues.input}
+              </Text>
+            )}
+            <Text size="xs" c="dimmed" mb="md">
+              A bound value replaces the template value at its destination path.
+              previousRunId is null before this schedule starts a run.
+            </Text>
+            {(
+              ['scheduledAt', 'firedAt', 'triggerId', 'previousRunId'] as const
+            ).map((key) => (
+              <div key={key} className={styles.binding}>
+                <Checkbox
+                  label={key}
+                  checked={config.bindings[key] !== undefined}
+                  onChange={(e) => {
+                    const next = { ...config.bindings };
+                    if (e.target.checked) next[key] = `schedule.${key}`;
+                    else delete next[key];
+                    field('bindings', next);
+                  }}
+                />
+                <TextInput
+                  aria-label={`${key} destination path`}
+                  placeholder="Destination path"
+                  disabled={config.bindings[key] === undefined}
+                  value={config.bindings[key] ?? ''}
+                  onChange={(e) =>
+                    field('bindings', {
+                      ...config.bindings,
+                      [key]: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            ))}
+            {issues.bindings && (
+              <Text c="red" size="xs">
+                {issues.bindings}
+              </Text>
+            )}
+          </div>
+          {section === 'policies' && (
+            <Stack gap="xl">
+              <Radio.Group
+                label="When a previous run is active or queued"
+                value={config.overlapPolicy}
+                onChange={(v) =>
+                  field('overlapPolicy', v as ScheduleConfig['overlapPolicy'])
+                }
+              >
+                <Stack mt="sm">
+                  <Radio
+                    value="skip"
+                    label="Skip this fire"
+                    description="Do not add work while any run from this schedule is active or queued."
+                  />
+                  <Radio
+                    value="queue"
+                    label="Queue at most one run"
+                    description="Wait for prior runs to end, then apply workflow admission limits."
+                  />
+                  <Radio
+                    value="allow"
+                    label="Allow another run"
+                    description="Workflow admission limits still apply."
+                  />
+                </Stack>
+              </Radio.Group>
+              <Radio.Group
+                label="Missed fires after downtime or pause"
+                value={config.missedFirePolicy}
+                onChange={(v) =>
+                  field(
+                    'missedFirePolicy',
+                    v as ScheduleConfig['missedFirePolicy'],
+                  )
+                }
+              >
+                <Stack mt="sm">
+                  <Radio value="skip" label="Skip to the next slot" />
+                  <Radio
+                    value="run_once"
+                    label="Run once"
+                    description="Attempt only the latest missed slot, never a catch-up burst. Enabling can start work immediately."
+                  />
+                </Stack>
+              </Radio.Group>
+              <div>
+                <Checkbox
+                  label="Pause after consecutive failures"
+                  checked={config.pauseAfterConsecutiveFailures !== null}
+                  onChange={(e) =>
+                    field(
+                      'pauseAfterConsecutiveFailures',
+                      e.target.checked ? 3 : null,
+                    )
+                  }
+                />
+                {config.pauseAfterConsecutiveFailures !== null && (
+                  <NumberInput
+                    mt="sm"
+                    label="Consecutive failures before pause"
+                    min={1}
+                    max={10000}
+                    value={config.pauseAfterConsecutiveFailures}
+                    error={issues.pauseAfterConsecutiveFailures}
+                    onChange={(v) =>
+                      field('pauseAfterConsecutiveFailures', Number(v))
+                    }
+                  />
+                )}
+                <Text size="xs" c="dimmed" mt="sm">
+                  Off by default. A completed scheduled run resets the count.
+                  Cancelled runs and skipped fires do not count.
+                </Text>
+              </div>
+            </Stack>
+          )}
+          {error && (
+            <Alert color="red" role="alert" mt="md">
+              {error}
+              {onReload && error.includes('revision conflict') && (
+                <Button
+                  variant="subtle"
+                  onClick={() =>
+                    void onReload()
+                      .then((current) => {
+                        setConfig(current);
+                        setJsonValid(true);
+                        setIssues({});
+                        setError('');
+                      })
+                      .catch((e) => setError(errorMessage(e)))
+                  }
+                >
+                  Reload current schedule and discard edits
+                </Button>
+              )}
+            </Alert>
+          )}
+        </fieldset>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="default" disabled={pending} onClick={onClose}>
+          Cancel
+        </Button>
+        <Button loading={pending} onClick={() => void submit()}>
+          {initial.name ? 'Save schedule' : 'Create schedule'}
+        </Button>
+      </ModalFooter>
+    </Modal>
+  );
+}
+
+export function ScheduleAlerts({
+  workflowId,
+  onCount,
+}: {
+  workflowId?: string;
+  onCount?: (count: number) => void;
+}) {
+  const [page, setPage] =
+    useState<Awaited<ReturnType<typeof api.triggers.attention.query>>>();
+  const [offset, setOffset] = useState(0);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let current = true;
+    void api.triggers.attention
+      .query({ workflowId, offset })
+      .then((result) => {
+        if (current) {
+          setPage(result);
+          onCount?.(result.total);
+        }
+      })
+      .catch((e) => {
+        if (current) setError(errorMessage(e));
+      });
+    return () => {
+      current = false;
+    };
+  }, [workflowId, offset, onCount]);
+  if (error)
+    return (
+      <Text role="alert" c="red">
+        Could not load schedule alerts. {error}
+      </Text>
+    );
+  if (!page?.total) return null;
+  return (
+    <section aria-label="Schedule alerts">
+      <Text fw={600} size="sm" mb="sm">
+        Schedule alerts · {page.total}
+      </Text>
+      {page.items.map((item) => (
+        <Alert
+          key={item.triggerId}
+          color={item.kind === 'automatic_pause' ? 'red' : 'yellow'}
+          mb="md"
+          title={item.name}
+        >
+          <Text size="sm">{item.reason}</Text>
+          <Link to={paths.workflowSchedule(item.workflowId, item.triggerId)}>
+            Inspect schedule
+          </Link>
+        </Alert>
+      ))}
+      <Group>
+        {offset > 0 && (
+          <Button
+            variant="subtle"
+            onClick={() => setOffset((n) => Math.max(0, n - 20))}
+          >
+            Previous schedule alerts
+          </Button>
+        )}
+        {page.nextOffset !== null && (
+          <Button variant="subtle" onClick={() => setOffset(page.nextOffset!)}>
+            More schedule alerts
+          </Button>
+        )}
+      </Group>
+    </section>
+  );
+}

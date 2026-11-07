@@ -1,3 +1,4 @@
+import { WorkflowTriggers } from './workflowTriggers.js';
 import { PauseHolds } from './pauseHolds.js';
 import { BackgroundScripts, UncertainScript } from './backgroundScripts.js';
 import { scriptOperationSchema, type ScriptOperation } from '@interlock/core';
@@ -151,6 +152,7 @@ class ResultProcessingError extends InterlockError {
   }
 }
 export class Engine {
+  readonly triggers: WorkflowTriggers;
   readonly history: RunHistory;
   readonly executors: ExecutorManager;
   readonly continuation: Continuation;
@@ -266,6 +268,38 @@ export class Engine {
         this.event(this.run(id), 'work.resources', message);
     });
     this.starts = new RunStarts(store);
+    this.triggers = new WorkflowTriggers(store, (trigger, input, slot) => {
+      const workflow = this.workflow(trigger.workflowId);
+      const q = {
+        workflowId: trigger.workflowId,
+        input,
+        version: workflow.latestVersion,
+        requestId: `schedule:${trigger.id}:${slot}`,
+      };
+      const result = this.starts.resolve(q, () => ({
+        run: this.newRun(
+          trigger.workflowId,
+          q.version,
+          input,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          q,
+          {
+            triggerId: trigger.id,
+            scheduledAt: slot,
+            waitForPrevious: trigger.overlapPolicy === 'queue',
+            previousRunIds: store
+              .activeRuns()
+              .filter((r) => r.schedule?.triggerId === trigger.id)
+              .map((r) => r.id),
+          },
+        ),
+        reused: false,
+      }));
+      return this.run(result.id);
+    });
     this.history = new RunHistory(
       store,
       (ids) => this.starts.deleted(ids),
@@ -843,6 +877,10 @@ export class Engine {
           this.store.remove('deletedVersions', version.id);
       this.testbench.deleteWorkflow(id);
       this.simulations.deleteWorkflow(id);
+      for (const trigger of this.store.workflowTriggers(id)) {
+        this.store.deleteScheduleFires(trigger.id);
+        this.store.remove('workflowTriggers', trigger.id);
+      }
       this.store.remove('workflows', id);
       return { id };
     });
@@ -967,6 +1005,7 @@ export class Engine {
     comparison?: import('@interlock/core').ComparisonRunContext,
     continuedFrom?: Run,
     startOptions?: RunStartOptions,
+    schedule?: Run['schedule'],
   ): Run {
     const w = this.workflow(workflowId);
     // Preserve existing dispatch-time failures for invalid nested pins; cleanup
@@ -1071,6 +1110,8 @@ export class Engine {
       rollover.continueAsNew
     )
       this.chains.start(run, rollover.continueAsNew.maxRuns);
+    if (schedule ?? continuedFrom?.schedule)
+      run.schedule = schedule ?? continuedFrom?.schedule;
     new RunAdmission(this.store).queue(run, definition, startOptions);
     this.save(run);
     this.event(
@@ -2268,6 +2309,7 @@ export class Engine {
   pump() {
     if (this.stopped) return;
     this.store.transaction(() => {
+      this.triggers.tick();
       this.pauses.refresh();
       this.budgets.refresh();
       this.resources.refresh();
