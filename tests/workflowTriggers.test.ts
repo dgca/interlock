@@ -679,3 +679,34 @@ it('does not miss a slot merely because a hold ended before that slot', () => {
   expect(e.store.runs()).toHaveLength(1);
   expect(fires(e, t)[0].outcome).toBe('started');
 });
+
+it.each([false, true])(
+  '45758202-R1 preserves originating admission when a chain successor is queued=%s',
+  (queued) => {
+    const e = setup(),
+      d = blankDefinition();
+    d.nodes[d.nodes.length - 1] = {
+      ...d.nodes.at(-1)!,
+      kind: 'exit',
+      continueAsNew: { maxRuns: 3 },
+    } as (typeof d.nodes)[number];
+    const w = workflow(e, { ...d, ...(queued ? { maxActiveRuns: 1 } : {}) }),
+      t = create(e, w.id);
+    at(e, 30000);
+    const first = e.store.runs()[0];
+    e.pump();
+    const original = fires(e, t).find((f) => f.runId === first.id)!;
+    expect(original.lagMs).toBe(0);
+    if (queued) e.start(w.id, {}, undefined, undefined, { priority: 100 });
+    vi.setSystemTime(Date.parse(base) + 120000);
+    finish(e, first.id);
+    e.pump();
+    expect(e.run(e.run(first.id).chain!.nextRunId!).status === 'queued').toBe(
+      queued,
+    );
+    const after = fires(e, t).find((f) => f.runId === first.id)!;
+    expect(after.admittedAt).toBe(original.admittedAt);
+    expect(after.lagMs).toBe(0);
+    expect(e.triggers.attention().total).toBe(0);
+  },
+);

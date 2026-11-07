@@ -26,7 +26,7 @@ By default, failed runs never pause a schedule. Optional `pauseAfterConsecutiveF
 
 Fire inspection retains up to 200 settled outcomes plus pending runs. Pages default to 20 and cap at 100. Deleted run history displays as unavailable while the fire remains inspectable. Deleting a schedule removes its configuration and fire history, preserving existing runs and RunStarts tombstones.
 
-Portable format 5 exports configuration with `enabled:false`, without operational history. Import always disables included schedules, including forced imports. Existing differing schedule configuration requires explicit `force`; identities cannot move to another workflow. Older bundle formats remain supported. Explicitly inspect and enable schedules after import.
+Portable format 5 exports configuration with `enabled:false`, without operational history. Import always disables included schedules, including identical and forced reimports. Each included schedule revision advances; its next slot and interval anchor reset at import time, and automatic pause, consecutive failures and last measured lag clear. Existing local fire history, prior-run links and runs remain. Schedules absent from the bundle are unchanged. Existing differing schedule configuration requires explicit `force`; identities cannot move to another workflow. Older bundle formats remain supported. Explicitly inspect and enable schedules after import.
 
 ## Use the CLI and MCP
 

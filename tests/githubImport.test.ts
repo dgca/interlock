@@ -381,3 +381,65 @@ it('continues ref resolution after GitHub returns 422 for a candidate containing
   const result = await new GithubImporter(nested).discover(url + '/empty');
   expect(result.source.folder).toBe('workflows/empty');
 });
+
+it('45758202-R3 imports selected schedule bundles and merges overlapping schedules without losing conflicts', async () => {
+  const a = new Engine(new Store(':memory:'), process.cwd()),
+    b = new Engine(new Store(':memory:'), process.cwd());
+  try {
+    const w = a.create('Selected schedules');
+    a.publish(w.id);
+    const config = {
+      name: 'Heartbeat',
+      timing: { type: 'interval' as const, intervalMs: 30000 },
+    };
+    const first = a.triggers.mutate({
+      action: 'create',
+      workflowId: w.id,
+      config,
+    }).trigger!;
+    const bundle = exportWorkflows(a.store, w.id);
+    expect(inspectImportDocument(bundle).name).toBe(w.name);
+    importSelection(b, [bundle]);
+    expect(b.triggers.list(w.id).total).toBe(1);
+    const second = a.triggers.mutate({
+      action: 'create',
+      workflowId: w.id,
+      config: { ...config, name: 'Second' },
+    }).trigger!;
+    const additional = exportWorkflows(a.store, w.id);
+    additional.workflows[0].schedules =
+      additional.workflows[0].schedules!.filter((t) => t.id === second.id);
+    importSelection(b, [bundle, additional]);
+    expect(
+      b.triggers
+        .list(w.id)
+        .items.map((t) => t.id)
+        .sort(),
+    ).toEqual([first.id, second.id].sort());
+    const conflict = structuredClone(bundle);
+    conflict.workflows[0].schedules![0].config.name = 'Conflicting name';
+    const before = JSON.stringify(
+      ['workflows', 'versions', 'workflowTriggers'].map((c) => b.store.list(c)),
+    );
+    expect(() => importSelection(b, [additional, conflict, bundle])).toThrow(
+      /conflict.*schedule|schedule.*conflict/i,
+    );
+    expect(
+      JSON.stringify(
+        ['workflows', 'versions', 'workflowTriggers'].map((c) =>
+          b.store.list(c),
+        ),
+      ),
+    ).toBe(before);
+    const importer = new GithubImporter(fixture({ 'scheduled.json': bundle }));
+    const preview = await importer.discover(url);
+    expect(preview.items[0].valid).toBe(true);
+    await importer.import(b, preview.source, ['scheduled.json']);
+    expect(b.triggers.inspect(first.id).trigger.enabled).toBe(false);
+  } finally {
+    a.stop();
+    b.stop();
+    a.store.close();
+    b.store.close();
+  }
+});

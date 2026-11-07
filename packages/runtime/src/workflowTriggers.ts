@@ -257,9 +257,10 @@ export class WorkflowTriggers {
       const at = new Date().toISOString();
       const settledTriggers = new Set<string>();
       for (const fire of this.store.pendingScheduleFires()) {
-        let run = fire.runId
+        const origin = fire.runId
           ? this.store.get<Run>('runs', fire.runId)
           : undefined;
+        let run = origin;
         const seen = new Set<string>();
         while (run?.chain?.nextRunId && !seen.has(run.id)) {
           seen.add(run.id);
@@ -272,9 +273,10 @@ export class WorkflowTriggers {
         if (!trigger) continue;
         if (run) {
           fire.runStatus = run.status;
-          fire.admittedAt =
-            run.admission?.admittedAt ??
-            (run.status !== 'queued' ? run.createdAt : undefined);
+          // Chain traversal resolves terminal state, not the originating admission.
+          fire.admittedAt ??= origin?.admission
+            ? origin.admission.admittedAt
+            : origin?.createdAt;
           if (fire.admittedAt) {
             fire.lagMs = Math.max(
               0,

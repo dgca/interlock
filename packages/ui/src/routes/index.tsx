@@ -219,6 +219,7 @@ function WorkflowRoute() {
           <Schedules
             workflow={workflow}
             onDirty={context.onScheduleDirty}
+            onPending={context.onSchedulePending}
             tick={context.tick}
             visible={search.get('view') === 'schedules'}
           />

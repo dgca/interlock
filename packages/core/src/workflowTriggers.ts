@@ -20,6 +20,20 @@ export const scheduleTimingSchema = z
   ])
   .superRefine((value, ctx) => {
     if (value.type !== 'cron') return;
+    let validZone = true;
+    try {
+      if (/^[+-]/.test(value.timeZone))
+        throw new Error('Use an IANA time zone, not a fixed offset');
+      new Intl.DateTimeFormat('en', { timeZone: value.timeZone });
+    } catch (error) {
+      validZone = false;
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['timeZone'],
+        message:
+          error instanceof Error ? error.message : 'Invalid IANA time zone',
+      });
+    }
     try {
       if (
         value.expression.split(/\s+/).length !== 5 ||
@@ -28,17 +42,16 @@ export const scheduleTimingSchema = z
         throw new Error(
           'Use exactly five cron fields without macros or hashed jitter',
         );
-      if (/^[+-]/.test(value.timeZone))
-        throw new Error('Use an IANA time zone, not a fixed offset');
-      new Intl.DateTimeFormat('en', { timeZone: value.timeZone });
       CronExpressionParser.parse(value.expression, {
-        tz: value.timeZone,
+        tz: validZone ? value.timeZone : 'UTC',
         currentDate: '2026-01-01T00:00:00Z',
       }).next();
     } catch (error) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: error instanceof Error ? error.message : 'Invalid cron timing',
+        path: ['expression'],
+        message:
+          error instanceof Error ? error.message : 'Invalid cron expression',
       });
     }
   });

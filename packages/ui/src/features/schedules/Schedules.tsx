@@ -68,10 +68,12 @@ export function Schedules({
   tick,
   visible,
   onDirty,
+  onPending,
 }: {
   workflow: Workflow;
   tick: number;
   visible: boolean;
+  onPending?: (pending: boolean) => void;
   onDirty: (dirty: boolean) => void;
 }) {
   const [search, setSearch] = useSearchParams();
@@ -90,6 +92,10 @@ export function Schedules({
   const heading = useRef<HTMLHeadingElement>(null);
   const refreshGeneration = useRef(0);
   const focusSelection = useRef(false);
+  useEffect(() => {
+    setEditing(undefined);
+    setConfirm(undefined);
+  }, [selected, visible]);
   const select = (id: string) => {
     focusSelection.current = true;
     setFireOffset(0);
@@ -148,6 +154,7 @@ export function Schedules({
   const mutate = async (request: ScheduleMutation) => {
     if (inFlight.current) return;
     inFlight.current = true;
+    onPending?.(true);
     setPending(true);
     setError('');
     setSuccess('');
@@ -155,6 +162,7 @@ export function Schedules({
       const result = await api.triggers.manage.mutate(request);
       flushSync(() => {
         onDirty(false);
+        onPending?.(false);
         setEditing(undefined);
         setConfirm(undefined);
       });
@@ -205,6 +213,7 @@ export function Schedules({
       throw e;
     } finally {
       inFlight.current = false;
+      onPending?.(false);
       setPending(false);
     }
   };
@@ -547,7 +556,7 @@ export function Schedules({
           </article>
         </div>
       )}
-      {editing && (
+      {visible && editing && (
         <ScheduleEditor
           key={editing === 'new' ? 'new' : editing.id}
           initial={editing === 'new' ? initialConfig : configOf(editing)}
@@ -579,7 +588,7 @@ export function Schedules({
           }
         />
       )}
-      {confirm && trigger && (
+      {visible && confirm && trigger && (
         <Modal
           title={`${confirm === 'enable' && trigger.autoPaused ? 'Re-enable' : confirm[0].toUpperCase() + confirm.slice(1)} schedule`}
           busy={pending}
@@ -661,6 +670,7 @@ function ScheduleEditor({
   const [error, setError] = useState('');
   const [issues, setIssues] = useState<Record<string, string>>({});
   const [jsonValid, setJsonValid] = useState(true);
+  const [jsonReset, setJsonReset] = useState(0);
   const dirty =
     JSON.stringify(config) !== JSON.stringify(initial) || !jsonValid;
   useBeforeUnloadWarning(dirty);
@@ -698,7 +708,8 @@ function ScheduleEditor({
     setConfig((c) => ({ ...c, [key]: value }));
     setIssues((previous) => {
       const next = { ...previous };
-      delete next[key];
+      for (const path of Object.keys(next))
+        if (path === key || path.startsWith(`${key}.`)) delete next[path];
       return next;
     });
     setError('');
@@ -714,10 +725,14 @@ function ScheduleEditor({
     if (!parsed.success) {
       const errors: Record<string, string> = {};
       for (const issue of parsed.error.issues)
-        errors[String(issue.path[0] ?? 'input')] = issue.message;
+        errors[issue.path.length ? issue.path.join('.') : 'input'] =
+          issue.message;
       setIssues(errors);
       setSection(
-        errors.name || errors.timing
+        Object.keys(errors).some(
+          (path) =>
+            path === 'name' || path === 'timing' || path.startsWith('timing.'),
+        )
           ? 'timing'
           : errors.input || errors.bindings
             ? 'input'
@@ -758,7 +773,11 @@ function ScheduleEditor({
                   : s === 'input'
                     ? 'Run input'
                     : 'Policies'}
-                {(s === 'timing' && (issues.name || issues.timing)) ||
+                {(s === 'timing' &&
+                  (issues.name ||
+                    Object.keys(issues).some(
+                      (path) => path === 'timing' || path.startsWith('timing.'),
+                    ))) ||
                 (s === 'input' && (issues.input || issues.bindings)) ||
                 (s === 'policies' && issues.pauseAfterConsecutiveFailures)
                   ? ' · Error'
@@ -810,7 +829,7 @@ function ScheduleEditor({
                           : 1000)
                     }
                     min={unit === 'seconds' ? 30 : undefined}
-                    error={issues.timing}
+                    error={issues['timing.intervalMs'] || issues.timing}
                     onChange={(value) =>
                       field('timing', {
                         type: 'interval',
@@ -838,7 +857,7 @@ function ScheduleEditor({
                     label="Cron expression"
                     description="Exactly five fields: minute hour day month weekday"
                     value={config.timing.expression}
-                    error={issues.timing}
+                    error={issues['timing.expression'] || issues.timing}
                     onChange={(e) =>
                       field('timing', {
                         ...(config.timing as Extract<
@@ -851,6 +870,7 @@ function ScheduleEditor({
                   />
                   <TextInput
                     label="IANA time zone"
+                    error={issues['timing.timeZone']}
                     value={config.timing.timeZone}
                     onChange={(e) =>
                       field('timing', {
@@ -897,6 +917,7 @@ function ScheduleEditor({
           )}
           <div hidden={section !== 'input'}>
             <JsonEditor
+              key={jsonReset}
               label="JSON input template"
               value={config.input}
               onChange={(input) => field('input', input)}
@@ -1032,6 +1053,7 @@ function ScheduleEditor({
                     void onReload()
                       .then((current) => {
                         setConfig(current);
+                        setJsonReset((value) => value + 1);
                         setJsonValid(true);
                         setIssues({});
                         setError('');
@@ -1060,9 +1082,11 @@ function ScheduleEditor({
 
 export function ScheduleAlerts({
   workflowId,
+  tick,
   onCount,
 }: {
   workflowId?: string;
+  tick: number;
   onCount?: (count: number) => void;
 }) {
   const [page, setPage] =
@@ -1075,7 +1099,12 @@ export function ScheduleAlerts({
       .query({ workflowId, offset })
       .then((result) => {
         if (current) {
+          if (offset > 0 && offset >= result.total) {
+            setOffset(Math.max(0, Math.floor((result.total - 1) / 20) * 20));
+            return;
+          }
           setPage(result);
+          setError('');
           onCount?.(result.total);
         }
       })
@@ -1085,7 +1114,7 @@ export function ScheduleAlerts({
     return () => {
       current = false;
     };
-  }, [workflowId, offset, onCount]);
+  }, [workflowId, offset, onCount, tick]);
   if (error)
     return (
       <Text role="alert" c="red">

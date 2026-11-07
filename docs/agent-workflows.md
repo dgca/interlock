@@ -413,7 +413,7 @@ entries, including polling checks, pin protected revisions at run startup. Value
 are never added implicitly to Agent assignments. Secret read-back is unavailable;
 prefer the local UI or CLI stdin for entry. See [workflow variables](variables.md).
 
-For format 4, supply a `variableBindings` entry for every required ID, with
+For formats 4 and 5, supply a `variableBindings` entry for every required ID, with
 `{action:"bind",variableId:"LOCAL_ID"}` or `{action:"provision",name:"local_name"}`.
 Bindings are instance-wide and same-kind; name matching never attaches credentials.
 Provisioning creates an unset value. Missing values block runs. Imports cannot
@@ -421,18 +421,16 @@ redirect existing bindings or rewrite published definitions. After provisioning
 and setting a value, a later import must explicitly select that existing local
 value. CLI import accepts the same choices through `--variable-bindings json|@file`.
 
-Schedule-bearing exports use `formatVersion: 5`, with configuration always disabled and no fire history. Imports always disable included schedules, including forced imports. Use `read_workflow_triggers` and `manage_workflow_triggers` for explicit later inspection and activation. See [workflow schedules](schedules.md).
+`interlock export WORKFLOW_ID`, MCP `export_workflow`, and the library and Workflow settings export the same `interlock-workflows` bundle. The highest required format wins: schedule configuration uses format 5, variable requirements use format 4, deleted-version identities use format 3, saved prompts use format 2, and other bundles use format 1. Older readers reject unsupported newer formats. Workflow settings includes local draft edits without saving them.
 
-`interlock export WORKFLOW_ID` and MCP `export_workflow` export an `interlock-workflows` bundle with `formatVersion: 1` when no saved prompts are referenced, or `formatVersion: 2` when prompts are included. Variable-bearing exports use `formatVersion: 4`, with safe required-variable metadata and no Config or Secret values. They require explicit `variableBindings` on import. Other exports with deleted-version identity hashes use `formatVersion: 3`, with prompts when needed. Older readers reject format 3. Prompt-bearing bundles require an Interlock version with Prompts support; earlier readers reject version 2. The library and Workflow settings export the same bundle format. Workflow settings includes local draft edits without saving them.
-
-A bundle contains the root workflow, its owned children, owners, and transitive dependencies from drafts and retained published versions. Each record includes a stable ID, name, description, ownership, draft, source draft revision, and retained published versions with original numbers, which may have gaps. Format-3 and format-4 records can also include `deletedVersions` with version numbers, definition hashes, and deletion timestamps. Missing referenced workflows or saved prompts block export. Prompt-bearing format-2, format-3, and format-4 bundles include one current prompt record per referenced ID, with name, description, revision, and Markdown content. References in all exported drafts and published versions are included. Prompt revision history and historical run captures are excluded. Runs, claim tokens, and archive flags are excluded. Exporting an owned child includes its owner and siblings to preserve ownership.
+A bundle contains the root workflow, its owned children, owners, and transitive dependencies from drafts and retained published versions. Each record includes stable identity, metadata, ownership, draft, source draft revision and retained published definitions with their original numbers. Formats 3 through 5 can include `deletedVersions` identity hashes. Formats 2 through 5 can include current saved prompt records. Formats 4 and 5 carry safe required-variable metadata, never Config or Secret values, and require deliberate `variableBindings` on import. Format 5 also includes schedule configuration with `enabled:false`, without fire history or activation/failure state. Missing referenced workflows or prompts block export. Runs, claim tokens, archive flags, prompt revision history and historical run captures are excluded. Exporting an owned child includes its owner and siblings to preserve ownership.
 
 ```sh
 interlock export WORKFLOW_ID > workflow.json
 interlock import @workflow.json
 ```
 
-Import creates missing workflows with their bundle IDs and imports their exact published pins in one transaction. Reimporting an identical bundle is a no-op. Existing archive flags, runs, and published versions remain intact. Legacy single-definition import documents still create a new workflow each time. MCP `create_workflow` also retains creation semantics; use `import_workflows` for bundles.
+Import creates missing workflows with their bundle IDs and imports their exact published pins in one transaction. Identical workflow definitions remain unchanged. Every included schedule is disabled, including identical or forced reimports; its revision advances, its next slot and interval anchor reset at import time, and automatic pause, consecutive failures and last measured lag clear. Local fire history, prior-run links, existing runs, archive flags and published versions remain intact. Schedules absent from the bundle remain unchanged. Inspect with `read_workflow_triggers` before explicitly enabling imported schedules. Legacy single-definition import documents still create a new workflow each time. MCP `create_workflow` also retains creation semantics; use `import_workflows` for bundles.
 
 To replace an existing draft, inspect the target with `get_workflow`, then pass `draftRevisions` keyed by target workflow ID to `import_workflows`. CLI `--revisions` accepts that JSON map. Source draft revisions in the bundle are informational; each engine has its own revision sequence.
 

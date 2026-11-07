@@ -121,7 +121,10 @@ export function RunList({
         <Tabs.Panel value={tab} pt="md">
           {tab === 'attention' && (
             <ScheduleAlerts
-              key={`${workflowId ?? 'all'}:${tick}`}
+              key={
+                workflowId === undefined ? 'library' : `workflow:${workflowId}`
+              }
+              tick={tick}
               workflowId={workflowId}
             />
           )}

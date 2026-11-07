@@ -29,6 +29,7 @@ export type AppContext = {
   act: Action;
   onDirty: (dirty: boolean) => void;
   onScheduleDirty: (dirty: boolean) => void;
+  onSchedulePending: (pending: boolean) => void;
   onSaved: (workflow: Workflow) => void;
   onRun: (workflow: Workflow) => void;
   onConnect?: () => void;
@@ -53,6 +54,7 @@ export function App() {
   const [scheduleAttentionCount, setScheduleAttentionCount] = useState(0);
   const [editorDirty, setEditorDirty] = useState(false);
   const [scheduleDirty, setScheduleDirty] = useState(false);
+  const [schedulePending, setSchedulePending] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [engineHost, setEngineHost] = useState<string>();
@@ -72,7 +74,7 @@ export function App() {
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       (editorDirty && currentLocation.pathname !== nextLocation.pathname) ||
-      (scheduleDirty &&
+      ((scheduleDirty || schedulePending) &&
         (currentLocation.pathname !== nextLocation.pathname ||
           currentLocation.search !== nextLocation.search)),
   );
@@ -195,6 +197,7 @@ export function App() {
     act,
     onDirty: setEditorDirty,
     onScheduleDirty: setScheduleDirty,
+    onSchedulePending: setSchedulePending,
     onSaved: (w) =>
       setWorkflows((all) =>
         all.some((old) => old.id === w.id)
@@ -273,6 +276,7 @@ export function App() {
               <Button
                 color="red"
                 variant="light"
+                disabled={schedulePending}
                 onClick={() => {
                   if (blocker.state === 'blocked') {
                     setEditorDirty(false);
