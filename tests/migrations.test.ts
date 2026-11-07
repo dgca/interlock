@@ -76,6 +76,43 @@ it('initializes empty databases and reopens current databases without a backup',
   expect(existsSync(`${file}.backups`)).toBe(false);
 });
 
+it('indexes queued comparison roots during schema-8 upgrade without rewriting run documents', () => {
+  const file = path(),
+    db = open(file);
+  migrate(db, file, migrations.slice(0, 8));
+  const run = {
+    id: 'queued-root',
+    status: 'queued',
+    comparison: { comparisonId: 'comparison' },
+    admission: { priority: 7 },
+  };
+  db.prepare('INSERT INTO documents VALUES (?, ?, ?)').run(
+    'runs',
+    run.id,
+    JSON.stringify(run),
+  );
+  expect(db.prepare('SELECT * FROM active_comparison_runs').all()).toEqual([]);
+  const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
+  expect(migrate(db, file)).toMatchObject({
+    from: 8,
+    to: 9,
+    backup: expect.any(String),
+  });
+  expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
+    before,
+  );
+  expect(db.prepare('SELECT * FROM active_comparison_runs').all()).toEqual([
+    { run_id: run.id, comparison_id: 'comparison' },
+  ]);
+  expect(
+    db
+      .prepare(
+        "SELECT id FROM documents INDEXED BY runs_admission_queue WHERE collection='runs' AND json_extract(value,'$.status')='queued'",
+      )
+      .all(),
+  ).toEqual([{ id: run.id }]);
+});
+
 it.each([
   { journalMode: 'wal', synchronous: 1, databasePath: path },
   { journalMode: 'memory', synchronous: 2, databasePath: () => ':memory:' },

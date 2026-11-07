@@ -964,3 +964,31 @@ it('preserves native-default effort resets and removes model overrides through a
     cleared.definition?.nodes.find((n) => n.kind === 'agent'),
   ).not.toHaveProperty('effort');
 });
+
+it('sets and clears published admission settings through revision-protected authoring contracts', () => {
+  const d = blankDefinition();
+  const result = applyWorkflowEdits(d, [
+    {
+      op: 'update_settings',
+      set: { maxActiveRuns: 2, excludeStages: ['Accept'] },
+    },
+  ]);
+  expect(result.definition).toMatchObject({
+    maxActiveRuns: 2,
+    excludeStages: ['Accept'],
+  });
+  expect(draftChanges(d, result.definition!).settings).toEqual([
+    'maxActiveRuns',
+    'excludeStages',
+  ]);
+  const cleared = applyWorkflowEdits(result.definition!, [
+    { op: 'update_settings', unset: ['maxActiveRuns', 'excludeStages'] },
+  ]);
+  expect(cleared.definition).not.toHaveProperty('maxActiveRuns');
+  expect(cleared.definition).not.toHaveProperty('excludeStages');
+  expect(
+    applyWorkflowEdits(d, [
+      { op: 'update_settings', set: { maxActiveRuns: 0 } },
+    ]).definition,
+  ).toBeUndefined();
+});

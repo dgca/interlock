@@ -212,6 +212,26 @@ it('does not pump reused work when no request key is supplied', () => {
   expect(state(e)).toBe(before);
 });
 
+it('retains uncertain resource ownership when replacing a claimed task', () => {
+  const e = setup(),
+    d = blankDefinition();
+  if (d.nodes[1].kind === 'agent')
+    d.nodes[1].resources = [{ source: 'literal', value: 'deployment' }];
+  const w = publish(e, d),
+    first = e.start(w.id, {}, undefined, undefined, { externalTask: task }).run;
+  const claim = e.claim(e.available(first.id)[0].id, worker);
+  const replacement = e.start(w.id, {}, undefined, undefined, {
+    externalTask: task,
+    onActiveExternalTask: 'cancel_previous',
+  }).run;
+  expect(e.run(first.id).status).toBe('cancelled');
+  expect(e.available(replacement.id)).toEqual([]);
+  expect(
+    e.inspect(replacement.id).work[0].resourceBlocked?.owners,
+  ).toMatchObject([{ runId: first.id, state: 'uncertain' }]);
+  expect(() => e.submit(claim.id, claim.token!, {})).toThrow();
+});
+
 it('validates a replacement before cancellation and rolls all protected state back on write failure', () => {
   const e = setup(),
     d = blankDefinition();

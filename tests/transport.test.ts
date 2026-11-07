@@ -218,19 +218,46 @@ it.each(['stdio', 'http'])(
       await call('cancel_run', { id: queued.runId });
       await call('cancel_run', { id: admitted.runId });
       const taskIdentity = { system: 'test', id: `atomic-${mode}` };
-      const competing = await Promise.all(
-        Array.from({ length: 8 }, (_, i) =>
-          api.runs.startSummary.mutate({
-            workflowId: limited.id,
-            input: {},
-            requestId: `atomic-${mode}-${i}`,
-            externalTask: taskIdentity,
-            onActiveExternalTask: 'reuse',
-          }),
-        ),
-      );
-      expect(new Set(competing.map((r) => r.runId)).size).toBe(1);
-      await call('cancel_run', { id: competing[0].runId });
+      for (const policy of [
+        'allow',
+        'reuse',
+        'reject',
+        'cancel_previous',
+      ] as const) {
+        const identity = {
+          ...taskIdentity,
+          id: `${taskIdentity.id}-${policy}`,
+        };
+        const competing = await Promise.allSettled(
+          Array.from({ length: 8 }, (_, i) =>
+            api.runs.startSummary.mutate({
+              workflowId: limited.id,
+              input: {},
+              requestId: `atomic-${mode}-${policy}-${i}`,
+              externalTask: identity,
+              onActiveExternalTask: policy,
+            }),
+          ),
+        );
+        const accepted = competing.flatMap((result) =>
+          result.status === 'fulfilled' ? [result.value] : [],
+        );
+        const linked = await api.runs.find.query({ externalTask: identity });
+        expect(accepted).toHaveLength(policy === 'reject' ? 1 : 8);
+        expect(new Set(accepted.map((run) => run.runId)).size).toBe(
+          policy === 'reuse' || policy === 'reject' ? 1 : 8,
+        );
+        expect(
+          linked.filter((run) =>
+            ['queued', 'running', 'waiting'].includes(run.status),
+          ),
+        ).toHaveLength(policy === 'allow' ? 8 : 1);
+        if (policy === 'cancel_previous')
+          expect(
+            linked.filter((run) => run.status === 'cancelled'),
+          ).toHaveLength(7);
+        for (const run of linked) await call('cancel_run', { id: run.id });
+      }
       const oldUrl = process.env.INTERLOCK_URL;
       process.env.INTERLOCK_URL = url;
       try {
