@@ -458,7 +458,7 @@ it.each(['stdio', 'http'])(
       expect(nextCursor).toBeUndefined();
       expect(
         Buffer.byteLength(JSON.stringify(toolDiscovery)),
-      ).toBeLessThanOrEqual(285_000);
+      ).toBeLessThanOrEqual(290_000);
       expect(Buffer.byteLength(instructions)).toBeLessThanOrEqual(10_000);
       expect(instructions).toContain(
         'docs/agent-workflows.md#discover-schemas-and-assignments',

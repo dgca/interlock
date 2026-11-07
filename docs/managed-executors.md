@@ -114,8 +114,44 @@ Command lines and HTTP URLs support environment variable token replacement:
 - `$INTERLOCK_CWD`
 - `$INTERLOCK_CLAIM_TOKEN`
 - `$INTERLOCK_CLAIM_TICKET`
+- `$INTERLOCK_SESSION_NAME`
 
 Custom harness commands do not require absolute executable paths; binary names resolved from `PATH` and arbitrary shell commands are permitted. Configured and dynamic `cwd` values must resolve to an existing directory contained inside the declared `allowedRoots`.
+
+## Session visibility: name templates, deep links and live tail
+
+Managed execution surfaces native session identity, inspection shortcuts, and active progress tail across the UI, API, and MCP tools (`manage_executors` action `inspect`, run briefings).
+
+### Session name templates
+
+Workflows and executor profiles can provide human-readable session names passed to native harnesses (such as Pi's `--session-name` or custom launchers via `$INTERLOCK_SESSION_NAME` and `sessionName` payload fields). Session names are evaluated from run context:
+
+- `{{externalTask.id}}` - External task identifier (e.g. `243`)
+- `{{externalTask.title}}` - External task title
+- `{{node.label}}` - Current workflow node label
+- `{{node.id}}` - Current workflow node ID
+- `{{runId}}` - Current workflow run ID
+- `{{workId}}` - Current work assignment ID
+- `{{session.id}}` - Session identifier
+
+Precedence follows: **Agent node override** (`node.sessionNameTemplate`) > **Workflow default** (`workflow.sessionNameTemplate`) > **Profile default** (`profile.sessionNameTemplate`). Unresolved mustache tags gracefully fall back to blank.
+
+### Resume commands and deep links
+
+When an agent session runs, Interlock captures its native session ID and resolves copyable resume commands and clickable deep links:
+
+- **Built-in CLI harnesses**:
+  - Claude Code: `claude resume <sessionId>`
+  - Pi: `pi --session <sessionId>`
+- **Custom harnesses**: Custom profiles configure templates using `{{sessionId}}`, `{{runId}}`, `{{workId}}`, etc.:
+  - `resumeCommandTemplate`: e.g. `my-cli resume {{sessionId}}`
+  - `deepLinkTemplate`: e.g. `https://agent-cloud.internal/sessions/{{sessionId}}` or `app://sessions/{{sessionId}}`
+- **Launcher status hook**: Custom launchers returning `resumeCommand` or `deepLink` in status poll responses update inspection dynamically.
+- **Security & Sanitization**: Deep links allow only safe URI protocols (`http:`, `https:`, and custom app schemes like `vscode:`, `app:`). Dangerous schemes (such as `javascript:` or `data:`) are rejected and omitted. Claim tokens and credentials are never exposed in resume commands, deep links, or session names.
+
+### Live progress tail buffer
+
+The executor manager maintains an in-memory ring buffer of the latest 20 progress messages per session. During active execution, the Run Inspector displays this live tail to monitor agent progress in real time without persisting unbounded stdout/stderr logs.
 
 ## Replace a refused model
 

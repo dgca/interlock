@@ -386,6 +386,13 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
       .describe(
         'Managed effort override; omit to inherit, null for native default. Use levels reported for the effective model.',
       ),
+    sessionNameTemplate: z
+      .string()
+      .trim()
+      .min(1)
+      .max(1000)
+      .optional()
+      .describe('Session name template.'),
     resources: resourceBindingsSchema
       .optional()
       .describe(
@@ -566,6 +573,13 @@ export const definitionSchema = z.object({
     ),
   continueOnMissingResult: continueOnMissingResultSchema.optional(),
   transientRetry: transientRetrySchema.optional(),
+  sessionNameTemplate: z
+    .string()
+    .trim()
+    .min(1)
+    .max(1000)
+    .optional()
+    .describe('Default session name template.'),
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
   nodes: z.array(nodeSchema).min(2),
@@ -791,6 +805,10 @@ export interface WorkRequest {
   continuity?: import('./contextContinuity.js').ContextContinuity;
   distinctProviderFrom?: string[];
   candidateModels?: string[];
+  sessionNameTemplate?: string;
+  sessionName?: string;
+  resumeCommand?: string;
+  deepLink?: string;
   providerDiversityBlocked?: import('./providerDiversity.js').ProviderDiversityBlock;
   pauseBlocked?: import('./pauseHolds.js').PauseBlock;
   budgetBlocked?: import('./budgets.js').BudgetBlock;

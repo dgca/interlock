@@ -21,6 +21,7 @@ export interface HarnessRun {
   command: string;
   cwd: string;
   sessionId?: string;
+  sessionName?: string;
   work: WorkRequest;
   signal: AbortSignal;
   onSession: (id: string, model?: string) => void;
@@ -32,6 +33,8 @@ export interface HarnessResult {
   usage?: ModelUsage[];
   /** Omission means native session cumulative counters. */
   usageScope?: 'attempt';
+  resumeCommand?: string;
+  deepLink?: string;
 }
 /** Native transports remain inside adapters; neither owns Interlock claims. */
 export interface HarnessAdapter {

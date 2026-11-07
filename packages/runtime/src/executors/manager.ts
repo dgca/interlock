@@ -61,6 +61,12 @@ import {
   type HarnessResult,
 } from './contracts.js';
 import { buildTokenMap, interpolateTokens } from './custom.js';
+import {
+  evaluateSessionNameTemplate,
+  evaluateCommandOrUrlTemplate,
+  sanitizeDeepLink,
+  sanitizeMessage,
+} from './templates.js';
 
 interface LauncherSession {
   idempotencyKey: string;
@@ -69,6 +75,9 @@ interface LauncherSession {
   profile: ExecutorProfile;
   claimTicket: string;
   sessionId: string;
+  sessionName?: string;
+  resumeCommand?: string;
+  deepLink?: string;
   cwd: string;
   status: 'working' | 'idle' | 'needs_attention' | 'ended';
   launchedAt: string;
@@ -101,6 +110,9 @@ interface Session {
   command: string;
   cwd: string;
   nativeId?: string;
+  sessionName?: string;
+  resumeCommand?: string;
+  deepLink?: string;
   requestedModel?: string;
   recoveryRequestedEffort?: ExecutorProfile['effort'];
   usage?: ModelUsage[];
@@ -779,17 +791,71 @@ export class ExecutorManager {
           ...(record.error ? { reason: record.error } : {}),
           pendingRequests: record.requests.filter((q) => q.state === 'pending')
             .length,
+          sessionId: record.sessionId,
+          sessionName: record.sessionName,
+          resumeCommand: record.resumeCommand,
+          deepLink: record.deepLink,
         },
       });
     this.engine.store.touchRun(record.runId);
   }
   private log(record: ManagedExecution, message: string) {
     record.logCount++;
-    record.logs = [
-      ...record.logs,
-      { at: now(), message: message.slice(0, 1000) },
-    ].slice(-50);
+    const cleanMessage = sanitizeMessage(message).slice(0, 1000);
+    record.logs = [...record.logs, { at: now(), message: cleanMessage }].slice(
+      -20,
+    );
     this.write(record);
+  }
+  private resolveSessionName(
+    work: WorkRequest,
+    profile: ExecutorProfile,
+  ): string {
+    const run = this.engine.store.get<Run>('runs', work.runId);
+    let definition: WorkflowDefinition | undefined;
+    if (run) {
+      if (typeof (this.engine.store as any).getVersion === 'function') {
+        const versionRecord = (this.engine.store as any).getVersion(
+          run.workflowId,
+          run.version,
+        );
+        definition = versionRecord?.definition;
+      }
+      if (!definition) {
+        const wf = this.engine.store.get<{ draft?: WorkflowDefinition }>(
+          'workflows',
+          run.workflowId,
+        );
+        definition = wf?.draft;
+      }
+    }
+    const node = definition?.nodes?.find((n: any) => n.id === work.nodeId);
+    const template =
+      (node as any)?.sessionNameTemplate ||
+      definition?.sessionNameTemplate ||
+      profile.sessionNameTemplate;
+    if (template) {
+      const evaluated = evaluateSessionNameTemplate(template, {
+        externalTask: run?.externalTask,
+        node: node
+          ? { id: node.id, label: node.label, kind: node.kind }
+          : { id: work.nodeId, label: work.label },
+        run: run
+          ? { id: run.id, status: run.status, workflowId: run.workflowId }
+          : { id: work.runId },
+        work: {
+          id: work.id,
+          attempt: work.attempt,
+          nodeId: work.nodeId,
+          label: work.label,
+        },
+        runId: work.runId,
+        workId: work.id,
+        nodeId: work.nodeId,
+      });
+      if (evaluated) return evaluated;
+    }
+    return `interlock-${work.runId}-${work.id}`;
   }
   inspect(workId: string) {
     if (!this.engine.store.get<WorkRequest>('work', workId))
@@ -823,6 +889,10 @@ export class ExecutorManager {
         startedAt: r.startedAt,
         endedAt: r.endedAt,
         error: r.error,
+        sessionId: r.sessionId,
+        sessionName: r.sessionName,
+        resumeCommand: r.resumeCommand,
+        deepLink: r.deepLink,
         recoveryEvents: r.recoveryEvents,
       })),
     };
@@ -1075,6 +1145,31 @@ export class ExecutorManager {
           cwd,
         };
         this.engine.store.put(sessionsCollection, session);
+        const sessionName = this.resolveSessionName(work, profile);
+        const templateVars = {
+          sessionId: session.nativeId ?? '',
+          workId: work.id,
+          runId: work.runId,
+          cwd,
+          sessionName,
+        };
+        const resumeCommand =
+          session.resumeCommand ||
+          (profile.resumeCommandTemplate && session.nativeId
+            ? evaluateCommandOrUrlTemplate(
+                profile.resumeCommandTemplate,
+                templateVars,
+              )
+            : undefined);
+        const deepLink = sanitizeDeepLink(
+          session.deepLink ||
+            (profile.deepLinkTemplate && session.nativeId
+              ? evaluateCommandOrUrlTemplate(
+                  profile.deepLinkTemplate,
+                  templateVars,
+                )
+              : undefined),
+        );
         const record: ManagedExecution = {
           id: `${work.id}:${work.attempt}`,
           workId: work.id,
@@ -1088,6 +1183,9 @@ export class ExecutorManager {
           command: session.command,
           cwd,
           sessionId: session.nativeId,
+          sessionName,
+          resumeCommand,
+          deepLink,
           startedAt: now(),
           requests: [],
           logs: [],
@@ -1176,10 +1274,13 @@ export class ExecutorManager {
       return existing;
     }
 
+    const sessionName = this.resolveSessionName(work, profile);
     const claimTicket = randomUUID();
     const tokenMap = buildTokenMap(work, cwd, {
       claimTicket,
       sessionId: logicalSession,
+      sessionName,
+      INTERLOCK_SESSION_NAME: sessionName,
     });
 
     const launchPayload = {
@@ -1195,11 +1296,13 @@ export class ExecutorManager {
       model: profile.model,
       effort: profile.effort,
       permissions: profile.permissions,
-      sessionName: `interlock-${work.runId}-${work.id}`,
+      sessionName,
       sessionId: logicalSession,
     };
 
     let remoteSessionId: string | undefined;
+    let remoteResumeCommand: string | undefined;
+    let remoteDeepLink: string | undefined;
 
     if (profile.transport === 'http') {
       if (!profile.launchUrl) {
@@ -1230,6 +1333,8 @@ export class ExecutorManager {
       }
       const data = await res.json().catch(() => ({}));
       remoteSessionId = (data as any)?.sessionId;
+      remoteResumeCommand = (data as any)?.resumeCommand;
+      remoteDeepLink = (data as any)?.deepLink;
     } else {
       const cmd = profile.launchCommand || profile.command;
       if (!cmd) {
@@ -1244,6 +1349,7 @@ export class ExecutorManager {
           resolvedEnv[k] = interpolateTokens(v, tokenMap);
         }
       }
+      resolvedEnv.INTERLOCK_SESSION_NAME = sessionName;
       await new Promise<void>((resolve, reject) => {
         const child = spawn(interpolatedCmd, {
           cwd,
@@ -1271,6 +1377,8 @@ export class ExecutorManager {
             try {
               const parsed = JSON.parse(stdoutData.trim());
               remoteSessionId = parsed.sessionId;
+              remoteResumeCommand = parsed.resumeCommand;
+              remoteDeepLink = parsed.deepLink;
             } catch {}
             resolve();
           }
@@ -1280,13 +1388,39 @@ export class ExecutorManager {
       });
     }
 
+    const effectiveSessionId = remoteSessionId || logicalSession;
+    const templateVars: Record<string, string> = {
+      sessionId: effectiveSessionId,
+      workId: work.id,
+      runId: work.runId,
+      cwd,
+      sessionName,
+    };
+    const resumeCommand =
+      remoteResumeCommand ||
+      (profile.resumeCommandTemplate
+        ? evaluateCommandOrUrlTemplate(
+            profile.resumeCommandTemplate,
+            templateVars,
+          )
+        : undefined);
+    const deepLink = sanitizeDeepLink(
+      remoteDeepLink ||
+        (profile.deepLinkTemplate
+          ? evaluateCommandOrUrlTemplate(profile.deepLinkTemplate, templateVars)
+          : undefined),
+    );
+
     const sessionRecord: LauncherSession = {
       idempotencyKey,
       workId: work.id,
       runId: work.runId,
       profile,
       claimTicket,
-      sessionId: remoteSessionId || logicalSession,
+      sessionId: effectiveSessionId,
+      sessionName,
+      resumeCommand,
+      deepLink,
       cwd,
       status: 'working',
       launchedAt: now(),
@@ -1304,7 +1438,10 @@ export class ExecutorManager {
       permissionSource: 'harness',
       command: profile.launchCommand || profile.command || 'launch',
       cwd,
-      sessionId: remoteSessionId || logicalSession,
+      sessionId: effectiveSessionId,
+      sessionName,
+      resumeCommand,
+      deepLink,
       startedAt: now(),
       requests: [],
       logs: [
@@ -1339,8 +1476,10 @@ export class ExecutorManager {
       INTERLOCK_CLAIM_TOKEN: session.claimTicket,
       INTERLOCK_CLAIM_TICKET: session.claimTicket,
       INTERLOCK_SESSION_ID: session.sessionId,
+      INTERLOCK_SESSION_NAME: session.sessionName ?? '',
     };
     let newStatus: string | undefined;
+    let parsedStatusData: any;
 
     if (session.profile.statusUrl) {
       const url = interpolateTokens(session.profile.statusUrl, tokenMap);
@@ -1354,6 +1493,7 @@ export class ExecutorManager {
         const res = await fetch(url, { method: 'GET', headers });
         if (res.ok) {
           const data = await res.json().catch(() => ({}));
+          parsedStatusData = data;
           newStatus =
             (data as any)?.status ??
             (typeof data === 'string' ? data : undefined);
@@ -1367,6 +1507,7 @@ export class ExecutorManager {
           resolvedEnv[k] = interpolateTokens(v, tokenMap);
         }
       }
+      resolvedEnv.INTERLOCK_SESSION_NAME = session.sessionName ?? '';
       try {
         const output = await new Promise<string>((resolve, reject) => {
           const child = spawn(cmd, {
@@ -1387,6 +1528,7 @@ export class ExecutorManager {
         });
         try {
           const parsed = JSON.parse(output);
+          parsedStatusData = parsed;
           newStatus = parsed.status ?? parsed;
         } catch {
           newStatus = output;
@@ -1396,6 +1538,24 @@ export class ExecutorManager {
 
     if (this.stopped || this.launchedWork.get(session.workId) !== session)
       return;
+
+    const record = this.latest(session.workId);
+    if (record && parsedStatusData && typeof parsedStatusData === 'object') {
+      if (parsedStatusData.resumeCommand) {
+        session.resumeCommand = parsedStatusData.resumeCommand;
+        record.resumeCommand = parsedStatusData.resumeCommand;
+      }
+      if (parsedStatusData.deepLink) {
+        const clean = sanitizeDeepLink(parsedStatusData.deepLink);
+        if (clean) {
+          session.deepLink = clean;
+          record.deepLink = clean;
+        }
+      }
+      if (parsedStatusData.progress || parsedStatusData.message) {
+        this.log(record, parsedStatusData.progress ?? parsedStatusData.message);
+      }
+    }
     if (
       newStatus &&
       ['working', 'idle', 'needs_attention', 'ended'].includes(newStatus)
@@ -1935,20 +2095,63 @@ export class ExecutorManager {
             try {
               r.state = 'running';
               this.write(r);
+              const sessionName = this.resolveSessionName(
+                currentWork,
+                r.profile,
+              );
               turnResult = await adapter.run({
                 profile: r.profile,
                 command: r.command,
                 cwd: r.cwd,
                 sessionId: session.nativeId,
+                sessionName,
                 work: currentWork,
                 signal: job.abort.signal,
                 onSession: (id, model) => {
                   if (job.abort.signal.aborted || this.stopped) return;
                   session.nativeId = id;
+                  session.sessionName = sessionName;
                   r.sessionId = id;
+                  r.sessionName = sessionName;
                   if (model) {
                     session.profile = { ...session.profile, model };
                     r.profile = session.profile;
+                  }
+                  const templateVars = {
+                    sessionId: id,
+                    workId: job.work.id,
+                    runId: job.work.runId,
+                    cwd: r.cwd,
+                    sessionName,
+                  };
+                  const defaultResume =
+                    r.profile.harness === 'pi'
+                      ? `pi --session ${id}`
+                      : r.profile.harness === 'claude-code'
+                        ? `claude resume ${id}`
+                        : undefined;
+                  const resumeCommand =
+                    (r.profile.resumeCommandTemplate
+                      ? evaluateCommandOrUrlTemplate(
+                          r.profile.resumeCommandTemplate,
+                          templateVars,
+                        )
+                      : undefined) || defaultResume;
+                  const deepLink = sanitizeDeepLink(
+                    r.profile.deepLinkTemplate
+                      ? evaluateCommandOrUrlTemplate(
+                          r.profile.deepLinkTemplate,
+                          templateVars,
+                        )
+                      : undefined,
+                  );
+                  if (resumeCommand) {
+                    session.resumeCommand = resumeCommand;
+                    r.resumeCommand = resumeCommand;
+                  }
+                  if (deepLink) {
+                    session.deepLink = deepLink;
+                    r.deepLink = deepLink;
                   }
                   this.engine.store.put(sessionsCollection, session);
                   this.write(r);
@@ -1965,6 +2168,17 @@ export class ExecutorManager {
                 },
                 request: (request) => this.request(job, request),
               });
+              if (turnResult?.resumeCommand) {
+                session.resumeCommand = turnResult.resumeCommand;
+                r.resumeCommand = turnResult.resumeCommand;
+              }
+              if (turnResult?.deepLink) {
+                const clean = sanitizeDeepLink(turnResult.deepLink);
+                if (clean) {
+                  session.deepLink = clean;
+                  r.deepLink = clean;
+                }
+              }
               turnSuccess = true;
               receivedResult = true;
               break;
