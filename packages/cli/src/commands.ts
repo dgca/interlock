@@ -541,6 +541,42 @@ export async function runCommand(argv: string[]) {
         workId: args[0],
         token: args[1],
       });
+    case 'cancel-tree': {
+      const { values, positionals } = parseArgs({
+        args,
+        allowPositionals: true,
+        options: {
+          'include-detached': { type: 'boolean' },
+          preview: { type: 'boolean' },
+          reason: { type: 'string' },
+          limit: { type: 'string' },
+          offset: { type: 'string' },
+        },
+      });
+      if (
+        positionals.length !== 1 ||
+        (!values.preview && (!values.reason || values.offset !== undefined))
+      )
+        throw new Error(
+          'Usage: cancel-tree <run-id> [--include-detached] [--preview [--offset N] | --reason TEXT] [--limit N]',
+        );
+      const selection = {
+        id: positionals[0],
+        includeDetached: values['include-detached'] ?? false,
+        ...(values.limit !== undefined ? { limit: Number(values.limit) } : {}),
+      };
+      return values.preview
+        ? client.runs.previewCancellation.query({
+            ...selection,
+            ...(values.offset !== undefined
+              ? { offset: Number(values.offset) }
+              : {}),
+          })
+        : client.runs.cancelTree.mutate({
+            ...selection,
+            reason: values.reason!,
+          });
+    }
     case 'cancel': {
       if (
         args.length < 1 ||
@@ -633,6 +669,7 @@ export async function runCommand(argv: string[]) {
           'fail <work-id> <token> <error>',
           'renew <work-id> <token> [options-json: {"leaseSeconds":3600}]',
           'script <json|@file> (action: inspect/stop/reconcile; exact runId and executionId; reconciliation requires stopped:true and reason)',
+          'cancel-tree <run-id> [--include-detached] [--preview [--offset N] | --reason TEXT] [--limit N] (preview or atomically cancel descendant tree)',
           'cancel <run-id> [--chain] (stop the latest successor from any chain member; detached descendants remain independent)',
           'retry <run-id>',
         ],

@@ -32,6 +32,7 @@ import styles from './RunInspector.module.css';
 import { ComparisonContext } from './ComparisonContext';
 import { RunUsage } from './RunUsage';
 import { RunVersionDialog } from './RunVersionDialog';
+import { RunCancellationDialog } from './RunCancellationDialog';
 import { runProjectionText } from './runProjectionText';
 import { RunTags } from './RunTags';
 const stallLabels = {
@@ -76,6 +77,7 @@ export function RunInspector({
   const [retryRequested, setRetryRequested] = useState(false);
   const [retryError, setRetryError] = useState('');
   const [versionDialog, setVersionDialog] = useState(false);
+  const [cancellationDialog, setCancellationDialog] = useState(false);
   const [returnMenuFocus, setReturnMenuFocus] = useState(true);
   const [data, setData] = useState<Detail>(),
     [error, setError] = useState(''),
@@ -365,6 +367,18 @@ export function RunInspector({
               Cancel run
             </Button>
           )}
+          {(['queued', 'running', 'waiting'].includes(run.status) ||
+            descendants.some((child) =>
+              ['queued', 'running', 'waiting'].includes(child.status),
+            ) ||
+            (data.chain &&
+              ['queued', 'running', 'waiting'].includes(
+                data.chain.latestStatus,
+              ))) && (
+            <Button onClick={() => setCancellationDialog(true)}>
+              Cancel run tree
+            </Button>
+          )}
           <Button onClick={() => download(`run-${id}.json`, data)}>
             <Download />
             Export run
@@ -387,6 +401,15 @@ export function RunInspector({
           onChanged={refresh}
         />
       )}
+      {cancellationDialog && (
+        <RunCancellationDialog
+          key={id}
+          runId={id}
+          onClose={() => setCancellationDialog(false)}
+          onCancelled={refresh}
+          onOpen={onOpen}
+        />
+      )}
       <PauseBanner workflowId={run.workflowId} run />
       <div className={styles.liveSummary} role="status" aria-live="polite">
         <strong>
@@ -405,6 +428,11 @@ export function RunInspector({
           <span>Failure handled by parent recovery.</span>
         )}
         <span>{runProjectionText(run)}</span>
+        {run.cancellationReason && (
+          <span className={styles.cancellationReason}>
+            Cancellation reason: {run.cancellationReason}
+          </span>
+        )}
         {progress.detail && <span>{progress.detail}</span>}
         {retryRequested && <span>Retry requested.</span>}
         {attention.length > 0 && (

@@ -7,6 +7,8 @@ export type HistoryRun = Pick<
   'id' | 'workflowId' | 'workflowName' | 'status' | 'createdAt' | 'updatedAt'
 > & {
   parentRunId: string | null;
+  parentMode: string | null;
+  chainNextRunId: string | null;
   chainRootRunId: string | null;
   comparisonId: string | null;
 };
@@ -21,6 +23,8 @@ export function historyRuns(db: DatabaseSync): HistoryRun[] {
     json_extract(value, '$.createdAt') AS createdAt,
     json_extract(value, '$.updatedAt') AS updatedAt,
     json_extract(value, '$.parentRunId') AS parentRunId,
+    json_extract(value, '$.parentMode') AS parentMode,
+    json_extract(value, '$.chain.nextRunId') AS chainNextRunId,
     json_extract(value, '$.chain.rootRunId') AS chainRootRunId,
     json_extract(value, '$.comparison.comparisonId') AS comparisonId
     FROM documents WHERE collection = 'runs' ORDER BY rowid`,

@@ -52,6 +52,8 @@ import {
   runVersionPreviewSchema,
   runVersionApplySchema,
   cancelRunSchema,
+  previewRunCancellationSchema,
+  cancelRunTreeSchema,
   ExternalInputConflict,
   InterlockError,
   ResultRejection,
@@ -747,6 +749,12 @@ export const appRouter = t.router({
         },
       ),
     ),
+    previewCancellation: p
+      .input(previewRunCancellationSchema)
+      .query(({ ctx, input }) => ctx.engine.previewRunCancellation(input)),
+    cancelTree: p
+      .input(cancelRunTreeSchema)
+      .mutation(({ ctx, input }) => ctx.engine.cancelRunTree(input)),
     cancel: p
       .input(cancelRunSchema)
       .mutation(({ ctx, input }) => ctx.engine.cancel(input.id, input.scope)),

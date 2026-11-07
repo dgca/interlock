@@ -1,3 +1,4 @@
+export * from './runCancellation.js';
 export * from './stalls.js';
 import {
   stallFields,
@@ -710,6 +711,7 @@ export interface PollCheckResult {
   error?: string;
 }
 export interface Run {
+  cancellationReason?: string;
   versionPolicy?: import('./runVersions.js').RunVersionPolicy;
   versionRevision?: number;
   versionBlocker?: import('./runVersions.js').RunVersionBlocker;

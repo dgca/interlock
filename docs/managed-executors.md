@@ -165,7 +165,9 @@ Use `manage_executors` action `retry_model` with the exact `executionId` and hum
 
 ## Stop and recover
 
-**Stop agent** beside the selected assignment asks the native process to stop. Cancellation, a disabled profile, claim loss, server shutdown or restart can leave external effects uncertain. The assignment is held where possible, and another claim is blocked. Pending questions become cancelled.
+**Stop agent** beside the selected assignment asks the native process to stop. [Tree cancellation](workflow-execution.md#cancel-a-run-tree) applies the same stop and recovery boundary to all selected managed assignments, including detached descendants only when explicitly included. Cancellation, a disabled profile, claim loss, server shutdown or restart can leave external effects uncertain. The assignment is held where possible, and another claim is blocked. Pending questions become cancelled.
+
+Delegated launches persist a `starting` execution before dispatch. Cancellation during the launch keeps that execution as a quiescence blocker. A late launch response does not grant a usable claim ticket and requests the configured stop operation. Cancellation also stops already launched sessions before archiving them. The stop request or response does not release uncertain ownership. After the launch and stop operations settle, verify the exact remote session and subprocesses stopped, then reconcile its `executionId`. A launch cancelled before its first claim has no resource reservation to release, but still requires that stop confirmation.
 
 ### Recovery policies
 

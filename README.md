@@ -23,6 +23,8 @@ Workflow editors and run inspectors have bookmarkable URLs. Reloading restores t
 
 Keep the terminal running while you use Interlock. Closing the browser does not stop the engine. Press Ctrl+C in the terminal to stop it.
 
+To stop a runaway tree, use **Cancel run tree** in its inspector and explicitly include detached descendants when needed. CLI and MCP provide the same bounded preview and atomic cancellation state. External work can still require stop reconciliation. See [cancel a run tree](docs/workflow-execution.md#cancel-a-run-tree).
+
 ## Run your first workflow
 
 New libraries start empty. Open **Workflows → Import → Starters**, select **SDLC workflow**, and choose **Add to library** for a published procedure that plans, implements, and reviews a software change. It creates a task branch, saves planning artifacts, and commits the completed change. It finishes locally by default. Existing libraries keep their workflows when you upgrade. Nothing is added or run automatically.
@@ -75,7 +77,7 @@ Interlock launches ready assignments inside its existing server, including indep
 
 Select **New workflow** to create a draft. Use **Add node** to choose each step's type, then connect the nodes in execution order. Agent is selected initially; choose another type when needed.
 
-Available nodes include entry and exit, Agent, Script, Fetch, Wait, External input, Branch, Workflow, and Batch. Branch unifies Condition and Switch authoring while retaining existing definitions. A Workflow node invokes a pinned published workflow once. It defaults to **Wait for result**. Choose **Start and continue** to return a run reference immediately while the invoked workflow runs independently, even after parent cancellation. See [Workflow execution](docs/workflow-execution.md). A Batch repeats a visible path for each item and collects the results in input order.
+Available nodes include entry and exit, Agent, Script, Fetch, Wait, External input, Branch, Workflow, and Batch. Branch unifies Condition and Switch authoring while retaining existing definitions. A Workflow node invokes a pinned published workflow once. It defaults to **Wait for result**. Choose **Start and continue** to return a run reference immediately while the invoked workflow runs independently, even after ordinary parent cancellation. See [Workflow execution](docs/workflow-execution.md). A Batch repeats a visible path for each item and collects the results in input order.
 
 Node settings group the work, input, result and execution controls. Agent, Script, Fetch and waited Workflow steps can branch on an accepted result and construct forwarded fields using fixed values, missing-field defaults and nested objects. The engine validates and routes the raw result before shaping the output. See [Step data and result branches](docs/node-data.md).
 

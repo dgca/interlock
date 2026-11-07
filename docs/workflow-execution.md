@@ -103,7 +103,7 @@ Input bindings, the launching node's input contract, the target workflow's input
 
 ## Independent lifecycle
 
-A detached run retains its parent link for inspection but continues after the parent completes, fails, or is cancelled. Its own failure or cancellation does not change the parent. Cancel the detached run directly to stop it. Cancellation includes ordinary descendants and stops at each detached relationship.
+A detached run retains its parent link for inspection but continues after the parent completes, fails, or is cancelled. Its own failure or cancellation does not change the parent. Cancel the detached run directly to stop it, or explicitly include it in [tree cancellation](#cancel-a-run-tree). Ordinary `cancel_run` includes active ordinary descendants and stops at each detached relationship.
 
 A failed detached run can be retried directly, even after its parent ends. Completed and cancelled runs cannot be retried. Retrying a later parent step does not recreate or retry earlier detached work.
 
@@ -113,7 +113,7 @@ Child creation, the execution link, and dispatch completion commit atomically. A
 
 Global **Runs** includes detached runs under **Active** or **History**, marked **Started independently** with their origin. They remain visible after their parent finishes. The launching execution shows a **Started run** link and its live status. The child's **Started by** button opens the launching execution.
 
-Parent inspection includes detached descendants, but their progress does not make a completed parent appear unfinished. While detached descendants are active, the parent inspector links to them and explains that cancelling the parent leaves them running.
+Parent inspection includes detached descendants, but their progress does not make a completed parent appear unfinished. While detached descendants are active, the parent inspector links to them and explains that ordinary cancellation leaves them running. **Cancel run tree** can explicitly include them.
 
 Use existing CLI commands with the returned `runId`:
 
@@ -138,6 +138,52 @@ A detached workflow creates a new `runInput` scope. Its `rootInput` remains the 
 
 Deleting a workflow remains blocked if its deletion set includes active detached descendants. Archive it to preserve ongoing work and history.
 
-There is no join node, completion callback, automatic parent notification, cancel-all-descendants action, or global detached-work concurrency limit. Inspect the returned run ID for status and results.
+There is no join node, completion callback, automatic parent notification, or global detached-work concurrency limit. Inspect the returned run ID for status and results.
 
 Waited nodes may [route and map their accepted result](node-data.md). Start and continue returns the intrinsic run reference and cannot configure result routing or output mappings. The editor restores pending waited-result settings if you switch back before applying.
+
+## Cancel a run tree
+
+Use **Cancel run tree** in the run inspector to preview active runs before cancellation. The action remains available on a terminal parent with active descendants. Enable **Include detached descendants** to include independent work, enter a cancellation reason, and confirm. The ordinary **Cancel run** action keeps its existing detached boundaries.
+
+CLI supports the same preview and cancellation:
+
+```sh
+interlock cancel-tree RUN_ID --include-detached --preview
+interlock cancel-tree RUN_ID --include-detached --reason 'Stop runaway batch'
+```
+
+MCP separates the read-only preview from the mutation:
+
+```json
+{
+  "name": "preview_run_cancellation",
+  "arguments": {
+    "id": "RUN_ID",
+    "includeDetached": true,
+    "limit": 20,
+    "offset": 0
+  }
+}
+```
+
+```json
+{
+  "name": "cancel_run_tree",
+  "arguments": {
+    "id": "RUN_ID",
+    "includeDetached": true,
+    "reason": "Stop runaway batch"
+  }
+}
+```
+
+The shared API exposes `runs.previewCancellation` as a query and `runs.cancelTree` as a mutation with those arguments. `includeDetached` defaults to `false`. The reason is required for cancellation and accepts 1 through 1,000 characters after trimming. Preview accepts `limit` from 1 through 100, default 20, and a nonnegative `offset`. CLI uses `--limit` and preview-only `--offset`.
+
+Preview returns compact run references in `items`, exact `total`, `offset`, `nextOffset`, and `truncated`. It excludes inputs, prompts, outputs, and claim tokens. No work is advanced, claimed, or stopped. Cancellation recomputes the live selection, so a preview is advisory. Its bounded `cancelled.items` list and exact `cancelled.total` describe the runs changed by that action. Mutation `limit` bounds returned references, not cancellation scope.
+
+Discovery follows the selected run's descendants and forward continue-as-new links, including active work below completed or failed intermediate parents. Selecting a child does not select its parent or siblings. Without `includeDetached: true`, traversal stops at every detached edge. Terminal run outcomes remain unchanged. Selected chains are stopped to prevent continuation or retry.
+
+Cancellation state, claim invalidation, hold closure, usage endings, reasons, and lifecycle events commit in one transaction. A failed write rolls back the whole action. After commit, Interlock requests native process stops and aborts local operations through their existing execution paths. Cancelled timers and Batch parents create no later work. Lifecycle handlers retain their own normal trigger behavior.
+
+A successful cancellation response confirms logical cancellation, not external quiescence. Revoked claims and operations that may still be active retain uncertain ownership. Confirmed completion or exact-attempt stopped reconciliation releases that ownership. Inspect background Scripts with `manage_script`, managed sessions with `manage_executors`, and uncertain owners with `manage_work_resources` before releasing them. See [resource recovery](work-resources.md#reconcile-an-uncertain-stop) and [quiescent teardown](events.md#quiescent-teardown).

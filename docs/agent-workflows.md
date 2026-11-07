@@ -494,7 +494,7 @@ Reference errors identify every blocking workflow by name and ID, list the refer
 
 Set a Workflow node to `mode: "detached"` to start its pinned workflow and continue with `{runId, workflowId, version}`. Omit mode or use `wait` to await its result. Input validation precedes dispatch; later child failure does not change the launching step. See [Workflow execution](workflow-execution.md) for the fixed output contract and lifecycle.
 
-`list_work` includes detached descendants, even when their parent is terminal. Root IDs describe ancestry. To operate independent work, use its own run ID. `list_runs` with `rootOnly: true` excludes detached runs, so omit that filter when finding active independent work. Cancellation stops at detached relationships. Retry failed detached runs directly; retrying a later parent step does not duplicate dispatches.
+`list_work` includes detached descendants, even when their parent is terminal. Root IDs describe ancestry. To operate independent work, use its own run ID. `list_runs` with `rootOnly: true` excludes detached runs, so omit that filter when finding active independent work. Ordinary `cancel_run` stops at detached relationships. Use the read-only `preview_run_cancellation` and then `cancel_run_tree` with `includeDetached: true` and a reason to cancel the selected tree, including independent descendants. See [tree cancellation and stop reconciliation](workflow-execution.md#cancel-a-run-tree). Retry failed detached runs directly; retrying a later parent step does not duplicate dispatches.
 
 ## Context continuity
 
@@ -520,7 +520,7 @@ A standalone workflow can opt into [continue as new](continue-as-new.md) on Exit
 
 Briefings and compact mutations include chain links. On `next:continue_as_new`, follow `nextCall` to `chain.nextRunId` instead of treating the completed predecessor as a final result. Its Exit execution stores the checkpoint; final run output is available only from a normal Exit. Existing briefings and finite waits remain scoped to one run and its children.
 
-Use `list_runs` with `chainRootRunId` for bounded discovery, `get_run` for latest chain state, `get_run_usage` with `includeChain:true` for chain usage, and `cancel_run` with `scope:"chain"` to stop it from any member. Default cancellation remains per run. Detached descendants keep running independently. No new MCP tool is required.
+Use `list_runs` with `chainRootRunId` for bounded discovery, `get_run` for latest chain state, `get_run_usage` with `includeChain:true` for chain usage, and `cancel_run` with `scope:"chain"` to stop it from any member. Default `cancel_run` cancellation remains per run. Detached descendants keep running independently. For explicit whole-tree cancellation, `preview_run_cancellation` and `cancel_run_tree` follow forward chain links and can include detached descendants.
 
 ## Manage local executors
 
