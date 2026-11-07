@@ -1,0 +1,67 @@
+
+ RUN  v3.2.7 /Users/dan/dev/interlock-worktrees/issue-230
+
+ ❯ tests/customExecutor.test.ts (8 tests | 2 failed | 6 skipped) 175ms
+   ↓ saves and lists custom harness profiles with direct and launcher modes
+   ↓ executes direct turn mode via subprocess CLI and submits result envelope
+   ↓ executes direct turn mode via HTTP POST and handles result envelope
+   ↓ dispatches delegated launcher mode, enforces claim ticket, supports idempotency and archives on completion
+   ↓ blocks dynamic cwd binding if resolving outside profile allowedRoots
+   ↓ preserves delegated launch and one-time ticket rules across independent pause holds
+   × rechecks library pauses between awaited custom launcher dispatches 99ms
+     → expected [ …(3) ] to deeply equal [ Array(1) ]
+   × rechecks workflow pauses between awaited custom launcher dispatches 75ms
+     → expected [ …(3) ] to deeply equal [ …(2) ]
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/customExecutor.test.ts > rechecks library pauses between awaited custom launcher dispatches
+AssertionError: expected [ …(3) ] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+  [
+    "ecb1e28a-1ebe-4ec3-80ef-a60293c9d80f",
++   "8d0b0cc0-78f9-4ec5-b97e-f6a77e1b4b22",
++   "50bbe2da-39b8-452c-a45a-f52d8ffdef75",
+  ]
+
+ ❯ tests/customExecutor.test.ts:489:44
+    487|       finishFirst();
+    488|       await scans.mock.results[0].value;
+    489|       expect(requests.map((r) => r.runId)).toEqual(
+       |                                            ^
+    490|         scope === 'library' ? [first.id] : [first.id, other.id],
+    491|       );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/customExecutor.test.ts > rechecks workflow pauses between awaited custom launcher dispatches
+AssertionError: expected [ …(3) ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+  [
+    "a2fc5664-06ba-4b4d-bed8-f0408eb1ce0e",
++   "b0ba984e-3479-4d57-b810-203e478e2892",
+    "211f5137-5278-410e-9ab6-a024e3292658",
+  ]
+
+ ❯ tests/customExecutor.test.ts:489:44
+    487|       finishFirst();
+    488|       await scans.mock.results[0].value;
+    489|       expect(requests.map((r) => r.runId)).toEqual(
+       |                                            ^
+    490|         scope === 'library' ? [first.id] : [first.id, other.id],
+    491|       );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 6 skipped (8)
+   Start at  02:11:32
+   Duration  761ms (transform 254ms, setup 0ms, collect 423ms, tests 175ms, environment 0ms, prepare 29ms)
+

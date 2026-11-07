@@ -1,0 +1,40 @@
+
+ RUN  v3.2.7 /Users/dan/dev/interlock-worktrees/issue-230
+
+ ✓ tests/pauseTransport.test.ts (2 tests) 414ms
+ ✓ tests/customExecutor.test.ts (8 tests) 579ms
+stderr | tests/transport.test.ts > completes a workflow through MCP stdio and the shared HTTP and SQLite interfaces
+unknown format "date-time" ignored in schema at path "#/properties/bundle/properties/workflows/items/properties/deletedVersions/items/properties/deletedAt"
+unknown format "date-time" ignored in schema at path "#/properties/bundle/properties/workflows/items/properties/deletedVersions/items/properties/deletedAt"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "date-time" ignored in schema at path "#/properties/request/anyOf/0/properties/before"
+unknown format "date-time" ignored in schema at path "#/properties/request/anyOf/0/properties/before"
+
+stdout | tests/transport.test.ts > completes a workflow through MCP stdio and the shared HTTP and SQLite interfaces
+stdio: 57 MCP tools, 259953 B definitions
+
+ ✓ tests/pauseHolds.test.ts (21 tests) 2478ms
+   ✓ holds polling checks at the next check boundary and keeps cancellation available  1160ms
+stderr | tests/transport.test.ts > completes a workflow through MCP http and the shared HTTP and SQLite interfaces
+unknown format "date-time" ignored in schema at path "#/properties/bundle/properties/workflows/items/properties/deletedVersions/items/properties/deletedAt"
+unknown format "date-time" ignored in schema at path "#/properties/bundle/properties/workflows/items/properties/deletedVersions/items/properties/deletedAt"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "uri" ignored in schema at path "#/properties/externalTask/properties/url"
+unknown format "date-time" ignored in schema at path "#/properties/request/anyOf/0/properties/before"
+unknown format "date-time" ignored in schema at path "#/properties/request/anyOf/0/properties/before"
+
+stdout | tests/transport.test.ts > completes a workflow through MCP http and the shared HTTP and SQLite interfaces
+http: 57 MCP tools, 259953 B definitions
+
+ ✓ tests/transport.test.ts (3 tests) 4100ms
+   ✓ completes a workflow through MCP stdio and the shared HTTP and SQLite interfaces  2400ms
+   ✓ completes a workflow through MCP http and the shared HTTP and SQLite interfaces  1666ms
+ ✓ tests/managedExecutors.test.ts (66 tests) 5165ms
+   ✓ keeps the event loop responsive while an ordinary script runs beside managed dispatch  339ms
+
+ Test Files  5 passed (5)
+      Tests  100 passed (100)
+   Start at  02:12:38
+   Duration  5.72s (transform 432ms, setup 0ms, collect 2.17s, tests 12.74s, environment 0ms, prepare 145ms)
+

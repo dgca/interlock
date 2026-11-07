@@ -426,3 +426,97 @@ it('preserves delegated launch and one-time ticket rules across independent paus
     await closed;
   }
 });
+
+it.each(['library', 'workflow'] as const)(
+  'rechecks %s pauses between awaited custom launcher dispatches',
+  async (scope) => {
+    const requests: { workId: string; runId: string }[] = [];
+    let finishFirst!: () => void;
+    const firstResponse = new Promise<void>((resolve) => {
+      finishFirst = resolve;
+    });
+    const server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', async () => {
+        requests.push(JSON.parse(body));
+        if (requests.length === 1) await firstResponse;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ sessionId: `session-${requests.length}` }));
+      });
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+    const address = server.address();
+    if (!address || typeof address === 'string')
+      throw new Error('No server port');
+    const e = create();
+    // Observe the real scan promise only to await its boundary deterministically.
+    // All admission, transport and launch behavior runs without substitution.
+    const scans = vi.spyOn(e.executors as any, 'scan');
+    try {
+      e.executors.saveProfile({
+        id: 'pause-scan-launcher',
+        harness: 'custom',
+        name: 'Pause scan launcher',
+        enabled: true,
+        expectedRevision: 0,
+        mode: 'launcher',
+        transport: 'http',
+        launchUrl: `http://127.0.0.1:${address.port}/launch`,
+      });
+      const firstWorkflow = workflow(e, 'pause-scan-launcher');
+      const pausedWorkflow = workflow(e, 'pause-scan-launcher');
+      const otherWorkflow = workflow(e, 'pause-scan-launcher');
+      e.executors.start(nativeAdapters);
+      const first = e.start(firstWorkflow.id, null).run;
+      const paused = e.start(pausedWorkflow.id, null).run;
+      const other = e.start(otherWorkflow.id, null).run;
+      await vi.waitFor(() => expect(requests).toHaveLength(1));
+      expect(requests[0].runId).toBe(first.id);
+      const hold = e.pauses.create({
+        target:
+          scope === 'library'
+            ? { scope }
+            : { scope, workflowId: pausedWorkflow.id },
+        actor: 'incident',
+        reason: 'Pause while the preceding launch response is pending',
+      });
+      expect(e.available(paused.id)).toEqual([]);
+      finishFirst();
+      await scans.mock.results[0].value;
+      expect(requests.map((r) => r.runId)).toEqual(
+        scope === 'library' ? [first.id] : [first.id, other.id],
+      );
+      expect(e.inspect(first.id).work[0].managedExecution?.state).toBe(
+        'running',
+      );
+      const pending = e.inspect(paused.id).work[0];
+      expect(pending.status).toBe('available');
+      expect(pending.attempt).toBe(0);
+      expect(pending.managedExecution?.state).toBe('queued');
+      expect(e.executors.inspect(pending.id).items).toEqual([]);
+      e.pauses.resume(hold.id);
+      e.pump();
+      await vi.waitFor(() => {
+        expect(e.inspect(paused.id).work[0].managedExecution?.state).toBe(
+          'running',
+        );
+        expect(e.inspect(other.id).work[0].managedExecution?.state).toBe(
+          'running',
+        );
+      });
+      expect(requests).toHaveLength(3);
+      expect(new Set(requests.map((r) => r.workId)).size).toBe(3);
+    } finally {
+      finishFirst();
+      await e.executors.stop();
+      const closed = new Promise<void>((resolve) =>
+        server.close(() => resolve()),
+      );
+      server.closeAllConnections();
+      await closed;
+    }
+  },
+);

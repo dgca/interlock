@@ -391,6 +391,80 @@ it('does not dispatch managed work while paused and launches after the final app
   await vi.waitFor(() => expect(e.run(r.id).status).toBe('completed'));
   expect(starts).toBe(1);
 });
+it.each(['library', 'workflow'] as const)(
+  'rechecks %s pause admission after direct harness detection awaits',
+  async (scope) => {
+    const e = open();
+    const starts: string[] = [];
+    let finishDetection!: () => void;
+    const detection = new Promise<void>((resolve) => {
+      finishDetection = resolve;
+    });
+    let detectionStarted = false;
+    const scans = vi.spyOn(e.executors as any, 'scan');
+    e.executors.saveProfile({
+      id: 'codex',
+      harness: 'codex',
+      name: 'Codex',
+      enabled: true,
+      expectedRevision: 0,
+    });
+    e.executors.start([
+      {
+        id: 'codex',
+        detect: async () => {
+          detectionStarted = true;
+          await detection;
+          return {
+            command: '/fake/codex',
+            status: 'detected',
+            version: 'test',
+          };
+        },
+        run: async (i) => {
+          starts.push(i.work.runId);
+          return { output: i.work.input };
+        },
+      },
+    ]);
+    try {
+      const d = blankDefinition();
+      d.executor = 'codex';
+      const a = publish(e, d),
+        b = publish(e, d);
+      const first = e.start(a, null).run,
+        other = e.start(b, null).run;
+      await vi.waitFor(() => expect(detectionStarted).toBe(true));
+      const h = e.pauses.create({
+        target: scope === 'library' ? { scope } : { scope, workflowId: a },
+        actor: 'incident',
+        reason: 'Detection is pending',
+      });
+      finishDetection();
+      await scans.mock.results[0].value;
+      expect(starts).toEqual(scope === 'library' ? [] : [other.id]);
+      expect(e.inspect(first.id).work[0]).toMatchObject({
+        status: 'available',
+        attempt: 0,
+      });
+      expect(e.inspect(first.id).work[0].managedExecution?.state).toBe(
+        'queued',
+      );
+      expect(e.executors.inspect(e.inspect(first.id).work[0].id).items).toEqual(
+        [],
+      );
+      resume(e, h.id);
+      await vi.waitFor(() => {
+        expect(e.run(first.id).status).toBe('completed');
+        expect(e.run(other.id).status).toBe('completed');
+      });
+      expect(starts).toHaveLength(2);
+      expect(new Set(starts).size).toBe(2);
+    } finally {
+      finishDetection();
+    }
+  },
+);
 it('holds polling checks at the next check boundary and keeps cancellation available', async () => {
   const e = open(),
     d = step({

@@ -1,0 +1,30 @@
+First request in flight; library hold added; request count: 1
+{
+  "launchesWhileHeld": 2,
+  "workIds": [
+    "ff1c2f87-af6d-4274-9209-ccc71610dc86",
+    "5b69d8c8-31d6-470c-a732-5600b0827fbf"
+  ],
+  "activeHolds": 1,
+  "available": 0,
+  "one": "50a415a4-1ca7-46aa-a292-90e254ec4e02",
+  "two": "e7b54737-647b-4c37-abb8-b2980807f914"
+}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: A second delegated launcher must not start after a library pause begins during the first launch
+
+2 !== 1
+
+    at <anonymous> (/private/tmp/interlock-230-rebase-review-launch-race.mts:12:201) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 2,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.22.1
