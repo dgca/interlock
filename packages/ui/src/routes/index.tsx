@@ -53,6 +53,11 @@ const Diagnostics = lazy(() =>
     default: m.Diagnostics,
   })),
 );
+const WorkflowReportView = lazy(() =>
+  import('../features/report/WorkflowReportView').then((m) => ({
+    default: m.WorkflowReportView,
+  })),
+);
 const PromptLibrary = lazy(() =>
   import('../features/prompts/Prompts').then((m) => ({
     default: m.PromptLibrary,
@@ -100,6 +105,17 @@ function DiagnosticsRoute() {
   return (
     <Suspense fallback={<RouteLoading label="Loading diagnostics…" />}>
       <Diagnostics />
+    </Suspense>
+  );
+}
+
+function ReportRoute() {
+  const { workflowId } = useParams<{ workflowId?: string }>();
+  return (
+    <Suspense
+      fallback={<RouteLoading label="Loading performance and cost report…" />}
+    >
+      <WorkflowReportView workflowId={workflowId} />
     </Suspense>
   );
 }
@@ -402,6 +418,7 @@ export const routes: RouteObject[] = [
       { path: 'prompts', Component: PromptsRoute },
       { path: 'variables', Component: VariablesRoute },
       { path: 'variables/:variableId', Component: VariableItemRoute },
+      { path: 'report', Component: ReportRoute },
       { path: 'settings/harnesses', Component: HarnessesRoute },
       { path: 'settings/diagnostics', Component: DiagnosticsRoute },
       {
@@ -410,6 +427,7 @@ export const routes: RouteObject[] = [
       },
       { path: 'prompts/:promptId', Component: PromptRoute },
       { path: 'workflows/:workflowId', Component: WorkflowRoute },
+      { path: 'workflows/:workflowId/report', Component: ReportRoute },
       { path: 'runs', Component: RunsRoute },
       { path: 'runs/:runId', Component: RunRoute },
       { path: '*', Component: NotFound },

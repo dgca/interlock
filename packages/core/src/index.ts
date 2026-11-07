@@ -1440,4 +1440,5 @@ export * from './webhooks.js';
 export * from './workflowDiff.js';
 export * from './eventTriggers.js';
 export * from './doctor.js';
+export * from './report.js';
 export { VERSION } from './version.js';

@@ -59,6 +59,7 @@ import {
   setBudgetSchema,
   doctorOptionsSchema,
   doctorReportSchema,
+  reportFilterSchema,
 } from '@interlock/core';
 import {
   mcpMutationDetailSchema,
@@ -167,6 +168,12 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     doctorOptionsSchema,
     (options) => client.system.doctor(options),
     doctorReportSchema,
+  );
+  tool(
+    'workflow_report',
+    'Bounded workflow performance and cost summary: run durations, H8 admission wait, human wait, stage/node percentiles, claim wait (new vs continuing session), reliability counts, token/cost attribution, and Exit node outcomes.',
+    reportFilterSchema,
+    (filter) => client.report.summary(filter),
   );
   tool(
     'workflow_simulation',

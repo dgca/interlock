@@ -7,6 +7,7 @@ import {
   Settings2,
   KeyRound,
   Stethoscope,
+  BarChart2,
 } from 'lucide-react';
 import { VERSION } from '../../../../core/src/version';
 import { Link } from 'react-router';
@@ -23,6 +24,7 @@ export function Sidebar({
   page:
     | 'workflows'
     | 'runs'
+    | 'report'
     | 'prompts'
     | 'variables'
     | 'harnesses'
@@ -49,6 +51,12 @@ export function Sidebar({
               to: paths.workflows,
             },
             { id: 'runs', label: 'Runs', Icon: Activity, to: paths.runs() },
+            {
+              id: 'report',
+              label: 'Report',
+              Icon: BarChart2,
+              to: paths.report,
+            },
             {
               id: 'prompts',
               label: 'Prompts',

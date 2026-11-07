@@ -31,6 +31,8 @@ export function runOffset(value: string | null) {
 
 // Resource URLs use stable IDs, independent of names or future folder membership.
 export const paths = {
+  report: '/report',
+  workflowReport: (id: string) => `/workflows/${encodeURIComponent(id)}/report`,
   diagnostics: '/settings/diagnostics',
   harnesses: '/settings/harnesses',
   prompts: '/prompts',

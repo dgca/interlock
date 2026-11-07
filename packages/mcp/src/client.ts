@@ -4,7 +4,11 @@ import { createClient } from '@interlock/client';
 export function createMcpClient(url?: string) {
   const client = createClient(url);
   return {
-    system: { doctor: client.system.doctor.query },
+    report: { summary: client.report.summary.query },
+    system: {
+      doctor: client.system.doctor.query,
+      report: client.system.report.query,
+    },
     stalls: { manage: client.stalls.manage.mutate },
     triggers: {
       read: client.triggers.read.query,

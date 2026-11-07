@@ -328,6 +328,12 @@ Usage contracts and aggregation live in `core`; `runtime` captures each claim an
 
 Run budget contracts and metric checks live in `core`; `runtime` evaluates retained usage within claim transactions. Policies persist in `runBudgets` and blocked assignments retain an optional marker and suspended timeout duration. Local and ancestor gates compose across explicit scopes. Continuation reads exclude blocked work from available lists and expose bounded recovery references. See [run budgets](run-budgets.md).
 
+## Performance and cost reporting
+
+Workflow performance and cost reporting contracts live in `core`, query operations in `storage`, and aggregation logic in `runtime`. The storage engine queries the `runs` collection with bounds on time range (`since`/`until`), workflow ID, and limit. The runtime engine aggregates run durations, admission queue delays, human wait times (input node waits and pause/declared holds), stage durations, and per-node duration distributions (p50 and p90). Claim wait times are tracked from assignment availability to claim, split by fresh vs continuing continuity sessions. Reliability metrics aggregate claim attempts, lease expiries, work failures, managed execution recoveries (`recoveryEvents`), and inactivity stalls (`stalls`). Model usage and costs are aggregated across runs, nodes, models/aliases, and providers, alongside explicit measured vs unknown coverage percentages. Terminal outcomes are categorized by Exit node to evaluate unattended completion vs human escalation rates.
+
+The shared API exposes `report.summary` (with `system.report` as an alias), the MCP server provides the `workflow_report` tool, the CLI provides `interlock report`, and the UI presents an interactive dashboard at `/report` and `/workflows/:workflowId/report`.
+
 ## Local interfaces
 
 The main service binds to `127.0.0.1` and rejects unexpected request hosts and browser origins. It is a single-user local service without authentication. Local processes can invoke its interfaces. It must not be exposed through a public tunnel.
@@ -374,20 +380,22 @@ Workflow pages have Editor and Runs sections. `?view=runs` selects workflow runs
 
 React Router owns browser navigation through a shared application layout and child routes in `packages/ui/src/routes`. The layout keeps the engine connection and live refresh active across route changes. URL builders live in `routes/paths.ts`.
 
-| Route                    | View                                                   |
-| ------------------------ | ------------------------------------------------------ |
-| `/`                      | Redirects to `/workflows`, replacing the history entry |
-| `/workflows`             | Workflow library                                       |
-| `/workflows/:workflowId` | Workflow draft editor                                  |
-| `/prompts`               | Saved prompt library                                   |
-| `/prompts/:promptId`     | Saved prompt editor                                    |
-| `/variables`             | Variable metadata library                              |
-| `/variables/:variableId` | Variable editor; `new` creates a variable              |
-| `/runs`                  | Active runs                                            |
-| `/runs?tab=history`      | Run history                                            |
-| `/runs/:runId`           | Run inspector, including child runs                    |
-| `/settings/harnesses`    | Harness profiles and execution settings                |
-| `/settings/diagnostics`  | System diagnostics and readiness check                 |
+| Route                           | View                                                   |
+| ------------------------------- | ------------------------------------------------------ |
+| `/`                             | Redirects to `/workflows`, replacing the history entry |
+| `/workflows`                    | Workflow library                                       |
+| `/workflows/:workflowId`        | Workflow draft editor                                  |
+| `/prompts`                      | Saved prompt library                                   |
+| `/prompts/:promptId`            | Saved prompt editor                                    |
+| `/variables`                    | Variable metadata library                              |
+| `/variables/:variableId`        | Variable editor; `new` creates a variable              |
+| `/runs`                         | Active runs                                            |
+| `/runs?tab=history`             | Run history                                            |
+| `/runs/:runId`                  | Run inspector, including child runs                    |
+| `/report`                       | Global workflow performance and cost report            |
+| `/workflows/:workflowId/report` | Workflow-scoped performance and cost report            |
+| `/settings/harnesses`           | Harness profiles and execution settings                |
+| `/settings/diagnostics`         | System diagnostics and readiness check                 |
 
 Resource routes use stable, encoded IDs. Names and future folder or group membership do not determine a workflow's address. Folder and group pages can be added as sibling routes under the application layout without changing existing resource links. Query parameters represent view filters; hash fragments remain available for in-page anchors such as run output.
 
