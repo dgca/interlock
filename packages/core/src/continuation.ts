@@ -105,6 +105,7 @@ export const continuationWorkSchema = z.object({
   managedExecution: managedWorkSummarySchema.optional(),
   resources: z.array(z.string()).max(8).optional(),
   trialEnvironmentId: z.string().optional(),
+  resolvedCwd: z.string().optional(),
   id: z.string(),
   runId: z.string(),
   executionId: z.string(),

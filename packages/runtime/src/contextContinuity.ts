@@ -85,8 +85,15 @@ export class ContextContinuityGroups {
         'Context session conflict: resume the expected session or record an explicit context handoff',
       );
     if (!binding.session) {
-      binding = { ...binding, revision: 1, session };
+      binding = {
+        ...binding,
+        revision: 1,
+        session,
+        ...(work.resolvedCwd ? { cwd: work.resolvedCwd } : {}),
+      };
       this.bind(binding);
+    } else if (binding.cwd) {
+      work.resolvedCwd = binding.cwd;
     }
     work.continuity = binding;
     this.store.put<ContextEvent>(events, {

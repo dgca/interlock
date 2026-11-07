@@ -8,12 +8,34 @@ import type { ConnectionConfig } from './connection.js';
 import { checkPort, startupError } from './startup.js';
 import { nativeAdapters } from '../../runtime/src/executors/native.js';
 
+export function parseAllowedRoots(value?: string): string[] | undefined {
+  if (!value || !value.trim()) return undefined;
+  const trimmed = value.trim();
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed))
+        return parsed
+          .map(String)
+          .map((s) => s.trim())
+          .filter(Boolean);
+    } catch {
+      // Fall through to delimiter splitting
+    }
+  }
+  return trimmed
+    .split(/[,:]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export async function startServer(options: {
   database: string;
   workdir: string;
   ui: string;
   port: number;
   connection: ConnectionConfig;
+  allowedRoots?: string[];
 }) {
   await checkPort(options.port);
   let store: Store;
@@ -28,7 +50,12 @@ export async function startServer(options: {
     );
   let engine: Engine | undefined;
   try {
-    engine = new Engine(store, options.workdir);
+    const allowedRoots =
+      options.allowedRoots ??
+      parseAllowedRoots(process.env.INTERLOCK_ALLOWED_ROOTS);
+    engine = new Engine(store, options.workdir, {
+      ...(allowedRoots ? { allowedRoots } : {}),
+    });
     engine.executors.start(nativeAdapters);
     engine.pump();
   } catch (error) {

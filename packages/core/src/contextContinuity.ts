@@ -13,6 +13,7 @@ export const continuitySchema = z.object({
   revision: z.number().int().nonnegative(),
   session: sessionIdentitySchema.nullable(),
   checkpointRef: z.string().optional(),
+  cwd: z.string().optional(),
 });
 export const contextGroupQuerySchema = z.object({
   runId: z.string().min(1),

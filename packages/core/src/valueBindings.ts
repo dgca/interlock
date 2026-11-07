@@ -60,6 +60,12 @@ export function resolveBindingFields(
     }),
   );
 }
+export function resolveValueBinding(
+  binding: ValueBinding,
+  source: (binding: PathBinding) => Json | undefined,
+): Json {
+  return resolveBindingFields({ value: binding }, source).value;
+}
 
 /** Includes object containers so diagnostics can point at invalid authoring targets. */
 export function bindingEntries(

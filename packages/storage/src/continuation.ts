@@ -50,6 +50,8 @@ export type WorkMetadata = Pick<
   | 'hold'
   | 'holdRevision'
   | 'heldClaimCount'
+  | 'resolvedCwd'
+  | 'cwdBlocked'
 > & {
   context: Pick<
     WorkRequest['context'],
