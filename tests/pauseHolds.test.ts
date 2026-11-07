@@ -579,3 +579,58 @@ it('pauses Batch item claims and stops further item dispatch until resume', () =
   expect(e.available(r.id)).toHaveLength(1);
   expect(e.run(r.id).executions.at(-1)?.childRunIds).toHaveLength(2);
 });
+it('keeps lease-expired and explicitly resumed assignments out of discovery during pause', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime('2026-11-01T00:00:00Z');
+  const e = open(),
+    d = step({
+      kind: 'agent',
+      prompt: 'Go',
+      unclaimedTimeoutMs: 1000,
+      maxLeaseExpiries: 2,
+    });
+  d.edges.push({
+    id: 'timeout',
+    source: 'agent',
+    port: 'timeout',
+    target: 'exit',
+  });
+  const w = publish(e, d),
+    r = e.start(w, null).run,
+    work = e.available(r.id)[0];
+  e.claim(work.id, worker, 10);
+  const h = hold(e, w);
+  vi.advanceTimersByTime(10_000);
+  expect(e.available(r.id)).toEqual([]);
+  expect(e.store.work('available', r.id)[0].pauseBlocked).toBeDefined();
+  expect(e.continuation.briefing({ id: r.id, limit: 20 }).available.total).toBe(
+    0,
+  );
+  const current = e.store.work('available', r.id)[0];
+  e.manageWorkHold({
+    action: 'hold',
+    workId: current.id,
+    expectedAttempt: 1,
+    expectedRevision: 0,
+    actor: 'test',
+    category: 'other',
+    reason: 'External blocker',
+    checkpointRef: 'test',
+  });
+  // Change the applicable scope hold while the assignment is held.
+  resume(e, h.id);
+  const next = hold(e, w);
+  e.manageWorkHold({
+    action: 'resume',
+    workId: current.id,
+    expectedAttempt: 1,
+    expectedRevision: 1,
+    actor: 'test',
+  });
+  expect(e.available(r.id, { advance: false })).toEqual([]);
+  expect(e.continuation.briefing({ id: r.id, limit: 20 }).available.total).toBe(
+    0,
+  );
+  resume(e, next.id);
+  expect(e.available(r.id)).toHaveLength(1);
+});

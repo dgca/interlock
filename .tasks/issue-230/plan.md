@@ -24,3 +24,5 @@ Build owns relevant tests, pnpm test, pnpm build, pnpm test:package, and pnpm fo
 Independent UI review and SDLC fresh final review remain with the parent coordinator. Build does not claim either review or open/push a PR.
 
 The final runtime pass also covers Batch dispatch, both pause/resource release orders, and reconnecting a real running background Script after restart while paused. Existing supervisor monitoring remains allowed because it cannot launch a new process; the following step remains gated. Pause changes now emit current projection events so open run views update without reload.
+
+An expiry-boundary check verifies that a claim returning to availability inside one pump pass is immediately refreshed against pause admission. Assignment-hold resume refreshes the same gate before returning. Both available discovery and read-only continuation stay empty until the applicable pause clears.

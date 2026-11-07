@@ -2050,6 +2050,7 @@ export class Engine {
       let changed = true,
         rounds = 0;
       while (changed && rounds++ < 2000) {
+        this.pauses.refresh();
         this.budgets.refresh();
         this.resources.refresh();
         changed = this.testbench.advance();
@@ -2654,6 +2655,7 @@ export class Engine {
           before?.status === 'claimed'
         )
           this.resources.end(before, 'held');
+        this.pauses.refresh();
         this.budgets.refresh();
         this.resources.refresh();
         return result;
