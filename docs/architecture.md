@@ -151,7 +151,7 @@ Core defines prompt content, optional Agent `promptIds`, and pure instruction co
 
 Every non-Batch workflow run captures the latest prompts referenced anywhere in its own published graph at startup. Batch items inherit the enclosing capture, including delayed dispatch. Invoked workflows, including detached work, capture independently when they start. Loops, claim recovery, retries, and restart retain that run's captures. Saved prompt sections precede node task instructions. Context policy and contracts retain their meanings. Compact storage projections omit captures and saved instruction bodies.
 
-Variable-bearing bundles use format version 4 with safe requirements and deliberate local binding. Other bundles with deleted version identities use format version 3. Other prompt-bearing bundles use format version 2, including current shared prompt records from exported drafts and all versions; other prompt-free bundles retain version 1. Import preserves IDs, reuses identical local content, and rejects divergent shared content even with force. Re-importing a deleted prompt allocates a current revision above retained local history, preserving old revisions and subsequent edits. Truly new IDs retain the bundle revision. Revision history and run captures are excluded from workflow bundles.
+Model-alias-bearing bundles use format version 6 with alias requirements without local overrides. Schedule-bearing bundles use format version 5. Variable-bearing bundles use format version 4 with safe requirements and deliberate local binding. Other bundles with deleted version identities use format version 3. Other prompt-bearing bundles use format version 2, including current shared prompt records from exported drafts and all versions; other prompt-free bundles retain version 1. Import preserves IDs, reuses identical local content, and rejects divergent shared content even with force. Re-importing a deleted prompt allocates a current revision above retained local history, preserving old revisions and subsequent edits. Truly new IDs retain the bundle revision. Revision history and run captures are excluded from workflow bundles.
 
 The Prompts library and editor use the shared Mantine theme and navigation protection. Dirty prompt text retains its original save revision across external refreshes. Agent settings provide searchable ordered prompt selection and content inspection above Task instructions. Run inspection shows captured content and revisions.
 
@@ -225,6 +225,12 @@ same-kind local binding or unset provisioning. Bindings remain outside published
 definitions; conflicting existing bindings reject atomically. Earlier formats
 remain supported for variable-free workflows. Variable-bearing legacy imports must
 be re-exported as format-4 bundles.
+
+## Model aliases
+
+Model aliases map logical roles (e.g. `builder`, `reviewer`, `evaluator`) to an ordered candidate list of `{ model, effort?, profileId? }`. Workflows and Agent nodes reference an alias anywhere a model ID is accepted (`agentModel`, `model`, `candidateModels`, and `distinctProviderFrom`).
+
+Runs pin resolved alias definitions at start time in `modelAliasCaptures` (alongside `variableCaptures`). Mid-run mutations or deletions of local aliases never mutate in-flight runs; continued runs and batch items inherit the pinned captures. When selecting an executor or matching provider diversity constraints, candidate fallback order is evaluated and the first available candidate is selected. Portable workflow bundles export alias requirements without local candidate overrides or private profile IDs (format version 6).
 
 ## Timers
 

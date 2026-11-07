@@ -102,6 +102,7 @@ import {
   checkVariableDelivery,
 } from './variables.js';
 export * from './variables.js';
+export * from './modelAliases.js';
 export {
   bindingLeaves,
   resolveBindingFields,
@@ -711,6 +712,7 @@ export interface Run {
   updatedAt: string;
   promptSnapshots?: import('./prompts.js').PromptSnapshot[];
   variableCaptures?: import('./variables.js').VariableCapture[];
+  modelAliasCaptures?: import('./modelAliases.js').ModelAliasCapture[];
 }
 export type RunSummary = Pick<
   Run,

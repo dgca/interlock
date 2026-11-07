@@ -17,8 +17,10 @@ import {
 } from '@interlock/core';
 import { definitionHash } from './versionIdentity.js';
 import { Variables } from './variables.js';
+import { ModelAliases } from './modelAliases.js';
 import {
   variableReferences,
+  modelReferences,
   type VariableImportBindings,
 } from '@interlock/core';
 import {
@@ -114,19 +116,32 @@ export function exportWorkflows(
       ),
     ),
   ]);
+  const referencedModels = [
+    ...new Set(
+      records.flatMap((w) =>
+        [w.draft, ...w.versions.map((v) => v.definition)].flatMap(
+          modelReferences,
+        ),
+      ),
+    ),
+  ];
+  const modelAliases = new ModelAliases(store).requirements(referencedModels);
   return {
     format: 'interlock-workflows',
-    formatVersion: records.some((w) => w.schedules?.length)
-      ? 5
-      : variables.length
-        ? 4
-        : records.some((w) => w.deletedVersions?.length)
-          ? 3
-          : prompts.length
-            ? 2
-            : 1,
+    formatVersion: modelAliases.length
+      ? 6
+      : records.some((w) => w.schedules?.length)
+        ? 5
+        : variables.length
+          ? 4
+          : records.some((w) => w.deletedVersions?.length)
+            ? 3
+            : prompts.length
+              ? 2
+              : 1,
     ...(prompts.length ? { prompts } : {}),
     ...(variables.length ? { variables } : {}),
+    ...(modelAliases.length ? { modelAliases } : {}),
     rootId,
     workflows: records,
   };

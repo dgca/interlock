@@ -98,6 +98,8 @@ import { TrialEnvironments } from './trialEnvironments.js';
 import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
 import { Variables } from './variables.js';
+import { ModelAliases } from './modelAliases.js';
+export { ModelAliases } from './modelAliases.js';
 import { secretRedaction } from './secretRedaction.js';
 import { nodeVariableReferences, variableReferences } from '@interlock/core';
 import type { PollCheck } from '@interlock/core';
@@ -160,6 +162,7 @@ export class Engine {
   readonly continuation: Continuation;
   readonly prompts: Prompts;
   readonly variables: Variables;
+  readonly modelAliases: ModelAliases;
   readonly versions: VersionCleanup;
   readonly ownership: Ownership;
   readonly testbench: Testbench;
@@ -238,6 +241,7 @@ export class Engine {
     );
     this.prompts = new Prompts(store);
     this.variables = new Variables(store);
+    this.modelAliases = new ModelAliases(store);
     this.assignmentSizes = new AssignmentSizes(store, this.prompts, (work) =>
       this.describeWork(work),
     );
@@ -1115,6 +1119,22 @@ export class Engine {
                     : this.variables.capture(definition),
           }
         : {}),
+      ...(() => {
+        const captures = this.options.substituteOperation
+          ? []
+          : continuedFrom
+            ? this.modelAliases.capture(
+                definition,
+                continuedFrom.modelAliasCaptures ?? [],
+              )
+            : batchNodeId && parentRunId
+              ? this.modelAliases.capture(
+                  definition,
+                  this.run(parentRunId).modelAliasCaptures ?? [],
+                )
+              : this.modelAliases.capture(definition);
+        return captures.length ? { modelAliasCaptures: captures } : {};
+      })(),
     };
     if (
       !parentRunId &&
@@ -1793,6 +1813,12 @@ export class Engine {
             if (reEval) {
               if (reEval.status === 'selected') {
                 work.executorModel = reEval.candidate;
+                if (reEval.candidateProfileId) {
+                  work.executor = reEval.candidateProfileId;
+                }
+                if (reEval.candidateEffort !== undefined) {
+                  work.executorEffort = reEval.candidateEffort;
+                }
                 work.executorModelSource = 'node';
                 delete work.providerDiversityBlocked;
                 this.store.put('work', work);
@@ -1888,16 +1914,68 @@ export class Engine {
               prefixOverrides: this.executors.settings().providerPrefixes,
             })
           : null;
+        let resolvedAliasCandidate:
+          import('@interlock/core').ModelAliasCandidate | undefined;
+        if (!diversityEval) {
+          const targetModelOrAlias =
+            node.model ?? this.definition(run).agentModel;
+          const candidatePool: string[] = [];
+          if (node.candidateModels?.length) {
+            candidatePool.push(...node.candidateModels);
+          } else if (targetModelOrAlias) {
+            candidatePool.push(targetModelOrAlias);
+          }
+
+          const expandedCandidates: import('@interlock/core').ModelAliasCandidate[] =
+            [];
+          for (const item of candidatePool) {
+            const aliasList = this.modelAliases.resolveCandidates(
+              run.modelAliasCaptures,
+              item,
+            );
+            if (aliasList?.length) {
+              expandedCandidates.push(...aliasList);
+            } else {
+              expandedCandidates.push({ model: item });
+            }
+          }
+
+          if (expandedCandidates.length > 0) {
+            const profiles = this.executors.profiles();
+            for (const cand of expandedCandidates) {
+              if (cand.profileId) {
+                const prof = profiles.find((p) => p.id === cand.profileId);
+                if (prof && prof.enabled) {
+                  resolvedAliasCandidate = cand;
+                  break;
+                }
+              } else {
+                resolvedAliasCandidate = cand;
+                break;
+              }
+            }
+            if (!resolvedAliasCandidate) {
+              resolvedAliasCandidate = expandedCandidates[0];
+            }
+          }
+        }
         const matchedCandidateProfile =
           diversityEval?.status === 'selected'
             ? this.executors
                 .profiles()
-                .find((p) => p.id === diversityEval.candidate)
+                .find(
+                  (p) =>
+                    p.id ===
+                    (diversityEval.candidateProfileId ??
+                      diversityEval.candidate),
+                )
             : undefined;
         const selectedModel =
           diversityEval?.status === 'selected'
             ? (matchedCandidateProfile?.model ?? diversityEval.candidate)
-            : (node.model ?? this.definition(run).agentModel);
+            : resolvedAliasCandidate
+              ? resolvedAliasCandidate.model
+              : (node.model ?? this.definition(run).agentModel);
         const selectedModelSource =
           diversityEval?.status === 'selected'
             ? ('node' as const)
@@ -1907,9 +1985,23 @@ export class Engine {
         const effectiveExecutor =
           node.executor === null
             ? undefined
-            : (matchedCandidateProfile?.id ??
-              node.executor ??
-              this.definition(run).executor);
+            : diversityEval?.status === 'selected'
+              ? (matchedCandidateProfile?.id ??
+                diversityEval.candidateProfileId ??
+                node.executor ??
+                this.definition(run).executor)
+              : (resolvedAliasCandidate?.profileId ??
+                node.executor ??
+                this.definition(run).executor);
+        const effectiveEffort =
+          diversityEval?.status === 'selected' &&
+          diversityEval.candidateEffort !== undefined
+            ? diversityEval.candidateEffort
+            : resolvedAliasCandidate?.effort !== undefined
+              ? resolvedAliasCandidate.effort
+              : node.effort !== undefined
+                ? node.effort
+                : this.definition(run).agentEffort;
 
         const work: WorkRequest = {
           ...(node.executor !== null && selectedModel
@@ -1921,15 +2013,14 @@ export class Engine {
           ...(effectiveExecutor
             ? {
                 executor: effectiveExecutor,
-                ...(node.effort !== undefined ||
-                this.definition(run).agentEffort !== undefined
+                ...(effectiveEffort !== undefined
                   ? {
-                      executorEffort:
-                        node.effort !== undefined
-                          ? node.effort
-                          : this.definition(run).agentEffort,
+                      executorEffort: effectiveEffort,
                       executorEffortSource:
-                        node.effort !== undefined
+                        node.effort !== undefined ||
+                        (diversityEval?.status === 'selected' &&
+                          diversityEval.candidateEffort !== undefined) ||
+                        resolvedAliasCandidate?.effort !== undefined
                           ? ('node' as const)
                           : ('workflow' as const),
                     }

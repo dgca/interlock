@@ -13,6 +13,8 @@ export type ProviderDiversityEvaluation =
   | {
       status: 'selected';
       candidate: string;
+      candidateProfileId?: string;
+      candidateEffort?: string | null;
       provider: string;
       excludedProviders: string[];
     }
@@ -94,8 +96,17 @@ export function evaluateProviderDiversity(options: {
           (n) => n.id === upstreamId && n.kind === 'agent',
         ) as Extract<WorkflowNode, { kind: 'agent' }> | undefined;
         if (upstreamDef?.model) {
+          const aliasCandidates = engine.modelAliases.resolveCandidates(
+            run.modelAliasCaptures,
+            upstreamDef.model,
+          );
+          const modelToCheck = aliasCandidates?.[0]?.model ?? upstreamDef.model;
+          const profileToCheck = aliasCandidates?.[0]?.profileId
+            ? profiles.find((p) => p.id === aliasCandidates[0].profileId)
+            : undefined;
           provider = resolveProvider({
-            model: upstreamDef.model,
+            model: profileToCheck?.model ?? modelToCheck,
+            profile: profileToCheck,
             prefixOverrides,
           });
         }
@@ -189,15 +200,40 @@ export function evaluateProviderDiversity(options: {
       ? profiles.find((p) => p.id === (node.executor ?? definition.executor))
       : null;
 
-  const candidates: string[] = [];
+  interface DiversityCandidate {
+    model: string;
+    profileId?: string;
+    effort?: string | null;
+  }
+
+  const rawCandidates: string[] = [];
   if (node.candidateModels && node.candidateModels.length > 0) {
-    candidates.push(...node.candidateModels);
+    rawCandidates.push(...node.candidateModels);
   } else if (node.model) {
-    candidates.push(node.model);
+    rawCandidates.push(node.model);
   } else if (configuredProfile?.model) {
-    candidates.push(configuredProfile.model);
+    rawCandidates.push(configuredProfile.model);
   } else if (definition.agentModel) {
-    candidates.push(definition.agentModel);
+    rawCandidates.push(definition.agentModel);
+  }
+
+  const candidates: DiversityCandidate[] = [];
+  for (const raw of rawCandidates) {
+    const aliasCandidates = engine.modelAliases.resolveCandidates(
+      run.modelAliasCaptures,
+      raw,
+    );
+    if (aliasCandidates && aliasCandidates.length > 0) {
+      for (const ac of aliasCandidates) {
+        candidates.push({
+          model: ac.model,
+          profileId: ac.profileId,
+          effort: ac.effort,
+        });
+      }
+    } else {
+      candidates.push({ model: raw });
+    }
   }
 
   if (candidates.length === 0) {
@@ -210,9 +246,11 @@ export function evaluateProviderDiversity(options: {
   }
 
   for (const candidate of candidates) {
-    const matchedProfile = profiles.find((p) => p.id === candidate);
+    const matchedProfile = candidate.profileId
+      ? profiles.find((p) => p.id === candidate.profileId)
+      : profiles.find((p) => p.id === candidate.model);
     const candidateProvider = resolveProvider({
-      model: matchedProfile ? matchedProfile.model : candidate,
+      model: matchedProfile ? matchedProfile.model : candidate.model,
       profile: matchedProfile ?? configuredProfile,
       prefixOverrides,
     });
@@ -220,7 +258,13 @@ export function evaluateProviderDiversity(options: {
     if (candidateProvider && !excludedProviders.has(candidateProvider)) {
       return {
         status: 'selected',
-        candidate,
+        candidate: candidate.model,
+        candidateProfileId:
+          candidate.profileId ??
+          (profiles.some((p) => p.id === candidate.model)
+            ? candidate.model
+            : undefined),
+        candidateEffort: candidate.effort,
         provider: candidateProvider,
         excludedProviders: Array.from(excludedProviders),
       };
@@ -231,6 +275,6 @@ export function evaluateProviderDiversity(options: {
     status: 'blocked',
     reason: 'provider_diversity_exhausted',
     excludedProviders: Array.from(excludedProviders),
-    details: `All candidate models [${candidates.join(', ')}] belong to excluded providers [${Array.from(excludedProviders).join(', ')}]`,
+    details: `All candidate models [${candidates.map((c) => c.model).join(', ')}] belong to excluded providers [${Array.from(excludedProviders).join(', ')}]`,
   };
 }
