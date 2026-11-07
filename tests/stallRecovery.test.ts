@@ -21,6 +21,7 @@ let ticket = '',
   messageCount = 0,
   stopCount = 0,
   status = 'idle';
+let onStatus: (() => Response | Promise<Response> | undefined) | undefined;
 let onMessage: (() => void) | undefined, onStop: (() => void) | undefined;
 beforeEach(() => {
   vi.useFakeTimers();
@@ -30,7 +31,7 @@ beforeEach(() => {
   ticket = '';
   launchCount = messageCount = stopCount = 0;
   status = 'idle';
-  onMessage = onStop = undefined;
+  onMessage = onStop = onStatus = undefined;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url, options) => {
@@ -51,7 +52,7 @@ beforeEach(() => {
         onStop?.();
         return Response.json({ ok: true });
       }
-      return Response.json({ status });
+      return onStatus?.() ?? Response.json({ status });
     }),
   );
   e.executors.saveProfile({
@@ -125,6 +126,9 @@ it('executes one nudge then confirmed stop and relaunch through ordinary budgets
   await tick(3000);
   expect(stopCount).toBe(1);
   expect(launchCount).toBe(2);
+  expect(e.executors.inspect(claim.id).history).toContainEqual(
+    expect.objectContaining({ id: `${claim.id}:1`, state: 'failed' }),
+  );
   const work = e.store.work()[0];
   expect(work).toMatchObject({
     status: 'available',
@@ -265,4 +269,27 @@ it('does not consume a launch ticket when resource admission rolls back the clai
   e.submit(owner2.id, owner2.token!, null);
   const launched = e.claim(work.id, { ...worker, claimTicket: capturedTicket });
   expect(launched.attempt).toBe(1);
+});
+
+it('ignores a stale status poll after confirmed recovery launches a new session', async () => {
+  const { claim } = await start();
+  await tick(3000);
+  let resolveOld: (value: Response) => void = () => {};
+  onStatus = () => {
+    onStatus = undefined;
+    return new Promise<Response>((resolve) => {
+      resolveOld = resolve;
+    });
+  };
+  onStop = () => {
+    status = 'ended';
+  };
+  await tick(3000);
+  expect(launchCount).toBe(2);
+  const current = e.claim(claim.id, { ...worker, claimTicket: ticket });
+  expect(current.attempt).toBe(2);
+  resolveOld(Response.json({ status: 'ended' }));
+  await settle();
+  expect(e.executors.inspect(claim.id).items[0].state).toBe('running');
+  expect(e.store.work()[0].status).toBe('claimed');
 });

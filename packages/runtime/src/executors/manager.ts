@@ -488,6 +488,7 @@ export class ExecutorManager {
   private latest(workId: string) {
     return this.engine.store
       .forWork<ManagedExecution>(attemptsCollection, workId)
+      .reverse()
       .sort((a, b) => b.attempt - a.attempt)[0];
   }
   executionProvenance(
@@ -794,6 +795,7 @@ export class ExecutorManager {
       throw new InterlockError('Assignment not found');
     const records = this.engine.store
       .forWork<ManagedExecution>(attemptsCollection, workId)
+      .reverse()
       .sort((a, b) => b.attempt - a.attempt);
     const latest = records[0];
     return {
@@ -1292,7 +1294,7 @@ export class ExecutorManager {
     };
 
     const record: ManagedExecution = {
-      id: `${work.id}:${work.attempt}`,
+      id: `${work.id}:launch:${work.attempt}`,
       workId: work.id,
       runId: work.runId,
       attempt: work.attempt,
@@ -1391,6 +1393,8 @@ export class ExecutorManager {
       } catch {}
     }
 
+    if (this.stopped || this.launchedWork.get(session.workId) !== session)
+      return;
     if (
       newStatus &&
       ['working', 'idle', 'needs_attention', 'ended'].includes(newStatus)
@@ -1413,7 +1417,7 @@ export class ExecutorManager {
     session: LauncherSession,
     captured: WorkRequest,
   ) {
-    if (this.idleRecovering.has(captured.id)) return;
+    if (this.stopped || this.idleRecovering.has(captured.id)) return;
     const run = this.engine.store.get<Run>('runs', captured.runId);
     const definition =
       run &&
@@ -1453,8 +1457,11 @@ export class ExecutorManager {
     if (!pending && (captured.idleRecoveryCount ?? 0) >= recovery.maxRecoveries)
       return;
     const owned = () => {
+      if (this.stopped || this.launchedWork.get(captured.id) !== session)
+        return;
       const w = this.engine.store.get<WorkRequest>('work', captured.id);
       return w?.status === 'claimed' &&
+        w.managedExecution?.state !== 'needs_human' &&
         w.attempt === captured.attempt &&
         w.token === captured.token &&
         w.lastActivityAt === captured.lastActivityAt
