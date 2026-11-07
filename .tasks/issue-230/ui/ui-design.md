@@ -82,6 +82,8 @@ Prototype limitations: pause state is not persisted, no scheduler or concurrent-
 
 ## Reproduce the preview
 
+The prototype may need an untracked dependency link after checkout: `ln -s ../../../../packages/ui/node_modules .tasks/issue-230/ui/prototype/node_modules`.
+
 From the checkout root, start the task-owned server:
 
 ```sh
