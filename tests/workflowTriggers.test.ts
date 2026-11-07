@@ -99,6 +99,24 @@ function protectedState(e: Engine) {
   );
 }
 
+it('UI236-R5 returns explicit duration bounds at the shared validation boundary', () => {
+  for (const [intervalMs, message] of [
+    [6000, 'Use an interval of at least 30 seconds.'],
+    [31_536_000_001, 'Use an interval of at most 365 days.'],
+  ] as const) {
+    const parsed = scheduleTimingSchema.safeParse({
+      type: 'interval',
+      intervalMs,
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success)
+      expect(parsed.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: ['intervalMs'], message }),
+        ]),
+      );
+  }
+});
 it('validates five-field cron, IANA zone, minimum interval, bindings and literal templates', () => {
   for (const timing of [
     { type: 'interval', intervalMs: 29999 },

@@ -168,6 +168,38 @@ async function fill(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
   });
 }
 
+it('UI236-R5 explains the duration minimum beside a fractional-minute interval and allows correction', async () => {
+  await renderSchedules();
+  await click('Edit schedule');
+  await act(async () =>
+    document.querySelector<HTMLInputElement>('input[value=interval]')!.click(),
+  );
+  await act(async () => input('Unit').click());
+  await act(async () =>
+    [...document.querySelectorAll<HTMLElement>('[role=option]')]
+      .find((el) => el.textContent === 'minutes')!
+      .click(),
+  );
+  await fill(input('Every'), '0.1');
+  // 0.1 minutes is six seconds.
+  await click('Save schedule');
+  const every = input('Every');
+  expect(every.getAttribute('aria-invalid')).toBe('true');
+  expect(
+    document.getElementById(every.getAttribute('aria-describedby')!)
+      ?.textContent,
+  ).toBe('Use an interval of at least 30 seconds.');
+  expect(rpc.manage).not.toHaveBeenCalled();
+  await fill(every, '0.5');
+  await click('Save schedule');
+  expect(rpc.manage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      config: expect.objectContaining({
+        timing: { type: 'interval', intervalMs: 30000 },
+      }),
+    }),
+  );
+});
 it('UI236-R2 associates invalid zone feedback with the zone field while keeping valid cron clear', async () => {
   await renderSchedules();
   await click('Edit schedule');

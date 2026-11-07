@@ -7,7 +7,11 @@ export const scheduleTimingSchema = z
     z
       .object({
         type: z.literal('interval'),
-        intervalMs: z.number().int().min(30_000).max(31_536_000_000),
+        intervalMs: z
+          .number()
+          .int()
+          .min(30_000, 'Use an interval of at least 30 seconds.')
+          .max(31_536_000_000, 'Use an interval of at most 365 days.'),
       })
       .strict(),
     z
