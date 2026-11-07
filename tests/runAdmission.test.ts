@@ -232,6 +232,49 @@ it('retains uncertain resource ownership when replacing a claimed task', () => {
   expect(() => e.submit(claim.id, claim.token!, {})).toThrow();
 });
 
+it('stops native work only after an atomic replacement commits', () => {
+  const e = new Engine(new Store(':memory:'), process.cwd(), {
+    substituteOperation: () => new Promise(() => {}),
+  });
+  engines.push(e);
+  const d = blankDefinition();
+  d.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    label: 'Native operation',
+    kind: 'script',
+    language: 'javascript',
+    command: 'return input;',
+  });
+  const w = publish(e, d),
+    first = e.start(w.id, {}, undefined, undefined, { externalTask: task }).run;
+  const jobs = (e as unknown as { localJobs: Map<string, AbortController> })
+    .localJobs;
+  const controller = jobs.get(first.executions.at(-1)!.id)!;
+  expect(controller.signal.aborted).toBe(false);
+  const before = state(e),
+    put = e.store.put.bind(e.store);
+  const failure = vi
+    .spyOn(e.store, 'put')
+    .mockImplementation((collection, value) => {
+      if (collection === 'runStarts') throw new Error('receipt failure');
+      return put(collection, value);
+    });
+  const options = {
+    externalTask: task,
+    requestId: 'replacement',
+    onActiveExternalTask: 'cancel_previous' as const,
+  };
+  expect(() => e.start(w.id, {}, undefined, undefined, options)).toThrow(
+    'receipt failure',
+  );
+  expect(state(e)).toBe(before);
+  expect(controller.signal.aborted).toBe(false);
+  failure.mockRestore();
+  e.start(w.id, {}, undefined, undefined, options);
+  expect(e.run(first.id).status).toBe('cancelled');
+  expect(controller.signal.aborted).toBe(true);
+});
+
 it('validates a replacement before cancellation and rolls all protected state back on write failure', () => {
   const e = setup(),
     d = blankDefinition();

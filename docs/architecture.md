@@ -498,7 +498,7 @@ Workflow `maxActiveRuns` and optional `excludeStages` gate starts at the publish
 
 Queued runs capture prompts, protected variable revisions, budgets, and request receipts before execution, with no node or assignment until admission. The queued status participates in active queries, comparison scheduling, continuation counts, cancellation and deletion protections. A dedicated partial priority index supports queue scans. An additive migration updates active-comparison triggers without rewriting historical run documents. Queue position and dependency/capacity/pause blockers use the shared admission_queue waiting projection with engine actor. Storage changes wake scoped continuation readers.
 
-Ordinary active-task policies run in the same transaction as receipt resolution and startup. Reuse returns a retained active match read-only. Reject creates no state. Replacement validation precedes cancellation, which retains existing uncertain ownership and detached boundaries. See [start policy and dependency contracts](idempotent-run-starts.md).
+Ordinary active-task policies run in the same transaction as receipt resolution and startup. Reuse returns a retained active match read-only. Reject creates no state. Replacement validation precedes cancellation, which retains existing uncertain ownership and detached boundaries. Native stop requests run after the receipt transaction commits, so rollback leaves the prior job active. See [start policy and dependency contracts](idempotent-run-starts.md).
 
 ## Ordinary start receipts
 

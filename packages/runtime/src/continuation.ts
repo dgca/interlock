@@ -439,7 +439,6 @@ export class Continuation {
           .filter((run) => run.status === 'failed')
           .map((run) => ({
             ...reference(run.id, latest.get(run.id)?.id),
-            ...(run.status === 'queued' ? { admission: run.admission } : {}),
             error: run.error,
             lifecycleRunId: run.lifecycleRunId,
           })),

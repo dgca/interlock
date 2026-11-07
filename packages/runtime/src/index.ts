@@ -1121,6 +1121,7 @@ export class Engine {
       )
     )
       throw new InterlockError('A start cannot depend on its own requestId');
+    const afterCommit: (() => void)[] = [];
     const result = this.starts.resolve(q, () => {
       const w = this.workflow(q.workflowId);
       if (
@@ -1175,9 +1176,11 @@ export class Engine {
           budget: q.budget,
         });
       if (policy === 'cancel_previous')
-        for (const previous of matching) this.cancelTree(previous.id);
+        for (const previous of matching)
+          this.cancelTree(previous.id, afterCommit);
       return { run, reused: false };
     });
+    for (const effect of afterCommit) effect();
     if (!result.replayed) this.pump();
     return result.id;
   }
@@ -3177,28 +3180,35 @@ export class Engine {
       background: execution.background,
     };
   }
-  private cancelTree(id: string) {
+  private cancelTree(id: string, afterCommit?: (() => void)[]) {
     const run = this.run(id);
     if (terminal(run.status)) return;
     for (const child of this.store
       .runs()
       .filter((r) => r.parentRunId === id && r.parentMode !== 'detached'))
-      this.cancelTree(child.id);
+      this.cancelTree(child.id, afterCommit);
     run.status = 'cancelled';
     const execution = run.executions.at(-1);
-    if (
-      execution?.background &&
-      ['launching', 'running'].includes(execution.background.state)
-    ) {
-      try {
-        this.backgroundScripts.stop(run.id, execution.id);
-      } catch {
-        execution.background.state = 'uncertain';
-        execution.error =
-          'Background stop could not verify the supervisor. Inspect processes and reconcile stopped.';
+    const stop = () => {
+      if (
+        execution?.background &&
+        ['launching', 'running'].includes(execution.background.state)
+      ) {
+        try {
+          this.backgroundScripts.stop(run.id, execution.id);
+        } catch {
+          execution.background.state = 'uncertain';
+          execution.error =
+            'Background stop could not verify the supervisor. Inspect processes and reconcile stopped.';
+          if (afterCommit) this.save(run);
+        }
       }
-    }
-    if (execution) this.localJobs.get(execution.id)?.abort();
+      if (execution) this.localJobs.get(execution.id)?.abort();
+    };
+    // Atomic task replacement must commit cancellation and its receipt before
+    // requesting external stops. A rolled-back start leaves the old job alone.
+    if (afterCommit) afterCommit.push(stop);
+    else stop();
     if (execution && !terminal(execution.status))
       execution.status = 'cancelled';
     for (const work of this.store

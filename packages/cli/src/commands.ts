@@ -479,7 +479,7 @@ export async function runCommand(argv: string[]) {
       return {
         usage: [
           'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value; write-only Secret creation/replacement through stdin)',
-          'executors [json|@file] (list by default; settings/save_settings for shared concurrency, discover models/efforts, save local profiles, inspect work, respond, retry_model after a model refusal, stop or reconcile an interrupted execution)',
+          'executors [json|@file] (list by default; settings/save_settings for shared concurrency, save local profiles with optional concurrency, discover models/efforts, inspect work, respond, retry_model after a model refusal, stop or reconcile an interrupted execution)',
           'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
           'workflow <id>',
           'update <workflow-id> <json|@file> (metadata or draft replacement; layout:"tidy" arranges with Dagre; draft/layout changes require draftRevision)',
