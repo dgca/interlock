@@ -4,8 +4,12 @@ import { act, createElement as h, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
 import { createBrowserRouter, RouterProvider } from 'react-router';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { routes } from '../packages/ui/src/routes';
+
+beforeAll(async () => {
+  await import('../packages/ui/src/features/runs/RunList');
+});
 
 const queries = vi.hoisted(() => ({
   workflows: vi.fn(),
