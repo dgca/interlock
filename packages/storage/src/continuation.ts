@@ -17,6 +17,8 @@ export type ExecutionMetadata = Omit<
 > & {
   runId: string;
   hasOutput: boolean;
+  /** Runtime-only overlay; never inferred from a persisted polling deadline. */
+  pollCheckRunning?: boolean;
   check?: Omit<NonNullable<NodeExecution['check']>, 'output'>;
   checkSummary?: { output: string; truncated: number };
 };

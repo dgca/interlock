@@ -1126,6 +1126,9 @@ export class Engine {
   }
   private projectionState(id: string) {
     const state = this.store.continuation(id);
+    for (const execution of state.executions)
+      if (execution.kind === 'wait' && this.localJobs.has(execution.id))
+        execution.pollCheckRunning = true;
     for (const work of state.work)
       if (work.executor) work.managedExecution = this.executors.describe(work);
     return state;
@@ -2432,6 +2435,11 @@ export class Engine {
       throw new InterlockError(redact.text(message(error)));
     }
   }
+  private pollCheckChanged(runId: string) {
+    if (this.stopped) return;
+    this.store.touchRun(runId);
+    queueMicrotask(() => this.listeners.forEach((listener) => listener()));
+  }
   /**
    * Run a polling Wait's check when it is due. The check is a server-side job
    * like a Script or Fetch step, but the execution stays `waiting`: a passing
@@ -2452,6 +2460,7 @@ export class Engine {
     const { timing } = node;
     const controller = new AbortController();
     this.localJobs.set(execution.id, controller);
+    this.pollCheckChanged(run.id);
     const job: Promise<{ output: Json; resolvedCwd?: string }> =
       Promise.resolve().then(() => {
         controller.signal.throwIfAborted();
@@ -2540,6 +2549,7 @@ export class Engine {
       )
       .finally(() => {
         this.localJobs.delete(execution.id);
+        this.pollCheckChanged(run.id);
         this.pump();
       });
   }

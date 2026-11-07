@@ -218,10 +218,13 @@ function PauseDialog({
   const [selected, setSelected] = useState<string>(),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
-    [stale, setStale] = useState('');
+    [stale, setStale] = useState(''),
+    [acknowledgement, setAcknowledgement] = useState('');
   const keep = useRef<HTMLButtonElement>(null),
     body = useRef<HTMLDivElement>(null),
-    add = useRef<HTMLButtonElement>(null);
+    add = useRef<HTMLButtonElement>(null),
+    retryRefresh = useRef<HTMLButtonElement>(null),
+    focusAfterMutation = useRef(false);
   const load = useCallback(
     async (offset = 0) => {
       const d = await api.pauses.list.query({
@@ -263,30 +266,54 @@ function PauseDialog({
   useEffect(() => {
     if (selected) keep.current?.focus();
   }, [selected]);
+  useEffect(() => {
+    if (busy || !focusAfterMutation.current) return;
+    focusAfterMutation.current = false;
+    requestAnimationFrame(() => {
+      const nextButton =
+        body.current?.querySelector<HTMLButtonElement>('[data-release]');
+      (stale ? retryRefresh.current : (nextButton ?? add.current))?.focus();
+    });
+  }, [busy, stale]);
   const perform = async (action: () => Promise<unknown>, release = false) => {
     setBusy(true);
     setError('');
+    setAcknowledgement('');
     try {
       await action();
-      await load();
-      changed();
-      if (release) {
-        setSelected(undefined);
-        requestAnimationFrame(() => {
-          const nextButton =
-            body.current?.querySelector<HTMLButtonElement>('[data-release]');
-          (nextButton ?? add.current)?.focus();
-        });
-      } else {
-        setActor('');
-        setReason('');
-        setAdding(false);
-      }
     } catch (e) {
       setError(errorMessage(e));
       void load().catch(() =>
         setStale('Could not refresh holds. Retry before releasing.'),
       );
+      setBusy(false);
+      return;
+    }
+    // Acknowledged writes stay completed even when their follow-up read fails.
+    if (release) setSelected(undefined);
+    else {
+      setActor('');
+      setReason('');
+      setAdding(false);
+    }
+    setAcknowledgement(release ? 'Hold released.' : 'Pause added.');
+    changed();
+    focusAfterMutation.current = true;
+    try {
+      await load();
+    } catch (e) {
+      setStale(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const refresh = async () => {
+    setBusy(true);
+    focusAfterMutation.current = true;
+    try {
+      await load();
+    } catch (e) {
+      setStale(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -301,15 +328,20 @@ function PauseDialog({
                 ? `${total} applicable hold${total === 1 ? '' : 's'}`
                 : 'Loading holds…'}
             </Text>
+            {acknowledgement && (
+              <Text size="sm" role="status">
+                {acknowledgement}
+              </Text>
+            )}
             {stale && (
               <Alert color="yellow" title="Pause status may be out of date">
                 {stale}
                 <Button
                   size="xs"
                   variant="subtle"
-                  onClick={() =>
-                    void load().catch((e) => setStale(errorMessage(e)))
-                  }
+                  ref={retryRefresh}
+                  disabled={busy}
+                  onClick={() => void refresh()}
                 >
                   Retry refresh
                 </Button>
@@ -400,8 +432,11 @@ function PauseDialog({
               <Button
                 ref={add}
                 variant="default"
-                disabled={busy}
-                onClick={() => setAdding(true)}
+                disabled={busy || !!stale}
+                onClick={() => {
+                  setAcknowledgement('');
+                  setAdding(true);
+                }}
               >
                 Add another pause
               </Button>

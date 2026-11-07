@@ -2,6 +2,8 @@
 
 Use **Pause library** in the persistent header or **Pause workflow** beside the workflow actions. Supply an actor label and reason. Every action creates an independent persisted hold. Open **Review holds** to inspect scope, actor, reason, creation time, and exact ID. **Release hold** releases only that record. Execution can resume when no applicable records remain.
 
+Acknowledged creation closes and clears its form before status refresh. If refresh fails, **Retry refresh** reads the current holds without repeating the write. **Add another pause** deliberately starts a new blank form. A failed creation request preserves entered values.
+
 A library hold applies to every workflow. A workflow hold applies to runs with that workflow ID, including Batch items. It does not propagate to an invoked workflow with a different ID. Already dispatched child work keeps its own scope. Actor labels describe the caller; they do not authenticate identity or restrict who can release a hold.
 
 ## Pause and release through CLI, MCP, or API
@@ -25,7 +27,7 @@ MCP `manage_pause` accepts `request` with `action:"pause"` plus the creation fie
 
 ## Execution and clocks while paused
 
-Pauses block new claims and managed launches, the next step, Script/Fetch launches, polling checks, Wait advancement, and external-input acceptance. In-flight Agent, Script, Fetch, and polling operations may finish. The next boundary stays blocked. Manual starts may allocate a run whose first step waits for resume. Reads, editing, inspection, cancellation, and cleanup remain available. Input submissions and revisions remain accepted; releasing a pause does not accept pending input.
+Pauses block new claims and managed launches, the next step, Script/Fetch launches, polling checks, Wait advancement, and external-input acceptance. In-flight Agent, Script, Fetch, and polling operations may finish. A running polling check keeps its engine actor until settlement, including in waited-parent projections. The next boundary stays blocked. Manual starts may allocate a run whose first step waits for resume. Reads, editing, inspection, cancellation, and cleanup remain available. Input submissions and revisions remain accepted; releasing a pause does not accept pending input.
 
 Blocked runs expose `waiting.kind:"pause"`, person actor, stable `since`, exact `detail.pauseCount`, and bounded reasons. Use the paginated hold operation for all records. An actively finishing step keeps its stage and actor. Work discovery and briefings omit paused assignments from available work. Inspection keeps their `pauseBlocked` metadata visible.
 

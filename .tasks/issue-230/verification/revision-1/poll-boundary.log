@@ -1,0 +1,50 @@
+{
+  "phase": "poll demonstrably executing",
+  "run": {
+    "id": "34864d0a-cc83-43ad-a2e6-b21cab0e0944",
+    "workflowId": "be4206e6-d060-4288-b4fd-38bb47746e46",
+    "workflowName": "Independent polling boundary",
+    "version": 1,
+    "status": "waiting",
+    "cursor": "agent",
+    "createdAt": "2026-11-07T08:28:49.490Z",
+    "updatedAt": "2026-11-07T08:28:49.493Z",
+    "lifecycleRunId": "34864d0a-cc83-43ad-a2e6-b21cab0e0944",
+    "stage": "Build",
+    "waiting": {
+      "kind": "poll",
+      "since": "2026-11-07T08:28:49.493Z",
+      "detail": {
+        "runId": "34864d0a-cc83-43ad-a2e6-b21cab0e0944",
+        "nodeId": "agent",
+        "executionId": "66e8a97f-3a76-42dc-95df-0e79121f0702",
+        "message": "Polling check running",
+        "resumeAt": "2026-11-07T08:28:49.493Z",
+        "nextCheckAt": "2026-11-07T08:28:49.493Z"
+      }
+    },
+    "actor": "engine",
+    "definitionAvailable": true,
+    "rootRunId": "34864d0a-cc83-43ad-a2e6-b21cab0e0944",
+    "rootWorkflowId": "be4206e6-d060-4288-b4fd-38bb47746e46",
+    "result": {
+      "runId": "34864d0a-cc83-43ad-a2e6-b21cab0e0944"
+    },
+    "currentExecution": "66e8a97f-3a76-42dc-95df-0e79121f0702"
+  },
+  "blockers": {
+    "items": [
+      {
+        "runId": "34864d0a-cc83-43ad-a2e6-b21cab0e0944",
+        "executionId": "66e8a97f-3a76-42dc-95df-0e79121f0702",
+        "lifecycleRunId": "34864d0a-cc83-43ad-a2e6-b21cab0e0944",
+        "reason": "wait",
+        "resumeAt": "2026-11-07T08:28:49.493Z",
+        "nextCheckAt": "2026-11-07T08:28:49.493Z"
+      }
+    ],
+    "total": 1,
+    "truncated": false
+  }
+}
+PASS in-flight check completes once; exit is held until exact release.

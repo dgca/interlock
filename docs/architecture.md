@@ -454,6 +454,8 @@ Waiting selects a leaf that can progress before an intervention-blocked leaf, wi
 
 Storage's continuation projection omits operation payloads and supplies only a 512-character JSON-text preview of the latest polling output, with a truncation marker. `waiting.detail.lastCheck` adds that preview and bounded error text. The projection emits `pause` for applicable scope holds at blocked boundaries, with exact hold count and bounded reasons. In-flight Agent/Script/Fetch executions retain their active actor. `admission_queue` remains reserved. Lifecycle event triggers remain planned.
 
+Before projection, runtime overlays active polling checks from the current engine job registry. A check retains engine actor and `waiting.kind:poll` while running, including through waited parents and applicable pauses. Start and settlement wake continuation and UI readers. This state is not persisted, so restart cannot imply a stale check is still running.
+
 Before projection, runtime overlays the same current managed admission summary used by work inspection onto compact assignment metadata. Missing, disabled, or incompatible profiles require intervention; a pending model-capability lookup remains queued for the engine. External-input hold waits use the effective holding run's persisted `heldAt`, including inherited holds.
 
 Optional Agent `context.tier` is captured with assignments and retained in compact discovery and continuation. Core defines the fixed vocabulary and optional claim `modelSelection`; runtime captures requested and declared selection on each new usage-attempt receipt. Usage model reports remain separate. No model is selected or verified by Interlock. See [model tiers](model-tiers.md).

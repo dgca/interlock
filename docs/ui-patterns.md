@@ -70,3 +70,5 @@ Keep tests focused on consequences: request identity, retained answers, explicit
 - [n8n human review](https://docs.n8n.io/advanced-ai/human-in-the-loop-tools/) provides the tool and proposed parameters for a human decision.
 - [Visibility of system status](https://www.nngroup.com/articles/visibility-system-status/) explains feedback during actions and state changes.
 - [Progressive disclosure](https://www.nngroup.com/articles/progressive-disclosure/) explains prioritizing frequent decisions while retaining access to advanced details.
+
+Pause creation and release record acknowledged success before refreshing hold lists. A failed follow-up read keeps the completed outcome, closes the creation form, and offers read-only **Retry refresh**. Only actual mutation failures retain entered form values for retry. **Add another pause** starts a new blank form after status recovery.

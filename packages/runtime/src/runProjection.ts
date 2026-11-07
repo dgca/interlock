@@ -80,7 +80,11 @@ export function projectRun(
     };
     const managed = work?.managedExecution;
     const pauses = store.pauseHolds(run.workflowId);
+    const pollCheckRunning =
+      current?.kind === 'wait' &&
+      state.executions.some((e) => e.id === current.id && e.pollCheckRunning);
     const inFlight =
+      pollCheckRunning ||
       work?.status === 'claimed' ||
       ((current?.kind === 'script' || current?.kind === 'fetch') &&
         current.status === 'running');
@@ -160,7 +164,11 @@ export function projectRun(
           ? 'poll'
           : 'timer',
         'engine',
-        current.nextCheckAt ? 'Waiting for polling check' : 'Waiting for timer',
+        pollCheckRunning
+          ? 'Polling check running'
+          : current.nextCheckAt
+            ? 'Waiting for polling check'
+            : 'Waiting for timer',
       );
       const detail = branch.waiting!.detail;
       if (current.resumeAt) detail.resumeAt = current.resumeAt;

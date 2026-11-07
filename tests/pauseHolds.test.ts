@@ -634,3 +634,88 @@ it('keeps lease-expired and explicitly resumed assignments out of discovery duri
   resume(e, next.id);
   expect(e.available(r.id)).toHaveLength(1);
 });
+
+it.each([true, false])(
+  '3a0f58d-poll-inflight-projection: retains the engine actor through a real passing=%s check and waited-parent rollup',
+  async (passing) => {
+    const dir = mkdtempSync(join(tmpdir(), 'interlock-pause-poll-projection-'));
+    dirs.push(dir);
+    const ready = join(dir, 'ready'),
+      release = join(dir, 'release');
+    const e = open(),
+      d = step({
+        kind: 'wait',
+        stage: 'Build',
+        timing: {
+          kind: 'poll',
+          everyMs: 1000,
+          check: {
+            kind: 'script',
+            language: 'javascript',
+            command: `const fs=await import('node:fs'); fs.appendFileSync(${JSON.stringify(ready)},'x'); while(!fs.existsSync(${JSON.stringify(release)})) await new Promise(r=>setTimeout(r,10)); return {ready:${passing}};`,
+            timeoutMs: 5000,
+          },
+          path: 'ready',
+          equals: true,
+        },
+      });
+    const childWorkflow = publish(e, d);
+    const parent = blankDefinition();
+    parent.nodes[1] = nodeSchema.parse({
+      id: 'agent',
+      kind: 'workflow',
+      label: 'Wait for child',
+      stage: 'Intake',
+      workflowId: childWorkflow,
+      version: 1,
+    });
+    const root = e.start(publish(e, parent), null).run;
+    await vi.waitFor(() => expect(existsSync(ready)).toBe(true));
+    const child = e.store.runs().find((r) => r.parentRunId === root.id)!;
+    const h = hold(e);
+    const expected = {
+      stage: 'Build',
+      actor: 'engine',
+      waiting: { kind: 'poll', detail: { message: 'Polling check running' } },
+    };
+    expect(e.projectRun(child.id)).toMatchObject(expected);
+    expect(e.projectRun(root.id)).toMatchObject(expected);
+    expect(e.inspect(root.id).run).toMatchObject(expected);
+    expect(
+      e.continuation.briefing({ id: root.id, limit: 20 }).run,
+    ).toMatchObject(expected);
+    expect(e.continuation.summary(root.id, 20)).toMatchObject(expected);
+    const { appRouter } = await import('../packages/server/src/router');
+    const api = appRouter.createCaller({ engine: e });
+    expect(
+      (await api.runs.summaries({})).items.find((r) => r.id === root.id),
+    ).toMatchObject(expected);
+    expect(
+      e
+        .inspect(child.id)
+        .events.findLast((event) => event.type === 'execution.paused'),
+    ).toMatchObject(expected);
+    const before = e.continuation.briefing({ id: root.id, limit: 20 }).cursor;
+    writeFileSync(release, 'release');
+    await vi.waitFor(() =>
+      expect(e.projectRun(root.id)).toMatchObject({
+        actor: 'person',
+        waiting: { kind: 'pause' },
+      }),
+    );
+    expect(
+      e.run(child.id).executions.find((x) => x.kind === 'wait')?.check?.count,
+    ).toBe(1);
+    expect(e.run(child.id).executions.some((x) => x.kind === 'exit')).toBe(
+      false,
+    );
+    expect(e.continuation.briefing({ id: root.id, limit: 20 }).cursor).not.toBe(
+      before,
+    );
+    const { readFileSync } = await import('node:fs');
+    expect(readFileSync(ready, 'utf8')).toBe('x');
+    resume(e, h.id);
+    if (passing) expect(e.run(root.id).status).toBe('completed');
+    else e.cancel(root.id);
+  },
+);
