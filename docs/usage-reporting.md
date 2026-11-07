@@ -178,3 +178,25 @@ Receipts survive restart, retries, and published-definition cleanup. Deleting a 
 [Comparison measurements](workflow-testbench.md#compare-measurements) freeze the observed trial's run and attempt inventory. Reports read current receipts for those original attempts, including late observer reports, with an as-of time. A later explicit retry does not add its work to the original measurement. Ordinary `get_run_usage` still describes current run history, including retries; its scope can therefore differ from a frozen comparison. Missing legacy inventories and deleted receipts remain unknown.
 
 Attempt groups include `wallMs`, `pausedMs`, and `activeMs`, with null values when historical claim time is unknown. Active milliseconds subtract overlapping applicable library/workflow pause intervals once. They describe elapsed time excluding declared pauses, not measured model activity.
+
+## Workflow performance and cost reports
+
+Use `interlock report`, the MCP tool `workflow_report`, the shared API `report.summary`, or the UI **Reports** view (`/report` or `/workflows/:id/report`) to generate operational performance and cost reports over a single workflow or across the entire library.
+
+Reports evaluate runs within a bounded time window (`since` and `until`, defaulting to the past 30 days) and sample limit (default 100, maximum 1000 runs):
+
+```sh
+interlock report
+interlock report --workflow WORKFLOW_ID --since 2026-01-01 --limit 50
+interlock report --json
+```
+
+### Metrics and aggregations
+
+Each report aggregates operational metrics across completed, failed, and active runs in the window:
+
+- **Run duration & wait times**: Reports median (p50) and 90th percentile (p90) wall time for terminal runs, active runs, admission queue wait (time between start request and admission when concurrency or stage exclusion gates apply), and human wait (time spent awaiting human input on Input nodes plus duration under declared pause holds).
+- **Stage and node durations**: Breaks down execution time by configured stage (H4) and per node (p50 and p90 durations), highlighting workflow bottlenecks.
+- **Claim latency and reliability**: Measures claim wait (available to claimed) separately for fresh sessions versus continuing continuity group sessions. Reliability metrics aggregate total claim attempts, lease expiries, attempt failures, managed harness recoveries (H7 restarts, nudges, retries), and inactivity stalls (H12).
+- **Spend and coverage**: Total input/output/cached/reasoning tokens and attributed costs aggregated by run, node, model/alias, and provider. Each metric explicitly states measured versus unknown coverage percentages so partial telemetry is never mistaken for complete measurement.
+- **Terminal outcomes and escalation rate**: Groups terminal runs by Exit node, tracking the count, percentage, unattended completion rate, and human escalation rate (runs finishing at escalation or human-review exit nodes).

@@ -2,7 +2,13 @@ import { EventTriggers } from './eventTriggers.js';
 import { RunVersions } from './runVersions.js';
 import { modelReferences } from '@interlock/core';
 import { runDoctor } from './doctor.js';
-import type { DoctorOptions, DoctorReport } from '@interlock/core';
+import { generateWorkflowReport } from './report.js';
+import type {
+  DoctorOptions,
+  DoctorReport,
+  ReportFilter,
+  WorkflowReport,
+} from '@interlock/core';
 import {
   sourceQuiescence,
   uncertainClaimCollection,
@@ -697,6 +703,9 @@ export class Engine {
   }
   doctor(options?: DoctorOptions): Promise<DoctorReport> {
     return runDoctor(this, options);
+  }
+  report(filter: ReportFilter): WorkflowReport {
+    return generateWorkflowReport(this.store, this, filter);
   }
   private arrangeDraft(definition: WorkflowDefinition, layout?: DraftLayout) {
     const parsed = definitionSchema.parse(definition);
@@ -4431,3 +4440,4 @@ export class Engine {
 }
 
 export { runDoctor } from './doctor.js';
+export { generateWorkflowReport } from './report.js';

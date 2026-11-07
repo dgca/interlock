@@ -15,6 +15,8 @@ import {
   runTagsSchema,
   type DoctorReport,
   type DiagnosticCategory,
+  type WorkflowReport,
+  type ReportFilter,
 } from '@interlock/core';
 const parse = async (value: string | undefined) => {
   if (value === undefined) throw new Error('Missing JSON argument');
@@ -565,9 +567,28 @@ export async function runCommand(argv: string[]) {
       });
       return client.system.doctor.query({ live: values.live });
     }
+    case 'report': {
+      const { values } = parseArgs({
+        args,
+        options: {
+          workflow: { type: 'string' },
+          since: { type: 'string' },
+          until: { type: 'string' },
+          limit: { type: 'string' },
+          json: { type: 'boolean' },
+        },
+      });
+      return client.report.summary.query({
+        workflowId: values.workflow,
+        since: values.since,
+        until: values.until,
+        limit: values.limit ? Number(values.limit) : undefined,
+      });
+    }
     default:
       return {
         usage: [
+          'report [--workflow <id>] [--since <date>] [--until <date>] [--limit <n>] [--json] (workflow performance and cost report over time window)',
           'doctor [--live] [--json] (read-only system health and readiness check; returns non-zero on failure)',
           'triggers <read|manage> <json|@file> (schedule/webhook/event configuration, paged fires/deliveries and attention; mutations use expectedRevision; create/import disabled; schedules alias retained)',
           'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value; write-only Secret creation/replacement through stdin)',
@@ -671,4 +692,182 @@ export function formatDoctorReport(report: DoctorReport): string {
   );
   lines.push(`Overall status: ${report.status.toUpperCase()}`);
   return lines.join('\n');
+}
+
+export async function runReportCommand(filter: ReportFilter) {
+  const client = createClient(process.env.INTERLOCK_URL);
+  return await client.report.summary.query(filter);
+}
+
+export function formatWorkflowReport(report: WorkflowReport): string {
+  const lines: string[] = [
+    '============================================================',
+    'Interlock Performance & Cost Report',
+    `Generated at: ${report.generatedAt}`,
+    `Window: since=${report.window.since ?? 'all'} until=${report.window.until ?? 'all'}`,
+    `Workflow filter: ${report.filter.workflowId ?? 'all'}`,
+    '============================================================',
+    '',
+    'SUMMARY',
+    `  Total Runs:                     ${report.summary.totalRuns}`,
+    `  Run Duration:                   ${formatDist(report.summary.durationMs)}`,
+    `  Admission Queue Wait (H8):      ${formatDist(report.summary.admissionQueueWaitMs)}`,
+    `  Human Wait Time:                ${formatDist(report.summary.humanWaitMs)}`,
+    '',
+  ];
+
+  if (report.stages.length > 0) {
+    lines.push('STAGES (H4)');
+    lines.push(
+      '  ' +
+        'Stage'.padEnd(24) +
+        'Runs'.padEnd(10) +
+        'Median (ms)'.padEnd(15) +
+        'P90 (ms)',
+    );
+    lines.push('  ' + '-'.repeat(60));
+    for (const s of report.stages) {
+      lines.push(
+        '  ' +
+          s.stage.padEnd(24) +
+          String(s.runCount).padEnd(10) +
+          String(s.durationMs.median ?? 0).padEnd(15) +
+          String(s.durationMs.p90 ?? 0),
+      );
+    }
+    lines.push('');
+  }
+
+  if (report.nodes.length > 0) {
+    lines.push('NODES');
+    lines.push(
+      '  ' +
+        'Node ID'.padEnd(20) +
+        'Label'.padEnd(24) +
+        'Kind'.padEnd(12) +
+        'Execs'.padEnd(8) +
+        'Median (ms)'.padEnd(15) +
+        'P90 (ms)',
+    );
+    lines.push('  ' + '-'.repeat(88));
+    for (const n of report.nodes.slice(0, 20)) {
+      lines.push(
+        '  ' +
+          n.nodeId.padEnd(20) +
+          n.label.slice(0, 22).padEnd(24) +
+          n.kind.padEnd(12) +
+          String(n.executionCount).padEnd(8) +
+          String(n.durationMs.median ?? 0).padEnd(15) +
+          String(n.durationMs.p90 ?? 0),
+      );
+    }
+    lines.push('');
+  }
+
+  lines.push('CLAIMS');
+  lines.push(
+    `  Wait to Claim (New session):        ${formatDist(report.claims.newSession)}`,
+  );
+  lines.push(
+    `  Wait to Claim (Continuing session): ${formatDist(report.claims.continuingSession)}`,
+  );
+  lines.push(
+    `  Total Attempts:                     ${report.claims.totalAttempts}`,
+  );
+  lines.push(
+    `  Lease Expiries:                     ${report.claims.leaseExpiries}`,
+  );
+  lines.push(`  Failures:                           ${report.claims.failures}`);
+  lines.push(
+    `  H7 Recoveries:                      ${report.claims.h7Recoveries}`,
+  );
+  lines.push(
+    `  H12 Stalls:                         ${report.claims.h12Stalls}`,
+  );
+  lines.push('');
+
+  lines.push('USAGE & ATTRIBUTED COST');
+  lines.push(
+    `  Tokens: input=${report.usage.tokens.inputTokens.toLocaleString()} output=${report.usage.tokens.outputTokens.toLocaleString()} cached=${report.usage.tokens.cachedInputTokens.toLocaleString()} reasoning=${report.usage.tokens.reasoningOutputTokens.toLocaleString()}`,
+  );
+  const costStr =
+    report.usage.costs.map((c) => c.formatted).join(', ') || '0 USD';
+  lines.push(`  Attributed Cost: ${costStr}`);
+  lines.push(
+    `  Coverage: ${report.usage.coverage.measuredPercentage}% measured (${report.usage.coverage.measuredAttempts}/${report.usage.coverage.totalAttempts} attempts), ${report.usage.coverage.unknownPercentage}% unknown (${report.usage.coverage.unknownAttempts}/${report.usage.coverage.totalAttempts} attempts)`,
+  );
+
+  if (report.usage.byProvider.length > 0) {
+    lines.push('  By Provider:');
+    for (const p of report.usage.byProvider) {
+      const pCost = p.costMicros
+        ? (p.costMicros / 1_000_000).toFixed(4) + ' ' + (p.currency ?? '')
+        : 'none';
+      lines.push(
+        `    ${p.provider.padEnd(20)} count=${String(p.count).padEnd(6)} input=${p.inputTokens.toLocaleString().padEnd(12)} output=${p.outputTokens.toLocaleString().padEnd(12)} cost=${pCost}`,
+      );
+    }
+  }
+
+  if (report.usage.byModel.length > 0) {
+    lines.push('  By Model:');
+    for (const m of report.usage.byModel.slice(0, 10)) {
+      const mCost = m.costMicros
+        ? (m.costMicros / 1_000_000).toFixed(4) + ' ' + (m.currency ?? '')
+        : 'none';
+      lines.push(
+        `    ${(m.provider + '/' + m.model).padEnd(30)} count=${String(m.count).padEnd(6)} input=${m.inputTokens.toLocaleString().padEnd(12)} output=${m.outputTokens.toLocaleString().padEnd(12)} cost=${mCost}`,
+      );
+    }
+  }
+  lines.push('');
+
+  lines.push('TERMINAL OUTCOMES');
+  lines.push(
+    `  Completed: ${report.terminalOutcomes.completedRuns} | Failed: ${report.terminalOutcomes.failedRuns} | Cancelled: ${report.terminalOutcomes.cancelledRuns} | Active: ${report.terminalOutcomes.activeRuns}`,
+  );
+  lines.push(
+    `  Unattended Completion Rate: ${report.terminalOutcomes.unattendedCompletionRate}%`,
+  );
+  lines.push(
+    `  Human Escalation Rate:       ${report.terminalOutcomes.humanEscalationRate}%`,
+  );
+
+  if (report.terminalOutcomes.exitNodes.length > 0) {
+    lines.push('  Exit Nodes:');
+    lines.push(
+      '    ' +
+        'Node ID'.padEnd(20) +
+        'Label'.padEnd(28) +
+        'Runs'.padEnd(8) +
+        '% of Completed',
+    );
+    lines.push('    ' + '-'.repeat(66));
+    for (const e of report.terminalOutcomes.exitNodes) {
+      lines.push(
+        '    ' +
+          e.nodeId.padEnd(20) +
+          e.label.padEnd(28) +
+          String(e.count).padEnd(8) +
+          `${e.percentage}%`,
+      );
+    }
+  }
+
+  lines.push('============================================================');
+  return lines.join('\n');
+}
+
+function formatDist(
+  d: {
+    count: number;
+    min: number | null;
+    median: number | null;
+    p90: number | null;
+    max: number | null;
+  },
+  unit = 'ms',
+): string {
+  if (d.count === 0 || d.median === null) return 'none';
+  return `count=${d.count} min=${d.min} median=${d.median} p90=${d.p90} max=${d.max} ${unit}`.trim();
 }

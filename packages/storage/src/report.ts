@@ -1,0 +1,35 @@
+import type { DatabaseSync } from 'node:sqlite';
+import type { ReportFilter, Run } from '@interlock/core';
+
+export function runsForReport(db: DatabaseSync, filter: ReportFilter): Run[] {
+  const conditions = ["collection = 'runs'"];
+  const params: (string | number)[] = [];
+
+  if (filter.workflowId !== undefined) {
+    conditions.push("json_extract(value, '$.workflowId') = ?");
+    params.push(filter.workflowId);
+  }
+  if (filter.since !== undefined) {
+    conditions.push("json_extract(value, '$.createdAt') >= ?");
+    params.push(filter.since);
+  }
+  if (filter.until !== undefined) {
+    conditions.push("json_extract(value, '$.createdAt') <= ?");
+    params.push(filter.until);
+  }
+
+  const limit = filter.limit ?? 500;
+  params.push(limit);
+
+  const sql = `
+    SELECT value FROM documents
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY json_extract(value, '$.createdAt') DESC
+    LIMIT ?
+  `;
+
+  return db
+    .prepare(sql)
+    .all(...params)
+    .map((row) => JSON.parse(row.value as string) as Run);
+}

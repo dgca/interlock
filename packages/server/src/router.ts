@@ -2,6 +2,7 @@ import {
   stallSettingsUpdateSchema,
   stallRequestSchema,
   doctorOptionsSchema,
+  reportFilterSchema,
 } from '@interlock/core';
 import {
   scheduleMutationSchema,
@@ -837,10 +838,18 @@ export const appRouter = t.router({
         ctx.engine.reportFailure(input.workId, input.token, input.error),
       ),
   }),
+  report: t.router({
+    summary: p
+      .input(reportFilterSchema.optional())
+      .query(({ ctx, input }) => ctx.engine.report(input ?? {})),
+  }),
   system: t.router({
     doctor: p
       .input(doctorOptionsSchema.optional())
       .query(({ ctx, input }) => ctx.engine.doctor(input ?? undefined)),
+    report: p
+      .input(reportFilterSchema.optional())
+      .query(({ ctx, input }) => ctx.engine.report(input ?? {})),
   }),
 });
 export type AppRouter = typeof appRouter;

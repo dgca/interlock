@@ -4,10 +4,17 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { readPath, InterlockError, type RunQuery } from '@interlock/core';
+import {
+  readPath,
+  InterlockError,
+  type RunQuery,
+  type ReportFilter,
+} from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
 import { continuationState } from './continuation.js';
 import { runSummaries } from './runSummaries.js';
+import { runsForReport } from './report.js';
+export { runsForReport } from './report.js';
 export type { HistoryRun } from './history.js';
 import {
   historyRuns,
@@ -492,6 +499,9 @@ export class Store {
   }
   runSummaries(query: RunSummaryQuery, attentionIds: string[]) {
     return runSummaries(this.db, query, attentionIds);
+  }
+  runsForReport(filter: ReportFilter): Run[] {
+    return runsForReport(this.db, filter);
   }
   queuedRuns(): Run[] {
     return this.db

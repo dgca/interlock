@@ -83,7 +83,7 @@ it.each(['http', 'stdio'])(
     try {
       await client.connect(transport);
       const tools = (await client.listTools()).tools;
-      expect(tools).toHaveLength(63);
+      expect(tools).toHaveLength(64);
       if (discovery) expect(tools).toEqual(discovery);
       else discovery = tools;
       expect(await call('list_workflows')).toEqual([]);

@@ -14,6 +14,8 @@ import {
   commandError,
   runDoctorCommand,
   formatDoctorReport,
+  runReportCommand,
+  formatWorkflowReport,
 } from './commands.js';
 
 async function main() {
@@ -47,6 +49,7 @@ Workflow variables: variables <read|manage> <json|@file> [--value-stdin]
 Workflow triggers: triggers (schedules is an alias) <read|manage> <json|@file>
 Kinds: schedule, webhook, event. Event triggers match run transitions with optional quiescence.
 Named pause holds: pause, pause-holds, resume
+Workflow performance and cost report: report [--workflow <id>] [--since <date>] [--until <date>] [--limit <n>] [--json]
 System readiness check: doctor [--live] [--json]
 Run 'interlock commands' for argument syntax.
 
@@ -107,9 +110,35 @@ Variable encryption keys are held separately from the database. Back up keys sep
       'budget',
       'set-budget',
       'doctor',
+      'report',
     ];
     if (!known.includes(argv[0]))
       throw new Error(`Unknown command: ${argv[0]}. Run interlock --help.`);
+    if (argv[0] === 'report') {
+      const { values } = parseArgs({
+        args: argv.slice(1),
+        options: {
+          workflow: { type: 'string' },
+          since: { type: 'string' },
+          until: { type: 'string' },
+          limit: { type: 'string' },
+          json: { type: 'boolean' },
+        },
+      });
+      const filter = {
+        workflowId: values.workflow,
+        since: values.since,
+        until: values.until,
+        limit: values.limit ? Number(values.limit) : undefined,
+      };
+      const report = await runReportCommand(filter);
+      if (values.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatWorkflowReport(report));
+      }
+      return;
+    }
     if (argv[0] === 'doctor') {
       const { values } = parseArgs({
         args: argv.slice(1),

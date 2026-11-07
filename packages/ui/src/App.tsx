@@ -43,17 +43,21 @@ export function App() {
   const variableMatch = useMatch('/variables/*');
   const harnessMatch = useMatch('/settings/harnesses');
   const diagnosticsMatch = useMatch('/settings/diagnostics');
+  const reportMatch =
+    useMatch('/report') || useMatch('/workflows/:workflowId/report');
   const page = diagnosticsMatch
     ? 'diagnostics'
-    : harnessMatch
-      ? 'harnesses'
-      : variableMatch
-        ? 'variables'
-        : promptMatch
-          ? 'prompts'
-          : runMatch
-            ? 'runs'
-            : 'workflows';
+    : reportMatch
+      ? 'report'
+      : harnessMatch
+        ? 'harnesses'
+        : variableMatch
+          ? 'variables'
+          : promptMatch
+            ? 'prompts'
+            : runMatch
+              ? 'runs'
+              : 'workflows';
   const [scheduleAttentionCount, setScheduleAttentionCount] = useState(0);
   const [editorDirty, setEditorDirty] = useState(false);
   const [scheduleDirty, setScheduleDirty] = useState(false);
