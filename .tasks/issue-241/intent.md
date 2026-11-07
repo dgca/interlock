@@ -25,3 +25,7 @@ SDLC run: c0597851-3a59-4ce9-8fa1-f5c99fab5aca
 ## Open questions
 
 None about intent. Event schema, bounded inspection and persistence details belong to the spec and plan.
+
+## Review baseline
+
+The original baseline above remains the task's starting point. The task branch was rebased onto `8c720e70838847999fa3036a27b0a1c4c2c7d975` before final verification, incorporating the independently merged #204 usage work. Use that commit as the complete task-diff review base.
