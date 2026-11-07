@@ -101,7 +101,7 @@ export function Schedules({
   };
   const refresh = useCallback(async () => {
     const generation = ++refreshGeneration.current;
-    const [list, detail] = await Promise.all([
+    const [list, detail] = await Promise.allSettled([
       api.triggers.list.query({
         workflowId: workflow.id,
         offset: listOffset,
@@ -112,10 +112,16 @@ export function Schedules({
         : Promise.resolve(undefined),
     ]);
     if (generation !== refreshGeneration.current) return;
-    if (detail && detail.trigger.workflowId !== workflow.id)
-      throw new Error('Schedule belongs to another workflow');
-    setListing(list);
-    setInspection(detail);
+    if (list.status === 'fulfilled') setListing(list.value);
+    if (detail.status === 'fulfilled') {
+      if (detail.value && detail.value.trigger.workflowId !== workflow.id) {
+        setInspection(undefined);
+        throw new Error('Schedule belongs to another workflow');
+      }
+      setInspection(detail.value);
+    } else setInspection(undefined);
+    if (list.status === 'rejected') throw list.reason;
+    if (detail.status === 'rejected') throw detail.reason;
     setError('');
   }, [workflow.id, selected, fireOffset, listOffset]);
   useEffect(() => {
@@ -245,7 +251,7 @@ export function Schedules({
         </Alert>
       )}
       {!listing ? (
-        <Text role="status">Loading schedules…</Text>
+        !error && <Text role="status">Loading schedules…</Text>
       ) : listing.total === 0 ? (
         <Text size="sm">
           No schedules. Add one to start this workflow periodically.
