@@ -16,10 +16,19 @@ import {
   workResourceRequestSchema,
   type WorkResourceRequest,
 } from '@interlock/core';
+import { tmpdir } from 'node:os';
+import { writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { Store } from '@interlock/storage';
 import { tidyWorkflow } from '@interlock/core/layout';
+import {
+  calculateVisitCount,
+  buildExecutionProvenance,
+  buildRunExecutionProvenanceFile,
+} from './nodeData.js';
+export * from './nodeData.js';
 import {
   assertContract,
   assertExternalInputContract,
@@ -60,6 +69,7 @@ import {
   type WorkflowEdge,
   type WorkflowNode,
   type WorkRequest,
+  type ModelUsage,
   composePrompt,
   promptIds,
   continuationLimitSchema,
@@ -1407,6 +1417,15 @@ export class Engine {
         throw new InterlockError(
           'itemInput is only available inside a Batch item run',
         );
+      if (binding.source === 'execution') {
+        const previous = run.executions.findLast(
+          (candidate) =>
+            candidate.nodeId === binding.nodeId &&
+            candidate.status === 'completed',
+        );
+        return (previous?.provenance ?? undefined) as unknown as
+          Json | undefined;
+      }
       if (binding.source !== 'node') return sources[binding.source];
       const previous = run.executions.findLast(
         (candidate) =>
@@ -1420,7 +1439,15 @@ export class Engine {
     let port = 'default';
     if (node.routing) {
       try {
-        const matched = matchRouting(node.routing, result);
+        const matched = matchRouting(node.routing, result, (nodeId, path) => {
+          const previous = run.executions.findLast(
+            (e) => e.nodeId === nodeId && e.status === 'completed',
+          );
+          if (path === 'visitCount')
+            return previous?.provenance?.visitCount ?? 0;
+          if (!previous?.provenance) return null;
+          return readPath(previous.provenance as unknown as Json, path);
+        });
         if (matched === undefined)
           throw new InterlockError(
             `No result branch matched at "${node.routing.path || '$'}"`,
@@ -1518,6 +1545,14 @@ export class Engine {
           ),
         );
         const step = previous.executions.at(-1)!;
+        const visitCount = calculateVisitCount(previous.executions, node.id);
+        step.provenance = buildExecutionProvenance({
+          node,
+          execution: step,
+          visitCount,
+          attempt: step.attempt ?? 1,
+          endedAt: now(),
+        });
         step.output = output;
         step.port = port;
         step.status = 'completed';
@@ -1535,6 +1570,37 @@ export class Engine {
       });
       return;
     }
+    const visitCount = calculateVisitCount(run.executions, node.id);
+    let managed:
+      | {
+          profileId?: string | null;
+          harness?: string | null;
+          sessionId?: string | null;
+          requestedModel?: string | null;
+          actualModel?: string | null;
+          provider?: string | null;
+          effort?: string | null;
+          usage?: ModelUsage[] | null;
+        }
+      | undefined;
+    let attempt = execution.attempt ?? 1;
+    if (node.kind === 'agent') {
+      const work = this.store
+        .work(undefined, run.id)
+        .find((w) => w.executionId === execution.id);
+      if (work) {
+        attempt = work.attempt;
+        managed = this.executors.executionProvenance(work.id, work.attempt);
+      }
+    }
+    execution.provenance = buildExecutionProvenance({
+      node,
+      execution,
+      visitCount,
+      managed,
+      attempt,
+      endedAt: now(),
+    });
     if (rawResult !== undefined) execution.result = rawResult;
     execution.output = output;
     execution.port = port;
@@ -2056,7 +2122,7 @@ export class Engine {
         return changed;
       }
       if (node.kind === 'switch') {
-        const value = readPath(execution.input, node.path);
+        const value = this.readBranchValue(run, execution, node.path);
         const port =
           node.cases.find((entry) => isDeepStrictEqual(value, entry.equals))
             ?.port ?? node.default;
@@ -2079,7 +2145,10 @@ export class Engine {
         node,
         execution.input,
         node.kind === 'condition'
-          ? isDeepStrictEqual(readPath(execution.input, node.path), node.equals)
+          ? isDeepStrictEqual(
+              this.readBranchValue(run, execution, node.path),
+              node.equals,
+            )
             ? 'true'
             : 'false'
           : 'default',
@@ -2335,6 +2404,49 @@ export class Engine {
           : undefined,
     };
   }
+  private readBranchValue(
+    run: Run,
+    execution: NodeExecution,
+    path: string,
+  ): Json {
+    const normalized = path.replace(/^\$\./, '');
+    if (normalized.startsWith('execution.')) {
+      const hasInputExecution =
+        execution.input !== null &&
+        typeof execution.input === 'object' &&
+        Object.hasOwn(execution.input, 'execution');
+      if (!hasInputExecution) {
+        const parts = normalized.split('.');
+        const targetNodeId = parts[1];
+        const propPath = parts.slice(2).join('.');
+        const previous = run.executions.findLast(
+          (candidate) =>
+            candidate.nodeId === targetNodeId &&
+            candidate.status === 'completed',
+        );
+        if (propPath === 'visitCount') {
+          return previous?.provenance?.visitCount ?? 0;
+        }
+        if (!previous || !previous.provenance) {
+          return null;
+        }
+        return readPath(previous.provenance as unknown as Json, propPath);
+      }
+    }
+    return readPath(execution.input, path);
+  }
+  private writeExecutionProvenanceFile(
+    run: Run,
+    execution: NodeExecution,
+  ): string {
+    const data = buildRunExecutionProvenanceFile(run);
+    const filePath = join(
+      tmpdir(),
+      `interlock-provenance-${run.id}-${execution.id}.json`,
+    );
+    writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    return filePath;
+  }
   private async localOperation(
     run: Run,
     operation: Extract<WorkflowNode, { kind: 'script' | 'fetch' }> | PollCheck,
@@ -2434,7 +2546,11 @@ export class Engine {
         const launch = !execution.background;
         if (launch)
           this.backgroundScripts.prepare(run, execution, operation.timeoutMs);
-        if (launch)
+        if (launch) {
+          const provenanceFile = this.writeExecutionProvenanceFile(
+            run,
+            execution,
+          );
           this.backgroundScripts.launch(
             run,
             execution,
@@ -2445,10 +2561,12 @@ export class Engine {
             {
               ...inherited,
               ...this.scriptContextEnvironment(run, execution),
+              INTERLOCK_EXECUTION_PROVENANCE_FILE: provenanceFile,
               ...bindings,
             },
             resolved.secrets.length > 0,
           );
+        }
         const output = await this.backgroundScripts.monitor(
           run,
           execution,
@@ -2478,6 +2596,7 @@ export class Engine {
         );
         return { output, resolvedCwd: effectiveCwd };
       }
+      const provenanceFile = this.writeExecutionProvenanceFile(run, execution);
       const launch = (env: NodeJS.ProcessEnv) =>
         executeScript(
           operation.command,
@@ -2489,19 +2608,33 @@ export class Engine {
           env,
           resolved.secrets.length ? redact.text : undefined,
         );
-      const output = await launch({
-        ...inherited,
-        ...this.scriptContextEnvironment(run, execution),
-        ...bindings,
-      }).catch((error: unknown) => {
-        // E2BIG comes from spawn before the Script process can start.
-        if (
-          error instanceof Error &&
-          (error as NodeJS.ErrnoException).code === 'E2BIG'
-        )
-          return launch({ ...inherited, ...bindings });
-        throw error;
-      });
+      let output: Json;
+      try {
+        output = await launch({
+          ...inherited,
+          ...this.scriptContextEnvironment(run, execution),
+          INTERLOCK_EXECUTION_PROVENANCE_FILE: provenanceFile,
+          ...bindings,
+        }).catch((error: unknown) => {
+          // E2BIG comes from spawn before the Script process can start.
+          if (
+            error instanceof Error &&
+            (error as NodeJS.ErrnoException).code === 'E2BIG'
+          )
+            return launch({
+              ...inherited,
+              INTERLOCK_EXECUTION_PROVENANCE_FILE: provenanceFile,
+              ...bindings,
+            });
+          throw error;
+        });
+      } finally {
+        try {
+          rmSync(provenanceFile, { force: true });
+        } catch {
+          /* ignore */
+        }
+      }
       return { output: redact.json(output), resolvedCwd: effectiveCwd };
     } catch (error) {
       if (error instanceof UncertainScript) throw error;

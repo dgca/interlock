@@ -29,6 +29,7 @@ import {
   type Run,
   type WorkflowDefinition,
   type PauseHold,
+  type UsageAttempt,
 } from '@interlock/core';
 import type { Engine, Worker } from '../index.js';
 import { validateDirectoryContainment } from '../workingDirectory.js';
@@ -476,6 +477,57 @@ export class ExecutorManager {
     return this.engine.store
       .forWork<ManagedExecution>(attemptsCollection, workId)
       .sort((a, b) => b.attempt - a.attempt)[0];
+  }
+  executionProvenance(
+    workId: string,
+    attempt: number,
+  ):
+    | {
+        profileId: string | null;
+        harness: string | null;
+        sessionId: string | null;
+        requestedModel: string | null;
+        actualModel: string | null;
+        provider: string | null;
+        effort: string | null;
+        usage: ModelUsage[] | null;
+      }
+    | undefined {
+    const job = this.jobs.get(workId);
+    const record =
+      (job && job.record.attempt === attempt ? job.record : undefined) ??
+      this.engine.store.get<ManagedExecution>(
+        attemptsCollection,
+        `${workId}:${attempt}`,
+      );
+    if (!record) return undefined;
+    const sessionKey = job?.sessionKey ?? record.sessionId;
+    const session = sessionKey
+      ? this.engine.store.get<Session>(sessionsCollection, sessionKey)
+      : undefined;
+    const usageAttempt = this.engine.store.get<UsageAttempt>(
+      'usageAttempts',
+      `${workId}:${attempt}`,
+    );
+    const usage =
+      usageAttempt?.snapshot?.models ?? (job && session?.usage) ?? null;
+    const actualModel =
+      usage?.[0]?.model ??
+      session?.requestedModel ??
+      record.profile.model ??
+      null;
+    const provider = usage?.[0]?.provider ?? null;
+
+    return {
+      profileId: record.profile.id,
+      harness: record.profile.harness,
+      sessionId: session?.id ?? record.sessionId ?? null,
+      requestedModel: session?.requestedModel ?? record.profile.model ?? null,
+      actualModel,
+      provider,
+      effort: record.profile.effort ?? null,
+      usage: usage ?? null,
+    };
   }
   describe(work: ManagedAssignment): ManagedWorkSummary | undefined {
     const record = this.latest(work.id);

@@ -26,6 +26,53 @@ import {
 import { continueAsNewSchema } from './runChains.js';
 import { z } from 'zod';
 export * from './usage.js';
+import { modelUsageSchema, type ModelUsage } from './usage.js';
+export interface ExecutionProvenance {
+  profileId: string | null;
+  harness: string | null;
+  sessionId: string | null;
+  requestedModel: string | null;
+  actualModel: string | null;
+  provider: string | null;
+  effort: string | null;
+  attempt: number;
+  visitCount: number;
+  startedAt: string | null;
+  endedAt: string | null;
+  usage: ModelUsage[] | null;
+}
+export const executionProvenanceSchema = z.object({
+  profileId: z.string().nullable(),
+  harness: z.string().nullable(),
+  sessionId: z.string().nullable(),
+  requestedModel: z.string().nullable(),
+  actualModel: z.string().nullable(),
+  provider: z.string().nullable(),
+  effort: z.string().nullable(),
+  attempt: z.number().int().positive(),
+  visitCount: z.number().int().positive(),
+  startedAt: z.string().nullable(),
+  endedAt: z.string().nullable(),
+  usage: z.array(modelUsageSchema).nullable(),
+});
+export const EXECUTION_PROVENANCE_CONTRACT = {
+  type: 'object',
+  properties: {
+    profileId: { type: ['string', 'null'] },
+    harness: { type: ['string', 'null'] },
+    sessionId: { type: ['string', 'null'] },
+    requestedModel: { type: ['string', 'null'] },
+    actualModel: { type: ['string', 'null'] },
+    provider: { type: ['string', 'null'] },
+    effort: { type: ['string', 'null'] },
+    attempt: { type: 'integer' },
+    visitCount: { type: 'integer' },
+    startedAt: { type: ['string', 'null'] },
+    endedAt: { type: ['string', 'null'] },
+    usage: { type: ['array', 'null'] },
+  },
+  required: ['attempt', 'visitCount'],
+};
 export * from './budgets.js';
 export * from './resultValidation.js';
 export * from './resultRules.js';
@@ -144,6 +191,13 @@ export type ValueBinding =
       default?: Json;
       sourceDefault?: Json;
     }
+  | {
+      source: 'execution';
+      nodeId: string;
+      path: string;
+      default?: Json;
+      sourceDefault?: Json;
+    }
   | { source: 'literal'; value: Json }
   | { source: 'object'; fields: Record<string, ValueBinding> };
 export type ValueBindingInput =
@@ -154,6 +208,13 @@ export type ValueBindingInput =
     }
   | {
       source: 'node';
+      nodeId: string;
+      path?: string;
+      default?: Json;
+      sourceDefault?: Json;
+    }
+  | {
+      source: 'execution';
       nodeId: string;
       path?: string;
       default?: Json;
@@ -174,6 +235,13 @@ export const valueBindingSchema: z.ZodType<
     }),
     z.object({
       source: z.literal('node'),
+      nodeId: z.string().min(1),
+      path: z.string().default(''),
+      default: jsonSchema.optional(),
+      sourceDefault: jsonSchema.optional(),
+    }),
+    z.object({
+      source: z.literal('execution'),
       nodeId: z.string().min(1),
       path: z.string().default(''),
       default: jsonSchema.optional(),
@@ -573,6 +641,7 @@ export interface NodeExecution {
   check?: PollCheckResult;
   port?: WorkflowEdge['port'];
   resolvedCwd?: string;
+  provenance?: ExecutionProvenance;
 }
 export interface PollCheckResult {
   count: number;
@@ -993,17 +1062,17 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       ...bindingLeaves(node.outputBindings ?? {}),
       ...bindingLeaves(resourceBindings),
     ]) {
-      if (binding.source !== 'node') continue;
+      if (binding.source !== 'node' && binding.source !== 'execution') continue;
       const target = d.nodes.find(
         (candidate) => candidate.id === binding.nodeId,
       );
       if (!target || target.kind === 'entry' || target.kind === 'exit')
         throw new InterlockError(
-          `${node.label}: node binding must reference an existing non-Entry/Exit node`,
+          `${node.label}: ${binding.source === 'execution' ? 'execution' : 'node'} binding must reference an existing non-Entry/Exit node`,
         );
       if (target.batchId !== node.batchId)
         throw new InterlockError(
-          `${node.label}: node binding must reference a node in the same execution scope`,
+          `${node.label}: ${binding.source === 'execution' ? 'execution' : 'node'} binding must reference a node in the same execution scope`,
         );
     }
     if (

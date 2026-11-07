@@ -5,6 +5,7 @@ import {
 } from './valueBindings.js';
 import type { ValueBinding } from './index.js';
 import {
+  EXECUTION_PROVENANCE_CONTRACT,
   definitionSchema,
   isPollWait,
   hasTimeoutRoute,
@@ -218,20 +219,20 @@ export function diagnoseDraft(input: unknown): {
           'itemInput requires Batch membership.',
           { nodeId: n.id },
         );
-      if (binding.source === 'node') {
+      if (binding.source === 'node' || binding.source === 'execution') {
         const source = d.nodes.find((x) => x.id === binding.nodeId);
         if (!source || source.kind === 'entry' || source.kind === 'exit')
           add(
             'invalid_binding_source',
             path,
-            'Node binding requires an existing non-Entry/Exit node.',
+            `${binding.source === 'execution' ? 'Execution' : 'Node'} binding requires an existing non-Entry/Exit node.`,
             { nodeId: n.id },
           );
         else if (source.batchId !== n.batchId)
           add(
             'binding_scope',
             path,
-            'Node binding must remain in the same execution scope.',
+            `${binding.source === 'execution' ? 'Execution' : 'Node'} binding must remain in the same execution scope.`,
             { nodeId: n.id },
           );
       }
@@ -442,6 +443,17 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
         ? first
         : unknownShape();
     }
+    if (binding.source === 'execution') {
+      const source = nodes.get(binding.nodeId);
+      if (
+        !source ||
+        source.batchId !== node.batchId ||
+        source.kind === 'entry' ||
+        source.kind === 'exit'
+      )
+        return unknownShape();
+      return shape(EXECUTION_PROVENANCE_CONTRACT);
+    }
     return unknownShape();
   };
   const bindingShape = (
@@ -462,7 +474,7 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
         resolved = unknownShape();
     }
     if (
-      binding.source === 'node' &&
+      (binding.source === 'node' || binding.source === 'execution') &&
       binding.sourceDefault !== undefined &&
       resolved.state !== 'missing' &&
       !structuralEqual(resolved.schema, literalContract(binding.sourceDefault))

@@ -33,7 +33,7 @@ export function resolveBindingFields(
         return [key, resolveBindingFields(b.fields, source, depth + 1)];
       const value = source(b);
       if (value === undefined) {
-        if (b.source !== 'node')
+        if (b.source !== 'node' && b.source !== 'execution')
           throw new InterlockError(
             `Binding source "${b.source}" is unavailable`,
           );
@@ -41,6 +41,10 @@ export function resolveBindingFields(
           parseDataPath(b.path);
           return [key, b.sourceDefault];
         }
+        if (b.source === 'execution')
+          throw new InterlockError(
+            `Node "${b.nodeId}" has no completed execution in this run`,
+          );
         throw new InterlockError(
           `Node "${b.nodeId}" has no completed output in this run`,
         );
@@ -112,7 +116,9 @@ export function bindingContract(
     return bindingsContract(binding.fields, pathContract);
   const selected = pathContract(binding);
   const sourceDefault =
-    binding.source === 'node' ? binding.sourceDefault : undefined;
+    binding.source === 'node' || binding.source === 'execution'
+      ? binding.sourceDefault
+      : undefined;
   if (sourceDefault === undefined && !Object.keys(selected).length)
     return selected;
   const contracts = [selected];

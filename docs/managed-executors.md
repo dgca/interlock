@@ -180,6 +180,40 @@ Profile `permissions` defaults to `standard`; `read-only` and `full-access` are 
 
 The initial adapters target macOS/Linux installations. Native account access, enterprise restrictions and CLI version compatibility still require validation in the user's environment. OpenCode, other harnesses, Channels, remote workers, automatic permission decisions and automatic harness installation are outside this increment.
 
+## Execution provenance and anti-spoofing
+
+Interlock records verified execution provenance on every completed node execution:
+
+```json
+{
+  "profileId": "codex",
+  "harness": "codex",
+  "sessionId": "native-session-123",
+  "requestedModel": "gpt-4o",
+  "actualModel": "gpt-4o-2024-08-06",
+  "provider": "openai",
+  "effort": "medium",
+  "attempt": 1,
+  "visitCount": 1,
+  "startedAt": "2026-11-07T10:00:00.000Z",
+  "endedAt": "2026-11-07T10:00:15.000Z",
+  "usage": [
+    {
+      "provider": "openai",
+      "model": "gpt-4o-2024-08-06",
+      "inputTokens": 100,
+      "outputTokens": 50
+    }
+  ]
+}
+```
+
+- **Verified source of truth**: Provenance is populated directly from the engine state and executor manager records upon node acceptance.
+- **Anti-spoofing**: Workers cannot overwrite, inject, or spoof provenance fields in their output envelope. Input bindings and branch routing read from verified provenance rather than agent output.
+- **Exposed in data bindings and Branch conditions**: Downstream steps can bind provenance fields via `source: "execution"`. Standalone Branch and Switch nodes can evaluate `execution.<nodeId>.<path>` directly (e.g. `execution.agentStep.actualModel`).
+- **Loop visit count**: `visitCount` records the 1-based completed execution count of `<nodeId>` in the current run and Batch scope, enabling direct loop counting and termination without pass-through state.
+- **Script injection**: Foreground and background scripts receive `INTERLOCK_EXECUTION_PROVENANCE_FILE` containing all prior node execution records.
+
 ## Test an installed Pi
 
 After authenticating Pi, run the opt-in live check from a checkout:

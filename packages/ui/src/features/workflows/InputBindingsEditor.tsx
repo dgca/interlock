@@ -13,6 +13,7 @@ import {
   nodeOutputContract,
   valueBindingsSchema,
   STARTED_RUN_SCHEMA,
+  EXECUTION_PROVENANCE_CONTRACT,
   type Contract,
   type WorkflowNode,
   type WorkflowDefinition,
@@ -82,6 +83,7 @@ export function InputBindingsEditor({
     { value: 'runInput', label: 'Original workflow input' },
     { value: 'rootInput', label: 'Original root input' },
     { value: 'node', label: 'Node output' },
+    { value: 'execution', label: 'Execution provenance' },
     { value: 'literal', label: 'Fixed value' },
     ...(node.batchId || rows.some((row) => row.binding.source === 'itemInput')
       ? [
@@ -96,6 +98,7 @@ export function InputBindingsEditor({
   const sourceSchema = (binding: ValueBinding): Contract => {
     if (binding.source === 'input') return incomingSchema;
     if (binding.source === 'runInput') return workflowInputSchema;
+    if (binding.source === 'execution') return EXECUTION_PROVENANCE_CONTRACT;
     if (binding.source === 'node') {
       const source = nodes.find((n) => n.id === binding.nodeId);
       if (source?.kind === 'agent' && source.unclaimedTimeoutMs !== undefined)
@@ -215,7 +218,7 @@ export function InputBindingsEditor({
                           binding:
                             source === 'literal'
                               ? { source, value: '' }
-                              : source === 'node'
+                              : source === 'node' || source === 'execution'
                                 ? { source, nodeId: '', path, ...fallback }
                                 : source === 'object'
                                   ? { source, fields: {} }
@@ -266,14 +269,19 @@ export function InputBindingsEditor({
                       <Trash2 size={14} />
                     </Button>
                   </div>
-                  {binding.source === 'node' && (
+                  {(binding.source === 'node' ||
+                    binding.source === 'execution') && (
                     <NativeSelect
                       mt="sm"
                       label="Node"
                       aria-label={`Node for field ${index + 1}`}
                       value={binding.nodeId}
                       required
-                      description="Latest completed output in this run."
+                      description={
+                        binding.source === 'execution'
+                          ? 'Latest completed execution provenance in this run.'
+                          : 'Latest completed output in this run.'
+                      }
                       onChange={(event) =>
                         patch(index, {
                           binding: { ...binding, nodeId: event.target.value },
@@ -299,10 +307,16 @@ export function InputBindingsEditor({
                   {pathBinding &&
                     (['sourceDefault', 'default'] as const).map((key) => {
                       const sourceMissing = key === 'sourceDefault';
-                      if (sourceMissing && binding.source !== 'node')
+                      if (
+                        sourceMissing &&
+                        binding.source !== 'node' &&
+                        binding.source !== 'execution'
+                      )
                         return null;
                       const fallback =
-                        sourceMissing && binding.source === 'node'
+                        sourceMissing &&
+                        (binding.source === 'node' ||
+                          binding.source === 'execution')
                           ? binding.sourceDefault
                           : pathBinding.default;
                       if (
@@ -316,7 +330,9 @@ export function InputBindingsEditor({
                           <Switch
                             label={
                               sourceMissing
-                                ? 'Default if no completed output'
+                                ? binding.source === 'execution'
+                                  ? 'Default if no completed execution'
+                                  : 'Default if no completed output'
                                 : 'Default if path missing'
                             }
                             aria-label={
