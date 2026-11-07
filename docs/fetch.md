@@ -49,10 +49,10 @@ header. The same rule applies to Fetch polling checks.
 
 HTTP errors retain their parsed response in the failed node execution. To branch on a status instead of failing the step, clear **Fail on HTTP errors** and connect a Condition that reads `status`.
 
-Enable **Route on failure**, or set `onFailure: "route"`, to handle rejected HTTP statuses, network errors, timeouts, response parsing errors, and output-contract failures through a **Failed** route. Connect both `default` and `failed`. Recovery receives `{input,error,output}`, including the HTTP response when available. Request binding and resolution errors remain terminal. See [failure routes](failure-routes.md).
+Enable **Route on failure**, or set `onFailure: "route"`, to handle rejected HTTP statuses, network errors, timeouts, response parsing errors, and output-contract failures through a **Failed** route. Connect both `default` and `failed`. Recovery receives `{input,error,output}`, including the HTTP response when available. Request binding and resolution errors remain terminal. With declared resources, a dispatched request whose complete response is not observed also fails terminally and retains uncertain ownership, even when failure routing is enabled. See [failure routes](failure-routes.md).
 
 ## Cancellation and retries
 
-Fetch has no automatic workflow retries. Cancelling a run aborts its unfinished requests. A service interruption marks an in-flight Fetch as failed rather than resending it on restart. Explicit retry sends the request again. Cancellation and timeout cannot undo a request that the remote server has already processed.
+Fetch has no automatic workflow retries. Cancelling a run aborts its unfinished requests. A service interruption marks an in-flight Fetch as failed rather than resending it on restart. Explicit retry sends the request again. Cancellation and timeout cannot undo a request that the remote server has already processed. For resource-protected requests, inspect and confirm that remote work stopped before releasing the exact execution reservation. A client abort or disconnect alone is insufficient. See [resource reconciliation](work-resources.md#reconcile-an-uncertain-stop).
 
 Fetch runs from the local engine with its network access. It does not use browser cookies or browser CORS restrictions. Authentication can be supplied through headers; there is no separate credential manager, OAuth flow, binary download, or multipart form editor.

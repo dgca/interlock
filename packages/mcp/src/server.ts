@@ -666,7 +666,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'retry_run',
-    'Explicitly retry a failed step after inspecting effects; Script/Fetch/Agent retries can repeat external actions. Captured prompts and budgets remain. Bindings resolve again; successful Batch items persist. Uncertain background Scripts in the resumed tree require manage_script reconcile with stopped:true. Managed Git trials reject retries. Retry ordinary children through a terminal parent; a failed detached child can retry independently. A child already handled by a Workflow Failed route requires parent recovery. Completed/cancelled runs cannot retry, and detached dispatch is not repeated. Deleted definitions reject before mutation; restore originals first. Comparison retries require execution-tree capacity and preserve observations. Agent retry resets failure/expiry allowances, not accumulated usage; ordinary claim gates still apply.',
+    'Explicitly retry a failed step after inspecting effects; Script/Fetch/Agent retries can repeat external actions. Captured prompts and budgets remain. Bindings resolve again; successful Batch items persist. Uncertain background Scripts in the resumed tree require manage_script reconcile with stopped:true. Resource-protected Fetch transport failures need remote-stop resource reconciliation before reuse. Managed Git trials reject retries. Retry ordinary children through a terminal parent; a failed detached child can retry independently. A child already handled by a Workflow Failed route requires parent recovery. Completed/cancelled runs cannot retry, and detached dispatch is not repeated. Deleted definitions reject before mutation; restore originals first. Comparison retries require execution-tree capacity and preserve observations. Agent retry resets failure/expiry allowances, not accumulated usage; ordinary claim gates still apply.',
     { id: z.string() },
     (input) => client.runs.retry(input),
   );
@@ -744,7 +744,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'manage_work_resources',
-    'Inspect reservations by workId for an Agent, or runId + executionId for a deterministic step. Release an exact uncertain attempt only after confirming that owner and its subprocesses stopped using every reserved resource. Release requires expectedAttempt, actor and confirmStopped:true; it rejects active ownership. Stop or cancel first if necessary. Expiry, cancellation and holds do not prove quiescence. Stale recovery cannot release a replacement owner. No fencing, process termination or protection from unmanaged writers. inspect is read-only; release returns applied and released count.',
+    'Inspect reservations by workId for an Agent, or runId + executionId for a deterministic step. Release an exact uncertain attempt only after confirming that owner and its subprocesses stopped using every reserved resource. Release requires expectedAttempt, actor and confirmStopped:true; it rejects active ownership. Stop or cancel first if necessary. Expiry, cancellation and holds do not prove quiescence. For Fetch, confirm remote work stopped; client timeout or disconnect is insufficient. Stale recovery cannot release a replacement owner. No fencing, process termination or protection from unmanaged writers. inspect is read-only; release returns applied and released count.',
     { request: workResourceRequestSchema },
     ({ request }) => client.work.resources(request),
   );

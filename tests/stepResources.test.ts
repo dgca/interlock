@@ -34,6 +34,13 @@ function start(e: Engine, config: Record<string, unknown>, input: Json = {}) {
     resources: fixed('shared'),
     ...config,
   });
+  if (config.onFailure === 'route')
+    d.edges.push({
+      id: 'failed',
+      source: 'agent',
+      target: 'exit',
+      port: 'failed',
+    });
   if (config.kind === 'wait')
     d.edges.push({
       id: 'timeout',
@@ -419,4 +426,226 @@ it('restores the polling wall-clock deadline when contention ends during a named
   e.pump();
   expect(e.run(id).status).toBe('completed');
   expect(step(e, id).port).toBe('timeout');
+});
+
+it.each([
+  ['fetch', 'timeout'],
+  ['poll', 'timeout'],
+  ['fetch', 'disconnect'],
+  ['poll', 'disconnect'],
+] as const)(
+  'retains uncertain resources after a dispatched %s request has a %s while remote work continues',
+  async (kind, failure) => {
+    const { createServer } = await import('node:http');
+    let active = 0,
+      requests = 0;
+    const remoteStopped = deferred();
+    const server = createServer(async (_request, response) => {
+      active++;
+      requests++;
+      if (failure === 'disconnect') response.destroy();
+      await remoteStopped.promise;
+      active--;
+      response.end('{}');
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+    const address = server.address();
+    if (!address || typeof address === 'string') throw Error('No listener');
+    const e = setup();
+    const fetch = {
+      ...fetchNode,
+      onFailure: 'route',
+      method: 'POST',
+      url: `http://127.0.0.1:${address.port}`,
+      timeoutMs: 100,
+    };
+    try {
+      const id = start(
+        e,
+        kind === 'fetch'
+          ? fetch
+          : {
+              ...polling,
+              timing: { ...polling.timing, check: fetch, timeoutMs: 10000 },
+            },
+      );
+      await vi.waitFor(() => {
+        e.pump();
+        expect(
+          kind === 'fetch' ? e.run(id).status : step(e, id).check?.error,
+        ).toMatch(kind === 'fetch' ? 'failed' : /exceeded|fetch failed/);
+      });
+      expect(active).toBe(1);
+      expect(requests).toBe(1);
+      expect(inspect(e, id)).toMatchObject([
+        { state: 'uncertain', attempt: 1 },
+      ]);
+      if (kind === 'poll') {
+        expect(e.projectRun(id)).toMatchObject({
+          actor: 'person',
+          waiting: { kind: 'resource' },
+        });
+        expect(step(e, id).timeoutAt).toBeUndefined();
+        expect(e.continuation.briefing({ id, limit: 20 }).next).toBe(
+          'inspect_resources',
+        );
+      }
+      const other = start(e, { ...script });
+      await new Promise((r) => setTimeout(r, 1100));
+      e.pump();
+      expect(requests).toBe(1);
+      expect(step(e, other).resourceBlocked).toBeDefined();
+      expect(step(e, id).resourceAttempt).toBe(1);
+      // Only the remote operator can establish that the timed-out work has stopped.
+      remoteStopped.resolve(null);
+      await vi.waitFor(() => expect(active).toBe(0));
+      if (kind === 'poll') e.cancel(id);
+      release(e, id);
+      await settled(e, other);
+    } finally {
+      remoteStopped.resolve(null);
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  },
+);
+
+it.each(['fetch', 'poll'] as const)(
+  'releases %s resources for a fully observed HTTP failure and invalid JSON, and rejects missing bindings before dispatch',
+  async (kind) => {
+    const { createServer } = await import('node:http');
+    let requests = 0;
+    const server = createServer((req, res) => {
+      requests++;
+      res.writeHead(req.url === '/http-error' ? 500 : 200, {
+        'content-type': 'application/json',
+      });
+      res.end(req.url === '/http-error' ? '{}' : '{invalid json');
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+    const address = server.address();
+    if (!address || typeof address === 'string') throw Error('No listener');
+    const e = setup();
+    try {
+      for (const path of ['/http-error', '/json-error']) {
+        const fetch = {
+          ...fetchNode,
+          onFailure: 'route',
+          url: `http://127.0.0.1:${address.port}${path}`,
+        };
+        const id = start(
+          e,
+          kind === 'fetch'
+            ? fetch
+            : {
+                ...polling,
+                timing: { ...polling.timing, check: fetch, timeoutMs: 10000 },
+              },
+        );
+        if (kind === 'fetch') {
+          await settled(e, id);
+          expect(step(e, id).port).toBe('failed');
+        } else
+          await vi.waitFor(() =>
+            expect(step(e, id).check?.error).toBeDefined(),
+          );
+        expect(inspect(e, id)).toEqual([]);
+        const other = start(e, {
+          kind: 'agent',
+          prompt: 'known response released',
+        });
+        const work = e.available(other)[0];
+        expect(work).toBeDefined();
+        const claim = e.claim(work.id, worker);
+        e.submit(work.id, claim.token!, {});
+        if (kind === 'poll') e.cancel(id);
+      }
+      expect(requests).toBe(2);
+      const invalid = {
+        ...fetchNode,
+        url: `http://127.0.0.1:${address.port}/never`,
+        headers: [
+          { name: 'X-Required', value: { kind: 'input', path: 'missing' } },
+        ],
+      };
+      const id = start(
+        e,
+        kind === 'fetch'
+          ? invalid
+          : {
+              ...polling,
+              timing: { ...polling.timing, check: invalid, timeoutMs: 10000 },
+            },
+      );
+      if (kind === 'fetch') await settled(e, id, 'failed');
+      else
+        await vi.waitFor(() =>
+          expect(step(e, id).check?.error).toContain('missing'),
+        );
+      expect(inspect(e, id)).toEqual([]);
+      expect(requests).toBe(2);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  },
+);
+
+it('resumes an uncertain polling Fetch only after exact remote-stop reconciliation', async () => {
+  const { createServer } = await import('node:http');
+  let requests = 0,
+    firstActive = true,
+    overlap = false;
+  const remoteStopped = deferred();
+  const server = createServer(async (_req, res) => {
+    requests++;
+    if (requests === 1) {
+      res.destroy();
+      await remoteStopped.promise;
+      firstActive = false;
+    } else {
+      overlap ||= firstActive;
+      res.setHeader('content-type', 'application/json');
+      res.end('{"ready":true}');
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw Error('No listener');
+  const e = setup();
+  try {
+    const id = start(e, {
+      ...polling,
+      timing: {
+        ...polling.timing,
+        check: {
+          ...fetchNode,
+          method: 'POST',
+          url: `http://127.0.0.1:${address.port}`,
+        },
+        timeoutMs: 10000,
+      },
+    });
+    await vi.waitFor(() => expect(step(e, id).resourceBlocked).toBeDefined());
+    expect(requests).toBe(1);
+    expect(inspect(e, id)[0].state).toBe('uncertain');
+    expect(release(e, id, 2)).toMatchObject({ released: 0 });
+    expect(requests).toBe(1);
+    remoteStopped.resolve(null);
+    await vi.waitFor(() => expect(firstActive).toBe(false));
+    expect(release(e, id)).toMatchObject({ released: 1 });
+    await settled(e, id);
+    expect(requests).toBe(2);
+    expect(overlap).toBe(false);
+    expect(step(e, id).resourceAttempt).toBe(2);
+    expect(inspect(e, id)).toEqual([]);
+  } finally {
+    remoteStopped.resolve(null);
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 });

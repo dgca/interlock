@@ -89,7 +89,7 @@ import {
   type DraftLayout,
 } from '@interlock/core';
 import { assignmentInstructions } from './agentInstructions.js';
-import { executeFetch } from './fetch.js';
+import { executeFetch, UncertainFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 import { RunStarts } from './runStarts.js';
 import { RunAdmission } from './runAdmission.js';
@@ -2531,7 +2531,9 @@ export class Engine {
           (error) => ({
             ok: false as const,
             error: message(error),
-            uncertain: error instanceof UncertainScript,
+            uncertain:
+              error instanceof UncertainScript ||
+              error instanceof UncertainFetch,
           }),
         )
         .then((result) => {
@@ -2561,6 +2563,10 @@ export class Engine {
                 (result.uncertain || current.background.state !== 'completed')
               ) {
                 current.background.state = 'uncertain';
+                this.fail(latest, current, node.label + ': ' + result.error);
+                return;
+              }
+              if (result.uncertain && current.resources?.length) {
                 this.fail(latest, current, node.label + ': ' + result.error);
                 return;
               }
@@ -2912,6 +2918,8 @@ export class Engine {
       return { output: redact.json(output), resolvedCwd: effectiveCwd };
     } catch (error) {
       if (error instanceof UncertainScript) throw error;
+      if (error instanceof UncertainFetch)
+        throw new UncertainFetch(redact.text(message(error)));
       throw new InterlockError(redact.text(message(error)));
     }
   }
@@ -2963,6 +2971,7 @@ export class Engine {
     const settle = (result: {
       output?: Json;
       error?: string;
+      uncertain?: boolean;
       resolvedCwd?: string;
     }) => {
       if (this.stopped) return;
@@ -2975,7 +2984,7 @@ export class Engine {
           current.status !== 'waiting'
         )
           return;
-        this.resources.endExecution(latest.id, current);
+        this.resources.endExecution(latest.id, current, result.uncertain);
         if (result.resolvedCwd) current.resolvedCwd = result.resolvedCwd;
         if (this.finishPollTimeout(latest, current, node)) return;
         const checked = now();
@@ -2985,6 +2994,12 @@ export class Engine {
           output: result.output,
           error: result.error,
         };
+        if (result.uncertain && current.resources?.length) {
+          current.nextCheckAt = checked;
+          current.resumeAt = checked;
+          this.admitOperation(latest, current);
+          return;
+        }
         if (result.error === undefined) {
           let value: Json;
           try {
@@ -3026,7 +3041,11 @@ export class Engine {
     void job
       .then(
         (res) => settle({ output: res.output, resolvedCwd: res.resolvedCwd }),
-        (error) => settle({ error: message(error) }),
+        (error) =>
+          settle({
+            error: message(error),
+            uncertain: error instanceof UncertainFetch,
+          }),
       )
       .finally(() => {
         this.localJobs.delete(execution.id);
