@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -21,6 +21,7 @@ const setup = () => {
   return e;
 };
 afterEach(() => {
+  vi.useRealTimers();
   for (const e of engines.splice(0)) {
     e.stop();
     e.store.close();
@@ -143,6 +144,13 @@ it('reports person only when all branches require human action', () => {
   expect(e.projectRun(root)).toMatchObject({
     actor: 'person',
     waiting: { kind: 'hold', since: heldAt },
+  });
+  e.executors.saveProfile({
+    id: 'managed',
+    name: 'Managed',
+    harness: 'codex',
+    enabled: true,
+    expectedRevision: 0,
   });
   mutateWork(e, children[1].id, {
     status: 'available',
@@ -276,13 +284,189 @@ it('retains stage and waiting since after reopening persisted history', () => {
     d.nodes[1].stage = 'Build';
     const id = e.start(publish(e, d), {}).run.id;
     const before = e.projectRun(id);
+    const input = blankDefinition();
+    input.nodes[1] = nodeSchema.parse({
+      id: 'agent',
+      kind: 'input',
+      label: 'Answer',
+      stage: 'Accept',
+    });
+    const inputId = e.start(publish(e, input), {}).run.id;
+    e.externalInputs.mutate({
+      action: 'hold',
+      runId: inputId,
+      expectedRevision: 0,
+    });
+    const held = e.projectRun(inputId);
     e.stop();
     e.store.close();
     e = new Engine(new Store(path), process.cwd());
     expect(e.projectRun(id)).toEqual(before);
+    expect(e.projectRun(inputId)).toEqual(held);
   } finally {
     e.stop();
     e.store.close();
     rmSync(temp, { recursive: true, force: true });
   }
+});
+
+it('29f3cb6-managed-blocker: uses real current profile admission in every run projection', async () => {
+  const e = setup(),
+    d = blankDefinition();
+  d.executor = 'projection-profile';
+  d.nodes[1].stage = 'Build';
+  const started = e.startSummary(publish(e, d), {});
+  const id = started.runId;
+  const check = async (
+    actor: 'person' | 'engine',
+    kind: 'human_request' | 'managed_launch',
+  ) => {
+    const expected = {
+      actor,
+      waiting: {
+        kind,
+        since:
+          kind === 'human_request'
+            ? e.run(id).executions.at(-1)!.startedAt
+            : e.store.work().find((w) => w.runId === id)!.createdAt,
+      },
+    };
+    expect(e.projectRun(id)).toMatchObject(expected);
+    expect(e.inspect(id).run).toMatchObject(expected);
+    expect(e.continuation.briefing({ id, limit: 20 }).run).toMatchObject(
+      expected,
+    );
+    expect(e.continuation.summary(id, 20)).toMatchObject(expected);
+    const api = appRouter.createCaller({ engine: e });
+    expect((await api.runs.summaries({})).items[0]).toMatchObject(expected);
+    expect((await api.runs.find({}))[0]).toMatchObject(expected);
+  };
+  expect(started).toMatchObject({
+    actor: 'person',
+    waiting: {
+      kind: 'human_request',
+      detail: { message: 'Configure this local harness profile' },
+    },
+  });
+  await check('person', 'human_request');
+  e.executors.saveProfile({
+    id: 'projection-profile',
+    name: 'Disabled',
+    harness: 'codex',
+    enabled: false,
+    expectedRevision: 0,
+  });
+  await check('person', 'human_request');
+  expect(e.projectRun(id).waiting!.detail.message).toMatch(/disabled/);
+  e.executors.saveProfile({
+    id: 'projection-profile',
+    name: 'Enabled',
+    harness: 'codex',
+    enabled: true,
+    expectedRevision: 1,
+  });
+  await check('engine', 'managed_launch');
+  // Model discovery can finish automatically; an in-flight capability check is not a human blocker.
+  e.executors.saveProfile({
+    id: 'projection-profile',
+    name: 'Checking model',
+    harness: 'codex',
+    enabled: true,
+    model: 'configured',
+    effort: 'high',
+    expectedRevision: 2,
+  });
+  await check('engine', 'managed_launch');
+  expect(e.projectRun(id).waiting!.detail.message).toMatch(
+    /Checking thinking effort/,
+  );
+});
+
+it.each([false, true, null, 0, 'text', { ready: false }])(
+  '29f3cb6-poll-json: preserves actual poll JSON %j',
+  async (output) => {
+    const e = setup(),
+      d = blankDefinition();
+    d.nodes[1] = nodeSchema.parse({
+      id: 'agent',
+      kind: 'wait',
+      label: 'Poll',
+      timing: {
+        kind: 'poll',
+        everyMs: 60000,
+        path: '',
+        equals: '__never__',
+        check: {
+          kind: 'script',
+          language: 'javascript',
+          command: `return ${JSON.stringify(output)};`,
+        },
+      },
+    });
+    const id = e.start(publish(e, d), {}).run.id;
+    await vi.waitFor(() =>
+      expect(e.run(id).executions.at(-1)!.check?.count).toBe(1),
+    );
+    expect(e.run(id).executions.at(-1)!.check!.output).toEqual(output);
+    const expected = { output: JSON.stringify(output), truncated: false };
+    expect(e.projectRun(id).waiting!.detail.lastCheck).toMatchObject(expected);
+    expect(
+      e.continuation.summary(id, 20).waiting!.detail.lastCheck,
+    ).toMatchObject(expected);
+    expect(e.projectRun(id, e.run(id)).waiting!.detail.lastCheck).toMatchObject(
+      expected,
+    );
+  },
+);
+
+it('29f3cb6-input-hold-since: anchors inherited hold, release and rehold to the effective persisted transition', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime('2026-01-01T00:00:00Z');
+  const e = setup(),
+    d = blankDefinition();
+  d.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    kind: 'input',
+    label: 'Answer',
+  });
+  const root = e.start(publish(e, workflowCall(publish(e, d))), {}).run.id;
+  const child = e.store.runs().find((r) => r.parentRunId === root)!.id;
+  const waitStart = e.projectRun(child).waiting!.since;
+  vi.setSystemTime('2026-01-02T00:00:00Z');
+  e.externalInputs.mutate({ action: 'hold', runId: root, expectedRevision: 0 });
+  const parentHeld = e.run(root).externalInputHold!.heldAt;
+  expect(e.projectRun(child).waiting).toMatchObject({
+    kind: 'hold',
+    since: parentHeld,
+  });
+  expect(parentHeld).not.toBe(waitStart);
+  expect(e.projectRun(root).waiting!.since).toBe(parentHeld);
+  vi.setSystemTime('2026-01-03T00:00:00Z');
+  e.externalInputs.mutate({
+    action: 'hold',
+    runId: child,
+    expectedRevision: 0,
+  });
+  const childHeld = e.run(child).externalInputHold!.heldAt;
+  expect(e.projectRun(child).waiting!.since).toBe(childHeld);
+  e.externalInputs.mutate({
+    action: 'release',
+    runId: child,
+    expectedRevision: 1,
+  });
+  expect(e.projectRun(child).waiting!.since).toBe(parentHeld);
+  e.externalInputs.mutate({
+    action: 'release',
+    runId: root,
+    expectedRevision: 1,
+  });
+  expect(e.projectRun(child).waiting).toMatchObject({
+    kind: 'input_node',
+    since: waitStart,
+  });
+  vi.setSystemTime('2026-01-04T00:00:00Z');
+  e.externalInputs.mutate({ action: 'hold', runId: root, expectedRevision: 2 });
+  const reheld = e.projectRun(child);
+  expect(reheld.waiting!.since).toBe('2026-01-04T00:00:00.000Z');
+  expect(e.projectRun(child)).toEqual(reheld);
 });

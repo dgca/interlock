@@ -13,11 +13,15 @@ const labels: Record<RunWaiting['kind'], string> = {
   poll: 'Waiting for a polling check',
   admission_queue: 'Queued for admission',
 };
-export function runProjectionText(run: RunProjection) {
+export function runProjectionText(run: RunProjection, waitingText?: string) {
   const actor = { agent: 'Agent', person: 'Person', engine: 'Engine' }[
     run.actor
   ];
-  return [run.stage, run.waiting ? labels[run.waiting.kind] : null, actor]
+  return [
+    run.stage,
+    run.waiting ? (waitingText ?? labels[run.waiting.kind]) : null,
+    actor,
+  ]
     .filter(Boolean)
     .join(' · ');
 }

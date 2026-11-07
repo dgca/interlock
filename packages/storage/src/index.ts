@@ -315,6 +315,9 @@ export class Store {
   }
   /** Nearest held run, stopping at the detached boundary. */
   externalInputHoldOwner(id: string): string | undefined {
+    return this.externalInputHold(id)?.runId;
+  }
+  externalInputHold(id: string): { runId: string; heldAt: string } | undefined {
     const row = this.db
       .prepare(
         `WITH RECURSIVE lineage(id, parentId, mode, heldAt, depth) AS (
@@ -327,11 +330,13 @@ export class Store {
         FROM lineage JOIN documents d ON d.collection = 'runs' AND d.id = lineage.parentId
         WHERE lineage.mode IS NOT 'detached'
       )
-      SELECT id FROM lineage WHERE heldAt IS NOT NULL
+      SELECT id, heldAt FROM lineage WHERE heldAt IS NOT NULL
       ORDER BY depth LIMIT 1`,
       )
       .get(id);
-    return row?.id as string | undefined;
+    return row
+      ? { runId: row.id as string, heldAt: row.heldAt as string }
+      : undefined;
   }
   /** Waiting runs whose effective hold can change when an ancestor changes. */
   attachedExternalInputWaits(id: string): string[] {

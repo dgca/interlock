@@ -122,7 +122,7 @@ export function projectRun(
     else if (work?.status === 'claimed')
       branch.actor = work.executor ? 'engine' : 'agent';
     else if (current?.kind === 'input') {
-      const held = store.externalInputHoldOwner(runId);
+      const held = store.externalInputHold(runId);
       wait(
         held ? 'hold' : 'input_node',
         held ? 'person' : 'agent',
@@ -131,6 +131,7 @@ export function projectRun(
           : current.externalInput?.submittedAt
             ? 'Waiting for external input acceptance'
             : 'Waiting for external input',
+        held?.heldAt ?? at,
       );
     } else if (current?.kind === 'wait') {
       wait(

@@ -188,19 +188,26 @@ export function RunList({
                   </span>
                   <span className="run-status">
                     <Badge status={r.status} />
-                    {r.attention ? (
-                      <small className="run-attention">
-                        {attentionText(r.attention)}
-                      </small>
-                    ) : r.actor ? (
+                    {r.actor ? (
                       <small className="run-wait-reason">
-                        {runProjectionText(r)}
+                        {runProjectionText(
+                          r,
+                          r.waiting?.kind === 'human_request' && r.attention
+                            ? attentionText(r.attention)
+                            : undefined,
+                        )}
                       </small>
-                    ) : r.waitReason ? (
+                    ) : r.waitReason && !r.attention ? (
                       <small className="run-wait-reason">
                         {waitReasonText[r.waitReason]}
                       </small>
                     ) : null}
+                    {r.attention &&
+                      (!r.actor || r.waiting?.kind !== 'human_request') && (
+                        <small className="run-attention">
+                          {attentionText(r.attention)}
+                        </small>
+                      )}
                   </span>
                   <span>{new Date(r.createdAt).toLocaleString()}</span>
                   <span>{r.executionCount}</span>

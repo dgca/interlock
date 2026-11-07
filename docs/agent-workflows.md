@@ -8,17 +8,17 @@ All run summaries, full run/descendant inspection, briefings, compact start/subm
 
 `waiting` is null during execution, or `{kind, detail, since}`. Detail identifies the run, node, execution, and assignment when present. `since` uses a persisted execution, assignment, hold or budget timestamp; reads and restart do not reset it. Resource waits use assignment creation as their available persisted anchor.
 
-| Kind             | Current meaning                                        | Actor                                     |
-| ---------------- | ------------------------------------------------------ | ----------------------------------------- |
-| `claim_queue`    | Connected Agent available                              | agent                                     |
-| `managed_launch` | Managed assignment awaiting dispatch                   | engine                                    |
-| `human_request`  | Managed permission, question, model choice or recovery | person                                    |
-| `input_node`     | External submission or acceptance required             | agent                                     |
-| `hold`           | Assignment or external-input acceptance held           | person                                    |
-| `budget`         | New claim blocked by budget                            | person                                    |
-| `resource`       | Shared resource occupied                               | engine, or person for uncertain ownership |
-| `timer`          | Wait deadline pending                                  | engine                                    |
-| `poll`           | Polling Wait pending                                   | engine                                    |
+| Kind             | Current meaning                                                       | Actor                                     |
+| ---------------- | --------------------------------------------------------------------- | ----------------------------------------- |
+| `claim_queue`    | Connected Agent available                                             | agent                                     |
+| `managed_launch` | Managed assignment awaiting dispatch                                  | engine                                    |
+| `human_request`  | Managed permission, question, configuration, model choice or recovery | person                                    |
+| `input_node`     | External submission or acceptance required                            | agent                                     |
+| `hold`           | Assignment or external-input acceptance held                          | person                                    |
+| `budget`         | New claim blocked by budget                                           | person                                    |
+| `resource`       | Shared resource occupied                                              | engine, or person for uncertain ownership |
+| `timer`          | Wait deadline pending                                                 | engine                                    |
+| `poll`           | Polling Wait pending                                                  | engine                                    |
 
 Person applies only when every active waited leaf requires intervention. A branch that can progress takes precedence, then agent before engine, then the stage tie order. External input uses agent because an integration can submit and accept automatically. Read briefing blocker lists to see branches omitted by the single waiting choice. Claimed connected work uses agent with null waiting; native execution uses engine.
 

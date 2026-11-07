@@ -181,3 +181,89 @@ it('requests the selected workflow and opens its invocation', async () => {
     container.remove();
   }
 });
+
+it('29f3cb6-attention-row: preserves stage and actor with specific attention and opens the request', async () => {
+  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
+  const base = {
+    id: 'attention',
+    workflowId: 'workflow',
+    workflowName: 'Review build',
+    status: 'waiting',
+    version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    executionCount: 2,
+    stage: 'Build',
+    actor: 'person',
+    waiting: {
+      kind: 'human_request',
+      since: new Date().toISOString(),
+      detail: { runId: 'attention', nodeId: 'agent' },
+    },
+    attention: {
+      runId: 'attention',
+      reasons: ['approval'],
+      target: { runId: 'child', executionId: 'request' },
+    },
+  };
+  query.mockResolvedValue({
+    items: [base],
+    counts: { active: 1, attention: 1, history: 0 },
+    offset: 0,
+    nextOffset: null,
+    total: 1,
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container),
+    open = vi.fn();
+  const render = (tick = 0) =>
+    root.render(
+      h(
+        MantineProvider,
+        { env: 'test' },
+        h(RunList, {
+          tick,
+          offset: 0,
+          onOffsetChange: vi.fn(),
+          workflows: [],
+          tab: 'attention',
+          onTabChange: vi.fn(),
+          onOpen: open,
+        }),
+      ),
+    );
+  try {
+    await act(async () => render());
+    let row = container.querySelector<HTMLButtonElement>('button.run-row')!;
+    expect(row.textContent).toContain('Build · Approval requested · Person');
+    expect(row.textContent!.match(/Approval requested/g)).toHaveLength(1);
+    await act(async () => row.click());
+    expect(open).toHaveBeenCalledWith('child', 'request');
+    query.mockResolvedValue({
+      items: [
+        {
+          ...base,
+          actor: 'agent',
+          waiting: { ...base.waiting, kind: 'claim_queue' },
+        },
+      ],
+      counts: { active: 1, attention: 1, history: 0 },
+      offset: 0,
+      nextOffset: null,
+      total: 1,
+    });
+    await act(async () => render(1));
+    row = container.querySelector<HTMLButtonElement>('button.run-row')!;
+    expect(row.textContent).toContain('Build · Waiting for an agent · Agent');
+    expect(row.textContent).toContain('Approval requested');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});

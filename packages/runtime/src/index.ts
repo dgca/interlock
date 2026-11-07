@@ -175,7 +175,9 @@ export class Engine {
     this.executors = new ExecutorManager(this, cwd);
     this.simulations = new Simulations(store, cwd);
     this.chains = new RunChains(store);
-    this.continuation = new Continuation(store);
+    this.continuation = new Continuation(store, (id) =>
+      this.projectionState(id),
+    );
     this.externalInputs = new ExternalInputs(store, {
       run: (id) => this.run(id),
       node: (run, execution) => {
@@ -340,7 +342,7 @@ export class Engine {
       type,
       message: text,
       at: now(),
-      ...projectRun(this.store, run.id, undefined, run),
+      ...this.projectRun(run.id, run),
     });
     queueMicrotask(() => this.listeners.forEach((listener) => listener()));
   }
@@ -1111,8 +1113,14 @@ export class Engine {
   runAttention() {
     return runAttention(this.store);
   }
-  projectRun(id: string) {
-    return projectRun(this.store, id);
+  private projectionState(id: string) {
+    const state = this.store.continuation(id);
+    for (const work of state.work)
+      if (work.executor) work.managedExecution = this.executors.describe(work);
+    return state;
+  }
+  projectRun(id: string, override?: Run) {
+    return projectRun(this.store, id, this.projectionState(id), override);
   }
   inspect(id: string) {
     const run = this.run(id);
