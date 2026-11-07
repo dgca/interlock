@@ -1,0 +1,297 @@
+import { spawn } from 'node:child_process';
+import { setTimeout as delay } from 'node:timers/promises';
+import type { HarnessAdapter, HarnessRun, HarnessResult } from './contracts.js';
+import { HarnessResultError } from './contracts.js';
+import type { Json, ModelUsage } from '@interlock/core';
+
+export function interpolateTokens(
+  template: string,
+  tokens: Record<string, string>,
+): string {
+  return template.replace(
+    /\$(?:([A-Z0-9_]+)|\{([A-Z0-9_]+)\})/g,
+    (_, name1, name2) => {
+      const key = name1 || name2;
+      return key in tokens ? tokens[key] : `$${key}`;
+    },
+  );
+}
+
+export function buildTokenMap(
+  work: { id: string; runId: string; token?: string; input: unknown },
+  cwd: string,
+  extra: Record<string, string> = {},
+): Record<string, string> {
+  return {
+    INTERLOCK_WORK_ID: work.id,
+    INTERLOCK_RUN_ID: work.runId,
+    INTERLOCK_CWD: cwd,
+    INTERLOCK_CLAIM_TOKEN: work.token ?? extra.claimTicket ?? '',
+    INTERLOCK_CLAIM_TICKET: extra.claimTicket ?? '',
+    INTERLOCK_INPUT:
+      typeof work.input === 'string'
+        ? work.input
+        : JSON.stringify(work.input ?? null),
+    INTERLOCK_SESSION_ID: extra.sessionId ?? '',
+    ...extra,
+  };
+}
+
+export interface CustomTurnEnvelope {
+  output?: Json;
+  result?: Json;
+  sessionId?: string;
+  model?: string;
+  provider?: string;
+  usage?: ModelUsage[];
+}
+
+export async function executeSubprocessTurn(input: {
+  command: string;
+  cwd: string;
+  env?: Record<string, string>;
+  payload: unknown;
+  tokens: Record<string, string>;
+  signal: AbortSignal;
+  timeoutSeconds?: number;
+  onProgress?: (msg: string) => void;
+}): Promise<CustomTurnEnvelope> {
+  const interpolatedCommand = interpolateTokens(input.command, input.tokens);
+  const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
+  if (input.env) {
+    for (const [k, v] of Object.entries(input.env)) {
+      resolvedEnv[k] = interpolateTokens(v, input.tokens);
+    }
+  }
+
+  return new Promise<CustomTurnEnvelope>((resolve, reject) => {
+    let timer: NodeJS.Timeout | undefined;
+    const child = spawn(interpolatedCommand, {
+      cwd: input.cwd,
+      env: resolvedEnv,
+      shell: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let stdoutData = '';
+    let stderrData = '';
+
+    child.stdout.on('data', (chunk) => {
+      stdoutData += chunk.toString();
+    });
+
+    child.stderr.on('data', (chunk) => {
+      const text = chunk.toString();
+      stderrData += text;
+      input.onProgress?.(text);
+    });
+
+    if (input.timeoutSeconds && input.timeoutSeconds > 0) {
+      timer = setTimeout(() => {
+        try {
+          child.kill('SIGKILL');
+        } catch {}
+        reject(
+          new Error(
+            `Custom harness turn timed out after ${input.timeoutSeconds} seconds`,
+          ),
+        );
+      }, input.timeoutSeconds * 1000);
+    }
+
+    const abortHandler = () => {
+      try {
+        child.kill('SIGTERM');
+      } catch {}
+      setTimeout(() => {
+        try {
+          child.kill('SIGKILL');
+        } catch {}
+      }, 1000);
+      reject(new Error('Turn aborted by signal'));
+    };
+
+    if (input.signal.aborted) {
+      abortHandler();
+      return;
+    }
+    input.signal.addEventListener('abort', abortHandler, { once: true });
+
+    child.on('error', (err) => {
+      if (timer) clearTimeout(timer);
+      input.signal.removeEventListener('abort', abortHandler);
+      reject(err);
+    });
+
+    child.on('close', (code) => {
+      if (timer) clearTimeout(timer);
+      input.signal.removeEventListener('abort', abortHandler);
+      if (code !== 0) {
+        return reject(
+          new Error(
+            `Custom turn command failed with exit code ${code}${
+              stderrData ? `: ${stderrData.trim()}` : ''
+            }`,
+          ),
+        );
+      }
+      try {
+        const trimmed = stdoutData.trim();
+        if (!trimmed) {
+          throw new HarnessResultError(
+            'Custom turn command completed with empty STDOUT; expected JSON envelope',
+          );
+        }
+        const parsed = JSON.parse(trimmed);
+        resolve(parsed);
+      } catch (err) {
+        reject(
+          new HarnessResultError(
+            `Failed to parse custom turn STDOUT JSON: ${
+              err instanceof Error ? err.message : String(err)
+            }\nOutput was: ${stdoutData.slice(0, 500)}`,
+          ),
+        );
+      }
+    });
+
+    // Write input payload to stdin and close
+    child.stdin.write(JSON.stringify(input.payload));
+    child.stdin.end();
+  });
+}
+
+export async function executeHttpTurn(input: {
+  url: string;
+  headers?: Record<string, string>;
+  payload: unknown;
+  tokens: Record<string, string>;
+  signal: AbortSignal;
+  timeoutSeconds?: number;
+}): Promise<CustomTurnEnvelope> {
+  const resolvedUrl = interpolateTokens(input.url, input.tokens);
+  const resolvedHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+  if (input.headers) {
+    for (const [k, v] of Object.entries(input.headers)) {
+      resolvedHeaders[k] = interpolateTokens(v, input.tokens);
+    }
+  }
+
+  const controller = new AbortController();
+  let timer: NodeJS.Timeout | undefined;
+  if (input.timeoutSeconds && input.timeoutSeconds > 0) {
+    timer = setTimeout(() => controller.abort(), input.timeoutSeconds * 1000);
+  }
+
+  const abortListener = () => controller.abort();
+  input.signal.addEventListener('abort', abortListener, { once: true });
+
+  try {
+    const res = await fetch(resolvedUrl, {
+      method: 'POST',
+      headers: resolvedHeaders,
+      body: JSON.stringify(input.payload),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => '');
+      throw new Error(
+        `Custom turn HTTP request failed (${res.status} ${res.statusText}): ${errorText.slice(
+          0,
+          500,
+        )}`,
+      );
+    }
+    const data = await res.json();
+    return data as CustomTurnEnvelope;
+  } finally {
+    if (timer) clearTimeout(timer);
+    input.signal.removeEventListener('abort', abortListener);
+  }
+}
+
+export const customAdapter: HarnessAdapter = {
+  id: 'custom',
+  detect: async (override?: string) => ({
+    status: 'detected',
+    command: override ?? 'custom',
+    version: '1.0.0',
+  }),
+  models: async () => ({ models: [], truncated: false }),
+  run: async (input: HarnessRun): Promise<HarnessResult> => {
+    const { profile, work, cwd, signal, onSession, onProgress } = input;
+    const tokens = buildTokenMap(work, cwd, {
+      sessionId: input.sessionId ?? '',
+    });
+
+    const contextPayload = {
+      idempotencyKey: `${work.id}:${work.attempt}`,
+      workId: work.id,
+      runId: work.runId,
+      attempt: work.attempt,
+      prompt: work.prompt,
+      input: work.input,
+      outputSchema: work.outputSchema,
+      cwd,
+      model: profile.model,
+      effort: profile.effort,
+      permissions: profile.permissions,
+      sessionName: `interlock-${work.runId}-${work.id}`,
+      sessionId: input.sessionId,
+    };
+
+    let envelope: CustomTurnEnvelope;
+    if (profile.transport === 'http') {
+      if (!profile.turnUrl) {
+        throw new Error(
+          `Custom profile "${profile.id}" in HTTP direct turn mode requires turnUrl`,
+        );
+      }
+      envelope = await executeHttpTurn({
+        url: profile.turnUrl,
+        headers: profile.headers,
+        payload: contextPayload,
+        tokens,
+        signal,
+        timeoutSeconds: profile.timeoutSeconds,
+      });
+    } else {
+      const command = profile.turnCommand || profile.command;
+      if (!command) {
+        throw new Error(
+          `Custom profile "${profile.id}" in subprocess direct turn mode requires turnCommand`,
+        );
+      }
+      envelope = await executeSubprocessTurn({
+        command,
+        cwd,
+        env: profile.env,
+        payload: contextPayload,
+        tokens,
+        signal,
+        timeoutSeconds: profile.timeoutSeconds,
+        onProgress,
+      });
+    }
+
+    if (envelope.sessionId || envelope.model) {
+      onSession(envelope.sessionId ?? input.sessionId ?? '', envelope.model);
+    }
+
+    const output =
+      envelope.output !== undefined
+        ? envelope.output
+        : envelope.result !== undefined
+          ? envelope.result
+          : (envelope as Json);
+
+    return {
+      output,
+      usage: envelope.usage,
+      usageScope: 'attempt',
+    };
+  },
+};

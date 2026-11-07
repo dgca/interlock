@@ -1,6 +1,6 @@
 # Managed Agent execution
 
-Interlock can launch installed Claude Code, Codex, and Pi harnesses when an Agent assignment becomes ready. The execution manager runs inside the existing server. Keep Interlock running; no separate worker or open chat is required. Connected MCP agents and manual completion remain available.
+Interlock can launch installed Claude Code, Codex, and Pi harnesses, as well as user-defined custom harnesses (`harness: "custom"`), when an Agent assignment becomes ready. The execution manager runs inside the existing server. Keep Interlock running; no separate worker or open chat is required. Connected MCP agents and manual completion remain available.
 
 ## Configure a harness
 
@@ -48,6 +48,75 @@ Open the run inspector and choose **Review request** to answer a pending permiss
 
 Progress records contain bounded tool/status updates, not full conversations. Native output and error text can contain task data; use non-secret task inputs. Interlock records reported usage where available. Missing measurements stay unknown. Pi aggregates response usage for each assignment, including continued sessions. Resumed cumulative counters from other harnesses are differenced when a baseline is known; uncertain resumed history is not charged again. Provider cost estimates are not account billing.
 
+## Custom harnesses
+
+Interlock supports user-defined custom harnesses (`harness: "custom"`) to execute external agent CLI tools, standalone scripts, or desktop/hosted agent applications. Custom profiles support two execution modes:
+
+- **Direct Turn Mode (`mode: "direct"`)**: Interlock manages the assignment claim, renews the claim lease, executes the command or HTTP endpoint, and submits the returned result envelope.
+- **Delegated Claim-Ticket Mode (`mode: "launcher"`)**: Interlock launches an external session and issues a one-time `claimTicket`. The launched session claims the work via MCP `claim_work` using this ticket, executes autonomously, and submits its own result.
+
+### Direct Turn Mode
+
+Direct turn mode executes a subprocess command (`turnCommand`) or HTTP POST endpoint (`turnUrl`). Interlock passes assignment context JSON via stdin or the HTTP request body:
+
+```json
+{
+  "idempotencyKey": "UUID",
+  "workId": "WORK_ID",
+  "attempt": 1,
+  "prompt": "COMPOSED_PROMPT",
+  "input": {},
+  "outputSchema": {},
+  "cwd": "/path/to/workdir",
+  "model": "model-id",
+  "effort": "high",
+  "permissions": "standard",
+  "sessionName": "run-label",
+  "sessionId": "CONTINUITY_SESSION_ID"
+}
+```
+
+The command or HTTP endpoint must return a JSON result envelope:
+
+```json
+{
+  "output": { ... },
+  "sessionId": "optional-session-id",
+  "model": "optional-model",
+  "provider": "optional-provider",
+  "usage": { "promptTokens": 100, "completionTokens": 50 }
+}
+```
+
+Interlock validates `output` against `outputSchema` and submits the result. A non-zero process exit code or HTTP error status records an execution failure and consumes an attempt according to the workflow's retry policy.
+
+### Delegated Claim-Ticket Mode (Launcher)
+
+Launcher mode delegates execution to an external agent application (such as a desktop app or standalone agent runner). Interlock executes `launchCommand` or HTTP POST `launchUrl`, providing the assignment context and a one-time `claimTicket`.
+
+- **Claim Ticket Authorization**: Interlock records the `claimTicket` bound exclusively to `workId`. Only the launched session presenting this exact ticket to MCP `claim_work` can claim the assignment. Any other claimant is rejected with an authorization error. Upon successful claim, the ticket is consumed.
+- **Launch Idempotency**: Replaying a launch with the same `idempotencyKey` returns the existing session handle, avoiding duplicate process launches on retries.
+- **Lifecycle Hooks**: Custom launcher profiles can define optional lifecycle hooks (via subprocess command or HTTP POST endpoint):
+  - `statusCommand` / `statusUrl`: Interlock polls session state (`working`, `idle`, `needs_attention`, `ended`).
+  - `messageCommand` / `messageUrl`: Delivers idle nudges or recovery instructions to the external session.
+  - `stopCommand` / `stopUrl`: Requests the external session to stop on assignment cancellation or server shutdown.
+  - `archiveCommand` / `archiveUrl`: Invoked when the session's final assignment in the run completes.
+
+### Template tokens and working directories
+
+Command lines and HTTP URLs support environment variable token replacement:
+
+- `$INTERLOCK_WORK_ID`
+- `$INTERLOCK_RUN_ID`
+- `$INTERLOCK_EXECUTION_ID`
+- `$INTERLOCK_NODE_ID`
+- `$INTERLOCK_SESSION_ID`
+- `$INTERLOCK_CWD`
+- `$INTERLOCK_CLAIM_TOKEN`
+- `$INTERLOCK_CLAIM_TICKET`
+
+Custom harness commands do not require absolute executable paths; binary names resolved from `PATH` and arbitrary shell commands are permitted. Configured and dynamic `cwd` values must resolve to an existing directory contained inside the declared `allowedRoots`.
+
 ## Replace a refused model
 
 A recognized model-unavailable or unsupported-model error before task actions places the assignment on hold with **Choose a model** status. Interlock confirms native process cleanup and releases the attempt's resource reservations. The run retains completed work and waits for a replacement. This hold survives server restart, uses no execution slot, and does not consume the Agent failure budget. Authentication, quota, unknown transport failures, and model errors after task actions retain their existing failure or interruption handling.
@@ -78,6 +147,8 @@ interlock executors '{"action":"save_settings","concurrency":null,"expectedRevis
 interlock executors '{"action":"list","refresh":true}'
 interlock executors '{"action":"models","profileId":"codex","refresh":true}'
 interlock executors '{"action":"save","profile":{"id":"codex","harness":"codex","name":"Codex","enabled":true,"cwd":"/worktrees/default","allowedRoots":["/worktrees"],"expectedRevision":0}}'
+interlock executors '{"action":"save","profile":{"id":"custom-direct","harness":"custom","name":"Custom Turn","enabled":true,"mode":"direct","transport":"subprocess","turnCommand":"node ./agent-turn.js","cwd":"/worktrees/default","expectedRevision":0}}'
+interlock executors '{"action":"save","profile":{"id":"custom-launcher","harness":"custom","name":"Custom Launcher","enabled":true,"mode":"launcher","transport":"subprocess","launchCommand":"node ./launcher.js launch","statusCommand":"node ./launcher.js status","cwd":"/worktrees/default","expectedRevision":0}}'
 interlock executors '{"action":"inspect","workId":"WORK_ID"}'
 interlock executors '{"action":"respond","executionId":"EXECUTION_ID","requestId":"REQUEST_ID","answer":{"allow":false}}'
 interlock executors '{"action":"retry_model","executionId":"EXECUTION_ID","model":"openai/gpt-6.1-sol"}'

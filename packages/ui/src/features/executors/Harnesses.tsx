@@ -11,9 +11,14 @@ import {
   ChevronUp,
   RefreshCw,
   Terminal,
+  Cpu,
   Plus,
 } from 'lucide-react';
-import { executorProfileSchema, type ExecutorProfile } from '@interlock/core';
+import {
+  executorProfileSchema,
+  type ExecutorProfile,
+  type ExecutorProfileUpdate,
+} from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { ActionError } from '../../components/ActionError/ActionError';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
@@ -27,11 +32,19 @@ import {
 } from './permissions';
 import { ModelSettings } from './ModelSettings';
 import { ExecutionSettings } from './ExecutionSettings';
-const harnessNames = { 'claude-code': 'Claude Code', codex: 'Codex', pi: 'Pi' };
-const harnessSetup = {
+import { CustomProfileDialog } from './CustomProfileDialog';
+
+const harnessNames: Record<string, string> = {
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
+  pi: 'Pi',
+  custom: 'Custom Harness',
+};
+const harnessSetup: Record<string, string> = {
   'claude-code': 'https://code.claude.com/docs/en/setup',
   codex: 'https://developers.openai.com/codex/cli/',
   pi: 'https://pi.dev/',
+  custom: 'https://docs.interlock.dev/managed-executors',
 };
 type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
 
@@ -67,6 +80,12 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     [error, setError] = useState(''),
     [checking, setChecking] = useState(false),
     [adding, setAdding] = useState(false);
+
+  const [customModalOpen, setCustomModalOpen] = useState(false);
+  const [customModalProfile, setCustomModalProfile] =
+    useState<ExecutorProfile | null>(null);
+  const [customModalInitialName, setCustomModalInitialName] = useState('');
+
   const refresh = async (check = false) => {
     const current = ++request.current;
     setError('');
@@ -129,6 +148,11 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
               profile={p}
               refresh={() => refresh()}
               onDirty={trackDirty}
+              onConfigureCustom={(prof) => {
+                setCustomModalProfile(prof);
+                setCustomModalInitialName(prof.name);
+                setCustomModalOpen(true);
+              }}
             />
           ))}
         </div>
@@ -151,12 +175,32 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
         <NewProfile
           onDirty={newDirty}
           onCancel={() => setAdding(false)}
+          onOpenCustom={(initialName) => {
+            setAdding(false);
+            setCustomModalProfile(null);
+            setCustomModalInitialName(initialName);
+            setCustomModalOpen(true);
+          }}
           onSave={async () => {
             setAdding(false);
             await refresh();
           }}
         />
       )}
+      <CustomProfileDialog
+        opened={customModalOpen}
+        onClose={() => setCustomModalOpen(false)}
+        profile={customModalProfile}
+        initialName={customModalInitialName}
+        isNew={!customModalProfile}
+        onSave={async (data) => {
+          await api.executors.manage.mutate({
+            action: 'save',
+            profile: data,
+          });
+          await refresh();
+        }}
+      />
     </div>
   );
 }
@@ -168,10 +212,12 @@ function ProfileRow({
   profile,
   refresh,
   onDirty,
+  onConfigureCustom,
 }: {
   profile: Profile;
   onDirty: DirtySetting;
   refresh: () => Promise<Profile[] | undefined>;
+  onConfigureCustom: (profile: ExecutorProfile) => void;
 }) {
   const editorId = useId();
   const row = useRef<HTMLElement>(null);
@@ -237,10 +283,26 @@ function ProfileRow({
   return (
     <section ref={row} className={styles.row} aria-label={profile.name}>
       <div className={styles.rowHeading}>
-        <Terminal size={21} className={styles.icon} />
+        {profile.harness === 'custom' ? (
+          <Cpu size={21} className={styles.customIcon} />
+        ) : (
+          <Terminal size={21} className={styles.icon} />
+        )}
         <div className={styles.identity}>
           <h2>{profile.name}</h2>
-          {!open ? (
+          {profile.harness === 'custom' ? (
+            <p
+              title={
+                profile.mode === 'launcher'
+                  ? `Delegated Launcher (${profile.transport})`
+                  : `Direct Turn (${profile.transport})`
+              }
+            >
+              {profile.mode === 'launcher'
+                ? `${profile.transport === 'http' ? 'HTTP POST ' + (profile.launchUrl ?? '') : 'Subprocess CLI · Launch: ' + (profile.launchCommand || 'custom')}${profile.timeoutSeconds ? ` · Timeout: ${profile.timeoutSeconds}s` : ''} · ${permissionLabels[profile.permissions] ?? profile.permissions} permissions`
+                : `${profile.transport === 'http' ? 'HTTP Service · ' + (profile.turnUrl ?? '') : 'Subprocess CLI · Turn: ' + (profile.turnCommand || profile.command || 'custom')}${profile.timeoutSeconds ? ` · Timeout: ${profile.timeoutSeconds}s` : ''} · ${permissionLabels[profile.permissions] ?? profile.permissions} permissions`}
+            </p>
+          ) : !open ? (
             <p
               title={`${profile.model ?? 'CLI default'}${profile.effort ? ` · ${profile.effort} effort` : ''} · ${permissionLabels[profile.permissions]} permissions`}
             >
@@ -254,9 +316,16 @@ function ProfileRow({
             <p>{harnessNames[profile.harness]}</p>
           ) : null}
         </div>
+        {profile.harness === 'custom' && (
+          <Badge variant="light" color="violet" tt="none">
+            custom: {profile.mode ?? 'direct'}
+          </Badge>
+        )}
         <Badge variant="light" color={detected ? 'blue' : 'gray'} tt="none">
           {detected
-            ? 'Detected'
+            ? profile.harness === 'custom'
+              ? 'Configured'
+              : 'Detected'
             : profile.detection.status === 'missing'
               ? 'Not installed'
               : 'Unavailable'}
@@ -279,15 +348,23 @@ function ProfileRow({
           aria-controls={editorId}
           disabled={busy}
           onClick={() => {
-            if (open) cancel();
-            else {
-              setDraft(configuration(profile));
-              setError('');
-              setOpen(true);
+            if (profile.harness === 'custom') {
+              onConfigureCustom(configuration(profile));
+            } else {
+              if (open) cancel();
+              else {
+                setDraft(configuration(profile));
+                setError('');
+                setOpen(true);
+              }
             }
           }}
         >
-          {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          {open ? (
+            <ChevronUp size={14} />
+          ) : profile.harness === 'custom' ? null : (
+            <ChevronDown size={14} />
+          )}
           {open ? 'Cancel editing' : 'Configure'}
         </Button>
       </div>
@@ -446,10 +523,12 @@ function NewProfile({
   onSave,
   onCancel,
   onDirty,
+  onOpenCustom,
 }: {
   onDirty: (dirty: boolean) => void;
   onSave: () => Promise<void>;
   onCancel: () => void;
+  onOpenCustom: (initialName: string) => void;
 }) {
   const [name, setName] = useState(''),
     [harness, setHarness] = useState<ExecutorProfile['harness']>('codex'),
@@ -464,6 +543,10 @@ function NewProfile({
       className={styles.newProfile}
       onSubmit={async (e) => {
         e.preventDefault();
+        if (harness === 'custom') {
+          onOpenCustom(name);
+          return;
+        }
         setBusy(true);
         setError('');
         try {
@@ -500,6 +583,7 @@ function NewProfile({
             { value: 'claude-code', label: 'Claude Code' },
             { value: 'codex', label: 'Codex' },
             { value: 'pi', label: 'Pi' },
+            { value: 'custom', label: 'Custom Harness (harness: "custom")' },
           ]}
         />
       </div>
@@ -508,9 +592,23 @@ function NewProfile({
         <Button onClick={onCancel} disabled={busy}>
           Cancel
         </Button>
-        <Button type="submit" variant="primary" disabled={busy || !name.trim()}>
-          {busy ? 'Adding…' : 'Add configuration'}
-        </Button>
+        {harness === 'custom' ? (
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => onOpenCustom(name)}
+          >
+            Continue with Custom Setup…
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={busy || !name.trim()}
+          >
+            {busy ? 'Adding…' : 'Add configuration'}
+          </Button>
+        )}
       </div>
     </form>
   );
