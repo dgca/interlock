@@ -1,4 +1,8 @@
-import { stallSettingsUpdateSchema, stallRequestSchema } from '@interlock/core';
+import {
+  stallSettingsUpdateSchema,
+  stallRequestSchema,
+  doctorOptionsSchema,
+} from '@interlock/core';
 import {
   scheduleMutationSchema,
   scheduleReadSchema,
@@ -830,6 +834,11 @@ export const appRouter = t.router({
       .mutation(({ ctx, input }) =>
         ctx.engine.reportFailure(input.workId, input.token, input.error),
       ),
+  }),
+  system: t.router({
+    doctor: p
+      .input(doctorOptionsSchema.optional())
+      .query(({ ctx, input }) => ctx.engine.doctor(input ?? undefined)),
   }),
 });
 export type AppRouter = typeof appRouter;

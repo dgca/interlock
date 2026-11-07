@@ -386,6 +386,8 @@ React Router owns browser navigation through a shared application layout and chi
 | `/runs`                  | Active runs                                            |
 | `/runs?tab=history`      | Run history                                            |
 | `/runs/:runId`           | Run inspector, including child runs                    |
+| `/settings/harnesses`    | Harness profiles and execution settings                |
+| `/settings/diagnostics`  | System diagnostics and readiness check                 |
 
 Resource routes use stable, encoded IDs. Names and future folder or group membership do not determine a workflow's address. Folder and group pages can be added as sibling routes under the application layout without changing existing resource links. Query parameters represent view filters; hash fragments remain available for in-page anchors such as run output.
 
@@ -557,7 +559,21 @@ Available assignments capture `pauseBlocked.remainingMs`; pause, budget, resourc
 
 Pause changes touch affected run continuation revisions and wake readers without rewriting execution history. Run projection returns the current paused boundary with person actor and bounded reasons, preserving actual stages and in-flight actors. UI header controls and shared dialog use `pauses.list/pause/resume`, also exposed by CLI and grouped MCP `manage_pause`. Resume releases one exact ID and never clears other records. Reads, cancellation and cleanup stay available. See [pause operations and scope](work-holds.md).
 
-Schedules check this gate before firing and queued promotion, and apply their missed-fire policy on recovery. Webhook starts, cancellations, and holds reject while an applicable named hold is active. Pending input submissions remain allowed. Input acceptance retains its separate run hold and named-pause checks. Doctor remains future work.
+Schedules check this gate before firing and queued promotion, and apply their missed-fire policy on recovery. Webhook starts, cancellations, and holds reject while an applicable named hold is active. Pending input submissions remain allowed. Input acceptance retains its separate run hold and named-pause checks.
+
+## System diagnostics and health check (`doctor`)
+
+Interlock provides a unified read-only readiness and health check via `interlock doctor [--live] [--json]`, the MCP tool `doctor`, the shared server API `system.doctor`, and the UI Diagnostics page at `/settings/diagnostics`.
+
+Core owns the diagnostic schemas (`diagnosticCategorySchema`, `diagnosticStatusSchema`, `diagnosticCheckSchema`, `doctorReportSchema`, and `doctorOptionsSchema`). Diagnostics evaluate five categories without mutating state or starting workflow runs:
+
+1. **System**: Checks engine version match, SQLite database integrity (`PRAGMA quick_check`), schema migration version, database file size and run history count, and available disk space (`statfsSync`).
+2. **Harnesses**: Verifies enabled harness profiles, binary detection, version discovery, `cwd` and `allowedRoots` existence, and optional live single-turn auth/model verification (`--live`).
+3. **Triggers**: Checks schedule execution lag (>60s), consecutive trigger failures, auto-paused schedules, and recent webhook rejections (last 24 hours).
+4. **Blockers**: Inspects active library and workflow pause holds (`pauseHolds`), uncertain resource and executor holds (`uncertainClaims`, `uncertainOperations`), active stalled work items (`currentStalls`), and `needs_model` execution holds (`managedExecutions`).
+5. **Workflows**: Validates missing or disabled variables and aliases referenced by published workflows, and detects workflows with unpublished draft edits.
+
+The overall status evaluates to `ok` if all checks pass, `warn` if warnings exist without errors, and `fail` if any check fails. The CLI exits with code 0 on `ok` and `warn`, and code 1 on `fail`.
 
 ## Workflow triggers and delivery
 

@@ -42,15 +42,18 @@ export function App() {
   const promptMatch = useMatch('/prompts/*');
   const variableMatch = useMatch('/variables/*');
   const harnessMatch = useMatch('/settings/harnesses');
-  const page = harnessMatch
-    ? 'harnesses'
-    : variableMatch
-      ? 'variables'
-      : promptMatch
-        ? 'prompts'
-        : runMatch
-          ? 'runs'
-          : 'workflows';
+  const diagnosticsMatch = useMatch('/settings/diagnostics');
+  const page = diagnosticsMatch
+    ? 'diagnostics'
+    : harnessMatch
+      ? 'harnesses'
+      : variableMatch
+        ? 'variables'
+        : promptMatch
+          ? 'prompts'
+          : runMatch
+            ? 'runs'
+            : 'workflows';
   const [scheduleAttentionCount, setScheduleAttentionCount] = useState(0);
   const [editorDirty, setEditorDirty] = useState(false);
   const [scheduleDirty, setScheduleDirty] = useState(false);

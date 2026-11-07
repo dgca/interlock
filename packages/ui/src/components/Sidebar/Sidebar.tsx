@@ -6,6 +6,7 @@ import {
   FileText,
   Settings2,
   KeyRound,
+  Stethoscope,
 } from 'lucide-react';
 import { VERSION } from '../../../../core/src/version';
 import { Link } from 'react-router';
@@ -19,7 +20,13 @@ export function Sidebar({
   engineHost,
   onConnect,
 }: {
-  page: 'workflows' | 'runs' | 'prompts' | 'variables' | 'harnesses';
+  page:
+    | 'workflows'
+    | 'runs'
+    | 'prompts'
+    | 'variables'
+    | 'harnesses'
+    | 'diagnostics';
   attentionCount?: number;
   connected: boolean;
   connectionError: boolean;
@@ -59,6 +66,12 @@ export function Sidebar({
               label: 'Harnesses',
               Icon: Settings2,
               to: paths.harnesses,
+            },
+            {
+              id: 'diagnostics',
+              label: 'Diagnostics',
+              Icon: Stethoscope,
+              to: paths.diagnostics,
             },
           ] as const
         ).map(({ id, label, Icon, to }) => (

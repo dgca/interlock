@@ -9,7 +9,12 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { startServer } from '../../server/src/start.js';
 import { createMcpServer } from '../../mcp/src/server.js';
 import { VERSION } from '../../core/src/version.js';
-import { runCommand, commandError } from './commands.js';
+import {
+  runCommand,
+  commandError,
+  runDoctorCommand,
+  formatDoctorReport,
+} from './commands.js';
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -42,6 +47,7 @@ Workflow variables: variables <read|manage> <json|@file> [--value-stdin]
 Workflow triggers: triggers (schedules is an alias) <read|manage> <json|@file>
 Kinds: schedule, webhook, event. Event triggers match run transitions with optional quiescence.
 Named pause holds: pause, pause-holds, resume
+System readiness check: doctor [--live] [--json]
 Run 'interlock commands' for argument syntax.
 
 Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL, INTERLOCK_SECRET_KEY_FILE
@@ -100,9 +106,26 @@ Variable encryption keys are held separately from the database. Back up keys sep
       'report-usage',
       'budget',
       'set-budget',
+      'doctor',
     ];
     if (!known.includes(argv[0]))
       throw new Error(`Unknown command: ${argv[0]}. Run interlock --help.`);
+    if (argv[0] === 'doctor') {
+      const { values } = parseArgs({
+        args: argv.slice(1),
+        options: {
+          live: { type: 'boolean' },
+          json: { type: 'boolean' },
+        },
+      });
+      const report = await runDoctorCommand({ live: values.live });
+      if (values.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatDoctorReport(report));
+      }
+      process.exit(report.status === 'fail' ? 1 : 0);
+    }
     console.log(JSON.stringify(await runCommand(argv), null, 2));
     return;
   }
