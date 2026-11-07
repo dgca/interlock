@@ -1,0 +1,26 @@
+### Result
+{"finding":"UI236-R3","passed":true,"unchangedUnderlyingJson":true,"rawBufferReset":true,"invalidResaveRejected":true,"correctedSavePassed":true}
+### Ran Playwright code
+```js
+await (async page => {
+ const context={"dir": "/var/folders/c9/6p3b_52j3tjg1flszl2g97440000gn/T/interlock-236-ui-fjFcPm", "workflowId": "d572590c-a053-4e54-8a42-63bd9c6f9ca3", "draftWorkflowId": "704f8b2f-a09e-4f5b-b671-2baa74037855", "triggerId": "916e21f8-c9f6-4b9e-b646-666f9a07c7b3", "url": "http://127.0.0.1:5197/workflows/d572590c-a053-4e54-8a42-63bd9c6f9ca3?view=schedules&schedule=916e21f8-c9f6-4b9e-b646-666f9a07c7b3", "source": "production UI build + actual runtime; seeded isolated schedule due slot; no user database", "failureWorkflowId": "440eca10-61bd-4a91-9e94-0cb6a2ef3878", "failureTriggerId": "7350587d-b44c-4d49-8b13-31f9b7122bb7", "lagWorkflowId": "d1cd7301-fe6a-460d-8181-3e118a15d350", "lagTriggerId": "d1ae7d25-9027-4873-946b-0de42e0a54c2", "alertCount": 24};await page.goto(context.url);await page.getByRole('button',{name:'Edit schedule',exact:true}).click();const dialog=page.getByRole('dialog');await dialog.getByRole('textbox',{name:'Schedule name',exact:true}).fill('Local conflict input');
+ const read=await page.request.get('http://127.0.0.1:5197/trpc/triggers.inspect',{params:{input:JSON.stringify({id:context.triggerId})}});const trigger=(await read.json()).result.data.trigger;
+ const config={kind:trigger.kind,name:'Remote JSON winner',timing:trigger.timing,input:trigger.input,bindings:trigger.bindings,overlapPolicy:trigger.overlapPolicy,missedFirePolicy:trigger.missedFirePolicy,pauseAfterConsecutiveFailures:trigger.pauseAfterConsecutiveFailures};
+ const peer=await page.request.post('http://127.0.0.1:5197/trpc/triggers.manage',{data:{action:'update',id:trigger.id,expectedRevision:trigger.revision,config}});if(!peer.ok())throw new Error('Peer update failed');
+ await dialog.getByRole('button',{name:'Save schedule',exact:true}).click();await dialog.getByRole('button',{name:'Reload current schedule and discard edits',exact:true}).waitFor();await dialog.getByRole('button',{name:'Run input',exact:true}).click();await dialog.getByRole('textbox',{name:'JSON input template',exact:true}).fill('{invalid');
+ await dialog.getByRole('button',{name:'Reload current schedule and discard edits',exact:true}).click();await dialog.getByRole('alert').waitFor({state:'hidden'});
+ const raw=await dialog.getByRole('textbox',{name:'JSON input template',exact:true}).inputValue();if(JSON.stringify(JSON.parse(raw))!==JSON.stringify(trigger.input))throw new Error('UI236-R3 stale raw buffer');
+ if(await dialog.getByRole('textbox',{name:'JSON input template',exact:true}).getAttribute('aria-invalid')==='true')throw new Error('Reload retained invalid state');
+ await page.screenshot({path:'.tasks/issue-236/revision-45758202/ui/conflict-reload-json-reset-900.png'});
+ await dialog.getByRole('textbox',{name:'JSON input template',exact:true}).fill('{invalid again');await dialog.getByRole('button',{name:'Save schedule',exact:true}).click();await dialog.getByText('Enter valid JSON before saving.',{exact:true}).waitFor();
+ await dialog.getByRole('textbox',{name:'JSON input template',exact:true}).fill(JSON.stringify(trigger.input));await dialog.getByRole('button',{name:'Save schedule',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ const verify=await page.request.get('http://127.0.0.1:5197/trpc/triggers.inspect',{params:{input:JSON.stringify({id:context.triggerId})}});if(JSON.stringify((await verify.json()).result.data.trigger.input)!==JSON.stringify(trigger.input))throw new Error('Incorrect JSON persisted');
+ return {finding:'UI236-R3',passed:true,unchangedUnderlyingJson:true,rawBufferReset:true,invalidResaveRejected:true,correctedSavePassed:true};
+})(page);
+```
+### Page
+- Page URL: http://127.0.0.1:5197/workflows/d572590c-a053-4e54-8a42-63bd9c6f9ca3?view=schedules&schedule=916e21f8-c9f6-4b9e-b646-666f9a07c7b3
+- Page Title: Interlock
+- Console: 1 errors, 0 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-11-07T12-00-34-952Z.log#L1

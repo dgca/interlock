@@ -1,3 +1,8 @@
+import {
+  scheduleConfigSchema,
+  nextScheduleSlot,
+  type WorkflowTrigger,
+} from '@interlock/core';
 import { isDeepStrictEqual } from 'node:util';
 import type { Store } from '@interlock/storage';
 import {
@@ -57,6 +62,24 @@ export function exportWorkflows(
       draft: w.draft,
       draftRevision: w.draftRevision,
       versions,
+      ...(store.workflowTriggers(id).length
+        ? {
+            schedules: store.workflowTriggers(id).map((t) => ({
+              id: t.id,
+              config: scheduleConfigSchema.parse({
+                kind: t.kind,
+                name: t.name,
+                timing: t.timing,
+                input: t.input,
+                bindings: t.bindings,
+                overlapPolicy: t.overlapPolicy,
+                missedFirePolicy: t.missedFirePolicy,
+                pauseAfterConsecutiveFailures: t.pauseAfterConsecutiveFailures,
+              }),
+              enabled: false,
+            })),
+          }
+        : {}),
       ...(deletedVersions.length ? { deletedVersions } : {}),
     });
     if (w.ownerWorkflowId) include(w.ownerWorkflowId);
@@ -93,13 +116,15 @@ export function exportWorkflows(
   ]);
   return {
     format: 'interlock-workflows',
-    formatVersion: variables.length
-      ? 4
-      : records.some((w) => w.deletedVersions?.length)
-        ? 3
-        : prompts.length
-          ? 2
-          : 1,
+    formatVersion: records.some((w) => w.schedules?.length)
+      ? 5
+      : variables.length
+        ? 4
+        : records.some((w) => w.deletedVersions?.length)
+          ? 3
+          : prompts.length
+            ? 2
+            : 1,
     ...(prompts.length ? { prompts } : {}),
     ...(variables.length ? { variables } : {}),
     rootId,
@@ -296,6 +321,57 @@ export function importWorkflows(
       };
       store.put('workflows', workflow);
     }
+    const scheduleIds = new Set<string>();
+    for (const entry of bundle.workflows)
+      for (const schedule of entry.schedules ?? []) {
+        if (scheduleIds.has(schedule.id))
+          throw new InterlockError('Duplicate schedule identity in bundle');
+        scheduleIds.add(schedule.id);
+        const existing = store.get<WorkflowTrigger>(
+          'workflowTriggers',
+          schedule.id,
+        );
+        if (existing && existing.workflowId !== entry.id)
+          throw new InterlockError(
+            'Schedule identity belongs to another workflow',
+          );
+        if (
+          existing &&
+          !options.force &&
+          !isDeepStrictEqual(
+            scheduleConfigSchema.parse({
+              kind: existing.kind,
+              name: existing.name,
+              timing: existing.timing,
+              input: existing.input,
+              bindings: existing.bindings,
+              overlapPolicy: existing.overlapPolicy,
+              missedFirePolicy: existing.missedFirePolicy,
+              pauseAfterConsecutiveFailures:
+                existing.pauseAfterConsecutiveFailures,
+            }),
+            schedule.config,
+          )
+        )
+          throw new InterlockError(
+            'Schedule configuration conflict; use force to replace after inspection',
+          );
+        store.put<WorkflowTrigger>('workflowTriggers', {
+          ...existing,
+          ...schedule.config,
+          id: schedule.id,
+          workflowId: entry.id,
+          revision: (existing?.revision ?? 0) + 1,
+          enabled: false,
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now,
+          anchorAt: now,
+          nextFireAt: nextScheduleSlot(schedule.config.timing, now),
+          consecutiveFailures: 0,
+          autoPaused: undefined,
+          lastLagMs: undefined,
+        });
+      }
     const all = store.workflows();
     for (const entry of bundle.workflows) {
       if (entry.ownerWorkflowId) {

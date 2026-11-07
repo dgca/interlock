@@ -151,6 +151,71 @@ export class Store {
       .get(collection, id);
     return row ? (JSON.parse(row.value as string) as T) : undefined;
   }
+  workflowTriggers(
+    workflowId?: string,
+  ): import('@interlock/core').WorkflowTrigger[] {
+    return this.db
+      .prepare(
+        `SELECT value FROM documents WHERE collection = 'workflowTriggers' ${workflowId ? "AND json_extract(value, '$.workflowId') = ?" : ''} ORDER BY rowid`,
+      )
+      .all(...(workflowId ? [workflowId] : []))
+      .map((row) => JSON.parse(row.value as string));
+  }
+  scheduleFires(triggerId: string, offset = 0, limit = 20) {
+    const total = Number(
+      this.db
+        .prepare(
+          "SELECT count(*) AS total FROM documents WHERE collection = 'scheduleFires' AND json_extract(value, '$.triggerId') = ?",
+        )
+        .get(triggerId)!.total,
+    );
+    const items = this.db
+      .prepare(
+        "SELECT value FROM documents WHERE collection = 'scheduleFires' AND json_extract(value, '$.triggerId') = ? ORDER BY json_extract(value, '$.scheduledAt') DESC LIMIT ? OFFSET ?",
+      )
+      .all(triggerId, limit, offset)
+      .map(
+        (row) =>
+          JSON.parse(
+            row.value as string,
+          ) as import('@interlock/core').ScheduleFire,
+      );
+    return {
+      items,
+      total,
+      nextOffset: offset + items.length < total ? offset + items.length : null,
+    };
+  }
+  pendingScheduleLag(triggerId: string, at: number): number {
+    const row = this.db
+      .prepare(
+        "SELECT min(json_extract(value, '$.scheduledAt')) AS slot FROM documents WHERE collection = 'scheduleFires' AND json_extract(value, '$.triggerId') = ? AND json_extract(value, '$.settled') = 0 AND json_type(value, '$.admittedAt') IS NULL",
+      )
+      .get(triggerId);
+    return row?.slot ? Math.max(0, at - Date.parse(row.slot as string)) : 0;
+  }
+  pendingScheduleFires(): import('@interlock/core').ScheduleFire[] {
+    return this.db
+      .prepare(
+        "SELECT value FROM documents WHERE collection = 'scheduleFires' AND json_extract(value, '$.settled') = 0 ORDER BY json_extract(value, '$.scheduledAt'), rowid",
+      )
+      .all()
+      .map((row) => JSON.parse(row.value as string));
+  }
+  trimScheduleFires(triggerId: string, keep = 200) {
+    this.db
+      .prepare(
+        "DELETE FROM documents WHERE collection = 'scheduleFires' AND id IN (SELECT id FROM documents WHERE collection = 'scheduleFires' AND json_extract(value, '$.triggerId') = ? AND json_extract(value, '$.settled') = 1 ORDER BY json_extract(value, '$.scheduledAt') DESC LIMIT -1 OFFSET ?)",
+      )
+      .run(triggerId, keep);
+  }
+  deleteScheduleFires(triggerId: string) {
+    this.db
+      .prepare(
+        "DELETE FROM documents WHERE collection = 'scheduleFires' AND json_extract(value, '$.triggerId') = ?",
+      )
+      .run(triggerId);
+  }
   pauseHolds(
     workflowId?: string,
     includeReleased = false,

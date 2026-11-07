@@ -129,3 +129,5 @@ interlock runs --external-task '{"system":"github","id":"dgca/interlock#181"}' -
 Inline JSON and `@file` work for task metadata and budgets. Omit `--summary` for full inspection; it does not change request identity. The optional positional version retains its existing meaning.
 
 Shared `runs.start` and `runs.startSummary` accept `requestId`, `externalTask`, `priority`, `after`, and `onActiveExternalTask` beside their existing fields. Direct Engine callers can supply `{requestId, externalTask, priority, after, onActiveExternalTask}` as the final optional options argument after `budget`, preserving existing positional calls. Shared and MCP result references, cancellation, claims, budgets, ordinary/detached lifecycles and explicit retries keep their existing rules.
+
+Schedule fires use the same atomic RunStarts receipts with `schedule:<triggerId>:<slotIso>` and captured input/published version. Overlap queue waits for prior schedule runs to become terminal even on failure; public `after` dependencies retain success-only behavior. See [workflow schedules](schedules.md).

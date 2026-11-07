@@ -69,7 +69,7 @@ export function Sidebar({
             aria-current={page === id ? 'page' : undefined}
             aria-label={
               id === 'runs' && attentionCount
-                ? `Runs, ${attentionCount} ${attentionCount === 1 ? 'run needs' : 'runs need'} attention`
+                ? `Runs, ${attentionCount} ${attentionCount === 1 ? 'item needs' : 'items need'} attention`
                 : label
             }
           >

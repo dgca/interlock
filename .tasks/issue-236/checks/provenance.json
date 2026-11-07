@@ -1,0 +1,111 @@
+{
+  "sourceCommit": "4349fb5ec0f0993267371ef345e9fc27cddc8576",
+  "originalTaskBase": "dcba6b6ff490d6a8d709a39233e56fddced3d944",
+  "rebasedMain": "7b29dcae81403be62833d2caa2075c625abc894d",
+  "checkedAt": "2026-11-07T11:25:07.475134+00:00",
+  "sourceSha256": {
+    ".changeset/durable-workflow-schedules.md": "00c890c52c5cf5d940e13109d6c513d2db14b1b4faeb3aaed3f526a6098c3066",
+    "CONTEXT.md": "a41f1f898325d7179d534727897d57d1b7ebdad4c3a86366a2f8dc6129e36d17",
+    "README.md": "2dcc34a1eb7a7fffb0bac6422c5de7c309a96e513d8d9882f7cacea9baa8e4fd",
+    "docs/agent-workflows.md": "3bda8aebb277fc62ddac16624819288cf42cd8abf1e409fbbc8091ac4c38be1a",
+    "docs/architecture.md": "c154711b2ef04e18bda9e4dd847e5de1a7e645852da3d22a336f50a6db6d2d4c",
+    "docs/idempotent-run-starts.md": "efe62af4a61beb8cc2cda5cd212f29e141d9c96ac44d58d30e9df7a43a8a42f0",
+    "docs/prompts.md": "9106908dccd592b99b3d078aca2e3b549c20da325b9bf754fa667c11d58c0934",
+    "docs/schedules.md": "657b3167504d0ef4323ec246132e8af6f708e1a755322ed8746ff62c165de3e8",
+    "docs/v1.md": "3a83cc5c4feb46ed241c63485816869a6e2a15dc2667b9bdff098ff71ed2e952",
+    "docs/variables.md": "3c8e309b61ee23db88434967c42875f4ab11788223ead52ead833db687b99100",
+    "docs/work-holds.md": "ea4697e817d0b09521c08446a72340e82ca9762a00e938f9a3c6e7ccd26275bf",
+    "packages/cli/src/bin.ts": "18b84358239c51db07b9af44bda0dc8ef17064e722189c8a18caaa238b14fe93",
+    "packages/cli/src/commands.ts": "3ea6e74354be885c41bc13e7a9f2081b3c8a4e0a94963093e48307b569350980",
+    "packages/core/package.json": "2c3300989e6f9dbba60fb7f353f07a579c5b2680ebbc238d8961e46bb179871d",
+    "packages/core/src/index.ts": "d0a72a41637def7c16237134667a537d763ae82444f65934dd88cbab555c1e2d",
+    "packages/core/src/transfer.ts": "74f126de6030eedaaec37e5d29e7d899d645532fae1fbcd3758b8bc5775d6d7f",
+    "packages/core/src/workflowTriggers.ts": "ab4a03b2330c996dd31efdb6aaa36e40c95c83d9b158399f3e4868a7d68d6e51",
+    "packages/mcp/src/client.ts": "edd20c36bcb3ca3377c404867e8f573be436aa73bad9ff06b7217d4dd638c548",
+    "packages/mcp/src/server.ts": "e7c648d3d8403b46fd4d474167714545213db73fce2c4f55a4213834c962356c",
+    "packages/runtime/src/index.ts": "c2b2edda3640e90abda1e054fcb092e07a6510e24332e556c44df90b831c8a2f",
+    "packages/runtime/src/runAdmission.ts": "d8ede53157964d9337e36b4af6ef0ed5a935e8a5d20e63ba06061fbbbc163c43",
+    "packages/runtime/src/transfer.ts": "3b051e143be58cbbfb57c555bdcce022b8bbfb13cfd4d11c6fafcaff44e83525",
+    "packages/runtime/src/workflowTriggers.ts": "b174c49b3e5c8c09939797a582f43f7e6d3c14e27253897d0d307b00dba940b9",
+    "packages/server/src/router.ts": "1b4d3337b92df36c1d2d6cb6f2213125c9564b30737ac4f07745cf646efa5433",
+    "packages/storage/src/index.ts": "b9771c0b7bfb207d9766c51d9eeff850f079cf8ca9248031b33225d7b25f4412",
+    "packages/storage/src/migrations.ts": "2cca48c203d9083ad35acf0b8c0c328ac25ecace8d47188d991b88517efac0eb",
+    "packages/ui/src/App.tsx": "81a08498cef44d1ef5866b2cc79f8e3834748ab079114c1107df7d4766cdec65",
+    "packages/ui/src/components/JsonEditor/JsonEditor.tsx": "2bbfd5c696a91568548d5a92d9a9367f3695ada0eb2cde3b823b58cfcb9e59da",
+    "packages/ui/src/components/Sidebar/Sidebar.tsx": "13c5bfe9edc847607ae881e283d6311e7b2c031b6096eaeb66ed74a03bf2bb1e",
+    "packages/ui/src/features/runs/RunList.tsx": "e19a65ce805401c2a410a3f7f8642a8ef70d75027d66dbc9c869938bb83b9099",
+    "packages/ui/src/features/schedules/Schedules.module.css": "223b8e16855bdb7894ece36558b01cd9362cc345aa8661c4c8a657b54212ea53",
+    "packages/ui/src/features/schedules/Schedules.tsx": "d61bdb849d6d5a04d6c5b29f9fdce191bf2d9e90354848fb1864deb3c16fd66f",
+    "packages/ui/src/features/workflows/WorkflowEditor.tsx": "046462123a4fd5ae29239253c26c451d85b76c3541bc9ebcd03360f543950b69",
+    "packages/ui/src/routes/index.tsx": "8c2e6cc11115b27a264d6700cdbffa9db722e91fe0e820d21a57eb78f56900b7",
+    "packages/ui/src/routes/paths.ts": "76f3bd4e16f23d1704361433df9e16942d32ef230a1c9a94f5766a78ce7bf71d",
+    "pnpm-lock.yaml": "723888378e86ffa345b204f5ad4b802207640909709fb4c487c395411f5773ce",
+    "scripts/test-package.mjs": "15ac230427a068849f64c4542a849acd934b7fa952950b39e1647fe77e3502eb",
+    "tests/backgroundHistory.test.ts": "d180dc98ed6cae5fea4e0f2469dae136318331376b05bf219fd085d81542e878",
+    "tests/budgets.test.ts": "17cbf2c246fd20a01afc6a5f24bdcaf56ef707337df68a21e415020f868c9699",
+    "tests/comparisonConfigurationsTransport.test.ts": "9108fac8b28de0f863ab6b573daa8106cf9a2818303b8364573f15dc11c58c64",
+    "tests/comparisonMetricsTransport.test.ts": "e0055ff188e32657e2b3c7a14fba5de7eb42e9e895ec2115aa5506f8171d7092",
+    "tests/contextContinuity.test.ts": "a1a73142553a6190c4245604c391d9f81bdad6d54a3974aa331ff8c9782d04a6",
+    "tests/migrations.test.ts": "6b098fa6d3a27a02885b430efbfe569eab44a85ff039c8157dd3cdbcfa46fe5d",
+    "tests/nodeResultsTransport.test.ts": "79ecadec374540d5e4580e71d3e66824eace2443f2d091adc75b5aedabe04c6e",
+    "tests/routes.test.ts": "543c7d8b598bd6dbf13f0ce8cdc1308695c816f5001a96a025c7ce0a9cfd9d6b",
+    "tests/runChainTransport.test.ts": "3fa4346dca3e0d58fd6c6d7afc844e5579a93011728b569518c6ff42703c48c3",
+    "tests/runList.test.ts": "362293fa8822ddd37213af46e47ed830bad02648e47165c61e554456d27e0799",
+    "tests/runStartTransports.test.ts": "a8f21d105e6c0d15b09b35343bd81a4f8f893fac394b8963ba262ff23279d792",
+    "tests/starterTransports.test.ts": "ded0e64e19d1a62624bf8f5172de84db1b9e3b63fac57ba929116f469b091ccb",
+    "tests/testbench.test.ts": "cb8f810a861f0912d5940d5576ec6d6194f0b96ad5d8ea79a1c586485c3488e6",
+    "tests/transport.test.ts": "8da97b449736209c2a7b3d2560f7e67bfc32eae7719c9ccb0dfcc980c5f32ee8",
+    "tests/trialTransports.test.ts": "b0cf76ba9a70e9368427805979764ce42825f3c397e830613b7a5e77ca2506a7",
+    "tests/workflowFailureTransport.test.ts": "3d3e36189a4f689b3ed6ffc79f4ca885af0bc79ad417eadd52df219d806de083",
+    "tests/workflowTriggers.test.ts": "53da2a0e0d0735c3a9d3fd539138075701095dc0225f2a803cdfd12c8a0dcf01"
+  },
+  "imagesSha256": {
+    "missing-schedule-900.png": "bf14bd1c4317ec499949c3d5667ddb752ce25ac2faf49cf4260ad1b3ce48a24f",
+    "schedules-1440.png": "d775d88aaa28d2301b1fc31b20fb2fb3aee0ac48aefd27996540c5fc8b1a9e48",
+    "saved-refresh-failed-1440.png": "5049514ac659d29932fe7d0f28cbce1b28122534f632827f47668e15e1d45cd3",
+    "save-rejected-1440.png": "5d3683df6461a4803ae3905b47486de937e3b99a6690e18f311f0cbd394a6488",
+    "auto-paused-900.png": "3713db3c89255ce99f2b2f7134ee2d02ab43e25baaa1e027b5e6f2be51d3b686",
+    "draft-empty-390.png": "e3313aba17eb8a92e9f07f5aa7867f519489f4163c896d9e3a0859d621d06d07",
+    "needs-attention-1440.png": "093a3b750993a240024698837e51d898ce230a5ec2e2b32825eb8bd1ffe31338",
+    "policies-1440.png": "2bb282038ca6bf6f0cdcd5bea7852a635da78f29cef934a694582801f92b12a7",
+    "schedules-900.png": "7d4e977913c5070fb80af5270d308046bbd89f697937ccfb96be8046c162517b",
+    "queue-lag-900.png": "1ef758f7d8e3021c9fa36e8b34b56a7bda74aba94b0f5e111ae927b9c7ce3228",
+    "revision-conflict-900.png": "9cc4dd5252d834f38cb501d57ad5e0731894ca6c60b90f3dc42b6290975710dd",
+    "inspection-390.png": "be0fd63af215918e6519fdd078f22c1e4d0fb4f14889c2c25ead4396672b6532",
+    "policies-390.png": "0f606b9facf9287ad7f1329759546f423c291ec88ce4ae620d5d48cb29d22ed1",
+    "cron-900.png": "1dd44ea7593eda10faa6c92bc4e0b123911c8776712c6483f59367ff44a2cd5e",
+    "schedules-390.png": "2407d5e09781802427c558ea0318c042ff0ffe7f6fea77b952ab876e8b18b5a2"
+  },
+  "checks": {
+    "pnpm test": {
+      "exitCode": 0,
+      "files": 128,
+      "tests": 1541
+    },
+    "pnpm build": {
+      "exitCode": 0
+    },
+    "pnpm test:package": {
+      "exitCode": 0
+    },
+    "pnpm format:check": {
+      "exitCode": 0
+    },
+    "schedule tests": {
+      "exitCode": 0,
+      "tests": 25
+    }
+  },
+  "visualProvenance": {
+    "finalOverviews": "4349fb5ec0f0993267371ef345e9fc27cddc8576",
+    "otherRuntimeCaptures": "Earlier actual-control evidence is carried forward with these original source commits. Later UI changes affect missing-schedule reads and the schedule-only empty panel; their new states were checked separately. The final runtime change affects only persisted hold interval classification and is covered by final-head tests.",
+    "designFixtures": "ui/evidence is the earlier UI design v2 fixture, with its own source-snapshot.json. ui/runtime-evidence uses production UI and actual runtime on isolated fixture DBs.",
+    "runtimeFixture": "runtime-server.ts creates a separate temporary DB, seeds one due slot, then calls the real scheduler. runtime-states.ts seeds failure and admission-capacity fixtures and calls the real scheduler.",
+    "runtimeServerSourceCommit": "5d13808578efeea8be22feee3f0454b5b0b63bb9",
+    "runtimeServerScope": "Server loaded before the final pause-slot correction. The depicted fixtures have no named holds, so that correction cannot change their observed states; final-head tests verify the added hold boundary. Fresh independent UI review must start the fixture server from its reviewed checkout.",
+    "runtimeJourneyCommit": "5d13808578efeea8be22feee3f0454b5b0b63bb9",
+    "statesAndConflictUiCommit": "80434c3fd022083eb39ac386c1a24a51678ae7c2",
+    "attentionUiCommit": "85ce3ee2df1d4b74b3fd6d7c01fdacbc6abfae16"
+  },
+  "reviewState": "Awaiting independent UI review and fresh SDLC Review change. No human rendered approval."
+}

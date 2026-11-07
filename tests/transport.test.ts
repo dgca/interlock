@@ -33,6 +33,7 @@ function leaseDeadline(value: unknown): number {
 }
 
 let testbenchDiscovery: unknown;
+let scheduleDiscovery: unknown;
 
 it.each(['stdio', 'http'])(
   'completes a workflow through MCP %s and the shared HTTP and SQLite interfaces',
@@ -174,6 +175,102 @@ it.each(['stdio', 'http'])(
         draftRevision: engine.workflow(w.id).draftRevision,
       });
       const toolDiscovery = await client.listTools();
+      const scheduleTools = toolDiscovery.tools.filter((t) =>
+        ['read_workflow_triggers', 'manage_workflow_triggers'].includes(t.name),
+      );
+      expect(scheduleTools).toHaveLength(2);
+      if (scheduleDiscovery) expect(scheduleTools).toEqual(scheduleDiscovery);
+      else scheduleDiscovery = scheduleTools;
+      expect(JSON.stringify(scheduleTools)).toContain('expectedRevision');
+      const schedule = (
+        await call('manage_workflow_triggers', {
+          request: {
+            action: 'create',
+            workflowId: w.id,
+            config: {
+              name: 'Transport heartbeat',
+              timing: { type: 'interval', intervalMs: 30000 },
+            },
+          },
+        })
+      ).trigger;
+      expect(schedule.enabled).toBe(false);
+      expect(
+        (
+          await call('read_workflow_triggers', {
+            request: { action: 'inspect', id: schedule.id },
+          })
+        ).fires.total,
+      ).toBe(0);
+      expect(
+        (
+          await call('read_workflow_triggers', {
+            request: {
+              action: 'preview',
+              timing: {
+                type: 'cron',
+                expression: '0 9 * * 1-5',
+                timeZone: 'America/Denver',
+              },
+            },
+          })
+        ).upcoming,
+      ).toHaveLength(3);
+      const changedSchedule = (
+        await call('manage_workflow_triggers', {
+          request: {
+            action: 'update',
+            id: schedule.id,
+            expectedRevision: 1,
+            config: {
+              name: 'Changed heartbeat',
+              timing: { type: 'interval', intervalMs: 30000 },
+              overlapPolicy: 'queue',
+            },
+          },
+        })
+      ).trigger;
+      const enabledSchedule = (
+        await call('manage_workflow_triggers', {
+          request: {
+            action: 'enable',
+            id: schedule.id,
+            expectedRevision: changedSchedule.revision,
+          },
+        })
+      ).trigger;
+      expect(enabledSchedule.enabled).toBe(true);
+      const scheduleBundle = await call('export_workflow', { id: w.id });
+      expect(scheduleBundle.formatVersion).toBe(5);
+      expect(
+        scheduleBundle.workflows.find((entry: any) => entry.id === w.id)
+          .schedules[0].enabled,
+      ).toBe(false);
+      expect(
+        (
+          await call('read_workflow_triggers', {
+            request: { action: 'attention' },
+          })
+        ).total,
+      ).toBe(0);
+      const disabledSchedule = (
+        await call('manage_workflow_triggers', {
+          request: {
+            action: 'disable',
+            id: schedule.id,
+            expectedRevision: enabledSchedule.revision,
+          },
+        })
+      ).trigger;
+      expect(disabledSchedule.enabled).toBe(false);
+      await call('manage_workflow_triggers', {
+        request: {
+          action: 'delete',
+          id: schedule.id,
+          expectedRevision: disabledSchedule.revision,
+        },
+      });
+
       const { tools, nextCursor } = toolDiscovery;
       const admissionSchema = tools.find((t) => t.name === 'start_run')!
         .inputSchema.properties!;
@@ -261,6 +358,24 @@ it.each(['stdio', 'http'])(
       const oldUrl = process.env.INTERLOCK_URL;
       process.env.INTERLOCK_URL = url;
       try {
+        expect(
+          await runCommand([
+            'schedules',
+            'read',
+            JSON.stringify({ action: 'list', workflowId: w.id }),
+          ]),
+        ).toMatchObject({ total: 0 });
+        expect(
+          await runCommand([
+            'schedules',
+            'read',
+            JSON.stringify({
+              action: 'preview',
+              timing: { type: 'interval', intervalMs: 30000 },
+            }),
+          ]),
+        ).toHaveProperty('upcoming');
+
         const cliStart = await runCommand([
           'start',
           limited.id,
@@ -310,7 +425,7 @@ it.each(['stdio', 'http'])(
       expect(nextCursor).toBeUndefined();
       expect(
         Buffer.byteLength(JSON.stringify(toolDiscovery)),
-      ).toBeLessThanOrEqual(260_000);
+      ).toBeLessThanOrEqual(270_000);
       expect(Buffer.byteLength(instructions)).toBeLessThanOrEqual(10_000);
       expect(instructions).toContain(
         'docs/agent-workflows.md#discover-schemas-and-assignments',

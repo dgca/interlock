@@ -19,6 +19,8 @@ export const paths = {
   variable: (id: string) => `/variables/${encodeURIComponent(id)}`,
   prompt: (id: string) => `/prompts/${encodeURIComponent(id)}`,
   workflows: '/workflows',
+  workflowSchedule: (id: string, triggerId?: string) =>
+    `/workflows/${encodeURIComponent(id)}?view=schedules${triggerId ? `&schedule=${encodeURIComponent(triggerId)}` : ''}`,
   workflow: (id: string) => `/workflows/${encodeURIComponent(id)}`,
   runs: (tab: RunTab = 'active', offset = 0) => {
     const query = runListSearch(tab, offset);

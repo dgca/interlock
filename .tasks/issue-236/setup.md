@@ -1,0 +1,1 @@
+Setup verified on branch feat/issue-236 in the authorized worktree. SDLC run 2db902b3-d9e0-40be-94fa-352aafe8045c. Configure claim response was truncated before the token was retained; no external effects or subprocesses remain. Recover only this assignment through a named work hold, then resume with a fresh claim.

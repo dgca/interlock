@@ -653,6 +653,12 @@ export interface PollCheckResult {
   error?: string;
 }
 export interface Run {
+  schedule?: {
+    triggerId: string;
+    scheduledAt: string;
+    waitForPrevious: boolean;
+    previousRunIds: string[];
+  };
   admission?: import('./runStarts.js').RunAdmission;
   startRequestId?: string;
   externalTask?: import('./runStarts.js').ExternalTask;
@@ -1346,3 +1352,5 @@ export { nextCallSchema, withNextCall } from './continuation.js';
 export * from './runProjection.js';
 
 export * from './pauseHolds.js';
+
+export * from './workflowTriggers.js';

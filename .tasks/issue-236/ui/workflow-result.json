@@ -1,0 +1,17 @@
+{
+  "runId": "e45a3f5d-2885-4e7c-8754-8361ccca722b",
+  "workflowId": "4ac0b1f0-0ed5-46f8-b1fd-d3652a9cf43b",
+  "workflowVersion": 2,
+  "runStatus": "completed",
+  "status": "ready",
+  "artifactPath": ".tasks/issue-236/ui/ui-design.md",
+  "prototypePath": ".tasks/issue-236/ui/prototype",
+  "decisionSource": "existing_authorization",
+  "humanResponse": "",
+  "renderedHumanApproval": false,
+  "evidenceDirectory": ".tasks/issue-236/ui/evidence",
+  "fixtureCheckCount": 33,
+  "mechanicalFindings": 0,
+  "productionSourceChanged": false,
+  "cleanup": "Browser ui236 closed, preview port 5196 stopped, temporary Vite cache removed. No database created."
+}

@@ -1,0 +1,8 @@
+{
+  "browser": "issue236-runtime closed",
+  "serverPort": 5197,
+  "serverStopped": true,
+  "removedOnlyOwnedTemporaryDatabaseDirectories": true,
+  "userInterlockDataTouched": false,
+  "sourceChangedAfterChecks": false
+}

@@ -81,3 +81,7 @@ Interlock defines repeatable procedures that agents and people can execute and i
 **Comparison sample**: One baseline or candidate execution of a case at a particular repetition.
 
 **Quality judgment**: A declared reviewer's assessment of a comparison sample against an explicit rubric, distinct from execution status and structural checks.
+
+**Workflow trigger**: A configured cause of new runs, managed separately from a workflow draft. A schedule trigger starts runs at periodic slots under its overlap and missed-fire policies.
+
+**Schedule fire**: One recorded attempt or policy skip for a schedule slot. Its admission outcome is distinct from the resulting run's completion outcome.

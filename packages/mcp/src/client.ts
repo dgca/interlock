@@ -4,6 +4,10 @@ import { createClient } from '@interlock/client';
 export function createMcpClient(url?: string) {
   const client = createClient(url);
   return {
+    triggers: {
+      read: client.triggers.read.query,
+      manage: client.triggers.manage.mutate,
+    },
     pauses: {
       list: client.pauses.list.query,
       pause: client.pauses.pause.mutate,

@@ -6,12 +6,14 @@ export function JsonEditor({
   label,
   rows = 9,
   validate,
+  onValidityChange,
 }: {
   value: unknown;
   onChange?: (value: any) => void;
   label: string;
   rows?: number;
   validate?: (value: unknown) => string | undefined;
+  onValidityChange?: (valid: boolean) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const serialized = JSON.stringify(value, null, 2);
@@ -40,10 +42,12 @@ export function JsonEditor({
           const parsed = JSON.parse(e.target.value);
           const problem = validate?.(parsed);
           setError(problem ?? '');
+          onValidityChange?.(!problem);
           e.target.setCustomValidity(problem ?? '');
           if (!problem) onChange?.(parsed);
         } catch {
           setError('Enter valid JSON.');
+          onValidityChange?.(false);
           e.target.setCustomValidity('Enter valid JSON.');
         }
       }}

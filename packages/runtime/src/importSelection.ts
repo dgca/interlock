@@ -150,6 +150,14 @@ function combineBundles(
         throw new InterlockError(
           `Selected files conflict for workflow ${entry.id}`,
         );
+      for (const schedule of entry.schedules ?? []) {
+        const old = previous.schedules?.find((item) => item.id === schedule.id);
+        if (old && !isDeepStrictEqual(old.config, schedule.config))
+          throw new InterlockError(
+            `Selected files conflict for schedule ${schedule.id}`,
+          );
+        if (!old) (previous.schedules ??= []).push(structuredClone(schedule));
+      }
       for (const version of entry.versions) {
         if (
           previous.deletedVersions?.some((v) => v.version === version.version)
@@ -213,13 +221,15 @@ function combineBundles(
   return rootId
     ? {
         format: 'interlock-workflows',
-        formatVersion: variables.size
-          ? 4
-          : [...workflows.values()].some((w) => w.deletedVersions?.length)
-            ? 3
-            : prompts.size
-              ? 2
-              : 1,
+        formatVersion: [...workflows.values()].some((w) => w.schedules?.length)
+          ? 5
+          : variables.size
+            ? 4
+            : [...workflows.values()].some((w) => w.deletedVersions?.length)
+              ? 3
+              : prompts.size
+                ? 2
+                : 1,
         rootId,
         workflows: [...workflows.values()],
         ...(prompts.size ? { prompts: [...prompts.values()] } : {}),

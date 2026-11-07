@@ -28,6 +28,8 @@ export type AppContext = {
   tick: number;
   act: Action;
   onDirty: (dirty: boolean) => void;
+  onScheduleDirty: (dirty: boolean) => void;
+  onSchedulePending: (pending: boolean) => void;
   onSaved: (workflow: Workflow) => void;
   onRun: (workflow: Workflow) => void;
   onConnect?: () => void;
@@ -49,7 +51,10 @@ export function App() {
         : runMatch
           ? 'runs'
           : 'workflows';
+  const [scheduleAttentionCount, setScheduleAttentionCount] = useState(0);
   const [editorDirty, setEditorDirty] = useState(false);
+  const [scheduleDirty, setScheduleDirty] = useState(false);
+  const [schedulePending, setSchedulePending] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [engineHost, setEngineHost] = useState<string>();
@@ -68,7 +73,10 @@ export function App() {
   const [loadError, setLoadError] = useState('');
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
-      editorDirty && currentLocation.pathname !== nextLocation.pathname,
+      (editorDirty && currentLocation.pathname !== nextLocation.pathname) ||
+      ((scheduleDirty || schedulePending) &&
+        (currentLocation.pathname !== nextLocation.pathname ||
+          currentLocation.search !== nextLocation.search)),
   );
   const [workflows, setWorkflows] = useState<Workflow[]>([]),
     [prompts, setPrompts] = useState<SavedPrompt[]>([]),
@@ -77,14 +85,16 @@ export function App() {
     [tick, setTick] = useState(0),
     [runDialog, setRunDialog] = useState<Workflow>();
   const refresh = useCallback(async () => {
-    const [w, p, a] = await Promise.all([
+    const [w, p, a, schedules] = await Promise.all([
       api.workflows.list.query(),
       api.prompts.list.query(),
       api.runs.attention.query(),
+      api.triggers.attention.query({ limit: 1 }),
     ]);
     setWorkflows(w);
     setPrompts(p);
     setAttention(a);
+    setScheduleAttentionCount(schedules.total);
     setConnected(true);
     setLoaded(true);
     setLoadError('');
@@ -186,6 +196,8 @@ export function App() {
     tick,
     act,
     onDirty: setEditorDirty,
+    onScheduleDirty: setScheduleDirty,
+    onSchedulePending: setSchedulePending,
     onSaved: (w) =>
       setWorkflows((all) =>
         all.some((old) => old.id === w.id)
@@ -201,7 +213,7 @@ export function App() {
         <Sidebar
           onConnect={context.onConnect}
           page={page}
-          attentionCount={attention.length}
+          attentionCount={attention.length + scheduleAttentionCount}
           connected={connected}
           connectionError={!!loadError}
           engineHost={engineHost}
@@ -264,9 +276,11 @@ export function App() {
               <Button
                 color="red"
                 variant="light"
+                disabled={schedulePending}
                 onClick={() => {
                   if (blocker.state === 'blocked') {
                     setEditorDirty(false);
+                    setScheduleDirty(false);
                     blocker.proceed();
                   }
                 }}

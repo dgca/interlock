@@ -31,6 +31,11 @@ vi.mock('../packages/ui/src/lib/engineEvents', () => ({
 }));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
+    triggers: {
+      attention: {
+        query: () => Promise.resolve({ items: [], total: 0, nextOffset: null }),
+      },
+    },
     pauses: {
       list: {
         query: () => Promise.resolve({ items: [], total: 0, nextOffset: null }),
@@ -342,7 +347,7 @@ it('shows global human attention, deep-links to its assignment, and preserves th
   ]);
   await mount('/workflows');
   const badge = container.querySelector(
-    'a[aria-label="Runs, 1 run needs attention"]',
+    'a[aria-label="Runs, 1 item needs attention"]',
   );
   expect(badge?.textContent).toBe('Runs1');
   await act(async () => router.navigate('/runs?tab=attention'));
@@ -364,7 +369,7 @@ it('shows global human attention, deep-links to its assignment, and preserves th
     await new Promise((resolve) => setTimeout(resolve, 150));
   });
   expect(
-    container.querySelector('a[aria-label="Runs, 1 run needs attention"]'),
+    container.querySelector('a[aria-label="Runs, 1 item needs attention"]'),
   ).toBeNull();
   expect(container.textContent).toContain('No runs need your attention.');
 });

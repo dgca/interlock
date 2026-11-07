@@ -176,6 +176,16 @@ export const migrations: readonly Migration[] = [
             AND json_type(NEW.value, '$.comparison.comparisonId') = 'text'; END;`);
     },
   },
+  {
+    version: 10,
+    up(db) {
+      db.exec(`
+        CREATE INDEX workflow_triggers_workflow ON documents(json_extract(value, '$.workflowId')) WHERE collection = 'workflowTriggers';
+        CREATE INDEX schedule_fires_trigger ON documents(json_extract(value, '$.triggerId'), json_extract(value, '$.scheduledAt') DESC) WHERE collection = 'scheduleFires';
+        CREATE INDEX schedule_fires_pending ON documents(json_extract(value, '$.settled')) WHERE collection = 'scheduleFires';
+      `);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

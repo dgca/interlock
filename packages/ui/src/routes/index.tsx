@@ -18,6 +18,11 @@ import { lazy, Suspense, useState } from 'react';
 import { Button, Center, Loader } from '@mantine/core';
 import { RouteSkeleton, type LoadingSubject } from './RouteSkeleton';
 
+const Schedules = lazy(() =>
+  import('../features/schedules/Schedules').then((m) => ({
+    default: m.Schedules,
+  })),
+);
 const WorkflowLibrary = lazy(() =>
   import('../features/workflows/WorkflowLibrary').then((m) => ({
     default: m.WorkflowLibrary,
@@ -210,6 +215,15 @@ function WorkflowRoute() {
         workflows={context.workflows}
         prompts={context.prompts}
         act={context.act}
+        schedulesView={
+          <Schedules
+            workflow={workflow}
+            onDirty={context.onScheduleDirty}
+            onPending={context.onSchedulePending}
+            tick={context.tick}
+            visible={search.get('view') === 'schedules'}
+          />
+        }
         onDirty={context.onDirty}
         onSaved={context.onSaved}
         onRun={context.onRun}
@@ -230,11 +244,13 @@ function WorkflowRoute() {
           );
         }}
         section={
-          search.get('view') === 'runs'
-            ? 'runs'
-            : search.get('view') === 'children' && !workflow.ownerWorkflowId
-              ? 'children'
-              : 'editor'
+          search.get('view') === 'schedules'
+            ? 'schedules'
+            : search.get('view') === 'runs'
+              ? 'runs'
+              : search.get('view') === 'children' && !workflow.ownerWorkflowId
+                ? 'children'
+                : 'editor'
         }
         onSectionChange={(section) =>
           setSearch((previous) => {
