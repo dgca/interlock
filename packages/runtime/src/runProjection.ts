@@ -79,7 +79,14 @@ export function projectRun(
       };
     };
     const managed = work?.managedExecution;
-    if (
+    if (work?.cwdBlocked)
+      wait(
+        'human_request',
+        'person',
+        work.cwdBlocked.reason,
+        work.createdAt ?? at,
+      );
+    else if (
       managed &&
       ['needs_human', 'needs_model', 'interrupted', 'blocked'].includes(
         managed.state,

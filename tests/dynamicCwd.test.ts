@@ -20,6 +20,7 @@ import {
   definitionSchema,
   executorProfileSchema,
   type Json,
+  type Run,
   type WorkflowDefinition,
 } from '@interlock/core';
 
@@ -89,7 +90,7 @@ describe('Dynamic CWD binding for Scripts', () => {
     const wf = engine.create('Test CWD', '', def);
     engine.publish(wf.id);
     const start = engine.start(wf.id, {});
-    let run = start.run;
+    let run: Run = start.run;
 
     for (let i = 0; i < 10; i++) {
       engine.pump();
@@ -131,7 +132,7 @@ describe('Dynamic CWD binding for Scripts', () => {
     const wf = engine.create('Dynamic Input CWD', '', def);
     engine.publish(wf.id);
     const start = engine.start(wf.id, { targetDir: worktreeDir });
-    let run = start.run;
+    let run: Run = start.run;
 
     for (let i = 0; i < 10; i++) {
       engine.pump();
@@ -179,7 +180,7 @@ describe('Dynamic CWD binding for Scripts', () => {
     const wf = engine.create('Node Output CWD', '', def);
     engine.publish(wf.id);
     const start = engine.start(wf.id, {});
-    let run = start.run;
+    let run: Run = start.run;
 
     for (let i = 0; i < 15; i++) {
       engine.pump();
@@ -217,7 +218,7 @@ describe('Dynamic CWD binding for Scripts', () => {
     const wf = engine.create('Workflow CWD', '', def);
     engine.publish(wf.id);
     const start = engine.start(wf.id, {});
-    let run = start.run;
+    let run: Run = start.run;
 
     for (let i = 0; i < 10; i++) {
       engine.pump();
@@ -257,7 +258,7 @@ describe('Dynamic CWD binding for Scripts', () => {
     const wf = engine.create('Override CWD', '', def);
     engine.publish(wf.id);
     const start = engine.start(wf.id, {});
-    let run = start.run;
+    let run: Run = start.run;
 
     for (let i = 0; i < 10; i++) {
       engine.pump();
@@ -296,7 +297,7 @@ describe('Dynamic CWD binding for Scripts', () => {
     const wf = engine.create('Escaping CWD', '', def);
     engine.publish(wf.id);
     const start = engine.start(wf.id, {});
-    let run = start.run;
+    let run: Run = start.run;
 
     for (let i = 0; i < 10; i++) {
       engine.pump();
@@ -338,7 +339,7 @@ describe('Dynamic CWD binding for Scripts', () => {
     const wf = engine.create('Symlink Escape', '', def);
     engine.publish(wf.id);
     const start = engine.start(wf.id, {});
-    let run = start.run;
+    let run: Run = start.run;
 
     for (let i = 0; i < 10; i++) {
       engine.pump();
@@ -377,7 +378,7 @@ describe('Dynamic CWD binding for Scripts', () => {
     const wf = engine.create('Missing Dir', '', def);
     engine.publish(wf.id);
     const start = engine.start(wf.id, {});
-    let run = start.run;
+    let run: Run = start.run;
 
     for (let i = 0; i < 10; i++) {
       engine.pump();
@@ -428,7 +429,7 @@ describe('Dynamic CWD binding for Polling Script Checks', () => {
     const wf = engine.create('Poll CWD', '', def);
     engine.publish(wf.id);
     const start = engine.start(wf.id, {});
-    let run = start.run;
+    let run: Run = start.run;
 
     for (let i = 0; i < 15; i++) {
       engine.pump();
@@ -521,6 +522,17 @@ describe('Dynamic CWD binding for Agent Nodes', () => {
     );
     expect(blocker).toBeDefined();
     expect(blocker?.cwdBlocked?.reason).toContain('outside allowed roots');
+    expect(briefing.run).toMatchObject({
+      actor: 'person',
+      waiting: {
+        kind: 'human_request',
+        detail: { message: expect.stringContaining('outside allowed roots') },
+      },
+    });
+    expect(engine.inspect(run.id).run).toMatchObject({
+      actor: 'person',
+      waiting: { kind: 'human_request' },
+    });
 
     // Claim attempt is rejected with blocker reason
     const allWork = engine.store.work();
@@ -600,7 +612,7 @@ describe('Dynamic CWD binding for Agent Nodes', () => {
     const wf = engine.create('Continuity CWD', '', def);
     engine.publish(wf.id);
     const start = engine.start(wf.id, {});
-    let run = start.run;
+    let run: Run = start.run;
 
     for (let i = 0; i < 30; i++) {
       engine.pump();
