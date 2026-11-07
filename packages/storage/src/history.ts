@@ -36,6 +36,8 @@ const scoped = [
   'events',
   'usageAttempts',
   'workHolds',
+  'externalInputValues',
+  'externalInputReceipts',
   'contextGroups',
   'contextEvents',
   'managedExecutions',

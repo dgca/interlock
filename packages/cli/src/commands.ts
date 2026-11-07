@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createClient, TRPCClientError } from '@interlock/client';
 import { parseArgs } from 'node:util';
 import {
+  externalInputRequestSchema,
   withNextCall,
   testSuiteSaveSchema,
   testSuiteReadSchema,
@@ -346,6 +347,14 @@ export async function runCommand(argv: string[]) {
       if (args.length !== 1)
         throw new Error('Usage: assignment-size <json|@file>');
       return client.work.size.query(await parse(args[0]));
+    case 'external-input': {
+      if (args.length !== 1)
+        throw new Error('Usage: external-input <json|@file>');
+      const request = externalInputRequestSchema.parse(await parse(args[0]));
+      return request.action === 'status'
+        ? client.runs.externalInputStatus.query(request)
+        : client.runs.externalInput.mutate(request);
+    }
     case 'work-hold':
       if (args.length !== 1) throw new Error('Usage: work-hold <json|@file>');
       return client.work.hold.mutate(await parse(args[0]));
@@ -459,6 +468,7 @@ export async function runCommand(argv: string[]) {
           'assignment-size <json|@file> (workId, or workflowId/nodeId with sample; optional warningBytes)',
           'work [run-id] [--summary]',
           'claim <work-id> [worker-id] [options-json: {"leaseSeconds":1800,"freshContext":false,"tools":[],"skills":[]}] [--fresh] [--lease seconds] (flags override options JSON; --fresh attests an isolated context; grouped work also requires session: {executorId,sessionId} in options; optional modelSelection: {tier,provider,model} declares a selection, not usage)',
+          'external-input <json|@file> (action: status, submit, accept, hold or release)',
           'work-hold <json|@file> (action: hold, resume or read-only history; hold/resume require current attempt/revision)',
           'preflight <work-id> <token> <json|@file> (read-only result contract/rules, result routing/output mappings and claim check)',
           'submit <work-id> <token> <json|@file> [--summary]',

@@ -1,4 +1,8 @@
-import { attentionText, type RunTab } from './runAttention';
+import {
+  LoadingSkeleton,
+  Placeholder,
+} from '../../components/LoadingSkeleton/LoadingSkeleton';
+import { attentionText, waitReasonText, type RunTab } from './runAttention';
 import { Button, Group, Tabs, Text } from '@mantine/core';
 import { useEffect, useRef, useState } from 'react';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
@@ -127,7 +131,27 @@ export function RunList({
             </Group>
           )}
           {!page ? (
-            !error && <Text role="status">Loading runs…</Text>
+            !error && (
+              <LoadingSkeleton label="Loading runs…" className="run-table">
+                {[1, 2, 3, 4].map((row) => (
+                  <div className="run-row" key={row}>
+                    <span>
+                      <Placeholder h={13} w="min(90%, 170px)" />
+                      <Placeholder mt={5} h={9} w={60} />
+                    </span>
+                    <span>
+                      <Placeholder h={18} w={64} />
+                    </span>
+                    <span>
+                      <Placeholder h={10} w="min(100%, 110px)" />
+                    </span>
+                    <span>
+                      <Placeholder h={10} w={24} />
+                    </span>
+                  </div>
+                ))}
+              </LoadingSkeleton>
+            )
           ) : page.items.length ? (
             <div className="run-table">
               <div className="run-row table-heading">
@@ -163,11 +187,15 @@ export function RunList({
                   </span>
                   <span className="run-status">
                     <Badge status={r.status} />
-                    {r.attention && (
+                    {r.attention ? (
                       <small className="run-attention">
                         {attentionText(r.attention)}
                       </small>
-                    )}
+                    ) : r.waitReason ? (
+                      <small className="run-wait-reason">
+                        {waitReasonText[r.waitReason]}
+                      </small>
+                    ) : null}
                   </span>
                   <span>{new Date(r.createdAt).toLocaleString()}</span>
                   <span>{r.executionCount}</span>

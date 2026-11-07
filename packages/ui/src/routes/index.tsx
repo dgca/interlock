@@ -19,22 +19,30 @@ import { RunInspector } from '../features/runs/RunInspector';
 import { Harnesses } from '../features/executors/Harnesses';
 import { paths, runOffset } from './paths';
 import { flushSync } from 'react-dom';
+import { useState } from 'react';
+import { Button } from '@mantine/core';
+import { RouteSkeleton, type LoadingSubject } from './RouteSkeleton';
 import { PromptLibrary, PromptEditor } from '../features/prompts/Prompts';
 import {
   VariableLibrary,
   VariableRoute,
 } from '../features/variables/Variables';
 
+function HarnessesRoute() {
+  const { onDirty } = useOutletContext<AppContext>();
+  return <Harnesses onDirty={onDirty} />;
+}
+
 function PromptsRoute() {
   const context = useOutletContext<AppContext>();
-  if (!context.loaded) return <Loading error={context.loadError} />;
+  if (!context.loaded) return <Loading subject="prompts" />;
   return <PromptLibrary prompts={context.prompts} act={context.act} />;
 }
 function PromptRoute() {
   const { promptId } = useParams();
   const context = useOutletContext<AppContext>();
   const prompt = context.prompts.find((p) => p.id === promptId);
-  if (!context.loaded) return <Loading error={context.loadError} />;
+  if (!context.loaded) return <Loading subject="prompt" />;
   if (!prompt) return <NotFound title="Prompt not found" />;
   return (
     <PromptEditor
@@ -48,9 +56,9 @@ function PromptRoute() {
 }
 
 function LibraryRoute() {
-  const { workflows, act, loaded, loadError } = useOutletContext<AppContext>();
+  const { workflows, act, loaded } = useOutletContext<AppContext>();
   const navigate = useNavigate();
-  if (!loaded) return <Loading error={loadError} />;
+  if (!loaded) return <Loading subject="workflows" />;
   return (
     <WorkflowLibrary
       workflows={workflows}
@@ -60,10 +68,26 @@ function LibraryRoute() {
   );
 }
 
-function Loading({ error }: { error: string }) {
+function Loading({ subject }: { subject: LoadingSubject }) {
+  const { loadError, retryLoad } = useOutletContext<AppContext>();
+  const [retrying, setRetrying] = useState(false);
+  if (!loadError) return <RouteSkeleton subject={subject} />;
   return (
-    <div className="content-page" role={error ? 'alert' : 'status'}>
-      {error || 'Loading workflows…'}
+    <div className="content-page">
+      <p role="alert">
+        Could not load {subject}. {loadError}
+      </p>
+      <Button
+        variant="default"
+        disabled={retrying}
+        onClick={async () => {
+          setRetrying(true);
+          await retryLoad();
+          setRetrying(false);
+        }}
+      >
+        {retrying ? 'Retrying…' : 'Retry'}
+      </Button>
     </div>
   );
 }
@@ -98,7 +122,7 @@ function WorkflowRoute() {
   const navigate = useNavigate();
   const { search, setSearch, page } = useRunPage();
   const workflow = context.workflows.find((w) => w.id === workflowId);
-  if (!context.loaded) return <Loading error={context.loadError} />;
+  if (!context.loaded) return <Loading subject="workflow" />;
   if (!workflow) return <NotFound title="Workflow not found" />;
   return (
     <WorkflowEditor
@@ -234,7 +258,7 @@ export const routes: RouteObject[] = [
       { path: 'prompts', Component: PromptsRoute },
       { path: 'variables', Component: VariableLibrary },
       { path: 'variables/:variableId', Component: VariableRoute },
-      { path: 'settings/harnesses', Component: Harnesses },
+      { path: 'settings/harnesses', Component: HarnessesRoute },
       { path: 'prompts/:promptId', Component: PromptRoute },
       { path: 'workflows/:workflowId', Component: WorkflowRoute },
       { path: 'runs', Component: RunsRoute },

@@ -119,7 +119,12 @@ export function runProgress(
   for (const node of definition?.nodes ?? []) {
     const items = scopes(node).map((owner, index) => {
       const execution = latest(owner, node.id);
-      return { run: owner, execution, state: stateOf(owner, execution), index };
+      return {
+        run: owner,
+        execution,
+        state: stateOf(owner, execution),
+        index: owner.batchItemIndex ?? index,
+      };
     });
     const states = items.map((item) => item.state);
     const state = aggregate(states);
@@ -159,6 +164,8 @@ export function runProgress(
     }
     if (node.kind === 'wait' && state === 'waiting' && !node.batchId)
       label = 'Waiting for timer';
+    if (node.kind === 'input' && state === 'waiting' && !node.batchId)
+      label = 'Waiting for external input';
     if (
       node.kind === 'agent' &&
       state === 'completed' &&
@@ -265,7 +272,7 @@ export function runProgress(
     title,
     detail:
       run.status === 'failed'
-        ? run.error
+        ? run.error?.split('\n', 1)[0]?.slice(0, 240)
         : current?.kind === 'batch'
           ? currentProgress?.label
           : current?.kind === 'wait' &&

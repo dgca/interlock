@@ -17,6 +17,7 @@ import { Store } from '@interlock/storage';
 import { tidyWorkflow } from '@interlock/core/layout';
 import {
   assertContract,
+  assertExternalInputContract,
   resolveBindingFields,
   matchRouting,
   type PathBinding,
@@ -88,6 +89,7 @@ import { Usage } from './usage.js';
 import { RunChains } from './runChains.js';
 import { Budgets } from './budgets.js';
 import { WorkHolds } from './workHolds.js';
+import { ExternalInputs } from './externalInputs.js';
 import { AssignmentSizes } from './assignmentSize.js';
 import { ContextContinuityGroups } from './contextContinuity.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
@@ -140,6 +142,7 @@ export class Engine {
   readonly budgets: Budgets;
   readonly assignmentSizes: AssignmentSizes;
   readonly holds: WorkHolds;
+  readonly externalInputs: ExternalInputs;
   private readonly resources: WorkResources;
   readonly contextGroups: ContextContinuityGroups;
   private readonly starts: RunStarts;
@@ -162,6 +165,22 @@ export class Engine {
     this.simulations = new Simulations(store, cwd);
     this.chains = new RunChains(store);
     this.continuation = new Continuation(store);
+    this.externalInputs = new ExternalInputs(store, {
+      run: (id) => this.run(id),
+      node: (run, execution) => {
+        const node = this.definition(run).nodes.find(
+          (node) => node.id === execution.nodeId,
+        );
+        if (node?.kind !== 'input')
+          throw new InterlockError('External-input node definition not found');
+        return node;
+      },
+      complete: (run, execution, node, value) =>
+        this.finish(run, execution, node, value),
+      save: (run) => this.save(run),
+      event: (run, type, message) => this.event(run, type, message),
+      pump: () => this.pump(),
+    });
     this.holds = new WorkHolds(
       store,
       (work, outcome) => this.usage.ended(work, outcome),
@@ -736,6 +755,16 @@ export class Engine {
         if (removed.has(event.runId)) this.store.remove('events', event.id);
       this.resources.assertDelete(removed);
       this.starts.deleted(removed);
+      for (const collection of [
+        'externalInputValues',
+        'externalInputReceipts',
+      ]) {
+        for (const record of this.store.forRuns<{ id: string }>(
+          collection,
+          removed,
+        ))
+          this.store.remove(collection, record.id);
+      }
       for (const runId of removed) this.store.remove('runs', runId);
       for (const version of this.store.list<
         import('@interlock/core').WorkflowVersion & { id: string }
@@ -1047,6 +1076,15 @@ export class Engine {
     const run = this.run(id);
     const handledFailure = this.handledWorkflowFailure(run);
     const allRuns = this.store.runs();
+    if (run.batchNodeId && run.parentRunId && !run.parentExecutionId) {
+      const invocation = allRuns
+        .find((parent) => parent.id === run.parentRunId)
+        ?.executions.find((step) => step.childRunIds.includes(run.id));
+      if (invocation) {
+        run.parentExecutionId = invocation.id;
+        run.batchItemIndex ??= invocation.childRunIds.indexOf(run.id);
+      }
+    }
     const ids = new Set([id]);
     let changed = true;
     while (changed) {
@@ -1064,6 +1102,7 @@ export class Engine {
     const chain = this.chains.read(run);
     return {
       run,
+      externalInputHeldByRunId: this.store.externalInputHoldOwner(run.id),
       ...(handledFailure ? { handledFailure } : {}),
       ...(chain
         ? {
@@ -1236,7 +1275,7 @@ export class Engine {
       rootInput: root.input,
       itemInput: run.input,
     };
-    return (binding: PathBinding): Json => {
+    return (binding: PathBinding): Json | undefined => {
       if (binding.source === 'itemInput' && !run.batchNodeId)
         throw new InterlockError(
           'itemInput is only available inside a Batch item run',
@@ -1247,11 +1286,7 @@ export class Engine {
           candidate.nodeId === binding.nodeId &&
           candidate.status === 'completed',
       );
-      if (!previous || previous.output === undefined)
-        throw new InterlockError(
-          `Node "${binding.nodeId}" has no completed output in this run`,
-        );
-      return previous.output;
+      return previous?.output;
     };
   }
   private prepareResult(run: Run, node: WorkflowNode, result: Json) {
@@ -1295,14 +1330,17 @@ export class Engine {
   ) {
     // Lifecycle routes bypass success-result validation, routing and shaping.
     const timeout = port === 'timeout' && hasTimeoutRoute(node);
-    if (!timeout)
-      assertContract(
+    if (!timeout) {
+      const assertOutput =
+        node.kind === 'input' ? assertExternalInputContract : assertContract;
+      assertOutput(
         node.kind === 'workflow' && node.mode === 'detached'
           ? STARTED_RUN_SCHEMA
           : node.outputSchema,
         output,
         `${node.label} output`,
       );
+    }
     let rawResult: Json | undefined;
     if (port === 'default' && (node.routing || node.outputBindings)) {
       try {
@@ -1441,6 +1479,19 @@ export class Engine {
       }
     }
     try {
+      if (node.kind === 'input') {
+        if (execution.status === 'waiting') return false;
+        execution.status = 'waiting';
+        execution.externalInput = { revision: 0 };
+        run.status = 'waiting';
+        this.save(run);
+        this.event(
+          run,
+          'node.waiting',
+          `${node.label}: waiting for external input`,
+        );
+        return true;
+      }
       if (node.kind === 'agent') {
         if (execution.status === 'waiting') {
           if (node.unclaimedTimeoutMs === undefined) return false;
@@ -1778,6 +1829,7 @@ export class Engine {
             if (node.kind === 'batch') {
               child.workflowName = `${node.label} · item ${execution.nextItem + 1}`;
               child.batchItemIndex = execution.nextItem;
+              child.parentExecutionId = execution.id;
               this.save(child);
             }
             execution.childRunIds.push(child.id);

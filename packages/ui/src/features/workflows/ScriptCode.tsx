@@ -1,0 +1,90 @@
+import { useRef, useState } from 'react';
+import { Input, SegmentedControl } from '@mantine/core';
+import { Button } from '../../components/Button/Button';
+import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
+
+type Language = 'javascript' | 'bash';
+type Code = { language?: Language; command: string };
+const names = { javascript: 'JavaScript', bash: 'Bash' };
+const bashStarter = 'cat';
+
+export function ScriptCode({
+  value,
+  onChange,
+  polling = false,
+}: {
+  value: Code;
+  onChange: (value: Code) => void;
+  polling?: boolean;
+}) {
+  const drafts = useRef<
+    Partial<Record<Language, { code: Code; carriedFrom?: Language }>>
+  >({});
+  const [carriedFrom, setCarriedFrom] = useState<Language>();
+  const language = value.language ?? 'bash';
+  const javascriptStarter = polling
+    ? 'return { ready: true };'
+    : 'return input;';
+  const starter = language === 'javascript' ? javascriptStarter : bashStarter;
+  const changeLanguage = (next: Language) => {
+    drafts.current[language] = {
+      code: { language: value.language, command: value.command },
+      carriedFrom,
+    };
+    const previous = drafts.current[next];
+    const hasCustomCode = value.command.trim() && value.command !== starter;
+    setCarriedFrom(
+      previous ? previous.carriedFrom : hasCustomCode ? language : undefined,
+    );
+    onChange(
+      previous?.code ?? {
+        language: next,
+        command: hasCustomCode
+          ? value.command
+          : next === 'javascript'
+            ? javascriptStarter
+            : bashStarter,
+      },
+    );
+  };
+  return (
+    <>
+      <Input.Wrapper label="Language" mb="md">
+        <SegmentedControl
+          mt={4}
+          style={{ display: 'flex', width: 'fit-content' }}
+          aria-label={polling ? 'Check language' : 'Language'}
+          value={language}
+          data={[
+            { value: 'javascript', label: 'JavaScript' },
+            { value: 'bash', label: 'Bash' },
+          ]}
+          onChange={(next) => changeLanguage(next as Language)}
+        />
+      </Input.Wrapper>
+      {carriedFrom && (
+        <div>
+          <p className="hint" role="status">
+            Code carried over from {names[carriedFrom]}. Review it before
+            running with {names[language]}.
+          </p>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              onChange({ language, command: starter });
+              setCarriedFrom(undefined);
+            }}
+          >
+            Use {names[language]} starter
+          </Button>
+        </div>
+      )}
+      <CodeEditor
+        label={`${polling ? 'Check ' : ''}${language === 'javascript' ? 'JavaScript code' : 'Bash command'}`}
+        language={language}
+        value={value.command}
+        onChange={(command) => onChange({ language: value.language, command })}
+      />
+    </>
+  );
+}

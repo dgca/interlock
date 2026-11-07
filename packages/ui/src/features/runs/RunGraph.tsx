@@ -67,6 +67,9 @@ export function RunGraph({
       ...graph,
       nodes: graph.nodes.map((node) => ({
         ...node,
+        ariaRole: 'button' as const,
+        ariaLabel: node.data.node.label,
+        domAttributes: { 'aria-pressed': selected === node.id },
         data: { ...node.data, progress: progress[node.id] },
       })),
     };
@@ -75,6 +78,20 @@ export function RunGraph({
     <div
       ref={boxZoom.containerRef}
       {...boxZoom.handlers}
+      onKeyDownCapture={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const target = event.target;
+        if (
+          !(target instanceof HTMLElement) ||
+          !target.matches('.react-flow__node[data-id]')
+        )
+          return;
+        const id = target.dataset.id;
+        if (!id) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onSelect(id);
+      }}
       className={`${styles.viewport} ${styles.runViewport} ${boxZoom.active ? styles.boxZoomReady : ''}`}
     >
       <ReactFlow

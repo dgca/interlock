@@ -40,8 +40,6 @@
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 24px;
-  max-height: 62vh;
-  overflow: auto;
 }
 .editing {
   min-width: 0;
@@ -182,4 +180,14 @@
 }
 .compact small {
   display: none;
+}
+
+@media (max-width: 480px) {
+  .modeTab {
+    padding-inline: 8px;
+  }
+
+  .modeIcon {
+    display: none;
+  }
 }

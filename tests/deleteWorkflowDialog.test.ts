@@ -29,10 +29,12 @@ beforeEach(async () => {
         workflow: { id: 'workflow', name: 'My workflow' },
         onClose: close,
         onDeleted: deleted,
-        act: async (fn) => {
+        act: async (fn, _success, onError) => {
           try {
             await fn();
-          } catch {}
+          } catch (error) {
+            onError?.((error as Error).message);
+          }
         },
       }),
     ),

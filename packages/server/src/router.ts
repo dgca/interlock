@@ -14,6 +14,8 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { developmentConnection, type ConnectionConfig } from './connection.js';
 import {
+  externalInputMutationSchema,
+  externalInputStatusSchema,
   simulationRequestSchema,
   workHoldRequestSchema,
   contextGroupQuerySchema,
@@ -29,6 +31,7 @@ import {
   runSummaryQuerySchema,
   runStartSchema,
   cancelRunSchema,
+  ExternalInputConflict,
   InterlockError,
   ResultRejection,
   briefingQuerySchema,
@@ -484,6 +487,27 @@ export const appRouter = t.router({
       .mutation(({ ctx, input }) => ctx.engine.versions.delete(input)),
   }),
   runs: t.router({
+    externalInputStatus: p
+      .input(externalInputStatusSchema)
+      .query(({ ctx, input }) => ctx.engine.externalInputs.status(input)),
+    externalInput: p
+      .input(externalInputMutationSchema)
+      .mutation(({ ctx, input }) => {
+        try {
+          return ctx.engine.externalInputs.mutate(input);
+        } catch (error) {
+          if (error instanceof InterlockError)
+            throw new TRPCError({
+              code:
+                error instanceof ExternalInputConflict
+                  ? 'CONFLICT'
+                  : 'BAD_REQUEST',
+              message: error.message,
+              cause: error,
+            });
+          throw error;
+        }
+      }),
     previewHistoryDeletion: p
       .input(historyPreviewSchema)
       .query(({ ctx, input }) => ctx.engine.history.preview(input)),

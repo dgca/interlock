@@ -1,3 +1,4 @@
+import { LoadingSkeleton } from '../../components/LoadingSkeleton/LoadingSkeleton';
 import { useEffect, useState } from 'react';
 import { Checkbox, Group, NativeSelect, Stack, Text } from '@mantine/core';
 import type { UsageMetric } from '@interlock/core';
@@ -75,7 +76,7 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
             {error}
           </Text>
         ) : !totals ? (
-          <Text size="sm">Loading usage…</Text>
+          <LoadingSkeleton label="Loading usage…" />
         ) : (
           <>
             <Group gap="lg">

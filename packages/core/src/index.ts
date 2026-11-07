@@ -23,6 +23,7 @@ export * from './budgets.js';
 export * from './resultValidation.js';
 export * from './resultRules.js';
 export * from './workHolds.js';
+export * from './externalInput.js';
 import { resultRulesSchema, resultRuleProblems } from './resultRules.js';
 export * from './assignmentSize.js';
 export * from './contextContinuity.js';
@@ -31,7 +32,7 @@ export * from './trialEnvironments.js';
 export * from './authoringLayout.js';
 import { modelTierSchema } from './modelTiers.js';
 import { continuityGroupSchema } from './contextContinuity.js';
-import Ajv from 'ajv';
+import Ajv, { type ValidateFunction } from 'ajv';
 import { bindingLeaves } from './valueBindings.js';
 import {
   variableReferenceSchema,
@@ -122,7 +123,7 @@ const fetchRequestFields = {
   timeoutMs: z.number().int().min(100).max(120000).default(30000),
   failOnHttpError: z.boolean().default(true),
 };
-/** A probe a polling Wait runs on the server: a Script or a Fetch, bounded like the matching node. */
+/** A probe a polling Wait runs on the server with a short request or process timeout. */
 const pollCheckShapeSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('script'),
@@ -145,7 +146,13 @@ export type ValueBinding =
       path: string;
       default?: Json;
     }
-  | { source: 'node'; nodeId: string; path: string; default?: Json }
+  | {
+      source: 'node';
+      nodeId: string;
+      path: string;
+      default?: Json;
+      sourceDefault?: Json;
+    }
   | { source: 'literal'; value: Json }
   | { source: 'object'; fields: Record<string, ValueBinding> };
 export type ValueBindingInput =
@@ -154,7 +161,13 @@ export type ValueBindingInput =
       path?: string;
       default?: Json;
     }
-  | { source: 'node'; nodeId: string; path?: string; default?: Json }
+  | {
+      source: 'node';
+      nodeId: string;
+      path?: string;
+      default?: Json;
+      sourceDefault?: Json;
+    }
   | { source: 'literal'; value: Json }
   | { source: 'object'; fields: Record<string, ValueBindingInput> };
 export const valueBindingSchema: z.ZodType<
@@ -173,6 +186,7 @@ export const valueBindingSchema: z.ZodType<
       nodeId: z.string().min(1),
       path: z.string().default(''),
       default: jsonSchema.optional(),
+      sourceDefault: jsonSchema.optional(),
     }),
     z.object({ source: z.literal('literal'), value: jsonSchema }),
     z.object({
@@ -209,7 +223,7 @@ const nodeBase = {
   inputBindings: valueBindingsSchema
     .optional()
     .describe(
-      'Optional replacement input fields. Sources: input, runInput, rootInput, itemInput, node (same-scope completed output), literal {value}, object {fields}. Paths default blank; default applies only to a missing path. Record keys stay literal, including dots; use object for nesting, at most 10 levels. Original inputs remain immutable.',
+      'Replace input fields from input, runInput, rootInput, itemInput, node (same-scope completed output), literal {value}, or object {fields}. Blank paths select the source. default covers missing paths; node sourceDefault covers absent completed output. Keys stay literal; use object for nesting (max 10 levels). Original inputs remain immutable.',
     ),
   outputBindings: valueBindingsSchema
     .optional()
@@ -222,6 +236,7 @@ const nodeBase = {
       'Optional success-result branches for Agent, Script, Fetch or waited Workflow. Match raw validated result before outputBindings; same Switch first-match/fallback semantics. Missing path or unmatched without default fails. Failure/timeout routes remain separate.',
     ),
 };
+export const MAX_SCRIPT_TIMEOUT_MS = 3_600_000;
 export const DEFAULT_BATCH_MAX_ITEMS = 200;
 export const MAX_BATCH_ITEMS = 10_000;
 const onFailureSchema = z
@@ -305,7 +320,12 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     // Older saved nodes omit language and must continue to run as Bash.
     language: z.enum(['javascript', 'bash']).optional(),
     command: z.string().min(1),
-    timeoutMs: z.number().int().min(100).max(120000).default(30000),
+    timeoutMs: z
+      .number()
+      .int()
+      .min(100)
+      .max(MAX_SCRIPT_TIMEOUT_MS)
+      .default(60_000),
   }),
   z.object({
     ...nodeBase,
@@ -322,6 +342,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     }),
     ...fetchRequestFields,
   }),
+  z.object({ ...nodeBase, kind: z.literal('input') }),
   z.object({
     ...nodeBase,
     kind: z.literal('wait'),
@@ -483,6 +504,7 @@ export interface NodeExecution {
   attempt?: number;
   retryChildRunIds?: string[];
   request?: FetchRequest;
+  externalInput?: import('./externalInput.js').ExternalInputMetadata;
   resumeAt?: string;
   /** Polling Wait: when the next check runs, the deadline, and the latest check. */
   nextCheckAt?: string;
@@ -501,6 +523,7 @@ export interface Run {
   externalTask?: import('./runStarts.js').ExternalTask;
   chain?: import('./runChains.js').RunChainLink;
   contextRevision?: number;
+  externalInputHold?: import('./externalInput.js').ExternalInputHold;
   budgetRevision?: number;
   comparison?: import('./testbench.js').ComparisonRunContext;
   id: string;
@@ -543,6 +566,15 @@ export type RunSummary = Pick<
 > & {
   executionCount: number;
   parentWorkflowName?: string;
+  waitReason?:
+    | 'held'
+    | 'agent'
+    | 'managed'
+    | 'claimed'
+    | 'external_input'
+    | 'external_review'
+    | 'timer'
+    | 'child';
 };
 export interface RunAncestry {
   workflowId: string;
@@ -622,6 +654,7 @@ export interface RunEvent {
   at: string;
 }
 export class InterlockError extends Error {}
+export class ExternalInputConflict extends InterlockError {}
 export class ResultRejection extends InterlockError {
   constructor(
     readonly resultCheck: import('./resultValidation.js').ResultCheck,
@@ -633,6 +666,39 @@ export class ResultRejection extends InterlockError {
   }
 }
 const ajv = new Ajv({ allErrors: true, strict: false });
+const externalInputContracts = new Ajv({
+  allErrors: true,
+  strict: false,
+  ownProperties: true,
+});
+const propertiesKeyword = externalInputContracts.getKeyword('properties');
+if (
+  !propertiesKeyword ||
+  propertiesKeyword === true ||
+  !('code' in propertiesKeyword)
+)
+  throw new Error('AJV properties validator is unavailable');
+const generateProperties = propertiesKeyword.code;
+// Fail closed when AJV would skip this name, including inside resolved refs.
+externalInputContracts.removeKeyword('properties').addKeyword({
+  ...propertiesKeyword,
+  code(context, ruleType) {
+    if (Object.hasOwn(context.schema, '__proto__'))
+      throw new InterlockError(
+        'Use patternProperties with "^__proto__$" to constrain the "__proto__" field in a submitted value',
+      );
+    generateProperties(context, ruleType);
+  },
+});
+
+function compileExternalInputContract(schema: Record<string, unknown>) {
+  if (schema.$async === true)
+    throw new InterlockError(
+      'Submitted-value contracts must validate synchronously',
+    );
+  return externalInputContracts.compile(schema);
+}
+
 export function validateContractSchema(schema: Record<string, unknown>) {
   contractSchema.parse(schema);
   ajv.compile(schema);
@@ -642,7 +708,20 @@ export function assertContract(
   value: Json,
   label: string,
 ) {
-  const validate = ajv.compile(schema);
+  assertContractValue(ajv.compile(schema), value, label);
+}
+export function assertExternalInputContract(
+  schema: Record<string, unknown>,
+  value: Json,
+  label: string,
+) {
+  assertContractValue(compileExternalInputContract(schema), value, label);
+}
+function assertContractValue(
+  validate: ValidateFunction,
+  value: Json,
+  label: string,
+) {
   if (!validate(value)) {
     const errors = (validate.errors ?? []).slice(0, 3).map((error) => {
       const segments = error.instancePath
@@ -690,23 +769,7 @@ export function assertContract(
     throw new InterlockError(`${label}: ${errors.join(' ')}`);
   }
 }
-export function readPath(value: Json, path: string): Json {
-  if (!path || path === '$') return value;
-  let result: Json | undefined = value;
-  for (const key of path.replace(/^\$\./, '').split('.')) {
-    if (['__proto__', 'prototype', 'constructor'].includes(key))
-      throw new InterlockError('Invalid data path');
-    result =
-      result !== null &&
-      typeof result === 'object' &&
-      Object.hasOwn(result, key)
-        ? (result as Record<string, Json>)[key]
-        : undefined;
-  }
-  if (result === undefined)
-    throw new InterlockError(`Input has no path "${path}"`);
-  return result;
-}
+export { readPath } from './dataPath.js';
 export function supportsResultRouting(node: WorkflowNode): boolean {
   return (
     ['agent', 'script', 'fetch'].includes(node.kind) ||
@@ -805,12 +868,13 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
     throw new InterlockError('A workflow needs exactly one entry');
   if (!d.nodes.some((n) => n.kind === 'exit'))
     throw new InterlockError('A workflow needs an exit');
-  for (const schema of [
-    d.inputSchema,
-    d.outputSchema,
-    ...d.nodes.flatMap((n) => [n.inputSchema, n.outputSchema]),
-  ])
-    ajv.compile(schema);
+  ajv.compile(d.inputSchema);
+  ajv.compile(d.outputSchema);
+  for (const node of d.nodes) {
+    ajv.compile(node.inputSchema);
+    if (node.kind === 'input') compileExternalInputContract(node.outputSchema);
+    else ajv.compile(node.outputSchema);
+  }
   for (const edge of d.edges) {
     if (!ids.has(edge.source) || !ids.has(edge.target))
       throw new InterlockError('Edge references a missing node');
@@ -997,6 +1061,7 @@ export {
 } from './inputHints.js';
 
 export function nodeKindLabel(kind: WorkflowNode['kind']): string {
+  if (kind === 'input') return 'External input';
   return kind === 'switch' || kind === 'condition'
     ? 'Branch'
     : kind === 'batch'

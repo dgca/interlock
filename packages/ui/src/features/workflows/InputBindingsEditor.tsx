@@ -81,7 +81,7 @@ export function InputBindingsEditor({
     },
     { value: 'runInput', label: 'Original workflow input' },
     { value: 'rootInput', label: 'Original root input' },
-    { value: 'node', label: 'Earlier node output' },
+    { value: 'node', label: 'Node output' },
     { value: 'literal', label: 'Fixed value' },
     ...(node.batchId || rows.some((row) => row.binding.source === 'itemInput')
       ? [
@@ -297,48 +297,77 @@ export function InputBindingsEditor({
                     </NativeSelect>
                   )}
                   {pathBinding &&
-                    (pathBinding.path ||
-                      Object.hasOwn(pathBinding, 'default')) && (
-                      <div className={styles.fallback}>
-                        <Switch
-                          label="Default if missing"
-                          aria-label={`Use default for field ${index + 1}`}
-                          size="xs"
-                          checked={Object.hasOwn(pathBinding, 'default')}
-                          onChange={(event) => {
-                            const { default: _default, ...rest } = pathBinding;
-                            patch(index, {
-                              binding: event.currentTarget.checked
-                                ? {
-                                    ...rest,
-                                    default: suggestedMatchValue(
+                    (['sourceDefault', 'default'] as const).map((key) => {
+                      const sourceMissing = key === 'sourceDefault';
+                      if (sourceMissing && binding.source !== 'node')
+                        return null;
+                      const fallback =
+                        sourceMissing && binding.source === 'node'
+                          ? binding.sourceDefault
+                          : pathBinding.default;
+                      if (
+                        !sourceMissing &&
+                        !pathBinding.path &&
+                        fallback === undefined
+                      )
+                        return null;
+                      return (
+                        <div className={styles.fallback} key={key}>
+                          <Switch
+                            label={
+                              sourceMissing
+                                ? 'Default if no completed output'
+                                : 'Default if path missing'
+                            }
+                            aria-label={
+                              sourceMissing
+                                ? `Use source default for field ${index + 1}`
+                                : `Use default for field ${index + 1}`
+                            }
+                            size="xs"
+                            checked={fallback !== undefined}
+                            onChange={(event) => {
+                              const next = { ...pathBinding };
+                              if (event.currentTarget.checked) {
+                                patch(index, {
+                                  binding: {
+                                    ...next,
+                                    [key]: suggestedMatchValue(
                                       contractAtPath(
                                         sourceSchema(binding),
                                         pathBinding.path,
                                       ),
                                     ),
-                                  }
-                                : rest,
-                            });
-                          }}
-                        />
-                        {Object.hasOwn(pathBinding, 'default') && (
-                          <div className={styles.defaultValue}>
-                            <TypedValueEditor
-                              label={`${mode} field ${index + 1} default value`}
-                              valueLabel="Default value"
-                              showType={showTypes}
-                              value={pathBinding.default!}
-                              onChange={(value) =>
-                                patch(index, {
-                                  binding: { ...pathBinding, default: value },
-                                })
+                                  },
+                                });
+                              } else {
+                                Reflect.deleteProperty(next, key);
+                                patch(index, { binding: next });
                               }
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
+                            }}
+                          />
+                          {fallback !== undefined && (
+                            <div className={styles.defaultValue}>
+                              <TypedValueEditor
+                                label={`${mode} field ${index + 1} ${sourceMissing ? 'source default' : 'default'} value`}
+                                valueLabel={
+                                  sourceMissing
+                                    ? 'Source default value'
+                                    : 'Default value'
+                                }
+                                showType={showTypes}
+                                value={fallback}
+                                onChange={(value) =>
+                                  patch(index, {
+                                    binding: { ...pathBinding, [key]: value },
+                                  })
+                                }
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               );
             })}

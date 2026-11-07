@@ -212,12 +212,15 @@ export class Continuation {
                     ? 'resource_blocked'
                     : assignment
                       ? 'available_work'
-                      : execution?.kind === 'wait'
-                        ? 'wait'
-                        : execution?.kind === 'batch' ||
-                            execution?.kind === 'workflow'
-                          ? 'children'
-                          : 'executing';
+                      : execution?.kind === 'input' &&
+                          execution.status === 'waiting'
+                        ? 'external_input'
+                        : execution?.kind === 'wait'
+                          ? 'wait'
+                          : execution?.kind === 'batch' ||
+                              execution?.kind === 'workflow'
+                            ? 'children'
+                            : 'executing';
         return {
           ...reference(run.id, execution?.id),
           lifecycleRunId: run.lifecycleRunId,
@@ -231,6 +234,15 @@ export class Continuation {
             ? { resourceOwners: assignment.resourceBlocked.owners }
             : {}),
           error: run.error,
+          ...(reason === 'external_input' && execution
+            ? {
+                externalInput: {
+                  waitingSince: execution.startedAt,
+                  revision: execution.externalInput?.revision ?? 0,
+                  submittedAt: execution.externalInput?.submittedAt,
+                },
+              }
+            : {}),
           resumeAt: execution?.resumeAt,
           nextCheckAt: execution?.nextCheckAt,
           timeoutAt: execution?.timeoutAt,
@@ -382,7 +394,20 @@ export class Continuation {
         work.filter((w) => w.status === 'claimed'),
         limit,
       ),
-      blockers: bounded(blockers, limit),
+      blockers: {
+        ...bounded(blockers, limit),
+        items: blockers.slice(0, limit).map((blocker) =>
+          blocker.externalInput
+            ? {
+                ...blocker,
+                externalInput: {
+                  ...blocker.externalInput,
+                  heldByRunId: this.store.externalInputHoldOwner(blocker.runId),
+                },
+              }
+            : blocker,
+        ),
+      },
       failures: bounded(
         state.runs
           .filter((run) => run.status === 'failed')

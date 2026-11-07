@@ -217,3 +217,34 @@ it('infers original input on polling Timeout and stays conservative for node ref
     ),
   ).toEqual([]);
 });
+
+it('includes node source and path defaults as possible input shapes', () => {
+  const definition = graph();
+  const node = definition.nodes[2];
+  node.inputBindings = {
+    name: {
+      source: 'node',
+      nodeId: 'script',
+      path: '$.name',
+      sourceDefault: null,
+      default: false,
+    },
+  };
+  expect(nodeInputHint(definition, node).schema.properties).toEqual({
+    name: {
+      anyOf: [{ type: 'string' }, { type: 'boolean' }, { type: 'null' }],
+    },
+  });
+});
+
+it('includes the loop initial value when earlier output has no declared shape', () => {
+  const definition = graph();
+  const node = definition.nodes[1];
+  node.outputSchema = {};
+  node.inputBindings = {
+    count: { source: 'node', nodeId: node.id, path: 'count', sourceDefault: 0 },
+  };
+  expect(nodeInputHint(definition, node).schema.properties).toEqual({
+    count: { anyOf: [{}, { type: 'integer' }] },
+  });
+});

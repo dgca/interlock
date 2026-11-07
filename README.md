@@ -55,13 +55,13 @@ The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by th
 
 Open **Harnesses** in the sidebar to set the shared concurrent assignment limit, default Limited to 3 with an Unlimited option, and configure an installed Claude Code, Codex, or Pi executable. Configurations start disabled. Set the working directory, default permissions, model and optional thinking effort, then enable the configuration. Model pickers load native choices and accept custom IDs; Use CLI default retains the harness’s own selection. Choose it in **Workflow settings → Default Agent executor** or override it in an Agent node’s **Execution → Executor** settings, save and publish. Workflow **Agent model** and **Thinking effort** can inherit harness defaults; Agent nodes can override both. Workflow **Agent permissions** can inherit the harness default or select **Read only**, **Standard** or **Full access**. Existing workflows keep connected-agent execution unless you opt in. If a managed harness refuses the model before task actions, the run waits for you to choose a replacement and retry the assignment. See [model recovery](docs/managed-executors.md#replace-a-refused-model).
 
-Interlock launches ready assignments inside its existing server, including independently started workflows. A badge beside **Runs** and the **Needs attention** tab surface approvals, questions, and recovery checks. Permission requests and questions appear in the run inspector; stopping or losing a session requires explicit recovery before retrying. Installation detection makes no model calls and does not verify authentication. See [managed Agent execution](docs/managed-executors.md) for setup, native authentication requirements, MCP/CLI operations and limitations.
+Interlock launches ready assignments inside its existing server, including independently started workflows. A badge beside **Runs** and the **Needs attention** tab surface approvals, questions, model selection, and recovery checks. Permission requests and questions appear in the run inspector; stopping or losing a session requires explicit recovery before retrying. Installation detection makes no model calls and does not verify authentication. See [managed Agent execution](docs/managed-executors.md) for setup, native authentication requirements, MCP/CLI operations and limitations.
 
 ## Create a workflow
 
 Select **New workflow** to create a draft. Use **Add node** to choose each step's type, then connect the nodes in execution order. Agent is selected initially; choose another type when needed.
 
-Available nodes include entry and exit, Agent, Script, Fetch, Wait, Branch, Workflow, and Batch. Branch unifies Condition and Switch authoring while retaining existing definitions. A Workflow node invokes a pinned published workflow once. It defaults to **Wait for result**. Choose **Start and continue** to return a run reference immediately while the invoked workflow runs independently, even after parent cancellation. See [Workflow execution](docs/workflow-execution.md). A Batch repeats a visible path for each item and collects the results in input order.
+Available nodes include entry and exit, Agent, Script, Fetch, Wait, External input, Branch, Workflow, and Batch. Branch unifies Condition and Switch authoring while retaining existing definitions. A Workflow node invokes a pinned published workflow once. It defaults to **Wait for result**. Choose **Start and continue** to return a run reference immediately while the invoked workflow runs independently, even after parent cancellation. See [Workflow execution](docs/workflow-execution.md). A Batch repeats a visible path for each item and collects the results in input order.
 
 Node settings group the work, input, result and execution controls. Agent, Script, Fetch and waited Workflow steps can branch on an accepted result and construct forwarded fields using fixed values, missing-field defaults and nested objects. The engine validates and routes the raw result before shaping the output. See [Step data and result branches](docs/node-data.md).
 
@@ -94,7 +94,7 @@ For a 207-item backlog, set **Maximum items** to 250 and **Items at a time** to 
 
 This Batch accepts the whole input array and runs up to three items at once. `maxItems` counts the selected list, `concurrency` limits active item runs, and `maxSteps` bounds each run's node executions. Raising one does not raise the others. Input contracts can impose stricter bounds. Larger batches store more item runs and results and can slow the local engine and inspector; the maximum setting is a validation bound, not a throughput guarantee. Existing published versions retain their configured limit, or 200 when `maxItems` is absent. Nested Batches each enforce their own item limit.
 
-In node settings, **Input → Source** defaults to **Previous step output**. Select **Choose fields** to build a named input object. **Expected format** describes the input structure the step accepts. When that contract is empty, the editor can suggest a shape from a connected predecessor or selected input fields. The suggestion does not change validation unless you choose **Use as expected format**. Typed inputs suggest paths in node settings and types for new Switch cases; paths remain editable. New fields default to **Previous step output**. Choose **Node output** to select a source node; its **Reads from** canvas label focuses that source. [Input binding rules](docs/agent-workflows.md#bind-original-input-into-later-steps) also apply to Advanced JSON, CLI, and MCP.
+In node settings, **Input → Source** defaults to **Previous step output**. Select **Choose fields** to build a named input object. **Expected format** describes the input structure the step accepts. When that contract is empty, the editor can suggest a shape from a connected predecessor or selected input fields. The suggestion does not change validation unless you choose **Use as expected format**. Typed inputs suggest paths in node settings and types for new Switch cases; paths remain editable. New fields default to **Previous step output**. Choose **Node output** to select a source node. Enable **Default if no completed output** to supply a value when the source has no completed output in the current run. The **Reads from** canvas label focuses the source. [Input binding rules](docs/agent-workflows.md#bind-original-input-into-later-steps) also apply to Advanced JSON, CLI, and MCP.
 
 Configure input and output contracts in the node settings. Entry and Exit display the shared workflow input and output contracts. With a blank items path, Batch input must be an array; with a named path, the selected value must be an array. Use **Visual / Raw** to switch between the graph and its JSON definition. The raw editor checks JSON syntax and structure before saving. Publishing also checks the workflow's graph.
 
@@ -152,7 +152,7 @@ Failed executions can be retried from the inspector. Retrying a failed Batch pre
 
 Agents can request the editor's Dagre Tidy layout during draft creation or updates with `layout: "tidy"`. Omitting it preserves the supplied positions. See [arrange drafts during authoring](docs/authoring-layout.md) for MCP, shared API, and CLI examples.
 
-Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library and from each card's menu in **Child workflows**. Inside a workflow, the three-dot menu beside **Run** contains **Workflow settings** and **Delete workflow**. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows block deletion. Obsolete published callers can be removed through [explicit version cleanup](docs/version-cleanup.md) after a preview and informed agreement. Cleanup keeps run records but removes their graph and retry capability until original definitions are explicitly restored from a backup.
+Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library and from each card's menu in **Child workflows**. Inside a workflow, the three-dot menu beside **Run** contains **Workflow settings** and **Delete workflow**. A workflow with owned children must have them removed first. The dialog links to **Child workflows** when they block deletion. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows also block deletion. Obsolete published callers can be removed through [explicit version cleanup](docs/version-cleanup.md) after a preview and informed agreement. Cleanup keeps run records but removes their graph and retry capability until original definitions are explicitly restored from a backup.
 
 ### Waits and unanswered assignments
 
@@ -206,6 +206,10 @@ redaction, and import requirements.
 
 Individual body fields with a fixed value have typed controls, so text needs no JSON quotes and existing JSON values keep their types.
 
+### External input
+
+Use an **External input** node to pause a run for an answer from an integration. Set the **Submitted value** contract in **Result**. The integration submits an answer to the waiting execution, then accepts the exact revision to advance the run. See [Wait for an external answer](docs/external-input.md).
+
 ### Script nodes
 
 New script nodes default to JavaScript. Read the incoming JSON value as `input` and return a JSON value for the next node. Top-level `await` is supported:
@@ -223,6 +227,8 @@ To identify the current run, read `process.env.INTERLOCK_RUN_ID` in JavaScript
 or `"$INTERLOCK_RUN_ID"` in Bash. Script checks in polling Waits receive the
 same context. See [Script execution context](docs/architecture.md#script-execution-context)
 for execution IDs, retry attempts, and Batch item fields.
+
+New Script nodes default to a 60-second timeout. Set **Timeout** in **Execution** to allow between 100 milliseconds and one hour.
 
 A thrown error, nonzero exit, timeout, or invalid output fails the script step. Scripts are not retried automatically.
 

@@ -4,6 +4,7 @@ import type { DatabaseSync } from 'node:sqlite';
 const active = "json_extract(r.value, '$.status') IN ('running', 'waiting')";
 const attention = 'r.id IN (SELECT value FROM attention_ids)';
 const tabFilter = { active, attention, history: `NOT (${active})` };
+const currentStep = "json_extract(r.value, '$.executions[#-1].kind')";
 
 type SummaryRow = {
   [Key in keyof RunSummary]-?: Key extends 'comparison'
@@ -76,7 +77,31 @@ export function runSummaries(
       CASE WHEN json_extract(r.value, '$.parentMode') = 'detached' THEN
         (SELECT json_extract(parent.value, '$.workflowName') FROM documents parent
          WHERE parent.collection = 'runs' AND parent.id = json_extract(r.value, '$.parentRunId'))
-      END AS parentWorkflowName
+      END AS parentWorkflowName,
+      CASE WHEN json_extract(r.value, '$.status') = 'waiting' THEN
+        CASE ${currentStep}
+          WHEN 'input' THEN
+            CASE WHEN json_extract(r.value, '$.executions[#-1].externalInput.submittedAt') IS NULL
+              THEN 'external_input' ELSE 'external_review' END
+          WHEN 'wait' THEN 'timer'
+          WHEN 'workflow' THEN 'child'
+          WHEN 'batch' THEN 'child'
+          WHEN 'agent' THEN (
+            SELECT CASE json_extract(w.value, '$.status')
+              WHEN 'held' THEN 'held'
+              WHEN 'claimed' THEN 'claimed'
+              WHEN 'available' THEN
+                CASE WHEN json_extract(w.value, '$.executor') IS NULL THEN 'agent' ELSE 'managed' END
+            END
+            FROM documents w
+            WHERE w.collection = 'work'
+              AND json_extract(w.value, '$.runId') = r.id
+              AND json_extract(w.value, '$.executionId') = json_extract(r.value, '$.executions[#-1].id')
+              AND json_extract(w.value, '$.status') IN ('held', 'claimed', 'available')
+            LIMIT 1
+          )
+        END
+      END AS waitReason
     FROM page CROSS JOIN documents r ON r.rowid = page.position
     ORDER BY page.createdAt DESC, page.position DESC
   `,
@@ -89,6 +114,7 @@ export function runSummaries(
       parentExecutionId,
       parentWorkflowName,
       comparison,
+      waitReason,
       ...row
     }) => ({
       ...row,
@@ -96,6 +122,7 @@ export function runSummaries(
       ...(parentMode === null ? {} : { parentMode }),
       ...(parentExecutionId === null ? {} : { parentExecutionId }),
       ...(parentWorkflowName === null ? {} : { parentWorkflowName }),
+      ...(waitReason === null ? {} : { waitReason }),
       ...(comparison === null ? {} : { comparison: JSON.parse(comparison) }),
     }),
   );

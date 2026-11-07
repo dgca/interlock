@@ -1,25 +1,25 @@
 .editor {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   min-width: 0;
   overflow: hidden;
   container: workflow-editor / inline-size;
 }
 .header {
-  height: 82px;
+  min-height: 72px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 21px;
+  padding: 10px 21px;
   gap: 12px;
   background: var(--surface);
 }
 .title {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
   flex: 1;
 }
@@ -32,8 +32,8 @@
   white-space: nowrap;
 }
 .title strong {
-  font-size: 13px;
-  font-weight: 550;
+  font-size: 14px;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -60,6 +60,14 @@
 }
 .editor[data-icon-only] .headerAction :global(.mantine-Button-label) > span {
   display: none;
+}
+.draftStatus {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.draftStatus[data-dirty] {
+  color: var(--mantine-color-yellow-3);
 }
 .saved {
   font-size: 9px;
@@ -131,11 +139,23 @@
   border-right: 1px solid var(--border);
   padding-right: 5px;
 }
+.canvasWrap[data-raw-view] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.canvasWrap[data-raw-view] .canvasToolbar {
+  position: static;
+  width: fit-content;
+  margin: 12px 20px 0;
+  flex-shrink: 0;
+}
 .rawView {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  padding: 80px 20px 20px;
+  flex: 1;
+  min-height: 0;
+  padding: 12px 20px 14px;
   gap: 10px;
 }
 .rawView > p {
@@ -291,6 +311,12 @@
   }
   .canvasToolbar button {
     font-size: 10px;
+  }
+  .canvasWrap[data-raw-view] .canvasToolbar {
+    margin-inline: 12px;
+  }
+  .rawView {
+    padding-inline: 12px;
   }
   .rawActions {
     flex-wrap: wrap;

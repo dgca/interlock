@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
   ActionIcon,
@@ -23,6 +23,8 @@ import {
 import type { PromptContent, PromptUsage, SavedPrompt } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { Modal } from '../../components/Modal/Modal';
+import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
+import { ActionError } from '../../components/ActionError/ActionError';
 import type { Action } from '../../lib/useActionFeedback';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
@@ -91,10 +93,16 @@ export function PromptLibrary({
   act: Action;
 }) {
   const navigate = useNavigate();
+  const createFormId = useId();
   const [query, setQuery] = useState('');
   const [draft, setDraft] = useState<PromptContent>();
   const [busy, setBusy] = useState(false);
-  const openCreate = () => setDraft({ name: '', description: '', content: '' });
+  const searchInput = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState('');
+  const openCreate = () => {
+    setError('');
+    setDraft({ name: '', description: '', content: '' });
+  };
   const visible = prompts
     .filter((p) =>
       `${p.name} ${p.description}`.toLowerCase().includes(query.toLowerCase()),
@@ -117,6 +125,7 @@ export function PromptLibrary({
         <TextInput
           size="xs"
           className={layout.librarySearch}
+          ref={searchInput}
           aria-label="Search prompts"
           placeholder="Search prompts"
           leftSection={<Search size={15} />}
@@ -172,7 +181,14 @@ export function PromptLibrary({
           <h2>{query ? 'No matching prompts' : 'No prompts yet'}</h2>
           <MantineButton
             variant="default"
-            onClick={query ? () => setQuery('') : openCreate}
+            onClick={
+              query
+                ? () => {
+                    setQuery('');
+                    searchInput.current?.focus();
+                  }
+                : openCreate
+            }
           >
             {query ? 'Clear search' : 'Create a prompt'}
           </MantineButton>
@@ -183,41 +199,51 @@ export function PromptLibrary({
           onClose={() => !busy && setDraft(undefined)}
           title="New prompt"
           size={650}
-          classNames={{ header: styles.createHeader, body: styles.createBody }}
+          busy={busy}
         >
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void (async () => {
-                setBusy(true);
-                let id: string | undefined;
-                await act(async () => {
-                  id = (await api.prompts.create.mutate(draft)).id;
-                }, 'Prompt created.');
-                setBusy(false);
-                if (id) {
-                  setDraft(undefined);
-                  void navigate(paths.prompt(id));
-                }
-              })();
-            }}
-          >
-            <fieldset disabled={busy} className={styles.fields}>
-              <PromptFields value={draft} onChange={setDraft} />
-            </fieldset>
-            <Group justify="flex-end" className={layout.formSection}>
-              <Button disabled={busy} onClick={() => setDraft(undefined)}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={busy || !draft.name.trim() || !draft.content.trim()}
-              >
-                Create prompt
-              </Button>
-            </Group>
-          </form>
+          <ModalBody>
+            <form
+              id={createFormId}
+              onSubmit={(e) => {
+                e.preventDefault();
+                void (async () => {
+                  setBusy(true);
+                  setError('');
+                  let id: string | undefined;
+                  await act(
+                    async () => {
+                      id = (await api.prompts.create.mutate(draft)).id;
+                    },
+                    'Prompt created.',
+                    setError,
+                  );
+                  setBusy(false);
+                  if (id) {
+                    setDraft(undefined);
+                    void navigate(paths.prompt(id));
+                  }
+                })();
+              }}
+            >
+              <fieldset disabled={busy} className={styles.fields}>
+                <PromptFields value={draft} onChange={setDraft} />
+              </fieldset>
+              <ActionError message={error} />
+            </form>
+          </ModalBody>
+          <ModalFooter>
+            <Button disabled={busy} onClick={() => setDraft(undefined)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form={createFormId}
+              variant="primary"
+              disabled={busy || !draft.name.trim() || !draft.content.trim()}
+            >
+              {busy ? 'Creating…' : 'Create prompt'}
+            </Button>
+          </ModalFooter>
         </Modal>
       )}
     </div>
@@ -243,6 +269,8 @@ export function PromptEditor({
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [saveError, setSaveError] = useState('');
+  const actionsTrigger = useRef<HTMLButtonElement>(null);
   const formId = useId();
   const dirty = !same(draft, baseline);
   useBeforeUnloadWarning(dirty);
@@ -294,6 +322,7 @@ export function PromptEditor({
             onClick={() => {
               const latest =
                 prompt.revision > baseline.revision ? prompt : baseline;
+              setSaveError('');
               setBaseline(latest);
               setDraft(fields(latest));
             }}
@@ -309,13 +338,14 @@ export function PromptEditor({
             }
           >
             <Save />
-            Save
+            {busy && !deleting ? 'Saving…' : 'Save'}
           </Button>
           <Menu position="bottom-end" width={180}>
             <Menu.Target>
               <ActionIcon
                 variant="subtle"
                 color="gray"
+                ref={actionsTrigger}
                 aria-label="Prompt actions"
                 disabled={busy}
               >
@@ -353,19 +383,25 @@ export function PromptEditor({
               e.preventDefault();
               void (async () => {
                 setBusy(true);
-                await act(async () => {
-                  const saved = await api.prompts.update.mutate({
-                    id: prompt.id,
-                    revision: baseline.revision,
-                    ...draft,
-                  });
-                  setBaseline(saved);
-                  setDraft(fields(saved));
-                }, 'Prompt saved.');
+                setSaveError('');
+                await act(
+                  async () => {
+                    const saved = await api.prompts.update.mutate({
+                      id: prompt.id,
+                      revision: baseline.revision,
+                      ...draft,
+                    });
+                    setBaseline(saved);
+                    setDraft(fields(saved));
+                  },
+                  'Prompt saved.',
+                  setSaveError,
+                );
                 setBusy(false);
               })();
             }}
           >
+            <ActionError message={saveError} />
             <fieldset disabled={busy} className={styles.fields}>
               <PromptFields value={draft} onChange={setDraft} editing />
             </fieldset>
@@ -418,24 +454,28 @@ export function PromptEditor({
       </div>
       {deleting && (
         <Modal
+          busy={busy}
           onClose={() => !busy && setDeleting(false)}
           title={`Delete ${baseline.name}?`}
+          returnFocusTo={() => actionsTrigger.current}
         >
-          <p>
-            Prompts used by draft or published workflows cannot be deleted. Past
-            runs keep their captured instructions.
-          </p>
-          {!!usage.length && (
-            <Text mt="md" size="sm">
-              Referenced by {usage.map((w) => w.name).join(', ')}.
-            </Text>
-          )}
-          {deleteError && (
-            <Text role="alert" c="red" mt="md">
-              {deleteError}
-            </Text>
-          )}
-          <Group justify="flex-end" mt="lg">
+          <ModalBody>
+            <p>
+              Prompts used by draft or published workflows cannot be deleted.
+              Past runs keep their captured instructions.
+            </p>
+            {!!usage.length && (
+              <Text mt="md" size="sm">
+                Referenced by {usage.map((w) => w.name).join(', ')}.
+              </Text>
+            )}
+            {deleteError && (
+              <Text role="alert" c="red" mt="md">
+                {deleteError}
+              </Text>
+            )}
+          </ModalBody>
+          <ModalFooter>
             <Button disabled={busy} onClick={() => setDeleting(false)}>
               Cancel
             </Button>
@@ -446,15 +486,14 @@ export function PromptEditor({
                 void (async () => {
                   setBusy(true);
                   let deleted = false;
-                  await act(async () => {
-                    try {
+                  await act(
+                    async () => {
                       await api.prompts.delete.mutate({ id: prompt.id });
-                    } catch (error) {
-                      setDeleteError(errorMessage(error));
-                      throw error;
-                    }
-                    deleted = true;
-                  }, 'Prompt deleted.');
+                      deleted = true;
+                    },
+                    'Prompt deleted.',
+                    setDeleteError,
+                  );
                   setBusy(false);
                   if (deleted) void navigate(paths.prompts);
                 })();
@@ -462,7 +501,7 @@ export function PromptEditor({
             >
               Delete
             </Button>
-          </Group>
+          </ModalFooter>
         </Modal>
       )}
     </section>

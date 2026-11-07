@@ -1,6 +1,8 @@
+import { LoadingSkeleton } from '../../components/LoadingSkeleton/LoadingSkeleton';
 import { useEffect, useState } from 'react';
 import type { WorkflowDefinition, WorkflowVersion } from '@interlock/core';
 import { Modal } from '../../components/Modal/Modal';
+import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
 import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import {
@@ -124,69 +126,73 @@ export function PublishReviewDialog({
     <Modal
       title="Review publication"
       size={780}
-      className={styles.modal}
+      busy={pending}
       onClose={() => !pending && onClose()}
     >
-      <div className={styles.body}>
-        <p className={styles.baseline}>
-          {latestVersion
-            ? `Draft compared with published v${latestVersion}`
-            : 'First publication · no published version yet'}
-        </p>
-        {!versions && !error && <p role="status">Loading published version…</p>}
-        {error && (
-          <div role="alert" className={styles.error}>
-            Could not load published versions: {error}
-            <Button onClick={() => setRequest((value) => value + 1)}>
-              Retry
-            </Button>
-          </div>
-        )}
-        {(stale || editorChanged) && (
-          <p role="alert" className={styles.error}>
-            This workflow changed since the review opened. Close it and review
-            the current draft before publishing.
+      <ModalBody>
+        <div className={styles.body}>
+          <p className={styles.baseline}>
+            {latestVersion
+              ? `Draft compared with published v${latestVersion}`
+              : 'First publication · no published version yet'}
           </p>
-        )}
-        {diff && (
-          <>
-            <div className={styles.counts} aria-label="Change summary">
-              <span>{changeCount(diff.nodes.length, 'node')}</span>
-              <span>{changeCount(diff.routes.length, 'route')}</span>
-              <span>{changeCount(diff.workflow.length, 'workflow')}</span>
-              {diff.layout.length > 0 && (
-                <span>{changeCount(diff.layout.length, 'layout')}</span>
+          {!versions && !error && (
+            <LoadingSkeleton label="Loading published version…" />
+          )}
+          {error && (
+            <div role="alert" className={styles.error}>
+              Could not load published versions: {error}
+              <Button onClick={() => setRequest((value) => value + 1)}>
+                Retry
+              </Button>
+            </div>
+          )}
+          {(stale || editorChanged) && (
+            <p role="alert" className={styles.error}>
+              This workflow changed since the review opened. Close it and review
+              the current draft before publishing.
+            </p>
+          )}
+          {diff && (
+            <>
+              <div className={styles.counts} aria-label="Change summary">
+                <span>{changeCount(diff.nodes.length, 'node')}</span>
+                <span>{changeCount(diff.routes.length, 'route')}</span>
+                <span>{changeCount(diff.workflow.length, 'workflow')}</span>
+                {diff.layout.length > 0 && (
+                  <span>{changeCount(diff.layout.length, 'layout')}</span>
+                )}
+              </div>
+              {count === 0 && (
+                <p className={styles.empty}>
+                  No definition changes. Publishing still creates a new version.
+                </p>
               )}
-            </div>
-            {count === 0 && (
-              <p className={styles.empty}>
-                No definition changes. Publishing still creates a new version.
-              </p>
-            )}
-            <div className={styles.list}>
-              <ChangeGroup title="Nodes" items={diff.nodes} />
-              <ChangeGroup title="Routes" items={diff.routes} />
-              <ChangeGroup
-                title="Workflow contracts and settings"
-                items={diff.workflow}
-              />
-              <ChangeGroup title="Layout" items={diff.layout} />
-            </div>
-          </>
-        )}
-        <div className={styles.actions}>
-          <Button variant="ghost" disabled={pending} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            disabled={!diff || pending}
-            onClick={onPublish}
-          >
-            {pending ? 'Publishing…' : 'Publish version'}
-          </Button>
+              <div>
+                <ChangeGroup title="Nodes" items={diff.nodes} />
+                <ChangeGroup title="Routes" items={diff.routes} />
+                <ChangeGroup
+                  title="Workflow contracts and settings"
+                  items={diff.workflow}
+                />
+                <ChangeGroup title="Layout" items={diff.layout} />
+              </div>
+            </>
+          )}
         </div>
-      </div>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="ghost" disabled={pending} onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          disabled={!diff || pending}
+          onClick={onPublish}
+        >
+          {pending ? 'Publishing…' : 'Publish version'}
+        </Button>
+      </ModalFooter>
     </Modal>
   );
 }

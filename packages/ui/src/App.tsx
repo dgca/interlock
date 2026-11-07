@@ -1,7 +1,9 @@
 import { useUiFeatures } from './lib/uiFeatures';
 import { useCallback, useEffect, useState } from 'react';
 import { Check, AlertCircle } from 'lucide-react';
-import { Button, Group, Modal, Notification, Text } from '@mantine/core';
+import { Button, Group, Notification, Text } from '@mantine/core';
+import { Modal } from './components/Modal/Modal';
+import { ModalBody, ModalFooter } from './components/Modal/ModalLayout';
 import { Outlet, useBlocker, useMatch, useNavigate } from 'react-router';
 import { paths } from './routes/paths';
 import { useActionFeedback } from './lib/useActionFeedback';
@@ -18,6 +20,7 @@ export type AppContext = {
   prompts: SavedPrompt[];
   loaded: boolean;
   loadError: string;
+  retryLoad: () => Promise<void>;
   tick: number;
   act: Action;
   onDirty: (dirty: boolean) => void;
@@ -82,6 +85,15 @@ export function App() {
     setLoaded(true);
     setLoadError('');
   }, []);
+  const retryLoad = useCallback(async () => {
+    try {
+      await refresh();
+      setTick((t) => t + 1);
+    } catch (e) {
+      setConnected(false);
+      setLoadError(errorMessage(e));
+    }
+  }, [refresh]);
   useEffect(() => {
     let mounted = true;
     let streamHealthy = false;
@@ -135,7 +147,6 @@ export function App() {
       onChange: schedule,
       onConnect: () => {
         streamHealthy = true;
-        setConnected(true);
         resetPolling();
         schedule();
       },
@@ -167,6 +178,7 @@ export function App() {
     prompts,
     loaded,
     loadError,
+    retryLoad,
     tick,
     act,
     onDirty: setEditorDirty,
@@ -186,22 +198,24 @@ export function App() {
         page={page}
         attentionCount={attention.length}
         connected={connected}
+        connectionError={!!loadError}
         engineHost={engineHost}
-        onNavigate={(next) =>
-          void navigate(
-            next === 'harnesses'
-              ? paths.harnesses
-              : next === 'runs'
-                ? paths.runs()
-                : next === 'prompts'
-                  ? paths.prompts
-                  : next === 'variables'
-                    ? paths.variables
-                    : paths.workflows,
-          )
-        }
       />
       <main className="main">
+        {loaded && loadError && (
+          <Group className="engine-warning" justify="space-between" gap="xs">
+            <Text size="sm" role="status">
+              Could not refresh workspace data. Open views may be out of date.
+            </Text>
+            <Button
+              variant="default"
+              size="xs"
+              onClick={() => void retryLoad()}
+            >
+              Retry connection
+            </Button>
+          </Group>
+        )}
         {feedback && (
           <Notification
             key={feedback.id}
@@ -226,33 +240,36 @@ export function App() {
         )}
         <Outlet context={context} />
       </main>
-      <Modal
-        opened={blocker.state === 'blocked'}
-        onClose={() => blocker.state === 'blocked' && blocker.reset()}
-        title="Discard unsaved changes?"
-        centered
-      >
-        <Text>You have changes that have not been saved.</Text>
-        <Group justify="flex-end" mt="md">
-          <Button
-            variant="default"
-            onClick={() => blocker.state === 'blocked' && blocker.reset()}
-          >
-            Keep editing
-          </Button>
-          <Button
-            color="red"
-            onClick={() => {
-              if (blocker.state === 'blocked') {
-                setEditorDirty(false);
-                blocker.proceed();
-              }
-            }}
-          >
-            Discard changes
-          </Button>
-        </Group>
-      </Modal>
+      {blocker.state === 'blocked' && (
+        <Modal
+          onClose={() => blocker.state === 'blocked' && blocker.reset()}
+          title="Discard unsaved changes?"
+        >
+          <ModalBody>
+            <Text>You have changes that have not been saved.</Text>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="default"
+              onClick={() => blocker.state === 'blocked' && blocker.reset()}
+            >
+              Keep editing
+            </Button>
+            <Button
+              color="red"
+              variant="light"
+              onClick={() => {
+                if (blocker.state === 'blocked') {
+                  setEditorDirty(false);
+                  blocker.proceed();
+                }
+              }}
+            >
+              Discard changes
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
       {features.connectAgent && connectDialog && (
         <ConnectDialog onClose={() => setConnectDialog(false)} />
       )}{' '}

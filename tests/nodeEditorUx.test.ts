@@ -47,6 +47,7 @@ afterEach(async () => {
 async function render(
   config: Record<string, unknown>,
   graph?: WorkflowDefinition,
+  onDelete?: () => void,
 ) {
   const node = nodeSchema.parse({ id: 'step', label: 'Step', ...config });
   const definition =
@@ -70,6 +71,7 @@ async function render(
           workflows: [],
           onApply,
           onClose,
+          onDelete,
         }),
       ),
     ),
@@ -244,9 +246,12 @@ it('suggests text and unknown fields for Wait while allowing another path', asyn
     'customDeadline',
   );
 });
-it.each(['script', 'fetch'])(
-  'edits %s timeouts in seconds and enforces the existing bounds',
-  async (kind) => {
+it.each([
+  ['script', '3601'],
+  ['fetch', '121'],
+])(
+  'edits %s timeouts in seconds and enforces its bounds',
+  async (kind, aboveMaximum) => {
     const { onApply } = await render({
       kind,
       command: 'cat',
@@ -255,7 +260,7 @@ it.each(['script', 'fetch'])(
     });
     expect(field('Timeout').value).toBe('30');
     expect(field('Timeout unit').value).toBe('1000');
-    await fill('Timeout', '121');
+    await fill('Timeout', aboveMaximum);
     await click('Apply changes');
     expect(onApply).not.toHaveBeenCalled();
     await fill('Timeout', '0.05');
@@ -266,6 +271,35 @@ it.each(['script', 'fetch'])(
     expect(onApply.mock.calls[0][0].definition.nodes[0].timeoutMs).toBe(1500);
   },
 );
+it('keeps one delete action in the shared node settings footer', async () => {
+  const onDelete = vi.fn();
+  await render({ kind: 'agent', prompt: 'Do work' }, undefined, onDelete);
+  const deleteButtons = () =>
+    Array.from(container.querySelectorAll('button')).filter(
+      (button) => button.textContent === 'Delete node',
+    );
+  const [deleteButton] = deleteButtons();
+  expect(deleteButton?.closest('footer')).toBeTruthy();
+  expect(deleteButtons()).toEqual([deleteButton]);
+  for (const section of ['Input', 'Result', 'Execution']) {
+    await click(section);
+    expect(deleteButtons()).toEqual([deleteButton]);
+    expect(deleteButton.closest('[hidden]')).toBeNull();
+  }
+  await click('Delete node');
+  expect(onDelete).toHaveBeenCalledOnce();
+});
+
+it('defaults Script timeouts to one minute and accepts one hour', async () => {
+  const { onApply } = await render({ kind: 'script', command: 'cat' });
+  expect(field('Timeout').value).toBe('1');
+  expect(field('Timeout unit').value).toBe('60000');
+  await select('Timeout unit', '3600000');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timeoutMs).toBe(
+    3_600_000,
+  );
+});
 it('preserves legacy Bash and exact millisecond durations', async () => {
   const { node, onApply } = await render({
     kind: 'script',
@@ -604,4 +638,31 @@ it('keeps Agent routing optional and prefers an enum result field when enabled',
       default: 'otherwise',
     },
   });
+});
+
+it('preserves the configured Wait duration when returning from polling', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: { kind: 'duration', ms: 1000 },
+  });
+  await act(async () =>
+    container.querySelector<HTMLInputElement>('input[value="poll"]')!.click(),
+  );
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>('input[value="duration"]')!
+      .click(),
+  );
+  await click('Apply changes');
+  expect(onApply).toHaveBeenCalledWith(
+    expect.objectContaining({
+      definition: expect.objectContaining({
+        nodes: expect.arrayContaining([
+          expect.objectContaining({
+            timing: { kind: 'duration', ms: 1000 },
+          }),
+        ]),
+      }),
+    }),
+  );
 });

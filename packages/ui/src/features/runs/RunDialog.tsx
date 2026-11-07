@@ -3,6 +3,11 @@ import { useEffect, useState, useRef } from 'react';
 import { Play } from 'lucide-react';
 import type { Json, Workflow, WorkflowVersion } from '@interlock/core';
 import { Modal } from '../../components/Modal/Modal';
+import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
+import {
+  FormPlaceholder,
+  LoadingSkeleton,
+} from '../../components/LoadingSkeleton/LoadingSkeleton';
 import { Button } from '../../components/Button/Button';
 import { SchemaInput } from '../../components/SchemaInput/SchemaInput';
 import { api, errorMessage } from '../../lib/api';
@@ -43,9 +48,14 @@ export function RunDialog({
     api.workflows.versions
       .query({ id: workflow.id })
       .then((v) => {
+        const latest = v.at(-1);
+        if (!latest) {
+          setError('This workflow has no published versions.');
+          return;
+        }
         setVersions(v);
         setInput(
-          JSON.stringify(sample(v.at(-1)!.definition.inputSchema), null, 2),
+          JSON.stringify(sample(latest.definition.inputSchema), null, 2),
         );
       })
       .catch((e) => setError(errorMessage(e)));
@@ -64,76 +74,89 @@ export function RunDialog({
     !Array.isArray(parsed);
   return (
     <Modal title={`Run ${workflow.name}`} onClose={onClose}>
-      <p className="hint">
-        Script and Fetch steps run automatically. Agent steps wait for a
-        connected agent to pick up their assignments. Starting a run does not
-        launch an agent; ask your agent to continue the run when it is waiting.
-      </p>
+      <ModalBody>
+        {versions.length > 0 ? (
+          <>
+            <p className="hint">
+              Script and Fetch steps run automatically. Agent steps wait for a
+              connected agent to pick up their assignments. Starting a run does
+              not launch an agent; ask your agent to continue the run when it is
+              waiting.
+            </p>
 
-      <NativeSelect
-        mb="md"
-        label="Published version"
-        value={version}
-        onChange={(e) => {
-          const next = Number(e.target.value);
-          setVersion(next);
-          setInput(
-            JSON.stringify(
-              sample(
-                versions.find((v) => v.version === next)!.definition
-                  .inputSchema,
-              ),
-              null,
-              2,
-            ),
-          );
-        }}
-      >
-        {[...versions]
-          .sort((a, b) => b.version - a.version)
-          .map((v) => (
-            <option key={v.version} value={v.version}>
-              Version {v.version}
-            </option>
-          ))}
-      </NativeSelect>
+            <NativeSelect
+              mb="md"
+              label="Published version"
+              value={version}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setVersion(next);
+                setInput(
+                  JSON.stringify(
+                    sample(
+                      versions.find((v) => v.version === next)!.definition
+                        .inputSchema,
+                    ),
+                    null,
+                    2,
+                  ),
+                );
+              }}
+            >
+              {[...versions]
+                .sort((a, b) => b.version - a.version)
+                .map((v) => (
+                  <option key={v.version} value={v.version}>
+                    Version {v.version}
+                  </option>
+                ))}
+            </NativeSelect>
 
-      {canForm && (
-        <div className="actions" style={{ marginBottom: 16 }}>
-          <Button variant="ghost" onClick={() => setRaw(!raw)}>
-            {raw ? 'Use input fields' : 'Edit as JSON'}
-          </Button>
-        </div>
-      )}
-      <div ref={fieldsRef}>
-        {canForm && !raw ? (
-          <SchemaInput
-            schema={schema!}
-            value={parsed as Record<string, Json>}
-            onChange={(next) => setInput(JSON.stringify(next, null, 2))}
-          />
+            {canForm && (
+              <div className="actions" style={{ marginBottom: 16 }}>
+                <Button variant="ghost" onClick={() => setRaw(!raw)}>
+                  {raw ? 'Use input fields' : 'Edit as JSON'}
+                </Button>
+              </div>
+            )}
+            <div ref={fieldsRef}>
+              {canForm && !raw ? (
+                <SchemaInput
+                  schema={schema!}
+                  value={parsed as Record<string, Json>}
+                  onChange={(next) => setInput(JSON.stringify(next, null, 2))}
+                />
+              ) : (
+                <Textarea
+                  mb="md"
+                  label="Workflow input"
+                  aria-label="Workflow input"
+                  styles={{ input: { fontFamily: 'var(--mono)' } }}
+                  rows={12}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                />
+              )}
+            </div>
+            <details>
+              <summary>Input contract</summary>
+              <pre>{JSON.stringify(schema, null, 2)}</pre>
+            </details>
+          </>
         ) : (
-          <Textarea
-            mb="md"
-            label="Workflow input"
-            aria-label="Workflow input"
-            styles={{ input: { fontFamily: 'var(--mono)' } }}
-            rows={12}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-          />
+          !error && (
+            <LoadingSkeleton label="Loading workflow versions…">
+              <FormPlaceholder />
+            </LoadingSkeleton>
+          )
         )}
-      </div>
-      <details>
-        <summary>Input contract</summary>
-        <pre>{JSON.stringify(schema, null, 2)}</pre>
-      </details>
-      {error && (
-        <p className="error-text" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="modal-actions">
+        {error && (
+          <p className="error-text" role="alert">
+            {error}
+          </p>
+        )}
+      </ModalBody>
+      <ModalFooter>
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="primary"
@@ -163,7 +186,7 @@ export function RunDialog({
           <Play />
           {busy ? 'Starting…' : 'Start run'}
         </Button>
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

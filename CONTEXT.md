@@ -24,6 +24,8 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Wait**: A step that pauses until a persisted deadline and passes its input through unchanged, or re-runs a check on a schedule until its result matches and continues with that result merged into the input.
 
+**External input**: A step that waits for a caller to accept a specific revision of submitted JSON and then forwards that value.
+
 **Branch**: A step that compares one input path against ordered cases and passes its input unchanged through the first matching route. Unmatched values fail the run unless a fallback route is configured.
 
 **Accepted result**: Data produced by a step and accepted against its result contract and checks, before result routing or output mapping.

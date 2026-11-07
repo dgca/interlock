@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Checkbox, Group, SegmentedControl, Tabs, Text } from '@mantine/core';
+import {
+  Box,
+  Checkbox,
+  Group,
+  SegmentedControl,
+  Tabs,
+  Text,
+} from '@mantine/core';
 import { Copy } from 'lucide-react';
 import { Modal } from '../Modal/Modal';
+import { ModalBody, ModalFooter } from '../Modal/ModalLayout';
+import { LoadingSkeleton } from '../LoadingSkeleton/LoadingSkeleton';
 import { Button } from '../Button/Button';
 import { api, errorMessage } from '../../lib/api';
 
@@ -110,153 +119,169 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
   const snippet = stdio ? stdioSnippet : httpSnippet;
   return (
     <Modal title="Connect with MCP" onClose={onClose} size={680}>
-      <p className="hint">
-        Keep Interlock running while your harness uses its tools. After adding
-        the configuration, restart or reconnect your harness.
-      </p>
-      {!stdio && config && (
+      <ModalBody>
         <p className="hint">
-          MCP endpoint: <code>{config.mcpUrl}</code>. This URL stays the same
-          when you upgrade and restart Interlock at the same address.
+          Keep Interlock running while your harness uses its tools. After adding
+          the configuration, restart or reconnect your harness.
         </p>
-      )}
-      <Group justify="space-between" gap="sm" my="md">
-        <Text size="xs" c="dimmed">
-          Transport
-        </Text>
-        <SegmentedControl
-          aria-label="MCP transport"
-          size="xs"
-          value={stdio ? 'stdio' : 'http'}
-          data={[
-            { value: 'http', label: 'HTTP' },
-            { value: 'stdio', label: 'Legacy stdio' },
-          ]}
-          onChange={(value) => {
-            setStdio(value === 'stdio');
-            setCopied(false);
-          }}
-        />
-      </Group>
-      {stdio && config?.development && (
-        <p className="hint">
-          This development server uses paths to this checkout. Installed copies
-          use <code>interlock mcp</code>.
-        </p>
-      )}
-      <Tabs
-        value={tab}
-        onChange={(value) => {
-          setTab(value);
-          setCopied(false);
-        }}
-      >
-        <Tabs.List>
-          {['Codex', 'Claude', 'OpenCode', 'Other'].map((name) => (
-            <Tabs.Tab key={name} value={name}>
-              {name}
-            </Tabs.Tab>
-          ))}
-        </Tabs.List>
-      </Tabs>
-      {tab === 'Codex' && (
-        <p>
-          Add this to <code>~/.codex/config.toml</code>.{' '}
-          <a
-            href="https://developers.openai.com/codex/mcp"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Codex MCP docs
-          </a>
-        </p>
-      )}
-      {tab === 'Claude' && (
-        <p>
-          Run this in your terminal to add Interlock to Claude Code for your
-          user account.{' '}
-          <a
-            href="https://code.claude.com/docs/en/mcp"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Claude Code MCP docs
-          </a>
-        </p>
-      )}
-      {tab === 'OpenCode' && (
-        <p>
-          Merge this into your <code>opencode.json</code> configuration.{' '}
-          <a
-            href="https://opencode.ai/docs/mcp-servers/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            OpenCode MCP docs
-          </a>
-        </p>
-      )}
-      {tab === 'Other' && (
-        <p>
-          {stdio
-            ? 'Add a local MCP server using stdio transport and the command, arguments, and environment below. Your harness starts the bridge process.'
-            : 'Choose Streamable HTTP transport and use the endpoint URL below. No bridge command or authentication is required.'}
-        </p>
-      )}
-      {stdio && config?.fallback && (
-        <Checkbox
-          size="xs"
-          label="Use absolute paths if your harness cannot find interlock"
-          checked={absolute}
-          onChange={(event) => {
-            setAbsolute(event.currentTarget.checked);
-            setCopied(false);
-          }}
-        />
-      )}
-      <pre>{snippet || 'Loading configuration…'}</pre>
-      <Button
-        disabled={!config}
-        onClick={() =>
-          void navigator.clipboard
-            .writeText(snippet)
-            .then(() => setCopied(true))
-            .catch((e) => setError(errorMessage(e)))
-        }
-      >
-        <Copy />
-        {copied
-          ? 'Copied'
-          : tab === 'Claude'
-            ? 'Copy command'
-            : tab === 'Other' && !stdio
-              ? 'Copy endpoint URL'
-              : 'Copy configuration'}
-      </Button>
-      {tab === 'Claude' && config && (
-        <details>
-          <summary>Claude Desktop configuration</summary>
-          <p>
-            For Claude Desktop, use the stdio bridge below. It requires an
-            installed Interlock command or the absolute paths from this server.
-            Select Legacy stdio to choose absolute paths, then merge this into
-            your Claude Desktop MCP configuration.
+        {!stdio && config && (
+          <p className="hint">
+            MCP endpoint: <code>{config.mcpUrl}</code>. This URL stays the same
+            when you upgrade and restart Interlock at the same address.
           </p>
-          <pre>
-            {JSON.stringify(
-              { mcpServers: { interlock: JSON.parse(other) } },
-              null,
-              2,
-            )}
-          </pre>
-        </details>
-      )}
-      <p className="hint">
-        Ask your agent to find a workflow, start it with your input, and
-        complete its assignments. Your harness controls tool approval and agent
-        capabilities.
-      </p>
-      {error && <p className="error-text">{error}</p>}
+        )}
+        <Group justify="space-between" gap="sm" my="md">
+          <Text size="xs" c="dimmed">
+            Transport
+          </Text>
+          <SegmentedControl
+            aria-label="MCP transport"
+            size="xs"
+            value={stdio ? 'stdio' : 'http'}
+            data={[
+              { value: 'http', label: 'HTTP' },
+              { value: 'stdio', label: 'Legacy stdio' },
+            ]}
+            onChange={(value) => {
+              setStdio(value === 'stdio');
+              setCopied(false);
+            }}
+          />
+        </Group>
+        {stdio && config?.development && (
+          <p className="hint">
+            This development server uses paths to this checkout. Installed
+            copies use <code>interlock mcp</code>.
+          </p>
+        )}
+        <Tabs
+          value={tab}
+          onChange={(value) => {
+            setTab(value);
+            setCopied(false);
+          }}
+        >
+          <Tabs.List>
+            {['Codex', 'Claude', 'OpenCode', 'Other'].map((name) => (
+              <Tabs.Tab key={name} value={name}>
+                {name}
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </Tabs>
+        {tab === 'Codex' && (
+          <p>
+            Add this to <code>~/.codex/config.toml</code>.{' '}
+            <a
+              href="https://developers.openai.com/codex/mcp"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Codex MCP docs
+            </a>
+          </p>
+        )}
+        {tab === 'Claude' && (
+          <p>
+            Run this in your terminal to add Interlock to Claude Code for your
+            user account.{' '}
+            <a
+              href="https://code.claude.com/docs/en/mcp"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Claude Code MCP docs
+            </a>
+          </p>
+        )}
+        {tab === 'OpenCode' && (
+          <p>
+            Merge this into your <code>opencode.json</code> configuration.{' '}
+            <a
+              href="https://opencode.ai/docs/mcp-servers/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              OpenCode MCP docs
+            </a>
+          </p>
+        )}
+        {tab === 'Other' && (
+          <p>
+            {stdio
+              ? 'Add a local MCP server using stdio transport and the command, arguments, and environment below. Your harness starts the bridge process.'
+              : 'Choose Streamable HTTP transport and use the endpoint URL below. No bridge command or authentication is required.'}
+          </p>
+        )}
+        {stdio && config?.fallback && (
+          <Checkbox
+            size="xs"
+            label="Use absolute paths if your harness cannot find interlock"
+            checked={absolute}
+            onChange={(event) => {
+              setAbsolute(event.currentTarget.checked);
+              setCopied(false);
+            }}
+          />
+        )}
+        {config ? (
+          <pre>{snippet}</pre>
+        ) : !error ? (
+          <Box bg="var(--canvas)" p={12} my="md" style={{ borderRadius: 5 }}>
+            <LoadingSkeleton label="Loading configuration…" />
+          </Box>
+        ) : null}
+        {tab === 'Claude' && config && (
+          <details>
+            <summary>Claude Desktop configuration</summary>
+            <p>
+              For Claude Desktop, use the stdio bridge below. It requires an
+              installed Interlock command or the absolute paths from this
+              server. Select Legacy stdio to choose absolute paths, then merge
+              this into your Claude Desktop MCP configuration.
+            </p>
+            <pre>
+              {JSON.stringify(
+                { mcpServers: { interlock: JSON.parse(other) } },
+                null,
+                2,
+              )}
+            </pre>
+          </details>
+        )}
+        <p className="hint">
+          Ask your agent to find a workflow, start it with your input, and
+          complete its assignments. Your harness controls tool approval and
+          agent capabilities.
+        </p>
+        {error && (
+          <p className="error-text" role="alert">
+            {error}
+          </p>
+        )}
+      </ModalBody>
+      <ModalFooter>
+        <Button onClick={onClose}>Close</Button>
+        <Button
+          variant="primary"
+          disabled={!config}
+          onClick={() =>
+            void navigator.clipboard
+              .writeText(snippet)
+              .then(() => setCopied(true))
+              .catch((e) => setError(errorMessage(e)))
+          }
+        >
+          <Copy />
+          {copied
+            ? 'Copied'
+            : tab === 'Claude'
+              ? 'Copy command'
+              : tab === 'Other' && !stdio
+                ? 'Copy endpoint URL'
+                : 'Copy configuration'}
+        </Button>
+      </ModalFooter>
     </Modal>
   );
 }
