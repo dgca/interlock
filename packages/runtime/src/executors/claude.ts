@@ -81,6 +81,7 @@ export const claudeAdapter: HarnessAdapter = {
   async run(input: HarnessRun) {
     let taskStarted = false;
     let modelRefused = false;
+    let capturedSessionId: string | undefined = input.sessionId;
     const abortController = new AbortController();
     const abort = () => abortController.abort();
     input.signal.addEventListener('abort', abort, { once: true });
@@ -222,6 +223,7 @@ export const claudeAdapter: HarnessAdapter = {
             throw new Error(
               'Claude Code did not resume the required native session',
             );
+          capturedSessionId = message.session_id;
           input.onSession(message.session_id, message.model);
         }
         if (message.type === 'assistant') {
@@ -284,6 +286,9 @@ export const claudeAdapter: HarnessAdapter = {
             (envelope as Record<string, unknown>).result,
           ),
           usage,
+          resumeCommand: capturedSessionId
+            ? `claude resume ${capturedSessionId}`
+            : undefined,
         };
       }
       throw new Error('Claude Code ended without an assignment result');

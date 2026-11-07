@@ -7,7 +7,9 @@ import {
   Textarea,
 } from '@mantine/core';
 import {
+  ArrowUpRight,
   Check,
+  Copy,
   MessageSquare,
   RotateCcw,
   ShieldCheck,
@@ -63,6 +65,13 @@ function Execution({
   const [inspection, setInspection] = useState<Inspection>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string>();
+  const [copiedResume, setCopiedResume] = useState(false);
+
+  const handleCopyResume = (cmd: string) => {
+    void navigator.clipboard.writeText(cmd);
+    setCopiedResume(true);
+    setTimeout(() => setCopiedResume(false), 2000);
+  };
   const [confirmed, setConfirmed] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [answered, setAnswered] = useState<string[]>([]);
@@ -355,6 +364,72 @@ function Execution({
         !(record.state === 'needs_model' && work.status === 'held') && (
           <p className={styles.reason}>{record.error}</p>
         )}
+      {record.sessionId && (
+        <div className={styles.sessionVisibilityBar}>
+          <div className={styles.sessionMeta}>
+            <span className={styles.sessionLabel}>Session</span>
+            <span className={styles.sessionId}>{record.sessionId}</span>
+            {record.sessionName && (
+              <span className={styles.sessionName} title="Session name">
+                {record.sessionName}
+              </span>
+            )}
+          </div>
+          <div className={styles.sessionActions}>
+            {record.resumeCommand && (
+              <Button
+                variant="ghost"
+                onClick={() => handleCopyResume(record.resumeCommand!)}
+                title={record.resumeCommand}
+              >
+                {copiedResume ? <Check size={12} /> : <Copy size={12} />}
+                {copiedResume ? 'Copied' : 'Copy resume command'}
+              </Button>
+            )}
+            {record.deepLink && (
+              <a
+                href={record.deepLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.deepLinkBtn}
+                title={record.deepLink}
+              >
+                Open in harness
+                <ArrowUpRight size={12} />
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+      {['starting', 'running', 'needs_human', 'needs_model'].includes(
+        record.state,
+      ) && (
+        <section
+          className={styles.liveTailSection}
+          aria-label="Live progress tail"
+        >
+          <div className={styles.liveTailHeader}>
+            <h4>Live progress</h4>
+            {record.logCount > 0 && (
+              <span className={styles.logCountBadge}>
+                {record.logs.length} / {record.logCount} updates
+              </span>
+            )}
+          </div>
+          {record.logs.length > 0 ? (
+            <ol className={styles.liveLogs} tabIndex={0} aria-live="polite">
+              {record.logs.map((log, i) => (
+                <li key={i}>
+                  <time>{new Date(log.at).toLocaleTimeString()}</time>
+                  <span>{log.message}</span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className={styles.liveEmpty}>Waiting for progress updates…</p>
+          )}
+        </section>
+      )}
       <details className={styles.details}>
         <summary>
           Execution details
@@ -398,6 +473,32 @@ function Execution({
             <>
               <dt>Session</dt>
               <dd>{record.sessionId}</dd>
+            </>
+          )}
+          {record.sessionName && (
+            <>
+              <dt>Session name</dt>
+              <dd>{record.sessionName}</dd>
+            </>
+          )}
+          {record.resumeCommand && (
+            <>
+              <dt>Resume command</dt>
+              <dd className={styles.codeWrap}>{record.resumeCommand}</dd>
+            </>
+          )}
+          {record.deepLink && (
+            <>
+              <dt>Deep link</dt>
+              <dd>
+                <a
+                  href={record.deepLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {record.deepLink}
+                </a>
+              </dd>
             </>
           )}
         </dl>

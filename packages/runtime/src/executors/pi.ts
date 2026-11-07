@@ -134,6 +134,9 @@ export const piAdapter: HarnessAdapter = {
           ...(input.sessionId
             ? ['--session', sessionId]
             : ['--session-id', sessionId]),
+          ...(!input.sessionId && input.sessionName
+            ? ['--session-name', input.sessionName]
+            : []),
         ],
         input.cwd,
         'pi',
@@ -258,6 +261,7 @@ export const piAdapter: HarnessAdapter = {
         output: jsonSchema.parse(envelope.result),
         usage: [...usage.values()],
         usageScope: 'attempt',
+        resumeCommand: `pi --session ${sessionId}`,
       };
     } catch (error) {
       if (

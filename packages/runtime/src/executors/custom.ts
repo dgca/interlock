@@ -33,6 +33,8 @@ export function buildTokenMap(
         ? work.input
         : JSON.stringify(work.input ?? null),
     INTERLOCK_SESSION_ID: extra.sessionId ?? '',
+    INTERLOCK_SESSION_NAME:
+      extra.sessionName ?? extra.INTERLOCK_SESSION_NAME ?? '',
     ...extra,
   };
 }
@@ -41,6 +43,9 @@ export interface CustomTurnEnvelope {
   output?: Json;
   result?: Json;
   sessionId?: string;
+  sessionName?: string;
+  resumeCommand?: string;
+  deepLink?: string;
   model?: string;
   provider?: string;
   usage?: ModelUsage[];
@@ -223,8 +228,12 @@ export const customAdapter: HarnessAdapter = {
   models: async () => ({ models: [], truncated: false }),
   run: async (input: HarnessRun): Promise<HarnessResult> => {
     const { profile, work, cwd, signal, onSession, onProgress } = input;
+    const sessionName =
+      input.sessionName || `interlock-${work.runId}-${work.id}`;
     const tokens = buildTokenMap(work, cwd, {
       sessionId: input.sessionId ?? '',
+      sessionName,
+      INTERLOCK_SESSION_NAME: sessionName,
     });
 
     const contextPayload = {
@@ -239,7 +248,7 @@ export const customAdapter: HarnessAdapter = {
       model: profile.model,
       effort: profile.effort,
       permissions: profile.permissions,
-      sessionName: `interlock-${work.runId}-${work.id}`,
+      sessionName,
       sessionId: input.sessionId,
     };
 
@@ -292,6 +301,8 @@ export const customAdapter: HarnessAdapter = {
       output,
       usage: envelope.usage,
       usageScope: 'attempt',
+      resumeCommand: envelope.resumeCommand,
+      deepLink: envelope.deepLink,
     };
   },
 };

@@ -74,6 +74,11 @@ export function CustomProfileDialog({
   const [cwd, setCwd] = useState('');
   const [allowedRoots, setAllowedRoots] = useState<string[]>([]);
 
+  // Session visibility templates
+  const [sessionNameTemplate, setSessionNameTemplate] = useState('');
+  const [resumeCommandTemplate, setResumeCommandTemplate] = useState('');
+  const [deepLinkTemplate, setDeepLinkTemplate] = useState('');
+
   // UI accordion state for optional hooks
   const [openHooks, setOpenHooks] = useState<Record<string, boolean>>({
     status: false,
@@ -112,6 +117,9 @@ export function CustomProfileDialog({
         setArchiveUrl(profile.archiveUrl ?? '');
         setCwd(profile.cwd ?? '');
         setAllowedRoots(profile.allowedRoots ?? []);
+        setSessionNameTemplate(profile.sessionNameTemplate ?? '');
+        setResumeCommandTemplate(profile.resumeCommandTemplate ?? '');
+        setDeepLinkTemplate(profile.deepLinkTemplate ?? '');
       } else {
         const generatedId = `custom-${crypto.randomUUID().slice(0, 8)}`;
         setName(initialName || 'My Custom Harness');
@@ -137,6 +145,9 @@ export function CustomProfileDialog({
         setArchiveUrl('');
         setCwd('');
         setAllowedRoots([]);
+        setSessionNameTemplate('');
+        setResumeCommandTemplate('');
+        setDeepLinkTemplate('');
       }
     }
   }, [opened, profile, initialName]);
@@ -224,6 +235,15 @@ export function CustomProfileDialog({
         ...(Object.keys(headers).length > 0 ? { headers } : {}),
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
         ...(cleanedRoots.length > 0 ? { allowedRoots: cleanedRoots } : {}),
+        ...(sessionNameTemplate.trim()
+          ? { sessionNameTemplate: sessionNameTemplate.trim() }
+          : {}),
+        ...(resumeCommandTemplate.trim()
+          ? { resumeCommandTemplate: resumeCommandTemplate.trim() }
+          : {}),
+        ...(deepLinkTemplate.trim()
+          ? { deepLinkTemplate: deepLinkTemplate.trim() }
+          : {}),
         ...(turnCommand.trim() ? { turnCommand: turnCommand.trim() } : {}),
         ...(turnUrl.trim() ? { turnUrl: turnUrl.trim() } : {}),
         ...(launchCommand.trim()
@@ -732,6 +752,56 @@ export function CustomProfileDialog({
                 ))}
               </div>
             )}
+          </div>
+
+          <div>
+            <span className={styles.fieldLabel}>
+              Session Name Template (sessionNameTemplate)
+            </span>
+            <TextInput
+              size="xs"
+              className={styles.monoInput}
+              placeholder="e.g. {{externalTask.id}} {{node.label}}: {{externalTask.title}}"
+              value={sessionNameTemplate}
+              onChange={(e) => setSessionNameTemplate(e.currentTarget.value)}
+            />
+            <p className={styles.fieldHelper}>
+              Evaluated from run context. Passed to custom launchers, direct
+              turns, and Pi.
+            </p>
+          </div>
+
+          <div>
+            <span className={styles.fieldLabel}>
+              Resume Command Template (resumeCommandTemplate)
+            </span>
+            <TextInput
+              size="xs"
+              className={styles.monoInput}
+              placeholder="e.g. my-tool resume {{sessionId}}"
+              value={resumeCommandTemplate}
+              onChange={(e) => setResumeCommandTemplate(e.currentTarget.value)}
+            />
+            <p className={styles.fieldHelper}>
+              CLI command to resume or inspect an external session.
+            </p>
+          </div>
+
+          <div>
+            <span className={styles.fieldLabel}>
+              Deep Link URL Template (deepLinkTemplate)
+            </span>
+            <TextInput
+              size="xs"
+              className={styles.monoInput}
+              placeholder="e.g. https://app.example.com/sessions/{{sessionId}}"
+              value={deepLinkTemplate}
+              onChange={(e) => setDeepLinkTemplate(e.currentTarget.value)}
+            />
+            <p className={styles.fieldHelper}>
+              HTTP(S) deep link opened directly in the browser from Run
+              Inspector.
+            </p>
           </div>
         </section>
 

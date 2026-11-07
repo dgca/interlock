@@ -209,6 +209,27 @@ export const executorProfileSchema = z
     archiveUrl: z.string().trim().min(1).max(4096).optional(),
     continueOnMissingResult: continueOnMissingResultSchema.optional(),
     transientRetry: transientRetrySchema.optional(),
+    sessionNameTemplate: z
+      .string()
+      .trim()
+      .min(1)
+      .max(1000)
+      .optional()
+      .describe('Session name template.'),
+    resumeCommandTemplate: z
+      .string()
+      .trim()
+      .min(1)
+      .max(1000)
+      .optional()
+      .describe('Resume command template.'),
+    deepLinkTemplate: z
+      .string()
+      .trim()
+      .min(1)
+      .max(2000)
+      .optional()
+      .describe('Deep link URL template.'),
   })
   .strict();
 export type ExecutorProfile = z.infer<typeof executorProfileSchema>;
@@ -314,6 +335,10 @@ export const managedWorkSummarySchema = z.object({
   reason: z.string().optional(),
   pendingRequests: z.number().int().nonnegative().optional(),
   recoveryEvents: z.array(recoveryEventSchema).optional(),
+  sessionId: z.string().optional(),
+  sessionName: z.string().optional(),
+  resumeCommand: z.string().optional(),
+  deepLink: z.string().optional(),
 });
 /** Local execution provenance. Never contains a claim token or credentials. */
 export interface ManagedExecution {
@@ -329,6 +354,9 @@ export interface ManagedExecution {
   command: string;
   cwd: string;
   sessionId?: string;
+  sessionName?: string;
+  resumeCommand?: string;
+  deepLink?: string;
   startedAt: string;
   endedAt?: string;
   error?: string;
@@ -351,4 +379,8 @@ export interface ManagedWorkSummary {
   reason?: string;
   pendingRequests?: number;
   recoveryEvents?: RecoveryEvent[];
+  sessionId?: string;
+  sessionName?: string;
+  resumeCommand?: string;
+  deepLink?: string;
 }
