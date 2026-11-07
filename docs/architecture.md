@@ -113,7 +113,11 @@ For `collect`, downstream nodes read each record's `.output` after checking `.st
 
 ## Agent work
 
-Optional node input bindings select incoming data or original persisted workflow, root, and Batch item inputs, or the latest completed output of a node in the current run, before input validation. A node binding can set `sourceDefault` for absent completed output and `default` for a missing path within an available output. Resolved inputs appear in execution history. See [input bindings](agent-workflows.md#bind-original-input-into-later-steps) for scope and retry semantics.
+Optional node input bindings select incoming data or original persisted workflow, root, and Batch item inputs, the latest completed output of a node in the current run (`source: "node"`), or engine-verified execution provenance (`source: "execution"`), before input validation. Both `node` and `execution` bindings can set `sourceDefault` for absent completed executions and `default` for a missing path within an available execution. Resolved inputs appear in execution history. See [input bindings](agent-workflows.md#bind-original-input-into-later-steps) for scope and retry semantics.
+
+### Execution provenance and anti-spoofing
+
+When a node completes execution, the engine evaluates 1-based `visitCount` within the current run and Batch scope and collects verified executor attributes (`profileId`, `harness`, `sessionId`, `requestedModel`, `actualModel`, `provider`, `effort`, `attempt`, `visitCount`, `startedAt`, `endedAt`, `usage`). Provenance is assigned directly to `execution.provenance` by the engine and cannot be spoofed, overwritten, or modified by worker submission payloads. Downstream nodes bind provenance via `source: "execution"` or evaluate `execution.<nodeId>.<path>` in standalone Branch conditions. Foreground and background scripts receive prior node provenance via `INTERLOCK_EXECUTION_PROVENANCE_FILE`.
 
 The editor derives optional input hints from draft edges and declared contracts. Explicit node input contracts take precedence. Bindings yield a projected object shape; pass-through nodes can carry an inferred shape forward. Conflicting incoming shapes and unknown source contracts yield no single hint. These hints drive editor suggestions only. They are not stored, do not affect publication, and do not change runtime contract checks unless the author explicitly copies a hint into a node input contract.
 
@@ -270,18 +274,19 @@ Script nodes and Script checks in polling Waits receive these environment
 variables. Read them through `process.env` in JavaScript or shell variables
 in Bash. JavaScript's `input` and Bash's JSON stdin keep their usual format.
 
-| Variable                       | Value                                                                                                                                  |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `INTERLOCK_RUN_ID`             | Run executing the script. Use this ID to inspect the run.                                                                              |
-| `INTERLOCK_ROOT_RUN_ID`        | Outermost ancestor run. A top-level run identifies itself. A detached child keeps its original ancestry.                               |
-| `INTERLOCK_WORKFLOW_ID`        | Workflow whose published definition supplies the step. Batch items use their owner's workflow.                                         |
-| `INTERLOCK_WORKFLOW_VERSION`   | Published version number.                                                                                                              |
-| `INTERLOCK_NODE_ID`            | Step ID in the published definition. For a polling check, this is the Wait node ID.                                                    |
-| `INTERLOCK_EXECUTION_ID`       | Current node execution. Each new visit and explicit retry gets a fresh ID. Checks within the same Wait attempt share its execution ID. |
-| `INTERLOCK_ATTEMPT`            | Attempt within a visit, starting at 1. Explicit retries increment it. A later visit starts at 1.                                       |
-| `INTERLOCK_BATCH_OWNER_RUN_ID` | Run containing the Batch that started this item. Present for Batch item runs.                                                          |
-| `INTERLOCK_BATCH_ITEM_INDEX`   | Zero-based position in the Batch input. Present for Batch item runs.                                                                   |
-| `INTERLOCK_POLL_CHECK_NUMBER`  | Present for polling Script checks. Starts at 1 within each Wait attempt. An interrupted check can reuse its number after restart.      |
+| Variable                              | Value                                                                                                                                  |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `INTERLOCK_RUN_ID`                    | Run executing the script. Use this ID to inspect the run.                                                                              |
+| `INTERLOCK_ROOT_RUN_ID`               | Outermost ancestor run. A top-level run identifies itself. A detached child keeps its original ancestry.                               |
+| `INTERLOCK_WORKFLOW_ID`               | Workflow whose published definition supplies the step. Batch items use their owner's workflow.                                         |
+| `INTERLOCK_WORKFLOW_VERSION`          | Published version number.                                                                                                              |
+| `INTERLOCK_NODE_ID`                   | Step ID in the published definition. For a polling check, this is the Wait node ID.                                                    |
+| `INTERLOCK_EXECUTION_ID`              | Current node execution. Each new visit and explicit retry gets a fresh ID. Checks within the same Wait attempt share its execution ID. |
+| `INTERLOCK_ATTEMPT`                   | Attempt within a visit, starting at 1. Explicit retries increment it. A later visit starts at 1.                                       |
+| `INTERLOCK_BATCH_OWNER_RUN_ID`        | Run containing the Batch that started this item. Present for Batch item runs.                                                          |
+| `INTERLOCK_BATCH_ITEM_INDEX`          | Zero-based position in the Batch input. Present for Batch item runs.                                                                   |
+| `INTERLOCK_POLL_CHECK_NUMBER`         | Present for polling Script checks. Starts at 1 within each Wait attempt. An interrupted check can reuse its number after restart.      |
+| `INTERLOCK_EXECUTION_PROVENANCE_FILE` | Path to temporary JSON file with prior node provenance: `{ [nodeId]: { visitCount, latest, history } }`. Cleaned up upon completion.   |
 
 Interlock uses `INTERLOCK_` for its own environment variables. Choose names
 outside that prefix for saved variable bindings to avoid collisions. Explicit

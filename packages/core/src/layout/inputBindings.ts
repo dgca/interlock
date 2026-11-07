@@ -11,7 +11,9 @@ export function bindingNodeIds(node: WorkflowNode): string[] {
         ...bindingLeaves(node.inputBindings ?? {}),
         ...bindingLeaves(node.outputBindings ?? {}),
         ...bindingLeaves(cwdBindings),
-      ].flatMap((b) => (b.source === 'node' ? [b.nodeId] : [])),
+      ].flatMap((b) =>
+        b.source === 'node' || b.source === 'execution' ? [b.nodeId] : [],
+      ),
     ),
   ];
 }

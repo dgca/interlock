@@ -339,6 +339,7 @@ Optional `inputBindings` constructs a replacement input object before the node's
 | `rootInput` | Original input of the outermost run                                                |
 | `itemInput` | Original input of the current Batch item run, available only inside a Batch        |
 | `node`      | Latest completed output of `nodeId` in the current run                             |
+| `execution` | Engine-verified execution provenance of `nodeId` in the current run                |
 
 For example, an Agent may return a proposed action while the following Script reads `dryRun` from the original workflow input:
 
@@ -386,6 +387,15 @@ To initialize a loop counter, bind the `count` input of a step with ID `count` t
 ```
 
 The first visit receives `{"count": 0}`. Later visits read `count` from the last completed output. The same setting covers a source skipped by a branch. To supply a fallback for a missing field in a completed output, set `default` separately.
+
+### Execution provenance and loop visitCount
+
+Workflows implementing review gates, model verification, or repair loops can count loop visits directly and inspect execution metadata without relying on agent-reported outputs:
+
+- **Direct loop counting**: Use `source: "execution"` with `path: "visitCount"` to obtain the 1-based completed execution count of `nodeId` in the current run and Batch scope. Alternatively, configure a Branch condition or Switch path directly as `execution.<nodeId>.visitCount` (evaluating to `0` before the node completes its first execution).
+- **Model verification gates**: Inspect `execution.<nodeId>.actualModel` or `execution.<nodeId>.provider` to ensure high-assurance tasks were executed by an authorized model before allowing downstream deployment branches.
+- **Anti-spoofing**: Provenance is recorded directly by the engine and executor manager upon node completion. Fields like `profileId`, `harness`, `sessionId`, `requestedModel`, `actualModel`, `provider`, `effort`, `attempt`, `visitCount`, and `usage` cannot be spoofed or overwritten by worker outputs.
+- **Script provenance file**: Script steps have access to prior node execution records through `INTERLOCK_EXECUTION_PROVENANCE_FILE`, containing `{ [nodeId]: { visitCount, latest, history } }`.
 
 In node settings, the **Input** section groups data selection and validation. **Source** defaults to **Previous step output**. Select **Choose fields** to reveal the field editor. Opening settings or choosing this mode alone leaves input unchanged. **Expected format** edits the input contract, which validates the selected data before execution. **Add input field** adds a named field with **Previous step output** selected by default. Choose **Node output** to select a node by its label and ID in the same execution scope. **Default if no completed output** sets `sourceDefault` for the selected node. **Original Batch item** is available inside Batch item paths. Paths select nested fields or array indices. A blank path selects the whole value.
 

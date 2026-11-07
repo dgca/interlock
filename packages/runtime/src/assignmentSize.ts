@@ -107,7 +107,7 @@ export class AssignmentSizes {
               reason = 'item_scope_required';
               throw new Error(reason);
             }
-            if (leaf.source === 'node') {
+            if (leaf.source === 'node' || leaf.source === 'execution') {
               const source = definition.nodes.find((n) => n.id === leaf.nodeId);
               if (
                 !source ||
@@ -125,11 +125,13 @@ export class AssignmentSizes {
                   Object.hasOwn(q.sample.outputs, leaf.nodeId)
                   ? q.sample.outputs[leaf.nodeId]
                   : undefined
-                : q.sample?.[leaf.source];
+                : leaf.source === 'execution'
+                  ? undefined
+                  : q.sample?.[leaf.source];
             if (source !== undefined) return source;
             // A supplied map describes the completed outputs in this scenario.
             if (
-              leaf.source === 'node' &&
+              (leaf.source === 'node' || leaf.source === 'execution') &&
               leaf.sourceDefault !== undefined &&
               q.sample?.outputs
             )

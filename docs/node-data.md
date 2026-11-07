@@ -15,19 +15,43 @@ In **Input**, choose **Choose fields** to construct an object. Each field can se
 
 `inputBindings` replaces the complete input. Omitting it passes the previous output through; `{}` constructs an empty object. Binding sources are:
 
-| Source      | Value                                                           |
-| ----------- | --------------------------------------------------------------- |
-| `input`     | The incoming output before input bindings                       |
-| `runInput`  | Original input of the enclosing workflow run                    |
-| `rootInput` | Original input of the outermost run                             |
-| `itemInput` | Original item in the current Batch item run                     |
-| `node`      | Latest completed output of `nodeId` in this run and Batch scope |
-| `literal`   | The JSON `value` supplied in the binding                        |
-| `object`    | An object constructed from recursive `fields`                   |
+| Source      | Value                                                                 |
+| ----------- | --------------------------------------------------------------------- |
+| `input`     | The incoming output before input bindings                             |
+| `runInput`  | Original input of the enclosing workflow run                          |
+| `rootInput` | Original input of the outermost run                                   |
+| `itemInput` | Original item in the current Batch item run                           |
+| `node`      | Latest completed output of `nodeId` in this run and Batch scope       |
+| `execution` | Verified execution provenance of `nodeId` in this run and Batch scope |
+| `literal`   | The JSON `value` supplied in the binding                              |
+| `object`    | An object constructed from recursive `fields`                         |
 
 Path sources use dot-separated `path` keys or array indices. Blank, `$`, and `$.field` have the same meaning as existing data paths. A path binding may include `default` for a missing path in an available source. JSON null, false, zero, and empty text are existing values.
 
-A `node` binding may also include `sourceDefault`. If the referenced node has no completed output in the current run, the binding uses `sourceDefault` as the field value. If the node has completed output, Interlock reads the path from that output and uses `default` if the path is missing. Both defaults accept any JSON value, including null. Without the applicable default, the binding fails. Invalid paths still fail. Publication requires an existing node in the same execution scope and excludes Entry and Exit.
+A `node` or `execution` binding may also include `sourceDefault`. If the referenced node has no completed output or execution in the current run, the binding uses `sourceDefault` as the field value. If the node has completed, Interlock reads the path from that output or provenance object and uses `default` if the path is missing. Both defaults accept any JSON value, including null. Without the applicable default, the binding fails. Invalid paths still fail. Publication requires an existing node in the same execution scope and excludes Entry and Exit.
+
+`execution` bindings select engine-verified provenance from the latest completed execution of `nodeId`:
+
+| Field            | Type           | Description                                                               |
+| ---------------- | -------------- | ------------------------------------------------------------------------- |
+| `profileId`      | string \| null | Configured executor profile ID                                            |
+| `harness`        | string \| null | Harness identifier (`codex`, `claude`, `pi`, `custom`)                    |
+| `sessionId`      | string \| null | Managed session identifier                                                |
+| `requestedModel` | string \| null | Model identifier requested by workflow or profile                         |
+| `actualModel`    | string \| null | Engine- or observer-verified model identifier                             |
+| `provider`       | string \| null | Model provider name (e.g. `openai`, `anthropic`)                          |
+| `effort`         | string \| null | Configured reasoning effort level                                         |
+| `attempt`        | integer        | 1-based attempt number of this execution                                  |
+| `visitCount`     | integer        | 1-based completed execution count of `nodeId` in this run and Batch scope |
+| `startedAt`      | string \| null | ISO-8601 execution start timestamp                                        |
+| `endedAt`        | string \| null | ISO-8601 execution completion timestamp                                   |
+| `usage`          | array \| null  | Measured model token usage records                                        |
+
+Provenance is populated exclusively by the engine and executor manager; worker responses cannot overwrite or spoof provenance fields.
+
+Standalone Branch nodes (`switch` and `condition`) can evaluate provenance directly without explicit input bindings by specifying a path starting with `execution.<nodeId>.<path>` (e.g., `execution.repairStep.visitCount`). If the referenced node has not yet run, `visitCount` resolves to `0` and other paths resolve to `undefined`.
+
+Scripts can also read complete execution history from `INTERLOCK_EXECUTION_PROVENANCE_FILE`, which points to a temporary JSON file containing `{ [nodeId]: { visitCount, latest, history } }` with all prior node executions in the run.
 
 For example, these fields select a request, preserve repository configuration, and supply a fixed policy:
 
