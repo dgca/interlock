@@ -226,7 +226,7 @@ export function RunList({
             </div>
           ) : offset > 0 ? (
             <Text role="status">No runs on this page.</Text>
-          ) : (
+          ) : tab === 'attention' && page.scheduleAttentionCount > 0 ? null : (
             <div className="empty">
               <Activity size={28} />
               <h2>
