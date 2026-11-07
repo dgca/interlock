@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { isAbsolute } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { setTimeout as delay } from 'node:timers/promises';
 import {
   InterlockError,
   executorProfileSchema,
@@ -12,6 +13,7 @@ import {
   executorEffortSchema,
   executorSettingsSchema,
   executorSettingsUpdateSchema,
+  elapsedExcludingPausesMs,
   type ExecutorModels,
   tokenFields,
   type ExecutorProfile,
@@ -22,6 +24,11 @@ import {
   type ManagedWorkSummary,
   type WorkRequest,
   type ModelUsage,
+  type RecoveryEvent,
+  type ErrorClass,
+  type Run,
+  type WorkflowDefinition,
+  type PauseHold,
 } from '@interlock/core';
 import type { Engine, Worker } from '../index.js';
 import { validateDirectoryContainment } from '../workingDirectory.js';
@@ -45,8 +52,11 @@ type ManagedAssignment = Pick<
 import {
   HarnessResultError,
   HarnessModelError,
+  classifyHarnessError,
+  isModelRefusal,
   type HarnessAdapter,
   type HarnessRequest,
+  type HarnessResult,
 } from './contracts.js';
 import { buildTokenMap, interpolateTokens } from './custom.js';
 
@@ -462,6 +472,7 @@ export class ExecutorManager {
         reason: record.error,
         pendingRequests: record.requests.filter((r) => r.state === 'pending')
           .length,
+        recoveryEvents: record.recoveryEvents,
       };
     if (!work.executor || work.status !== 'available') return;
     const profile = this.profiles().find((p) => p.id === work.executor);
@@ -680,6 +691,7 @@ export class ExecutorManager {
         startedAt: r.startedAt,
         endedAt: r.endedAt,
         error: r.error,
+        recoveryEvents: r.recoveryEvents,
       })),
     };
   }
@@ -1424,100 +1436,424 @@ export class ExecutorManager {
       });
     }
   }
-  private async execute(job: Job, adapter: HarnessAdapter, session: Session) {
-    const r = job.record;
-    let receivedResult = false;
+  private recordRecoveryEvent(record: ManagedExecution, event: RecoveryEvent) {
+    record.recoveryEvents = record.recoveryEvents ?? [];
+    record.recoveryEvents.push(event);
+    this.write(record);
+  }
+
+  private getPauseHolds(
+    workflowId?: string,
+    includeReleased = false,
+  ): PauseHold[] {
+    if (typeof (this.engine.store as any).pauseHolds === 'function') {
+      return (this.engine.store as any).pauseHolds(workflowId, includeReleased);
+    }
     try {
-      r.state = 'running';
-      this.write(r);
-      const result = await adapter.run({
-        profile: r.profile,
-        command: r.command,
-        cwd: r.cwd,
-        sessionId: session.nativeId,
-        work: job.work,
-        signal: job.abort.signal,
-        onSession: (id, model) => {
-          if (job.abort.signal.aborted || this.stopped) return;
-          session.nativeId = id;
-          r.sessionId = id;
-          if (model) {
-            session.profile = { ...session.profile, model };
-            r.profile = session.profile;
-          }
-          this.engine.store.put(sessionsCollection, session);
-          this.write(r);
-        },
-        onProgress: (message) => {
-          if (!job.abort.signal.aborted && !this.stopped) this.log(r, message);
-        },
-        request: (request) => this.request(job, request),
+      const list = this.engine.store.list<PauseHold>('pauseHolds');
+      return list.filter((h) => {
+        if (!includeReleased && h.releasedAt) return false;
+        if (h.scope === 'library') return true;
+        return workflowId && h.workflowId === workflowId;
       });
-      receivedResult = true;
-      if (this.stopped || job.abort.signal.aborted) return;
-      const usage =
-        result.usage &&
-        (result.usageScope === 'attempt'
-          ? result.usage
-          : usageDelta(
-              result.usage,
-              session.nativeId && session.usageUncertain
-                ? null
-                : (session.usage ?? []),
-            ));
-      if (result.usage && result.usageScope !== 'attempt') {
-        session.usage = result.usage;
-        session.usageUncertain = false;
-        this.engine.store.put(sessionsCollection, session);
+    } catch {
+      return [];
+    }
+  }
+
+  private countTransientRetriesInWindow(
+    record: ManagedExecution,
+    windowMs: number,
+    runId: string,
+  ): number {
+    const events = record.recoveryEvents ?? [];
+    const retryEvents = events.filter(
+      (e) => e.errorClass === 'transient' && e.action === 'retry',
+    );
+    if (!retryEvents.length) return 0;
+    const nowMs = Date.now();
+    const run = this.engine.store.get<Run>('runs', runId);
+    const pauseHolds = run ? this.getPauseHolds(run.workflowId, true) : [];
+    let count = 0;
+    for (const event of retryEvents) {
+      const eventMs = Date.parse(event.at);
+      const { activeMs } = elapsedExcludingPausesMs(eventMs, nowMs, pauseHolds);
+      if (activeMs <= windowMs) {
+        count++;
       }
-      if (usage?.length)
-        this.engine.usage.report({
-          workId: job.work.id,
-          attempt: job.work.attempt,
-          token: job.work.token,
-          snapshot: { sequence: 1, final: true, models: usage },
-        });
-      // Validation and duplicate handling stay in the ordinary submission path.
-      this.engine.submit(job.work.id, job.work.token!, result.output);
-      r.state = 'completed';
-      r.endedAt = now();
-      this.write(r);
-    } catch (error) {
-      if (this.stopped || job.abort.signal.aborted) return;
-      if (error instanceof HarnessModelError) {
-        try {
-          this.holdForModel(job, session, error);
-        } catch (holdError) {
-          this.interruptJob(
-            job,
-            'Could not hold the rejected model assignment: ' +
-              errorText(holdError),
-          );
-        }
+    }
+    return count;
+  }
+
+  private async sleepHonoringPauses(
+    delayMs: number,
+    runId: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const stepMs = 50;
+    let remainingMs = delayMs;
+    while (remainingMs > 0) {
+      if (signal.aborted || this.stopped) return;
+      const run = this.engine.store.get<Run>('runs', runId);
+      const isPaused = run
+        ? this.getPauseHolds(run.workflowId, false).length > 0
+        : false;
+      if (!isPaused) {
+        remainingMs -= stepMs;
+      }
+      await delay(stepMs);
+    }
+  }
+
+  private escalateTransientHold(
+    job: Job,
+    session: Session,
+    record: ManagedExecution,
+    reason: string,
+  ) {
+    this.engine.store.transaction(() => {
+      const work = this.engine.store.get<WorkRequest>('work', job.work.id);
+      if (
+        work?.status !== 'claimed' ||
+        work.token !== job.work.token ||
+        work.attempt !== record.attempt
+      )
         return;
-      }
-      if (!receivedResult && !(error instanceof HarnessResultError)) {
+      const holdReason = `Transient failure limit reached: ${reason}`.slice(
+        0,
+        1000,
+      );
+      try {
+        this.engine.manageWorkHold({
+          action: 'hold',
+          workId: work.id,
+          expectedAttempt: work.attempt,
+          expectedRevision: work.holdRevision ?? 0,
+          token: work.token,
+          actor: 'managed-recovery',
+          category: 'other',
+          reason: holdReason,
+          checkpointRef: `recovery:${record.id}`,
+        });
+      } catch (holdError) {
         this.interruptJob(
           job,
-          'Harness execution was lost: ' +
-            errorText(error) +
-            '. Inspect external effects and confirm the old session stopped before retrying.',
+          'Could not hold transient failure assignment: ' +
+            errorText(holdError),
         );
         return;
       }
-      r.state = 'failed';
-      r.endedAt = now();
-      r.error = errorText(error);
-      this.write(r);
-      const current = this.engine.store.get<WorkRequest>('work', job.work.id);
-      if (current?.status === 'claimed' && current.token === job.work.token) {
-        // An explicit failed attempt uses the existing bounded failure budget.
-        try {
-          this.engine.reportFailure(job.work.id, job.work.token!, r.error);
-        } catch {}
-      }
+      try {
+        this.engine.manageWorkResources({
+          action: 'release',
+          workId: work.id,
+          expectedAttempt: work.attempt,
+          actor: 'managed-recovery',
+          confirmStopped: true,
+        });
+      } catch {}
       session.usageUncertain = true;
       this.engine.store.put(sessionsCollection, session);
+      record.state = 'needs_human';
+      record.endedAt = now();
+      record.error = holdReason;
+      this.write(record);
+    });
+  }
+
+  private resolveRecoveryPolicies(work: WorkRequest, profile: ExecutorProfile) {
+    const run = this.engine.store.get<Run>('runs', work.runId);
+    let definition: WorkflowDefinition | undefined;
+    if (run) {
+      if (typeof (this.engine.store as any).getVersion === 'function') {
+        const versionRecord = (this.engine.store as any).getVersion(
+          run.workflowId,
+          run.version,
+        );
+        definition = versionRecord?.definition;
+      }
+      if (!definition) {
+        const wf = this.engine.store.get<{ draft?: WorkflowDefinition }>(
+          'workflows',
+          run.workflowId,
+        );
+        definition = wf?.draft;
+      }
+    }
+    const node = definition?.nodes?.find((n) => n.id === work.nodeId);
+    const workflow = definition;
+
+    const continueOnMissingResult = {
+      maxTurns:
+        node?.kind === 'agent' &&
+        node.continueOnMissingResult?.maxTurns !== undefined
+          ? node.continueOnMissingResult.maxTurns
+          : workflow?.continueOnMissingResult?.maxTurns !== undefined
+            ? workflow.continueOnMissingResult.maxTurns
+            : (profile.continueOnMissingResult?.maxTurns ?? 0),
+      message:
+        (node?.kind === 'agent' && node.continueOnMissingResult?.message) ||
+        workflow?.continueOnMissingResult?.message ||
+        profile.continueOnMissingResult?.message,
+    };
+
+    const transientRetry = {
+      maxRetries:
+        node?.kind === 'agent' && node.transientRetry?.maxRetries !== undefined
+          ? node.transientRetry.maxRetries
+          : workflow?.transientRetry?.maxRetries !== undefined
+            ? workflow.transientRetry.maxRetries
+            : (profile.transientRetry?.maxRetries ?? 0),
+      windowMs:
+        node?.kind === 'agent' && node.transientRetry?.windowMs !== undefined
+          ? node.transientRetry.windowMs
+          : workflow?.transientRetry?.windowMs !== undefined
+            ? workflow.transientRetry.windowMs
+            : (profile.transientRetry?.windowMs ?? 300_000),
+      initialBackoffMs:
+        node?.kind === 'agent' &&
+        node.transientRetry?.initialBackoffMs !== undefined
+          ? node.transientRetry.initialBackoffMs
+          : workflow?.transientRetry?.initialBackoffMs !== undefined
+            ? workflow.transientRetry.initialBackoffMs
+            : (profile.transientRetry?.initialBackoffMs ?? 1000),
+    };
+
+    return { continueOnMissingResult, transientRetry };
+  }
+
+  private async execute(job: Job, adapter: HarnessAdapter, session: Session) {
+    const r = job.record;
+    const { continueOnMissingResult, transientRetry } =
+      this.resolveRecoveryPolicies(job.work, r.profile);
+
+    try {
+      while (!this.stopped && !job.abort.signal.aborted) {
+        let continuationTurns = 0;
+        let currentWork = job.work;
+        let turnResult: HarnessResult | undefined;
+        let turnSuccess = false;
+        let receivedResult = false;
+
+        try {
+          while (!this.stopped && !job.abort.signal.aborted) {
+            try {
+              r.state = 'running';
+              this.write(r);
+              turnResult = await adapter.run({
+                profile: r.profile,
+                command: r.command,
+                cwd: r.cwd,
+                sessionId: session.nativeId,
+                work: currentWork,
+                signal: job.abort.signal,
+                onSession: (id, model) => {
+                  if (job.abort.signal.aborted || this.stopped) return;
+                  session.nativeId = id;
+                  r.sessionId = id;
+                  if (model) {
+                    session.profile = { ...session.profile, model };
+                    r.profile = session.profile;
+                  }
+                  this.engine.store.put(sessionsCollection, session);
+                  this.write(r);
+                },
+                onProgress: (message) => {
+                  if (!job.abort.signal.aborted && !this.stopped)
+                    this.log(r, message);
+                },
+                request: (request) => this.request(job, request),
+              });
+              turnSuccess = true;
+              receivedResult = true;
+              break;
+            } catch (turnError) {
+              if (this.stopped || job.abort.signal.aborted) return;
+              const classification = classifyHarnessError(turnError);
+              if (classification.errorClass === 'missing_result') {
+                if (continuationTurns < continueOnMissingResult.maxTurns) {
+                  continuationTurns++;
+                  const continuationPrompt =
+                    continueOnMissingResult.message ||
+                    'Your previous turn completed without returning the required structured result envelope. Please return a JSON object with one field, "result", matching the output schema.';
+                  this.recordRecoveryEvent(r, {
+                    errorClass: 'missing_result',
+                    messageExcerpt: classification.reason.slice(0, 200),
+                    action: 'continue',
+                    at: now(),
+                  });
+                  this.log(
+                    r,
+                    `Turn ended without structured result. Sending continuation prompt (${continuationTurns}/${continueOnMissingResult.maxTurns})...`,
+                  );
+                  currentWork = { ...job.work, prompt: continuationPrompt };
+                  continue;
+                } else {
+                  this.recordRecoveryEvent(r, {
+                    errorClass: 'missing_result',
+                    messageExcerpt: classification.reason.slice(0, 200),
+                    action: 'fail',
+                    at: now(),
+                  });
+                  throw turnError;
+                }
+              }
+              throw turnError;
+            }
+          }
+
+          if (turnSuccess && turnResult) {
+            if (this.stopped || job.abort.signal.aborted) return;
+            const usage =
+              turnResult.usage &&
+              (turnResult.usageScope === 'attempt'
+                ? turnResult.usage
+                : usageDelta(
+                    turnResult.usage,
+                    session.nativeId && session.usageUncertain
+                      ? null
+                      : (session.usage ?? []),
+                  ));
+            if (turnResult.usage && turnResult.usageScope !== 'attempt') {
+              session.usage = turnResult.usage;
+              session.usageUncertain = false;
+              this.engine.store.put(sessionsCollection, session);
+            }
+            if (usage?.length)
+              this.engine.usage.report({
+                workId: job.work.id,
+                attempt: job.work.attempt,
+                token: job.work.token,
+                snapshot: { sequence: 1, final: true, models: usage },
+              });
+            // Validation and duplicate handling stay in the ordinary submission path.
+            this.engine.submit(job.work.id, job.work.token!, turnResult.output);
+            r.state = 'completed';
+            r.endedAt = now();
+            this.write(r);
+            return;
+          }
+        } catch (error) {
+          if (this.stopped || job.abort.signal.aborted) return;
+          const classification = classifyHarnessError(error);
+
+          if (error instanceof HarnessModelError || isModelRefusal(error)) {
+            this.recordRecoveryEvent(r, {
+              errorClass: 'permanent',
+              messageExcerpt: classification.reason.slice(0, 200),
+              action: 'fail',
+              at: now(),
+            });
+            try {
+              this.holdForModel(
+                job,
+                session,
+                error instanceof Error
+                  ? error
+                  : new Error(classification.reason),
+              );
+            } catch (holdError) {
+              this.interruptJob(
+                job,
+                'Could not hold the rejected model assignment: ' +
+                  errorText(holdError),
+              );
+            }
+            return;
+          }
+
+          if (classification.errorClass === 'transient') {
+            if (transientRetry.maxRetries > 0) {
+              const recentRetries = this.countTransientRetriesInWindow(
+                r,
+                transientRetry.windowMs,
+                job.work.runId,
+              );
+              if (recentRetries < transientRetry.maxRetries) {
+                const delayMs =
+                  transientRetry.initialBackoffMs * Math.pow(2, recentRetries);
+                this.recordRecoveryEvent(r, {
+                  errorClass: 'transient',
+                  messageExcerpt: classification.reason.slice(0, 200),
+                  action: 'retry',
+                  at: now(),
+                });
+                this.log(
+                  r,
+                  `Transient error: ${classification.reason.slice(0, 100)}. Retrying with backoff in ${delayMs}ms (${recentRetries + 1}/${transientRetry.maxRetries})...`,
+                );
+                await this.sleepHonoringPauses(
+                  delayMs,
+                  job.work.runId,
+                  job.abort.signal,
+                );
+                if (this.stopped || job.abort.signal.aborted) return;
+                continue; // Retry turn
+              } else {
+                // Escalate to Needs attention hold!
+                this.recordRecoveryEvent(r, {
+                  errorClass: 'transient',
+                  messageExcerpt: classification.reason.slice(0, 200),
+                  action: 'escalate',
+                  at: now(),
+                });
+                this.escalateTransientHold(
+                  job,
+                  session,
+                  r,
+                  classification.reason,
+                );
+                return;
+              }
+            } else {
+              this.recordRecoveryEvent(r, {
+                errorClass: 'transient',
+                messageExcerpt: classification.reason.slice(0, 200),
+                action: 'fail',
+                at: now(),
+              });
+            }
+          } else if (classification.errorClass === 'permanent') {
+            this.recordRecoveryEvent(r, {
+              errorClass: 'permanent',
+              messageExcerpt: classification.reason.slice(0, 200),
+              action: 'fail',
+              at: now(),
+            });
+          }
+
+          if (!receivedResult && !(error instanceof HarnessResultError)) {
+            this.interruptJob(
+              job,
+              'Harness execution was lost: ' +
+                errorText(error) +
+                '. Inspect external effects and confirm the old session stopped before retrying.',
+            );
+            return;
+          }
+
+          r.state = 'failed';
+          r.endedAt = now();
+          r.error = errorText(error);
+          this.write(r);
+          const current = this.engine.store.get<WorkRequest>(
+            'work',
+            job.work.id,
+          );
+          if (
+            current?.status === 'claimed' &&
+            current.token === job.work.token
+          ) {
+            // An explicit failed attempt uses the existing bounded failure budget.
+            try {
+              this.engine.reportFailure(job.work.id, job.work.token!, r.error);
+            } catch {}
+          }
+          session.usageUncertain = true;
+          this.engine.store.put(sessionsCollection, session);
+          return;
+        }
+      }
     } finally {
       for (const answer of job.answers.values())
         answer.reject(new Error('Execution ended'));
