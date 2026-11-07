@@ -51,6 +51,18 @@ Replace the example request with the change you want. The workflow resolves the 
 
 The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by the same process as the UI and engine. Keep that process running. Upgrading and restarting at the same address preserves your agent configuration. The dialog also provides a stdio fallback for clients that need it. See [Connect a harness](docs/connect-harness.md) for configuration and the assignment loop.
 
+## Install workflow skills
+
+To audit an older workflow or compare two versions, install the optional skills from the project where your agent works.
+
+```sh
+npx skills add dgca/interlock \
+  --skill interlock-migrate-workflows \
+  --skill interlock-compare-workflows
+```
+
+See the [harness guide](docs/connect-harness.md#install-workflow-skills) for user-wide installation, harness selection, and manual setup.
+
 ## Run agents automatically
 
 Open **Harnesses** in the sidebar to set the shared concurrent assignment limit, default Limited to 3 with an Unlimited option, and configure an installed Claude Code, Codex, or Pi executable. Configurations start disabled. Set the working directory, default permissions, model and optional thinking effort, then enable the configuration. Model pickers load native choices and accept custom IDs; Use CLI default retains the harness’s own selection. Choose it in **Workflow settings → Default Agent executor** or override it in an Agent node’s **Execution → Executor** settings, save and publish. Workflow **Agent model** and **Thinking effort** can inherit harness defaults; Agent nodes can override both. Workflow **Agent permissions** can inherit the harness default or select **Read only**, **Standard** or **Full access**. Existing workflows keep connected-agent execution unless you opt in. If a managed harness refuses the model before task actions, the run waits for you to choose a replacement and retry the assignment. See [model recovery](docs/managed-executors.md#replace-a-refused-model).
@@ -324,7 +336,6 @@ The build includes TypeScript checks. Tests cover workflow contracts, runtime be
 - [Architecture and execution semantics](docs/architecture.md)
 - [Scope and limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
-- [Load workflow skills](docs/connect-harness.md#load-workflow-skills)
 - [Create and reuse saved prompts](docs/prompts.md)
 - [Reuse configuration and credentials](docs/variables.md)
 - [Agent workflow operations, original-input and node-output bindings, and portable bundles](docs/agent-workflows.md)
