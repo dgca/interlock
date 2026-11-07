@@ -38,6 +38,8 @@ Run commands: runs, run, run-history, work, claim, submit, fail, renew, assignme
 Usage and budget commands: usage, report-usage, budget, set-budget
 Local harness configuration and execution: executors
 Workflow variables: variables <read|manage> <json|@file> [--value-stdin]
+Workflow schedules: schedules <read|manage> <json|@file>
+Named pause holds: pause, pause-holds, resume
 Run 'interlock commands' for argument syntax.
 
 Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL, INTERLOCK_SECRET_KEY_FILE
@@ -59,6 +61,10 @@ Variable encryption keys are held separately from the database. Back up keys sep
       'commands',
       'executors',
       'variables',
+      'schedules',
+      'pause',
+      'resume',
+      'pause-holds',
       'workflows',
       'workflow',
       'starters',
