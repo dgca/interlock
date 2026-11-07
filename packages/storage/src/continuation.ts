@@ -18,6 +18,7 @@ export type ExecutionMetadata = Omit<
   runId: string;
   hasOutput: boolean;
   check?: Omit<NonNullable<NodeExecution['check']>, 'output'>;
+  checkSummary?: { output: string; truncated: number };
 };
 export type WorkMetadata = Pick<
   WorkRequest,
@@ -29,6 +30,7 @@ export type WorkMetadata = Pick<
   | 'executorEffortSource'
   | 'managedExecution'
   | 'id'
+  | 'createdAt'
   | 'runId'
   | 'executionId'
   | 'nodeId'
@@ -89,7 +91,10 @@ export function continuationState(db: DatabaseSync, id: string) {
       .prepare(
         `${tree}
     SELECT json_set(json_remove(e.value, '$.input', '$.output', '$.result', '$.originalInput', '$.request', '$.retryChildRunIds', '$.check.output'),
-      '$.runId', d.id, '$.hasOutput', json_type(e.value, '$.output') IS NOT NULL) AS value
+      '$.runId', d.id, '$.hasOutput', json_type(e.value, '$.output') IS NOT NULL,
+      '$.checkSummary', CASE WHEN json_type(e.value, '$.check.output') IS NOT NULL THEN json_object(
+        'output', substr(json_quote(json_extract(e.value, '$.check.output')), 1, 512),
+        'truncated', length(json_quote(json_extract(e.value, '$.check.output'))) > 512) END) AS value
     FROM tree JOIN documents d ON d.collection = 'runs' AND d.id = tree.id, json_each(d.value, '$.executions') e
     ORDER BY d.rowid, CAST(e.key AS INTEGER)
   `,

@@ -1,6 +1,7 @@
 import { BackgroundScripts, UncertainScript } from './backgroundScripts.js';
 import { scriptOperationSchema, type ScriptOperation } from '@interlock/core';
 import { runAttention } from './runAttention.js';
+import { projectRun } from './runProjection.js';
 import { WorkResources } from './workResources.js';
 import { ExecutorManager } from './executors/manager.js';
 import { resolveAndValidateCwd } from './workingDirectory.js';
@@ -339,6 +340,7 @@ export class Engine {
       type,
       message: text,
       at: now(),
+      ...projectRun(this.store, run.id, undefined, run),
     });
     queueMicrotask(() => this.listeners.forEach((listener) => listener()));
   }
@@ -1109,6 +1111,9 @@ export class Engine {
   runAttention() {
     return runAttention(this.store);
   }
+  projectRun(id: string) {
+    return projectRun(this.store, id);
+  }
   inspect(id: string) {
     const run = this.run(id);
     const handledFailure = this.handledWorkflowFailure(run);
@@ -1138,7 +1143,7 @@ export class Engine {
     }
     const chain = this.chains.read(run);
     return {
-      run,
+      run: { ...run, ...this.projectRun(id) },
       externalInputHeldByRunId: this.store.externalInputHoldOwner(run.id),
       ...(handledFailure ? { handledFailure } : {}),
       ...(chain
@@ -1150,9 +1155,9 @@ export class Engine {
           }
         : {}),
       counterpartRunId: this.testbench.counterpart(run),
-      descendants: allRuns.filter(
-        (child) => child.id !== id && ids.has(child.id),
-      ),
+      descendants: allRuns
+        .filter((child) => child.id !== id && ids.has(child.id))
+        .map((child) => ({ ...child, ...this.projectRun(child.id) })),
       descendantWork: this.store
         .work()
         .filter((work) => ids.has(work.runId))

@@ -14,6 +14,7 @@ Call MCP `start_run` with the task's original input and a stable key for this at
   "externalTask": {
     "system": "github",
     "id": "dgca/interlock#181",
+    "title": "Review issue 181",
     "url": "https://github.com/dgca/interlock/issues/181"
   }
 }
@@ -43,7 +44,7 @@ The initial run, selected version, prompt capture, chain state, correlation, sta
 
 ## Find linked runs
 
-`externalTask` is optional and independent of `requestId`. It contains a non-secret `system` of 1–64 characters, stable `id` of 1–200 characters and optional HTTP(S) `url` up to 2,000 characters. System, ID and URL trim surrounding whitespace; identity comparisons remain case-sensitive. Links cannot embed credentials. Do not put tokens, secrets or authority in these fields.
+`externalTask` is optional and independent of `requestId`. It contains a non-secret `system` of 1–64 characters, stable `id` of 1–200 characters, optional `title` of 1–200 characters, and optional HTTP(S) `url` up to 2,000 characters. All fields trim surrounding whitespace; identity comparisons remain case-sensitive. Links cannot embed credentials. Do not put tokens, secrets or authority in these fields. Title and URL participate in the start fingerprint, so keep them unchanged on redelivery. Task filters accept only system and ID.
 
 Correlation never changes original task input, updates a board, grants permission, or deduplicates a start by itself. It is not copied into portable workflow bundles. Existing full run inspection and briefings include it; compact mutation responses expose it when present.
 

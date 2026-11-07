@@ -3,6 +3,7 @@ import {
   Placeholder,
 } from '../../components/LoadingSkeleton/LoadingSkeleton';
 import { attentionText, waitReasonText, type RunTab } from './runAttention';
+import { runProjectionText } from './runProjectionText';
 import { Button, Group, Tabs, Text } from '@mantine/core';
 import { useEffect, useRef, useState } from 'react';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
@@ -190,6 +191,10 @@ export function RunList({
                     {r.attention ? (
                       <small className="run-attention">
                         {attentionText(r.attention)}
+                      </small>
+                    ) : r.actor ? (
+                      <small className="run-wait-reason">
+                        {runProjectionText(r)}
                       </small>
                     ) : r.waitReason ? (
                       <small className="run-wait-reason">

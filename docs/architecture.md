@@ -448,6 +448,12 @@ MCP `start_run` and `submit_result` default to `detail: "summary"`; `list_work` 
 
 ## Live run inspection
 
+`runtime/runProjection.ts` computes the shared `stage`, `waiting`, and `actor` fields for run lists, inspection, briefings, compact mutations, and new event snapshots. Stage selects the deepest active labeled node through current waited child links, including Batch items. Detached and terminal children do not roll up. Ties use latest execution start, then ascending run and node IDs. Unlabeled children preserve an active ancestor's label; terminal runs have null stage and waiting, with engine actor.
+
+Waiting selects a leaf that can progress before an intervention-blocked leaf, with agent before engine, then the same depth/time/ID order. Person is returned only when every active leaf requires intervention. External input can be delivered by an integration and therefore uses agent, not an inferred person. Managed dispatch and native execution use engine; managed requests, recovery, holds, budget gates, and uncertain resources use person. Existing `waitReason` remains compatible. Waiting timestamps derive from persisted execution, assignment, hold or budget times; reads never reset them. For resources the assignment creation time is the available persisted wait anchor. Event snapshots describe state when recorded and do not rewrite earlier events.
+
+Storage's continuation projection omits operation payloads and supplies only a 512-character JSON-text preview of the latest polling output, with a truncation marker. `waiting.detail.lastCheck` adds that preview and bounded error text. The shared contract reserves `pause` and `admission_queue`; this baseline has neither lifecycle and never emits those kinds. Lifecycle event triggers remain planned.
+
 Optional Agent `context.tier` is captured with assignments and retained in compact discovery and continuation. Core defines the fixed vocabulary and optional claim `modelSelection`; runtime captures requested and declared selection on each new usage-attempt receipt. Usage model reports remain separate. No model is selected or verified by Interlock. See [model tiers](model-tiers.md).
 
 The run inspector shows a live summary above the published graph. Unclaimed Agent assignments show Waiting for an agent; claimed assignments show Agent working. A claimed assignment indicates ownership, not reported internal progress. Running, waiting, completed, failed, and unstarted steps have distinct canvas indicators.

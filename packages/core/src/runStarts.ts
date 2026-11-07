@@ -15,6 +15,7 @@ export const externalTaskIdentitySchema = z
   .strict();
 export const externalTaskSchema = externalTaskIdentitySchema
   .extend({
+    title: z.string().trim().min(1).max(200).optional(),
     url: z
       .string()
       .trim()

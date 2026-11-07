@@ -4,6 +4,8 @@ Interlock is a local workflow editor and engine for AI agents. Define a procedur
 
 Build workflows visually or edit their JSON definitions. Interlock validates inputs and results, runs scripts, and stores progress in SQLite. A connected agent can handle assignments through the Model Context Protocol (MCP), or Interlock can launch a configured Claude Code, Codex, or Pi harness automatically.
 
+Optional node stages and shared run waiting/actor fields support board projections and diagnostics. Add a readable title to external task correlation when starting a run. See [run projections](docs/agent-workflows.md#project-run-stages-and-waiting).
+
 ## Install and run
 
 Requires **Node.js 24.13 or later** on **macOS or Linux**. Bash script nodes also require `/bin/bash`.

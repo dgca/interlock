@@ -29,6 +29,7 @@ import { manualClaims } from './manualClaims';
 import styles from './RunInspector.module.css';
 import { ComparisonContext } from './ComparisonContext';
 import { RunUsage } from './RunUsage';
+import { runProjectionText } from './runProjectionText';
 type Detail = Awaited<ReturnType<typeof api.runs.get.query>> & {
   availableWork: Awaited<ReturnType<typeof api.work.list.query>>;
 };
@@ -361,6 +362,7 @@ export function RunInspector({
         {data.handledFailure && (
           <span>Failure handled by parent recovery.</span>
         )}
+        <span>{runProjectionText(run)}</span>
         {progress.detail && <span>{progress.detail}</span>}
         {retryRequested && <span>Retry requested.</span>}
         {attention.length > 0 && (

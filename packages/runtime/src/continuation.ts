@@ -1,4 +1,5 @@
 import { resourceCollection, resourceOwner } from './workResources.js';
+import { projectRun } from './runProjection.js';
 import type { ResourceReservation } from '@interlock/core';
 import { randomUUID } from 'node:crypto';
 import { fingerprint } from './versionIdentity.js';
@@ -52,6 +53,9 @@ export class Continuation {
       ok: true,
       runId: snapshot.run.id,
       runStatus: snapshot.run.status,
+      stage: snapshot.run.stage,
+      waiting: snapshot.run.waiting,
+      actor: snapshot.run.actor,
       ...(snapshot.run.startRequestId !== undefined
         ? { startRequestId: snapshot.run.startRequestId }
         : {}),
@@ -285,6 +289,7 @@ export class Continuation {
       });
     const summaries = state.runs.map((run) => ({
       ...run,
+      ...projectRun(this.store, run.id, state),
       definitionAvailable: Boolean(
         this.store.getVersion(run.workflowId, run.version),
       ),

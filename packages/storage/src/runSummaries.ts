@@ -7,7 +7,7 @@ const tabFilter = { active, attention, history: `NOT (${active})` };
 const currentStep = "json_extract(r.value, '$.executions[#-1].kind')";
 
 type SummaryRow = {
-  [Key in keyof RunSummary]-?: Key extends 'comparison'
+  [Key in keyof RunSummary]-?: Key extends 'comparison' | 'externalTask'
     ? string | null
     : undefined extends RunSummary[Key]
       ? Exclude<RunSummary[Key], undefined> | null
@@ -73,6 +73,8 @@ export function runSummaries(
       json_extract(r.value, '$.parentMode') AS parentMode,
       json_extract(r.value, '$.parentExecutionId') AS parentExecutionId,
       json_extract(r.value, '$.comparison') AS comparison,
+      json_extract(r.value, '$.externalTask') AS externalTask,
+      json_extract(r.value, '$.startRequestId') AS startRequestId,
       coalesce(json_array_length(r.value, '$.executions'), 0) AS executionCount,
       CASE WHEN json_extract(r.value, '$.parentMode') = 'detached' THEN
         (SELECT json_extract(parent.value, '$.workflowName') FROM documents parent
@@ -114,6 +116,8 @@ export function runSummaries(
       parentExecutionId,
       parentWorkflowName,
       comparison,
+      externalTask,
+      startRequestId,
       waitReason,
       ...row
     }) => ({
@@ -124,6 +128,10 @@ export function runSummaries(
       ...(parentWorkflowName === null ? {} : { parentWorkflowName }),
       ...(waitReason === null ? {} : { waitReason }),
       ...(comparison === null ? {} : { comparison: JSON.parse(comparison) }),
+      ...(externalTask === null
+        ? {}
+        : { externalTask: JSON.parse(externalTask) }),
+      ...(startRequestId === null ? {} : { startRequestId }),
     }),
   );
   const total = query.tab ? counts[query.tab] : counts.active + counts.history;
