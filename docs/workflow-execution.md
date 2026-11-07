@@ -22,6 +22,48 @@ Wait for result is the default, including for older definitions that omit `mode`
 
 Replace the workflow ID and version with an existing published version. Connect the node's ordinary Out handle to its next step. Input bindings, ownership rules, pinned-version selection, portable bundles, and cascade publication work in both modes.
 
+## Move a run to a newer version
+
+Runs use `versionPolicy: "pinned"` by default. Publishing a fix leaves those runs unchanged. Set `versionPolicy: "latest-compatible"` when starting a run, or update the policy on an existing run, to check for a newer version before each new node execution.
+
+A move uses the latest published version only when that version contains the next node in the same Batch scope and accepts its resolved input. A missing node, incompatible contract, changed Batch ancestry, exhausted target step allowance, or missing captured dependency leaves the run on its current version. Inspection exposes the blocker; the old path can still continue and try again at its next boundary. There is no fallback search through intermediate versions.
+
+An available Agent assignment already belongs to an active execution. Available work, claims, Scripts, Fetch calls, Waits, input waits, active Batches, and waited child calls finish with the definition they started on. Their prompts, contracts, result routing, and output mappings stay unchanged. The run can move only before the next execution is created. Enabling a policy does not replace existing work.
+
+For an explicit move, preview an exact newer retained version, review its blockers, then apply with the returned confirmation and an operator reason. Apply rechecks the same state in one transaction. A stale preview, blocker, or failed write changes nothing. To keep a boundary available for an operator move, add a named workflow pause before the in-flight execution finishes, then remove that exact pause after applying. A pause does not make an active execution eligible for replacement.
+
+Version inspection returns the current policy and revision, the latest compatibility blocker, and paged change history. Each change records its original version, target version, time, and reason. Every new execution records its own `version`; executions created before this field existed use their run's original version. Policy writes require the revision returned by inspection.
+
+### Operate through CLI, MCP, and API
+
+The inspector's **Run version** dialog shows the policy, **Preview move**, blockers, and **Apply version N**. New-run controls also offer **Version policy**.
+
+CLI uses one JSON request with an `action`:
+
+```sh
+interlock start WORKFLOW_ID '{}' --version-policy latest-compatible
+interlock run-version '{"action":"read","runId":"RUN_ID","limit":20}'
+interlock run-version '{"action":"policy","runId":"RUN_ID","expectedRevision":0,"policy":"latest-compatible"}'
+interlock run-version '{"action":"preview","runId":"RUN_ID","version":3}'
+interlock run-version '{"action":"apply","runId":"RUN_ID","version":3,"confirmation":"PREVIEW_CONFIRMATION","reason":"Apply published fix"}'
+```
+
+Use the revision from `read` for policy writes and the confirmation from the exact `preview` for apply. Add `"recapturePrompts":true` to both preview and apply only when you intend to replace the saved prompt capture. Do not repeat start to inspect an existing run.
+
+MCP `manage_run_version` accepts those same actions inside `request`. MCP `start_run` accepts `versionPolicy`. The shared API exposes `runs.versionPolicy`, `runs.setVersionPolicy`, `runs.previewVersionMove`, and `runs.applyVersionMove`. Read history defaults to 20 entries and accepts a maximum of 100 with an offset; bodies and full prior definitions are omitted.
+
+### Captures and execution scope
+
+A move preserves the run's saved prompt capture, protected variable revisions, model-alias captures, budget history, and continuity bindings. A new version that needs a prompt, variable, or alias absent from that capture is blocked. Explicit `recapturePrompts: true` selects the target version's publish-pinned prompt revisions, or current revisions when that version has no pins. It does not recapture variables or model aliases. Existing work is never rewritten.
+
+A Batch parent cannot move during its active Batch execution. Item dispatch uses that execution's graph and inherits its captures and current policy. Item runs have independent version bindings and may accept a compatible upgrade at their own valid boundaries, including before their first step, while retaining their Batch identity. Future Batches created after a parent move use its new version.
+
+Invoked waited and detached workflows start independently with their own pinned policy and captures. A parent move does not change an existing child. Calls created after the move use the child version pinned by the new parent definition. Cancellation and detached lifetime boundaries retain their existing meaning.
+
+Continue-as-new successors inherit the predecessor's current version, policy, and captures. Upgrading a run cannot introduce, remove, or change its chain configuration or reset its cap. Earlier budget consumption still applies. Continuity groups remain local to each run. Comparison runs cannot move to another version.
+
+See [continue as new](continue-as-new.md) and [version cleanup](version-cleanup.md) for chain and retention behavior.
+
 ## Recover a waited failure
 
 Wait for result can opt into `onFailure:"route"` with its configured success edges and a failed edge. A failed child or a successful result rejected by the caller's output contract sends `{input,error,output}` through Failed, including `error.child` run/version/execution references. The child remains inspectable. Cancellation, caller input/dispatch errors and persistence failures stay terminal. Defaults remain unchanged; detached calls cannot route failures. See [Workflow failure routes](failure-routes.md#waited-workflow-calls).

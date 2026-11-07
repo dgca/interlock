@@ -24,6 +24,9 @@ export class RunStarts {
         version: q.version ?? null,
         budget: q.budget ?? null,
         externalTask: q.externalTask ?? null,
+        ...(q.versionPolicy !== undefined
+          ? { versionPolicy: q.versionPolicy }
+          : {}),
         ...(q.priority !== undefined ? { priority: q.priority } : {}),
         ...(q.after !== undefined ? { after: q.after } : {}),
         ...(q.onActiveExternalTask !== undefined

@@ -31,6 +31,7 @@ import { manualClaims } from './manualClaims';
 import styles from './RunInspector.module.css';
 import { ComparisonContext } from './ComparisonContext';
 import { RunUsage } from './RunUsage';
+import { RunVersionDialog } from './RunVersionDialog';
 import { runProjectionText } from './runProjectionText';
 const stallLabels = {
   unclaimedStallMs: 'Unclaimed stall',
@@ -73,6 +74,7 @@ export function RunInspector({
   const [retrying, setRetrying] = useState(false);
   const [retryRequested, setRetryRequested] = useState(false);
   const [retryError, setRetryError] = useState('');
+  const [versionDialog, setVersionDialog] = useState(false);
   const [returnMenuFocus, setReturnMenuFocus] = useState(true);
   const [data, setData] = useState<Detail>(),
     [error, setError] = useState(''),
@@ -300,6 +302,7 @@ export function RunInspector({
           }
         />
         <div className="actions">
+          <Button onClick={() => setVersionDialog(true)}>Run version</Button>
           {run.chain?.previousRunId && (
             <Button onClick={() => onOpen(run.chain!.previousRunId!)}>
               Previous run
@@ -367,6 +370,16 @@ export function RunInspector({
           </Button>
         </div>
       </header>
+      {versionDialog && (
+        <RunVersionDialog
+          key={id}
+          runId={id}
+          workflowId={run.workflowId}
+          active={['queued', 'running', 'waiting'].includes(run.status)}
+          onClose={() => setVersionDialog(false)}
+          onChanged={refresh}
+        />
+      )}
       <PauseBanner workflowId={run.workflowId} run />
       <div className={styles.liveSummary} role="status" aria-live="polite">
         <strong>
@@ -809,7 +822,7 @@ export function RunInspector({
                 <div className={styles.stepContent}>
                   <strong>{e.label}</strong>
                   <small>
-                    {nodeKindLabel(e.kind)} ·{' '}
+                    {nodeKindLabel(e.kind)} · v{e.version ?? run.version} ·{' '}
                     {new Date(e.startedAt).toLocaleTimeString()}
                   </small>
                 </div>

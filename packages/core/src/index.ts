@@ -25,6 +25,7 @@ export { matchRouting } from './resultRouting.js';
 export * from './simulation.js';
 export * from './runChains.js';
 export * from './runStarts.js';
+export * from './runVersions.js';
 import {
   startRequestIdSchema,
   externalTaskIdentitySchema,
@@ -663,6 +664,8 @@ export const runSummaryQuerySchema = runQuerySchema
 export type RunSummaryQuery = z.infer<typeof runSummaryQuerySchema>;
 export interface NodeExecution {
   id: string;
+  /** Published definition used for this visit. Legacy visits use the run's original version. */
+  version?: number;
   nodeId: string;
   kind: WorkflowNode['kind'];
   label: string;
@@ -704,6 +707,10 @@ export interface PollCheckResult {
   error?: string;
 }
 export interface Run {
+  versionPolicy?: import('./runVersions.js').RunVersionPolicy;
+  versionRevision?: number;
+  versionBlocker?: import('./runVersions.js').RunVersionBlocker;
+  versionChanges?: import('./runVersions.js').RunVersionChange[];
   /** Trigger identities inherited by all causal descendants and continuations. */
   triggerChain?: string[];
   schedule?: {

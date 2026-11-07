@@ -168,7 +168,7 @@ Failed executions can be retried from the inspector. Retrying a failed Batch pre
 
 Agents can request the editor's Dagre Tidy layout during draft creation or updates with `layout: "tidy"`. Omitting it preserves the supplied positions. See [arrange drafts during authoring](docs/authoring-layout.md) for MCP, shared API, and CLI examples.
 
-Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library and from each card's menu in **Child workflows**. Inside a workflow, the three-dot menu beside **Run** contains **Workflow settings** and **Delete workflow**. A workflow with owned children must have them removed first. The dialog links to **Child workflows** when they block deletion. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows also block deletion. Obsolete published callers can be removed through [explicit version cleanup](docs/version-cleanup.md) after a preview and informed agreement. Cleanup keeps run records but removes their graph and retry capability until original definitions are explicitly restored from a backup.
+Archive a workflow to move it out of the active library, or restore it later. **Delete** is available from each workflow's menu in the library and from each card's menu in **Child workflows**. Inside a workflow, the three-dot menu beside **Run** contains **Workflow settings** and **Delete workflow**. A workflow with owned children must have them removed first. The dialog links to **Child workflows** when they block deletion. A confirmation dialog precedes removal of the workflow, its published versions, and run history. Active executions and references from other workflows also block deletion. Obsolete published callers can be removed through [explicit version cleanup](docs/version-cleanup.md) after a preview and informed agreement. Cleanup keeps run records. Removing a run's current bound definition removes its graph and retry capability until the original definition is restored from backup. Removing only an earlier execution's definition keeps the current graph available.
 
 ### Waits and unanswered assignments
 
@@ -186,7 +186,9 @@ Workflow-level routes can loop back to an upstream node other than Entry. The sa
 
 `maxSteps` allows 2 through 1000 steps per run and defaults to 100. Entry, Exit, and every node visit count, including explicit retries that create a new execution. A Batch counts once in its parent; each item has its own budget. For example, 200 items with three steps each fit a three-step item budget, with a separate three-step parent path of Entry → Batch → Exit. The independent Batch `maxItems` limit defaults to 200.
 
-Standalone recurring Agent workflows can use an Exit with `continueAsNew:{maxRuns:100}` to pass a checkpoint into the same published version with fresh step history. The chain retains captured prompts and budget consumption. Inspect lineage and stop it from any member. See [continue as new](docs/continue-as-new.md).
+Run versions stay pinned by default. Opt into [compatible version upgrades](docs/workflow-execution.md#move-a-run-to-a-newer-version) to apply new publications before new steps. Explicit moves preview compatibility blockers and retain timestamped reasons; captured assignments finish under their original definition.
+
+Standalone recurring Agent workflows can use an Exit with `continueAsNew:{maxRuns:100}` to pass a checkpoint into the predecessor's current published version with fresh step history. Runs remain pinned by default; explicit upgrades carry into the successor without resetting the chain cap. The chain retains captured prompts and budget consumption. Inspect lineage and stop it from any member. See [continue as new](docs/continue-as-new.md).
 
 ### Retry a task start safely
 
@@ -395,7 +397,7 @@ The cascade follows references in each workflow's latest published definition, i
 
 Dependent drafts must match their latest published definitions. Publish or discard any definition edits before cascading. A dependency cycle or any validation failure rejects the whole operation, including publication of the requested workflow. Successful cascades update dependent drafts and their revisions, so an editor holding an older draft must reload before saving.
 
-Existing versions and runs retain their exact pins. New runs use the new versions by default; starting an explicit older version still uses its original dependencies. Contracts are checked during execution, so test changed child behavior before cascading it to callers.
+Existing versions retain their exact pins. Runs remain pinned by default; an opted-in [run version policy](docs/workflow-execution.md#move-a-run-to-a-newer-version) can accept the new parent version at a safe boundary. New runs use the new versions by default; starting an explicit older version still uses its original dependencies. Contracts are checked during execution, so test changed child behavior before cascading it to callers.
 
 Agent executors can [check candidate results before submission](docs/result-preflight.md) without renewing claims or advancing runs. Submission rechecks live state and returns bounded correction diagnostics when a result is rejected.
 

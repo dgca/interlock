@@ -1,7 +1,12 @@
 import { NativeSelect, Textarea } from '@mantine/core';
 import { useEffect, useState, useRef } from 'react';
 import { Play } from 'lucide-react';
-import type { Json, Workflow, WorkflowVersion } from '@interlock/core';
+import type {
+  Json,
+  Workflow,
+  WorkflowVersion,
+  RunVersionPolicy,
+} from '@interlock/core';
 import { Modal } from '../../components/Modal/Modal';
 import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
 import {
@@ -39,6 +44,8 @@ export function RunDialog({
 }) {
   const fieldsRef = useRef<HTMLDivElement>(null);
   const [raw, setRaw] = useState(false);
+  const [versionPolicy, setVersionPolicy] =
+    useState<RunVersionPolicy>('pinned');
   const [versions, setVersions] = useState<WorkflowVersion[]>([]),
     [version, setVersion] = useState(workflow.latestVersion),
     [input, setInput] = useState('{}'),
@@ -112,6 +119,22 @@ export function RunDialog({
                 ))}
             </NativeSelect>
 
+            <NativeSelect
+              mb="md"
+              label="Version policy"
+              value={versionPolicy}
+              onChange={(event) =>
+                setVersionPolicy(event.currentTarget.value as RunVersionPolicy)
+              }
+              data={[
+                { value: 'pinned', label: 'Keep the selected version' },
+                {
+                  value: 'latest-compatible',
+                  label: 'Use newer compatible versions',
+                },
+              ]}
+            />
+
             {canForm && (
               <div className="actions" style={{ marginBottom: 16 }}>
                 <Button variant="ghost" onClick={() => setRaw(!raw)}>
@@ -173,6 +196,7 @@ export function RunDialog({
               const result = await api.runs.start.mutate({
                 workflowId: workflow.id,
                 version,
+                versionPolicy,
                 input: JSON.parse(input),
               });
               onStarted(result.run.id);
