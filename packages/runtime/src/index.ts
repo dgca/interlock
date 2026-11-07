@@ -1,3 +1,4 @@
+import { Stalls } from './stalls.js';
 import { WorkflowTriggers } from './workflowTriggers.js';
 import { PauseHolds } from './pauseHolds.js';
 import { BackgroundScripts, UncertainScript } from './backgroundScripts.js';
@@ -152,6 +153,7 @@ class ResultProcessingError extends InterlockError {
   }
 }
 export class Engine {
+  readonly stalls: Stalls;
   readonly triggers: WorkflowTriggers;
   readonly history: RunHistory;
   readonly executors: ExecutorManager;
@@ -189,6 +191,9 @@ export class Engine {
       ) => Promise<Json>;
     } = {},
   ) {
+    this.stalls = new Stalls(store, (run, type, message) =>
+      this.event(run, type, message),
+    );
     this.pauses = new PauseHolds(store, (run, hold) =>
       this.event(
         run,
@@ -394,6 +399,12 @@ export class Engine {
     };
   }
   private event(run: Run, type: string, text: string) {
+    if (type === 'external_input.held' || type === 'external_input.released')
+      this.stalls.hold(
+        `input:${run.id}`,
+        run.id,
+        type === 'external_input.held',
+      );
     this.store.put('events', {
       id: randomUUID(),
       runId: run.id,
@@ -857,6 +868,8 @@ export class Engine {
       for (const collection of [
         'externalInputValues',
         'externalInputReceipts',
+        'stalls',
+        'activeClockHolds',
       ]) {
         for (const record of this.store.forRuns<{ id: string }>(
           collection,
@@ -1325,6 +1338,7 @@ export class Engine {
               : {}),
           };
         }),
+      stalls: this.stalls.inspect(id),
       events: this.store.events(id),
       children: this.store.runs().filter((r) => r.parentRunId === id),
     };
@@ -1986,6 +2000,7 @@ export class Engine {
                 failureCount: 0,
                 leaseExpiryCount: 0,
               }),
+          maxExecutionMs: node.maxExecutionMs,
           leaseSeconds: node.leaseSeconds,
           availableUntil:
             node.unclaimedTimeoutMs === undefined
@@ -2314,7 +2329,18 @@ export class Engine {
       this.budgets.refresh();
       this.resources.refresh();
       for (const work of this.store.work('claimed'))
-        if (Date.parse(work.leaseUntil!) <= Date.now()) {
+        if (this.stalls.deadlineExpired(work)) {
+          this.event(
+            this.run(work.runId),
+            'work.execution_timed_out',
+            `${work.label}: maximum active execution duration reached`,
+          );
+          this.releaseFailure(
+            work,
+            'Maximum active execution duration reached',
+            'deadline',
+          );
+        } else if (Date.parse(work.leaseUntil!) <= Date.now()) {
           work.expiredClaims = [
             ...(work.expiredClaims ?? []),
             {
@@ -2494,6 +2520,7 @@ export class Engine {
           this.pump();
         });
     }
+    this.store.transaction(() => this.stalls.tick());
     this.trials.pump(new Set(this.localJobs.keys()));
   }
   private finishPollTimeout(
@@ -2991,6 +3018,9 @@ export class Engine {
       leaseExpiryCount: work.leaseExpiryCount,
       ...(work.holdRevision ? { holdRevision: work.holdRevision } : {}),
       ...(work.heldClaimCount ? { heldClaimCount: work.heldClaimCount } : {}),
+      maxExecutionMs: work.maxExecutionMs,
+      claimedAt: work.claimedAt,
+      lastActivityAt: work.lastActivityAt,
       leaseSeconds: work.leaseSeconds,
       availableUntil: work.availableUntil,
     }));
@@ -3046,7 +3076,7 @@ export class Engine {
         ? undefined
         : modelSelectionSchema.parse(worker.modelSelection);
     this.pump();
-    return this.store.transaction(() => {
+    const claimed = this.store.transaction(() => {
       const work = this.store.get<WorkRequest>('work', workId);
       if (!work || work.status !== 'available')
         throw new InterlockError('Work is not available');
@@ -3108,6 +3138,9 @@ export class Engine {
       work.status = 'claimed';
       work.availableUntil = undefined;
       work.attempt++;
+      work.claimedAt = now();
+      work.lastActivityAt = work.claimedAt;
+      work.idleNudge = undefined;
       work.workerId = worker.workerId;
       work.modelSelection = modelSelection;
       this.contextGroups.claimed(work, worker.session);
@@ -3117,6 +3150,7 @@ export class Engine {
         Date.now() + work.claimLeaseSeconds * 1000,
       ).toISOString();
       this.resources.acquire(work);
+      this.executors.claimed(work);
       if (work.resolvedCwd) {
         const run = this.run(work.runId);
         const execution = run.executions.find((e) => e.id === work.executionId);
@@ -3136,6 +3170,8 @@ export class Engine {
       this.resources.refresh();
       return this.describeWork(work);
     });
+    this.executors.claimCommitted(workId);
+    return claimed;
   }
   private owned(id: string, token: string) {
     const work = this.store.get<WorkRequest>('work', id);
@@ -3148,6 +3184,8 @@ export class Engine {
     if (work.status === 'completed') return work;
     if (work.status !== 'claimed')
       throw new InterlockError('Claim no longer active');
+    if (this.stalls.deadlineExpired(work))
+      throw new ExpiredClaimError('Maximum active execution duration reached');
     if (Date.parse(work.leaseUntil!) <= Date.now())
       throw new ExpiredClaimError('Claim expired');
     return work;
@@ -3178,6 +3216,8 @@ export class Engine {
     return this.withClaim(id, token, (work) => {
       if (work.status !== 'claimed')
         throw new InterlockError('Work already completed');
+      work.lastActivityAt = now();
+      work.idleNudge = undefined;
       work.leaseUntil = new Date(
         Date.now() + (leaseSeconds ?? work.claimLeaseSeconds ?? 300) * 1000,
       ).toISOString();
@@ -3229,7 +3269,11 @@ export class Engine {
           : 'completed_conflict',
       );
     if (work.status !== 'claimed') return report('inactive');
-    if (Date.parse(work.leaseUntil!) <= Date.now()) return report('expired');
+    if (
+      Date.parse(work.leaseUntil!) <= Date.now() ||
+      this.stalls.deadlineExpired(work)
+    )
+      return report('expired');
     const diagnostics = checkAgentResult(
       work.outputSchema,
       work.resultRules,
@@ -3329,9 +3373,9 @@ export class Engine {
   private releaseFailure(
     work: WorkRequest,
     error: string,
-    reason: 'failure' | 'expiry' = 'failure',
+    reason: 'failure' | 'expiry' | 'deadline' = 'failure',
   ) {
-    this.resources.end(work, reason);
+    this.resources.end(work, reason === 'deadline' ? 'expiry' : reason);
     this.usage.ended(work, reason === 'expiry' ? 'expired' : 'failed');
     if (reason === 'expiry' && work.trialEnvironment) {
       work.status = 'failed';
@@ -3372,6 +3416,20 @@ export class Engine {
     work.token = undefined;
     work.leaseUntil = undefined;
     const run = this.run(work.runId);
+    if (reason === 'deadline' && work.trialEnvironment) {
+      const interrupted = this.trials.interrupt(run);
+      work.status = 'failed';
+      this.store.put('work', work);
+      this.fail(
+        run,
+        run.executions.find((e) => e.id === work.executionId)!,
+        error,
+      );
+      for (const id of interrupted) if (id !== run.id) this.cancelTree(id);
+      this.executors.deadlineRevoked(work);
+      return;
+    }
+
     if (exhausted) {
       work.status = 'failed';
       this.fail(
@@ -3381,6 +3439,8 @@ export class Engine {
       );
     } else {
       work.status = 'available';
+      work.availableSince = now();
+      work.lastActivityAt = undefined;
       const node = this.definition(run).nodes.find((n) => n.id === work.nodeId);
       work.availableUntil =
         node?.kind === 'agent' && node.unclaimedTimeoutMs !== undefined
@@ -3389,6 +3449,7 @@ export class Engine {
       this.event(run, 'work.retry', `${work.label}: ${error}`);
     }
     this.store.put('work', work);
+    if (reason === 'deadline') this.executors.deadlineRevoked(work);
   }
   reportFailure(id: string, token: string, error: string) {
     const runId = this.withClaim(id, token, (work) => {

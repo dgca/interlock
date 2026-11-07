@@ -195,7 +195,7 @@ When `list_work` is empty, use `get_run_briefing` for current blockers, claimed 
 
 The server advances timers without a connected agent. For a long delay, report the pending deadline and keep the run ID for later continuation. Avoid continuous polling or a new run. Do not fabricate an agent result to bypass a wait.
 
-Claim an assignment only when ready to perform it. Claiming stops its unclaimed timer, including for manual completion. If the deadline passes before the claim, inspect the existing run and rediscover work. The old assignment may be `timed_out` and its Timeout branch may already be running. A renewed claim has no total execution ceiling; an unclaimed timeout does not enforce a deadline for a person's answer after claiming.
+Claim an assignment only when ready to perform it. Claiming stops its unclaimed timer, including for manual completion. If the deadline passes before the claim, inspect the existing run and rediscover work. The old assignment may be `timed_out` and its Timeout branch may already be running. Optional Agent `maxExecutionMs` bounds active execution independently of renewal; an unclaimed timeout does not enforce a deadline for a person's answer after claiming.
 
 ## Saved prompts
 

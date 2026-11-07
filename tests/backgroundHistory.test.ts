@@ -135,7 +135,7 @@ it('backfills scheduling metadata during upgrade without changing comparison doc
       }),
     );
     const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
-    expect(migrate(db, ':memory:')).toEqual({ from: 4, to: 10 });
+    expect(migrate(db, ':memory:')).toEqual({ from: 4, to: 11 });
     expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
       before,
     );

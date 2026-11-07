@@ -36,6 +36,8 @@ const scoped = [
   'events',
   'usageAttempts',
   'workHolds',
+  'stalls',
+  'activeClockHolds',
   'externalInputValues',
   'externalInputReceipts',
   'contextGroups',

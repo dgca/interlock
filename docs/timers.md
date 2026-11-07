@@ -112,7 +112,7 @@ A timed Agent requires two outgoing edges:
 
 The editor labels these handles **Result** and **Timeout**. Result carries the submitted answer and enforces the Agent output contract. Timeout carries the original input, without applying the answer contract; the destination's input contract still applies. The timeout execution completes successfully and records `port: "timeout"`. Its assignment becomes `timed_out` and is no longer claimable.
 
-The deadline starts when work becomes available and appears as `availableUntil` on the assignment. Claiming stops the timer. If a failed or expired claim can be retried, a new full unclaimed interval starts when the assignment becomes available again. An exhausted failure or expiry budget fails the run instead. Renewal does not have a total execution ceiling. Claiming for manual completion also stops the timer, so this is a deadline to pick up work, not a deadline to submit an answer. If the timeout wins a claim race, the claim fails. The old assignment cannot accept a late reply; inspect the existing run to find its current work.
+The deadline starts when work becomes available and appears as `availableUntil` on the assignment. Claiming stops the timer. If a failed or expired claim can be retried, a new full unclaimed interval starts when the assignment becomes available again. An exhausted failure or expiry budget fails the run instead. Renewal does not extend the optional `maxExecutionMs` active execution limit. Without that setting, there is no total execution ceiling. Claiming for manual completion also stops the timer, so this is a deadline to pick up work, not a deadline to submit an answer. If the timeout wins a claim race, the claim fails. The old assignment cannot accept a late reply; inspect the existing run to find its current work.
 
 Drafts may omit routes. Publication requires both Agent routes when `unclaimedTimeoutMs` is set and rejects a `timeout` edge when it is absent. Removing the setting in Raw JSON or through MCP does not remove its edge automatically.
 
@@ -149,3 +149,38 @@ Timer fields are optional additions to persisted records and require no data mig
 [External holds](work-holds.md) suspend the remaining unclaimed timeout of available Agent work. Holding claimed work invalidates its lease; resumption starts a full unclaimed interval. Budget blocking can keep that interval suspended after resumption. No lease or unclaimed timeout advances while held, and a deadline that has already elapsed wins before a hold.
 
 An Agent with [result routing](node-data.md) connects its configured success branches and the independent Timeout port. Timeout sends the original input and bypasses result routing and output mappings.
+
+## Stall detection and active attempt deadlines
+
+All four stall thresholds are opt-in. Each accepts whole milliseconds from 1 through 2,592,000,000, or 30 days. Each field inherits independently from its applicable node to workflow definition to local library settings. Agent nodes expose unclaimed, claimed-idle and transition clocks; Input nodes expose human-wait and transition clocks; other nodes expose transition clocks. Omission inherits. Explicit `null` disables an inherited threshold. Existing definitions have no stall monitoring unless a library default is configured.
+
+| Field                | Clock                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `unclaimedStallMs`   | Active time an Agent assignment remains available. A failed attempt starts another availability interval.                       |
+| `claimedIdleStallMs` | Active time since the latest claim, managed progress callback, or successful renewal.                                           |
+| `humanWaitStallMs`   | Active time waiting at an unheld External input node, including acceptance. The caller can be a person or an integration.       |
+| `runStallMs`         | Active time without a transition or progress. Queued admission, intentional Wait nodes and active waited children are excluded. |
+
+Named library and workflow pauses, declared assignment holds, managed `needs_human` permission/question intervals and External input acceptance holds freeze these clocks. Overlapping intervals count once. `humanWaitStallMs` does not alert merely because an explicitly declared `needs_human` hold remains unanswered. It observes unheld input nodes and does not change their actor classification.
+
+Crossing a threshold creates a durable `stalled` Needs attention reason and a `stalled` lifecycle event. Attention links to the execution and reports the threshold. It does not fail, claim, resume or reclassify the run. Progress or a change of waiting interval resolves the current item. A later stall emits a new event. The one-second pump observes thresholds, so detection can occur after the exact crossing time. Events survive restart; event-trigger registration remains future M2 work.
+
+Library settings are local and revision protected. In the UI, open Harnesses and edit **Stall detection**. Workflow settings and each node's **Stall detection** section provide overrides. The same operations use `stalls.settings/configure/inspect` in the shared API, `manage_stalls` in MCP and `interlock stalls` in the CLI. Inspection returns current records with `offset`, default `limit:20`, maximum `100`, exact `total` and `nextOffset`, without task payloads or claim tokens.
+
+```sh
+interlock stalls
+interlock stalls '{"action":"configure","expectedRevision":0,"policy":{"unclaimedStallMs":300000,"claimedIdleStallMs":600000}}'
+interlock stalls '{"action":"inspect","runId":"RUN_ID","limit":20}'
+```
+
+Use the revision returned by settings when replacing `policy`. An empty policy disables library defaults. Library changes affect current monitoring; existing runs retain their published workflow and node overrides. Portable workflow bundles carry those authored fields, and exclude library settings and runtime stall history.
+
+An Agent can separately set `maxExecutionMs`, a whole number from 1 through 2,592,000,000. It bounds total active wall-clock duration per successful claim attempt. It has no inherited default. Claim responses and briefings expose the configured limit; full assignments also expose `claimedAt` and `lastActivityAt`. The Run Inspector shows the attempt limit.
+
+The deadline excludes the same pause and declared-hold intervals and persists across restart. Lease renewals, H7 continuation turns and transient retries in the same claim do not reset it. A new claim attempt receives a new start time. Deadline expiry records `work.execution_timed_out`, rejects late results and renewals, and spends the ordinary failure allowance. Resource ownership becomes uncertain until the previous worker is confirmed stopped. A deadline cannot prove external processes stopped. The existing failure/lease/claim-count budgets and managed reconciliation gates still apply. This limit does not add a Timeout route or change unclaimed timeout routing.
+
+When a managed attempt reaches its active deadline, Interlock revokes its claim, requests a launcher stop when supported, and exposes recovery attention. A retryable assignment stays held until the operator confirms the old session and subprocesses stopped through managed reconciliation. A spent ticket cannot claim again; a new ticket is issued only after reconciliation. Deadline failure and claim budgets are preserved. An exhausted attempt can still need stop/resource reconciliation.
+
+For a local Git trial, an execution deadline ends the sample even when ordinary attempts remain. The deadline spends failure allowance and preserves uncertain workspace ownership. Cleanup stays blocked until an explicit `quiescent:true` confirmation. A deadline does not establish that an external worker stopped.
+
+Holding an available assignment preserves the accumulated eligible unclaimed-stall interval. Holding a claimed assignment ends that interval; resumption starts a fresh availability clock, excluding its earlier claimed execution. Current stall monitoring and attention use an indexed unresolved-record query. Resolved records remain retained for explicit history inspection and cleanup.

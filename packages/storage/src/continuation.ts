@@ -39,6 +39,7 @@ export type WorkMetadata = Pick<
   | 'label'
   | 'status'
   | 'attempt'
+  | 'maxExecutionMs'
   | 'maxAttempts'
   | 'maxLeaseExpiries'
   | 'failureCount'

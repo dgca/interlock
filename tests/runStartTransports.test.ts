@@ -59,7 +59,7 @@ it.each(['http', 'stdio'])(
     try {
       await client.connect(transport);
       const tools = (await client.listTools()).tools;
-      expect(tools).toHaveLength(59);
+      expect(tools).toHaveLength(60);
       if (discovery) expect(tools).toEqual(discovery);
       else {
         discovery = tools;

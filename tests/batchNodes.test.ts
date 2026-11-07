@@ -734,7 +734,9 @@ it('removes the Timeout edge when disabling the deadline, preserving the Result 
     ),
   );
   await act(async () =>
-    container.querySelector<HTMLInputElement>('[role="switch"]')!.click(),
+    Array.from(container.querySelectorAll<HTMLLabelElement>('label'))
+      .find((label) => label.textContent === 'Route on unclaimed timeout')!
+      .click(),
   );
   await act(async () =>
     Array.from(container.querySelectorAll('button'))

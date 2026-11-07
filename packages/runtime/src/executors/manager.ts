@@ -148,6 +148,8 @@ export class ExecutorManager {
   >();
   private launchedWork = new Map<string, LauncherSession>();
   private launchIdempotency = new Map<string, LauncherSession>();
+  private idleRecovering = new Set<string>();
+  private launcherStops = new Map<string, Promise<void>>();
   private running = false;
   private stopped = false;
   private scheduled = false;
@@ -487,6 +489,7 @@ export class ExecutorManager {
   private latest(workId: string) {
     return this.engine.store
       .forWork<ManagedExecution>(attemptsCollection, workId)
+      .reverse()
       .sort((a, b) => b.attempt - a.attempt)[0];
   }
   executionProvenance(
@@ -707,7 +710,6 @@ export class ExecutorManager {
       if (ticketRecord.used) {
         throw new InterlockError('Claim ticket has already been used');
       }
-      ticketRecord.used = true;
       return;
     } else if (worker?.claimTicket) {
       throw new InterlockError(
@@ -725,7 +727,45 @@ export class ExecutorManager {
         'Managed execution is uncertain. Confirm that its old session and subprocesses stopped before claiming again.',
       );
   }
+  claimCommitted(workId: string) {
+    const ticket = this.claimTickets.get(workId);
+    if (ticket) ticket.used = true;
+  }
+  claimed(work: WorkRequest) {
+    const ticket = this.claimTickets.get(work.id);
+    if (!ticket) return;
+    const pending = this.latest(work.id);
+    if (!pending || !this.launchedWork.has(work.id)) return;
+    // A launch precedes the successful claim; bind its supervision to that attempt.
+    const record: ManagedExecution = {
+      ...pending,
+      id: `${work.id}:${work.attempt}`,
+      attempt: work.attempt,
+      state: 'running',
+      startedAt: now(),
+      endedAt: undefined,
+    };
+    this.engine.store.put(attemptsCollection, {
+      ...pending,
+      state: 'completed',
+      endedAt: now(),
+    });
+    this.engine.store.put(attemptsCollection, record);
+    work.managedExecution = {
+      profileId: record.profile.id,
+      executionId: record.id,
+      harness: record.profile.harness,
+      state: record.state,
+      pendingRequests: 0,
+    };
+  }
   private write(record: ManagedExecution) {
+    this.engine.stalls?.hold(
+      `managed:${record.id}`,
+      record.runId,
+      record.state === 'needs_human',
+      record.workId,
+    );
     this.engine.store.put(attemptsCollection, record);
     const work = this.engine.store.get<WorkRequest>('work', record.workId);
     if (work && work.attempt === record.attempt)
@@ -756,6 +796,7 @@ export class ExecutorManager {
       throw new InterlockError('Assignment not found');
     const records = this.engine.store
       .forWork<ManagedExecution>(attemptsCollection, workId)
+      .reverse()
       .sort((a, b) => b.attempt - a.attempt);
     const latest = records[0];
     return {
@@ -1109,6 +1150,8 @@ export class ExecutorManager {
         session.lastStatusAt = Date.now();
         void this.pollLauncherStatus(session).catch(() => {});
       }
+      if (current?.status === 'claimed')
+        void this.recoverIdleLauncher(session, current).catch(() => {});
       const runEnded =
         run && ['completed', 'failed', 'cancelled'].includes(run.status);
       const workEnded =
@@ -1252,7 +1295,7 @@ export class ExecutorManager {
     };
 
     const record: ManagedExecution = {
-      id: `${work.id}:${work.attempt}`,
+      id: `${work.id}:launch:${work.attempt}`,
       workId: work.id,
       runId: work.runId,
       attempt: work.attempt,
@@ -1267,7 +1310,7 @@ export class ExecutorManager {
       logs: [
         {
           at: now(),
-          message: `Launched ${profile.name} (ticket: ${claimTicket})`,
+          message: `Launched ${profile.name}`,
         },
       ],
       logCount: 1,
@@ -1351,6 +1394,8 @@ export class ExecutorManager {
       } catch {}
     }
 
+    if (this.stopped || this.launchedWork.get(session.workId) !== session)
+      return;
     if (
       newStatus &&
       ['working', 'idle', 'needs_attention', 'ended'].includes(newStatus)
@@ -1367,15 +1412,133 @@ export class ExecutorManager {
           this.log(record, `Status updated: ${newStatus}`);
         }
       }
-      if (
-        (newStatus === 'idle' || newStatus === 'needs_attention') &&
-        (session.profile.messageCommand || session.profile.messageUrl)
-      ) {
-        void this.sendLauncherMessage(
-          session,
-          `Assignment ${session.workId} is ${newStatus}`,
-        ).catch(() => {});
+    }
+  }
+  private async recoverIdleLauncher(
+    session: LauncherSession,
+    captured: WorkRequest,
+  ) {
+    if (this.stopped || this.idleRecovering.has(captured.id)) return;
+    const run = this.engine.store.get<Run>('runs', captured.runId);
+    const definition =
+      run &&
+      this.engine.store.getVersion(run.workflowId, run.version)?.definition;
+    const node = definition?.nodes.find((n) => n.id === captured.nodeId);
+    if (
+      !run ||
+      !definition ||
+      !node ||
+      session.status !== 'idle' ||
+      this.engine.pauses.applicable(run.workflowId).length
+    )
+      return;
+    const policy = this.engine.stalls.policy(definition, node);
+    const recovery = policy.idleRecovery;
+    const threshold = policy.claimedIdleStallMs;
+    if (
+      !recovery?.maxRecoveries ||
+      !threshold ||
+      captured.managedExecution?.state === 'needs_human'
+    )
+      return;
+    const activityAt = captured.lastActivityAt ?? captured.claimedAt;
+    if (
+      !activityAt ||
+      this.engine.stalls.elapsed(run, activityAt, captured.id).activeMs <
+        threshold
+    )
+      return;
+    const pending = captured.idleNudge;
+    if (
+      pending &&
+      this.engine.stalls.elapsed(run, pending.at, captured.id).activeMs <
+        threshold
+    )
+      return;
+    if (!pending && (captured.idleRecoveryCount ?? 0) >= recovery.maxRecoveries)
+      return;
+    const owned = () => {
+      if (this.stopped || this.launchedWork.get(captured.id) !== session)
+        return;
+      const w = this.engine.store.get<WorkRequest>('work', captured.id);
+      return w?.status === 'claimed' &&
+        w.managedExecution?.state !== 'needs_human' &&
+        w.attempt === captured.attempt &&
+        !this.engine.stalls.deadlineExpired(w) &&
+        w.token === captured.token &&
+        w.lastActivityAt === captured.lastActivityAt
+        ? w
+        : undefined;
+    };
+    this.idleRecovering.add(captured.id);
+    try {
+      if (!pending) {
+        if (!session.profile.messageCommand && !session.profile.messageUrl)
+          return;
+        const work = owned();
+        if (!work) return;
+        work.idleRecoveryCount = (work.idleRecoveryCount ?? 0) + 1;
+        work.idleNudge = { attempt: work.attempt, activityAt, at: now() };
+        this.engine.store.put('work', work);
+        const record = this.latest(work.id);
+        if (record)
+          this.recordRecoveryEvent(record, {
+            errorClass: 'idle',
+            action: 'nudge',
+            messageExcerpt: recovery.message.slice(0, 500),
+            at: now(),
+          });
+        await this.sendLauncherMessage(session, recovery.message);
+        return;
       }
+      if (!session.profile.stopCommand && !session.profile.stopUrl) return;
+      await this.requestLauncherStop(session);
+      await this.pollLauncherStatus(session);
+      const work = owned();
+      if (!work) return;
+      if ((session.status as string) !== 'ended')
+        throw new Error('Launcher stop did not confirm ended status');
+      // Confirmed external quiescence permits the ordinary bounded failure path.
+      const recovered = this.latest(work.id);
+      if (recovered)
+        this.recordRecoveryEvent(recovered, {
+          errorClass: 'idle',
+          action: 'relaunch',
+          messageExcerpt:
+            'Confirmed ended status; ordinary attempt admission applies',
+          at: now(),
+        });
+      this.engine.reportFailure(
+        work.id,
+        work.token!,
+        'Idle recovery stopped the stalled session',
+      );
+      this.claimTickets.delete(work.id);
+      this.launchedWork.delete(work.id);
+      const record = this.latest(work.id);
+      if (record) {
+        record.state = 'failed';
+        record.endedAt = now();
+        this.write(record);
+      }
+      this.schedule();
+    } catch (error) {
+      // Deadline/lease processing can revoke the snapshot while external delivery waits.
+      // Hold admission pumps too, so interruption must tolerate a second revocation.
+      try {
+        this.engine.pump();
+        const work = owned();
+        const record = work && this.latest(work.id);
+        if (record)
+          this.interrupted(
+            record,
+            ('Idle recovery uncertain: ' + errorText(error)).slice(0, 1000),
+          );
+      } catch {
+        // The claim may have ended, or the engine may have closed during delivery.
+      }
+    } finally {
+      this.idleRecovering.delete(captured.id);
     }
   }
   private async sendLauncherMessage(session: LauncherSession, message: string) {
@@ -1406,11 +1569,14 @@ export class ExecutorManager {
           headers[k] = interpolateTokens(v, tokenMap);
         }
       }
-      await fetch(url, {
+      const response = await fetch(url, {
         method: 'POST',
+        signal: AbortSignal.timeout(10000),
         headers,
         body: JSON.stringify(payload),
-      }).catch(() => {});
+      });
+      if (!response.ok)
+        throw new Error(`Launcher operation failed (${response.status})`);
     } else if (session.profile.messageCommand) {
       const cmd = interpolateTokens(session.profile.messageCommand, tokenMap);
       const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
@@ -1419,15 +1585,20 @@ export class ExecutorManager {
           resolvedEnv[k] = interpolateTokens(v, tokenMap);
         }
       }
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         const child = spawn(cmd, {
           cwd: session.cwd,
           env: resolvedEnv,
           shell: true,
+          timeout: 10000,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
-        child.on('close', () => resolve());
-        child.on('error', () => resolve());
+        child.on('close', (code) =>
+          code === 0
+            ? resolve()
+            : reject(new Error(`Launcher operation exited ${code}`)),
+        );
+        child.on('error', reject);
         child.stdin.write(JSON.stringify(payload));
         child.stdin.end();
       });
@@ -1486,6 +1657,19 @@ export class ExecutorManager {
       });
     }
   }
+  private requestLauncherStop(session: LauncherSession) {
+    const pending = this.launcherStops.get(session.workId);
+    if (pending) return pending;
+    const stop = this.stopLauncherSession(session);
+    this.launcherStops.set(session.workId, stop);
+    void stop
+      .finally(() => {
+        if (this.launcherStops.get(session.workId) === stop)
+          this.launcherStops.delete(session.workId);
+      })
+      .catch(() => {});
+    return stop;
+  }
   private async stopLauncherSession(session: LauncherSession) {
     const tokenMap = {
       INTERLOCK_WORK_ID: session.workId,
@@ -1512,11 +1696,14 @@ export class ExecutorManager {
           headers[k] = interpolateTokens(v, tokenMap);
         }
       }
-      await fetch(url, {
+      const response = await fetch(url, {
         method: 'POST',
+        signal: AbortSignal.timeout(10000),
         headers,
         body: JSON.stringify(payload),
-      }).catch(() => {});
+      });
+      if (!response.ok)
+        throw new Error(`Launcher operation failed (${response.status})`);
     } else if (session.profile.stopCommand) {
       const cmd = interpolateTokens(session.profile.stopCommand, tokenMap);
       const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
@@ -1525,15 +1712,20 @@ export class ExecutorManager {
           resolvedEnv[k] = interpolateTokens(v, tokenMap);
         }
       }
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         const child = spawn(cmd, {
           cwd: session.cwd,
           env: resolvedEnv,
           shell: true,
+          timeout: 10000,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
-        child.on('close', () => resolve());
-        child.on('error', () => resolve());
+        child.on('close', (code) =>
+          code === 0
+            ? resolve()
+            : reject(new Error(`Launcher operation exited ${code}`)),
+        );
+        child.on('error', reject);
         child.stdin.write(JSON.stringify(payload));
         child.stdin.end();
       });
@@ -1762,8 +1954,14 @@ export class ExecutorManager {
                   this.write(r);
                 },
                 onProgress: (message) => {
-                  if (!job.abort.signal.aborted && !this.stopped)
+                  if (!job.abort.signal.aborted && !this.stopped) {
+                    this.engine.stalls.activity(
+                      job.work.id,
+                      job.work.attempt,
+                      job.work.token,
+                    );
                     this.log(r, message);
+                  }
                 },
                 request: (request) => this.request(job, request),
               });
@@ -2208,6 +2406,35 @@ export class ExecutorManager {
     pending.resolve(q.answer);
     return { applied: true };
   }
+  deadlineRevoked(work: WorkRequest) {
+    const record = this.latest(work.id);
+    if (!record || record.attempt !== work.attempt) return;
+    const launcher = this.launchedWork.get(work.id);
+    const job = this.jobs.get(work.id);
+    if (!launcher && !job && !active(record)) return;
+    const reason =
+      'Active execution deadline expired. Stop the old session and subprocesses, then confirm before retrying.';
+    this.claimTickets.delete(work.id);
+    this.interrupted(record, reason);
+    if (work.status === 'available')
+      this.engine.holds.change({
+        action: 'hold',
+        workId: work.id,
+        expectedAttempt: work.attempt,
+        expectedRevision: work.holdRevision ?? 0,
+        actor: 'managed-executor',
+        category: 'other',
+        reason,
+        checkpointRef: `execution:${record.id}`,
+      });
+    if (job) {
+      job.abort.abort();
+      for (const answer of job.answers.values())
+        answer.reject(new Error(reason));
+      job.answers.clear();
+    }
+    if (launcher) void this.requestLauncherStop(launcher).catch(() => {});
+  }
   private interrupted(record: ManagedExecution, reason: string) {
     for (const session of this.engine.store.forRuns<Session>(
       sessionsCollection,
@@ -2260,7 +2487,7 @@ export class ExecutorManager {
     if (!record) throw new InterlockError('Execution not found');
     const launcherSession = this.launchedWork.get(record.workId);
     if (launcherSession) {
-      void this.stopLauncherSession(launcherSession).catch(() => {});
+      void this.requestLauncherStop(launcherSession).catch(() => {});
       this.interrupted(record, 'Execution stopped by the user.');
       return { stopping: true };
     }
@@ -2282,7 +2509,7 @@ export class ExecutorManager {
     );
     if (!record || record.state !== 'interrupted')
       throw new InterlockError('Interrupted execution not found');
-    if (this.jobs.has(record.workId))
+    if (this.jobs.has(record.workId) || this.launcherStops.has(record.workId))
       throw new InterlockError('The old harness is still stopping');
     const work = this.engine.store.get<WorkRequest>('work', record.workId);
     if (!work || work.attempt !== record.attempt)
@@ -2296,6 +2523,12 @@ export class ExecutorManager {
     });
     record.state = 'failed';
     this.write(record);
+    const launcher = this.launchedWork.get(work.id);
+    if (launcher) {
+      this.launchedWork.delete(work.id);
+      this.launchIdempotency.delete(launcher.idempotencyKey);
+      this.claimTickets.delete(work.id);
+    }
     if (work.status === 'held')
       this.engine.manageWorkHold({
         action: 'resume',

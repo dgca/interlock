@@ -1,4 +1,9 @@
-import type { RunAttention, RunAttentionReason } from '@interlock/core';
+import type {
+  Run,
+  StallRecord,
+  RunAttention,
+  RunAttentionReason,
+} from '@interlock/core';
 import type { Store } from '@interlock/storage';
 
 /** Human decisions roll up through owned work and stop at detached boundaries. */
@@ -50,6 +55,31 @@ export function runAttention(store: Store): RunAttention[] {
           runId: assignment.runId,
           executionId: assignment.executionId,
         },
+      });
+  }
+  for (const stall of store.currentStalls()) {
+    const found = store.get<Run>('runs', stall.runId);
+    if (!found || !['running', 'waiting'].includes(found.status)) continue;
+    let run: Run = found;
+    const seen = new Set<string>();
+    while (
+      run.parentRunId &&
+      run.parentMode !== 'detached' &&
+      !seen.has(run.id)
+    ) {
+      seen.add(run.id);
+      const parent: Run | undefined = store.get<Run>('runs', run.parentRunId);
+      if (!parent) break;
+      run = parent;
+    }
+    const entry = result.get(run.id);
+    if (entry) {
+      if (!entry.reasons.includes('stalled')) entry.reasons.push('stalled');
+    } else
+      result.set(run.id, {
+        runId: run.id,
+        reasons: ['stalled'],
+        target: { runId: stall.runId, executionId: stall.executionId },
       });
   }
   return [...result.values()];

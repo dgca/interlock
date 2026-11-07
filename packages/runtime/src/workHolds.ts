@@ -112,6 +112,7 @@ export class WorkHolds {
               ? Math.max(0, Date.parse(work.availableUntil) - atMs)
               : undefined));
       const hold = {
+        wasClaimed: work.status === 'claimed',
         revision: q.expectedRevision + 1,
         category: q.category,
         reason: q.reason,
@@ -146,6 +147,10 @@ export class WorkHolds {
       if (work.status !== 'held' || !work.hold)
         throw new InterlockError('Assignment is not held');
       const remainingMs = work.hold.remainingMs;
+      if (work.hold.wasClaimed) {
+        work.availableSince = at;
+        work.lastActivityAt = undefined;
+      }
       this.close(work, at, q.actor, 'resumed');
       work.status = 'available';
       work.workerId = undefined;

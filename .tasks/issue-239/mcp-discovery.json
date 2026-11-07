@@ -1,0 +1,349 @@
+{
+  "baselineCommit": "e9179503567b0577dade57e1021c52396b2cc32b",
+  "sourceCommit": "d6057f1ab336bcc67569a9f0fcd6f0913610b01f",
+  "baseline": [
+    {
+      "mode": "http",
+      "tools": 59,
+      "envelopeBytes": 267709,
+      "definitionsBytes": 267699,
+      "instructionsBytes": 9979,
+      "contributions": [
+        {
+          "name": "manage_executors",
+          "bytes": 7626
+        },
+        {
+          "name": "get_run_briefing",
+          "bytes": 1277
+        },
+        {
+          "name": "import_workflows",
+          "bytes": 43103
+        },
+        {
+          "name": "create_workflow",
+          "bytes": 32802
+        },
+        {
+          "name": "update_workflow",
+          "bytes": 32529
+        },
+        {
+          "name": "edit_workflow",
+          "bytes": 5609
+        },
+        {
+          "name": "start_run",
+          "bytes": 18175
+        },
+        {
+          "name": "list_work",
+          "bytes": 5070
+        },
+        {
+          "name": "claim_work",
+          "bytes": 7670
+        },
+        {
+          "name": "submit_result",
+          "bytes": 16286
+        },
+        {
+          "name": "renew_claim",
+          "bytes": 884
+        }
+      ]
+    },
+    {
+      "mode": "stdio",
+      "tools": 59,
+      "envelopeBytes": 267709,
+      "definitionsBytes": 267699,
+      "instructionsBytes": 9979,
+      "contributions": [
+        {
+          "name": "manage_executors",
+          "bytes": 7626
+        },
+        {
+          "name": "get_run_briefing",
+          "bytes": 1277
+        },
+        {
+          "name": "import_workflows",
+          "bytes": 43103
+        },
+        {
+          "name": "create_workflow",
+          "bytes": 32802
+        },
+        {
+          "name": "update_workflow",
+          "bytes": 32529
+        },
+        {
+          "name": "edit_workflow",
+          "bytes": 5609
+        },
+        {
+          "name": "start_run",
+          "bytes": 18175
+        },
+        {
+          "name": "list_work",
+          "bytes": 5070
+        },
+        {
+          "name": "claim_work",
+          "bytes": 7670
+        },
+        {
+          "name": "submit_result",
+          "bytes": 16286
+        },
+        {
+          "name": "renew_claim",
+          "bytes": 884
+        }
+      ]
+    }
+  ],
+  "current": [
+    {
+      "mode": "http",
+      "tools": 60,
+      "envelopeBytes": 280092,
+      "definitionsBytes": 280082,
+      "instructionsBytes": 9973,
+      "contributions": [
+        {
+          "name": "manage_stalls",
+          "bytes": 2907
+        },
+        {
+          "name": "manage_executors",
+          "bytes": 7819
+        },
+        {
+          "name": "get_run_briefing",
+          "bytes": 1391
+        },
+        {
+          "name": "import_workflows",
+          "bytes": 46229
+        },
+        {
+          "name": "create_workflow",
+          "bytes": 35168
+        },
+        {
+          "name": "update_workflow",
+          "bytes": 34800
+        },
+        {
+          "name": "edit_workflow",
+          "bytes": 5695
+        },
+        {
+          "name": "start_run",
+          "bytes": 18535
+        },
+        {
+          "name": "list_work",
+          "bytes": 5153
+        },
+        {
+          "name": "claim_work",
+          "bytes": 7952
+        },
+        {
+          "name": "submit_result",
+          "bytes": 16646
+        },
+        {
+          "name": "renew_claim",
+          "bytes": 1007
+        }
+      ]
+    },
+    {
+      "mode": "stdio",
+      "tools": 60,
+      "envelopeBytes": 280092,
+      "definitionsBytes": 280082,
+      "instructionsBytes": 9973,
+      "contributions": [
+        {
+          "name": "manage_stalls",
+          "bytes": 2907
+        },
+        {
+          "name": "manage_executors",
+          "bytes": 7819
+        },
+        {
+          "name": "get_run_briefing",
+          "bytes": 1391
+        },
+        {
+          "name": "import_workflows",
+          "bytes": 46229
+        },
+        {
+          "name": "create_workflow",
+          "bytes": 35168
+        },
+        {
+          "name": "update_workflow",
+          "bytes": 34800
+        },
+        {
+          "name": "edit_workflow",
+          "bytes": 5695
+        },
+        {
+          "name": "start_run",
+          "bytes": 18535
+        },
+        {
+          "name": "list_work",
+          "bytes": 5153
+        },
+        {
+          "name": "claim_work",
+          "bytes": 7952
+        },
+        {
+          "name": "submit_result",
+          "bytes": 16646
+        },
+        {
+          "name": "renew_claim",
+          "bytes": 1007
+        }
+      ]
+    }
+  ],
+  "explanation": "UTF-8 JSON bytes for the complete tools/list result envelope and tools array; initialization instructions measured separately. Both transports use isolated in-memory Stores and temporary local ports. No model execution.",
+  "previousReview": {
+    "reviewedCommit": "ada17ff295034cf7ddba291baad9bf5c6275304f",
+    "sourceCommit": "63c1142740f48121779d9ca79ac721bf5f70395b",
+    "measurements": [
+      {
+        "mode": "http",
+        "tools": 60,
+        "envelopeBytes": 279788,
+        "definitionsBytes": 279778,
+        "instructionsBytes": 9973,
+        "contributions": [
+          {
+            "name": "manage_stalls",
+            "bytes": 2907
+          },
+          {
+            "name": "manage_executors",
+            "bytes": 7626
+          },
+          {
+            "name": "get_run_briefing",
+            "bytes": 1391
+          },
+          {
+            "name": "import_workflows",
+            "bytes": 46229
+          },
+          {
+            "name": "create_workflow",
+            "bytes": 35168
+          },
+          {
+            "name": "update_workflow",
+            "bytes": 34800
+          },
+          {
+            "name": "edit_workflow",
+            "bytes": 5695
+          },
+          {
+            "name": "start_run",
+            "bytes": 18535
+          },
+          {
+            "name": "list_work",
+            "bytes": 5153
+          },
+          {
+            "name": "claim_work",
+            "bytes": 7952
+          },
+          {
+            "name": "submit_result",
+            "bytes": 16646
+          },
+          {
+            "name": "renew_claim",
+            "bytes": 1007
+          }
+        ]
+      },
+      {
+        "mode": "stdio",
+        "tools": 60,
+        "envelopeBytes": 279788,
+        "definitionsBytes": 279778,
+        "instructionsBytes": 9973,
+        "contributions": [
+          {
+            "name": "manage_stalls",
+            "bytes": 2907
+          },
+          {
+            "name": "manage_executors",
+            "bytes": 7626
+          },
+          {
+            "name": "get_run_briefing",
+            "bytes": 1391
+          },
+          {
+            "name": "import_workflows",
+            "bytes": 46229
+          },
+          {
+            "name": "create_workflow",
+            "bytes": 35168
+          },
+          {
+            "name": "update_workflow",
+            "bytes": 34800
+          },
+          {
+            "name": "edit_workflow",
+            "bytes": 5695
+          },
+          {
+            "name": "start_run",
+            "bytes": 18535
+          },
+          {
+            "name": "list_work",
+            "bytes": 5153
+          },
+          {
+            "name": "claim_work",
+            "bytes": 7952
+          },
+          {
+            "name": "submit_result",
+            "bytes": 16646
+          },
+          {
+            "name": "renew_claim",
+            "bytes": 1007
+          }
+        ]
+      }
+    ]
+  }
+}

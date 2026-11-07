@@ -186,6 +186,14 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 11,
+    up(db) {
+      db.exec(
+        `CREATE INDEX stalls_unresolved ON documents(json_extract(value, '$.runId'), json_extract(value, '$.detectedAt')) WHERE collection = 'stalls' AND json_extract(value, '$.resolvedAt') IS NULL;`,
+      );
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

@@ -138,6 +138,7 @@ export class Continuation {
       failureCount: work.failureCount,
       leaseExpiryCount: work.leaseExpiryCount,
       workerId: work.workerId,
+      maxExecutionMs: work.maxExecutionMs,
       leaseSeconds: work.leaseSeconds,
       leaseUntil: work.leaseUntil,
       availableUntil: work.availableUntil,

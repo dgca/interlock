@@ -8,6 +8,7 @@ export function attentionText(entry: RunAttention) {
     question: 'Answer needed',
     model: 'Choose a model',
     recovery: 'Recovery needed',
+    stalled: 'Stalled',
   };
   return entry.reasons.map((reason) => labels[reason]).join(' · ');
 }
