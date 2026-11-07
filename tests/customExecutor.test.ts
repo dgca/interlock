@@ -331,3 +331,98 @@ it('blocks dynamic cwd binding if resolving outside profile allowedRoots', async
     expect(workItem?.cwdBlocked?.reason).toContain('outside allowed roots');
   });
 });
+
+it('preserves delegated launch and one-time ticket rules across independent pause holds', async () => {
+  let launched: { workId: string; claimTicket: string } | undefined;
+  let launches = 0;
+  const server = createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => (body += chunk));
+    req.on('end', () => {
+      launches++;
+      launched = JSON.parse(body);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ sessionId: 'paused-launcher-session' }));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw Error('No listener');
+  const e = create();
+  try {
+    e.executors.saveProfile({
+      id: 'paused-launcher',
+      harness: 'custom',
+      name: 'Paused launcher',
+      enabled: true,
+      expectedRevision: 0,
+      mode: 'launcher',
+      transport: 'http',
+      launchUrl: `http://127.0.0.1:${address.port}/launch`,
+    });
+    e.executors.start(nativeAdapters);
+    const w = workflow(e, 'paused-launcher');
+    const library = e.pauses.create({
+      target: { scope: 'library' },
+      actor: 'deploy',
+      reason: 'Before dispatch',
+    });
+    const run = e.start(w.id, null).run;
+    expect(e.run(run.id).executions).toHaveLength(0);
+    expect(e.available(run.id)).toEqual([]);
+    expect(launches).toBe(0);
+    e.pauses.resume(library.id);
+    e.pump();
+    await vi.waitFor(() => expect(launched?.claimTicket).toBeTruthy(), {
+      timeout: 5000,
+    });
+    const workId = launched!.workId,
+      claimTicket = launched!.claimTicket;
+    // Wait for the successful launch response to become claimable.
+    await vi.waitFor(() =>
+      expect(e.inspect(run.id).work[0].managedExecution?.state).toBe('running'),
+    );
+    const local = e.pauses.create({
+      target: { scope: 'workflow', workflowId: w.id },
+      actor: 'incident',
+      reason: 'After launch',
+    });
+    expect(() =>
+      e.claim(workId, {
+        workerId: 'delegated',
+        freshContext: true,
+        tools: [],
+        skills: [],
+        claimTicket,
+      }),
+    ).toThrow(/paused/);
+    expect(e.store.get<any>('work', workId).attempt).toBe(0);
+    e.pauses.resume(local.id);
+    e.pump();
+    expect(() =>
+      e.claim(workId, {
+        workerId: 'rogue',
+        freshContext: true,
+        tools: [],
+        skills: [],
+      }),
+    ).toThrow(/claim ticket is required/i);
+    const claimed = e.claim(workId, {
+      workerId: 'delegated',
+      freshContext: true,
+      tools: [],
+      skills: [],
+      claimTicket,
+    });
+    e.submit(workId, claimed.token!, { done: true });
+    expect(e.run(run.id).status).toBe('completed');
+    expect(launches).toBe(1);
+  } finally {
+    await e.executors.stop();
+    const closed = new Promise<void>((resolve) =>
+      server.close(() => resolve()),
+    );
+    server.closeAllConnections();
+    await closed;
+  }
+});
