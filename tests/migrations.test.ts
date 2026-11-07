@@ -71,9 +71,27 @@ it('initializes empty databases and reopens current databases without a backup',
   const file = path();
   const db = open(file);
   expect(migrate(db, file)).toEqual({ from: 0, to: 7 });
+  expect(db.prepare('PRAGMA synchronous').get()).toEqual({ synchronous: 2 });
   expect(migrate(db, file)).toEqual({ from: 7, to: 7 });
   expect(existsSync(`${file}.backups`)).toBe(false);
 });
+
+it.each([
+  { journalMode: 'wal', synchronous: 1, databasePath: path },
+  { journalMode: 'memory', synchronous: 2, databasePath: () => ':memory:' },
+])(
+  'uses synchronous=$synchronous when the store journal mode is $journalMode',
+  ({ journalMode, synchronous, databasePath }) => {
+    const store = new Store(databasePath());
+    connections.push(store);
+    expect(store['db'].prepare('PRAGMA journal_mode').get()).toEqual({
+      journal_mode: journalMode,
+    });
+    expect(store['db'].prepare('PRAGMA synchronous').get()).toEqual({
+      synchronous,
+    });
+  },
+);
 
 it('snapshots committed WAL data before applying all pending migrations, exactly once', () => {
   const file = path();
@@ -82,6 +100,7 @@ it('snapshots committed WAL data before applying all pending migrations, exactly
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   const result = migrate(db, file, next);
   expect(result).toMatchObject({ from: 1, to: 3 });
+  expect(db.prepare('PRAGMA synchronous').get()).toEqual({ synchronous: 1 });
   expect(db.prepare('SELECT * FROM upgrade_test').get()).toEqual({
     value: 'applied in order',
   });

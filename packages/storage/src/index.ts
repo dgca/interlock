@@ -136,7 +136,10 @@ export class Store {
     this.db = new DatabaseSync(path);
     try {
       this.migration = migrate(this.db, path);
-      this.db.exec('PRAGMA journal_mode = WAL;');
+      const journalMode = this.db.prepare('PRAGMA journal_mode = WAL;').get();
+      if (journalMode?.journal_mode === 'wal') {
+        this.db.exec('PRAGMA synchronous = NORMAL;');
+      }
     } catch (error) {
       this.db.close();
       throw error;
