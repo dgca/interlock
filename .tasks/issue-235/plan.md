@@ -71,3 +71,9 @@ Reviewed affected MCP authoring, start, lookup, inspection, continuation, claim/
 
 No build-owned requirement remains intentionally unverified. Native provider calls are excluded from routine checks, as required by repository guidance. Fresh independent review and PR delivery remain unclaimed work for the parent coordinator.
 
+
+## Review revision 466a12c-F1
+
+The independent full review at `466a12ceb4a41f78a2bebc1ec96fa7ac46b83464` verified the functional criteria and required checks, and found one P3 AC9 contradiction in managed-executors.md. The guide now states that stored profile `concurrency` values remain effective after upgrade and that clearing the field removes the cap. This matches parseProfileSnapshot, profileAtCapacity, and the existing stored-profile regression test. A focused search found no directly related duplicate claim. No runtime, schema, test, UI, CLI, or MCP behavior changed.
+
+The original author manifest, full-review verdict and all earlier proof retain their original source identities. This docs-only revision reuses the 1,502-test/build/package evidence from reviewed commit `466a12ceb4a41f78a2bebc1ec96fa7ac46b83464`, with applicability established by the revision diff. Validation is a documentation/implementation comparison, targeted regression test, formatting, and diff checks. Revision-specific proof is stored separately at `/tmp/interlock-235-evidence/revision-466a12c-F1.json` and `revision-466a12c-F1-{test,format}.log`. The same SDLC run is resumed; fresh review remains unclaimed after the build result.
