@@ -298,24 +298,44 @@ it('consumes Agent failure/retry fixtures in order and enforces published step l
   });
 });
 it('rejects unsupported nodes including unreachable nodes before substituting anything', async () => {
-  for (const kind of ['workflow', 'batch', 'wait', 'timeout']) {
+  for (const scenarioKind of [
+    'detached-workflow',
+    'batch',
+    'continue-as-new',
+  ]) {
     const e = setup(),
       { request, w } = scenario(e);
     // Seed an otherwise published record to isolate the simulator gate, including unreachable unsupported nodes.
     const v = e.store.getVersion(w.id, 1)!;
-    if (kind === 'timeout')
-      (v.definition.nodes[1] as any).unclaimedTimeoutMs = 1;
-    else
+    if (scenarioKind === 'continue-as-new') {
       v.definition.nodes.push(
         nodeSchema.parse({
           id: 'unsupported',
-          kind,
-          label: 'Unsupported',
-          ...(kind === 'workflow'
-            ? { workflowId: w.id, version: 1, mode: 'detached' }
-            : {}),
+          kind: 'exit',
+          label: 'Continue As New',
+          continueAsNew: { maxRuns: 5 },
         }),
       );
+    } else if (scenarioKind === 'detached-workflow') {
+      v.definition.nodes.push(
+        nodeSchema.parse({
+          id: 'unsupported',
+          kind: 'workflow',
+          label: 'Detached Workflow',
+          workflowId: w.id,
+          version: 1,
+          mode: 'detached',
+        }),
+      );
+    } else {
+      v.definition.nodes.push(
+        nodeSchema.parse({
+          id: 'unsupported',
+          kind: 'batch',
+          label: 'Batch',
+        }),
+      );
+    }
     e.store.version(v);
     expect(await finish(e, request)).toMatchObject({
       state: 'unsupported',
@@ -611,4 +631,298 @@ it('simulates raw result routing before applying output fields without running t
   const report = await finish(e, request);
   expect(report.state).toBe('passed');
   expect(JSON.stringify(report)).not.toContain('hidden'.repeat(10));
+});
+
+it('simulates waited child workflow with substituted fixture output', async () => {
+  const e = setup();
+  const childDef = blankDefinition();
+  const childW = e.create('Child WF', '', childDef);
+  e.publish(childW.id);
+
+  const parentDef = blankDefinition();
+  parentDef.nodes[1] = nodeSchema.parse({
+    id: 'child',
+    kind: 'workflow',
+    label: 'Waited Child',
+    workflowId: childW.id,
+    version: 1,
+    mode: 'wait',
+  });
+  parentDef.edges[0].target = 'child';
+  parentDef.edges[1].source = 'child';
+
+  const { request } = scenario(
+    e,
+    [{ nodeId: 'child', kind: 'workflow', output: { answer: 123 } }],
+    parentDef,
+    [{ kind: 'output', path: 'answer', operator: 'equals', expected: 123 }],
+  );
+  const report = await finish(e, request);
+  expect(report.state).toBe('passed');
+  expect(report.substitutions.items).toEqual([
+    expect.objectContaining({
+      nodeId: 'child',
+      kind: 'workflow',
+      outcome: 'substituted',
+    }),
+  ]);
+  expect(report.coverage).toEqual({
+    totalEdges: 2,
+    coveredEdges: 2,
+    percentage: 100,
+    untested: [],
+  });
+});
+
+it('simulates waited child workflow failure route traversal on error', async () => {
+  const e = setup();
+  const childDef = blankDefinition();
+  const childW = e.create('Child WF', '', childDef);
+  e.publish(childW.id);
+
+  const parentDef = blankDefinition();
+  parentDef.nodes.push(
+    nodeSchema.parse({ id: 'exitError', kind: 'exit', label: 'Error Exit' }),
+  );
+  parentDef.nodes[1] = nodeSchema.parse({
+    id: 'child',
+    kind: 'workflow',
+    label: 'Waited Child',
+    workflowId: childW.id,
+    version: 1,
+    mode: 'wait',
+    onFailure: 'route',
+  });
+  parentDef.edges = [
+    { id: 'e1', source: 'entry', target: 'child', port: 'default' },
+    { id: 'e2', source: 'child', target: 'exit', port: 'default' },
+    { id: 'e3', source: 'child', target: 'exitError', port: 'failed' },
+  ];
+
+  const { request } = scenario(
+    e,
+    [{ nodeId: 'child', kind: 'workflow', error: 'Child failed' }],
+    parentDef,
+    [{ kind: 'route', nodeId: 'child', visit: 1, port: 'failed' }],
+  );
+  const report = await finish(e, request);
+  expect(report.state).toBe('passed');
+  expect(report.substitutions.items).toEqual([
+    expect.objectContaining({
+      nodeId: 'child',
+      kind: 'workflow',
+      outcome: 'failure',
+    }),
+  ]);
+  expect(report.coverage.totalEdges).toBe(3);
+  expect(report.coverage.coveredEdges).toBe(2);
+  expect(report.coverage.untested).toEqual([
+    { edgeId: 'e2', source: 'child', target: 'exit', port: 'default' },
+  ]);
+});
+
+it('advances virtual clock instantly for Wait duration nodes without real delay', async () => {
+  const e = setup();
+  const def = blankDefinition();
+  def.nodes[1] = nodeSchema.parse({
+    id: 'waitNode',
+    kind: 'wait',
+    label: 'Wait 1 Hour',
+    timing: { kind: 'duration', ms: 3_600_000 },
+  });
+  def.edges[0].target = 'waitNode';
+  def.edges[1].source = 'waitNode';
+
+  const start = Date.now();
+  const { request } = scenario(e, [], def);
+  const report = await finish(e, request);
+  const elapsed = Date.now() - start;
+
+  expect(report.state).toBe('passed');
+  expect(report.runStatus).toBe('completed');
+  expect(elapsed).toBeLessThan(1000);
+  expect(report.coverage.percentage).toBe(100);
+});
+
+it('simulates polling Wait node check iterations advancing virtual clock', async () => {
+  const e = setup();
+  const def = blankDefinition();
+  def.nodes.push(
+    nodeSchema.parse({
+      id: 'exitTimeout',
+      kind: 'exit',
+      label: 'Timeout Exit',
+    }),
+  );
+  def.nodes[1] = nodeSchema.parse({
+    id: 'pollNode',
+    kind: 'wait',
+    label: 'Poll service',
+    timing: {
+      kind: 'poll',
+      everyMs: 10_000,
+      check: {
+        kind: 'script',
+        language: 'javascript',
+        command: 'return { ready: false };',
+      },
+      path: 'ready',
+      equals: true,
+      timeoutMs: 60_000,
+    },
+  });
+  def.edges = [
+    { id: 'e1', source: 'entry', target: 'pollNode', port: 'default' },
+    { id: 'e2', source: 'pollNode', target: 'exit', port: 'default' },
+    { id: 'e3', source: 'pollNode', target: 'exitTimeout', port: 'timeout' },
+  ];
+
+  const { request } = scenario(
+    e,
+    [
+      { nodeId: 'pollNode', kind: 'script', output: { ready: false } },
+      { nodeId: 'pollNode', kind: 'script', output: { ready: false } },
+      { nodeId: 'pollNode', kind: 'script', output: { ready: true } },
+    ],
+    def,
+  );
+  const report = await finish(e, request);
+  expect(report.state).toBe('passed');
+  expect(report.substitutions.items).toHaveLength(3);
+  expect(
+    report.substitutions.items.every((s: any) => s.nodeId === 'pollNode'),
+  ).toBe(true);
+});
+
+it('simulates polling Wait node timeout taking timeout route', async () => {
+  const e = setup();
+  const def = blankDefinition();
+  def.nodes.push(
+    nodeSchema.parse({
+      id: 'exitTimeout',
+      kind: 'exit',
+      label: 'Timeout Exit',
+    }),
+  );
+  def.nodes[1] = nodeSchema.parse({
+    id: 'pollNode',
+    kind: 'wait',
+    label: 'Poll service',
+    timing: {
+      kind: 'poll',
+      everyMs: 10_000,
+      check: {
+        kind: 'script',
+        language: 'javascript',
+        command: 'return { ready: false };',
+      },
+      path: 'ready',
+      equals: true,
+      timeoutMs: 15_000,
+    },
+  });
+  def.edges = [
+    { id: 'e1', source: 'entry', target: 'pollNode', port: 'default' },
+    { id: 'e2', source: 'pollNode', target: 'exit', port: 'default' },
+    { id: 'e3', source: 'pollNode', target: 'exitTimeout', port: 'timeout' },
+  ];
+
+  const { request } = scenario(
+    e,
+    [
+      { nodeId: 'pollNode', kind: 'script', output: { ready: false } },
+      { nodeId: 'pollNode', kind: 'script', output: { ready: false } },
+    ],
+    def,
+    [{ kind: 'route', nodeId: 'pollNode', visit: 1, port: 'timeout' }],
+  );
+  const report = await finish(e, request);
+  expect(report.state).toBe('passed');
+  expect(report.coverage.coveredEdges).toBe(2);
+  expect(report.coverage.untested).toEqual([
+    { edgeId: 'e2', source: 'pollNode', target: 'exit', port: 'default' },
+  ]);
+});
+
+it('simulates agent unclaimed timeout fixture taking timeout route', async () => {
+  const e = setup();
+  const def = blankDefinition();
+  def.nodes.push(
+    nodeSchema.parse({
+      id: 'exitTimeout',
+      kind: 'exit',
+      label: 'Timeout Exit',
+    }),
+  );
+  def.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    kind: 'agent',
+    label: 'Agent with timeout',
+    prompt: 'Execute task',
+    unclaimedTimeoutMs: 5000,
+  });
+  def.edges = [
+    { id: 'e1', source: 'entry', target: 'agent', port: 'default' },
+    { id: 'e2', source: 'agent', target: 'exit', port: 'default' },
+    { id: 'e3', source: 'agent', target: 'exitTimeout', port: 'timeout' },
+  ];
+
+  const { request } = scenario(
+    e,
+    [{ nodeId: 'agent', kind: 'agent', timedOut: true }],
+    def,
+    [{ kind: 'route', nodeId: 'agent', visit: 1, port: 'timeout' }],
+  );
+  const report = await finish(e, request);
+  expect(report.state).toBe('passed');
+  expect(report.substitutions.items).toEqual([
+    expect.objectContaining({
+      nodeId: 'agent',
+      kind: 'agent',
+      outcome: 'timed_out',
+    }),
+  ]);
+  expect(report.coverage.untested).toEqual([
+    { edgeId: 'e2', source: 'agent', target: 'exit', port: 'default' },
+  ]);
+});
+
+it('computes edge and route coverage including untested branches', async () => {
+  const e = setup();
+  const def = blankDefinition();
+  def.nodes.push(
+    nodeSchema.parse({ id: 'exitOther', kind: 'exit', label: 'Other Exit' }),
+  );
+  def.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    kind: 'agent',
+    label: 'Agent',
+    prompt: 'Decide branch',
+    routing: {
+      path: 'branch',
+      cases: [{ port: 'other', equals: 'b' }],
+      default: 'default',
+    },
+  });
+  def.edges = [
+    { id: 'e1', source: 'entry', target: 'agent', port: 'default' },
+    { id: 'e2', source: 'agent', target: 'exit', port: 'default' },
+    { id: 'e3', source: 'agent', target: 'exitOther', port: 'other' },
+  ];
+
+  const { request } = scenario(
+    e,
+    [{ nodeId: 'agent', kind: 'agent', output: { branch: 'a' } }],
+    def,
+  );
+  const report = await finish(e, request);
+  expect(report.state).toBe('passed');
+  expect(report.coverage).toEqual({
+    totalEdges: 3,
+    coveredEdges: 2,
+    percentage: 66.7,
+    untested: [
+      { edgeId: 'e3', source: 'agent', target: 'exitOther', port: 'other' },
+    ],
+  });
 });
