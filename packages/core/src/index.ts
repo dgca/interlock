@@ -608,6 +608,12 @@ export const definitionSchema = z.object({
     .describe(
       'Projected stages excluded from start capacity. Admitted runs continue across stages.',
     ),
+  pinPromptsAtPublish: z
+    .boolean()
+    .optional()
+    .describe(
+      'When true, publishing this workflow captures exact revisions of referenced saved prompts in the immutable workflow version, and runs capture those pinned revisions instead of floating to latest.',
+    ),
   maxSteps: z.number().int().min(2).max(1000).default(100),
 });
 export type WorkflowDefinition = z.infer<typeof definitionSchema>;
@@ -629,6 +635,7 @@ export interface WorkflowVersion {
   workflowId: string;
   version: number;
   definition: WorkflowDefinition;
+  pinnedPromptRevisions?: Record<string, number>;
   createdAt: string;
 }
 export type RunStatus =
@@ -1415,3 +1422,5 @@ export * from './pauseHolds.js';
 export * from './workflowTriggers.js';
 
 export * from './webhooks.js';
+
+export * from './workflowDiff.js';

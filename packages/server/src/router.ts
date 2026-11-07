@@ -429,10 +429,16 @@ export const appRouter = t.router({
           draftRevisions: z.record(z.number().int().positive()).optional(),
           restoreDeletedVersions: z.boolean().optional(),
           variableBindings: variableImportBindingsSchema.optional(),
+          publish: z.boolean().optional(),
+          cascade: z.boolean().optional(),
+          dryRun: z.boolean().optional(),
         }),
       )
       .mutation(({ ctx, input }) =>
-        importWorkflows(ctx.engine.store, input.bundle, input),
+        importWorkflows(ctx.engine.store, input.bundle, {
+          ...input,
+          engine: ctx.engine,
+        }),
       ),
     list: p
       .input(

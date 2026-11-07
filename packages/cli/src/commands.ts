@@ -229,6 +229,9 @@ export async function runCommand(argv: string[]) {
             revisions: { type: 'string' },
             'restore-deleted-versions': { type: 'boolean' },
             'variable-bindings': { type: 'string' },
+            'dry-run': { type: 'boolean' },
+            publish: { type: 'boolean' },
+            cascade: { type: 'boolean' },
           },
         });
         return client.workflows.import.mutate({
@@ -241,6 +244,9 @@ export async function runCommand(argv: string[]) {
           draftRevisions: values.revisions
             ? await parse(values.revisions)
             : undefined,
+          dryRun: values['dry-run'],
+          publish: values.publish,
+          cascade: values.cascade,
         });
       }
       if (args.length !== 1)
@@ -504,7 +510,7 @@ export async function runCommand(argv: string[]) {
           'archive <id>',
           'restore <id>',
           'delete <id> --yes',
-          'import <json|@file> [--force | --revisions JSON] [--restore-deleted-versions] [--variable-bindings json|@file] (format 4 requires explicit local variable bindings/provisioning; force changes drafts only; restoration requires original definitions)',
+          'import <json|@file> [--force | --revisions JSON] [--restore-deleted-versions] [--variable-bindings json|@file] [--dry-run] [--publish] [--cascade] (format 4 requires explicit local variable bindings/provisioning; force changes drafts only; restoration requires original definitions; dry-run previews semantic diff; publish/cascade publishes atomically)',
           'starters (list bundled choices and existing copies)',
           'import-starter <starter-id> [--copy] [--request-id key] (explicit published copy; never starts a run)',
           'export <id>',

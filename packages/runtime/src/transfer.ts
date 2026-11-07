@@ -3,9 +3,12 @@ import {
   webhookConfigSchema,
   nextScheduleSlot,
   type WorkflowTrigger,
+  compareWorkflow,
+  type DiffItem,
 } from '@interlock/core';
 import { isDeepStrictEqual } from 'node:util';
 import type { Store } from '@interlock/storage';
+import { Engine } from './index.js';
 import {
   InterlockError,
   validateDefinition,
@@ -47,7 +50,11 @@ export function exportWorkflows(
     included.add(id);
     const versions = store
       .listVersions(id)
-      .map(({ version, definition }) => ({ version, definition }));
+      .map(({ version, definition, pinnedPromptRevisions }) => ({
+        version,
+        definition,
+        ...(pinnedPromptRevisions ? { pinnedPromptRevisions } : {}),
+      }));
     const deletedVersions = store
       .list<DeletedWorkflowVersion>('deletedVersions')
       .filter((v) => v.workflowId === id && !store.getVersion(id, v.version))
@@ -159,6 +166,142 @@ export function exportWorkflows(
   };
 }
 
+export interface BundleDryRunResult {
+  dryRun: true;
+  rootId: string;
+  workflows: Array<{
+    id: string;
+    name: string;
+    status: 'added' | 'changed' | 'unchanged';
+    latestVersion: number;
+    diff: {
+      firstPublication: boolean;
+      nodes: DiffItem[];
+      routes: DiffItem[];
+      workflow: DiffItem[];
+    };
+  }>;
+  prompts?: Array<{
+    id: string;
+    name: string;
+    status: 'added' | 'unchanged' | 'conflict';
+  }>;
+  triggers?: Array<{
+    id: string;
+    workflowId: string;
+    kind: 'schedule' | 'webhook';
+    status: 'added' | 'changed' | 'unchanged' | 'conflict';
+  }>;
+}
+
+export function diffBundleImport(
+  store: Store,
+  data: WorkflowBundle,
+): BundleDryRunResult {
+  const bundle = workflowBundleSchema.parse(data);
+  const workflows = bundle.workflows.map((entry) => {
+    const existing = store.get<Workflow>('workflows', entry.id);
+    const published = existing?.latestVersion
+      ? store.getVersion(entry.id, existing.latestVersion)
+      : undefined;
+    const diff = compareWorkflow(entry.draft, published?.definition);
+    const hasSemanticChanges =
+      !published ||
+      diff.nodes.length > 0 ||
+      diff.routes.length > 0 ||
+      diff.workflow.length > 0;
+    const status: 'added' | 'changed' | 'unchanged' = !existing
+      ? 'added'
+      : hasSemanticChanges
+        ? 'changed'
+        : 'unchanged';
+    return {
+      id: entry.id,
+      name: entry.name,
+      status,
+      latestVersion: existing?.latestVersion ?? 0,
+      diff: {
+        firstPublication: !published,
+        nodes: diff.nodes,
+        routes: diff.routes,
+        workflow: diff.workflow,
+      },
+    };
+  });
+
+  const prompts = (bundle.prompts ?? []).map((prompt) => {
+    const existing = store.get<SavedPrompt>('prompts', prompt.id);
+    const status: 'added' | 'unchanged' | 'conflict' = !existing
+      ? 'added'
+      : isDeepStrictEqual(
+            {
+              name: existing.name,
+              description: existing.description,
+              content: existing.content,
+            },
+            {
+              name: prompt.name,
+              description: prompt.description,
+              content: prompt.content,
+            },
+          )
+        ? 'unchanged'
+        : 'conflict';
+    return {
+      id: prompt.id,
+      name: prompt.name,
+      status,
+    };
+  });
+
+  const triggers = bundle.workflows.flatMap((entry) =>
+    [...(entry.schedules ?? []), ...(entry.webhooks ?? [])].map((trigger) => {
+      const existing = store.get<WorkflowTrigger>(
+        'workflowTriggers',
+        trigger.id,
+      );
+      const kind =
+        'timing' in trigger.config
+          ? ('schedule' as const)
+          : ('webhook' as const);
+      const status: 'added' | 'changed' | 'unchanged' | 'conflict' = !existing
+        ? 'added'
+        : existing.workflowId !== entry.id
+          ? 'conflict'
+          : isDeepStrictEqual(triggerConfig(existing), trigger.config)
+            ? 'unchanged'
+            : 'changed';
+      return {
+        id: trigger.id,
+        workflowId: entry.id,
+        kind,
+        status,
+      };
+    }),
+  );
+
+  return {
+    dryRun: true,
+    rootId: bundle.rootId,
+    workflows,
+    ...(prompts.length ? { prompts } : {}),
+    ...(triggers.length ? { triggers } : {}),
+  };
+}
+
+export type WorkflowImportResult = {
+  rootId: string;
+  changed: string[];
+  skippedVersions: { workflowId: string; version: number }[];
+  restoredVersions: { workflowId: string; version: number }[];
+  workflows: {
+    id: string;
+    draftRevision: number;
+    latestVersion?: number;
+  }[];
+  published?: { id: string; version: number }[];
+};
+
 export function importWorkflows(
   store: Store,
   data: WorkflowBundle,
@@ -167,8 +310,57 @@ export function importWorkflows(
     draftRevisions?: Record<string, number>;
     restoreDeletedVersions?: boolean;
     variableBindings?: VariableImportBindings;
+    publish?: boolean;
+    cascade?: boolean;
+    dryRun: true;
+    engine?: Engine;
+  },
+): BundleDryRunResult;
+export function importWorkflows(
+  store: Store,
+  data: WorkflowBundle,
+  options?: {
+    force?: boolean;
+    draftRevisions?: Record<string, number>;
+    restoreDeletedVersions?: boolean;
+    variableBindings?: VariableImportBindings;
+    publish?: boolean;
+    cascade?: boolean;
+    dryRun?: false;
+    engine?: Engine;
+  },
+): WorkflowImportResult;
+export function importWorkflows(
+  store: Store,
+  data: WorkflowBundle,
+  options?: {
+    force?: boolean;
+    draftRevisions?: Record<string, number>;
+    restoreDeletedVersions?: boolean;
+    variableBindings?: VariableImportBindings;
+    publish?: boolean;
+    cascade?: boolean;
+    dryRun?: boolean;
+    engine?: Engine;
+  },
+): WorkflowImportResult | BundleDryRunResult;
+export function importWorkflows(
+  store: Store,
+  data: WorkflowBundle,
+  options: {
+    force?: boolean;
+    draftRevisions?: Record<string, number>;
+    restoreDeletedVersions?: boolean;
+    variableBindings?: VariableImportBindings;
+    publish?: boolean;
+    cascade?: boolean;
+    dryRun?: boolean;
+    engine?: Engine;
   } = {},
-) {
+): WorkflowImportResult | BundleDryRunResult {
+  if (options.dryRun) {
+    return diffBundleImport(store, data);
+  }
   const bundle = workflowBundleSchema.parse(data);
   return store.transaction(() => {
     new Variables(store).importRequirements(
@@ -284,7 +476,11 @@ export function importWorkflows(
         const published = store.getVersion(entry.id, version.version);
         if (
           published &&
-          !isDeepStrictEqual(published.definition, version.definition)
+          (!isDeepStrictEqual(published.definition, version.definition) ||
+            !isDeepStrictEqual(
+              published.pinnedPromptRevisions ?? undefined,
+              version.pinnedPromptRevisions ?? undefined,
+            ))
         )
           throw new InterlockError(
             `Published version conflict for ${entry.id}:${version.version}. Published versions cannot be overwritten, even with force.`,
@@ -428,6 +624,20 @@ export function importWorkflows(
             );
       }
     }
+    let published: { id: string; version: number }[] | undefined;
+    if (options.publish) {
+      const engine = options.engine ?? new Engine(store, process.cwd());
+      try {
+        const workflowIds = bundle.workflows.map((w) => w.id);
+        engine.publish(workflowIds, options.cascade ?? false);
+        published = workflowIds.map((id) => ({
+          id,
+          version: store.get<Workflow>('workflows', id)!.latestVersion,
+        }));
+      } finally {
+        if (!options.engine) engine.stop();
+      }
+    }
     return {
       rootId: bundle.rootId,
       changed,
@@ -436,7 +646,14 @@ export function importWorkflows(
       workflows: bundle.workflows.map((w) => ({
         id: w.id,
         draftRevision: store.get<Workflow>('workflows', w.id)!.draftRevision,
+        ...(published
+          ? {
+              latestVersion: store.get<Workflow>('workflows', w.id)!
+                .latestVersion,
+            }
+          : {}),
       })),
+      ...(published ? { published } : {}),
     };
   });
 }

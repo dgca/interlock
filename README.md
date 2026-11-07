@@ -364,6 +364,20 @@ interlock workflows '{"ownerWorkflowId":"PARENT_ID"}'
 interlock workflows '{"ownerWorkflowId":null}'
 ```
 
+### Git-driven bundle sync and cascade publishing
+
+Deploying workflow changes across environments supports atomic bundle sync with dry-run diffs and cascade publishing:
+
+```sh
+# Preview semantic differences against published definitions (ignoring layout and key order)
+interlock import bundle.json --dry-run
+
+# Import and publish workflows atomically in topological order
+interlock import bundle.json --publish --cascade
+```
+
+`--dry-run` performs a read-only comparison against existing published definitions, ignoring diagram layout positions and object key ordering. `--publish --cascade` imports the bundle and publishes workflows in dependency order within a single transaction, updating downstream workflow node version references atomically.
+
 Use MCP `preview_workflow_ownership` and `set_workflow_owner` to move an existing workflow. Only the proposed owner may reference it in any draft or retained published version. Explicit old-version cleanup can remove obsolete caller blockers after informed agreement. Release uses `ownerWorkflowId: null`. An import without an owner remains a library workflow. A draft Workflow node can use `"version": null` until its target is published. A published reference always uses a positive version number.
 
 ### Publish a shared workflow and its dependents
