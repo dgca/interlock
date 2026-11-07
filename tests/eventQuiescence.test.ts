@@ -603,3 +603,61 @@ it('recovers durable pending event and pruned pair receipts through separate SQL
   expect(again.store.eventDeliveries(t.id).total).toBe(0);
   expect(again.store.list('eventTriggerReceipts')).toHaveLength(1);
 });
+
+it('keeps a foreground Script interrupted by restart uncertain after its old process exits', async () => {
+  const { engine: original, root } = setup(true);
+  const marker = join(root, 'foreground-pid');
+  const definition = blankDefinition();
+  definition.nodes[1] = nodeSchema.parse({
+    id: 'agent',
+    kind: 'script',
+    label: 'Foreground worker',
+    language: 'javascript',
+    timeoutMs: 60000,
+    command: `require('node:fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); await new Promise(resolve => setTimeout(resolve, 60000)); return {};`,
+  });
+  const child = publish(original, definition),
+    parent = publish(original, workflowCall(child, 'detached')),
+    t = reaction(original, parent);
+  const source = original.start(parent, {}).run;
+  await vi.waitFor(() => expect(existsSync(marker)).toBe(true));
+  const pid = Number(readFileSync(marker, 'utf8'));
+  const descendant = original.store
+    .runs()
+    .find((run) => run.parentRunId === source.id)!;
+  const execution = descendant.executions.find(
+    (step) => step.kind === 'script',
+  )!;
+  expect(delivery(original, t).outcome).toBe('pending_quiescence');
+  original.stop();
+  await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow());
+  original.store.close();
+  engines.splice(engines.indexOf(original), 1);
+  const recovered = new Engine(
+    new Store(join(root, 'db.sqlite'), { secretKeyFile: join(root, 'key') }),
+    root,
+  );
+  engines.push(recovered);
+  recovered.pump();
+  expect(recovered.run(descendant.id).status).toBe('failed');
+  expect(recovered.quiescence(source.id).blockers.items).toContainEqual(
+    expect.objectContaining({
+      kind: 'uncertain_operation',
+      executionId: execution.id,
+    }),
+  );
+  expect(delivery(recovered, t).outcome).toBe('pending_quiescence');
+  const released = recovered.manageWorkResources({
+    action: 'release',
+    runId: descendant.id,
+    executionId: execution.id,
+    expectedAttempt: 1,
+    confirmStopped: true,
+    actor: 'test verified old PID exited',
+  });
+  expect(released).toMatchObject({
+    applied: true,
+    uncertainOperationsReleased: 1,
+  });
+  expect(delivery(recovered, t).outcome).toBe('started');
+});
