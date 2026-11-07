@@ -1,0 +1,52 @@
+{
+  "sourceCommit": "f0090455a71df6bb7e23e3e3418bb28baeb77944",
+  "productionBuild": "/tmp/issue236-revision-build.log",
+  "viewport": {
+    "width": 900,
+    "height": 1000
+  },
+  "provenance": "Actual production UI, shared tRPC API and runtime against isolated temporary SQLite on 127.0.0.1:5197. Initial due-slot fixtures seeded explicitly; alert failures and run events executed by runtime. Browser assertions use controls and actual API acknowledgments.",
+  "results": [
+    {
+      "finding": "UI236-R1",
+      "passed": true,
+      "actualAlertCount": 24,
+      "page": "second",
+      "samePageAfterUnrelatedRun": true
+    },
+    {
+      "finding": "UI236-R2",
+      "passed": true,
+      "invalidZoneAssociated": true,
+      "validCronClear": true,
+      "correctedZoneSaved": true
+    },
+    {
+      "finding": "UI236-R3",
+      "passed": true,
+      "unchangedUnderlyingJson": true,
+      "rawBufferReset": true,
+      "invalidResaveRejected": true,
+      "correctedSavePassed": true
+    },
+    {
+      "finding": "UI236-R4",
+      "passed": true,
+      "keepEditingPreservesDraft": true,
+      "discardDismissesPortal": true,
+      "reopenReadsPersisted": true,
+      "pendingDiscardDisabled": true,
+      "saveAcknowledged": true
+    }
+  ],
+  "inspectedImages": [
+    "attention-page2-after-event-900.png",
+    "conflict-reload-json-reset-900.png",
+    "discard-runs-no-modal-900.png",
+    "invalid-zone-associated-900.png",
+    "pending-discard-disabled-900.png"
+  ],
+  "limitations": "Focused regression checks for four prior UI findings; no new full UI assessment or human approval claimed.",
+  "finalSourceCommit": "c6ae26ba62d6a7a52e14e4466c44616afdd41802",
+  "carriedEvidence": "Production UI images/browser checks at f0090455. Only tests/schedules.test.ts whitespace changed between that source and finalSourceCommit; every changed product source hash is identical."
+}

@@ -59,3 +59,9 @@ This adds real admission-failure/automatic-pause and capacity-queue/lag fixtures
 Author cleanup stopped browser `issue236-runtime` and its isolated server, then removed only its own temporary database directories. The handoff, original design prototype, representative images and proof remain committed for final human review. No shared engine configuration, schedules, pauses or user `.interlock` data changed.
 
 Artifact staging check: `git check-ignore` found the selected task images were not ignored. Normal explicit staging is sufficient. No node_modules, dist, database, browser cache or generated vendor files are included.
+
+## Revision after independent review 45758202
+
+All seven stable findings have focused regressions and fixes in commit `f0090455a71df6bb7e23e3e3418bb28baeb77944`. The complete prior review, individual resolutions, red→green logs, current check provenance and actual-control evidence are in [revision-45758202](revision-45758202/resolution.md). Runtime chain lag, selected-set schedule merging, existing documentation contracts and all four UI recovery/refresh findings are covered. Five new 900×1000 PNGs were opened and inspected; successful actual controls use production build plus isolated runtime/API. This focused revision does not replace the earlier full review or claim human approval.
+
+Current source includes `c6ae26b` for regression-test formatting only. Fresh required checks are recorded at that exact source commit; the final proof commit changes task artifacts only. Fetched/rebased main remains `7b29dcae81403be62833d2caa2075c625abc894d`. Author stopped the isolated server/browser and removed only its own generated database. Independent reviewer directory `ui-review-26628afe` remains untouched. Parent owns fresh exact-head code/UI review and subsequent PR, CI and merge.
