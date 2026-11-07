@@ -1,3 +1,5 @@
+import { BackgroundScripts, UncertainScript } from './backgroundScripts.js';
+import { scriptOperationSchema, type ScriptOperation } from '@interlock/core';
 import { runAttention } from './runAttention.js';
 import { WorkResources } from './workResources.js';
 import { ExecutorManager } from './executors/manager.js';
@@ -148,6 +150,7 @@ export class Engine {
   private readonly starts: RunStarts;
   private readonly trials: TrialEnvironments;
   private localJobs = new Map<string, AbortController>();
+  private backgroundScripts: BackgroundScripts;
   private stopped = false;
   private listeners = new Set<() => void>();
   constructor(
@@ -161,6 +164,7 @@ export class Engine {
       ) => Promise<Json>;
     } = {},
   ) {
+    this.backgroundScripts = new BackgroundScripts(store);
     this.executors = new ExecutorManager(this, cwd);
     this.simulations = new Simulations(store, cwd);
     this.chains = new RunChains(store);
@@ -247,6 +251,22 @@ export class Engine {
           blockers.push(
             'Native operations are still closing. Retry after they stop.',
           );
+        if (
+          store
+            .runTrees(ids)
+            .some((run) =>
+              run.executions.some(
+                (execution) =>
+                  execution.background &&
+                  ['launching', 'running', 'uncertain'].includes(
+                    execution.background.state,
+                  ),
+              ),
+            )
+        )
+          blockers.push(
+            'Background Scripts must have a verified outcome or explicit stopped reconciliation before deleting history.',
+          );
         try {
           this.executors.assertDelete(ids);
         } catch (error) {
@@ -289,7 +309,8 @@ export class Engine {
       if (
         run.status === 'running' &&
         (execution?.kind === 'script' || execution?.kind === 'fetch') &&
-        execution.status === 'running'
+        execution.status === 'running' &&
+        !execution.background
       ) {
         this.fail(
           run,
@@ -2020,7 +2041,11 @@ export class Engine {
       void job
         .then(
           (operation) => ({ ok: true as const, ...operation }),
-          (error) => ({ ok: false as const, error: message(error) }),
+          (error) => ({
+            ok: false as const,
+            error: message(error),
+            uncertain: error instanceof UncertainScript,
+          }),
         )
         .then((result) => {
           if (this.stopped) return;
@@ -2033,6 +2058,15 @@ export class Engine {
               return;
             const current = latest.executions.at(-1)!;
             if (!result.ok) {
+              if (
+                current.background &&
+                (result.uncertain || current.background.state !== 'completed')
+              ) {
+                current.background.state = 'uncertain';
+                this.fail(latest, current, node.label + ': ' + result.error);
+                return;
+              }
+              if (current.background) current.background.state = 'completed';
               this.failOperation(
                 latest,
                 current,
@@ -2042,6 +2076,7 @@ export class Engine {
               );
               return;
             }
+            if (current.background) current.background.state = 'completed';
             const output = result.output;
             if (node.kind === 'fetch') {
               current.output = output;
@@ -2214,6 +2249,57 @@ export class Engine {
           resolved.value(entry.variableId),
         ]),
       );
+      if (
+        'executionMode' in operation &&
+        operation.executionMode === 'background'
+      ) {
+        const launch = !execution.background;
+        if (launch)
+          this.backgroundScripts.prepare(run, execution, operation.timeoutMs);
+        if (launch)
+          this.backgroundScripts.launch(
+            run,
+            execution,
+            operation.command,
+            input,
+            environment?.cwd ?? this.cwd,
+            operation.language,
+            {
+              ...inherited,
+              ...this.scriptContextEnvironment(run, execution),
+              ...bindings,
+            },
+            resolved.secrets.length > 0,
+          );
+        const output = await this.backgroundScripts.monitor(
+          run,
+          execution,
+          resolved.secrets,
+          signal,
+          (receipt) => {
+            if (this.stopped) return;
+            const latest = this.run(run.id);
+            const current = latest.executions.find(
+              (step) => step.id === execution.id,
+            );
+            if (!current?.background || latest.status !== 'running') return;
+            const next = {
+              ...current.background,
+              state: receipt.outcome
+                ? ('completed' as const)
+                : ('running' as const),
+              supervisorPid: receipt.pid,
+              supervisorStart: receipt.start,
+              progress: receipt.progress,
+            };
+            if (JSON.stringify(next) !== JSON.stringify(current.background)) {
+              current.background = next;
+              this.save(latest);
+            }
+          },
+        );
+        return { output };
+      }
       const launch = (env: NodeJS.ProcessEnv) =>
         executeScript(
           operation.command,
@@ -2240,6 +2326,7 @@ export class Engine {
       });
       return { output: redact.json(output) };
     } catch (error) {
+      if (error instanceof UncertainScript) throw error;
       throw new InterlockError(redact.text(message(error)));
     }
   }
@@ -2792,6 +2879,95 @@ export class Engine {
     this.pump();
     return this.inspect(runId);
   }
+  manageScript(request: ScriptOperation): {
+    runId: string;
+    executionId: string;
+    status: NodeExecution['status'];
+    background: NonNullable<NodeExecution['background']>;
+  } {
+    const input = scriptOperationSchema.parse(request);
+    const run = this.run(input.runId);
+    const execution = run.executions.find(
+      (step) => step.id === input.executionId,
+    );
+    if (!execution?.background)
+      throw new InterlockError('Background Script execution not found');
+    if (
+      input.action === 'inspect' &&
+      ['launching', 'running'].includes(execution.background.state)
+    ) {
+      try {
+        const node = this.definition(run).nodes.find(
+          (node) => node.id === execution.nodeId,
+        );
+        if (node?.kind !== 'script')
+          throw new InterlockError('Script node not found');
+        const resolved = this.variables.resolve(
+          run,
+          (node.environment ?? []).map((entry) => entry.variableId),
+        );
+        const snapshot = this.backgroundScripts.snapshot(
+          run,
+          execution,
+          resolved.secrets,
+        );
+        if (snapshot) {
+          execution.background = snapshot;
+          this.save(run);
+        }
+      } catch {
+        execution.background.state = 'uncertain';
+        if (!terminal(run.status))
+          this.fail(
+            run,
+            execution,
+            'Background supervisor or protected receipts cannot be verified. Inspect processes and reconcile stopped.',
+          );
+        else this.save(run);
+      }
+    }
+    if (
+      input.action === 'stop' &&
+      ['launching', 'running', 'uncertain'].includes(execution.background.state)
+    ) {
+      try {
+        this.backgroundScripts.stop(run.id, execution.id);
+        if (!terminal(run.status)) {
+          this.cancelTree(run.id);
+          return this.manageScript({
+            action: 'inspect',
+            runId: run.id,
+            executionId: execution.id,
+          });
+        }
+      } catch (error) {
+        execution.background.state = 'uncertain';
+        if (!terminal(run.status)) this.fail(run, execution, message(error));
+        else this.save(run);
+        throw new InterlockError(message(error));
+      }
+    }
+    if (input.action === 'reconcile') {
+      if (execution.background.state !== 'uncertain')
+        throw new InterlockError(
+          'Only uncertain background Scripts can be reconciled',
+        );
+      execution.background.state = 'reconciled';
+      this.save(run);
+      this.event(
+        run,
+        'script.reconciled',
+        'Original Script confirmed stopped and effects inspected: ' +
+          input.reason,
+      );
+    }
+    return {
+      runId: run.id,
+      executionId: execution.id,
+      status: execution.status,
+      background: execution.background,
+    };
+  }
   private cancelTree(id: string) {
     const run = this.run(id);
     if (terminal(run.status)) return;
@@ -2801,6 +2977,18 @@ export class Engine {
       this.cancelTree(child.id);
     run.status = 'cancelled';
     const execution = run.executions.at(-1);
+    if (
+      execution?.background &&
+      ['launching', 'running'].includes(execution.background.state)
+    ) {
+      try {
+        this.backgroundScripts.stop(run.id, execution.id);
+      } catch {
+        execution.background.state = 'uncertain';
+        execution.error =
+          'Background stop could not verify the supervisor. Inspect processes and reconcile stopped.';
+      }
+    }
     if (execution) this.localJobs.get(execution.id)?.abort();
     if (execution && !terminal(execution.status))
       execution.status = 'cancelled';
@@ -2868,6 +3056,10 @@ export class Engine {
       const run = this.run(id);
       if (run.status !== 'failed')
         throw new InterlockError('Only failed runs can be retried');
+      if (run.executions.some((step) => step.background?.state === 'uncertain'))
+        throw new InterlockError(
+          'Reconcile the uncertain background Script with stopped:true after inspecting processes and effects before retrying',
+        );
       this.chains.assertRetry(run);
       if (this.handledWorkflowFailure(run))
         throw new InterlockError(

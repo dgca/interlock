@@ -433,6 +433,8 @@ export async function runCommand(argv: string[]) {
         scope: args[1] === '--chain' ? 'chain' : 'run',
       });
     }
+    case 'script':
+      return client.runs.script.mutate(await parse(args[0]));
     case 'retry':
       return client.runs.retry.mutate({ id: args[0] });
     default:
@@ -474,6 +476,7 @@ export async function runCommand(argv: string[]) {
           'submit <work-id> <token> <json|@file> [--summary]',
           'fail <work-id> <token> <error>',
           'renew <work-id> <token> [options-json: {"leaseSeconds":3600}]',
+          'script <json|@file> (action: inspect/stop/reconcile; exact runId and executionId; reconciliation requires stopped:true and reason)',
           'cancel <run-id> [--chain] (stop the latest successor from any chain member; detached descendants remain independent)',
           'retry <run-id>',
         ],

@@ -55,6 +55,7 @@ export function createMcpClient(url?: string) {
       publish: client.workflows.publish.mutate,
     },
     runs: {
+      script: client.runs.script.mutate,
       externalInputStatus: client.runs.externalInputStatus.query,
       externalInput: client.runs.externalInput.mutate,
       previewHistoryDeletion: client.runs.previewHistoryDeletion.query,

@@ -629,3 +629,9 @@ export class Store {
     this.db.close();
   }
 }
+
+export {
+  BackgroundFiles,
+  type BackgroundJob,
+  type SupervisorReceipt,
+} from './backgroundScripts.js';

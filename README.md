@@ -77,6 +77,8 @@ Available nodes include entry and exit, Agent, Script, Fetch, Wait, External inp
 
 Node settings group the work, input, result and execution controls. Agent, Script, Fetch and waited Workflow steps can branch on an accepted result and construct forwarded fields using fixed values, missing-field defaults and nested objects. The engine validates and routes the raw result before shaping the output. See [Step data and result branches](docs/node-data.md).
 
+Script settings offer **Background execution** for commands that must survive a server restart. A local supervisor enforces the deadline and records a durable result while Interlock is offline. Run inspection shows bounded progress; uncertainty requires explicit stopped reconciliation before retry. Foreground execution remains the default. See [Scripts and interruptions](docs/architecture.md#scripts-and-interruptions).
+
 Script, Fetch and waited Workflow settings offer **Route on failure** to send structured error data through a **Failed** connector. Existing nodes still stop the run by default. See [failure routes](docs/failure-routes.md) for the error contract and limits.
 
 Add a **Batch** and configure its items path and concurrency. Use **Add step** inside the group to create an Agent, Script, or other ordinary node. The first step connects to **Start** automatically. Connect additional steps within the group; connect the last step on every branch to **End**. Connect **Out** to the next step or Exit. The output route receives the ordered results after all items finish. Group members remain visible on the main canvas. Collapse hides them temporarily; moving the group moves its members.

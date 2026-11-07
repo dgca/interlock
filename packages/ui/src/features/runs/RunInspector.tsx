@@ -624,6 +624,22 @@ export function RunInspector({
               execution.port === 'failed' && (
                 <p className="hint">Followed Failed with error data.</p>
               )}
+            {execution?.background && (
+              <>
+                <p className="hint">
+                  Background Script: {execution.background.state}. Deadline{' '}
+                  {new Date(execution.background.deadline).toLocaleString()}.
+                </p>
+                {execution.background.progress && (
+                  <details>
+                    <summary>Script progress</summary>
+                    <pre className={styles.errorDetails}>
+                      {execution.background.progress}
+                    </pre>
+                  </details>
+                )}
+              </>
+            )}
             {execution?.check && (
               <>
                 <p className="hint">
