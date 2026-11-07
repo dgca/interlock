@@ -40,6 +40,7 @@ Usage and budget commands: usage, report-usage, budget, set-budget
 Local harness configuration and execution: executors
 Workflow variables: variables <read|manage> <json|@file> [--value-stdin]
 Workflow triggers: triggers (schedules is an alias) <read|manage> <json|@file>
+Kinds: schedule, webhook, event. Event triggers match run transitions with optional quiescence.
 Named pause holds: pause, pause-holds, resume
 Run 'interlock commands' for argument syntax.
 

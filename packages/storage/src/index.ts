@@ -172,6 +172,89 @@ export class Store {
       .all(...(workflowId ? [workflowId] : []))
       .map((row) => JSON.parse(row.value as string));
   }
+  eventDeliveries(triggerId: string, offset = 0, limit = 20) {
+    const total = Number(
+      this.db
+        .prepare(
+          "SELECT count(*) AS total FROM documents WHERE collection = 'eventDeliveries' AND json_extract(value, '$.triggerId') = ?",
+        )
+        .get(triggerId)!.total,
+    );
+    const items = this.db
+      .prepare(
+        "SELECT value FROM documents WHERE collection = 'eventDeliveries' AND json_extract(value, '$.triggerId') = ? ORDER BY json_extract(value, '$.createdAt') DESC, rowid DESC LIMIT ? OFFSET ?",
+      )
+      .all(triggerId, limit, offset)
+      .map(
+        (row) =>
+          JSON.parse(
+            row.value as string,
+          ) as import('@interlock/core').EventDelivery,
+      );
+    return {
+      items,
+      total,
+      nextOffset: offset + items.length < total ? offset + items.length : null,
+    };
+  }
+  pendingEventDeliveries(): import('@interlock/core').EventDelivery[] {
+    return this.db
+      .prepare(
+        "SELECT value FROM documents WHERE collection = 'eventDeliveries' AND coalesce(json_extract(value, '$.settled'), 0) = 0 ORDER BY json_extract(value, '$.createdAt'), rowid",
+      )
+      .all()
+      .map((row) => JSON.parse(row.value as string));
+  }
+  trimEventDeliveries(triggerId: string, keep = 200) {
+    this.db
+      .prepare(
+        "DELETE FROM documents WHERE collection = 'eventDeliveries' AND id IN (SELECT id FROM documents WHERE collection = 'eventDeliveries' AND json_extract(value, '$.triggerId') = ? AND json_extract(value, '$.settled') = 1 ORDER BY json_extract(value, '$.createdAt') DESC, rowid DESC LIMIT -1 OFFSET ?)",
+      )
+      .run(triggerId, keep);
+  }
+  deleteEventHistory(triggerId: string) {
+    // Receipts outlive visible history, including disable/delete/import cycles.
+    this.db
+      .prepare(
+        "DELETE FROM documents WHERE collection = 'eventDeliveries' AND json_extract(value, '$.triggerId') = ?",
+      )
+      .run(triggerId);
+  }
+  terminalBackgroundRuns(): Run[] {
+    return this.db
+      .prepare(
+        `
+      SELECT d.value FROM active_background_runs b JOIN documents d
+        ON d.collection = 'runs' AND d.id = b.run_id
+      WHERE json_extract(d.value, '$.status') IN ('completed', 'failed', 'cancelled')
+    `,
+      )
+      .all()
+      .map((row) => JSON.parse(row.value as string));
+  }
+  /** Source run, descendants including detached runs, and their continuations. */
+  sourceRunTree(runId: string): Run[] {
+    return this.db
+      .prepare(
+        `
+      WITH RECURSIVE tree(id) AS (
+        SELECT ?
+        UNION
+        SELECT d.id FROM documents d JOIN tree t
+          ON json_extract(d.value, '$.parentRunId') = t.id
+          WHERE d.collection = 'runs'
+        UNION
+        SELECT json_extract(d.value, '$.chain.nextRunId')
+          FROM documents d JOIN tree t ON d.id = t.id
+          WHERE d.collection = 'runs' AND json_type(d.value, '$.chain.nextRunId') = 'text'
+      )
+      SELECT d.value FROM documents d JOIN tree t ON d.id = t.id
+        WHERE d.collection = 'runs'
+    `,
+      )
+      .all(runId)
+      .map((row) => JSON.parse(row.value as string));
+  }
   scheduleFires(triggerId: string, offset = 0, limit = 20) {
     const total = Number(
       this.db

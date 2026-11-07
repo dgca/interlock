@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { webhookConfigSchema, type WebhookConfig } from './webhooks.js';
+import { eventConfigSchema, type EventConfig } from './eventTriggers.js';
 import { CronExpressionParser } from 'cron-parser';
 import { jsonSchema, type Json } from './index.js';
 
@@ -138,6 +139,7 @@ export type ScheduleConfig = z.infer<typeof scheduleConfigSchema>;
 export const triggerConfigSchema = z.union([
   scheduleConfigSchema,
   z.lazy(() => webhookConfigSchema),
+  eventConfigSchema,
 ]);
 export type TriggerConfig = z.infer<typeof triggerConfigSchema>;
 export function triggerConfig(trigger: WorkflowTrigger): TriggerConfig {
@@ -153,26 +155,37 @@ export function triggerConfig(trigger: WorkflowTrigger): TriggerConfig {
           'missedFirePolicy',
           'pauseAfterConsecutiveFailures',
         ]
-      : [
-          'kind',
-          'name',
-          'authentication',
-          'deliveryId',
-          'timestamp',
-          'timestampFormat',
-          'timestampWindowMs',
-          'filters',
-          'action',
-          'maxBodyBytes',
-          'rateLimit',
-          'pauseAfterConsecutiveFailures',
-        ];
+      : trigger.kind === 'event'
+        ? [
+            'kind',
+            'name',
+            'events',
+            'scope',
+            'exitNodeId',
+            'waitForQuiescence',
+            'maxTriggerDepth',
+            'pauseAfterConsecutiveFailures',
+          ]
+        : [
+            'kind',
+            'name',
+            'authentication',
+            'deliveryId',
+            'timestamp',
+            'timestampFormat',
+            'timestampWindowMs',
+            'filters',
+            'action',
+            'maxBodyBytes',
+            'rateLimit',
+            'pauseAfterConsecutiveFailures',
+          ];
   return triggerConfigSchema.parse(
     Object.fromEntries(
-      fields.map((key) => [
-        key,
-        (trigger as unknown as Record<string, unknown>)[key],
-      ]),
+      fields.flatMap((key) => {
+        const value = (trigger as unknown as Record<string, unknown>)[key];
+        return value === undefined ? [] : [[key, value]];
+      }),
     ),
   );
 }
@@ -180,7 +193,7 @@ export const scheduleReadSchema = z.discriminatedUnion('action', [
   z
     .object({
       action: z.literal('list'),
-      kind: z.enum(['schedule', 'webhook']).optional(),
+      kind: z.enum(['schedule', 'webhook', 'event']).optional(),
       workflowId: z.string().min(1).optional(),
       offset: z.number().int().min(0).default(0),
       limit: z.number().int().min(1).max(100).default(20),
@@ -271,7 +284,8 @@ export interface WebhookTrigger extends WebhookConfig, TriggerState {
   deliveryCount: number;
   rateWindow?: { startedAt: string; requests: number };
 }
-export type WorkflowTrigger = ScheduleTrigger | WebhookTrigger;
+export interface EventTrigger extends EventConfig, TriggerState {}
+export type WorkflowTrigger = ScheduleTrigger | WebhookTrigger | EventTrigger;
 export interface ScheduleFire {
   id: string;
   triggerId: string;

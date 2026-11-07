@@ -47,6 +47,7 @@ const inspectionFields = {
     .object({ id: z.string(), status: mutationSummarySchema.shape.runStatus })
     .passthrough()
     .optional(),
+  quiescence: z.record(z.unknown()).optional(),
   counterpartRunId: z.string().optional(),
   handledFailure: z
     .object({ runId: z.string(), executionId: z.string() })

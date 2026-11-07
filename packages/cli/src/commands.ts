@@ -499,7 +499,7 @@ export async function runCommand(argv: string[]) {
     default:
       return {
         usage: [
-          'triggers <read|manage> <json|@file> (schedule/webhook configuration, paged fires/deliveries and attention; mutations use expectedRevision; create/import disabled; schedules alias retained)',
+          'triggers <read|manage> <json|@file> (schedule/webhook/event configuration, paged fires/deliveries and attention; mutations use expectedRevision; create/import disabled; schedules alias retained)',
           'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value; write-only Secret creation/replacement through stdin)',
           'stalls [json|@file] (settings by default; configure with expectedRevision/policy, inspect with runId/offset/limit)',
           'executors [json|@file] (list by default; settings/save_settings for shared concurrency, save local profiles with optional concurrency, discover models/efforts, inspect work, respond, retry_model after a model refusal, stop or reconcile an interrupted execution)',

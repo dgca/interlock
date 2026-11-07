@@ -7,6 +7,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import {
   blankDefinition,
   scheduleConfigSchema,
+  eventConfigSchema,
   webhookConfigSchema,
   type Workflow,
 } from '@interlock/core';
@@ -423,4 +424,132 @@ it('UI240 preserves invalid webhook edits, saves disabled and inspects delivery 
       expect.objectContaining({ action, id: 'h' }),
     );
   }
+});
+
+it('UI241 saves and reopens event settings with revision protection and paginated quiescence outcomes', async () => {
+  await renderSchedules();
+  await click('Add event trigger');
+  await fill(input('Trigger name'), 'Teardown');
+  await fill(input('Source workflow ID'), 'source-workflow');
+  await fill(input('Completed Exit node ID'), 'accepted');
+  const quiescence = input('Wait for the source tree to stop');
+  await act(async () => quiescence.click());
+  await fill(input('Maximum trigger depth'), '3');
+  rpc.manage.mockRejectedValueOnce(
+    new Error('Trigger revision conflict; reload current trigger'),
+  );
+  await click('Save event trigger');
+  expect(document.body.textContent).toContain('Trigger revision conflict');
+  expect(input('Trigger name').value).toBe('Teardown');
+  const config = eventConfigSchema.parse({
+    kind: 'event',
+    name: 'Teardown',
+    events: ['completed'],
+    scope: { type: 'workflow', workflowId: 'source-workflow' },
+    exitNodeId: 'accepted',
+    waitForQuiescence: true,
+    maxTriggerDepth: 3,
+  });
+  const saved = {
+    ...config,
+    id: 'event-trigger',
+    workflowId: 'w',
+    revision: 1,
+    enabled: false,
+    consecutiveFailures: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    holds: [],
+    holdCount: 0,
+    canEnable: true,
+    lagMs: 0,
+    excessiveLag: false,
+  };
+  rpc.manage.mockImplementation(async () => {
+    rpc.list.mockResolvedValue({ items: [saved], total: 1, nextOffset: null });
+    rpc.inspect.mockResolvedValue({
+      trigger: saved,
+      upcoming: [],
+      fires: { items: [], total: 0, nextOffset: null },
+      deliveries: {
+        items: [
+          {
+            id: 'delivery',
+            eventId: 'event-id',
+            sourceRunId: 'source-run',
+            occurredAt: '2026-11-07T12:00:00Z',
+            outcome: 'pending_quiescence',
+            reason: 'Uncertain claim still active',
+          },
+        ],
+        total: 21,
+        nextOffset: 20,
+      },
+    });
+    return { applied: true, trigger: saved };
+  });
+  await click('Save event trigger');
+  expect(rpc.manage).toHaveBeenLastCalledWith({
+    action: 'create',
+    workflowId: 'w',
+    config,
+  });
+  expect(document.body.textContent).toContain(
+    'Event trigger created disabled.',
+  );
+  expect(document.body.textContent).toContain('Uncertain claim still active');
+  expect(document.querySelector('a[href="/runs/source-run"]')).toBeTruthy();
+  await click('Older deliveries');
+  expect(rpc.inspect).toHaveBeenLastCalledWith({
+    id: 'event-trigger',
+    offset: 20,
+  });
+  await click('Edit event');
+  expect(input('Source workflow ID').value).toBe('source-workflow');
+  expect(input('Wait for the source tree to stop').checked).toBe(true);
+  expect(input('Maximum trigger depth').value).toBe('3');
+  await click('Save event trigger');
+  expect(rpc.manage).toHaveBeenLastCalledWith({
+    action: 'update',
+    id: 'event-trigger',
+    expectedRevision: 1,
+    config,
+  });
+});
+
+it('UI241 removes terminal-only settings when attention events or library scope are selected', async () => {
+  await renderSchedules();
+  await click('Add event trigger');
+  await fill(input('Completed Exit node ID'), 'exit');
+  await act(async () => input('Wait for the source tree to stop').click());
+  await act(async () => input('Run transitions').click());
+  await act(async () =>
+    [...document.querySelectorAll<HTMLElement>('[role=option]')]
+      .find((option) => option.textContent === 'Stalled')!
+      .click(),
+  );
+  expect(input('Wait for the source tree to stop').disabled).toBe(true);
+  expect(input('Wait for the source tree to stop').checked).toBe(false);
+  expect(
+    [...document.querySelectorAll('label')].some(
+      (label) => label.textContent === 'Completed Exit node ID',
+    ),
+  ).toBe(false);
+  await act(async () => input('Source scope').click());
+  await act(async () =>
+    [...document.querySelectorAll<HTMLElement>('[role=option]')]
+      .find((option) => option.textContent === 'Entire library')!
+      .click(),
+  );
+  await click('Save event trigger');
+  expect(rpc.manage).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      config: expect.objectContaining({
+        events: ['completed', 'stalled'],
+        scope: { type: 'library' },
+        waitForQuiescence: false,
+        exitNodeId: undefined,
+      }),
+    }),
+  );
 });

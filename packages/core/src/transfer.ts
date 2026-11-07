@@ -1,3 +1,4 @@
+import { eventConfigSchema } from './eventTriggers.js';
 import { webhookConfigSchema } from './webhooks.js';
 import { scheduleConfigSchema } from './workflowTriggers.js';
 import { z } from 'zod';
@@ -18,6 +19,7 @@ export const workflowBundleSchema = z
       z.literal(5),
       z.literal(6),
       z.literal(7),
+      z.literal(8),
     ]),
     variables: z.array(variableRequirementSchema).max(4096).optional(),
     prompts: z.array(savedPromptSchema).optional(),
@@ -53,6 +55,18 @@ export const workflowBundleSchema = z
             )
             .max(4096)
             .optional(),
+          eventTriggers: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  config: eventConfigSchema,
+                  enabled: z.boolean().default(false),
+                })
+                .strict(),
+            )
+            .max(4096)
+            .optional(),
           draft: definitionSchema,
           draftRevision: z.number().int().positive(),
           deletedVersions: z.array(deletedVersionSchema).optional(),
@@ -70,6 +84,27 @@ export const workflowBundleSchema = z
       .min(1),
   })
   .superRefine((bundle, ctx) => {
+    if (
+      bundle.formatVersion < 8 &&
+      bundle.workflows.some((w) => w.eventTriggers?.length)
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Event triggers require bundle formatVersion 8',
+      });
+    const workflowIds = new Set(bundle.workflows.map((w) => w.id));
+    for (const workflow of bundle.workflows)
+      for (const trigger of workflow.eventTriggers ?? [])
+        if (
+          trigger.config.scope.type === 'workflow' &&
+          !workflowIds.has(trigger.config.scope.workflowId)
+        )
+          ctx.addIssue({
+            code: 'custom',
+            message:
+              'Event trigger source workflow must be included in the bundle',
+          });
+
     if (
       bundle.formatVersion < 7 &&
       bundle.workflows.some((w) => w.webhooks?.length)

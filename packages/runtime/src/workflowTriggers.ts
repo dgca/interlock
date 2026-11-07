@@ -20,6 +20,7 @@ import {
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { Webhooks } from './webhooks.js';
+import type { EventTriggers } from './eventTriggers.js';
 
 const active = (run: Run) =>
   ['queued', 'running', 'waiting'].includes(run.status);
@@ -29,6 +30,7 @@ export class WorkflowTriggers {
     private store: Store,
     private start: (trigger: ScheduleTrigger, input: Json, slot: string) => Run,
     private webhooks: Webhooks,
+    readonly events: EventTriggers,
   ) {}
   private get(id: string) {
     const trigger = this.store.get<WorkflowTrigger>('workflowTriggers', id);
@@ -101,7 +103,7 @@ export class WorkflowTriggers {
     workflowId?: string,
     offset = 0,
     limit = 20,
-    kind?: 'schedule' | 'webhook',
+    kind?: 'schedule' | 'webhook' | 'event',
   ) {
     const q = scheduleReadSchema.parse({
       action: 'list',
@@ -142,6 +144,18 @@ export class WorkflowTriggers {
     });
     if (q.action !== 'inspect') throw new Error('Invalid inspect');
     const trigger = this.get(id);
+    if (trigger.kind === 'event')
+      return {
+        trigger: this.summary(trigger),
+        deliveries: this.events.inspect(id, q.offset, q.limit),
+        endpoint: null,
+        upcoming: [],
+        fires: {
+          items: [] as (ScheduleFire & { runAvailable: boolean })[],
+          total: 0,
+          nextOffset: null,
+        },
+      };
     if (trigger.kind === 'webhook')
       return {
         trigger: this.summary(trigger),
@@ -224,6 +238,7 @@ export class WorkflowTriggers {
         if (!this.store.get('workflows', q.workflowId))
           throw new InterlockError('Workflow not found');
         if (q.config.kind === 'webhook') this.webhooks.validate(q.config);
+        if (q.config.kind === 'event') this.events.validate(q.config);
         const trigger = {
           ...q.config,
           id: randomUUID(),
@@ -237,7 +252,9 @@ export class WorkflowTriggers {
                 anchorAt: at,
                 nextFireAt: nextScheduleSlot(q.config.timing, at),
               }
-            : { ignoredCount: 0, rejectedCount: 0, deliveryCount: 0 }),
+            : q.config.kind === 'webhook'
+              ? { ignoredCount: 0, rejectedCount: 0, deliveryCount: 0 }
+              : {}),
           consecutiveFailures: 0,
         } as WorkflowTrigger;
         this.store.put('workflowTriggers', trigger);
@@ -252,6 +269,7 @@ export class WorkflowTriggers {
         this.store.remove('workflowTriggers', trigger.id);
         this.store.deleteScheduleFires(trigger.id);
         this.store.deleteWebhookHistory(trigger.id);
+        this.store.deleteEventHistory(trigger.id);
         return { applied: true, trigger: null };
       }
       if (q.action === 'update') {
@@ -261,6 +279,7 @@ export class WorkflowTriggers {
           );
         if (q.config.kind === 'webhook')
           this.webhooks.validate(q.config, trigger.enabled);
+        if (q.config.kind === 'event') this.events.validate(q.config);
         const changed =
           trigger.kind === 'schedule' &&
           q.config.kind === 'schedule' &&
@@ -274,6 +293,7 @@ export class WorkflowTriggers {
       } else if (q.action === 'enable') {
         this.assertTarget(trigger);
         if (trigger.kind === 'webhook') this.webhooks.validate(trigger, true);
+        if (trigger.kind === 'event') this.events.validate(trigger);
         trigger.enabled = true;
         trigger.autoPaused = undefined;
         trigger.consecutiveFailures = 0;
@@ -289,6 +309,7 @@ export class WorkflowTriggers {
           );
       } else {
         trigger.enabled = false;
+        if (trigger.kind === 'event') this.events.disable(trigger.id);
       }
       trigger.revision++;
       trigger.updatedAt = at;
@@ -314,6 +335,7 @@ export class WorkflowTriggers {
   tick() {
     this.store.transaction(() => {
       this.webhooks.tick();
+      this.events.tick();
       const at = new Date().toISOString();
       const settledTriggers = new Set<string>();
       for (const fire of this.store.pendingScheduleFires()) {

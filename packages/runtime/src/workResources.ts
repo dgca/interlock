@@ -1,3 +1,9 @@
+import {
+  uncertainClaimCollection,
+  type UncertainClaim,
+  uncertainOperationCollection,
+  type UncertainOperation,
+} from './quiescence.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
   InterlockError,
@@ -66,7 +72,47 @@ export class WorkResources {
       }
     });
   }
+  uncertainExecution(
+    runId: string,
+    execution: NodeExecution,
+    reason: string,
+    includeScripts = false,
+  ) {
+    const run = this.store.get<import('@interlock/core').Run>('runs', runId);
+    const node =
+      run &&
+      this.store
+        .getVersion(run.workflowId, run.version)
+        ?.definition.nodes.find((node) => node.id === execution.nodeId);
+    if (
+      execution.kind !== 'fetch' &&
+      !(includeScripts && execution.kind === 'script') &&
+      !(
+        node?.kind === 'wait' &&
+        node.timing.kind === 'poll' &&
+        (node.timing.check.kind === 'fetch' || includeScripts)
+      )
+    )
+      return;
+    const attempt = execution.resourceAttempt ?? execution.attempt ?? 1;
+    const record: UncertainOperation = {
+      id: `${execution.id}:${attempt}`,
+      runId,
+      executionId: execution.id,
+      attempt,
+      revokedAt: new Date().toISOString(),
+      reason,
+    };
+    this.store.put(uncertainOperationCollection, record);
+  }
   endExecution(runId: string, execution: NodeExecution, uncertain = false) {
+    if (uncertain)
+      this.uncertainExecution(
+        runId,
+        execution,
+        'Operation outcome unconfirmed; verify remote work stopped',
+      );
+    if (!uncertain) execution.operationStartedAt = undefined;
     if (!execution.resources?.length) return;
     for (const r of this.store.forRuns<ResourceReservation>(
       resourceCollection,
@@ -97,7 +143,27 @@ export class WorkResources {
     const records = this.store
       .forRuns<ResourceReservation>(resourceCollection, new Set([runId]))
       .filter((r) => r.executionId === executionId && r.attempt === attempt);
-    return this.releaseRecords(records, attempt, actor, { runId, executionId });
+    const operation = this.store.get<UncertainOperation>(
+      uncertainOperationCollection,
+      `${executionId}:${attempt}`,
+    );
+    const result = this.releaseRecords(records, attempt, actor, {
+      runId,
+      executionId,
+    });
+    if (operation?.runId === runId) {
+      this.store.remove(uncertainOperationCollection, operation.id);
+      this.store.touchRun(runId);
+      this.notify(
+        runId,
+        `${actor}: confirmed operation attempt ${attempt} stopped`,
+      );
+    }
+    return {
+      ...result,
+      applied: result.applied || operation?.runId === runId,
+      uncertainOperationsReleased: operation?.runId === runId ? 1 : 0,
+    };
   }
   private releaseRecords(
     records: ResourceReservation[],
@@ -159,6 +225,20 @@ export class WorkResources {
     work: WorkRequest,
     reason: 'completed' | 'failure' | 'expiry' | 'cancelled' | 'held',
   ) {
+    if (
+      work.status === 'claimed' &&
+      ['expiry', 'cancelled', 'held'].includes(reason)
+    ) {
+      const record: UncertainClaim = {
+        id: `${work.id}:${work.attempt}`,
+        runId: work.runId,
+        workId: work.id,
+        attempt: work.attempt,
+        revokedAt: new Date().toISOString(),
+        reason,
+      };
+      this.store.put(uncertainClaimCollection, record);
+    }
     for (const name of work.resources ?? []) {
       const r = this.store.get<ResourceReservation>(
         resourceCollection,
@@ -186,7 +266,29 @@ export class WorkResources {
     const records = this.store
       .forWork<ResourceReservation>(resourceCollection, workId)
       .filter((r) => r.attempt === attempt);
-    return this.releaseRecords(records, attempt, actor, { workId });
+    const claim = this.store.get<UncertainClaim>(
+      uncertainClaimCollection,
+      `${workId}:${attempt}`,
+    );
+    const work = this.store.get<WorkRequest>('work', workId);
+    if (work?.status === 'claimed' && work.attempt === attempt)
+      throw new InterlockError(
+        'An active claim still owns this attempt. Stop it before confirming stopped.',
+      );
+    const result = this.releaseRecords(records, attempt, actor, { workId });
+    if (claim) {
+      this.store.remove(uncertainClaimCollection, claim.id);
+      this.store.touchRun(claim.runId);
+      this.notify(
+        claim.runId,
+        `${actor}: confirmed revoked claim attempt ${attempt} stopped`,
+      );
+    }
+    return {
+      ...result,
+      applied: result.applied || !!claim,
+      uncertainClaimsReleased: claim ? 1 : 0,
+    };
   }
 
   assertDelete(runIds: Set<string>) {

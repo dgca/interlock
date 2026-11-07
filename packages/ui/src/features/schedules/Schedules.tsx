@@ -8,6 +8,7 @@ import {
   Button,
   Checkbox,
   Group,
+  MultiSelect,
   NumberInput,
   Radio,
   Select,
@@ -18,9 +19,11 @@ import {
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import {
   scheduleConfigSchema,
+  eventConfigSchema,
   webhookConfigSchema,
   triggerConfig,
   type WebhookConfig,
+  type EventConfig,
   type TriggerConfig,
   type ScheduleConfig,
   type ScheduleMutation,
@@ -54,13 +57,16 @@ const timestamp = (at?: string) =>
 const cadence = (
   t:
     | { kind: 'schedule'; timing: ScheduleConfig['timing'] }
-    | { kind: 'webhook' },
+    | { kind: 'webhook' }
+    | { kind: 'event'; events: EventConfig['events'] },
 ) =>
   t.kind === 'webhook'
     ? 'Webhook'
-    : t.timing.type === 'interval'
-      ? `Every ${t.timing.intervalMs / 1000} seconds`
-      : `${t.timing.expression} · ${t.timing.timeZone}`;
+    : t.kind === 'event'
+      ? `On ${t.events.map((event) => event.replaceAll('_', ' ')).join(', ')}`
+      : t.timing.type === 'interval'
+        ? `Every ${t.timing.intervalMs / 1000} seconds`
+        : `${t.timing.expression} · ${t.timing.timeZone}`;
 const state = (t: Pick<Trigger, 'autoPaused' | 'enabled'>) =>
   !t.enabled ? 'Disabled' : t.autoPaused ? 'Automatically paused' : 'Enabled';
 
@@ -84,7 +90,9 @@ export function Schedules({
   const [inspection, setInspection] = useState<Inspection>();
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [editing, setEditing] = useState<'new' | 'new_webhook' | Trigger>();
+  const [editing, setEditing] = useState<
+    'new' | 'new_webhook' | 'new_event' | Trigger
+  >();
   const [confirm, setConfirm] = useState<'enable' | 'disable' | 'delete'>();
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
@@ -123,7 +131,7 @@ export function Schedules({
     if (detail.status === 'fulfilled') {
       if (detail.value && detail.value.trigger.workflowId !== workflow.id) {
         setInspection(undefined);
-        throw new Error('Schedule belongs to another workflow');
+        throw new Error('Trigger belongs to another workflow');
       }
       setInspection(detail.value);
     } else setInspection(undefined);
@@ -168,7 +176,12 @@ export function Schedules({
         setConfirm(undefined);
       });
       const kind = 'config' in request ? request.config.kind : trigger?.kind;
-      const noun = kind === 'webhook' ? 'Webhook' : 'Schedule';
+      const noun =
+        kind === 'webhook'
+          ? 'Webhook'
+          : kind === 'event'
+            ? 'Event trigger'
+            : 'Schedule';
       setSuccess(
         request.action === 'delete'
           ? `${noun} deleted. Existing runs remain.`
@@ -241,6 +254,13 @@ export function Schedules({
           >
             Add webhook
           </Button>
+          <Button
+            variant="default"
+            leftSection={<Plus size={15} />}
+            onClick={() => setEditing('new_event')}
+          >
+            Add event trigger
+          </Button>
         </Group>
       </div>
       <Text size="xs" c="dimmed" mb="lg">
@@ -270,7 +290,7 @@ export function Schedules({
         !error && <Text role="status">Loading triggers…</Text>
       ) : listing.total === 0 ? (
         <Text size="sm">
-          No triggers. Add a schedule or webhook to start this workflow.
+          No triggers. Add a schedule, webhook or lifecycle event trigger.
         </Text>
       ) : (
         <div className={styles.grid}>
@@ -298,7 +318,11 @@ export function Schedules({
                     ? t.autoPaused.reason
                     : t.kind === 'schedule'
                       ? `Next slot ${timestamp(t.nextFireAt)}`
-                      : `POST /hooks/${t.id}`}
+                      : t.kind === 'webhook'
+                        ? `POST /hooks/${t.id}`
+                        : t.scope.type === 'library'
+                          ? 'Library-wide'
+                          : `Source ${t.scope.workflowId}${t.scope.includeChildren ? ' and owned children' : ''}`}
                 </small>
               </button>
             ))}
@@ -324,9 +348,9 @@ export function Schedules({
               <h3 ref={heading} tabIndex={-1}>
                 {selected
                   ? error
-                    ? 'Schedule unavailable'
-                    : 'Loading schedule…'
-                  : 'Select a schedule'}
+                    ? 'Trigger unavailable'
+                    : 'Loading trigger…'
+                  : 'Select a trigger'}
               </h3>
             ) : (
               <>
@@ -407,6 +431,49 @@ export function Schedules({
                       <pre>{JSON.stringify(configOf(trigger), null, 2)}</pre>
                     </details>
                   </Stack>
+                ) : trigger.kind === 'event' ? (
+                  <dl className={styles.policies}>
+                    <dt>Source</dt>
+                    <dd>
+                      {trigger.scope.type === 'library' ? (
+                        'Library-wide'
+                      ) : (
+                        <>
+                          <Link to={paths.workflow(trigger.scope.workflowId)}>
+                            {trigger.scope.workflowId}
+                          </Link>
+                          {trigger.scope.includeChildren
+                            ? ' and owned children'
+                            : ''}
+                        </>
+                      )}
+                    </dd>
+                    {trigger.exitNodeId && (
+                      <>
+                        <dt>Completed Exit</dt>
+                        <dd>
+                          <code>{trigger.exitNodeId}</code>
+                        </dd>
+                      </>
+                    )}
+                    <dt>Before dispatch</dt>
+                    <dd>
+                      {trigger.waitForQuiescence
+                        ? 'Wait for the source tree to stop'
+                        : 'Dispatch on transition'}
+                    </dd>
+                    <dt>Maximum trigger depth</dt>
+                    <dd>{trigger.maxTriggerDepth}</dd>
+                    <dt>Last dispatch</dt>
+                    <dd>{timestamp(trigger.lastFireAt)}</dd>
+                    <dt>Consecutive failures</dt>
+                    <dd>
+                      {trigger.consecutiveFailures}
+                      {trigger.pauseAfterConsecutiveFailures
+                        ? ` / ${trigger.pauseAfterConsecutiveFailures} before pause`
+                        : ' · automatic pause off'}
+                    </dd>
+                  </dl>
                 ) : (
                   <>
                     <dl className={styles.metrics}>
@@ -505,7 +572,7 @@ export function Schedules({
                       variant="default"
                       onClick={() => setConfirm('disable')}
                     >
-                      Disable schedule
+                      Disable {trigger.kind}
                     </Button>
                   )}
                   <Button
@@ -523,7 +590,7 @@ export function Schedules({
                     enabling.
                   </Text>
                 )}
-                {trigger.kind === 'webhook' ? (
+                {trigger.kind !== 'schedule' ? (
                   <>
                     <Text fw={600} size="sm">
                       Recent deliveries
@@ -532,11 +599,36 @@ export function Schedules({
                       {inspection?.deliveries.items.map((d) => (
                         <li className={styles.fire} key={d.id}>
                           <div>
-                            <strong>{d.outcome}</strong>
-                            <small>{timestamp(d.receivedAt)}</small>
-                            <small>
-                              HTTP {d.status} · {d.code}
-                            </small>
+                            <strong>{d.outcome.replaceAll('_', ' ')}</strong>
+                            {'receivedAt' in d ? (
+                              <>
+                                <small>{timestamp(d.receivedAt)}</small>
+                                <small>
+                                  HTTP {d.status} · {d.code}
+                                </small>
+                              </>
+                            ) : (
+                              <>
+                                <small>{timestamp(d.occurredAt)}</small>
+                                <small>
+                                  Event <code>{d.eventId}</code>
+                                </small>
+                                <Link to={paths.run(d.sourceRunId)}>
+                                  Inspect source run
+                                </Link>
+                                {d.reason && (
+                                  <small>{d.reason.replaceAll('_', ' ')}</small>
+                                )}
+                                {d.error && (
+                                  <Text size="xs" c="red">
+                                    {d.error}
+                                  </Text>
+                                )}
+                                {d.runStatus && (
+                                  <small>Handler {d.runStatus}</small>
+                                )}
+                              </>
+                            )}
                             {d.runId && (
                               <Link to={paths.run(d.runId, workflow.id)}>
                                 Inspect run
@@ -664,8 +756,49 @@ export function Schedules({
       )}
       {visible &&
         editing &&
-        (editing === 'new_webhook' ||
-        (typeof editing === 'object' && editing.kind === 'webhook') ? (
+        (editing === 'new_event' ||
+        (typeof editing === 'object' && editing.kind === 'event') ? (
+          <EventEditor
+            key={typeof editing === 'string' ? editing : editing.id}
+            initial={
+              typeof editing === 'string'
+                ? eventConfigSchema.parse({
+                    kind: 'event',
+                    name: 'Event trigger',
+                    events: ['completed'],
+                    scope: { type: 'workflow', workflowId: workflow.id },
+                  })
+                : eventConfigSchema.parse(configOf(editing))
+            }
+            pending={pending}
+            onDirty={onDirty}
+            onClose={() => setEditing(undefined)}
+            onSave={(config) =>
+              mutate(
+                typeof editing === 'string'
+                  ? { action: 'create', workflowId: workflow.id, config }
+                  : {
+                      action: 'update',
+                      id: editing.id,
+                      expectedRevision: editing.revision,
+                      config,
+                    },
+              )
+            }
+            onReload={
+              typeof editing === 'string'
+                ? undefined
+                : async () => {
+                    const current = await api.triggers.inspect.query({
+                      id: editing.id,
+                    });
+                    setEditing(current.trigger);
+                    return eventConfigSchema.parse(configOf(current.trigger));
+                  }
+            }
+          />
+        ) : editing === 'new_webhook' ||
+          (typeof editing === 'object' && editing.kind === 'webhook') ? (
           <WebhookEditor
             key={typeof editing === 'string' ? editing : editing.id}
             initial={
@@ -702,9 +835,9 @@ export function Schedules({
           />
         ) : (
           <ScheduleEditor
-            key={editing === 'new' ? 'new' : editing.id}
+            key={typeof editing === 'string' ? editing : editing.id}
             initial={
-              editing === 'new'
+              typeof editing === 'string'
                 ? initialConfig
                 : scheduleConfigSchema.parse(configOf(editing))
             }
@@ -712,7 +845,7 @@ export function Schedules({
             onDirty={onDirty}
             onClose={() => setEditing(undefined)}
             onReload={
-              editing === 'new'
+              typeof editing === 'string'
                 ? undefined
                 : async () => {
                     const current = await api.triggers.inspect.query({
@@ -726,7 +859,7 @@ export function Schedules({
             }
             onSave={(config) =>
               mutate(
-                editing === 'new'
+                typeof editing === 'string'
                   ? { action: 'create', workflowId: workflow.id, config }
                   : {
                       action: 'update',
@@ -757,9 +890,11 @@ export function Schedules({
                 ? `Delete this ${trigger.kind} and its ${trigger.kind === 'schedule' ? 'fire' : 'delivery'} history. Existing runs remain.`
                 : confirm === 'disable'
                   ? `Stop future ${trigger.kind === 'schedule' ? 'fires' : 'deliveries'}. Existing active and queued runs remain.`
-                  : trigger.kind === 'webhook'
-                    ? 'Accept authenticated deliveries. Named pause holds still apply.'
-                    : `${trigger.missedFirePolicy === 'run_once' ? 'Enabling can immediately attempt the latest missed slot once.' : 'Missed slots are skipped until the next future slot.'} Named pause holds still apply.`}
+                  : trigger.kind === 'event'
+                    ? 'Observe future matching run transitions. Pending deliveries honor named pause holds and quiescence.'
+                    : trigger.kind === 'webhook'
+                      ? 'Accept authenticated deliveries. Named pause holds still apply.'
+                      : `${trigger.missedFirePolicy === 'run_once' ? 'Enabling can immediately attempt the latest missed slot once.' : 'Missed slots are skipped until the next future slot.'} Named pause holds still apply.`}
             </Text>
             {error && (
               <Text role="alert" c="red" mt="md">
@@ -798,6 +933,260 @@ export function Schedules({
         </Modal>
       )}
     </section>
+  );
+}
+
+const eventOptions = [
+  { value: 'completed', label: 'Completed' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'needs_attention', label: 'Needs attention' },
+  { value: 'stalled', label: 'Stalled' },
+];
+function EventEditor({
+  initial,
+  pending,
+  onClose,
+  onSave,
+  onDirty,
+  onReload,
+}: {
+  initial: EventConfig;
+  pending: boolean;
+  onClose: () => void;
+  onSave: (config: EventConfig) => Promise<void>;
+  onDirty: (dirty: boolean) => void;
+  onReload?: () => Promise<EventConfig>;
+}) {
+  const [config, setConfig] = useState(initial);
+  const [error, setError] = useState('');
+  const [issues, setIssues] = useState<Record<string, string>>({});
+  const dirty = JSON.stringify(config) !== JSON.stringify(initial);
+  const completedOnly =
+    config.events.length === 1 && config.events[0] === 'completed';
+  const terminalOnly = config.events.every((event) =>
+    ['completed', 'failed', 'cancelled'].includes(event),
+  );
+  useBeforeUnloadWarning(dirty);
+  useEffect(() => {
+    onDirty(dirty);
+    return () => onDirty(false);
+  }, [dirty, onDirty]);
+  const field = <K extends keyof EventConfig>(
+    key: K,
+    value: EventConfig[K],
+  ) => {
+    setConfig((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === 'scope' && (value as EventConfig['scope']).type === 'library'
+        ? { exitNodeId: undefined }
+        : {}),
+    }));
+    setIssues({});
+    setError('');
+  };
+  const submit = () => {
+    const parsed = eventConfigSchema.safeParse(config);
+    if (!parsed.success) {
+      setIssues(
+        Object.fromEntries(
+          parsed.error.issues.map((issue) => [
+            issue.path.join('.'),
+            issue.message,
+          ]),
+        ),
+      );
+      return;
+    }
+    void onSave(parsed.data).catch((e) => setError(errorMessage(e)));
+  };
+  return (
+    <Modal
+      title="Event trigger configuration"
+      size={650}
+      height={720}
+      busy={pending}
+      onClose={onClose}
+    >
+      <ModalBody>
+        <fieldset
+          disabled={pending}
+          style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+        >
+          <Stack gap="lg">
+            <TextInput
+              label="Trigger name"
+              value={config.name}
+              error={issues.name}
+              onChange={(e) => field('name', e.target.value)}
+            />
+            <Select
+              label="Source scope"
+              allowDeselect={false}
+              value={
+                config.scope.type === 'library'
+                  ? 'library'
+                  : config.scope.includeChildren
+                    ? 'children'
+                    : 'workflow'
+              }
+              data={[
+                { value: 'workflow', label: 'One workflow' },
+                { value: 'children', label: 'Workflow and owned children' },
+                { value: 'library', label: 'Entire library' },
+              ]}
+              onChange={(value) =>
+                field(
+                  'scope',
+                  value === 'library'
+                    ? { type: 'library' }
+                    : {
+                        type: 'workflow',
+                        workflowId:
+                          config.scope.type === 'workflow'
+                            ? config.scope.workflowId
+                            : '',
+                        includeChildren: value === 'children',
+                      },
+                )
+              }
+            />
+            {config.scope.type === 'workflow' && (
+              <TextInput
+                label="Source workflow ID"
+                value={config.scope.workflowId}
+                error={issues['scope.workflowId']}
+                onChange={(e) =>
+                  field('scope', {
+                    type: 'workflow',
+                    workflowId: e.target.value,
+                    includeChildren:
+                      config.scope.type === 'workflow' &&
+                      config.scope.includeChildren,
+                  })
+                }
+              />
+            )}
+            <MultiSelect
+              label="Run transitions"
+              data={eventOptions}
+              value={config.events}
+              error={issues.events}
+              onChange={(values) => {
+                const events = values as EventConfig['events'];
+                setConfig((current) => ({
+                  ...current,
+                  events,
+                  waitForQuiescence:
+                    events.every((event) =>
+                      ['completed', 'failed', 'cancelled'].includes(event),
+                    ) && current.waitForQuiescence,
+                  exitNodeId:
+                    events.length === 1 && events[0] === 'completed'
+                      ? current.exitNodeId
+                      : undefined,
+                }));
+                setIssues({});
+              }}
+            />
+            {completedOnly && config.scope.type === 'workflow' && (
+              <TextInput
+                label="Completed Exit node ID"
+                description="Optional. Match completion through this Exit node only."
+                value={config.exitNodeId ?? ''}
+                error={issues.exitNodeId}
+                onChange={(e) =>
+                  field('exitNodeId', e.target.value || undefined)
+                }
+              />
+            )}
+            <Checkbox
+              label="Wait for the source tree to stop"
+              description={
+                terminalOnly
+                  ? 'Includes detached descendants, Scripts and uncertain claims. Reconcile uncertain work before teardown.'
+                  : 'Available when all selected transitions are completed, failed or cancelled.'
+              }
+              checked={config.waitForQuiescence}
+              disabled={!terminalOnly}
+              onChange={(e) => field('waitForQuiescence', e.target.checked)}
+            />
+            <NumberInput
+              label="Maximum trigger depth"
+              description="A trigger already in the causal chain is always suppressed."
+              value={config.maxTriggerDepth}
+              min={1}
+              max={20}
+              allowDecimal={false}
+              error={issues.maxTriggerDepth}
+              onChange={(value) => field('maxTriggerDepth', Number(value))}
+            />
+            <div>
+              <Checkbox
+                label="Pause after consecutive failures"
+                checked={config.pauseAfterConsecutiveFailures !== null}
+                onChange={(e) =>
+                  field(
+                    'pauseAfterConsecutiveFailures',
+                    e.target.checked ? 3 : null,
+                  )
+                }
+              />
+              {config.pauseAfterConsecutiveFailures !== null && (
+                <NumberInput
+                  mt="sm"
+                  label="Consecutive failures before pause"
+                  min={1}
+                  max={10000}
+                  allowDecimal={false}
+                  value={config.pauseAfterConsecutiveFailures}
+                  error={issues.pauseAfterConsecutiveFailures}
+                  onChange={(value) =>
+                    field('pauseAfterConsecutiveFailures', Number(value))
+                  }
+                />
+              )}
+            </div>
+          </Stack>
+        </fieldset>
+        {error && (
+          <Alert role="alert" color="red" mt="md">
+            {error}
+          </Alert>
+        )}
+      </ModalBody>
+      <ModalFooter>
+        {onReload && (
+          <Button
+            variant="subtle"
+            disabled={pending}
+            onClick={() => {
+              if (
+                dirty &&
+                !window.confirm('Discard event trigger edits and reload?')
+              )
+                return;
+              void onReload()
+                .then((current) => {
+                  setConfig(current);
+                  setIssues({});
+                  setError('');
+                })
+                .catch((e) => setError(errorMessage(e)));
+            }}
+          >
+            Reload current
+          </Button>
+        )}
+        <Button variant="default" disabled={pending} onClick={onClose}>
+          Cancel
+        </Button>
+        <Button loading={pending} onClick={submit}>
+          Save event trigger
+        </Button>
+      </ModalFooter>
+    </Modal>
   );
 }
 

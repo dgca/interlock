@@ -70,9 +70,9 @@ const next = [
 it('initializes empty databases and reopens current databases without a backup', () => {
   const file = path();
   const db = open(file);
-  expect(migrate(db, file)).toEqual({ from: 0, to: 12 });
+  expect(migrate(db, file)).toEqual({ from: 0, to: 13 });
   expect(db.prepare('PRAGMA synchronous').get()).toEqual({ synchronous: 2 });
-  expect(migrate(db, file)).toEqual({ from: 12, to: 12 });
+  expect(migrate(db, file)).toEqual({ from: 13, to: 13 });
   expect(existsSync(`${file}.backups`)).toBe(false);
 });
 
@@ -95,7 +95,7 @@ it('indexes queued comparison roots during schema-8 upgrade without rewriting ru
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   expect(migrate(db, file)).toMatchObject({
     from: 8,
-    to: 12,
+    to: 13,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -274,7 +274,7 @@ it('opens the previous release without rewriting records and executes its publis
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 1,
-    to: 12,
+    to: 13,
     backup: expect.any(String),
   });
   expect(
@@ -323,7 +323,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 2,
-    to: 12,
+    to: 13,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -336,7 +336,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   expect(revision).toBeGreaterThan(0);
   const reopened = new Store(file);
   connections.push(reopened);
-  expect(reopened.migration).toEqual({ from: 12, to: 12 });
+  expect(reopened.migration).toEqual({ from: 13, to: 13 });
   expect(reopened.continuation(run.id).revision).toBe(revision);
   store.remove('runs', run.id);
   expect(
@@ -358,7 +358,7 @@ it('adds run summary indexes to schema-6 databases without rewriting records', (
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 6,
-    to: 12,
+    to: 13,
     backup: expect.any(String),
   });
   expect(store.get('runs', run.id)).toEqual(run);
@@ -449,7 +449,7 @@ it('indexes unresolved stalls during schema-10 upgrade without discarding resolv
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   expect(migrate(db, file)).toMatchObject({
     from: 10,
-    to: 12,
+    to: 13,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -467,4 +467,58 @@ it('indexes unresolved stalls during schema-10 upgrade without discarding resolv
   connections.push(store);
   expect(store.currentStalls('run')).toMatchObject([{ id: 'active' }]);
   expect(store.forRuns('stalls', new Set(['run']))).toHaveLength(2);
+});
+
+it('adds lifecycle indexes and active background projection to schema-12 without rewriting documents', () => {
+  const file = path();
+  const db = open(file);
+  migrate(db, file, migrations.slice(0, 12));
+  const value = JSON.stringify({
+    id: 'pending',
+    triggerId: 'trigger',
+    createdAt: '2026-01-01T00:00:00Z',
+    settled: false,
+  });
+  db.prepare(
+    "INSERT INTO documents VALUES ('eventDeliveries', 'pending', ?)",
+  ).run(value);
+  const background = {
+    id: 'background',
+    status: 'cancelled',
+    executions: [{ background: { state: 'running' } }],
+  };
+  db.prepare("INSERT INTO documents VALUES ('runs', 'background', ?)").run(
+    JSON.stringify(background),
+  );
+  const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
+  expect(migrate(db, file)).toMatchObject({
+    from: 12,
+    to: 13,
+    backup: expect.any(String),
+  });
+  expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
+    before,
+  );
+  const indexes = db
+    .prepare(
+      "SELECT name FROM sqlite_schema WHERE type = 'index' AND name LIKE 'event_deliveries_%'",
+    )
+    .all()
+    .map((row) => row.name);
+  expect(indexes.sort()).toEqual([
+    'event_deliveries_pending',
+    'event_deliveries_trigger',
+  ]);
+  const store = new Store(file);
+  connections.push(store);
+  expect(store.terminalBackgroundRuns()).toMatchObject([{ id: 'background' }]);
+  // Store.put uses an outer upsert, whose conflict policy also affects triggers.
+  store.put('runs', { ...background, updatedAt: 'first update' });
+  store.put('runs', { ...background, updatedAt: 'second update' });
+  expect(store.terminalBackgroundRuns()).toHaveLength(1);
+  store.put('runs', {
+    ...background,
+    executions: [{ background: { state: 'completed' } }],
+  });
+  expect(store.terminalBackgroundRuns()).toEqual([]);
 });

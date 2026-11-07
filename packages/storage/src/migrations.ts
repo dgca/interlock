@@ -202,6 +202,30 @@ export const migrations: readonly Migration[] = [
         CREATE INDEX webhook_outcomes_trigger ON documents(json_extract(value, '$.triggerId')) WHERE collection = 'webhookOutcomes';`);
     },
   },
+  {
+    version: 13,
+    up(db) {
+      db.exec(`
+        CREATE INDEX event_deliveries_trigger ON documents(json_extract(value, '$.triggerId'), json_extract(value, '$.createdAt') DESC) WHERE collection = 'eventDeliveries';
+        CREATE INDEX event_deliveries_pending ON documents(coalesce(json_extract(value, '$.settled'), 0)) WHERE collection = 'eventDeliveries';
+        CREATE TABLE active_background_runs (run_id TEXT PRIMARY KEY);
+        INSERT INTO active_background_runs SELECT d.id FROM documents d
+          WHERE d.collection = 'runs' AND EXISTS (
+            SELECT 1 FROM json_each(d.value, '$.executions') e
+              WHERE json_extract(e.value, '$.background.state') IN ('launching', 'running'));
+      `);
+      const active = (value: string) => `EXISTS (
+        SELECT 1 FROM json_each(${value}, '$.executions') e
+          WHERE json_extract(e.value, '$.background.state') IN ('launching', 'running'))`;
+      for (const operation of ['INSERT', 'UPDATE'])
+        db.exec(`CREATE TRIGGER active_background_runs_${operation.toLowerCase()} AFTER ${operation} ON documents
+          WHEN NEW.collection = 'runs' BEGIN
+          DELETE FROM active_background_runs WHERE run_id = NEW.id;
+          INSERT INTO active_background_runs SELECT NEW.id WHERE ${active('NEW.value')}; END;`);
+      db.exec(`CREATE TRIGGER active_background_runs_delete AFTER DELETE ON documents
+        WHEN OLD.collection = 'runs' BEGIN DELETE FROM active_background_runs WHERE run_id = OLD.id; END;`);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

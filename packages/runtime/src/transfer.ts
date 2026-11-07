@@ -1,5 +1,6 @@
 import {
   triggerConfig,
+  eventConfigSchema,
   webhookConfigSchema,
   nextScheduleSlot,
   type WorkflowTrigger,
@@ -98,8 +99,23 @@ export function exportWorkflows(
               })),
           }
         : {}),
+      ...(store.workflowTriggers(id).some((t) => t.kind === 'event')
+        ? {
+            eventTriggers: store
+              .workflowTriggers(id)
+              .filter((t) => t.kind === 'event')
+              .map((t) => ({
+                id: t.id,
+                config: eventConfigSchema.parse(triggerConfig(t)),
+                enabled: false,
+              })),
+          }
+        : {}),
       ...(deletedVersions.length ? { deletedVersions } : {}),
     });
+    for (const trigger of store.workflowTriggers(id))
+      if (trigger.kind === 'event' && trigger.scope.type === 'workflow')
+        include(trigger.scope.workflowId);
     if (w.ownerWorkflowId) include(w.ownerWorkflowId);
     for (const child of workflows.values())
       if (child.ownerWorkflowId === id) include(child.id);
@@ -145,19 +161,21 @@ export function exportWorkflows(
   const modelAliases = new ModelAliases(store).requirements(referencedModels);
   return {
     format: 'interlock-workflows',
-    formatVersion: records.some((w) => w.webhooks?.length)
-      ? 7
-      : modelAliases.length
-        ? 6
-        : records.some((w) => w.schedules?.length)
-          ? 5
-          : variables.length
-            ? 4
-            : records.some((w) => w.deletedVersions?.length)
-              ? 3
-              : prompts.length
-                ? 2
-                : 1,
+    formatVersion: records.some((w) => w.eventTriggers?.length)
+      ? 8
+      : records.some((w) => w.webhooks?.length)
+        ? 7
+        : modelAliases.length
+          ? 6
+          : records.some((w) => w.schedules?.length)
+            ? 5
+            : variables.length
+              ? 4
+              : records.some((w) => w.deletedVersions?.length)
+                ? 3
+                : prompts.length
+                  ? 2
+                  : 1,
     ...(prompts.length ? { prompts } : {}),
     ...(variables.length ? { variables } : {}),
     ...(modelAliases.length ? { modelAliases } : {}),
@@ -549,6 +567,7 @@ export function importWorkflows(
       for (const schedule of [
         ...(entry.schedules ?? []),
         ...(entry.webhooks ?? []),
+        ...(entry.eventTriggers ?? []),
       ]) {
         if (scheduleIds.has(schedule.id))
           throw new InterlockError('Duplicate trigger identity in bundle');
@@ -567,7 +586,7 @@ export function importWorkflows(
           !isDeepStrictEqual(triggerConfig(existing), schedule.config)
         )
           throw new InterlockError(
-            'Schedule configuration conflict; use force to replace after inspection',
+            'Trigger configuration conflict; use force to replace after inspection',
           );
         if (existing && existing.kind !== schedule.config.kind)
           throw new InterlockError('Trigger identity cannot change kind');
@@ -585,18 +604,26 @@ export function importWorkflows(
                 anchorAt: now,
                 nextFireAt: nextScheduleSlot(schedule.config.timing, now),
               }
-            : {
-                ignoredCount:
-                  existing?.kind === 'webhook' ? existing.ignoredCount : 0,
-                rejectedCount:
-                  existing?.kind === 'webhook' ? existing.rejectedCount : 0,
-                deliveryCount:
-                  existing?.kind === 'webhook' ? existing.deliveryCount : 0,
-              }),
+            : schedule.config.kind === 'webhook'
+              ? {
+                  ignoredCount:
+                    existing?.kind === 'webhook' ? existing.ignoredCount : 0,
+                  rejectedCount:
+                    existing?.kind === 'webhook' ? existing.rejectedCount : 0,
+                  deliveryCount:
+                    existing?.kind === 'webhook' ? existing.deliveryCount : 0,
+                }
+              : {
+                  lastFireAt: undefined,
+                  previousRunId: undefined,
+                  lastCheckedAt: undefined,
+                }),
           consecutiveFailures: 0,
           autoPaused: undefined,
           lastLagMs: undefined,
         } as WorkflowTrigger);
+        if (schedule.config.kind === 'event')
+          store.deleteEventHistory(schedule.id);
       }
     const all = store.workflows();
     for (const entry of bundle.workflows) {
