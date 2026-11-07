@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serve } from '@hono/node-server';
+import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -560,6 +561,82 @@ describe('doctor health and readiness check', () => {
       } finally {
         delete process.env.INTERLOCK_URL;
       }
+    });
+
+    function invokeCli(args: string[], url: string) {
+      return new Promise<{
+        code: number | null;
+        stdout: string;
+        stderr: string;
+      }>((resolve, reject) => {
+        const child = spawn(
+          process.execPath,
+          ['--import', 'tsx', 'packages/cli/src/bin.ts', 'doctor', ...args],
+          {
+            cwd: process.cwd(),
+            env: { ...process.env, INTERLOCK_URL: url },
+            stdio: ['ignore', 'pipe', 'pipe'],
+          },
+        );
+        let stdout = '';
+        let stderr = '';
+        child.stdout.on('data', (d) => (stdout += d.toString()));
+        child.stderr.on('data', (d) => (stderr += d.toString()));
+        child.on('error', reject);
+        child.on('close', (code) => resolve({ code, stdout, stderr }));
+      });
+    }
+
+    it('exits with code 1 when CLI binary encounters failure status', async () => {
+      const { engine } = createEnv();
+      await engine.executors.saveProfile({
+        id: 'claude-code',
+        harness: 'claude-code',
+        name: 'Claude Code',
+        enabled: true,
+        expectedRevision: 0,
+        command: '/nonexistent/bin/claude',
+      });
+
+      const server = serve({
+        fetch: createApp(engine).fetch,
+        hostname: '127.0.0.1',
+        port: 0,
+      });
+      servers.push(server);
+      await new Promise<void>((resolve) =>
+        server.listening ? resolve() : server.once('listening', resolve),
+      );
+      const addr = server.address();
+      const url = `http://127.0.0.1:${(addr as any).port}`;
+
+      const cliResult = await invokeCli([], url);
+      expect(cliResult.code).toBe(1);
+      expect(cliResult.stdout).toContain('Overall status: FAIL');
+
+      const jsonResult = await invokeCli(['--json'], url);
+      expect(jsonResult.code).toBe(1);
+      const report = JSON.parse(jsonResult.stdout);
+      expect(report.status).toBe('fail');
+    });
+
+    it('exits with code 0 when CLI binary encounters passing status', async () => {
+      const { engine } = createEnv();
+      const server = serve({
+        fetch: createApp(engine).fetch,
+        hostname: '127.0.0.1',
+        port: 0,
+      });
+      servers.push(server);
+      await new Promise<void>((resolve) =>
+        server.listening ? resolve() : server.once('listening', resolve),
+      );
+      const addr = server.address();
+      const url = `http://127.0.0.1:${(addr as any).port}`;
+
+      const cliResult = await invokeCli([], url);
+      expect(cliResult.code).toBe(0);
+      expect(cliResult.stdout).toContain('Overall status: OK');
     });
   });
 });
