@@ -14,6 +14,7 @@ import {
   type ScheduleConfig,
   type WorkflowDefinition,
   type WorkflowTrigger,
+  type ScheduleTrigger,
 } from '@interlock/core';
 import {
   exportWorkflows,
@@ -62,7 +63,7 @@ function create(e: Engine, w: string, changes: Partial<ScheduleConfig> = {}) {
     action: 'enable',
     id: t.id,
     expectedRevision: t.revision,
-  }).trigger!;
+  }).trigger! as ScheduleTrigger;
 }
 function at(e: Engine, ms: number) {
   vi.setSystemTime(Date.parse(base) + ms);
@@ -250,9 +251,9 @@ it.each(['skip', 'run_once'] as const)(
     expect(fires(e, t)[0].scheduledAt).toBe('2026-11-07T12:03:00.000Z');
     e.pump();
     expect(fires(e, t)).toHaveLength(1);
-    expect(e.triggers.inspect(t.id).trigger.nextFireAt).toBe(
-      '2026-11-07T12:03:30.000Z',
-    );
+    expect(
+      (e.triggers.inspect(t.id).trigger as ScheduleTrigger).nextFireAt,
+    ).toBe('2026-11-07T12:03:30.000Z');
   },
 );
 
@@ -502,7 +503,8 @@ it('serves shared CRUD/read/preview/attention with bounded schemas', async () =>
     false,
   );
   expect(
-    (await caller.triggers.preview({ timing: t.timing })).upcoming,
+    (await caller.triggers.preview({ timing: (t as ScheduleTrigger).timing }))
+      .upcoming,
   ).toHaveLength(3);
   await expect(
     caller.triggers.inspect({ id: t.id, limit: 101 }),
@@ -590,10 +592,10 @@ it('reenables with explicit missed policy and reanchors timing edits', () => {
     expectedRevision: enabled.revision,
     config: config({ timing: { type: 'interval', intervalMs: 60000 } }),
   }).trigger!;
-  expect(updated.anchorAt).toBe(
+  expect((updated as ScheduleTrigger).anchorAt).toBe(
     new Date(Date.parse(base) + 180000).toISOString(),
   );
-  expect(updated.nextFireAt).toBe(
+  expect((updated as ScheduleTrigger).nextFireAt).toBe(
     new Date(Date.parse(base) + 240000).toISOString(),
   );
 });

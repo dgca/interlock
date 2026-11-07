@@ -1,6 +1,6 @@
 # Schedule workflows
 
-Open a workflow's **Schedules** tab, select **Add schedule**, and enter a name and timing. Create the schedule disabled, inspect it, then enable the exact schedule. Schedule changes apply independently of workflow draft save and publication. Fires target the latest retained published version. Unpublished or archived workflows cannot enable schedules.
+Open a workflow's **Triggers** tab, select **Add schedule**, and enter a name and timing. Create the schedule disabled, inspect it, then enable the exact schedule. Schedule changes apply independently of workflow draft save and publication. Fires target the latest retained published version. Unpublished or archived workflows cannot enable schedules.
 
 Intervals accept whole milliseconds from 30000 through 31536000000. Creation and timing changes anchor interval slots. Cron requires exactly five fields, minute, hour, day of month, month, and weekday, plus an IANA time zone. The shared cron-parser calculation handles daylight saving transitions. Macros, seconds fields and hashed jitter are rejected. Restricted day-of-month and weekday fields use the parser's OR semantics. Preview shows three calculated times for current settings; inspection shows the persisted next slot.
 
@@ -33,11 +33,11 @@ Portable format 5 exports configuration with `enabled:false`, without operationa
 Read operations are `list`, `inspect`, `preview`, and `attention`. Writes are `create`, `update`, `enable`, `disable`, and `delete`. Writes other than create require the current `expectedRevision` from inspection. Update replaces the complete configuration. After a revision conflict, keep edits and inspect before reconciling.
 
 ```sh
-interlock schedules read '{"action":"list","workflowId":"WORKFLOW_ID"}'
-interlock schedules manage '{"action":"create","workflowId":"WORKFLOW_ID","config":{"name":"Heartbeat","timing":{"type":"interval","intervalMs":120000},"input":{},"overlapPolicy":"skip","missedFirePolicy":"skip"}}'
-interlock schedules read '{"action":"inspect","id":"TRIGGER_ID"}'
-interlock schedules manage '{"action":"enable","id":"TRIGGER_ID","expectedRevision":1}'
-interlock schedules read '{"action":"preview","timing":{"type":"cron","expression":"0 9 * * 1-5","timeZone":"America/Denver"}}'
+interlock triggers read '{"action":"list","workflowId":"WORKFLOW_ID"}'
+interlock triggers manage '{"action":"create","workflowId":"WORKFLOW_ID","config":{"name":"Heartbeat","timing":{"type":"interval","intervalMs":120000},"input":{},"overlapPolicy":"skip","missedFirePolicy":"skip"}}'
+interlock triggers read '{"action":"inspect","id":"TRIGGER_ID"}'
+interlock triggers manage '{"action":"enable","id":"TRIGGER_ID","expectedRevision":1}'
+interlock triggers read '{"action":"preview","timing":{"type":"cron","expression":"0 9 * * 1-5","timeZone":"America/Denver"}}'
 ```
 
-The same JSON requests work with MCP `read_workflow_triggers` and `manage_workflow_triggers` inside `request`. Shared API callers use `triggers.read` and `triggers.manage`; typed UI reads also expose `list`, `inspect`, `preview`, and `attention`. No tool runs a fire immediately outside its schedule.
+`interlock schedules` remains an alias. The same JSON requests work with MCP `read_workflow_triggers` and `manage_workflow_triggers` inside `request`. Shared API callers use `triggers.read` and `triggers.manage`; typed UI reads also expose `list`, `inspect`, `preview`, and `attention`. No tool runs a fire immediately outside its schedule. The same trigger API supports [authenticated webhooks](webhooks.md); use list `kind:"schedule"` to select schedule records.

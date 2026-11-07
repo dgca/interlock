@@ -227,6 +227,58 @@ export class Store {
       )
       .run(triggerId);
   }
+  webhookDeliveries(triggerId: string, offset = 0, limit = 20) {
+    const total = Number(
+      this.db
+        .prepare(
+          "SELECT count(*) AS total FROM documents WHERE collection = 'webhookDeliveries' AND json_extract(value, '$.triggerId') = ?",
+        )
+        .get(triggerId)!.total,
+    );
+    const items = this.db
+      .prepare(
+        "SELECT value FROM documents WHERE collection = 'webhookDeliveries' AND json_extract(value, '$.triggerId') = ? ORDER BY json_extract(value, '$.receivedAt') DESC, rowid DESC LIMIT ? OFFSET ?",
+      )
+      .all(triggerId, limit, offset)
+      .map(
+        (row) =>
+          JSON.parse(
+            row.value as string,
+          ) as import('@interlock/core').WebhookDelivery,
+      );
+    return {
+      items,
+      total,
+      nextOffset: offset + items.length < total ? offset + items.length : null,
+    };
+  }
+  trimWebhookDeliveries(triggerId: string, keep = 200) {
+    this.db
+      .prepare(
+        "DELETE FROM documents WHERE collection = 'webhookDeliveries' AND id IN (SELECT id FROM documents WHERE collection = 'webhookDeliveries' AND json_extract(value, '$.triggerId') = ? ORDER BY json_extract(value, '$.receivedAt') DESC, rowid DESC LIMIT -1 OFFSET ?)",
+      )
+      .run(triggerId, keep);
+  }
+  deleteWebhookHistory(triggerId: string) {
+    for (const collection of [
+      'webhookDeliveries',
+      'webhookReceipts',
+      'webhookOutcomes',
+    ])
+      this.db
+        .prepare(
+          "DELETE FROM documents WHERE collection = ? AND json_extract(value, '$.triggerId') = ?",
+        )
+        .run(collection, triggerId);
+  }
+  pendingWebhookOutcomes(): { id: string; triggerId: string; runId: string }[] {
+    return this.db
+      .prepare(
+        "SELECT value FROM documents WHERE collection = 'webhookOutcomes'",
+      )
+      .all()
+      .map((row) => JSON.parse(row.value as string));
+  }
   pauseHolds(
     workflowId?: string,
     includeReleased = false,

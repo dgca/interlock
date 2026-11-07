@@ -1,3 +1,4 @@
+import { Webhooks, WebhookRejection } from './webhooks.js';
 import { Stalls } from './stalls.js';
 import { WorkflowTriggers } from './workflowTriggers.js';
 import { PauseHolds } from './pauseHolds.js';
@@ -157,6 +158,7 @@ class ResultProcessingError extends InterlockError {
 export class Engine {
   readonly stalls: Stalls;
   readonly triggers: WorkflowTriggers;
+  readonly webhooks: Webhooks;
   readonly history: RunHistory;
   readonly executors: ExecutorManager;
   readonly continuation: Continuation;
@@ -277,38 +279,118 @@ export class Engine {
         this.event(this.run(id), 'work.resources', message);
     });
     this.starts = new RunStarts(store);
-    this.triggers = new WorkflowTriggers(store, (trigger, input, slot) => {
-      const workflow = this.workflow(trigger.workflowId);
-      const q = {
-        workflowId: trigger.workflowId,
-        input,
-        version: workflow.latestVersion,
-        requestId: `schedule:${trigger.id}:${slot}`,
-      };
-      const result = this.starts.resolve(q, () => ({
-        run: this.newRun(
+    this.webhooks = new Webhooks(store, (trigger, request, effects) => {
+      if (trigger.action.type === 'start') {
+        const id = this.startRun(
           trigger.workflowId,
-          q.version,
-          input,
+          request.input ?? {},
           undefined,
           undefined,
-          undefined,
-          undefined,
-          q,
           {
-            triggerId: trigger.id,
-            scheduledAt: slot,
-            waitForPrevious: trigger.overlapPolicy === 'queue',
-            previousRunIds: store
-              .activeRuns()
-              .filter((r) => r.schedule?.triggerId === trigger.id)
-              .map((r) => r.id),
+            requestId: request.requestId,
+            externalTask: request.externalTask,
+            onActiveExternalTask: trigger.action.onActiveExternalTask,
           },
-        ),
-        reused: false,
-      }));
-      return this.run(result.id);
+          effects,
+        );
+        const run = this.run(id);
+        return {
+          outcome: run.status === 'queued' ? 'queued' : 'started',
+          runId: id,
+        };
+      }
+      const matching = store
+        .activeRuns()
+        .filter(
+          (run) =>
+            run.workflowId === trigger.workflowId &&
+            run.externalTask?.system === request.externalTask?.system &&
+            run.externalTask?.id === request.externalTask?.id,
+        );
+      if (trigger.action.type === 'input') {
+        const nodeId = trigger.action.nodeId;
+        const targets = matching.flatMap((run) => {
+          const execution = run.executions.at(-1);
+          return run.status === 'waiting' &&
+            execution?.kind === 'input' &&
+            execution.status === 'waiting' &&
+            execution.nodeId === nodeId
+            ? [{ run, execution }]
+            : [];
+        });
+        if (targets.length !== 1)
+          throw new WebhookRejection(409, 'input_target_not_unique');
+        const { run, execution } = targets[0];
+        if (Date.parse(request.eventAt) < Date.parse(execution.startedAt))
+          throw new WebhookRejection(409, 'event_predates_input');
+        this.externalInputs.mutate({
+          action: 'submit',
+          runId: run.id,
+          executionId: execution.id,
+          requestId: request.requestId,
+          expectedRevision: execution.externalInput?.revision ?? 0,
+          value: request.input ?? {},
+        });
+        return { outcome: 'submitted', runId: run.id };
+      }
+      if (!matching.length)
+        throw new WebhookRejection(409, 'active_task_not_found');
+      if (
+        trigger.action.type === 'hold' &&
+        matching.some((run) => run.status === 'queued')
+      )
+        throw new WebhookRejection(409, 'hold_requires_admitted_run');
+      for (const run of matching) {
+        if (trigger.action.type === 'cancel') this.cancelTree(run.id, effects);
+        else
+          this.externalInputs.mutate({
+            action: 'hold',
+            runId: run.id,
+            expectedRevision: run.externalInputHold?.revision ?? 0,
+          });
+      }
+      effects.push(() => this.pump());
+      return {
+        outcome: trigger.action.type === 'cancel' ? 'cancelled' : 'held',
+        affectedRuns: matching.length,
+      };
     });
+    this.triggers = new WorkflowTriggers(
+      store,
+      (trigger, input, slot) => {
+        const workflow = this.workflow(trigger.workflowId);
+        const q = {
+          workflowId: trigger.workflowId,
+          input,
+          version: workflow.latestVersion,
+          requestId: `schedule:${trigger.id}:${slot}`,
+        };
+        const result = this.starts.resolve(q, () => ({
+          run: this.newRun(
+            trigger.workflowId,
+            q.version,
+            input,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            q,
+            {
+              triggerId: trigger.id,
+              scheduledAt: slot,
+              waitForPrevious: trigger.overlapPolicy === 'queue',
+              previousRunIds: store
+                .activeRuns()
+                .filter((r) => r.schedule?.triggerId === trigger.id)
+                .map((r) => r.id),
+            },
+          ),
+          reused: false,
+        }));
+        return this.run(result.id);
+      },
+      this.webhooks,
+    );
     this.history = new RunHistory(
       store,
       (ids) => this.starts.deleted(ids),
@@ -917,6 +999,7 @@ export class Engine {
       for (const trigger of this.store.workflowTriggers(id)) {
         this.store.deleteScheduleFires(trigger.id);
         this.store.remove('workflowTriggers', trigger.id);
+        this.store.deleteWebhookHistory(trigger.id);
       }
       this.store.remove('workflows', id);
       return { id };
@@ -1205,6 +1288,7 @@ export class Engine {
     version?: number,
     budget?: BudgetPolicy,
     options?: RunStartOptions,
+    deferredEffects?: (() => void)[],
   ) {
     const metadata = runStartOptionsSchema.parse(options ?? {});
     const q = runStartSchema.parse({
@@ -1286,8 +1370,13 @@ export class Engine {
           this.cancelTree(previous.id, afterCommit);
       return { run, reused: false };
     });
-    for (const effect of afterCommit) effect();
-    if (!result.replayed) this.pump();
+    if (deferredEffects) {
+      deferredEffects.push(...afterCommit);
+      if (!result.replayed) deferredEffects.push(() => this.pump());
+    } else {
+      for (const effect of afterCommit) effect();
+      if (!result.replayed) this.pump();
+    }
     return result.id;
   }
   runAttention() {

@@ -109,6 +109,10 @@ function combineBundles(
 ): WorkflowBundle | undefined {
   const workflows = new Map<string, WorkflowBundle['workflows'][number]>();
   const variables = new Map<string, VariableRequirement>();
+  const modelAliases = new Map<
+    string,
+    NonNullable<WorkflowBundle['modelAliases']>[number]
+  >();
   const prompts = new Map<
     string,
     NonNullable<WorkflowBundle['prompts']>[number]
@@ -124,6 +128,14 @@ function combineBundles(
           'Selected files conflict for a variable requirement',
         );
       variables.set(variable.id, variable);
+    }
+    for (const alias of document.bundle.modelAliases ?? []) {
+      const old = modelAliases.get(alias.name.toLowerCase());
+      if (old && !isDeepStrictEqual(old, alias))
+        throw new InterlockError(
+          'Selected files conflict for a model alias requirement',
+        );
+      modelAliases.set(alias.name.toLowerCase(), alias);
     }
     for (const entry of document.bundle.workflows) {
       const previous = workflows.get(entry.id);
@@ -157,6 +169,14 @@ function combineBundles(
             `Selected files conflict for schedule ${schedule.id}`,
           );
         if (!old) (previous.schedules ??= []).push(structuredClone(schedule));
+      }
+      for (const webhook of entry.webhooks ?? []) {
+        const old = previous.webhooks?.find((item) => item.id === webhook.id);
+        if (old && !isDeepStrictEqual(old.config, webhook.config))
+          throw new InterlockError(
+            `Selected files conflict for webhook ${webhook.id}`,
+          );
+        if (!old) (previous.webhooks ??= []).push(structuredClone(webhook));
       }
       for (const version of entry.versions) {
         if (
@@ -221,16 +241,23 @@ function combineBundles(
   return rootId
     ? {
         format: 'interlock-workflows',
-        formatVersion: [...workflows.values()].some((w) => w.schedules?.length)
-          ? 5
-          : variables.size
-            ? 4
-            : [...workflows.values()].some((w) => w.deletedVersions?.length)
-              ? 3
-              : prompts.size
-                ? 2
-                : 1,
+        formatVersion: [...workflows.values()].some((w) => w.webhooks?.length)
+          ? 7
+          : modelAliases.size
+            ? 6
+            : [...workflows.values()].some((w) => w.schedules?.length)
+              ? 5
+              : variables.size
+                ? 4
+                : [...workflows.values()].some((w) => w.deletedVersions?.length)
+                  ? 3
+                  : prompts.size
+                    ? 2
+                    : 1,
         rootId,
+        ...(modelAliases.size
+          ? { modelAliases: [...modelAliases.values()] }
+          : {}),
         workflows: [...workflows.values()],
         ...(prompts.size ? { prompts: [...prompts.values()] } : {}),
         ...(variables.size ? { variables: [...variables.values()] } : {}),

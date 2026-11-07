@@ -1,3 +1,4 @@
+import { webhookConfigSchema } from './webhooks.js';
 import { scheduleConfigSchema } from './workflowTriggers.js';
 import { z } from 'zod';
 import { definitionSchema } from './index.js';
@@ -16,6 +17,7 @@ export const workflowBundleSchema = z
       z.literal(4),
       z.literal(5),
       z.literal(6),
+      z.literal(7),
     ]),
     variables: z.array(variableRequirementSchema).max(4096).optional(),
     prompts: z.array(savedPromptSchema).optional(),
@@ -39,6 +41,18 @@ export const workflowBundleSchema = z
                 .strict(),
             )
             .optional(),
+          webhooks: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  config: webhookConfigSchema,
+                  enabled: z.boolean().default(false),
+                })
+                .strict(),
+            )
+            .max(4096)
+            .optional(),
           draft: definitionSchema,
           draftRevision: z.number().int().positive(),
           deletedVersions: z.array(deletedVersionSchema).optional(),
@@ -53,6 +67,14 @@ export const workflowBundleSchema = z
       .min(1),
   })
   .superRefine((bundle, ctx) => {
+    if (
+      bundle.formatVersion < 7 &&
+      bundle.workflows.some((w) => w.webhooks?.length)
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Webhooks require bundle formatVersion 7',
+      });
     if (bundle.formatVersion < 6 && bundle.modelAliases?.length)
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -67,12 +89,26 @@ export const workflowBundleSchema = z
         message: 'Schedules require bundle formatVersion 5',
       });
     const references = new Set(
-      bundle.workflows.flatMap((w) =>
-        [w.draft, ...w.versions.map((v) => v.definition)].flatMap(
+      bundle.workflows.flatMap((w) => [
+        ...[w.draft, ...w.versions.map((v) => v.definition)].flatMap(
           variableReferences,
         ),
-      ),
+        ...(w.webhooks ?? []).map((t) => t.config.authentication.secretId),
+      ]),
     );
+    for (const w of bundle.workflows)
+      for (const hook of w.webhooks ?? [])
+        if (
+          !bundle.variables?.some(
+            (v) =>
+              v.id === hook.config.authentication.secretId &&
+              v.kind === 'secret',
+          )
+        )
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Webhook authentication requires a Secret requirement',
+          });
     const required = new Set((bundle.variables ?? []).map((v) => v.id));
     if (
       required.size !== (bundle.variables?.length ?? 0) ||

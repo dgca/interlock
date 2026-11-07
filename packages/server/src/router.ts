@@ -143,12 +143,18 @@ export const appRouter = t.router({
       .input(
         z.object({
           workflowId: z.string().optional(),
+          kind: z.enum(['schedule', 'webhook']).optional(),
           offset: z.number().int().min(0).default(0),
           limit: z.number().int().min(1).max(100).default(20),
         }),
       )
       .query(({ ctx, input }) =>
-        ctx.engine.triggers.list(input.workflowId, input.offset, input.limit),
+        ctx.engine.triggers.list(
+          input.workflowId,
+          input.offset,
+          input.limit,
+          input.kind,
+        ),
       ),
     inspect: p
       .input(

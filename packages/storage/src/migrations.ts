@@ -194,6 +194,14 @@ export const migrations: readonly Migration[] = [
       );
     },
   },
+  {
+    version: 12,
+    up(db) {
+      db.exec(`CREATE INDEX webhook_deliveries_trigger ON documents(json_extract(value, '$.triggerId'), json_extract(value, '$.receivedAt') DESC) WHERE collection = 'webhookDeliveries';
+        CREATE INDEX webhook_receipts_trigger ON documents(json_extract(value, '$.triggerId')) WHERE collection = 'webhookReceipts';
+        CREATE INDEX webhook_outcomes_trigger ON documents(json_extract(value, '$.triggerId')) WHERE collection = 'webhookOutcomes';`);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };
