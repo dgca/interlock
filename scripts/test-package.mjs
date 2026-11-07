@@ -38,6 +38,14 @@ try {
   assert(packed.files.some((file) => file.path === 'dist/cli.js'));
   assert(packed.files.some((file) => file.path === 'workflows/sdlc.json'));
   assert(packed.files.some((file) => file.path === 'workflows/evaluate.json'));
+  for (const path of [
+    'interlock-migrate-workflows/SKILL.md',
+    'interlock-migrate-workflows/references/fold-a-branch.md',
+    'interlock-compare-workflows/SKILL.md',
+    'interlock-compare-workflows/references/evaluate-artifacts.md',
+  ]) {
+    assert(packed.files.some((file) => file.path === `skill/${path}`));
+  }
   assert(
     !packed.files.some(
       (file) =>

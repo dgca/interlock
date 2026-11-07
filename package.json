@@ -59,6 +59,7 @@
     "CHANGELOG.md",
     "CONTEXT.md",
     "docs",
+    "skill",
     "workflows"
   ],
   "publishConfig": {
