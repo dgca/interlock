@@ -427,6 +427,86 @@ it('preserves delegated launch and one-time ticket rules across independent paus
   }
 });
 
+it.each(['limit', 'cancel'] as const)(
+  'rechecks %s and profile occupancy after an awaited launcher response',
+  async (change) => {
+    const requests: { workId: string; runId: string }[] = [];
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', async () => {
+        requests.push(JSON.parse(body));
+        if (requests.length === 1) await pending;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ sessionId: `launch-${requests.length}` }));
+      });
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('No listener');
+    const e = create();
+    const scans = vi.spyOn(e.executors as any, 'scan');
+    try {
+      const base = {
+        harness: 'custom' as const,
+        name: 'Limited launcher',
+        enabled: true,
+        expectedRevision: 0,
+        mode: 'launcher' as const,
+        transport: 'http' as const,
+        launchUrl: `http://127.0.0.1:${address.port}/launch`,
+      };
+      const profile = e.executors.saveProfile({
+        ...base,
+        id: 'limited-launch',
+        concurrency: 2,
+      });
+      e.executors.saveProfile({ ...base, id: 'other-launch', concurrency: 1 });
+      e.executors.start(nativeAdapters);
+      const a = workflow(e, 'limited-launch'),
+        b = workflow(e, 'other-launch');
+      const first = e.start(a.id, {}).run,
+        second = e.start(a.id, {}).run,
+        other = e.start(b.id, {}).run;
+      await vi.waitFor(() => expect(requests).toHaveLength(1));
+      if (change === 'limit') {
+        const { revision, ...fields } = profile;
+        e.executors.saveProfile({
+          ...fields,
+          expectedRevision: revision,
+          concurrency: 1,
+        });
+      } else e.cancel(second.id);
+      release();
+      await scans.mock.results[0].value;
+      expect(requests.map((r) => r.runId)).toEqual([first.id, other.id]);
+      if (change === 'limit') {
+        expect(e.available(second.id)[0].managedExecution?.reason).toContain(
+          'profile assignment slot',
+        );
+        e.cancel(first.id);
+        await vi.waitFor(() =>
+          expect(requests.map((r) => r.runId)).toContain(second.id),
+        );
+      }
+      e.cancel(first.id);
+      e.cancel(second.id);
+      e.cancel(other.id);
+    } finally {
+      release();
+      await e.executors.stop();
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  },
+);
+
 it.each(['library', 'workflow'] as const)(
   'rechecks %s pauses between awaited custom launcher dispatches',
   async (scope) => {

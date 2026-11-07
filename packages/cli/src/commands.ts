@@ -25,10 +25,17 @@ function parseSummaryArgs(args: string[], withBudget = false) {
     }
     if (
       withBudget &&
-      ['--budget', '--request-id', '--external-task'].includes(arg)
+      [
+        '--budget',
+        '--request-id',
+        '--external-task',
+        '--priority',
+        '--after',
+        '--on-active-external-task',
+      ].includes(arg)
     ) {
-      optionArgs.push(arg);
-      if (i + 1 < args.length) optionArgs.push(args[++i]);
+      if (i + 1 < args.length) optionArgs.push(`${arg}=${args[++i]}`);
+      else optionArgs.push(arg);
       continue;
     }
     // Negative JSON numbers are positional values, not short options.
@@ -48,6 +55,9 @@ function parseSummaryArgs(args: string[], withBudget = false) {
             budget: { type: 'string' as const },
             'request-id': { type: 'string' as const },
             'external-task': { type: 'string' as const },
+            priority: { type: 'string' as const },
+            after: { type: 'string' as const },
+            'on-active-external-task': { type: 'string' as const },
           }
         : {}),
     },
@@ -238,9 +248,22 @@ export async function runCommand(argv: string[]) {
       const { values, positionals } = parseSummaryArgs(args, true);
       if (positionals.length < 2 || positionals.length > 3)
         throw new Error(
-          'Usage: start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file]',
+          'Usage: start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous]',
         );
       const input = {
+        priority:
+          typeof values.priority === 'string'
+            ? Number(values.priority)
+            : undefined,
+        after:
+          typeof values.after === 'string'
+            ? await parse(values.after)
+            : undefined,
+        onActiveExternalTask:
+          typeof values['on-active-external-task'] === 'string'
+            ? (values['on-active-external-task'] as
+                'allow' | 'reuse' | 'reject' | 'cancel_previous')
+            : undefined,
         requestId:
           typeof values['request-id'] === 'string'
             ? values['request-id']
@@ -470,7 +493,7 @@ export async function runCommand(argv: string[]) {
           'export <id>',
           'publish <id> [--cascade]',
           'work-resources <json|@file> (inspect reservations or release an exact uncertain attempt after stop confirmation)',
-          'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file]',
+          'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous]',
           'runs [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
           'run-history <json|@file> (action: preview with workflowId/before/rootRunIds and offset/limit; delete requires roots with preview confirmations and acknowledgeHistoryLoss:true; workflows and published versions remain)',

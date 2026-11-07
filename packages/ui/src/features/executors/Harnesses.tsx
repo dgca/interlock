@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   Badge,
   NativeSelect,
+  NumberInput,
   Skeleton,
   Switch,
   TextInput,
@@ -418,6 +419,20 @@ function ProfileRow({
           </div>
           <fieldset className={styles.fieldGroup} disabled={busy}>
             <legend>Execution defaults</legend>
+            <NumberInput
+              label="Concurrent assignments"
+              description="Leave blank for no profile limit. The shared limit still applies."
+              min={1}
+              max={Number.MAX_SAFE_INTEGER}
+              allowDecimal={false}
+              value={draft.concurrency ?? ''}
+              onChange={(value) =>
+                setDraft({
+                  ...draft,
+                  concurrency: value === '' ? undefined : Number(value),
+                })
+              }
+            />
             <div className={styles.fields}>
               <ModelSettings
                 disabled={busy}

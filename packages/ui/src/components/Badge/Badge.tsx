@@ -6,6 +6,7 @@ const statusColors: Record<string, string> = {
   running: 'blue',
   claimed: 'blue',
   waiting: 'yellow',
+  queued: 'yellow',
   available: 'yellow',
   failed: 'red',
   cancelled: 'gray',

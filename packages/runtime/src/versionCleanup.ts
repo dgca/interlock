@@ -10,7 +10,8 @@ import type { Store } from '@interlock/storage';
 import { definitionHash, fingerprint } from './versionIdentity.js';
 
 const key = (ref: VersionReference) => `${ref.workflowId}:${ref.version}`;
-const active = (run: Run) => ['running', 'waiting'].includes(run.status);
+const active = (run: Run) =>
+  ['queued', 'running', 'waiting'].includes(run.status);
 
 /** Explicit cleanup of definitions, independently of workflow/run lifecycles. */
 export class VersionCleanup {

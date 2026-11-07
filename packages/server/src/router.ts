@@ -547,7 +547,13 @@ export const appRouter = t.router({
           input.version,
           input.limit,
           input.budget,
-          { requestId: input.requestId, externalTask: input.externalTask },
+          {
+            requestId: input.requestId,
+            externalTask: input.externalTask,
+            priority: input.priority,
+            after: input.after,
+            onActiveExternalTask: input.onActiveExternalTask,
+          },
         ),
       ),
     briefing: p
@@ -607,7 +613,13 @@ export const appRouter = t.router({
           input.input,
           input.version,
           input.budget,
-          { requestId: input.requestId, externalTask: input.externalTask },
+          {
+            requestId: input.requestId,
+            externalTask: input.externalTask,
+            priority: input.priority,
+            after: input.after,
+            onActiveExternalTask: input.onActiveExternalTask,
+          },
         ),
       ),
     cancel: p

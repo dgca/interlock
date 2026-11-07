@@ -51,7 +51,9 @@ import {
   validateEvaluationReceipt,
 } from './evaluationReceipts.js';
 const active = (run: Run) =>
-  run.status === 'running' || run.status === 'waiting';
+  run.status === 'queued' ||
+  run.status === 'running' ||
+  run.status === 'waiting';
 const now = () => new Date().toISOString();
 const textError = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const trimError = (e?: string) => e?.slice(0, 512);

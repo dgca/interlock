@@ -13,7 +13,13 @@ import {
 import { detachedBoundary } from './runScope';
 
 export type ProgressState =
-  'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+  | 'queued'
+  | 'pending'
+  | 'running'
+  | 'waiting'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 export type VisibleWork = Omit<WorkRequest, 'token'>;
 export type ItemExecution = {
   run: Run;
@@ -31,6 +37,7 @@ export type NodeProgress = {
 const latest = (run: Run, nodeId: string) =>
   run.executions.filter((execution) => execution.nodeId === nodeId).at(-1);
 const labels: Record<ProgressState, string> = {
+  queued: 'Queued',
   pending: 'Not started',
   running: 'Running',
   waiting: 'Waiting',
@@ -62,7 +69,7 @@ export function runProgress(
         : 'waiting';
     const states = execution.childRunIds.flatMap((id) => {
       const child = runs.get(id);
-      return child && ['running', 'waiting'].includes(child.status)
+      return child && ['queued', 'running', 'waiting'].includes(child.status)
         ? [stateOf(child, child.executions.at(-1))]
         : [];
     });
@@ -218,22 +225,26 @@ export function runProgress(
   const current = run.executions.at(-1);
   const currentProgress = current && nodes[current.nodeId];
   let title =
-    run.status === 'completed'
-      ? 'Completed'
-      : run.status === 'failed'
-        ? 'Failed'
-        : run.status === 'cancelled'
-          ? 'Cancelled'
-          : currentProgress?.state === 'running'
-            ? current?.kind === 'agent'
-              ? 'Agent working'
-              : 'Running'
-            : 'Waiting';
+    run.status === 'queued'
+      ? 'Queued'
+      : run.status === 'completed'
+        ? 'Completed'
+        : run.status === 'failed'
+          ? 'Failed'
+          : run.status === 'cancelled'
+            ? 'Cancelled'
+            : currentProgress?.state === 'running'
+              ? current?.kind === 'agent'
+                ? 'Agent working'
+                : 'Running'
+              : 'Waiting';
   const activeAssignments = work.filter(
     (assignment) =>
       assignment.status === 'available' &&
       !detachedBoundary(assignment.runId, run.id, runs) &&
-      ['running', 'waiting'].includes(runs.get(assignment.runId)?.status ?? ''),
+      ['queued', 'running', 'waiting'].includes(
+        runs.get(assignment.runId)?.status ?? '',
+      ),
   );
   if (title === 'Waiting' && activeAssignments.length)
     title = activeAssignments.some(
@@ -255,16 +266,16 @@ export function runProgress(
   const attention = work.find(
     (w) => needsManagedAttention(w) && !detachedBoundary(w.runId, run.id, runs),
   );
-  if (attention && ['running', 'waiting'].includes(run.status))
+  if (attention && ['queued', 'running', 'waiting'].includes(run.status))
     title = managedAttentionLabel(attention);
   if (!['completed', 'cancelled'].includes(run.status) && current)
-    title += ` · ${attention && ['running', 'waiting'].includes(run.status) ? attention.label : current.label}`;
+    title += ` · ${attention && ['queued', 'running', 'waiting'].includes(run.status) ? attention.label : current.label}`;
   return {
     nodes,
     runStates: Object.fromEntries(
       [...runs.values()].map((owner) => [
         owner.id,
-        ['running', 'waiting'].includes(owner.status)
+        ['queued', 'running', 'waiting'].includes(owner.status)
           ? stateOf(owner, owner.executions.at(-1))
           : owner.status,
       ]),

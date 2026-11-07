@@ -39,6 +39,19 @@ export const externalTaskSchema = externalTaskIdentitySchema
     'Non-secret correlation only; does not authorize work or update an external board.',
   );
 export type ExternalTask = z.infer<typeof externalTaskSchema>;
+export const startDependencySchema = z.union([
+  z.object({ requestId: startRequestIdSchema }).strict(),
+  z.object({ externalTask: externalTaskIdentitySchema }).strict(),
+]);
+export type StartDependency = z.infer<typeof startDependencySchema>;
+export interface RunAdmission {
+  queuedAt: string;
+  priority: number;
+  position: number;
+  after: { reference: StartDependency; runId?: string }[];
+  blockers: string[];
+  admittedAt?: string;
+}
 export const runStartOptionsSchema = z
   .object({
     requestId: startRequestIdSchema
@@ -47,6 +60,27 @@ export const runStartOptionsSchema = z
         'Library-wide ordinary-start key. Identical retries recover the original run without advancing it; conflicting reuse or deleted history rejects. Use a new key for a new attempt.',
       ),
     externalTask: externalTaskSchema.optional(),
+    priority: z
+      .number()
+      .int()
+      .min(-1000000)
+      .max(1000000)
+      .optional()
+      .describe('Higher first, FIFO ties, default 0.'),
+    onActiveExternalTask: z
+      .enum(['allow', 'reuse', 'reject', 'cancel_previous'])
+      .optional()
+      .describe(
+        'Library-wide active/queued task policy. Default allow; others require externalTask.',
+      ),
+    after: z
+      .array(startDependencySchema)
+      .min(1)
+      .max(32)
+      .optional()
+      .describe(
+        'Wait for every referenced run or continue-as-new chain to succeed. Missing, failed or cancelled dependencies remain queued with blockers. Task identities pin the newest retained match when resolved.',
+      ),
   })
   .strict();
 export type RunStartOptions = z.input<typeof runStartOptionsSchema>;

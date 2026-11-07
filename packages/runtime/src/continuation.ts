@@ -25,10 +25,9 @@ import type { Store } from '@interlock/storage';
 
 const counts = (statuses: string[]) =>
   Object.fromEntries(
-    ['running', 'waiting', 'completed', 'failed', 'cancelled'].map((status) => [
-      status,
-      statuses.filter((s) => s === status).length,
-    ]),
+    ['queued', 'running', 'waiting', 'completed', 'failed', 'cancelled'].map(
+      (status) => [status, statuses.filter((s) => s === status).length],
+    ),
   );
 const bounded = <T>(items: T[], limit: number) => ({
   items: items.slice(0, limit),
@@ -205,36 +204,40 @@ export class Continuation {
         })),
     ].sort((a, b) => a.at.localeCompare(b.at));
     const blockers = state.runs
-      .filter((run) => ['running', 'waiting', 'failed'].includes(run.status))
+      .filter((run) =>
+        ['queued', 'running', 'waiting', 'failed'].includes(run.status),
+      )
       .map((run) => {
         const execution = latest.get(run.id);
         const assignment = work.find((w) => w.runId === run.id);
         const reason =
-          run.status === 'failed'
-            ? 'failure'
-            : projectRun(this.store, run.id, state).waiting?.kind === 'pause'
-              ? 'pause'
-              : assignment?.status === 'held'
-                ? 'external_hold'
-                : assignment?.status === 'claimed'
-                  ? 'claimed_work'
-                  : assignment?.budgetBlocked
-                    ? 'budget_blocked'
-                    : assignment?.resourceBlocked
-                      ? 'resource_blocked'
-                      : assignment?.cwdBlocked
-                        ? 'cwd_blocked'
-                        : assignment
-                          ? 'available_work'
-                          : execution?.kind === 'input' &&
-                              execution.status === 'waiting'
-                            ? 'external_input'
-                            : execution?.kind === 'wait'
-                              ? 'wait'
-                              : execution?.kind === 'batch' ||
-                                  execution?.kind === 'workflow'
-                                ? 'children'
-                                : 'executing';
+          run.status === 'queued'
+            ? 'admission_queue'
+            : run.status === 'failed'
+              ? 'failure'
+              : projectRun(this.store, run.id, state).waiting?.kind === 'pause'
+                ? 'pause'
+                : assignment?.status === 'held'
+                  ? 'external_hold'
+                  : assignment?.status === 'claimed'
+                    ? 'claimed_work'
+                    : assignment?.budgetBlocked
+                      ? 'budget_blocked'
+                      : assignment?.resourceBlocked
+                        ? 'resource_blocked'
+                        : assignment?.cwdBlocked
+                          ? 'cwd_blocked'
+                          : assignment
+                            ? 'available_work'
+                            : execution?.kind === 'input' &&
+                                execution.status === 'waiting'
+                              ? 'external_input'
+                              : execution?.kind === 'wait'
+                                ? 'wait'
+                                : execution?.kind === 'batch' ||
+                                    execution?.kind === 'workflow'
+                                  ? 'children'
+                                  : 'executing';
         return {
           ...reference(run.id, execution?.id),
           lifecycleRunId: run.lifecycleRunId,
@@ -250,6 +253,7 @@ export class Continuation {
           ...(assignment?.cwdBlocked
             ? { cwdBlocked: assignment.cwdBlocked }
             : {}),
+          ...(run.status === 'queued' ? { admission: run.admission } : {}),
           error: run.error,
           ...(execution?.kind === 'input' && execution.status === 'waiting'
             ? {
@@ -435,6 +439,7 @@ export class Continuation {
           .filter((run) => run.status === 'failed')
           .map((run) => ({
             ...reference(run.id, latest.get(run.id)?.id),
+            ...(run.status === 'queued' ? { admission: run.admission } : {}),
             error: run.error,
             lifecycleRunId: run.lifecycleRunId,
           })),

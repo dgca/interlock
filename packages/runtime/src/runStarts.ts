@@ -11,10 +11,12 @@ const collection = 'runStarts';
 /** Resolve receipts and create all initial state under the same storage transaction. */
 export class RunStarts {
   constructor(private store: Store) {}
-  resolve(q: RunStartRequest, create: () => Run) {
+  resolve(q: RunStartRequest, create: () => { run: Run; reused: boolean }) {
     return this.store.transaction(() => {
-      if (q.requestId === undefined)
-        return { id: create().id, replayed: false };
+      if (q.requestId === undefined) {
+        const { run, reused } = create();
+        return { id: run.id, replayed: reused };
+      }
       const id = fingerprint(q.requestId);
       const requestHash = fingerprint({
         workflowId: q.workflowId,
@@ -22,6 +24,11 @@ export class RunStarts {
         version: q.version ?? null,
         budget: q.budget ?? null,
         externalTask: q.externalTask ?? null,
+        ...(q.priority !== undefined ? { priority: q.priority } : {}),
+        ...(q.after !== undefined ? { after: q.after } : {}),
+        ...(q.onActiveExternalTask !== undefined
+          ? { onActiveExternalTask: q.onActiveExternalTask }
+          : {}),
       });
       const receipt = this.store.get<RunStartReceipt>(collection, id);
       if (receipt) {
@@ -46,7 +53,7 @@ export class RunStarts {
         throw new InterlockError(
           'Run start receipt is unavailable; inspect retained runs before choosing a new requestId. No run was started',
         );
-      const run = create();
+      const { run, reused } = create();
       this.store.put<RunStartReceipt>(collection, {
         id,
         requestHash,
@@ -55,7 +62,7 @@ export class RunStarts {
         version: run.version,
         createdAt: run.createdAt,
       });
-      return { id: run.id, replayed: false };
+      return { id: run.id, replayed: reused };
     });
   }
   deleted(runIds: Set<string>) {

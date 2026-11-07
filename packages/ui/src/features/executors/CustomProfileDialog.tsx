@@ -46,6 +46,7 @@ export function CustomProfileDialog({
   const [transport, setTransport] = useState<'subprocess' | 'http'>(
     'subprocess',
   );
+  const [concurrency, setConcurrency] = useState<number | ''>('');
   const [timeoutSeconds, setTimeoutSeconds] = useState<number | ''>('');
   const [permissions, setPermissions] = useState<
     'standard' | 'read-only' | 'full-access'
@@ -92,6 +93,7 @@ export function CustomProfileDialog({
         setId(profile.id);
         setMode(profile.mode ?? 'direct');
         setTransport(profile.transport ?? 'subprocess');
+        setConcurrency(profile.concurrency ?? '');
         setTimeoutSeconds(profile.timeoutSeconds ?? '');
         setPermissions(profile.permissions as any);
         setEnv(profile.env ?? {});
@@ -116,6 +118,7 @@ export function CustomProfileDialog({
         setId(generatedId);
         setMode('direct');
         setTransport('subprocess');
+        setConcurrency('');
         setTimeoutSeconds('');
         setPermissions('standard');
         setEnv({});
@@ -213,6 +216,7 @@ export function CustomProfileDialog({
         mode,
         transport,
         permissions,
+        ...(concurrency === '' ? {} : { concurrency: Number(concurrency) }),
         ...(timeoutSeconds !== ''
           ? { timeoutSeconds: Number(timeoutSeconds) }
           : {}),
@@ -336,6 +340,18 @@ export function CustomProfileDialog({
           </div>
 
           <div className={styles.gridTwo}>
+            <NumberInput
+              label="Concurrent assignments"
+              description="Blank means no profile limit. The shared limit still applies."
+              min={1}
+              max={Number.MAX_SAFE_INTEGER}
+              allowDecimal={false}
+              disabled={busy}
+              value={concurrency}
+              onChange={(value) =>
+                setConcurrency(value === '' ? '' : Number(value))
+              }
+            />
             <NumberInput
               label="Execution Timeout (seconds)"
               min={1}

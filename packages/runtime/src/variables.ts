@@ -19,7 +19,8 @@ import {
 } from '@interlock/core';
 
 const stamp = () => new Date().toISOString();
-const active = (status: string) => status === 'running' || status === 'waiting';
+const active = (status: string) =>
+  status === 'queued' || status === 'running' || status === 'waiting';
 /** The library owns lookup, revision capture, dependency checks, and disclosure. */
 export class Variables {
   constructor(private store: Store) {}

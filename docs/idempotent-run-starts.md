@@ -24,7 +24,48 @@ After an uncertain response, repeat the same creation arguments and key. Full an
 
 A `requestId` is an opaque, nonblank string of 1–120 characters. Case and whitespace are significant. Prefer a UUID or a stable delivery/attempt identifier. Ordinary-start keys are library-wide, across workflows, and separate from comparison request IDs. Reusing a committed key for another workflow, input, version intent, budget or task reference rejects without creating anything. Errors do not copy the original input.
 
-A deliberate new attempt uses a new key. The same external task can have multiple attempts, including concurrent ones. This feature deduplicates one start request; it does not reserve an external issue or enforce one active owner. Keep that policy in the external coordinator. It also does not make arbitrary Script, Fetch or Agent effects execute exactly once.
+A deliberate new attempt uses a new key. The default active-task policy allows concurrent attempts. Set `onActiveExternalTask` to atomically reuse, reject, or cancel prior active attempts for the same task. Arbitrary Script, Fetch, and Agent effects still do not execute exactly once.
+
+## Queue starts until capacity is available
+
+A workflow definition can set `maxActiveRuns` to a positive whole number and `excludeStages` to at most 100 stage names. Each queued run uses its captured published settings. Active, admitted runs of the same workflow count across versions, except Batch item runs and runs currently in an excluded projected stage. Invoked workflows, comparison roots, and continue-as-new successors have their own admission. Batch items share their parent slot.
+
+A start beyond capacity is accepted with status `queued`. Its captures, startup budget, and receipt persist before any node executes. Full inspection exposes `admission`, including `queuedAt`, `priority`, one-based `position`, pinned dependency references, and bounded `blockers`. Summary and briefing `waiting.kind` is `admission_queue`; `waiting.detail` includes position, priority, and blockers. Queued runs appear in Active, can be cancelled, and cannot be claimed before promotion. Use the existing run ID and change cursor to wait for admission.
+
+Higher priority runs admit first, with FIFO ties. `priority` is an integer from -1,000,000 through 1,000,000 and defaults to zero. Queue position is scoped to the workflow and includes blocked entries. Missing dependencies and pauses do not prevent later eligible entries from using a slot. Priority has no aging policy. Completion, failure, cancellation, stage transitions, and server recovery can release capacity. Library and workflow pause holds gate promotion. Admitted runs keep progressing when they leave an excluded stage, so the active count can temporarily exceed the start limit.
+
+## Choose an active-task policy
+
+`onActiveExternalTask` matches normalized `externalTask.system` and `id` across the local library. Active means queued, running, or waiting, including continue-as-new successors. Policies other than `allow` require `externalTask`.
+
+| Policy            | Result when a match exists                                                                                        |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `allow`, default  | Create another attempt, subject to admission.                                                                     |
+| `reuse`           | Return the oldest active match without pumping it. A supplied request key retains a receipt pointing to that run. |
+| `reject`          | Reject without creating a run or receipt.                                                                         |
+| `cancel_previous` | Validate the replacement, cancel active matching lifecycles, and create the replacement atomically.               |
+
+Cancellation retains existing detached boundaries and uncertain resource or process ownership. It does not prove previous external effects stopped. Reconcile uncertain attempts before using their resources again.
+
+## Wait for prerequisite runs
+
+Pass `after` as a list of 1 through 32 references. Each reference contains exactly one `requestId` or `externalTask:{system,id}`. Every dependency must succeed before promotion:
+
+```json
+{
+  "workflowId": "REVIEW_WORKFLOW_ID",
+  "input": {},
+  "requestId": "review-attempt-1",
+  "priority": 10,
+  "after": [{ "requestId": "build-attempt-1" }],
+  "externalTask": { "system": "github", "id": "dgca/interlock#181" },
+  "onActiveExternalTask": "reject"
+}
+```
+
+Request keys resolve their original receipt. Task identities select the newest retained matching run when first found. Resolution pins that run ID and follows its continue-as-new successors. A later attempt cannot replace the pinned dependency. Missing references can resolve later. Failed, cancelled, or removed dependencies leave an explicit blocker and never start the dependent. A start cannot depend on its own request key. Cycles stay queued. Cancel a permanently blocked start and submit a new explicit attempt when its prerequisites change.
+
+CLI equivalents are `--priority N`, `--after json|@file`, and `--on-active-external-task allow|reuse|reject|cancel_previous`. They accompany the existing start options. `interlock runs --status queued` finds waiting starts.
 
 ## Keep creation arguments stable
 
@@ -33,6 +74,7 @@ The receipt fingerprint includes:
 - Workflow ID and original JSON input, with object key order ignored.
 - Requested version intent. An omitted version means "select latest for this new start" and remains distinct from an explicit version number.
 - The parsed optional budget and external task metadata.
+- Supplied `priority`, `after`, and `onActiveExternalTask` options. Omitted options remain distinct from explicit values.
 
 If the original request omitted `version`, repeating it still returns the original run after newer versions are published. Replacing that omission with its resolved version number is a conflicting request. Current prompt edits and library archive state do not change an accepted start's identity or its captured prompt content.
 
@@ -46,7 +88,7 @@ The initial run, selected version, prompt capture, chain state, correlation, sta
 
 `externalTask` is optional and independent of `requestId`. It contains a non-secret `system` of 1–64 characters, stable `id` of 1–200 characters, optional `title` of 1–200 characters, and optional HTTP(S) `url` up to 2,000 characters. All fields trim surrounding whitespace; identity comparisons remain case-sensitive. Links cannot embed credentials. Do not put tokens, secrets or authority in these fields. Title and URL participate in the start fingerprint, so keep them unchanged on redelivery. Task filters accept only system and ID.
 
-Correlation never changes original task input, updates a board, grants permission, or deduplicates a start by itself. It is not copied into portable workflow bundles. Existing full run inspection and briefings include it; compact mutation responses expose it when present.
+Correlation never changes original task input, updates a board, grants permission, or deduplicates a start under the default `allow` policy. It is not copied into portable workflow bundles. Existing full run inspection and briefings include it; compact mutation responses expose it when present.
 
 Use MCP `list_runs` or shared `runs.find`:
 
@@ -62,7 +104,7 @@ Use MCP `list_runs` or shared `runs.find`:
 }
 ```
 
-The task filter requires its exact system and ID, without the URL. Existing status, workflow, chain and input filters can be combined. Lookup does not reserve a task. A start key appears as `startRequestId` on its original run only. Continue-as-new successors inherit `externalTask`, but the same key always returns the original predecessor; follow its chain links to the current successor. Ordinary nested/detached children retain their existing ancestry and do not acquire task ownership or a new start key.
+The task filter requires its exact system and ID, without the URL. Existing status, workflow, chain and input filters can be combined. Lookup does not reserve a task. Use an atomic active-task start policy when needed. A start key appears as `startRequestId` on its original run only. Continue-as-new successors inherit `externalTask`, but the same key always returns the original predecessor; follow its chain links to the current successor. Ordinary nested/detached children retain their existing ancestry and do not acquire task ownership or a new start key.
 
 ## Recover after deletion or restart
 
@@ -86,4 +128,4 @@ interlock runs --external-task '{"system":"github","id":"dgca/interlock#181"}' -
 
 Inline JSON and `@file` work for task metadata and budgets. Omit `--summary` for full inspection; it does not change request identity. The optional positional version retains its existing meaning.
 
-Shared `runs.start` and `runs.startSummary` accept `requestId` and `externalTask` beside their existing fields. Direct Engine callers can supply `{requestId, externalTask}` as the final optional options argument after `budget`, preserving existing positional calls. Shared and MCP result references, cancellation, claims, budgets, ordinary/detached lifecycles and explicit retries keep their existing rules.
+Shared `runs.start` and `runs.startSummary` accept `requestId`, `externalTask`, `priority`, `after`, and `onActiveExternalTask` beside their existing fields. Direct Engine callers can supply `{requestId, externalTask, priority, after, onActiveExternalTask}` as the final optional options argument after `budget`, preserving existing positional calls. Shared and MCP result references, cancellation, claims, budgets, ordinary/detached lifecycles and explicit retries keep their existing rules.

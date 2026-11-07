@@ -19,7 +19,11 @@ export function runProjectionText(run: RunProjection, waitingText?: string) {
   ];
   return [
     run.stage,
-    run.waiting ? (waitingText ?? labels[run.waiting.kind]) : null,
+    run.waiting
+      ? run.waiting.kind === 'admission_queue'
+        ? `Queued · ${run.waiting.detail.message ?? `Position ${run.waiting.detail.position ?? 1}`}`
+        : (waitingText ?? labels[run.waiting.kind])
+      : null,
     actor,
   ]
     .filter(Boolean)

@@ -175,6 +175,89 @@ it.each(['stdio', 'http'])(
       });
       const toolDiscovery = await client.listTools();
       const { tools, nextCursor } = toolDiscovery;
+      const admissionSchema = tools.find((t) => t.name === 'start_run')!
+        .inputSchema.properties!;
+      expect(admissionSchema).toMatchObject({
+        priority: { minimum: -1000000, maximum: 1000000 },
+        after: { maxItems: 32 },
+        onActiveExternalTask: {
+          enum: ['allow', 'reuse', 'reject', 'cancel_previous'],
+        },
+      });
+      expect(
+        JSON.stringify(tools.find((t) => t.name === 'list_runs')!.inputSchema),
+      ).toContain('queued');
+      const limited = engine.create('Transport admission', '', {
+        ...blankDefinition(),
+        maxActiveRuns: 1,
+      });
+      engine.publish(limited.id);
+      const admitted = await call('start_run', {
+        workflowId: limited.id,
+        input: {},
+        requestId: `admit-${mode}`,
+      });
+      const queued = await call('start_run', {
+        workflowId: limited.id,
+        input: {},
+        priority: 5,
+        after: [{ requestId: `admit-${mode}` }],
+      });
+      expect(queued).toMatchObject({
+        runStatus: 'queued',
+        waiting: {
+          kind: 'admission_queue',
+          detail: { position: 1, priority: 5 },
+        },
+      });
+      expect(await call('list_work', { runId: queued.runId })).toEqual([]);
+      expect(
+        (await call('get_run_briefing', { id: queued.runId })).blockers.items[0]
+          .reason,
+      ).toBe('admission_queue');
+      await call('cancel_run', { id: queued.runId });
+      await call('cancel_run', { id: admitted.runId });
+      const taskIdentity = { system: 'test', id: `atomic-${mode}` };
+      const competing = await Promise.all(
+        Array.from({ length: 8 }, (_, i) =>
+          api.runs.startSummary.mutate({
+            workflowId: limited.id,
+            input: {},
+            requestId: `atomic-${mode}-${i}`,
+            externalTask: taskIdentity,
+            onActiveExternalTask: 'reuse',
+          }),
+        ),
+      );
+      expect(new Set(competing.map((r) => r.runId)).size).toBe(1);
+      await call('cancel_run', { id: competing[0].runId });
+      const oldUrl = process.env.INTERLOCK_URL;
+      process.env.INTERLOCK_URL = url;
+      try {
+        const cliStart = await runCommand([
+          'start',
+          limited.id,
+          '{}',
+          '--summary',
+          '--priority',
+          '-2',
+          '--after',
+          JSON.stringify([{ requestId: `missing-${mode}` }]),
+          '--external-task',
+          JSON.stringify(taskIdentity),
+          '--on-active-external-task',
+          'allow',
+        ]);
+        expect(cliStart).toMatchObject({
+          runStatus: 'queued',
+          waiting: { detail: { priority: -2 } },
+        });
+        await call('cancel_run', { id: (cliStart as { runId: string }).runId });
+      } finally {
+        if (oldUrl === undefined) delete process.env.INTERLOCK_URL;
+        else process.env.INTERLOCK_URL = oldUrl;
+      }
+
       expect(
         tools.find((t) => t.name === 'start_run')!.inputSchema.properties!
           .externalTask,

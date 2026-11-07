@@ -482,6 +482,22 @@ export const definitionSchema = z.object({
       targetHandle: z.enum(['default', 'end']).optional(),
     }),
   ),
+  maxActiveRuns: z
+    .number()
+    .int()
+    .min(1)
+    .max(Number.MAX_SAFE_INTEGER)
+    .optional()
+    .describe(
+      'Admitted workflow run cap. Batch items and excluded stages do not count. Omit for no cap.',
+    ),
+  excludeStages: z
+    .array(z.string().trim().min(1).max(120))
+    .max(100)
+    .optional()
+    .describe(
+      'Projected stages excluded from start capacity. Admitted runs continue across stages.',
+    ),
   maxSteps: z.number().int().min(2).max(1000).default(100),
 });
 export type WorkflowDefinition = z.infer<typeof definitionSchema>;
@@ -506,14 +522,14 @@ export interface WorkflowVersion {
   createdAt: string;
 }
 export type RunStatus =
-  'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+  'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
 export const runQuerySchema = z.object({
   requestId: startRequestIdSchema.optional(),
   externalTask: externalTaskIdentitySchema.optional(),
   chainRootRunId: z.string().min(1).optional(),
   workflowId: z.string().optional(),
   status: z
-    .enum(['running', 'waiting', 'completed', 'failed', 'cancelled'])
+    .enum(['queued', 'running', 'waiting', 'completed', 'failed', 'cancelled'])
     .optional(),
   rootOnly: z.boolean().default(false),
   limit: z.number().int().min(1).max(1000).default(50),
@@ -565,6 +581,7 @@ export interface PollCheckResult {
   error?: string;
 }
 export interface Run {
+  admission?: import('./runStarts.js').RunAdmission;
   startRequestId?: string;
   externalTask?: import('./runStarts.js').ExternalTask;
   chain?: import('./runChains.js').RunChainLink;

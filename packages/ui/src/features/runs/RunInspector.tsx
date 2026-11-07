@@ -183,7 +183,8 @@ export function RunInspector({
   );
   const independent = descendants.filter(
     (r) =>
-      r.parentMode === 'detached' && ['running', 'waiting'].includes(r.status),
+      r.parentMode === 'detached' &&
+      ['queued', 'running', 'waiting'].includes(r.status),
   );
   const requestedExecution =
     !selected && run.executions.find((e) => e.id === initialExecutionId);
@@ -284,7 +285,13 @@ export function RunInspector({
           <span className={styles.version}>Version {run.version}</span>
           <ComparisonContext comparison={run.comparison} />
         </div>
-        <Badge status={progress.runStates[run.id] ?? run.status} />
+        <Badge
+          status={
+            run.status === 'queued'
+              ? 'queued'
+              : (progress.runStates[run.id] ?? run.status)
+          }
+        />
         <div className="actions">
           {run.chain?.previousRunId && (
             <Button onClick={() => onOpen(run.chain!.previousRunId!)}>
@@ -298,7 +305,7 @@ export function RunInspector({
           )}
           {data.chain &&
             !data.chain.cancelledAt &&
-            ['running', 'waiting', 'failed'].includes(
+            ['queued', 'running', 'waiting', 'failed'].includes(
               data.chain.latestStatus,
             ) && (
               <Button
@@ -334,7 +341,7 @@ export function RunInspector({
               {retrying ? 'Requesting retry…' : 'Retry failed step'}
             </Button>
           )}
-          {['running', 'waiting'].includes(run.status) && (
+          {['queued', 'running', 'waiting'].includes(run.status) && (
             <Button
               onClick={() =>
                 void act(async () => {
@@ -446,7 +453,7 @@ export function RunInspector({
       {independent.length > 0 && (
         <div className={styles.independent}>
           <p>
-            {['running', 'waiting'].includes(run.status)
+            {['queued', 'running', 'waiting'].includes(run.status)
               ? 'These independent runs will keep running if you cancel this run.'
               : 'These independent runs are still active.'}
           </p>
@@ -459,7 +466,7 @@ export function RunInspector({
           </div>
         </div>
       )}
-      {['running', 'waiting'].includes(run.status) &&
+      {['queued', 'running', 'waiting'].includes(run.status) &&
         data.availableWork.some(
           (w) => !w.executor && !detachedBoundary(w.runId, run.id, runIndex),
         ) && (
