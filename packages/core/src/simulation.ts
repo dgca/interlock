@@ -5,13 +5,32 @@ const id = z.string().min(1).max(120);
 export const simulationFixtureSchema = z
   .object({
     nodeId: id,
-    kind: z.enum(['agent', 'script', 'fetch']),
+    kind: z.enum(['agent', 'script', 'fetch', 'workflow', 'wait']),
     output: z.lazy(() => jsonSchema).optional(),
     error: z.string().min(1).max(512).optional(),
     expectRejection: z.boolean().optional(),
+    timedOut: z.boolean().optional(),
   })
   .strict()
   .superRefine((fixture, ctx) => {
+    if (fixture.timedOut) {
+      if (fixture.kind !== 'agent' && fixture.kind !== 'wait')
+        ctx.addIssue({
+          code: 'custom',
+          message: 'timedOut is only supported for Agent and Wait fixtures',
+        });
+      if (fixture.output !== undefined || fixture.error !== undefined)
+        ctx.addIssue({
+          code: 'custom',
+          message: 'timedOut fixtures must not provide output or error',
+        });
+      if (fixture.expectRejection)
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Expected rejection cannot be used with timedOut',
+        });
+      return;
+    }
     if ((fixture.output === undefined) === (fixture.error === undefined))
       ctx.addIssue({
         code: 'custom',
@@ -43,6 +62,24 @@ export const simulationFixtureSchema = z
           'Fetch output requires status (100–599), string headers and JSON body',
       });
   });
+export const routeCoverageSchema = z
+  .object({
+    totalEdges: z.number().int().min(0),
+    coveredEdges: z.number().int().min(0),
+    percentage: z.number().min(0).max(100),
+    untested: z.array(
+      z
+        .object({
+          edgeId: z.string().min(1),
+          source: z.string().min(1),
+          target: z.string().min(1),
+          port: z.string().optional(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type RouteCoverage = z.infer<typeof routeCoverageSchema>;
 export const simulationRequestSchema = z.discriminatedUnion('action', [
   z
     .object({

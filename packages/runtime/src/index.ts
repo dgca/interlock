@@ -198,8 +198,15 @@ export class Engine {
     private options: {
       trialRoot?: string;
       allowedRoots?: string[];
+      clock?: { now: () => number };
+      substituteWorkflow?: (
+        node: Extract<WorkflowNode, { kind: 'workflow' }>,
+        execution: NodeExecution,
+      ) => Promise<Json> | undefined;
       substituteOperation?: (
-        node: Extract<WorkflowNode, { kind: 'script' | 'fetch' }>,
+        node:
+          | Extract<WorkflowNode, { kind: 'script' | 'fetch' }>
+          | { kind: 'script' | 'fetch' },
         execution: NodeExecution,
       ) => Promise<Json>;
     } = {},
@@ -574,6 +581,12 @@ export class Engine {
         );
       }
     }
+  }
+  nowMs(): number {
+    return this.options.clock ? this.options.clock.now() : Date.now();
+  }
+  now(): string {
+    return new Date(this.nowMs()).toISOString();
   }
   subscribe(listener: () => void) {
     this.listeners.add(listener);
@@ -2102,7 +2115,7 @@ export class Engine {
             work?.resourceBlocked ||
             work?.providerDiversityBlocked ||
             !work?.availableUntil ||
-            Date.parse(work.availableUntil) > Date.now()
+            Date.parse(work.availableUntil) > this.nowMs()
           )
             return false;
           work.status = 'timed_out';
@@ -2360,7 +2373,7 @@ export class Engine {
           availableUntil:
             node.unclaimedTimeoutMs === undefined
               ? undefined
-              : new Date(Date.now() + node.unclaimedTimeoutMs).toISOString(),
+              : new Date(this.nowMs() + node.unclaimedTimeoutMs).toISOString(),
           createdAt: now(),
         };
         this.store.put('work', work);
@@ -2374,7 +2387,7 @@ export class Engine {
       }
       if (isPollWait(node)) {
         if (!execution.nextCheckAt) {
-          const started = Date.now();
+          const started = this.nowMs();
           execution.nextCheckAt = new Date(started).toISOString();
           execution.resumeAt = execution.nextCheckAt;
           if (node.timing.timeoutMs !== undefined)
@@ -2395,7 +2408,7 @@ export class Engine {
           this.finishPollTimeout(run, execution, node)
         )
           return true;
-        if (Date.parse(execution.nextCheckAt!) <= Date.now())
+        if (Date.parse(execution.nextCheckAt!) <= this.nowMs())
           this.admitOperation(run, execution);
         return false;
       }
@@ -2403,7 +2416,7 @@ export class Engine {
         if (!execution.resumeAt) {
           if (node.timing.kind === 'duration') {
             execution.resumeAt = new Date(
-              Date.now() + node.timing.ms,
+              this.nowMs() + node.timing.ms,
             ).toISOString();
           } else {
             const value = readPath(execution.input, node.timing.path);
@@ -2431,7 +2444,7 @@ export class Engine {
             `${node.label}: waiting until ${execution.resumeAt}`,
           );
         }
-        if (Date.parse(execution.resumeAt) > Date.now()) return false;
+        if (Date.parse(execution.resumeAt) > this.nowMs()) return false;
         this.finish(run, execution, node, execution.input);
         return true;
       }
@@ -2479,6 +2492,94 @@ export class Engine {
           });
         });
         return true;
+      }
+      if (
+        node.kind === 'workflow' &&
+        this.options.substituteWorkflow &&
+        execution
+      ) {
+        if (starting) this.save(run);
+        const stepExecution = execution;
+        const executionId = stepExecution.id;
+        if (
+          !stepExecution.childRunIds.length &&
+          !this.localJobs.has(executionId)
+        ) {
+          const substituted = this.options.substituteWorkflow(
+            node,
+            stepExecution,
+          );
+          if (substituted) {
+            const controller = new AbortController();
+            this.localJobs.set(executionId, controller);
+            void substituted
+              .then(
+                (output) => {
+                  if (this.stopped) return;
+                  this.store.transaction(() => {
+                    const latest = this.run(run.id);
+                    if (
+                      latest.status !== 'running' ||
+                      latest.executions.at(-1)?.id !== executionId
+                    )
+                      return;
+                    const current = latest.executions.at(-1)!;
+                    if (hasFailureRoute(node)) current.output = output;
+                    try {
+                      assertContract(
+                        node.outputSchema,
+                        output,
+                        `${node.label}: workflow output`,
+                      );
+                      this.finish(latest, current, node, output);
+                    } catch (error) {
+                      if (hasFailureRoute(node)) {
+                        this.failOperation(
+                          latest,
+                          current,
+                          node,
+                          message(error),
+                          'output',
+                        );
+                      } else {
+                        this.fail(latest, current, message(error));
+                      }
+                    }
+                  });
+                },
+                (error) => {
+                  if (this.stopped) return;
+                  this.store.transaction(() => {
+                    const latest = this.run(run.id);
+                    if (
+                      latest.status !== 'running' ||
+                      latest.executions.at(-1)?.id !== executionId
+                    )
+                      return;
+                    const current = latest.executions.at(-1)!;
+                    if (hasFailureRoute(node)) {
+                      this.failOperation(
+                        latest,
+                        current,
+                        node,
+                        message(error),
+                        'child',
+                      );
+                    } else {
+                      this.fail(latest, current, message(error));
+                    }
+                  });
+                },
+              )
+              .finally(() => {
+                this.localJobs.delete(executionId);
+                this.pump();
+              });
+            return true;
+          }
+        } else if (this.localJobs.has(executionId)) {
+          return false;
+        }
       }
       if (node.kind === 'workflow' || node.kind === 'batch') {
         const value =
@@ -2704,7 +2805,7 @@ export class Engine {
           remainingMs:
             execution.resourceBlocked?.remainingMs ??
             (execution.timeoutAt
-              ? Math.max(0, Date.parse(execution.timeoutAt) - Date.now())
+              ? Math.max(0, Date.parse(execution.timeoutAt) - this.nowMs())
               : undefined),
         };
         // Only resource queue time is excluded from the polling Wait deadline.
@@ -2715,7 +2816,7 @@ export class Engine {
     }
     if (execution.resourceBlocked?.remainingMs !== undefined)
       execution.timeoutAt = new Date(
-        Date.now() + execution.resourceBlocked.remainingMs,
+        this.nowMs() + execution.resourceBlocked.remainingMs,
       ).toISOString();
     const wasBlocked = !!execution.resourceBlocked;
     execution.resourceBlocked = undefined;
@@ -2748,7 +2849,7 @@ export class Engine {
             'Maximum active execution duration reached',
             'deadline',
           );
-        } else if (Date.parse(work.leaseUntil!) <= Date.now()) {
+        } else if (Date.parse(work.leaseUntil!) <= this.nowMs()) {
           work.expiredClaims = [
             ...(work.expiredClaims ?? []),
             {
@@ -3008,7 +3109,7 @@ export class Engine {
     execution: NodeExecution,
     node: WorkflowNode,
   ): boolean {
-    if (!execution.timeoutAt || Date.parse(execution.timeoutAt) > Date.now())
+    if (!execution.timeoutAt || Date.parse(execution.timeoutAt) > this.nowMs())
       return false;
     if (this.localJobs.has(execution.id))
       this.resources.uncertainExecution(
@@ -3323,8 +3424,8 @@ export class Engine {
     if (!node || !isPollWait(node)) return;
     if (
       !execution.nextCheckAt ||
-      Date.parse(execution.nextCheckAt) > Date.now() ||
-      (execution.timeoutAt && Date.parse(execution.timeoutAt) <= Date.now())
+      Date.parse(execution.nextCheckAt) > this.nowMs() ||
+      (execution.timeoutAt && Date.parse(execution.timeoutAt) <= this.nowMs())
     )
       return;
     const { timing } = node;
@@ -3340,6 +3441,22 @@ export class Engine {
           throw new InterlockError(
             'Unsupported Fetch probe in a local Git trial',
           );
+        if (this.options.substituteOperation) {
+          return this.options
+            .substituteOperation(timing.check as any, execution)
+            .then((output) => {
+              if (
+                timing.check.kind === 'fetch' &&
+                (timing.check as any).failOnHttpError
+              ) {
+                const httpError = fetchHttpError(
+                  (output as { status: number }).status,
+                );
+                if (httpError) throw new InterlockError(httpError);
+              }
+              return { output };
+            });
+        }
         return this.localOperation(
           run,
           timing.check,
@@ -3370,7 +3487,7 @@ export class Engine {
         this.resources.endExecution(latest.id, current, result.uncertain);
         if (result.resolvedCwd) current.resolvedCwd = result.resolvedCwd;
         if (this.finishPollTimeout(latest, current, node)) return;
-        const checked = now();
+        const checked = this.now();
         current.check = {
           count: (current.check?.count ?? 0) + 1,
           at: checked,
@@ -3682,7 +3799,7 @@ export class Engine {
       work.token = randomUUID();
       work.claimLeaseSeconds = leaseSeconds ?? work.leaseSeconds ?? 300;
       work.leaseUntil = new Date(
-        Date.now() + work.claimLeaseSeconds * 1000,
+        this.nowMs() + work.claimLeaseSeconds * 1000,
       ).toISOString();
       this.resources.acquire(work);
       this.executors.claimed(work);
@@ -3721,7 +3838,7 @@ export class Engine {
       throw new InterlockError('Claim no longer active');
     if (this.stalls.deadlineExpired(work))
       throw new ExpiredClaimError('Maximum active execution duration reached');
-    if (Date.parse(work.leaseUntil!) <= Date.now())
+    if (Date.parse(work.leaseUntil!) <= this.nowMs())
       throw new ExpiredClaimError('Claim expired');
     return work;
   }
@@ -3754,7 +3871,7 @@ export class Engine {
       work.lastActivityAt = now();
       work.idleNudge = undefined;
       work.leaseUntil = new Date(
-        Date.now() + (leaseSeconds ?? work.claimLeaseSeconds ?? 300) * 1000,
+        this.nowMs() + (leaseSeconds ?? work.claimLeaseSeconds ?? 300) * 1000,
       ).toISOString();
       this.store.put('work', work);
       return this.describeWork(work);
@@ -3805,7 +3922,7 @@ export class Engine {
       );
     if (work.status !== 'claimed') return report('inactive');
     if (
-      Date.parse(work.leaseUntil!) <= Date.now() ||
+      Date.parse(work.leaseUntil!) <= this.nowMs() ||
       this.stalls.deadlineExpired(work)
     )
       return report('expired');
@@ -3979,7 +4096,7 @@ export class Engine {
       const node = this.definition(run).nodes.find((n) => n.id === work.nodeId);
       work.availableUntil =
         node?.kind === 'agent' && node.unclaimedTimeoutMs !== undefined
-          ? new Date(Date.now() + node.unclaimedTimeoutMs).toISOString()
+          ? new Date(this.nowMs() + node.unclaimedTimeoutMs).toISOString()
           : undefined;
       this.event(run, 'work.retry', `${work.label}: ${error}`);
     }

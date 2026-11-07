@@ -446,7 +446,9 @@ export function evaluateAssertions(
       );
     const routedFailure =
       execution?.status === 'failed' &&
-      (execution.kind === 'script' || execution.kind === 'fetch') &&
+      (execution.kind === 'script' ||
+        execution.kind === 'fetch' ||
+        execution.kind === 'workflow') &&
       execution.port === 'failed';
     if (
       execution &&
