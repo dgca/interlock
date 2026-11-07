@@ -1,5 +1,6 @@
 import {
-  scheduleConfigSchema,
+  triggerConfig,
+  webhookConfigSchema,
   nextScheduleSlot,
   type WorkflowTrigger,
 } from '@interlock/core';
@@ -64,22 +65,30 @@ export function exportWorkflows(
       draft: w.draft,
       draftRevision: w.draftRevision,
       versions,
-      ...(store.workflowTriggers(id).length
+      ...(store.workflowTriggers(id).some((t) => t.kind === 'schedule')
         ? {
-            schedules: store.workflowTriggers(id).map((t) => ({
-              id: t.id,
-              config: scheduleConfigSchema.parse({
-                kind: t.kind,
-                name: t.name,
-                timing: t.timing,
-                input: t.input,
-                bindings: t.bindings,
-                overlapPolicy: t.overlapPolicy,
-                missedFirePolicy: t.missedFirePolicy,
-                pauseAfterConsecutiveFailures: t.pauseAfterConsecutiveFailures,
-              }),
-              enabled: false,
-            })),
+            schedules: store
+              .workflowTriggers(id)
+              .filter((t) => t.kind === 'schedule')
+              .map((t) => ({
+                id: t.id,
+                config: triggerConfig(
+                  t,
+                ) as import('@interlock/core').ScheduleConfig,
+                enabled: false,
+              })),
+          }
+        : {}),
+      ...(store.workflowTriggers(id).some((t) => t.kind === 'webhook')
+        ? {
+            webhooks: store
+              .workflowTriggers(id)
+              .filter((t) => t.kind === 'webhook')
+              .map((t) => ({
+                id: t.id,
+                config: webhookConfigSchema.parse(triggerConfig(t)),
+                enabled: false,
+              })),
           }
         : {}),
       ...(deletedVersions.length ? { deletedVersions } : {}),
@@ -109,11 +118,12 @@ export function exportWorkflows(
   });
   const variables = new Variables(store).requirements([
     ...new Set(
-      records.flatMap((w) =>
-        [w.draft, ...w.versions.map((v) => v.definition)].flatMap(
+      records.flatMap((w) => [
+        ...[w.draft, ...w.versions.map((v) => v.definition)].flatMap(
           variableReferences,
         ),
-      ),
+        ...(w.webhooks ?? []).map((t) => t.config.authentication.secretId),
+      ]),
     ),
   ]);
   const referencedModels = [
@@ -128,17 +138,19 @@ export function exportWorkflows(
   const modelAliases = new ModelAliases(store).requirements(referencedModels);
   return {
     format: 'interlock-workflows',
-    formatVersion: modelAliases.length
-      ? 6
-      : records.some((w) => w.schedules?.length)
-        ? 5
-        : variables.length
-          ? 4
-          : records.some((w) => w.deletedVersions?.length)
-            ? 3
-            : prompts.length
-              ? 2
-              : 1,
+    formatVersion: records.some((w) => w.webhooks?.length)
+      ? 7
+      : modelAliases.length
+        ? 6
+        : records.some((w) => w.schedules?.length)
+          ? 5
+          : variables.length
+            ? 4
+            : records.some((w) => w.deletedVersions?.length)
+              ? 3
+              : prompts.length
+                ? 2
+                : 1,
     ...(prompts.length ? { prompts } : {}),
     ...(variables.length ? { variables } : {}),
     ...(modelAliases.length ? { modelAliases } : {}),
@@ -338,9 +350,12 @@ export function importWorkflows(
     }
     const scheduleIds = new Set<string>();
     for (const entry of bundle.workflows)
-      for (const schedule of entry.schedules ?? []) {
+      for (const schedule of [
+        ...(entry.schedules ?? []),
+        ...(entry.webhooks ?? []),
+      ]) {
         if (scheduleIds.has(schedule.id))
-          throw new InterlockError('Duplicate schedule identity in bundle');
+          throw new InterlockError('Duplicate trigger identity in bundle');
         scheduleIds.add(schedule.id);
         const existing = store.get<WorkflowTrigger>(
           'workflowTriggers',
@@ -348,29 +363,18 @@ export function importWorkflows(
         );
         if (existing && existing.workflowId !== entry.id)
           throw new InterlockError(
-            'Schedule identity belongs to another workflow',
+            'Trigger identity belongs to another workflow',
           );
         if (
           existing &&
           !options.force &&
-          !isDeepStrictEqual(
-            scheduleConfigSchema.parse({
-              kind: existing.kind,
-              name: existing.name,
-              timing: existing.timing,
-              input: existing.input,
-              bindings: existing.bindings,
-              overlapPolicy: existing.overlapPolicy,
-              missedFirePolicy: existing.missedFirePolicy,
-              pauseAfterConsecutiveFailures:
-                existing.pauseAfterConsecutiveFailures,
-            }),
-            schedule.config,
-          )
+          !isDeepStrictEqual(triggerConfig(existing), schedule.config)
         )
           throw new InterlockError(
             'Schedule configuration conflict; use force to replace after inspection',
           );
+        if (existing && existing.kind !== schedule.config.kind)
+          throw new InterlockError('Trigger identity cannot change kind');
         store.put<WorkflowTrigger>('workflowTriggers', {
           ...existing,
           ...schedule.config,
@@ -380,12 +384,23 @@ export function importWorkflows(
           enabled: false,
           createdAt: existing?.createdAt ?? now,
           updatedAt: now,
-          anchorAt: now,
-          nextFireAt: nextScheduleSlot(schedule.config.timing, now),
+          ...(schedule.config.kind === 'schedule'
+            ? {
+                anchorAt: now,
+                nextFireAt: nextScheduleSlot(schedule.config.timing, now),
+              }
+            : {
+                ignoredCount:
+                  existing?.kind === 'webhook' ? existing.ignoredCount : 0,
+                rejectedCount:
+                  existing?.kind === 'webhook' ? existing.rejectedCount : 0,
+                deliveryCount:
+                  existing?.kind === 'webhook' ? existing.deliveryCount : 0,
+              }),
           consecutiveFailures: 0,
           autoPaused: undefined,
           lastLagMs: undefined,
-        });
+        } as WorkflowTrigger);
       }
     const all = store.workflows();
     for (const entry of bundle.workflows) {

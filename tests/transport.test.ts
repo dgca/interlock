@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import {
   assertContract,
@@ -304,6 +305,100 @@ it.each(['stdio', 'http'])(
         },
       });
 
+      const hookSecret = await call('manage_variables', {
+        request: {
+          action: 'create',
+          name: `Webhook_${mode}`,
+          kind: 'secret',
+          value: 'transport-test-secret',
+        },
+      });
+      const hookConfig = {
+        kind: 'webhook',
+        name: 'Transport webhook',
+        authentication: {
+          secretId: hookSecret.id,
+          header: 'x-signature',
+          parts: [{ source: 'body' }],
+        },
+        deliveryId: { source: 'body', path: 'deliveryId' },
+        timestamp: { source: 'body', path: 'timestamp' },
+        action: { type: 'start', input: {}, bindings: {} },
+      };
+      const hook = (
+        await call('manage_workflow_triggers', {
+          request: { action: 'create', workflowId: w.id, config: hookConfig },
+        })
+      ).trigger;
+      const hookEnabled = (
+        await call('manage_workflow_triggers', {
+          request: {
+            action: 'enable',
+            id: hook.id,
+            expectedRevision: hook.revision,
+          },
+        })
+      ).trigger;
+      const unsignedConfig = await client.callTool({
+        name: 'manage_workflow_triggers',
+        arguments: {
+          request: {
+            action: 'create',
+            workflowId: w.id,
+            config: {
+              ...hookConfig,
+              deliveryId: { source: 'header', path: 'unsigned-id' },
+            },
+          },
+        },
+      });
+      expect(unsignedConfig.isError).toBe(true);
+      const hookBody = JSON.stringify({
+        deliveryId: `delivery-${mode}`,
+        timestamp: new Date().toISOString(),
+      });
+      const hookSignature = `sha256=${createHmac('sha256', 'transport-test-secret').update(hookBody).digest('hex')}`;
+      const hookResponse = await fetch(`${url}/hooks/${hook.id}`, {
+        method: 'POST',
+        body: hookBody,
+        headers: { 'x-signature': hookSignature },
+      });
+      expect(hookResponse.status).toBe(202);
+      expect(await hookResponse.json()).toMatchObject({ outcome: 'started' });
+      const hookInspection = await call('read_workflow_triggers', {
+        request: { action: 'inspect', id: hook.id, limit: 1 },
+      });
+      expect(hookInspection.deliveries).toMatchObject({
+        total: 1,
+        items: [expect.objectContaining({ outcome: 'started' })],
+      });
+      expect(JSON.stringify(hookInspection)).not.toContain(
+        'transport-test-secret',
+      );
+      expect(
+        (
+          await call('read_workflow_triggers', {
+            request: { action: 'list', workflowId: w.id, kind: 'webhook' },
+          })
+        ).total,
+      ).toBe(1);
+      const hookBundle = await call('export_workflow', { id: w.id });
+      expect(hookBundle.formatVersion).toBe(7);
+      expect(hookBundle.variables).toEqual([
+        expect.objectContaining({ id: hookSecret.id, kind: 'secret' }),
+      ]);
+      expect(
+        hookBundle.workflows.find((entry: any) => entry.id === w.id).webhooks[0]
+          .enabled,
+      ).toBe(false);
+      await call('manage_workflow_triggers', {
+        request: {
+          action: 'delete',
+          id: hook.id,
+          expectedRevision: hookEnabled.revision,
+        },
+      });
+
       const { tools, nextCursor } = toolDiscovery;
       const admissionSchema = tools.find((t) => t.name === 'start_run')!
         .inputSchema.properties!;
@@ -393,7 +488,7 @@ it.each(['stdio', 'http'])(
       try {
         expect(
           await runCommand([
-            'schedules',
+            'triggers',
             'read',
             JSON.stringify({ action: 'list', workflowId: w.id }),
           ]),
@@ -458,7 +553,7 @@ it.each(['stdio', 'http'])(
       expect(nextCursor).toBeUndefined();
       expect(
         Buffer.byteLength(JSON.stringify(toolDiscovery)),
-      ).toBeLessThanOrEqual(290_000);
+      ).toBeLessThanOrEqual(300_000);
       expect(Buffer.byteLength(instructions)).toBeLessThanOrEqual(10_000);
       expect(instructions).toContain(
         'docs/agent-workflows.md#discover-schemas-and-assignments',

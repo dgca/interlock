@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { webhookConfigSchema, type WebhookConfig } from './webhooks.js';
 import { CronExpressionParser } from 'cron-parser';
 import { jsonSchema, type Json } from './index.js';
 
@@ -134,10 +135,52 @@ export const scheduleConfigSchema = z
       });
   });
 export type ScheduleConfig = z.infer<typeof scheduleConfigSchema>;
+export const triggerConfigSchema = z.union([
+  scheduleConfigSchema,
+  z.lazy(() => webhookConfigSchema),
+]);
+export type TriggerConfig = z.infer<typeof triggerConfigSchema>;
+export function triggerConfig(trigger: WorkflowTrigger): TriggerConfig {
+  const fields =
+    trigger.kind === 'schedule'
+      ? [
+          'kind',
+          'name',
+          'timing',
+          'input',
+          'bindings',
+          'overlapPolicy',
+          'missedFirePolicy',
+          'pauseAfterConsecutiveFailures',
+        ]
+      : [
+          'kind',
+          'name',
+          'authentication',
+          'deliveryId',
+          'timestamp',
+          'timestampFormat',
+          'timestampWindowMs',
+          'filters',
+          'action',
+          'maxBodyBytes',
+          'rateLimit',
+          'pauseAfterConsecutiveFailures',
+        ];
+  return triggerConfigSchema.parse(
+    Object.fromEntries(
+      fields.map((key) => [
+        key,
+        (trigger as unknown as Record<string, unknown>)[key],
+      ]),
+    ),
+  );
+}
 export const scheduleReadSchema = z.discriminatedUnion('action', [
   z
     .object({
       action: z.literal('list'),
+      kind: z.enum(['schedule', 'webhook']).optional(),
       workflowId: z.string().min(1).optional(),
       offset: z.number().int().min(0).default(0),
       limit: z.number().int().min(1).max(100).default(20),
@@ -168,7 +211,7 @@ export const scheduleMutationSchema = z.discriminatedUnion('action', [
     .object({
       action: z.literal('create'),
       workflowId: z.string().min(1),
-      config: scheduleConfigSchema,
+      config: triggerConfigSchema,
     })
     .strict(),
   z
@@ -176,7 +219,7 @@ export const scheduleMutationSchema = z.discriminatedUnion('action', [
       action: z.literal('update'),
       id: z.string().min(1),
       expectedRevision: z.number().int().positive(),
-      config: scheduleConfigSchema,
+      config: triggerConfigSchema,
     })
     .strict(),
   z
@@ -203,15 +246,14 @@ export const scheduleMutationSchema = z.discriminatedUnion('action', [
 ]);
 export type ScheduleRead = z.input<typeof scheduleReadSchema>;
 export type ScheduleMutation = z.input<typeof scheduleMutationSchema>;
-export interface WorkflowTrigger extends ScheduleConfig {
+export interface TriggerState {
   id: string;
   workflowId: string;
   revision: number;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
-  anchorAt: string;
-  nextFireAt: string;
+
   lastFireAt?: string;
   previousRunId?: string;
   consecutiveFailures: number;
@@ -219,6 +261,17 @@ export interface WorkflowTrigger extends ScheduleConfig {
   lastLagMs?: number;
   lastCheckedAt?: string;
 }
+export interface ScheduleTrigger extends ScheduleConfig, TriggerState {
+  anchorAt: string;
+  nextFireAt: string;
+}
+export interface WebhookTrigger extends WebhookConfig, TriggerState {
+  ignoredCount: number;
+  rejectedCount: number;
+  deliveryCount: number;
+  rateWindow?: { startedAt: string; requests: number };
+}
+export type WorkflowTrigger = ScheduleTrigger | WebhookTrigger;
 export interface ScheduleFire {
   id: string;
   triggerId: string;
@@ -314,7 +367,7 @@ export const scheduleManageInputSchema = z
       .positive()
       .optional()
       .describe('Required except create; use current inspection revision.'),
-    config: scheduleConfigSchema
+    config: triggerConfigSchema
       .optional()
       .describe('Required for create/update; replaces the full configuration.'),
   })

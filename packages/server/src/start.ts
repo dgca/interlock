@@ -1,3 +1,4 @@
+import { createHooksApp } from './hooks.js';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { resolve } from 'node:path';
@@ -34,10 +35,20 @@ export async function startServer(options: {
   workdir: string;
   ui: string;
   port: number;
+  hooksPort?: number;
   connection: ConnectionConfig;
   allowedRoots?: string[];
 }) {
+  if (
+    options.hooksPort !== undefined &&
+    (!Number.isInteger(options.hooksPort) ||
+      options.hooksPort < 1 ||
+      options.hooksPort > 65535 ||
+      options.hooksPort === options.port)
+  )
+    throw new Error('Hooks port must be a different port between 1 and 65535.');
   await checkPort(options.port);
+  if (options.hooksPort !== undefined) await checkPort(options.hooksPort);
   let store: Store;
   try {
     store = new Store(options.database);
@@ -72,17 +83,37 @@ export async function startServer(options: {
     () =>
       console.log(`Interlock is running at ${options.connection.engineUrl}`),
   );
-  server.on('error', (error: NodeJS.ErrnoException) => {
-    console.error(
-      error.code === 'EADDRINUSE'
-        ? `Port ${options.port} is already in use. Open ${options.connection.engineUrl} or choose --port.`
-        : error.message,
-    );
-    clearInterval(timer);
-    engine.stop();
-    store.close();
-    process.exitCode = 1;
-  });
+  const hooksServer =
+    options.hooksPort === undefined
+      ? undefined
+      : serve(
+          {
+            fetch: createHooksApp(engine).fetch,
+            hostname: '0.0.0.0',
+            port: options.hooksPort,
+          },
+          () =>
+            console.log(
+              `Webhook ingress listening on port ${options.hooksPort}; only POST /hooks/:triggerId is exposed`,
+            ),
+        );
+  const onError =
+    (port: number, option: string) => (error: NodeJS.ErrnoException) => {
+      console.error(
+        error.code === 'EADDRINUSE'
+          ? `Port ${port} is already in use. Choose ${option} or stop the process using that port.`
+          : error.message,
+      );
+      clearInterval(timer);
+      hooksServer?.close();
+      server.close();
+      engine.stop();
+      store.close();
+      process.exitCode = 1;
+    };
+  server.on('error', onError(options.port, '--port'));
+  if (options.hooksPort !== undefined)
+    hooksServer?.on('error', onError(options.hooksPort, '--hooks-port'));
   let stopping = false;
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
     process.on(signal, async () => {
@@ -93,6 +124,7 @@ export async function startServer(options: {
       clearInterval(timer);
       await engine.executors.stop();
       engine.stop();
+      hooksServer?.close();
       server.close(() => {
         store.close();
         process.exit(0);

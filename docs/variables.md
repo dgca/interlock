@@ -47,9 +47,22 @@ Invalid target values fail with the variable and target names, without quoting
 the value.
 
 Save and publish the workflow. Its definition retains IDs rather than values.
-Variable references are supported in Fetch headers and Script environments only.
+Step variable references are supported in Fetch headers and Script environments. Webhook trigger authentication separately references a Secret variable by ID.
 They are not supported in URLs, query parameters, JSON bodies, general data
 bindings, Agent prompts, or harness profiles.
+
+## Authenticate a webhook
+
+Create a Secret for the sender's shared HMAC key. In the workflow's **Triggers** tab,
+select **Add webhook** and set `authentication.secretId` to that Secret's ID.
+Inspect the configuration, then enable the trigger. Every used header, including
+header-based delivery identity and event time, must belong to the signed material.
+See [webhook configuration and signing](webhooks.md#authentication-and-signed-time).
+
+Webhook deliveries use the current Secret value. Replacement affects subsequent
+signature checks without republishing. Disable blocks later verification. Existing
+workflow runs keep their own captured variable revisions. Portable webhook exports
+carry only a Secret requirement, and imports remain disabled until local setup.
 
 ## Rotate or stop using a credential
 
@@ -66,7 +79,7 @@ captures to use their original retained revisions again.
 
 Review **Used by** before renaming or deleting. Renames preserve ID-based
 references. Deletion is blocked by draft or retained published references, active
-runs, and running comparisons. Remove those dependencies first. Allowed deletion
+runs, running comparisons, and webhook authentication references. Remove those dependencies first. Allowed deletion
 removes current protected revisions while keeping historical capture metadata.
 Backups may retain encrypted data. A retry requiring a deleted value fails rather
 than substituting a new value.
@@ -76,7 +89,7 @@ before trying again. The failed save does not overwrite another editor's changes
 
 ## Import workflows that require variables
 
-Use a format-4 or schedule-bearing format-5 portable bundle for variable references. Exports contain safe
+Use a format-4 or later portable bundle for variable references. Format 7 includes webhook authentication requirements. Exports contain safe
 requirements and references, never Config or Secret values or encryption keys.
 Earlier bundle formats remain supported for workflows without variables.
 

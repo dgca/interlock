@@ -18,6 +18,10 @@ import {
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import {
   scheduleConfigSchema,
+  webhookConfigSchema,
+  triggerConfig,
+  type WebhookConfig,
+  type TriggerConfig,
   type ScheduleConfig,
   type ScheduleMutation,
   type Workflow,
@@ -42,24 +46,21 @@ const initialConfig: ScheduleConfig = {
   missedFirePolicy: 'skip',
   pauseAfterConsecutiveFailures: null,
 };
-const configOf = (t: Trigger): ScheduleConfig => ({
-  kind: t.kind,
-  name: t.name,
-  timing: t.timing,
-  input: t.input,
-  bindings: t.bindings,
-  overlapPolicy: t.overlapPolicy,
-  missedFirePolicy: t.missedFirePolicy,
-  pauseAfterConsecutiveFailures: t.pauseAfterConsecutiveFailures,
-});
+const configOf = (t: Trigger): TriggerConfig => triggerConfig(t);
 const timestamp = (at?: string) =>
   at
     ? new Date(at).toLocaleString(undefined, { timeZoneName: 'short' })
     : 'Never';
-const cadence = (t: Pick<ScheduleConfig, 'timing'>) =>
-  t.timing.type === 'interval'
-    ? `Every ${t.timing.intervalMs / 1000} seconds`
-    : `${t.timing.expression} · ${t.timing.timeZone}`;
+const cadence = (
+  t:
+    | { kind: 'schedule'; timing: ScheduleConfig['timing'] }
+    | { kind: 'webhook' },
+) =>
+  t.kind === 'webhook'
+    ? 'Webhook'
+    : t.timing.type === 'interval'
+      ? `Every ${t.timing.intervalMs / 1000} seconds`
+      : `${t.timing.expression} · ${t.timing.timeZone}`;
 const state = (t: Pick<Trigger, 'autoPaused' | 'enabled'>) =>
   !t.enabled ? 'Disabled' : t.autoPaused ? 'Automatically paused' : 'Enabled';
 
@@ -83,7 +84,7 @@ export function Schedules({
   const [inspection, setInspection] = useState<Inspection>();
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [editing, setEditing] = useState<'new' | Trigger>();
+  const [editing, setEditing] = useState<'new' | 'new_webhook' | Trigger>();
   const [confirm, setConfirm] = useState<'enable' | 'disable' | 'delete'>();
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
@@ -166,20 +167,17 @@ export function Schedules({
         setEditing(undefined);
         setConfirm(undefined);
       });
+      const kind = 'config' in request ? request.config.kind : trigger?.kind;
+      const noun = kind === 'webhook' ? 'Webhook' : 'Schedule';
       setSuccess(
         request.action === 'delete'
-          ? 'Schedule deleted. Existing runs remain.'
+          ? `${noun} deleted. Existing runs remain.`
           : request.action === 'create'
-            ? 'Schedule created disabled.'
-            : `Schedule ${request.action === 'update' ? 'saved' : request.action === 'enable' ? 'enabled' : 'disabled'}.`,
+            ? `${noun} created disabled.`
+            : `${noun} ${request.action === 'update' ? 'saved' : request.action === 'enable' ? 'enabled' : 'disabled'}.`,
       );
       if (result.trigger) {
         const saved = result.trigger;
-        if (inspection?.trigger.id === saved.id)
-          setInspection({
-            ...inspection,
-            trigger: { ...inspection.trigger, ...saved },
-          });
         if (request.action === 'create') {
           select(saved.id);
           return;
@@ -218,10 +216,10 @@ export function Schedules({
     }
   };
   return (
-    <section className={styles.page} aria-label="Workflow schedules">
+    <section className={styles.page} aria-label="Workflow triggers">
       <div className={styles.heading}>
         <h2>
-          Schedules
+          Triggers
           {listing && (
             <Text span size="sm" c="dimmed">
               {' '}
@@ -229,17 +227,26 @@ export function Schedules({
             </Text>
           )}
         </h2>
-        <Button
-          leftSection={<Plus size={15} />}
-          onClick={() => setEditing('new')}
-        >
-          Add schedule
-        </Button>
+        <Group>
+          <Button
+            variant="default"
+            leftSection={<Plus size={15} />}
+            onClick={() => setEditing('new')}
+          >
+            Add schedule
+          </Button>
+          <Button
+            leftSection={<Plus size={15} />}
+            onClick={() => setEditing('new_webhook')}
+          >
+            Add webhook
+          </Button>
+        </Group>
       </div>
       <Text size="xs" c="dimmed" mb="lg">
         {workflow.latestVersion
-          ? `Schedules start the latest published version, currently v${workflow.latestVersion}. Draft edits do not affect scheduled runs.`
-          : 'Publish this workflow before enabling a schedule. You can create a disabled schedule now.'}
+          ? `Run-start triggers use the latest published version, currently v${workflow.latestVersion}. Draft edits do not affect active runs.`
+          : 'Publish this workflow before enabling a trigger. You can save disabled configurations now.'}
       </Text>
       {success && (
         <Alert mb="md" role="status" color="green">
@@ -260,14 +267,14 @@ export function Schedules({
         </Alert>
       )}
       {!listing ? (
-        !error && <Text role="status">Loading schedules…</Text>
+        !error && <Text role="status">Loading triggers…</Text>
       ) : listing.total === 0 ? (
         <Text size="sm">
-          No schedules. Add one to start this workflow periodically.
+          No triggers. Add a schedule or webhook to start this workflow.
         </Text>
       ) : (
         <div className={styles.grid}>
-          <nav className={styles.list} aria-label="Schedules">
+          <nav className={styles.list} aria-label="Triggers">
             {listing.items.map((t) => (
               <button
                 key={t.id}
@@ -289,7 +296,9 @@ export function Schedules({
                 <small>
                   {t.autoPaused
                     ? t.autoPaused.reason
-                    : `Next slot ${timestamp(t.nextFireAt)}`}
+                    : t.kind === 'schedule'
+                      ? `Next slot ${timestamp(t.nextFireAt)}`
+                      : `POST /hooks/${t.id}`}
                 </small>
               </button>
             ))}
@@ -298,7 +307,7 @@ export function Schedules({
                 variant="subtle"
                 onClick={() => setListOffset((n) => Math.max(0, n - 20))}
               >
-                Previous schedules
+                Previous triggers
               </Button>
             )}
             {listing.nextOffset !== null && (
@@ -306,7 +315,7 @@ export function Schedules({
                 variant="subtle"
                 onClick={() => setListOffset(listing.nextOffset!)}
               >
-                More schedules
+                More triggers
               </Button>
             )}
           </nav>
@@ -333,7 +342,7 @@ export function Schedules({
                     leftSection={<Pencil size={14} />}
                     onClick={() => setEditing(trigger)}
                   >
-                    Edit schedule
+                    Edit {trigger.kind}
                   </Button>
                 </Group>
                 <Text size="sm" mt="sm">
@@ -342,7 +351,7 @@ export function Schedules({
                 {trigger.autoPaused && (
                   <Alert color="red" mt="md">
                     {trigger.autoPaused.reason}. Review recent outcomes, then
-                    re-enable this schedule.
+                    re-enable this {trigger.kind}.
                   </Alert>
                 )}
                 {trigger.enabled && trigger.excessiveLag && (
@@ -356,8 +365,11 @@ export function Schedules({
                   <Alert mt="md" color="yellow">
                     {trigger.holdCount} named pause{' '}
                     {trigger.holdCount === 1 ? 'hold blocks' : 'holds block'}{' '}
-                    scheduled starts. Enabling this schedule does not release
-                    them.
+                    {trigger.kind === 'webhook' &&
+                    trigger.action.type === 'input'
+                      ? 'acceptance. Pending input submissions remain allowed.'
+                      : 'trigger actions.'}{' '}
+                    Enabling this {trigger.kind} does not release them.
                     {trigger.holds.map((h) => (
                       <Text size="xs" key={h.id}>
                         {h.actor}: {h.reason} · {h.id}
@@ -365,72 +377,107 @@ export function Schedules({
                     ))}
                   </Alert>
                 )}
-                <dl className={styles.metrics}>
-                  <div>
-                    <dt>Last fire</dt>
-                    <dd>{timestamp(trigger.lastFireAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>Next slot</dt>
-                    <dd>
-                      {timestamp(trigger.nextFireAt)}
-                      {(!trigger.enabled || trigger.autoPaused) && (
-                        <Text size="xs" c="dimmed">
-                          No starts while{' '}
-                          {trigger.autoPaused
-                            ? 'automatically paused'
-                            : 'disabled'}
-                        </Text>
-                      )}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Fire lag</dt>
-                    <dd>
-                      {trigger.lastLagMs === undefined && trigger.lagMs === 0
-                        ? 'Not measured'
-                        : `${Math.floor(trigger.lagMs / 1000)} seconds`}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Consecutive failures</dt>
-                    <dd>
-                      {trigger.consecutiveFailures}
+                {trigger.kind === 'webhook' ? (
+                  <Stack gap="sm" my="lg">
+                    <Text size="sm">
+                      <code>POST /hooks/{trigger.id}</code>
+                    </Text>
+                    <Text size="sm">
+                      {trigger.deliveryCount} deliveries ·{' '}
+                      {trigger.ignoredCount} ignored · {trigger.rejectedCount}{' '}
+                      rejected
+                    </Text>
+                    <Text size="sm">
+                      Up to {trigger.maxBodyBytes} bytes ·{' '}
+                      {trigger.rateLimit.maxRequests} requests per{' '}
+                      {trigger.rateLimit.windowMs / 1000} seconds
+                    </Text>
+                    <Text size="sm">
+                      Secret variable:{' '}
+                      <code>{trigger.authentication.secretId}</code>
+                    </Text>
+                    <Text size="sm">
+                      Consecutive failures: {trigger.consecutiveFailures}
                       {trigger.pauseAfterConsecutiveFailures
                         ? ` / ${trigger.pauseAfterConsecutiveFailures} before pause`
-                        : ' · automatic pause off'}
-                    </dd>
-                  </div>
-                </dl>
-                <Text fw={600} size="sm">
-                  Policies
-                </Text>
-                <dl className={styles.policies}>
-                  <dt>Overlapping runs</dt>
-                  <dd>
-                    {trigger.overlapPolicy === 'skip'
-                      ? 'Skip this fire'
-                      : trigger.overlapPolicy === 'queue'
-                        ? 'Queue at most one run'
-                        : 'Allow another run'}
-                  </dd>
-                  <dt>Missed fires</dt>
-                  <dd>
-                    {trigger.missedFirePolicy === 'skip'
-                      ? 'Skip to the next slot'
-                      : 'Run once, then continue'}
-                  </dd>
-                </dl>
-                <details className={styles.disclosure}>
-                  <summary>Run input and bindings</summary>
-                  <pre>
-                    {JSON.stringify(
-                      { input: trigger.input, bindings: trigger.bindings },
-                      null,
-                      2,
-                    )}
-                  </pre>
-                </details>
+                        : ''}
+                    </Text>
+                    <details className={styles.disclosure}>
+                      <summary>Authentication and mappings</summary>
+                      <pre>{JSON.stringify(configOf(trigger), null, 2)}</pre>
+                    </details>
+                  </Stack>
+                ) : (
+                  <>
+                    <dl className={styles.metrics}>
+                      <div>
+                        <dt>Last fire</dt>
+                        <dd>{timestamp(trigger.lastFireAt)}</dd>
+                      </div>
+                      <div>
+                        <dt>Next slot</dt>
+                        <dd>
+                          {timestamp(trigger.nextFireAt)}
+                          {(!trigger.enabled || trigger.autoPaused) && (
+                            <Text size="xs" c="dimmed">
+                              No starts while{' '}
+                              {trigger.autoPaused
+                                ? 'automatically paused'
+                                : 'disabled'}
+                            </Text>
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Fire lag</dt>
+                        <dd>
+                          {trigger.lastLagMs === undefined &&
+                          trigger.lagMs === 0
+                            ? 'Not measured'
+                            : `${Math.floor(trigger.lagMs / 1000)} seconds`}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Consecutive failures</dt>
+                        <dd>
+                          {trigger.consecutiveFailures}
+                          {trigger.pauseAfterConsecutiveFailures
+                            ? ` / ${trigger.pauseAfterConsecutiveFailures} before pause`
+                            : ' · automatic pause off'}
+                        </dd>
+                      </div>
+                    </dl>
+                    <Text fw={600} size="sm">
+                      Policies
+                    </Text>
+                    <dl className={styles.policies}>
+                      <dt>Overlapping runs</dt>
+                      <dd>
+                        {trigger.overlapPolicy === 'skip'
+                          ? 'Skip this fire'
+                          : trigger.overlapPolicy === 'queue'
+                            ? 'Queue at most one run'
+                            : 'Allow another run'}
+                      </dd>
+                      <dt>Missed fires</dt>
+                      <dd>
+                        {trigger.missedFirePolicy === 'skip'
+                          ? 'Skip to the next slot'
+                          : 'Run once, then continue'}
+                      </dd>
+                    </dl>
+                    <details className={styles.disclosure}>
+                      <summary>Run input and bindings</summary>
+                      <pre>
+                        {JSON.stringify(
+                          { input: trigger.input, bindings: trigger.bindings },
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    </details>
+                  </>
+                )}
                 <Group mb="lg">
                   <Button
                     variant={
@@ -448,10 +495,10 @@ export function Schedules({
                     }
                   >
                     {trigger.autoPaused
-                      ? 'Re-enable schedule'
+                      ? `Re-enable ${trigger.kind}`
                       : trigger.enabled
-                        ? 'Disable schedule'
-                        : 'Enable schedule'}
+                        ? `Disable ${trigger.kind}`
+                        : `Enable ${trigger.kind}`}
                   </Button>
                   {trigger.enabled && trigger.autoPaused && (
                     <Button
@@ -467,7 +514,7 @@ export function Schedules({
                     leftSection={<Trash2 size={14} />}
                     onClick={() => setConfirm('delete')}
                   >
-                    Delete schedule
+                    Delete {trigger.kind}
                   </Button>
                 </Group>
                 {!trigger.canEnable && (
@@ -476,121 +523,224 @@ export function Schedules({
                     enabling.
                   </Text>
                 )}
-                <Text fw={600} size="sm">
-                  Recent fires
-                </Text>
-                <Text size="xs" c="dimmed" mt={4}>
-                  Started and queued describe admission, not successful
-                  completion.
-                </Text>
-                <ul className={styles.fires}>
-                  {inspection?.fires.items.map((f) => (
-                    <li className={styles.fire} key={f.id}>
-                      <div>
-                        <strong>{f.outcome.replaceAll('_', ' ')}</strong>
-                        <small>Scheduled {timestamp(f.scheduledAt)}</small>
-                        <small>
-                          Attempted {timestamp(f.firedAt)}
-                          {f.admittedAt
-                            ? ` · Admitted ${timestamp(f.admittedAt)}`
-                            : ''}
-                        </small>
-                        {f.runStatus && <small>Run {f.runStatus}</small>}
-                        {f.error && (
-                          <Text size="xs" c="red">
-                            {f.error}
-                          </Text>
-                        )}
-                      </div>
-                      <div>
-                        {f.runId && f.runAvailable ? (
+                {trigger.kind === 'webhook' ? (
+                  <>
+                    <Text fw={600} size="sm">
+                      Recent deliveries
+                    </Text>
+                    <ul className={styles.fires}>
+                      {inspection?.deliveries.items.map((d) => (
+                        <li className={styles.fire} key={d.id}>
+                          <div>
+                            <strong>{d.outcome}</strong>
+                            <small>{timestamp(d.receivedAt)}</small>
+                            <small>
+                              HTTP {d.status} · {d.code}
+                            </small>
+                            {d.runId && (
+                              <Link to={paths.run(d.runId, workflow.id)}>
+                                Inspect run
+                              </Link>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    {!inspection?.deliveries.total && (
+                      <Text size="sm" c="dimmed">
+                        No deliveries yet.
+                      </Text>
+                    )}
+                    <Group justify="space-between">
+                      {fireOffset > 0 && (
+                        <Button
+                          variant="subtle"
+                          onClick={() =>
+                            setFireOffset((n) => Math.max(0, n - 20))
+                          }
+                        >
+                          Newer deliveries
+                        </Button>
+                      )}
+                      {inspection?.deliveries.nextOffset != null && (
+                        <Button
+                          variant="subtle"
+                          onClick={() =>
+                            setFireOffset(inspection.deliveries.nextOffset!)
+                          }
+                        >
+                          Older deliveries
+                        </Button>
+                      )}
+                    </Group>
+                  </>
+                ) : (
+                  <>
+                    <Text fw={600} size="sm">
+                      Recent fires
+                    </Text>
+                    <Text size="xs" c="dimmed" mt={4}>
+                      Started and queued describe admission, not successful
+                      completion.
+                    </Text>
+                    <ul className={styles.fires}>
+                      {inspection?.fires.items.map((f) => (
+                        <li className={styles.fire} key={f.id}>
+                          <div>
+                            <strong>{f.outcome.replaceAll('_', ' ')}</strong>
+                            <small>Scheduled {timestamp(f.scheduledAt)}</small>
+                            <small>
+                              Attempted {timestamp(f.firedAt)}
+                              {f.admittedAt
+                                ? ` · Admitted ${timestamp(f.admittedAt)}`
+                                : ''}
+                            </small>
+                            {f.runStatus && <small>Run {f.runStatus}</small>}
+                            {f.error && (
+                              <Text size="xs" c="red">
+                                {f.error}
+                              </Text>
+                            )}
+                          </div>
+                          <div>
+                            {f.runId && f.runAvailable ? (
+                              <Button
+                                variant="subtle"
+                                size="xs"
+                                onClick={() =>
+                                  void navigate(
+                                    paths.run(f.runId!, workflow.id),
+                                  )
+                                }
+                              >
+                                Inspect run
+                              </Button>
+                            ) : (
+                              <Text size="xs" c="dimmed">
+                                {f.runId ? 'Run unavailable' : 'No run'}
+                              </Text>
+                            )}
+                            {f.lagMs !== undefined && (
+                              <small>Lag {Math.floor(f.lagMs / 1000)}s</small>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    {!inspection?.fires.total && (
+                      <Text size="sm" c="dimmed">
+                        No fires yet.
+                      </Text>
+                    )}
+                    <Group justify="space-between">
+                      {fireOffset > 0 && (
+                        <Button
+                          variant="subtle"
+                          onClick={() =>
+                            setFireOffset((n) => Math.max(0, n - 20))
+                          }
+                        >
+                          Newer fires
+                        </Button>
+                      )}
+                      {inspection?.fires.nextOffset !== null &&
+                        inspection?.fires.nextOffset !== undefined && (
                           <Button
                             variant="subtle"
-                            size="xs"
                             onClick={() =>
-                              void navigate(paths.run(f.runId!, workflow.id))
+                              setFireOffset(inspection.fires.nextOffset!)
                             }
                           >
-                            Inspect run
+                            Older fires
                           </Button>
-                        ) : (
-                          <Text size="xs" c="dimmed">
-                            {f.runId ? 'Run unavailable' : 'No run'}
-                          </Text>
                         )}
-                        {f.lagMs !== undefined && (
-                          <small>Lag {Math.floor(f.lagMs / 1000)}s</small>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-                {!inspection?.fires.total && (
-                  <Text size="sm" c="dimmed">
-                    No fires yet.
-                  </Text>
+                    </Group>
+                  </>
                 )}
-                <Group justify="space-between">
-                  {fireOffset > 0 && (
-                    <Button
-                      variant="subtle"
-                      onClick={() => setFireOffset((n) => Math.max(0, n - 20))}
-                    >
-                      Newer fires
-                    </Button>
-                  )}
-                  {inspection?.fires.nextOffset !== null &&
-                    inspection?.fires.nextOffset !== undefined && (
-                      <Button
-                        variant="subtle"
-                        onClick={() =>
-                          setFireOffset(inspection.fires.nextOffset!)
-                        }
-                      >
-                        Older fires
-                      </Button>
-                    )}
-                </Group>
               </>
             )}
           </article>
         </div>
       )}
-      {visible && editing && (
-        <ScheduleEditor
-          key={editing === 'new' ? 'new' : editing.id}
-          initial={editing === 'new' ? initialConfig : configOf(editing)}
-          pending={pending}
-          onDirty={onDirty}
-          onClose={() => setEditing(undefined)}
-          onReload={
-            editing === 'new'
-              ? undefined
-              : async () => {
-                  const current = await api.triggers.inspect.query({
-                    id: editing.id,
-                  });
-                  setEditing(current.trigger);
-                  return configOf(current.trigger);
-                }
-          }
-          onSave={(config) =>
-            mutate(
+      {visible &&
+        editing &&
+        (editing === 'new_webhook' ||
+        (typeof editing === 'object' && editing.kind === 'webhook') ? (
+          <WebhookEditor
+            key={typeof editing === 'string' ? editing : editing.id}
+            initial={
+              typeof editing === 'string'
+                ? initialWebhook
+                : webhookConfigSchema.parse(configOf(editing))
+            }
+            pending={pending}
+            onDirty={onDirty}
+            onClose={() => setEditing(undefined)}
+            onSave={(config) =>
+              mutate(
+                typeof editing === 'string'
+                  ? { action: 'create', workflowId: workflow.id, config }
+                  : {
+                      action: 'update',
+                      id: editing.id,
+                      expectedRevision: editing.revision,
+                      config,
+                    },
+              )
+            }
+            onReload={
+              typeof editing === 'string'
+                ? undefined
+                : async () => {
+                    const current = await api.triggers.inspect.query({
+                      id: editing.id,
+                    });
+                    setEditing(current.trigger);
+                    return webhookConfigSchema.parse(configOf(current.trigger));
+                  }
+            }
+          />
+        ) : (
+          <ScheduleEditor
+            key={editing === 'new' ? 'new' : editing.id}
+            initial={
               editing === 'new'
-                ? { action: 'create', workflowId: workflow.id, config }
-                : {
-                    action: 'update',
-                    id: editing.id,
-                    expectedRevision: editing.revision,
-                    config,
-                  },
-            )
-          }
-        />
-      )}
+                ? initialConfig
+                : scheduleConfigSchema.parse(configOf(editing))
+            }
+            pending={pending}
+            onDirty={onDirty}
+            onClose={() => setEditing(undefined)}
+            onReload={
+              editing === 'new'
+                ? undefined
+                : async () => {
+                    const current = await api.triggers.inspect.query({
+                      id: editing.id,
+                    });
+                    setEditing(current.trigger);
+                    return scheduleConfigSchema.parse(
+                      configOf(current.trigger),
+                    );
+                  }
+            }
+            onSave={(config) =>
+              mutate(
+                editing === 'new'
+                  ? { action: 'create', workflowId: workflow.id, config }
+                  : {
+                      action: 'update',
+                      id: editing.id,
+                      expectedRevision: editing.revision,
+                      config,
+                    },
+              )
+            }
+          />
+        ))}
       {visible && confirm && trigger && (
         <Modal
-          title={`${confirm === 'enable' && trigger.autoPaused ? 'Re-enable' : confirm[0].toUpperCase() + confirm.slice(1)} schedule`}
+          title={`${confirm === 'enable' && trigger.autoPaused ? 'Re-enable' : confirm[0].toUpperCase() + confirm.slice(1)} ${trigger.kind}`}
           busy={pending}
           onClose={() => {
             setConfirm(undefined);
@@ -604,10 +754,12 @@ export function Schedules({
             </Text>
             <Text size="sm" mt="md">
               {confirm === 'delete'
-                ? 'Delete this schedule and its fire history. Existing runs remain.'
+                ? `Delete this ${trigger.kind} and its ${trigger.kind === 'schedule' ? 'fire' : 'delivery'} history. Existing runs remain.`
                 : confirm === 'disable'
-                  ? 'Stop future fires. Existing active and queued runs remain.'
-                  : `${trigger.missedFirePolicy === 'run_once' ? 'Enabling can immediately attempt the latest missed slot once.' : 'Missed slots are skipped until the next future slot.'} Named pause holds still apply.`}
+                  ? `Stop future ${trigger.kind === 'schedule' ? 'fires' : 'deliveries'}. Existing active and queued runs remain.`
+                  : trigger.kind === 'webhook'
+                    ? 'Accept authenticated deliveries. Named pause holds still apply.'
+                    : `${trigger.missedFirePolicy === 'run_once' ? 'Enabling can immediately attempt the latest missed slot once.' : 'Missed slots are skipped until the next future slot.'} Named pause holds still apply.`}
             </Text>
             {error && (
               <Text role="alert" c="red" mt="md">
@@ -635,17 +787,145 @@ export function Schedules({
               }
             >
               {confirm === 'delete'
-                ? 'Delete schedule'
+                ? `Delete ${trigger.kind}`
                 : confirm === 'disable'
-                  ? 'Disable schedule'
+                  ? `Disable ${trigger.kind}`
                   : trigger.autoPaused
-                    ? 'Re-enable schedule'
-                    : 'Enable schedule'}
+                    ? `Re-enable ${trigger.kind}`
+                    : `Enable ${trigger.kind}`}
             </Button>
           </ModalFooter>
         </Modal>
       )}
     </section>
+  );
+}
+
+const initialWebhook: WebhookConfig = webhookConfigSchema.parse({
+  kind: 'webhook',
+  name: 'Webhook',
+  authentication: {
+    secretId: 'replace-with-secret-variable-id',
+    header: 'x-signature',
+    algorithm: 'sha256',
+    prefix: 'sha256=',
+    parts: [{ source: 'body' }],
+  },
+  deliveryId: { source: 'body', path: 'deliveryId' },
+  timestamp: { source: 'body', path: 'timestamp' },
+  action: {
+    type: 'start',
+    input: {},
+    bindings: { event: { source: 'body', path: '' } },
+  },
+});
+function WebhookEditor({
+  initial,
+  pending,
+  onClose,
+  onSave,
+  onDirty,
+  onReload,
+}: {
+  initial: WebhookConfig;
+  pending: boolean;
+  onClose: () => void;
+  onSave: (config: WebhookConfig) => Promise<void>;
+  onDirty: (dirty: boolean) => void;
+  onReload?: () => Promise<WebhookConfig>;
+}) {
+  const [config, setConfig] = useState(initial);
+  const [valid, setValid] = useState(true);
+  const [error, setError] = useState('');
+  const [reset, setReset] = useState(0);
+  const dirty = !valid || JSON.stringify(config) !== JSON.stringify(initial);
+  useBeforeUnloadWarning(dirty);
+  useEffect(() => {
+    onDirty(dirty);
+    return () => onDirty(false);
+  }, [dirty, onDirty]);
+  const validate = (value: unknown) => {
+    const parsed = webhookConfigSchema.safeParse(value);
+    return parsed.success
+      ? undefined
+      : parsed.error.issues
+          .map((i) => `${i.path.join('.')}: ${i.message}`)
+          .join('; ');
+  };
+  return (
+    <Modal
+      title="Webhook configuration"
+      size={760}
+      height={720}
+      busy={pending}
+      onClose={onClose}
+    >
+      <ModalBody>
+        <Text size="sm" mb="md">
+          Select a Secret variable ID for authentication. Sign the exact raw
+          body and every referenced header, including delivery ID and timestamp.
+          Input delivery submits a pending revision for explicit acceptance.
+        </Text>
+        <fieldset
+          disabled={pending}
+          style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+        >
+          <JsonEditor
+            key={reset}
+            label="Webhook JSON"
+            value={config}
+            rows={20}
+            validate={validate}
+            onChange={(value) => setConfig(value)}
+            onValidityChange={setValid}
+          />
+        </fieldset>
+        {error && (
+          <Alert role="alert" color="red">
+            {error}
+          </Alert>
+        )}
+      </ModalBody>
+      <ModalFooter>
+        {onReload && (
+          <Button
+            variant="subtle"
+            disabled={pending}
+            onClick={() => {
+              if (dirty && !window.confirm('Discard webhook edits and reload?'))
+                return;
+              void onReload()
+                .then((c) => {
+                  setConfig(c);
+                  setValid(true);
+                  setReset((n) => n + 1);
+                  setError('');
+                })
+                .catch((e) => setError(errorMessage(e)));
+            }}
+          >
+            Reload current
+          </Button>
+        )}
+        <Button variant="default" disabled={pending} onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          loading={pending}
+          disabled={!valid}
+          onClick={() => {
+            const parsed = webhookConfigSchema.safeParse(config);
+            if (!parsed.success) {
+              setError(validate(config) ?? 'Invalid configuration');
+              return;
+            }
+            void onSave(parsed.data).catch((e) => setError(errorMessage(e)));
+          }}
+        >
+          Save webhook
+        </Button>
+      </ModalFooter>
+    </Modal>
   );
 }
 
@@ -1118,14 +1398,14 @@ export function ScheduleAlerts({
   if (error)
     return (
       <Text role="alert" c="red">
-        Could not load schedule alerts. {error}
+        Could not load trigger alerts. {error}
       </Text>
     );
   if (!page?.total) return null;
   return (
-    <section aria-label="Schedule alerts">
+    <section aria-label="Trigger alerts">
       <Text fw={600} size="sm" mb="sm">
-        Schedule alerts · {page.total}
+        Trigger alerts · {page.total}
       </Text>
       {page.items.map((item) => (
         <Alert
@@ -1146,12 +1426,12 @@ export function ScheduleAlerts({
             variant="subtle"
             onClick={() => setOffset((n) => Math.max(0, n - 20))}
           >
-            Previous schedule alerts
+            Previous trigger alerts
           </Button>
         )}
         {page.nextOffset !== null && (
           <Button variant="subtle" onClick={() => setOffset(page.nextOffset!)}>
-            More schedule alerts
+            More trigger alerts
           </Button>
         )}
       </Group>

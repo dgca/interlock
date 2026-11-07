@@ -7,6 +7,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import {
   blankDefinition,
   scheduleConfigSchema,
+  webhookConfigSchema,
   type Workflow,
 } from '@interlock/core';
 import { Schedules } from '../packages/ui/src/features/schedules/Schedules';
@@ -294,11 +295,11 @@ it('UI236-R1 retains attention offset across unrelated run ticks and clamps afte
       ),
     );
   await render(0);
-  await click('More schedule alerts');
+  await click('More trigger alerts');
   expect(document.body.textContent).toContain('Alert 23');
   await render(1);
   expect(document.body.textContent).toContain('Alert 23');
-  expect(button('Previous schedule alerts')).toBeTruthy();
+  expect(button('Previous trigger alerts')).toBeTruthy();
   expect(rpc.attention).toHaveBeenLastCalledWith(
     expect.objectContaining({ offset: 20 }),
   );
@@ -307,4 +308,119 @@ it('UI236-R1 retains attention offset across unrelated run ticks and clamps afte
   expect(rpc.attention).toHaveBeenLastCalledWith(
     expect.objectContaining({ offset: 0 }),
   );
+});
+
+it('UI240 preserves invalid webhook edits, saves disabled and inspects delivery history', async () => {
+  await renderSchedules();
+  await click('Add webhook');
+  const json = () =>
+    document.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Webhook JSON"]',
+    )!;
+  const template = JSON.parse(json().value);
+  await fill(
+    json(),
+    JSON.stringify({
+      ...template,
+      deliveryId: { source: 'header', path: 'unsigned-id' },
+    }),
+  );
+  expect(json().getAttribute('aria-invalid')).toBe('true');
+  expect(button('Save webhook').disabled).toBe(true);
+  expect(rpc.manage).not.toHaveBeenCalled();
+  const config = webhookConfigSchema.parse({
+    ...template,
+    name: 'Issue intake',
+    authentication: { ...template.authentication, secretId: 'local-secret' },
+  });
+  await fill(json(), JSON.stringify(config));
+  const saved = {
+    ...config,
+    id: 'h',
+    workflowId: 'w',
+    revision: 1,
+    enabled: false,
+    ignoredCount: 2,
+    rejectedCount: 1,
+    deliveryCount: 3,
+    consecutiveFailures: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    holds: [],
+    holdCount: 0,
+    canEnable: true,
+    lagMs: 0,
+    excessiveLag: false,
+  };
+  const webhookDetail = () => ({
+    trigger: saved,
+    endpoint: '/hooks/h',
+    upcoming: [],
+    fires: { items: [], total: 0, nextOffset: null },
+    deliveries: {
+      items: [
+        {
+          id: 'd',
+          receivedAt: '2026-11-07T12:00:00Z',
+          outcome: 'rejected',
+          status: 401,
+          code: 'invalid_signature',
+        },
+      ],
+      total: 21,
+      nextOffset: 20,
+    },
+  });
+  rpc.manage.mockRejectedValueOnce(
+    new Error('Trigger revision conflict; retain edits and reload'),
+  );
+  await click('Save webhook');
+  expect(document.body.textContent).toContain('Trigger revision conflict');
+  expect(json().value).toContain('Issue intake');
+  rpc.manage.mockImplementation(async (q) => {
+    rpc.list.mockResolvedValue({ items: [saved], total: 1, nextOffset: null });
+    rpc.inspect.mockResolvedValue(webhookDetail());
+    if (q.action === 'enable') {
+      saved.enabled = true;
+      saved.revision++;
+    }
+    if (q.action === 'disable') {
+      saved.enabled = false;
+      saved.revision++;
+    }
+    return { applied: true, trigger: saved };
+  });
+  await click('Save webhook');
+  expect(rpc.manage).toHaveBeenLastCalledWith(
+    expect.objectContaining({ action: 'create', config }),
+  );
+  expect(document.body.textContent).toContain('Webhook created disabled.');
+  expect(document.body.textContent).toContain('POST /hooks/h');
+  expect(document.body.textContent).toContain(
+    '3 deliveries · 2 ignored · 1 rejected',
+  );
+  expect(document.body.textContent).toContain('HTTP 401 · invalid_signature');
+  await click('Older deliveries');
+  expect(rpc.inspect).toHaveBeenLastCalledWith({ id: 'h', offset: 20 });
+  await click('Edit webhook');
+  expect(JSON.parse(json().value)).toEqual(config);
+  await click('Cancel');
+  for (const [label, action] of [
+    ['Enable webhook', 'enable'],
+    ['Disable webhook', 'disable'],
+  ] as const) {
+    await click(label);
+    await act(async () =>
+      [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '[role="dialog"] button',
+        ),
+      ]
+        .find((b) => b.textContent?.trim() === label)!
+        .click(),
+    );
+    expect(rpc.manage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ action, id: 'h' }),
+    );
+  }
 });

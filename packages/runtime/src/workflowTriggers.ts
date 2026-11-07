@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
   InterlockError,
-  scheduleConfigSchema,
   scheduleMutationSchema,
   scheduleReadSchema,
   nextScheduleSlot,
@@ -13,12 +12,14 @@ import {
   type ScheduleRead,
   type ScheduleTiming,
   type WorkflowTrigger,
+  type ScheduleTrigger,
   type ScheduleFire,
   type Workflow,
   type Run,
   type Json,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
+import type { Webhooks } from './webhooks.js';
 
 const active = (run: Run) =>
   ['queued', 'running', 'waiting'].includes(run.status);
@@ -26,11 +27,12 @@ const active = (run: Run) =>
 export class WorkflowTriggers {
   constructor(
     private store: Store,
-    private start: (trigger: WorkflowTrigger, input: Json, slot: string) => Run,
+    private start: (trigger: ScheduleTrigger, input: Json, slot: string) => Run,
+    private webhooks: Webhooks,
   ) {}
   private get(id: string) {
     const trigger = this.store.get<WorkflowTrigger>('workflowTriggers', id);
-    if (!trigger) throw new InterlockError('Schedule not found');
+    if (!trigger) throw new InterlockError('Trigger not found');
     return trigger;
   }
   private assertTarget(trigger: Pick<WorkflowTrigger, 'workflowId'>) {
@@ -42,11 +44,11 @@ export class WorkflowTriggers {
         this.store.get<Workflow>('workflows', w.ownerWorkflowId)?.archived)
     )
       throw new InterlockError(
-        'Restore this workflow before enabling its schedule',
+        'Restore this workflow before enabling its trigger',
       );
     if (!w.latestVersion || !this.store.getVersion(w.id, w.latestVersion))
       throw new InterlockError(
-        'Publish this workflow before enabling its schedule',
+        'Publish this workflow before enabling its trigger',
       );
     return w;
   }
@@ -61,17 +63,18 @@ export class WorkflowTriggers {
     }
     return { calculatedAt: at, upcoming: slots };
   }
-  private summary(trigger: WorkflowTrigger, at = Date.now()) {
+  private summary<T extends WorkflowTrigger>(trigger: T, at = Date.now()) {
     const holds = this.store.pauseHolds(trigger.workflowId);
-    const overdue =
-      trigger.enabled && !trigger.autoPaused && !holds.length
-        ? Math.max(0, at - Date.parse(trigger.nextFireAt))
+    const lagMs =
+      trigger.kind === 'schedule'
+        ? Math.max(
+            trigger.lastLagMs ?? 0,
+            trigger.enabled && !trigger.autoPaused && !holds.length
+              ? Math.max(0, at - Date.parse(trigger.nextFireAt))
+              : 0,
+            this.store.pendingScheduleLag(trigger.id, at),
+          )
         : 0;
-    const lagMs = Math.max(
-      trigger.lastLagMs ?? 0,
-      overdue,
-      this.store.pendingScheduleLag(trigger.id, at),
-    );
     const workflow = this.store.get<Workflow>('workflows', trigger.workflowId);
     return {
       ...trigger,
@@ -94,19 +97,37 @@ export class WorkflowTriggers {
         ),
     };
   }
-  list(workflowId?: string, offset = 0, limit = 20) {
+  list(
+    workflowId?: string,
+    offset = 0,
+    limit = 20,
+    kind?: 'schedule' | 'webhook',
+  ) {
     const q = scheduleReadSchema.parse({
       action: 'list',
+      kind,
       workflowId,
       offset,
       limit,
     });
     if (q.action !== 'list') throw new Error('Invalid list');
-    const rows = this.store.workflowTriggers(q.workflowId);
+    const rows = this.store
+      .workflowTriggers(q.workflowId)
+      .filter((t) => !q.kind || t.kind === q.kind);
     return {
       items: rows.slice(q.offset, q.offset + q.limit).map((t) => {
-        const { input, bindings, ...summary } = this.summary(t);
-        return summary;
+        const compact = { ...this.summary(t) };
+        for (const key of [
+          'input',
+          'bindings',
+          'authentication',
+          'deliveryId',
+          'timestamp',
+          'filters',
+          'action',
+        ])
+          delete (compact as Record<string, unknown>)[key];
+        return compact;
       }),
       total: rows.length,
       nextOffset: q.offset + q.limit < rows.length ? q.offset + q.limit : null,
@@ -121,10 +142,28 @@ export class WorkflowTriggers {
     });
     if (q.action !== 'inspect') throw new Error('Invalid inspect');
     const trigger = this.get(id);
+    if (trigger.kind === 'webhook')
+      return {
+        trigger: this.summary(trigger),
+        deliveries: this.store.webhookDeliveries(id, q.offset, q.limit),
+        endpoint: `/hooks/${trigger.id}`,
+        upcoming: [],
+        fires: {
+          items: [] as (ScheduleFire & { runAvailable: boolean })[],
+          total: 0,
+          nextOffset: null,
+        },
+      };
     const fires = this.store.scheduleFires(id, q.offset, q.limit);
     return {
       trigger: this.summary(trigger),
       upcoming: this.preview(trigger.timing).upcoming,
+      deliveries: {
+        items: [] as import('@interlock/core').WebhookDelivery[],
+        total: 0,
+        nextOffset: null,
+      },
+      endpoint: null,
       fires: {
         ...fires,
         items: fires.items.map((f) => ({
@@ -168,7 +207,7 @@ export class WorkflowTriggers {
     const q = scheduleReadSchema.parse(input);
     switch (q.action) {
       case 'list':
-        return this.list(q.workflowId, q.offset, q.limit);
+        return this.list(q.workflowId, q.offset, q.limit, q.kind);
       case 'inspect':
         return this.inspect(q.id, q.offset, q.limit);
       case 'preview':
@@ -184,7 +223,8 @@ export class WorkflowTriggers {
       if (q.action === 'create') {
         if (!this.store.get('workflows', q.workflowId))
           throw new InterlockError('Workflow not found');
-        const trigger: WorkflowTrigger = {
+        if (q.config.kind === 'webhook') this.webhooks.validate(q.config);
+        const trigger = {
           ...q.config,
           id: randomUUID(),
           workflowId: q.workflowId,
@@ -192,37 +232,56 @@ export class WorkflowTriggers {
           enabled: false,
           createdAt: at,
           updatedAt: at,
-          anchorAt: at,
-          nextFireAt: nextScheduleSlot(q.config.timing, at),
+          ...(q.config.kind === 'schedule'
+            ? {
+                anchorAt: at,
+                nextFireAt: nextScheduleSlot(q.config.timing, at),
+              }
+            : { ignoredCount: 0, rejectedCount: 0, deliveryCount: 0 }),
           consecutiveFailures: 0,
-        };
+        } as WorkflowTrigger;
         this.store.put('workflowTriggers', trigger);
         return { applied: true, trigger };
       }
       const trigger = this.get(q.id);
       if (trigger.revision !== q.expectedRevision)
         throw new InterlockError(
-          'Schedule revision conflict; retain edits and reload the current schedule before reconciling',
+          'Trigger revision conflict; retain edits and reload the current trigger before reconciling',
         );
       if (q.action === 'delete') {
         this.store.remove('workflowTriggers', trigger.id);
         this.store.deleteScheduleFires(trigger.id);
+        this.store.deleteWebhookHistory(trigger.id);
         return { applied: true, trigger: null };
       }
       if (q.action === 'update') {
-        const changed = !isDeepStrictEqual(trigger.timing, q.config.timing);
+        if (q.config.kind !== trigger.kind)
+          throw new InterlockError(
+            'Trigger kind cannot change; create a new trigger',
+          );
+        if (q.config.kind === 'webhook')
+          this.webhooks.validate(q.config, trigger.enabled);
+        const changed =
+          trigger.kind === 'schedule' &&
+          q.config.kind === 'schedule' &&
+          !isDeepStrictEqual(trigger.timing, q.config.timing);
         Object.assign(trigger, q.config);
-        if (changed) {
+        if (changed && trigger.kind === 'schedule') {
           trigger.anchorAt = at;
           trigger.nextFireAt = nextScheduleSlot(trigger.timing, at);
           trigger.lastLagMs = undefined;
         }
       } else if (q.action === 'enable') {
         this.assertTarget(trigger);
+        if (trigger.kind === 'webhook') this.webhooks.validate(trigger, true);
         trigger.enabled = true;
         trigger.autoPaused = undefined;
         trigger.consecutiveFailures = 0;
-        if (trigger.missedFirePolicy === 'skip' && trigger.nextFireAt <= at)
+        if (
+          trigger.kind === 'schedule' &&
+          trigger.missedFirePolicy === 'skip' &&
+          trigger.nextFireAt <= at
+        )
           trigger.nextFireAt = nextScheduleSlot(
             trigger.timing,
             at,
@@ -237,7 +296,7 @@ export class WorkflowTriggers {
       return { applied: true, trigger };
     });
   }
-  private failure(trigger: WorkflowTrigger, at: string, detail: string) {
+  private failure(trigger: ScheduleTrigger, at: string, detail: string) {
     trigger.consecutiveFailures++;
     if (
       trigger.pauseAfterConsecutiveFailures &&
@@ -254,6 +313,7 @@ export class WorkflowTriggers {
   }
   tick() {
     this.store.transaction(() => {
+      this.webhooks.tick();
       const at = new Date().toISOString();
       const settledTriggers = new Set<string>();
       for (const fire of this.store.pendingScheduleFires()) {
@@ -270,7 +330,7 @@ export class WorkflowTriggers {
           'workflowTriggers',
           fire.triggerId,
         );
-        if (!trigger) continue;
+        if (!trigger || trigger.kind !== 'schedule') continue;
         if (run) {
           fire.runStatus = run.status;
           // Chain traversal resolves terminal state, not the originating admission.
@@ -298,7 +358,12 @@ export class WorkflowTriggers {
       }
       for (const id of settledTriggers) this.store.trimScheduleFires(id);
       for (const trigger of this.store.workflowTriggers()) {
-        if (!trigger.enabled || trigger.autoPaused) continue;
+        if (
+          trigger.kind !== 'schedule' ||
+          !trigger.enabled ||
+          trigger.autoPaused
+        )
+          continue;
         if (this.store.pauseHolds(trigger.workflowId).length) continue;
         if (trigger.nextFireAt > at) continue;
         const due = Date.parse(trigger.nextFireAt);
