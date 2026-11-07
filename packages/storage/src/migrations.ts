@@ -219,7 +219,12 @@ export function migrate(
   try {
     if (!plan.length || plan.some((item, index) => item.version !== index + 1))
       throw new Error('Migration versions must be consecutive, starting at 1.');
-    db.exec('PRAGMA busy_timeout = 5000; PRAGMA synchronous = FULL;');
+    db.exec('PRAGMA busy_timeout = 5000;');
+    if (db.prepare('PRAGMA journal_mode').get()?.journal_mode === 'wal') {
+      db.exec('PRAGMA synchronous = NORMAL;');
+    } else {
+      db.exec('PRAGMA synchronous = FULL;');
+    }
     const dataVersion = () =>
       db.prepare('PRAGMA data_version').get()!.data_version;
     const before = dataVersion();
