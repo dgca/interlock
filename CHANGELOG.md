@@ -1,5 +1,31 @@
 # @type_of/interlock
 
+## 0.2.13
+
+### Patch Changes
+
+- 2a7b35b: Reduce MCP discovery size by replacing repeated workflow authoring guidance with concise tool descriptions and a link to the authoring guide.
+- e6e6262: Add External input nodes that wait for an integration to submit and explicitly accept a JSON answer. Submissions are revisioned, acceptance can be held for a run and its attached children, and receipts survive restart.
+
+  Move **Delete node** to the left of the shared node settings footer.
+
+- 650558e: Bundle the `interlock-migrate-workflows` agent skill for auditing older workflows, moving eligible Condition and Switch routes onto their producing steps, and verifying draft changes before publication.
+
+  Bundle the `interlock-compare-workflows` agent skill for comparing exact published versions or saved prompt revisions on the same cases, interpreting results, and evaluating artifacts.
+
+- 5f66397: Show skeletons while browser views, previews, and pickers load.
+- 5f66397: Give Interlock dialogs a consistent header and action bar. Keep actions visible while long forms scroll, simplify the contract editor header, and make the next step clear when child workflows block deletion.
+- 5f66397: Preserve manual run results and workflow editor drafts during common navigation. Improve run status, keyboard and dialog recovery, and narrow-screen authoring and inspection.
+- b02e1f7: Load run summaries in pages and reserve full execution records for inspection. Visible tabs back off polling while live updates are healthy, and hidden tabs refresh when you return.
+
+  Startup backs up existing databases before building the run metadata index.
+
+- 1f7dc8a: Add optional node-output defaults for skipped steps and the first visit of a loop. Set `sourceDefault` in a binding or use **Default if no completed output** in the field editor.
+- 9cbd658: Keep connections visible in the run inspector when the graph refreshes.
+- 6b81315: Expose run, workflow, step, and retry identity to JavaScript and Bash scripts, including polling Wait checks and Batch items.
+- df51cda: New Script nodes default to a 60-second timeout and support an explicit timeout of up to one hour. Existing workflows retain their saved timeouts.
+- 3f7a4e9: Speed up SQLite commits for local workflows by syncing the write-ahead log less often. Committed changes survive an Interlock process crash, but a system crash or power loss may roll back recent commits.
+
 ## 0.2.12
 
 ### Patch Changes
