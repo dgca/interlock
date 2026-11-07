@@ -3,6 +3,7 @@ import { scriptOperationSchema, type ScriptOperation } from '@interlock/core';
 import { runAttention } from './runAttention.js';
 import { WorkResources } from './workResources.js';
 import { ExecutorManager } from './executors/manager.js';
+import { resolveAndValidateCwd } from './workingDirectory.js';
 export type {
   HarnessAdapter,
   HarnessRun,
@@ -111,7 +112,11 @@ function scriptEnvironmentId(id: string): string | undefined {
   if (id.includes('\0') || Buffer.byteLength(id) > 16 * 1024) return;
   if (Buffer.from(id).toString() === id) return id;
 }
-type LocalOperationResult = { output: Json; httpError?: string };
+type LocalOperationResult = {
+  output: Json;
+  httpError?: string;
+  resolvedCwd?: string;
+};
 export interface Worker {
   modelSelection?: ModelSelection;
   session?: SessionIdentity;
@@ -158,6 +163,7 @@ export class Engine {
     private cwd: string,
     private options: {
       trialRoot?: string;
+      allowedRoots?: string[];
       substituteOperation?: (
         node: Extract<WorkflowNode, { kind: 'script' | 'fetch' }>,
         execution: NodeExecution,
@@ -339,6 +345,16 @@ export class Engine {
   private save(run: Run) {
     run.updatedAt = now();
     this.store.put('runs', run);
+  }
+  getAllowedRoots(): string[] {
+    const serverSettingsRoots = this.store.get<{
+      id: string;
+      allowedRoots?: string[];
+    }>('executorSettings', 'shared')?.allowedRoots;
+    return [
+      ...(this.options.allowedRoots ?? []),
+      ...(serverSettingsRoots ?? []),
+    ];
   }
   workflow(id: string) {
     const w = this.store.get<Workflow>('workflows', id);
@@ -1557,6 +1573,38 @@ export class Engine {
               )
               .sort()
           : undefined;
+        const definition = this.definition(run);
+        const cwdBinding = node.cwd ?? definition.cwd;
+        let resolvedCwd: string | undefined;
+        let cwdBlocked: { reason: string; path?: string } | undefined;
+        if (cwdBinding !== undefined) {
+          const source = this.bindingSource(run, execution.input);
+          const allowed = this.getAllowedRoots();
+          const result = resolveAndValidateCwd(
+            cwdBinding,
+            source,
+            allowed.length ? allowed : undefined,
+          );
+          if (result.error) {
+            cwdBlocked = {
+              reason: `${node.label}: ${result.error}`,
+            };
+          } else {
+            resolvedCwd = result.resolvedCwd;
+            execution.resolvedCwd = resolvedCwd;
+          }
+        }
+        if (node.context.continuityGroup) {
+          const groupState = this.contextGroups.describe(
+            run.id,
+            node.context.continuityGroup,
+          );
+          if (groupState.session && groupState.cwd) {
+            resolvedCwd = groupState.cwd;
+            execution.resolvedCwd = resolvedCwd;
+            cwdBlocked = undefined;
+          }
+        }
         const work: WorkRequest = {
           ...((
             node.executor === null
@@ -1596,6 +1644,8 @@ export class Engine {
               }
             : {}),
           ...(resources ? { resources } : {}),
+          ...(resolvedCwd ? { resolvedCwd } : {}),
+          ...(cwdBlocked ? { cwdBlocked } : {}),
           id: randomUUID(),
           runId: run.id,
           executionId: execution.id,
@@ -2057,6 +2107,9 @@ export class Engine {
             )
               return;
             const current = latest.executions.at(-1)!;
+            if (result.ok && result.resolvedCwd) {
+              current.resolvedCwd = result.resolvedCwd;
+            }
             if (!result.ok) {
               if (
                 current.background &&
@@ -2249,6 +2302,23 @@ export class Engine {
           resolved.value(entry.variableId),
         ]),
       );
+      const definition = this.definition(run);
+      const cwdBinding = operation.cwd ?? definition.cwd;
+      let effectiveCwd = environment?.cwd ?? this.cwd;
+      if (cwdBinding !== undefined) {
+        const source = this.bindingSource(run, input);
+        const allowed = this.getAllowedRoots();
+        const result = resolveAndValidateCwd(
+          cwdBinding,
+          source,
+          allowed.length ? allowed : undefined,
+        );
+        if (result.error) {
+          throw new InterlockError(`${label}: ${result.error}`);
+        }
+        effectiveCwd = result.resolvedCwd!;
+      }
+      execution.resolvedCwd = effectiveCwd;
       if (
         'executionMode' in operation &&
         operation.executionMode === 'background'
@@ -2262,7 +2332,7 @@ export class Engine {
             execution,
             operation.command,
             input,
-            environment?.cwd ?? this.cwd,
+            effectiveCwd,
             operation.language,
             {
               ...inherited,
@@ -2298,14 +2368,14 @@ export class Engine {
             }
           },
         );
-        return { output };
+        return { output, resolvedCwd: effectiveCwd };
       }
       const launch = (env: NodeJS.ProcessEnv) =>
         executeScript(
           operation.command,
           input,
           operation.timeoutMs,
-          environment?.cwd ?? this.cwd,
+          effectiveCwd,
           signal,
           operation.language,
           env,
@@ -2324,7 +2394,7 @@ export class Engine {
           return launch({ ...inherited, ...bindings });
         throw error;
       });
-      return { output: redact.json(output) };
+      return { output: redact.json(output), resolvedCwd: effectiveCwd };
     } catch (error) {
       if (error instanceof UncertainScript) throw error;
       throw new InterlockError(redact.text(message(error)));
@@ -2350,25 +2420,30 @@ export class Engine {
     const { timing } = node;
     const controller = new AbortController();
     this.localJobs.set(execution.id, controller);
-    const job: Promise<Json> = Promise.resolve().then(() => {
-      controller.signal.throwIfAborted();
-      const environment = this.trials.execution(run);
-      if (environment && timing.check.kind === 'fetch')
-        throw new InterlockError(
-          'Unsupported Fetch probe in a local Git trial',
-        );
-      return this.localOperation(
-        run,
-        timing.check,
-        execution,
-        controller.signal,
-        node.label,
-      ).then(({ output, httpError }) => {
-        if (httpError) throw new InterlockError(httpError);
-        return output;
+    const job: Promise<{ output: Json; resolvedCwd?: string }> =
+      Promise.resolve().then(() => {
+        controller.signal.throwIfAborted();
+        const environment = this.trials.execution(run);
+        if (environment && timing.check.kind === 'fetch')
+          throw new InterlockError(
+            'Unsupported Fetch probe in a local Git trial',
+          );
+        return this.localOperation(
+          run,
+          timing.check,
+          execution,
+          controller.signal,
+          node.label,
+        ).then(({ output, httpError, resolvedCwd }) => {
+          if (httpError) throw new InterlockError(httpError);
+          return { output, resolvedCwd };
+        });
       });
-    });
-    const settle = (result: { output?: Json; error?: string }) => {
+    const settle = (result: {
+      output?: Json;
+      error?: string;
+      resolvedCwd?: string;
+    }) => {
       if (this.stopped) return;
       this.store.transaction(() => {
         const latest = this.run(run.id);
@@ -2379,12 +2454,14 @@ export class Engine {
           current.status !== 'waiting'
         )
           return;
+        if (result.resolvedCwd) current.resolvedCwd = result.resolvedCwd;
         if (this.finishPollTimeout(latest, current, node)) return;
         const checked = now();
         current.check = {
           count: (current.check?.count ?? 0) + 1,
           at: checked,
-          ...result,
+          output: result.output,
+          error: result.error,
         };
         if (result.error === undefined) {
           let value: Json;
@@ -2426,7 +2503,7 @@ export class Engine {
     };
     void job
       .then(
-        (output) => settle({ output }),
+        (res) => settle({ output: res.output, resolvedCwd: res.resolvedCwd }),
         (error) => settle({ error: message(error) }),
       )
       .finally(() => {
@@ -2473,7 +2550,13 @@ export class Engine {
     };
     return this.store
       .work('available')
-      .filter((w) => !w.budgetBlocked && !w.resourceBlocked && within(w.runId))
+      .filter(
+        (w) =>
+          !w.budgetBlocked &&
+          !w.resourceBlocked &&
+          !w.cwdBlocked &&
+          within(w.runId),
+      )
       .map((work) => this.describeWork(work));
   }
   workSummaries(runId?: string) {
@@ -2577,6 +2660,9 @@ export class Engine {
       const work = this.store.get<WorkRequest>('work', workId);
       if (!work || work.status !== 'available')
         throw new InterlockError('Work is not available');
+      if (work.cwdBlocked) {
+        throw new InterlockError(work.cwdBlocked.reason);
+      }
       this.executors.assertClaim(work);
       this.trials.context(this.run(work.runId));
       if (work.context.mode === 'fresh' && !worker.freshContext)
@@ -2604,6 +2690,14 @@ export class Engine {
         Date.now() + work.claimLeaseSeconds * 1000,
       ).toISOString();
       this.resources.acquire(work);
+      if (work.resolvedCwd) {
+        const run = this.run(work.runId);
+        const execution = run.executions.find((e) => e.id === work.executionId);
+        if (execution) {
+          execution.resolvedCwd = work.resolvedCwd;
+          this.store.put('runs', run);
+        }
+      }
       this.store.put('work', work);
       this.event(
         this.run(work.runId),

@@ -49,6 +49,7 @@ export * from './variables.js';
 export {
   bindingLeaves,
   resolveBindingFields,
+  resolveValueBinding,
   type PathBinding,
 } from './valueBindings.js';
 import { validateFetch, type FetchRequest } from './fetch.js';
@@ -128,23 +129,6 @@ const fetchRequestFields = {
   timeoutMs: z.number().int().min(100).max(120000).default(30000),
   failOnHttpError: z.boolean().default(true),
 };
-/** A probe a polling Wait runs on the server with a short request or process timeout. */
-const pollCheckShapeSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('script'),
-    // Omitted language runs as Bash, like Script nodes saved before JavaScript existed.
-    language: z.enum(['javascript', 'bash']).optional(),
-    command: z.string().min(1),
-    environment: scriptEnvironmentSchema.optional(),
-    timeoutMs: z.number().int().min(100).max(120000).default(30000),
-  }),
-  z.object({ kind: z.literal('fetch'), ...fetchRequestFields }),
-]);
-export type PollCheck = z.infer<typeof pollCheckSchema>;
-export const pollCheckSchema = z.preprocess(
-  checkVariableDelivery,
-  pollCheckShapeSchema,
-);
 export type ValueBinding =
   | {
       source: 'input' | 'runInput' | 'rootInput' | 'itemInput';
@@ -212,6 +196,33 @@ export const valueBindingsSchema = z
       });
     }
   });
+export const cwdBindingSchema = z.union([
+  z.string().min(1),
+  valueBindingSchema,
+]);
+export type CwdBinding = z.infer<typeof cwdBindingSchema>;
+/** A probe a polling Wait runs on the server with a short request or process timeout. */
+const pollCheckShapeSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('script'),
+    // Omitted language runs as Bash, like Script nodes saved before JavaScript existed.
+    language: z.enum(['javascript', 'bash']).optional(),
+    command: z.string().min(1),
+    environment: scriptEnvironmentSchema.optional(),
+    cwd: cwdBindingSchema
+      .optional()
+      .describe(
+        'Working directory or dynamic binding for this polling check. Overrides workflow cwd.',
+      ),
+    timeoutMs: z.number().int().min(100).max(120000).default(30000),
+  }),
+  z.object({ kind: z.literal('fetch'), ...fetchRequestFields }),
+]);
+export type PollCheck = z.infer<typeof pollCheckSchema>;
+export const pollCheckSchema = z.preprocess(
+  checkVariableDelivery,
+  pollCheckShapeSchema,
+);
 export const routingSchema = z.object({
   path: z.string(),
   cases: z.array(z.object({ port: z.string(), equals: jsonSchema })),
@@ -265,6 +276,11 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('agent'),
+    cwd: cwdBindingSchema
+      .optional()
+      .describe(
+        'Working directory or dynamic binding for this Agent node. Overrides workflow cwd.',
+      ),
     executor: executorReferenceSchema
       .nullable()
       .optional()
@@ -320,6 +336,11 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('script'),
+    cwd: cwdBindingSchema
+      .optional()
+      .describe(
+        'Working directory or dynamic binding for this Script node. Overrides workflow cwd.',
+      ),
     onFailure: onFailureSchema,
     executionMode: z
       .enum(['foreground', 'background'])
@@ -416,6 +437,11 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
 export const nodeSchema = z.preprocess(checkVariableDelivery, nodeShapeSchema);
 export type WorkflowNode = z.infer<typeof nodeSchema>;
 export const definitionSchema = z.object({
+  cwd: cwdBindingSchema
+    .optional()
+    .describe(
+      'Default working directory or dynamic binding for nodes in this workflow. Node cwd overrides it.',
+    ),
   agentModel: executorModelSchema
     .optional()
     .describe(
@@ -523,6 +549,7 @@ export interface NodeExecution {
   timeoutAt?: string;
   check?: PollCheckResult;
   port?: WorkflowEdge['port'];
+  resolvedCwd?: string;
 }
 export interface PollCheckResult {
   count: number;
@@ -606,6 +633,8 @@ export interface WorkRequest {
   resources?: string[];
   resourceBlocked?: import('./workResources.js').ResourceBlock;
   resourceReservations?: import('./workResources.js').ResourceOwner[]; // Derived inspection, not stored.
+  resolvedCwd?: string;
+  cwdBlocked?: { reason: string; path?: string };
 
   trialEnvironment?: import('./trialEnvironments.js').TrialWorkContext;
   hold?: import('./workHolds.js').WorkHold;

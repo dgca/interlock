@@ -142,6 +142,8 @@ export class Continuation {
         : {}),
       ...(work.holdRevision ? { holdRevision: work.holdRevision } : {}),
       ...(work.heldClaimCount ? { heldClaimCount: work.heldClaimCount } : {}),
+      ...(work.resolvedCwd ? { resolvedCwd: work.resolvedCwd } : {}),
+      ...(work.cwdBlocked ? { cwdBlocked: work.cwdBlocked } : {}),
       ...(work.hold
         ? {
             hold: {
@@ -210,17 +212,19 @@ export class Continuation {
                   ? 'budget_blocked'
                   : assignment?.resourceBlocked
                     ? 'resource_blocked'
-                    : assignment
-                      ? 'available_work'
-                      : execution?.kind === 'input' &&
-                          execution.status === 'waiting'
-                        ? 'external_input'
-                        : execution?.kind === 'wait'
-                          ? 'wait'
-                          : execution?.kind === 'batch' ||
-                              execution?.kind === 'workflow'
-                            ? 'children'
-                            : 'executing';
+                    : assignment?.cwdBlocked
+                      ? 'cwd_blocked'
+                      : assignment
+                        ? 'available_work'
+                        : execution?.kind === 'input' &&
+                            execution.status === 'waiting'
+                          ? 'external_input'
+                          : execution?.kind === 'wait'
+                            ? 'wait'
+                            : execution?.kind === 'batch' ||
+                                execution?.kind === 'workflow'
+                              ? 'children'
+                              : 'executing';
         return {
           ...reference(run.id, execution?.id),
           lifecycleRunId: run.lifecycleRunId,
@@ -232,6 +236,9 @@ export class Continuation {
             : {}),
           ...(assignment?.resourceBlocked
             ? { resourceOwners: assignment.resourceBlocked.owners }
+            : {}),
+          ...(assignment?.cwdBlocked
+            ? { cwdBlocked: assignment.cwdBlocked }
             : {}),
           error: run.error,
           ...(reason === 'external_input' && execution
@@ -362,7 +369,10 @@ export class Continuation {
       available: bounded(
         work.filter(
           (w) =>
-            w.status === 'available' && !w.budgetBlocked && !w.resourceBlocked,
+            w.status === 'available' &&
+            !w.budgetBlocked &&
+            !w.resourceBlocked &&
+            !w.cwdBlocked,
         ),
         limit,
       ),
@@ -442,7 +452,8 @@ export class Continuation {
                     (w) =>
                       w.status === 'available' &&
                       !w.budgetBlocked &&
-                      !w.resourceBlocked,
+                      !w.resourceBlocked &&
+                      !w.cwdBlocked,
                   )
                 ? 'claim_work'
                 : work.some((w) => w.status === 'available' && w.budgetBlocked)

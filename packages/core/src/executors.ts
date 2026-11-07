@@ -67,16 +67,37 @@ export const executorConcurrencySchema = z
   .describe(
     'Shared managed Agent assignment limit. A positive whole number sets the limit; null means Unlimited and removes only this shared cap.',
   );
+export const allowedRootSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(4096)
+  .refine(
+    (val) => /^(?:[a-zA-Z]:[\\/]|[\\/])/.test(val),
+    'Path must be absolute',
+  );
 export const executorSettingsSchema = z
   .object({
     revision: z.number().int().nonnegative().default(0),
     concurrency: executorConcurrencySchema.default(3),
+    allowedRoots: z
+      .array(allowedRootSchema)
+      .optional()
+      .describe(
+        'Server-wide allowed root directories for dynamic cwd binding. Paths must be absolute.',
+      ),
   })
   .strict();
 export const executorSettingsUpdateSchema = z
   .object({
     expectedRevision: z.number().int().nonnegative(),
     concurrency: executorConcurrencySchema,
+    allowedRoots: z
+      .array(allowedRootSchema)
+      .optional()
+      .describe(
+        'Server-wide allowed root directories for dynamic cwd binding. Paths must be absolute.',
+      ),
   })
   .strict();
 export const executorProfileSchema = z
@@ -88,6 +109,12 @@ export const executorProfileSchema = z
     revision: z.number().int().min(0).default(0),
     command: z.string().trim().min(1).max(4096).optional(),
     cwd: z.string().trim().min(1).max(4096).optional(),
+    allowedRoots: z
+      .array(allowedRootSchema)
+      .optional()
+      .describe(
+        'Allowed root directories for dynamic cwd binding. Paths must be absolute.',
+      ),
     model: executorModelSchema
       .optional()
       .describe(

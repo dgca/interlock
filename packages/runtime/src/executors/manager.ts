@@ -23,6 +23,7 @@ import {
   type ModelUsage,
 } from '@interlock/core';
 import type { Engine } from '../index.js';
+import { validateDirectoryContainment } from '../workingDirectory.js';
 import {
   HarnessResultError,
   HarnessModelError,
@@ -143,12 +144,14 @@ export class ExecutorManager {
       id: string;
       revision: number;
       concurrency: number | null;
+      allowedRoots?: string[];
     }>('executorSettings', 'shared');
-    return executorSettingsSchema.parse(
-      stored
-        ? { revision: stored.revision, concurrency: stored.concurrency }
-        : {},
-    );
+    const roots = stored?.allowedRoots ?? this.engine.getAllowedRoots();
+    return executorSettingsSchema.parse({
+      revision: stored?.revision ?? 0,
+      concurrency: stored ? stored.concurrency : 3,
+      ...(roots && roots.length > 0 ? { allowedRoots: roots } : {}),
+    });
   }
   saveSettings(input: unknown) {
     const q = executorSettingsUpdateSchema.parse(input);
@@ -157,9 +160,13 @@ export class ExecutorManager {
         throw new InterlockError(
           'Execution settings changed. Reload before saving.',
         );
+      const currentRoots = this.settings().allowedRoots;
+      const roots =
+        q.allowedRoots !== undefined ? q.allowedRoots : currentRoots;
       const next = executorSettingsSchema.parse({
         revision: q.expectedRevision + 1,
         concurrency: q.concurrency,
+        ...(roots && roots.length > 0 ? { allowedRoots: roots } : {}),
       });
       this.engine.store.put('executorSettings', { id: 'shared', ...next });
       return next;
@@ -173,10 +180,10 @@ export class ExecutorManager {
   }
   saveProfile(input: ExecutorProfileUpdate) {
     const q = executorProfileUpdateSchema.parse(input);
-    for (const path of [q.command, q.cwd])
+    for (const path of [q.command, q.cwd, ...(q.allowedRoots ?? [])])
       if (path && !isAbsolute(path))
         throw new InterlockError(
-          'Executable and working directory overrides must be absolute paths',
+          'Executable, working directory, and allowed root overrides must be absolute paths',
         );
     const result = this.engine.store.transaction(() => {
       const current = this.profiles().find((p) => p.id === q.id);
@@ -599,6 +606,7 @@ export class ExecutorManager {
         if (this.atCapacity() || this.stopped) break;
         if (
           !offered.executor ||
+          offered.cwdBlocked ||
           this.jobs.has(offered.id) ||
           ['interrupted', 'needs_model'].includes(
             this.latest(offered.id)?.state ?? '',
@@ -688,12 +696,30 @@ export class ExecutorManager {
           currentProfile.revision !== configured.revision
         )
           continue;
-        const cwd =
+        const candidateCwd =
           offered.trialEnvironment?.workspace ??
           priorSession?.cwd ??
+          offered.resolvedCwd ??
           previous?.cwd ??
           profile.cwd ??
           this.defaultCwd;
+        let cwd: string;
+        try {
+          const profileRoots = profile.allowedRoots ?? [];
+          const serverRoots = this.settings().allowedRoots ?? [];
+          const rootsToCheck = [...profileRoots, ...serverRoots];
+          cwd = validateDirectoryContainment(
+            candidateCwd,
+            rootsToCheck.length ? rootsToCheck : undefined,
+          );
+        } catch (err) {
+          offered.cwdBlocked = {
+            reason: `Managed executor "${profile.id}": ${err instanceof Error ? err.message : String(err)}`,
+            path: candidateCwd,
+          };
+          this.engine.store.put('work', offered);
+          continue;
+        }
         // Settings can change while native executable detection is pending.
         if (this.atCapacity() || this.stopped) break;
         let work: WorkRequest;
@@ -714,6 +740,20 @@ export class ExecutorManager {
           });
         } catch {
           continue;
+        }
+        work.resolvedCwd = cwd;
+        const runRecord = this.engine.store.get<import('@interlock/core').Run>(
+          'runs',
+          work.runId,
+        );
+        if (runRecord) {
+          const nodeExecution = runRecord.executions.find(
+            (e) => e.id === work.executionId,
+          );
+          if (nodeExecution) {
+            nodeExecution.resolvedCwd = cwd;
+            this.engine.store.put('runs', runRecord);
+          }
         }
         const session: Session = priorSession ?? {
           id: sessionKey,
