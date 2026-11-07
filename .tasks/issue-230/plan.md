@@ -1,0 +1,14 @@
+# Implement pause holds
+
+The [spec](spec.md) owns behavior and [intent](intent.md) owns scope. Existing storage uses additive document collections with indexed JSON fields; Engine owns advancement and claims, and ExternalInputs owns acceptance. Run projection is shared across callers.
+
+1. Add core pause contracts and interval union calculation, indexed persistent records in storage, and runtime PauseHolds service. Gate Engine.advance, native operation/poll launch, claim admission, and ExternalInputs.accept. Suspend available Agent timers with independent blocker accounting and preserve restart intervals. Cover AC1–AC6.
+2. Extend shared API, CLI pause/resume/holds commands, grouped MCP management, and bounded pause details in projection/briefing. Verify consistent discovery, filtering, exact release and error guidance across affected claim, start, continuation, managed and external-input tools. Cover AC5–AC7.
+3. Implement the existing UI proposal with shared pause controls/state and hold dialog. Integrate workflow and run context, paused claims and input acceptance. Read craft floor immediately before editing. Cover AC7–AC8.
+4. Update required docs, README and relevant agent/CLI instructions, add patch changeset, and retain design/evidence artifacts. Cover AC9.
+
+Build checks use temporary databases only. Highest risks are overlapping holds releasing too much, paused completion advancing downstream, lost resume responses, restart losing gates, and overlapping clocks double-counting. Direct tests create two library and one workflow record, release one exact ID twice, complete real claimed/native work under pause, submit/revise/reject acceptance with a valid post-resume control, reopen the same temporary DB, and calculate clipped interval unions. Test scope controls on a second workflow, waits past deadlines, polling in flight, managed admission, bounded API pagination, and HTTP/stdio discovery. Test unclaimed timer overlap with budget/resource blockers.
+
+The UI journey on task-owned temporary API/Vite servers adds two library holds and one workflow hold using actual controls, inspects complete reasons/IDs, releases one hold and confirms execution stays paused, submits/revises pending input with acceptance disabled, then releases the final applicable hold and observes work become claimable. Capture desktop and 390px states, error/focus behavior, and record resource ownership/cleanup.
+
+Build owns relevant tests, pnpm test, pnpm build, pnpm test:package, and pnpm format:check. Fetch/rebase main before the final checks. Independent review owns exact-head diff and targeted boundary verification, plus fresh UI review arranged by the parent. Build commits a concrete candidate and submits its exact branch/base/HEAD and checks. Stop before claiming fresh Review change or pushing/opening PR. Parent owns later review coordination and CI/merge cleanup. No release.
