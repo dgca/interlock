@@ -1,0 +1,20 @@
+### Result
+"Reset only the task fixture through actual controls after harness read-recovery race"
+### Ran Playwright code
+```js
+await (async page=>{const d=page.getByRole('dialog');await d.getByRole('button',{name:'Release…',exact:true}).click();await d.getByRole('button',{name:'Release hold',exact:true}).click();await d.getByText('0 applicable holds',{exact:true}).waitFor();await d.getByRole('button',{name:'Done',exact:true}).click();await page.getByRole('link',{name:'Workflows',exact:true}).click();return 'Reset only the task fixture through actual controls after harness read-recovery race';})(page);
+```
+### Page
+- Page URL: http://127.0.0.1:4414/workflows
+- Page Title: Interlock
+- Console: 2 errors, 0 warnings
+### Result
+"Reset task fixture for keyboard read-recovery journey"
+### Ran Playwright code
+```js
+await (async page=>{const d=page.getByRole('dialog');await d.getByRole('button',{name:'Release…',exact:true}).click();await d.getByRole('button',{name:'Release hold',exact:true}).click();await d.getByText('0 applicable holds',{exact:true}).waitFor();await d.getByRole('button',{name:'Done',exact:true}).click();await page.getByRole('link',{name:'Workflows',exact:true}).click();return 'Reset task fixture for keyboard read-recovery journey';})(page);
+```
+### Page
+- Page URL: http://127.0.0.1:4414/workflows
+- Page Title: Interlock
+- Console: 4 errors, 0 warnings

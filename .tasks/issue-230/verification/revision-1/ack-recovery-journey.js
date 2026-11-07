@@ -1,0 +1,81 @@
+async page => {
+  const checks=[];
+  const assert=(condition,message)=>{if(!condition)throw Error(message);checks.push(message);};
+  const output='.tasks/issue-230/verification/revision-1/';
+  const d=page.getByRole('dialog');
+  let blockReads=false,allowRefresh=false,writes=0,deliver;
+  const pending=new Promise(resolve=>deliver=resolve);
+  const reads=url=>url.href.includes('/trpc/')&&url.href.includes('pauses.list');
+  const readRoute=async route=>{
+    if(blockReads&&allowRefresh&&decodeURIComponent(route.request().url()).includes('"offset":0')) {blockReads=false;allowRefresh=false;}
+    return blockReads?route.abort():route.continue();
+  };
+  const writeRoute=async route=>{writes++;await pending;const response=await route.fetch();blockReads=true;await route.fulfill({response});};
+  await page.getByRole('link',{name:'Release pipeline',exact:true}).click();
+  await page.getByRole('button',{name:'Pause workflow',exact:true}).click();
+  await d.getByLabel('Actor').fill('revision-operator');
+  await d.getByLabel('Reason').fill('Committed before status refresh failed');
+  await page.route(reads,readRoute);
+  await page.route('**/trpc/pauses.pause*',writeRoute);
+  try {
+    await d.getByRole('button',{name:'Pause workflow',exact:true}).click();
+    assert(await d.getByRole('button',{name:'Done',exact:true}).isDisabled(),'Pending create disables Done');
+    assert(await d.getByRole('button',{name:'Close dialog',exact:true}).isDisabled(),'Pending create disables Close');
+    await page.keyboard.press('Escape');
+    assert(await d.isVisible(),'Pending create ignores Escape');
+    await page.screenshot({path:output+'pending-1440.png'});
+    deliver();
+    await d.getByText('Pause added.',{exact:true}).waitFor();
+    await d.getByRole('button',{name:'Retry refresh',exact:true}).waitFor();
+    assert(await d.locator('form').count()===0,'Acknowledged create closes the original form before failed refresh');
+    assert(await d.getByRole('button',{name:'Add another pause',exact:true}).isDisabled(),'Stale acknowledgement offers read recovery before another add');
+    assert(writes===1,'Acknowledged creation sent one mutation');
+    await page.waitForFunction(()=>document.activeElement?.textContent==='Retry refresh');
+    checks.push('Read failure moves focus to Retry refresh');
+    await page.screenshot({path:output+'acknowledged-read-failed-1440.png'});
+    allowRefresh=true;
+    await d.getByRole('button',{name:'Retry refresh',exact:true}).focus();await page.keyboard.press('Enter');
+    await d.getByText('1 applicable hold',{exact:true}).waitFor();
+    await d.getByText('Committed before status refresh failed',{exact:true}).waitFor();
+    assert(await d.locator('form').count()===0,'Recovered read does not restore a creation form');
+    assert(writes===1,'Retry refresh sends no creation mutation');
+    await page.waitForFunction(()=>document.activeElement?.textContent==='Release…');
+    checks.push('Recovered read focuses a current hold action');
+    await page.screenshot({path:output+'acknowledged-recovered-1440.png'});
+    await page.setViewportSize({width:390,height:844});
+    await page.waitForFunction(()=>{const r=document.querySelector('[role=dialog]')?.getBoundingClientRect();return r&&r.width<390&&r.x>=15;});
+    await page.screenshot({path:output+'acknowledged-recovered-390.png'});
+    await page.unroute('**/trpc/pauses.pause*',writeRoute);
+    await d.getByRole('button',{name:'Add another pause',exact:true}).click();
+    assert(await d.getByLabel('Actor').inputValue()===''&&await d.getByLabel('Reason').inputValue()==='','Explicit Add another pause opens a blank form');
+    await d.getByLabel('Actor').fill('revision-operator');
+    await d.getByLabel('Reason').fill('Explicit independent second hold');
+    await d.getByRole('button',{name:'Pause workflow',exact:true}).click();
+    await d.getByText('2 applicable holds',{exact:true}).waitFor();
+    checks.push('Explicit new form creates a separate second hold');
+    await d.getByRole('button',{name:'Add another pause',exact:true}).click();
+    await d.getByLabel('Actor').fill('revision-operator');
+    await d.getByLabel('Reason').fill('Rejected write preserves my input');
+    await page.route('**/trpc/pauses.pause*',route=>route.abort());
+    await d.getByRole('button',{name:'Pause workflow',exact:true}).click();
+    await d.getByRole('alert').waitFor();
+    assert(await d.getByLabel('Reason').inputValue()==='Rejected write preserves my input','Actual write failure retains entered input');
+    await page.unroute('**/trpc/pauses.pause*');
+    await d.getByRole('button',{name:'Pause workflow',exact:true}).click();
+    await d.getByText('3 applicable holds',{exact:true}).waitFor();
+    checks.push('Actual rejected write can be retried once to create its intended hold');
+    await d.getByRole('button',{name:'Release…',exact:true}).first().click();
+    await page.route('**/trpc/pauses.resume*',async route=>{const response=await route.fetch();blockReads=true;await route.fulfill({response});});
+    await d.getByRole('button',{name:'Release hold',exact:true}).click();
+    await d.getByText('Hold released.',{exact:true}).waitFor();
+    await d.getByRole('button',{name:'Retry refresh',exact:true}).waitFor();
+    assert(await d.getByRole('button',{name:'Release hold',exact:true}).count()===0,'Acknowledged release closes its confirmation before read recovery');
+    allowRefresh=true;await d.getByRole('button',{name:'Retry refresh',exact:true}).focus();await page.keyboard.press('Enter');
+    await d.getByText('2 applicable holds',{exact:true}).waitFor();
+    checks.push('Acknowledged release recovery only reads the remaining holds');
+    await page.screenshot({path:output+'release-recovered-390.png'});
+    return {finding:'3a0f58d-add-ack-refresh-retry',checks,acknowledgedCreateCount:writes,duplicateFromReadRetry:0};
+  } finally {
+    deliver();await page.unroute('**/trpc/pauses.pause*');await page.unroute('**/trpc/pauses.resume*');await page.unroute(reads,readRoute);
+  }
+}

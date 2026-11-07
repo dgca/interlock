@@ -142,6 +142,7 @@ export class Continuation {
       leaseSeconds: work.leaseSeconds,
       leaseUntil: work.leaseUntil,
       availableUntil: work.availableUntil,
+      pauseBlocked: work.pauseBlocked,
       budgetBlocked: work.budgetBlocked,
       ...(work.resources ? { resources: work.resources } : {}),
       ...(work.resourceBlocked
@@ -211,27 +212,29 @@ export class Continuation {
         const reason =
           run.status === 'failed'
             ? 'failure'
-            : assignment?.status === 'held'
-              ? 'external_hold'
-              : assignment?.status === 'claimed'
-                ? 'claimed_work'
-                : assignment?.budgetBlocked
-                  ? 'budget_blocked'
-                  : assignment?.resourceBlocked
-                    ? 'resource_blocked'
-                    : assignment?.cwdBlocked
-                      ? 'cwd_blocked'
-                      : assignment
-                        ? 'available_work'
-                        : execution?.kind === 'input' &&
-                            execution.status === 'waiting'
-                          ? 'external_input'
-                          : execution?.kind === 'wait'
-                            ? 'wait'
-                            : execution?.kind === 'batch' ||
-                                execution?.kind === 'workflow'
-                              ? 'children'
-                              : 'executing';
+            : projectRun(this.store, run.id, state).waiting?.kind === 'pause'
+              ? 'pause'
+              : assignment?.status === 'held'
+                ? 'external_hold'
+                : assignment?.status === 'claimed'
+                  ? 'claimed_work'
+                  : assignment?.budgetBlocked
+                    ? 'budget_blocked'
+                    : assignment?.resourceBlocked
+                      ? 'resource_blocked'
+                      : assignment?.cwdBlocked
+                        ? 'cwd_blocked'
+                        : assignment
+                          ? 'available_work'
+                          : execution?.kind === 'input' &&
+                              execution.status === 'waiting'
+                            ? 'external_input'
+                            : execution?.kind === 'wait'
+                              ? 'wait'
+                              : execution?.kind === 'batch' ||
+                                  execution?.kind === 'workflow'
+                                ? 'children'
+                                : 'executing';
         return {
           ...reference(run.id, execution?.id),
           lifecycleRunId: run.lifecycleRunId,
@@ -248,7 +251,7 @@ export class Continuation {
             ? { cwdBlocked: assignment.cwdBlocked }
             : {}),
           error: run.error,
-          ...(reason === 'external_input' && execution
+          ...(execution?.kind === 'input' && execution.status === 'waiting'
             ? {
                 externalInput: {
                   waitingSince: execution.startedAt,
@@ -378,6 +381,7 @@ export class Continuation {
         work.filter(
           (w) =>
             w.status === 'available' &&
+            !w.pauseBlocked &&
             !w.budgetBlocked &&
             !w.resourceBlocked &&
             !w.cwdBlocked,
@@ -459,6 +463,7 @@ export class Continuation {
               : work.some(
                     (w) =>
                       w.status === 'available' &&
+                      !w.pauseBlocked &&
                       !w.budgetBlocked &&
                       !w.resourceBlocked &&
                       !w.cwdBlocked,

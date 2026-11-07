@@ -79,7 +79,24 @@ export function projectRun(
       };
     };
     const managed = work?.managedExecution;
-    if (work?.cwdBlocked)
+    const pauses = store.pauseHolds(run.workflowId);
+    const pollCheckRunning =
+      current?.kind === 'wait' &&
+      state.executions.some((e) => e.id === current.id && e.pollCheckRunning);
+    const inFlight =
+      pollCheckRunning ||
+      work?.status === 'claimed' ||
+      ((current?.kind === 'script' || current?.kind === 'fetch') &&
+        current.status === 'running');
+    if (pauses.length && !inFlight) {
+      wait(
+        'pause',
+        'person',
+        `${pauses.length} pause hold${pauses.length === 1 ? '' : 's'}: ${pauses.map((h) => h.reason).join('; ')}`,
+        pauses[0].createdAt,
+      );
+      branch.waiting!.detail.pauseCount = pauses.length;
+    } else if (work?.cwdBlocked)
       wait(
         'human_request',
         'person',
@@ -147,7 +164,11 @@ export function projectRun(
           ? 'poll'
           : 'timer',
         'engine',
-        current.nextCheckAt ? 'Waiting for polling check' : 'Waiting for timer',
+        pollCheckRunning
+          ? 'Polling check running'
+          : current.nextCheckAt
+            ? 'Waiting for polling check'
+            : 'Waiting for timer',
       );
       const detail = branch.waiting!.detail;
       if (current.resumeAt) detail.resumeAt = current.resumeAt;

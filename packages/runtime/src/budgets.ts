@@ -153,6 +153,7 @@ export class Budgets {
           since: work.budgetBlocked?.since ?? new Date().toISOString(),
           remainingMs:
             work.budgetBlocked?.remainingMs ??
+            work.pauseBlocked?.remainingMs ??
             work.resourceBlocked?.remainingMs ??
             (work.availableUntil
               ? Math.max(0, Date.parse(work.availableUntil) - Date.now())
@@ -163,6 +164,7 @@ export class Budgets {
         if (!work.budgetBlocked) continue;
         if (
           !work.resourceBlocked &&
+          !work.pauseBlocked &&
           work.budgetBlocked.remainingMs !== undefined
         )
           work.availableUntil = new Date(

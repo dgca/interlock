@@ -20,6 +20,7 @@ export const runWaitingSchema = z.object({
     executionId: z.string().optional(),
     workId: z.string().optional(),
     message: z.string().max(500).optional(),
+    pauseCount: z.number().int().optional(),
     resumeAt: z.string().optional(),
     nextCheckAt: z.string().optional(),
     timeoutAt: z.string().optional(),

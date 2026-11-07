@@ -1,0 +1,89 @@
+{
+  "testedSourceHead": "333066048eca4ebc56ba6c1a1312a92e62e21b3e",
+  "priorReviewedHead": "5af70dcf770b174efba7fd16864654b1015af689",
+  "originalBaseCommit": "8e7ac9fb51bcdbbb82c622233e9f327d1f2ab84a",
+  "rebasedMainCommit": "c9e2a0a833712a233412dd21432d2abc23cb4672",
+  "branch": "feat/issue-230",
+  "checks": [
+    {
+      "name": "pnpm test",
+      "result": "passed",
+      "exitCode": 0,
+      "summary": "1468 tests passed across 123 files, including four new async-boundary scope controls.",
+      "proof": "/tmp/interlock-230-launch-admission-tests.log",
+      "sha256": "3543f1246761890e6585dab0e57acee37edab041650f344129d5a2afdde7217a"
+    },
+    {
+      "name": "pnpm build",
+      "result": "passed",
+      "exitCode": 0,
+      "summary": "TypeScript, UI and package build passed; existing large-chunk advisory remains.",
+      "proof": "/tmp/interlock-230-launch-admission-build.log",
+      "sha256": "b38ce2252f7292f293616ea84855fec648d9a8c2a1de6fb194452e7e9e12c3d6"
+    },
+    {
+      "name": "pnpm test:package",
+      "result": "passed",
+      "exitCode": 0,
+      "summary": "Packed global/npx installs, CLI/UI, HTTP/stdio MCP, restart/background execution and reviewed history cleanup passed.",
+      "proof": "/tmp/interlock-230-launch-admission-package.log",
+      "sha256": "f74a234a44d919d16a83abd0e6b7223d49d9ec7a63abe482ed6031faf2a996ab"
+    },
+    {
+      "name": "pnpm format:check",
+      "result": "passed",
+      "exitCode": 0,
+      "summary": "All matched files passed Prettier.",
+      "proof": "/tmp/interlock-230-launch-admission-format.log",
+      "sha256": "1d66faad74f5e8709353f7288592866bd3a9095da1174a916e7aa632949971e2"
+    }
+  ],
+  "finding": {
+    "id": "5af70dc-launcher-pause-snapshot",
+    "status": "addressed; independent exact-head re-review pending",
+    "cause": "The scan reused captured assignments after awaiting a preceding delegated launch response.",
+    "repair": "Recheck current library and workflow pause records before each captured assignment dispatch. Direct execution retains the post-detection claim gate.",
+    "regressions": [
+      "Real delayed-first-response HTTP launcher, library hold blocks remaining assignments.",
+      "Real delayed-first-response HTTP launcher, workflow hold blocks only its own workflow.",
+      "Delayed direct-harness detection, library hold blocks claims.",
+      "Delayed direct-harness detection, workflow hold blocks only its own claim."
+    ],
+    "proof": [
+      "original-red.log",
+      "original-green.log",
+      "regression-red.log",
+      "green-attempt-1.log",
+      "targeted-green.log"
+    ]
+  },
+  "targetedChecks": {
+    "tests": 100,
+    "files": 5,
+    "transports": [
+      "HTTP",
+      "stdio"
+    ],
+    "toolCount": 57,
+    "definitionBytes": 259953,
+    "unchangedByteLimit": 260000
+  },
+  "existingFindingProvenance": {
+    "ids": [
+      "3a0f58d-poll-inflight-projection",
+      "3a0f58d-add-ack-refresh-retry"
+    ],
+    "status": "Resolved in the prior independent rebase review; source untouched by this repair. No new UI review performed.",
+    "priorReviewPath": "/tmp/interlock-230-rebase-review.json",
+    "priorUiReviewRun": "6d020a15-8cfb-48c7-8ce6-ea76c640dd14"
+  },
+  "docsAndMcp": "Architecture updated to explain per-assignment revalidation and the post-detection claim boundary. Work-holds, managed-executors, v1, README, CLI and affected MCP launch/claim guidance retain the existing blocked-new-launch contract. No API/schema/discovery change in this repair.",
+  "delivery": {
+    "pushed": false,
+    "remoteBranchHead": "b117a566252af841ad73fdcdd39603f70fee3b26",
+    "pr": "https://github.com/dgca/interlock/pull/259",
+    "sdlcRun": "52c61ba1-c2dd-4630-8a97-f229d1ee0f5f",
+    "sdlcStatus": "completed; no duplicate run or claim"
+  },
+  "scope": "The following commit only adds this check metadata and a plan entry. Source checks belong to testedSourceHead. Reviewer artifact folders and the ignored prototype symlink are preserved."
+}

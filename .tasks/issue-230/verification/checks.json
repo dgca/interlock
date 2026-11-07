@@ -1,0 +1,68 @@
+{
+  "testedSourceHead": "a65af6719b17a4348b0672920edf93ca14e20d10",
+  "baseCommit": "8e7ac9fb51bcdbbb82c622233e9f327d1f2ab84a",
+  "branch": "feat/issue-230",
+  "checks": [
+    {
+      "name": "pnpm test",
+      "result": "passed",
+      "exitCode": 0,
+      "summary": "1453 tests passed across 121 files, including 17 pause boundary tests and HTTP/stdio/CLI lifecycle tests.",
+      "proof": "/tmp/interlock-issue230-tests-verified.log",
+      "sha256": "b21a4c38d59e726df561d22182da8babf294ce10f063a20bff56a75a1d57ebd7"
+    },
+    {
+      "name": "pnpm build",
+      "result": "passed",
+      "exitCode": 0,
+      "summary": "TypeScript, UI build and package bundle passed. Existing large-chunk advisory remains.",
+      "proof": "/tmp/interlock-issue230-build-verified.log",
+      "sha256": "87a782228b9ccc81807696821a63a4e95584fcedfb41a8dc7cd9c7f84a6ed091"
+    },
+    {
+      "name": "pnpm test:package",
+      "result": "passed",
+      "exitCode": 0,
+      "summary": "Global/npx installations, CLI/UI, HTTP/stdio MCP, restart persistence, JavaScript/background execution and history cleanup passed.",
+      "proof": "/tmp/interlock-issue230-package-verified.log",
+      "sha256": "f74a234a44d919d16a83abd0e6b7223d49d9ec7a63abe482ed6031faf2a996ab"
+    },
+    {
+      "name": "pnpm format:check",
+      "result": "passed",
+      "exitCode": 0,
+      "summary": "All matched files passed Prettier.",
+      "proof": "/tmp/interlock-issue230-format-verified.log",
+      "sha256": "1d66faad74f5e8709353f7288592866bd3a9095da1174a916e7aa632949971e2"
+    }
+  ],
+  "mcpDiscovery": {
+    "transports": [
+      "HTTP",
+      "stdio"
+    ],
+    "toolCount": 57,
+    "definitionBytes": 259973,
+    "unchangedByteLimit": 260000
+  },
+  "uiProof": [
+    "journey-create.log",
+    "journey-release.log",
+    "journey-final-release.log",
+    "journey-900.log",
+    "holds-desktop.png",
+    "workflow-desktop.png",
+    "workflow-900.png",
+    "workflow-mobile.png",
+    "holds-mobile.png",
+    "release-error-desktop.png",
+    "run-paused-mobile.png",
+    "final-release-mobile.png",
+    "run-resumed-mobile.png"
+  ],
+  "pending": [
+    "Fresh independent UI review",
+    "Fresh SDLC Review change"
+  ],
+  "scope": "Checks cover source at testedSourceHead. Following evidence-only commit adds this result and cleanup receipt; no implementation changes."
+}

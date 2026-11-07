@@ -1,0 +1,96 @@
+
+ RUN  v3.2.7 /Users/dan/dev/interlock-worktrees/issue-230
+
+ ❯ tests/pauseHolds.test.ts (19 tests | 2 failed | 17 skipped) 159ms
+   ↓ combines independent scopes, releases exact IDs idempotently, and gates all claim discovery
+   ↓ allows in-flight Agent completion and renewal but prevents downstream script and manual-start progress
+   ↓ lets an in-flight script finish without launching the next step
+   ↓ lets an in-flight fetch finish without launching the next step
+   ↓ preserves pending input revisions and inhibits acceptance until every hold clears
+   ↓ survives restart and retains wall-clock Wait deadlines while unclaimed Agent clocks suspend
+   ↓ unions overlapping persisted intervals and reports active attempt time
+   ↓ retains timeout allowance across overlapping pause and budget gates in either release order
+   ↓ does not dispatch managed work while paused and launches after the final applicable release
+   ↓ holds polling checks at the next check boundary and keeps cancellation available
+   ↓ finishes a real in-flight Script once while holding the downstream boundary and emits pause snapshots
+   ↓ keeps paused input discovery actionable and bounds status hold details
+   ↓ reconnects an already running background Script during pause without replay after restart
+   ↓ preserves unclaimed time across resource/pause overlap, pause released first: true
+   ↓ preserves unclaimed time across resource/pause overlap, pause released first: false
+   ↓ pauses Batch item claims and stops further item dispatch until resume
+   ↓ keeps lease-expired and explicitly resumed assignments out of discovery during pause
+   × 3a0f58d-poll-inflight-projection: retains the engine actor through a real passing=true check and waited-parent rollup 95ms
+     → expected { stage: 'Build', …(2) } to match object { stage: 'Build', …(2) }
+(5 matching properties omitted from actual)
+   × 3a0f58d-poll-inflight-projection: retains the engine actor through a real passing=false check and waited-parent rollup 63ms
+     → expected { stage: 'Build', …(2) } to match object { stage: 'Build', …(2) }
+(5 matching properties omitted from actual)
+ ❯ tests/pauseControls.test.ts (3 tests | 1 failed | 2 skipped) 153ms
+   × 3a0f58d-add-ack-refresh-retry: completes an acknowledged create before read failure and refreshes without another write 153ms
+     → expected '\n\n\n\n@media (max-width: 35.99375em…' to contain 'Pause added.'
+   ↓ retains entered values for a failed write and creates exactly one hold when the write is retried
+   ↓ keeps an acknowledged release completed when its read fails
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/pauseControls.test.ts > 3a0f58d-add-ack-refresh-retry: completes an acknowledged create before read failure and refreshes without another write
+AssertionError: expected '\n\n\n\n@media (max-width: 35.99375em…' to contain 'Pause added.'
+
+- Expected
++ Received
+
+- Pause added.
++
++
++
++
++ @media (max-width: 35.99375em) {.mantine-visible-from-xs {display: none !important;}}@media (min-width: 36em) {.mantine-hidden-from-xs {display: none !important;}}@media (max-width: 47.99375em) {.mantine-visible-from-sm {display: none !important;}}@media (min-width: 48em) {.mantine-hidden-from-sm {display: none !important;}}@media (max-width: 61.99375em) {.mantine-visible-from-md {display: none !important;}}@media (min-width: 62em) {.mantine-hidden-from-md {display: none !important;}}@media (max-width: 74.99375em) {.mantine-visible-from-lg {display: none !important;}}@media (min-width: 75em) {.mantine-hidden-from-lg {display: none !important;}}@media (max-width: 87.99375em) {.mantine-visible-from-xl {display: none !important;}}@media (min-width: 88em) {.mantine-hidden-from-xl {display: none !important;}}Library executionPause libraryPause holds0 applicable holdsPause status may be out of dateCould not refresh holds. Retry before releasing.Retry refreshEntire libraryActor *Reason *Acknowledged pausePause libraryCancelStatus read unavailableDone
+
+ ❯ tests/pauseControls.test.ts:117:18
+    115|   ).toBe(true);
+    116|   await act(async () => deliver());
+    117|   expect(text()).toContain('Pause added.');
+       |                  ^
+    118|   expect(text()).toContain('Status read unavailable');
+    119|   expect(document.querySelector('form')).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/pauseHolds.test.ts > 3a0f58d-poll-inflight-projection: retains the engine actor through a real passing=true check and waited-parent rollup
+ FAIL  tests/pauseHolds.test.ts > 3a0f58d-poll-inflight-projection: retains the engine actor through a real passing=false check and waited-parent rollup
+AssertionError: expected { stage: 'Build', …(2) } to match object { stage: 'Build', …(2) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "actor": "engine",
++   "actor": "person",
+    "stage": "Build",
+    "waiting": {
+      "detail": {
+-       "message": "Polling check running",
++       "message": "1 pause hold: deploy maintenance",
+      },
+-     "kind": "poll",
++     "kind": "pause",
+    },
+  }
+
+ ❯ tests/pauseHolds.test.ts:681:36
+    679|       waiting: { kind: 'poll', detail: { message: 'Polling check runni…
+    680|     };
+    681|     expect(e.projectRun(child.id)).toMatchObject(expected);
+       |                                    ^
+    682|     expect(e.projectRun(root.id)).toMatchObject(expected);
+    683|     expect(e.inspect(root.id).run).toMatchObject(expected);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 19 skipped (22)
+   Start at  01:29:35
+   Duration  1.87s (transform 1.04s, setup 0ms, collect 2.01s, tests 312ms, environment 331ms, prepare 140ms)
+

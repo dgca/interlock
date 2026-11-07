@@ -1,3 +1,7 @@
+import {
+  PauseProvider,
+  LibraryPauseBar,
+} from './features/pauses/PauseControls';
 import { useUiFeatures } from './lib/uiFeatures';
 import { useCallback, useEffect, useState } from 'react';
 import { Check, AlertCircle } from 'lucide-react';
@@ -192,97 +196,100 @@ export function App() {
     onConnect: features.connectAgent ? () => setConnectDialog(true) : undefined,
   };
   return (
-    <div className="app">
-      <Sidebar
-        onConnect={context.onConnect}
-        page={page}
-        attentionCount={attention.length}
-        connected={connected}
-        connectionError={!!loadError}
-        engineHost={engineHost}
-      />
-      <main className="main">
-        {loaded && loadError && (
-          <Group className="engine-warning" justify="space-between" gap="xs">
-            <Text size="sm" role="status">
-              Could not refresh workspace data. Open views may be out of date.
-            </Text>
-            <Button
-              variant="default"
-              size="xs"
-              onClick={() => void retryLoad()}
-            >
-              Retry connection
-            </Button>
-          </Group>
-        )}
-        {feedback && (
-          <Notification
-            key={feedback.id}
-            className="action-toast"
-            role={feedback.kind === 'error' ? 'alert' : 'status'}
-            color={feedback.kind === 'success' ? 'green' : 'red'}
-            icon={
-              feedback.kind === 'success' ? (
-                <Check size={18} />
-              ) : (
-                <AlertCircle size={18} />
-              )
-            }
-            title={
-              feedback.kind === 'success' ? 'Success' : 'Something went wrong'
-            }
-            onClose={dismiss}
-            closeButtonProps={{ 'aria-label': 'Dismiss notification' }}
-          >
-            {feedback.message}
-          </Notification>
-        )}
-        <Outlet context={context} />
-      </main>
-      {blocker.state === 'blocked' && (
-        <Modal
-          onClose={() => blocker.state === 'blocked' && blocker.reset()}
-          title="Discard unsaved changes?"
-        >
-          <ModalBody>
-            <Text>You have changes that have not been saved.</Text>
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="default"
-              onClick={() => blocker.state === 'blocked' && blocker.reset()}
-            >
-              Keep editing
-            </Button>
-            <Button
-              color="red"
-              variant="light"
-              onClick={() => {
-                if (blocker.state === 'blocked') {
-                  setEditorDirty(false);
-                  blocker.proceed();
-                }
-              }}
-            >
-              Discard changes
-            </Button>
-          </ModalFooter>
-        </Modal>
-      )}
-      {features.connectAgent && connectDialog && (
-        <ConnectDialog onClose={() => setConnectDialog(false)} />
-      )}{' '}
-      {runDialog && (
-        <RunDialog
-          workflow={runDialog}
-          onClose={() => setRunDialog(undefined)}
-          onStarted={(id) => {
-            success('Workflow run started.');
-            openRun(id);
-          }}
+    <PauseProvider tick={tick}>
+      <div className="app">
+        <Sidebar
+          onConnect={context.onConnect}
+          page={page}
+          attentionCount={attention.length}
+          connected={connected}
+          connectionError={!!loadError}
+          engineHost={engineHost}
         />
-      )}
-    </div>
+        <main className="main">
+          <LibraryPauseBar />
+          {loaded && loadError && (
+            <Group className="engine-warning" justify="space-between" gap="xs">
+              <Text size="sm" role="status">
+                Could not refresh workspace data. Open views may be out of date.
+              </Text>
+              <Button
+                variant="default"
+                size="xs"
+                onClick={() => void retryLoad()}
+              >
+                Retry connection
+              </Button>
+            </Group>
+          )}
+          {feedback && (
+            <Notification
+              key={feedback.id}
+              className="action-toast"
+              role={feedback.kind === 'error' ? 'alert' : 'status'}
+              color={feedback.kind === 'success' ? 'green' : 'red'}
+              icon={
+                feedback.kind === 'success' ? (
+                  <Check size={18} />
+                ) : (
+                  <AlertCircle size={18} />
+                )
+              }
+              title={
+                feedback.kind === 'success' ? 'Success' : 'Something went wrong'
+              }
+              onClose={dismiss}
+              closeButtonProps={{ 'aria-label': 'Dismiss notification' }}
+            >
+              {feedback.message}
+            </Notification>
+          )}
+          <Outlet context={context} />
+        </main>
+        {blocker.state === 'blocked' && (
+          <Modal
+            onClose={() => blocker.state === 'blocked' && blocker.reset()}
+            title="Discard unsaved changes?"
+          >
+            <ModalBody>
+              <Text>You have changes that have not been saved.</Text>
+            </ModalBody>
+            <ModalFooter>
+              <Button
+                variant="default"
+                onClick={() => blocker.state === 'blocked' && blocker.reset()}
+              >
+                Keep editing
+              </Button>
+              <Button
+                color="red"
+                variant="light"
+                onClick={() => {
+                  if (blocker.state === 'blocked') {
+                    setEditorDirty(false);
+                    blocker.proceed();
+                  }
+                }}
+              >
+                Discard changes
+              </Button>
+            </ModalFooter>
+          </Modal>
+        )}
+        {features.connectAgent && connectDialog && (
+          <ConnectDialog onClose={() => setConnectDialog(false)} />
+        )}{' '}
+        {runDialog && (
+          <RunDialog
+            workflow={runDialog}
+            onClose={() => setRunDialog(undefined)}
+            onStarted={(id) => {
+              success('Workflow run started.');
+              openRun(id);
+            }}
+          />
+        )}
+      </div>
+    </PauseProvider>
   );
 }

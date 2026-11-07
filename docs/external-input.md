@@ -63,3 +63,5 @@ A hold covers external-input acceptance in the selected run, attached child work
 Pending answers, holds, and receipts survive a server restart. Cancellation closes the wait. Identical submission retries recover retained receipts after cancellation. Run history cleanup deletes the retained input records with the run. Workflow exports contain the node definition.
 
 Briefings show the waiting execution, wait start, pending revision, and any effective hold. Submitted values are available through the targeted status read. The step creates no Agent assignment and has no lease or attempt budget.
+
+Library and workflow [pause holds](work-holds.md) also inhibit acceptance. Status returns up to 20 applicable active `pauses` and exact `pauseCount`; submissions and revisions remain accepted while paused. Release every applicable hold, then explicitly accept the current revision. A replay of an already committed acceptance remains idempotent.

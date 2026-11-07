@@ -38,6 +38,7 @@ export class ExternalInputs {
       save(run: Run): void;
       event(run: Run, type: string, message: string): void;
       pump(): void;
+      assertUnpaused(run: Run): void;
     },
   ) {}
 
@@ -47,7 +48,18 @@ export class ExternalInputs {
     const run = this.engine.run(runId);
     const hold = run.externalInputHold ?? { revision: 0 };
     const heldByRunId = this.store.externalInputHoldOwner(runId);
-    if (executionId === undefined) return { runId, hold, heldByRunId };
+    const pauses = this.store.pauseHolds(run.workflowId);
+    const pauseState = {
+      pauses: pauses.slice(0, 20),
+      pauseCount: pauses.length,
+    };
+    if (executionId === undefined)
+      return {
+        runId,
+        hold,
+        heldByRunId,
+        ...pauseState,
+      };
     const execution = this.execution(run, executionId);
     const {
       revision = 0,
@@ -61,6 +73,7 @@ export class ExternalInputs {
     return {
       runId,
       executionId,
+      ...pauseState,
       state: execution.status,
       waitingSince: execution.startedAt,
       revision,
@@ -189,6 +202,7 @@ export class ExternalInputs {
     };
     if (metadata.acceptedAt) return { receipt, advanced: false };
     this.waiting(run, execution);
+    this.engine.assertUnpaused(run);
     if (this.store.externalInputHoldOwner(run.id))
       throw new ExternalInputConflict('External-input acceptance is on hold');
     const pending = this.pending(run, execution);

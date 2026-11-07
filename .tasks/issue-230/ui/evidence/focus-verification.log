@@ -1,0 +1,11 @@
+### Result
+{"confirmFocus":"Keep hold","releaseFocus":"Release…","restoredFocus":"Review holds"}
+### Ran Playwright code
+```js
+await (async page => { await page.goto('http://127.0.0.1:5183/?view=workflow'); await page.getByRole('button',{name:'Pauses · 1'}).waitFor(); await page.getByRole('button',{name:'Review holds',exact:true}).nth(1).click(); await page.getByRole('button',{name:'Release…',exact:true}).first().click(); const confirmFocus=await page.evaluate(()=>document.activeElement.textContent); await page.getByRole('button',{name:'Release hold',exact:true}).click(); await page.waitForTimeout(300); const releaseFocus=await page.evaluate(()=>document.activeElement.textContent); await page.keyboard.press('Escape'); const restoredFocus=await page.evaluate(()=>document.activeElement.textContent); return {confirmFocus,releaseFocus,restoredFocus}; })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:5183/?view=workflow
+- Page Title: Interlock pause proposal
+### Events
+- New console entries: .playwright-cli/console-2026-11-07T07-29-33-668Z.log#L17

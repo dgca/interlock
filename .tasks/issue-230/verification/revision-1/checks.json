@@ -1,0 +1,87 @@
+{
+  "testedSourceHead": "e11570b3913b2e5c9fb2c971f3c463a67ca71570",
+  "priorReviewedHead": "3a0f58daed3e1c275a8617243f119c1e57eb1775",
+  "baseCommit": "8e7ac9fb51bcdbbb82c622233e9f327d1f2ab84a",
+  "branch": "feat/issue-230",
+  "checks": [
+    {
+      "name": "pnpm test",
+      "result": "passed",
+      "exitCode": 0,
+      "summary": "1458 tests passed across 122 files, including the two stable-finding regressions and three pause-dialog recovery tests.",
+      "proof": "/tmp/interlock-issue230-revision1-tests-verified.log",
+      "sha256": "49a7da8030e48fe866914a67821acf1ee94400b125158ae0ff9f776780f2d555"
+    },
+    {
+      "name": "pnpm build",
+      "result": "passed",
+      "exitCode": 0,
+      "summary": "TypeScript, UI, and package bundle passed; existing large-chunk advisory remains.",
+      "proof": "/tmp/interlock-issue230-revision1-build-verified.log",
+      "sha256": "34dc8a701d747ca0a01d40fc5c15df23e53a98975b69498714a0a989bafd1000"
+    },
+    {
+      "name": "pnpm test:package",
+      "result": "passed",
+      "exitCode": 0,
+      "summary": "Packed global/npx installs, CLI/UI, HTTP/stdio MCP, restart/background execution and history cleanup passed.",
+      "proof": "/tmp/interlock-issue230-revision1-package-verified.log",
+      "sha256": "f74a234a44d919d16a83abd0e6b7223d49d9ec7a63abe482ed6031faf2a996ab"
+    },
+    {
+      "name": "pnpm format:check",
+      "result": "passed",
+      "exitCode": 0,
+      "summary": "All matched files passed Prettier.",
+      "proof": "/tmp/interlock-issue230-revision1-format-verified.log",
+      "sha256": "1d66faad74f5e8709353f7288592866bd3a9095da1174a916e7aa632949971e2"
+    }
+  ],
+  "mcpDiscovery": {
+    "transports": [
+      "HTTP",
+      "stdio"
+    ],
+    "toolCount": 57,
+    "definitionBytes": 259973,
+    "fullEnvelopeBytes": 259983,
+    "unchangedByteLimit": 260000
+  },
+  "findingRepairs": [
+    {
+      "id": "3a0f58d-poll-inflight-projection",
+      "proof": [
+        "red.log",
+        "green.log",
+        "poll-boundary.log"
+      ],
+      "status": "addressed; independent re-review pending"
+    },
+    {
+      "id": "3a0f58d-add-ack-refresh-retry",
+      "proof": [
+        "red.log",
+        "green.log",
+        "ack-recovery-journey.log",
+        "ack-recovery-journey.js"
+      ],
+      "actualControlChecks": 16,
+      "acknowledgedFirstCreateCount": 1,
+      "duplicatesFromReadRetry": 0,
+      "status": "addressed; independent re-review pending"
+    }
+  ],
+  "uiRecoveryMethod": "Native Enter on the automatically focused Retry refresh button. Mouse recovery attempts raced element movement/background refresh; no mouse retry pass claimed. Original logs retained.",
+  "sourceFingerprints": {
+    "packages/runtime/src/index.ts": "f8cd96625bbc2365e93d87b9dcc2d5908751b86712b317d464c6b4bb36949d6f",
+    "packages/runtime/src/runProjection.ts": "5a75269a3f53f764d8067ad229b4f1b0867f9cdf5131bdfdb856864e53d71f27",
+    "packages/storage/src/continuation.ts": "ec544ca9e0b55c5d659695503e7018c83f2e8a32a5036173db2c83525a750394",
+    "packages/ui/src/features/pauses/PauseControls.tsx": "8c1332f0849de8d26315d39baa7aacb46bee4b8534b74657cd4b1e559918f0e2",
+    "packages/ui/dist/index.html": "ded18ee0e858501b84864eaf9e49e14b6be06f01d637128c81f3ff5bc595ad69"
+  },
+  "pending": [
+    "Focused independent UI revision review",
+    "Fresh SDLC Review change"
+  ],
+  "scope": "The next commit adds only plan and check metadata. Existing reviewer-generated ui-review-e8f29994 remains untracked and untouched."
+}

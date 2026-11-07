@@ -693,6 +693,14 @@ export class ExecutorManager {
         advance: false,
       })) {
         if (this.atCapacity() || this.stopped) break;
+        // A preceding launcher may have awaited its response since discovery.
+        // Recheck pause admission before dispatching another captured assignment.
+        if (
+          this.engine.pauses.applicable(
+            this.engine.run(offered.runId).workflowId,
+          ).length
+        )
+          continue;
         if (
           !offered.executor ||
           offered.cwdBlocked ||

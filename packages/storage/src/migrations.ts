@@ -145,6 +145,14 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 8,
+    up(db) {
+      db.exec(
+        `CREATE INDEX pause_holds_scope ON documents(json_extract(value, '$.scope'), json_extract(value, '$.workflowId'), json_extract(value, '$.createdAt')) WHERE collection = 'pauseHolds';`,
+      );
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };
