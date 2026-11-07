@@ -1,5 +1,20 @@
 # @type_of/interlock
 
+## 0.2.14
+
+### Patch Changes
+
+- dcba6b6: Add durable workflow admission queues with priority, stage exclusions, start dependencies, and atomic active external-task policies. Add optional managed executor profile concurrency alongside the shared assignment limit, with queue inspection and cancellation through the existing UI, CLI, shared API, and MCP.
+- 74ae3a3: Code-split UI routes with React.lazy to reduce initial bundle size and load feature views on demand.
+- c9e2a0a: Add user-defined custom harnesses (`harness: "custom"`) in ExecutorManager supporting direct turn execution (subprocess/HTTP) and delegated launcher execution with one-time claim-ticket authorization, session lifecycle hooks (status, message, stop, archive), and an executor configuration dialog in the UI.
+- 9f64487: Support per-run dynamic working directory (`cwd`) binding for Workflows, Agent nodes, and Script nodes (including polling Script checks) with `allowedRoots` containment validation, continuity group session pinning, and execution record telemetry.
+- 29a145d: Record engine-verified execution provenance on node executions, supporting `source: "execution"` bindings, 1-based loop `visitCount`, Branch condition resolution (`execution.<nodeId>.visitCount`), script provenance file injection (`INTERLOCK_EXECUTION_PROVENANCE_FILE`), and anti-spoofing guarantees.
+- 8cf9813: Add persistent library and workflow pause holds with independent exact-ID release through header controls, CLI, MCP, and the shared API. Pause claims and step boundaries while preserving in-flight completion and pending input revisions, and expose pause reasons and active elapsed time.
+- 068f6aa: Add managed session recovery policies for Agent executions, including `continueOnMissingResult` to prompt for missing JSON envelopes within the same session, `transientRetry` with exponential backoff and rolling window pause exclusion, adapter error classification, hold escalation on exhausted transient budgets, and recovery telemetry events.
+- 7b29dca: Add declarative provider-diversity constraints (`distinctProviderFrom`, `candidateModels`) on Agent nodes for multi-agent review, with deterministic candidate selection, slash/profile/prefix provider resolution, continuity group preservation, and explicit blocker reasons (`provider_diversity_unmet`, `provider_diversity_exhausted`).
+- 4ffc5a7: Add opt-in background Script execution that survives server restart, recovers durable results without replay, enforces deadlines offline, and exposes protected progress and explicit uncertain-outcome recovery through UI inspection, CLI, and MCP.
+- 8e7ac9f: Add optional node stages and external task titles. Run inspection and summaries now expose a shared active stage, structured waiting reason with bounded polling output, and actor across waited children.
+
 ## 0.2.13
 
 ### Patch Changes
