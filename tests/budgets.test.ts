@@ -620,3 +620,100 @@ it('adds policies to a published legacy database and preserves consumption acros
   );
   expect(e.run(c.runId).status).toBe('completed');
 });
+
+it('counts run-level observer usage against token budget limits and respects unknownUsage', () => {
+  const e = setup();
+  const wid = publish(e);
+  const { run } = e.start(wid, {}, undefined, {
+    scope: 'run',
+    unknownUsage: 'block',
+    limits: {
+      inputTokens: { max: 500 },
+      claims: { max: 10 },
+    },
+  });
+
+  // Initial state with 0 attempts and 0 reports: not blocked
+  const initial = e.budgets.read(run.id);
+  expect(initial.governing[0].state).toBe('ready');
+
+  // Submit a non-final run-level observer report: unknownUsage: block should block
+  e.usage.report({
+    source: 'observer',
+    runId: run.id,
+    snapshot: {
+      sequence: 1,
+      final: false,
+      models: [
+        {
+          provider: 'test',
+          model: 'overhead',
+          inputTokens: 200,
+          outputTokens: 50,
+        },
+      ],
+    },
+  });
+
+  const blockedUnknown = e.budgets.read(run.id);
+  expect(blockedUnknown.governing[0].state).toBe('blocked');
+  expect(
+    blockedUnknown.governing[0].checks.find(
+      (c: any) => c.metric === 'inputTokens',
+    )?.reasons,
+  ).toContain('usage_incomplete');
+
+  // Update to final: under 500 limit, so should become ready
+  e.usage.report({
+    source: 'observer',
+    runId: run.id,
+    snapshot: {
+      sequence: 2,
+      final: true,
+      models: [
+        {
+          provider: 'test',
+          model: 'overhead',
+          inputTokens: 250,
+          outputTokens: 50,
+        },
+      ],
+    },
+  });
+
+  const ready = e.budgets.read(run.id);
+  expect(ready.governing[0].state).toBe('ready');
+
+  // Report another run-level observer stream that pushes inputTokens over max: 500
+  e.usage.report({
+    source: 'observer',
+    runId: run.id,
+    streamId: 'stream-2',
+    snapshot: {
+      sequence: 1,
+      final: true,
+      models: [
+        {
+          provider: 'test',
+          model: 'extra',
+          inputTokens: 300,
+          outputTokens: 50,
+        },
+      ],
+    },
+  });
+
+  const blockedLimit = e.budgets.read(run.id);
+  expect(blockedLimit.governing[0].state).toBe('blocked');
+  expect(
+    blockedLimit.governing[0].checks.find(
+      (c: any) => c.metric === 'inputTokens',
+    )?.reasons,
+  ).toContain('limit_reached');
+  // Claims count should still be 0 because run reports do not consume claims!
+  expect(
+    blockedLimit.governing[0].checks.find((c: any) => c.metric === 'claims')
+      ?.value,
+  ).toBe(0);
+  expect(() => e.budgets.assertClaim(run.id)).toThrow('Budget blocked');
+});

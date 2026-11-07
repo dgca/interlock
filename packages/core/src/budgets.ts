@@ -4,6 +4,7 @@ import {
   summarizeUsageMetric,
   selectedUsageReport,
   type UsageAttempt,
+  type RunUsageReport,
   type UsageMetric,
 } from './usage.js';
 
@@ -77,12 +78,20 @@ export interface BudgetBlock {
   remainingMs?: number;
 }
 
-export function evaluateBudget(policy: BudgetPolicy, attempts: UsageAttempt[]) {
-  const totals = summarizeUsage(attempts);
+export function evaluateBudget(
+  policy: BudgetPolicy,
+  attempts: UsageAttempt[],
+  runReports: RunUsageReport[] = [],
+) {
+  const totals = summarizeUsage(attempts, runReports);
   const zero: UsageMetric = { value: 0, coverage: 'complete', overflow: false };
-  const models = attempts.flatMap(
-    (attempt) => selectedUsageReport(attempt)?.snapshot.models ?? [undefined],
-  );
+  const hasUsageScope = attempts.length > 0 || runReports.length > 0;
+  const models = [
+    ...attempts.flatMap(
+      (attempt) => selectedUsageReport(attempt)?.snapshot.models ?? [undefined],
+    ),
+    ...runReports.flatMap((report) => report.snapshot.models),
+  ];
   const cost = policy.limits.cost;
   const metrics: {
     metric: string;
@@ -102,7 +111,7 @@ export function evaluateBudget(policy: BudgetPolicy, attempts: UsageAttempt[]) {
       metrics.push({
         metric,
         limit: threshold,
-        usage: attempts.length ? totals.tokens[metric] : zero,
+        usage: hasUsageScope ? totals.tokens[metric] : zero,
       });
   }
   if (cost)
@@ -110,7 +119,7 @@ export function evaluateBudget(policy: BudgetPolicy, attempts: UsageAttempt[]) {
       metric: 'cost',
       currency: cost.currency,
       limit: cost.threshold,
-      usage: attempts.length
+      usage: hasUsageScope
         ? summarizeUsageMetric(
             models.map((model) =>
               model?.cost?.currency === cost.currency
@@ -119,7 +128,7 @@ export function evaluateBudget(policy: BudgetPolicy, attempts: UsageAttempt[]) {
             ),
             attempts.every(
               (attempt) => selectedUsageReport(attempt)?.snapshot.final,
-            ),
+            ) && runReports.every((report) => report.snapshot.final),
           )
         : zero,
     });

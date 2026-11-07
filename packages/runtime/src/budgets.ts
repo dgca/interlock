@@ -71,6 +71,7 @@ export class Budgets {
         result: evaluateBudget(
           record.budget!,
           this.usage.attemptsForRuns(scope),
+          this.usage.runReportsForRuns(scope),
         ),
       };
     });

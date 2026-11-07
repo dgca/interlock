@@ -77,7 +77,63 @@ Executor and observer reports have independent cumulative sequences and finality
 
 Once an observer report exists, its entire snapshot takes precedence over the executor snapshot in both usage totals and budget checks. Sources are never added together or merged field by field. Missing observer metrics remain unknown even if the executor supplied them. A later executor report remains inspectable but does not change selected usage. The first observer report can raise or lower selected totals and can change coverage or budget admission. Collect all available measurements before reporting; use `final:true` only when they are complete.
 
-Attribute measurements to the specific claim attempt. Do not report a shared session's lifetime totals against every assignment. Session overhead outside an attempt and run-level observer reporting are unsupported.
+Attribute measurements to the specific claim attempt when work occurs during a claim. Do not report a shared session's lifetime totals against an assignment. When an executor session incurs overhead outside assignments, use run-level observer reporting.
+
+## Report run-level observer usage outside claim attempts
+
+When an executor session or orchestrator serves multiple assignments in a run (such as a context continuity group), tokens spent between assignments—reading the next briefing, resuming after a wait, recovering from an error, or awaiting a human answer—belong to no single claim attempt.
+
+An observer can report this overhead directly against a run by providing `runId`, `source:"observer"`, and omitting `workId`, `attempt`, and `token`:
+
+```json
+{
+  "source": "observer",
+  "runId": "RUN_ID",
+  "streamId": "session-continuity-1",
+  "session": {
+    "executorId": "claude",
+    "sessionId": "session-abc-123"
+  },
+  "snapshot": {
+    "sequence": 1,
+    "final": true,
+    "models": [
+      {
+        "provider": "example-provider",
+        "model": "example-model",
+        "inputTokens": 250,
+        "outputTokens": 30
+      }
+    ]
+  }
+}
+```
+
+### When to use attempt vs run reporting
+
+- **Attempt reporting (`workId`, `attempt`)**: Use for model activity executed during a specific claim attempt. Executor reports require the claim token; attempt-level observer reports require an ended attempt and omit the token.
+- **Run reporting (`runId`, `source:"observer"`)**: Use for session and orchestrator tokens spent between assignments or outside any claim attempt. Requires `source:"observer"` and omits tokens.
+
+### Streams and identity
+
+Multiple observer streams can report for the same run without overwriting each other. Interlock keys run streams by `runId` and `streamId`. `streamId` defaults to `${session.executorId}:${session.sessionId}` when `session` is provided, or `"default"` when both are omitted. Providing distinct stream IDs or sessions allows different executor sessions serving the same run to maintain independent reporting streams.
+
+### Lifecycle and acceptance window
+
+Run-level observer reports are accepted while the target run is active (`pending`, `waiting`, `running`). After a run ends (`completed`, `failed`, or `cancelled`), reports are accepted for a bounded 1-hour grace window (`RUN_USAGE_GRACE_MS`) from the run's end time, allowing late measurements from external monitors to land before settling. Reports attempted after this window are rejected.
+
+### Rules and aggregation
+
+Run-level reports follow the exact same cumulative sequence monotonicity, duplicate idempotency (`applied:false`), cost attribution, and immutable final snapshot rules as attempt reports.
+
+Run-level usage is added once into `get_run_usage` totals (and scoped descendants when `includeDescendants:true`). In `groupBy` breakdowns:
+
+- `groupBy: "run"` includes run-level streams in that run's totals.
+- `groupBy: "node"` labels run-level streams as `Run-level usage` with `nodeId: null`.
+- `groupBy: "attempt"` includes each stream as an entry labelled `Run-level usage` with `attempt: null` and `workId: null`.
+- `groupBy: "worker"` attributes the stream to `session.executorId` if provided.
+
+Run budgets evaluate run-level usage under the same rules as attempt usage. Token and cost limits include run-level metrics, and `unknownUsage: "block"` blocks new claims if any run stream lacks final figures for configured metrics. Claims limits count assignment reservations only and are unaffected by run streams.
 
 ## Inspect totals and attribution
 
@@ -113,9 +169,9 @@ The CLI uses the same request contracts as MCP. `report-usage` accepts either so
 
 ## Existing data and retention
 
-Usage receipts use the existing `usageAttempts` document collection. Observer snapshots are separate optional fields on those receipts; no database schema migration is needed. Existing snapshots remain executor reports. Historical attempts without receipts remain unknown and cannot receive observer reports. The latest legacy attempt can report as executor if its token is still retained by the work record. Older replaced or revoked legacy tokens cannot create attribution retroactively. Claim timestamps unavailable in legacy data remain null.
+Usage receipts use the `usageAttempts` document collection, and run-level observer streams use `runUsage`. Observer snapshots are separate optional fields on attempt receipts; no database schema migration is needed. Existing snapshots remain executor reports. Historical attempts without receipts remain unknown and cannot receive observer reports. The latest legacy attempt can report as executor if its token is still retained by the work record. Older replaced or revoked legacy tokens cannot create attribution retroactively. Claim timestamps unavailable in legacy data remain null.
 
-Receipts survive restart, retries, and published-definition cleanup. Deleting a workflow's run history also deletes its usage receipts. Portable workflow bundles exclude usage, just as they exclude runs. Summaries bound the returned groups, not the database scan or lifetime of retained history.
+Receipts survive restart, retries, and published-definition cleanup. Deleting a workflow's run history also deletes its usage receipts and run-level usage streams. Portable workflow bundles exclude usage, just as they exclude runs. Summaries bound the returned groups, not the database scan or lifetime of retained history.
 
 ## Usage in workflow comparisons
 

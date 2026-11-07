@@ -2606,11 +2606,17 @@ it.each(['stdio', 'http'])(
       expect(
         tools.find((tool) => tool.name === 'report_usage')!.inputSchema
           .required,
-      ).toEqual(expect.arrayContaining(['workId', 'attempt', 'snapshot']));
+      ).toEqual(expect.arrayContaining(['snapshot']));
       const reportSchema = tools.find(
         (tool) => tool.name === 'report_usage',
       )!.inputSchema;
       expect(reportSchema.required).not.toContain('token');
+      expect(reportSchema.required).not.toContain('workId');
+      expect(reportSchema.required).not.toContain('attempt');
+      expect(reportSchema.required).not.toContain('runId');
+      expect(reportSchema.properties?.runId).toBeDefined();
+      expect(reportSchema.properties?.streamId).toBeDefined();
+      expect(reportSchema.properties?.session).toBeDefined();
       expect(reportSchema.properties?.source).toMatchObject({
         enum: ['executor', 'observer'],
         default: 'executor',
@@ -2825,6 +2831,50 @@ it.each(['stdio', 'http'])(
         if (observerUrl === undefined) delete process.env.INTERLOCK_URL;
         else process.env.INTERLOCK_URL = observerUrl;
       }
+      const runObserverInput = {
+        source: 'observer',
+        runId: claim.runId,
+        streamId: 'session-transport',
+        session: { executorId: 'harness', sessionId: 'sess-1' },
+        snapshot: {
+          sequence: 1,
+          final: true,
+          models: [
+            {
+              provider: 'test',
+              model: 'session-overhead',
+              inputTokens: 50,
+              outputTokens: 10,
+            },
+          ],
+        },
+      };
+      expect(await call('report_usage', runObserverInput)).toMatchObject({
+        applied: true,
+        source: 'observer',
+        runId: claim.runId,
+        streamId: 'session-transport',
+      });
+      const combinedUsage = await call('get_run_usage', {
+        runId: claim.runId,
+        groupBy: 'attempt',
+      });
+      expect(combinedUsage.totals).toMatchObject({
+        attempts: 1,
+        reportedAttempts: 1,
+        runStreams: 1,
+        tokens: {
+          inputTokens: { value: 200, coverage: 'complete' },
+          outputTokens: { value: 40, coverage: 'complete' },
+        },
+      });
+      expect(combinedUsage.groups).toHaveLength(2);
+      expect(combinedUsage.groups[1]).toMatchObject({
+        label: 'Run-level usage (session-transport)',
+        streamId: 'session-transport',
+        source: 'observer',
+        workerId: 'harness',
+      });
       expect(
         (
           await client.callTool({
