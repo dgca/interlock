@@ -1,0 +1,10 @@
+{
+  "workflowId": "cc973113-577c-4f6c-b5ea-a213605c92cb",
+  "runId": "c0597851-3a59-4ce9-8fa1-f5c99fab5aca",
+  "externalTask": "dgca/interlock#241",
+  "repoPath": "/Users/dan/dev/interlock-worktrees/issue-241",
+  "taskDir": ".tasks/issue-241",
+  "reviewPolicy": "auto",
+  "createPr": true,
+  "delivery": "Stop before final fresh review. Parent supplies reviewer and controls PR/push/merge."
+}
