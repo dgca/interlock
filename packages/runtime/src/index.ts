@@ -29,6 +29,7 @@ import {
   buildRunExecutionProvenanceFile,
 } from './nodeData.js';
 export * from './nodeData.js';
+import { evaluateProviderDiversity } from './providerDiversity.js';
 import {
   assertContract,
   assertExternalInputContract,
@@ -53,6 +54,7 @@ import {
   InterlockError,
   readPath,
   resolveFetch,
+  resolveProvider,
   validateDefinition,
   applyWorkflowEdits,
   diagnoseDraft,
@@ -1591,6 +1593,31 @@ export class Engine {
       if (work) {
         attempt = work.attempt;
         managed = this.executors.executionProvenance(work.id, work.attempt);
+        if (
+          !managed &&
+          (work.executorModel || work.modelSelection || node.model)
+        ) {
+          const actualModel =
+            work.modelSelection?.model ??
+            work.executorModel ??
+            node.model ??
+            null;
+          const provider = resolveProvider({
+            model: actualModel,
+            catalogProvider: work.modelSelection?.provider,
+            prefixOverrides: this.executors.settings().providerPrefixes,
+          });
+          managed = {
+            profileId: work.executor ?? null,
+            harness: null,
+            sessionId: null,
+            requestedModel: work.executorModel ?? node.model ?? null,
+            actualModel,
+            provider,
+            effort: work.executorEffort ?? null,
+            usage: null,
+          };
+        }
       }
     }
     execution.provenance = buildExecutionProvenance({
@@ -1692,13 +1719,43 @@ export class Engine {
       }
       if (node.kind === 'agent') {
         if (execution.status === 'waiting') {
-          if (node.unclaimedTimeoutMs === undefined) return false;
           const work = this.store
             .work('available', run.id)
             .find((w) => w.executionId === execution!.id);
           if (
+            work &&
+            node.distinctProviderFrom?.length &&
+            work.providerDiversityBlocked
+          ) {
+            const reEval = evaluateProviderDiversity({
+              run,
+              node,
+              definition: this.definition(run),
+              engine: this,
+              profiles: this.executors.profiles(),
+              prefixOverrides: this.executors.settings().providerPrefixes,
+            });
+            if (reEval) {
+              if (reEval.status === 'selected') {
+                work.executorModel = reEval.candidate;
+                work.executorModelSource = 'node';
+                delete work.providerDiversityBlocked;
+                this.store.put('work', work);
+              } else if (reEval.status === 'blocked') {
+                work.providerDiversityBlocked = {
+                  reason: reEval.reason,
+                  excludedProviders: reEval.excludedProviders,
+                  details: reEval.details,
+                };
+                this.store.put('work', work);
+              }
+            }
+          }
+          if (node.unclaimedTimeoutMs === undefined) return false;
+          if (
             work?.budgetBlocked ||
             work?.resourceBlocked ||
+            work?.providerDiversityBlocked ||
             !work?.availableUntil ||
             Date.parse(work.availableUntil) > Date.now()
           )
@@ -1766,23 +1823,49 @@ export class Engine {
             cwdBlocked = undefined;
           }
         }
+        const diversityEval = node.distinctProviderFrom?.length
+          ? evaluateProviderDiversity({
+              run,
+              node,
+              definition: this.definition(run),
+              engine: this,
+              profiles: this.executors.profiles(),
+              prefixOverrides: this.executors.settings().providerPrefixes,
+            })
+          : null;
+        const matchedCandidateProfile =
+          diversityEval?.status === 'selected'
+            ? this.executors
+                .profiles()
+                .find((p) => p.id === diversityEval.candidate)
+            : undefined;
+        const selectedModel =
+          diversityEval?.status === 'selected'
+            ? (matchedCandidateProfile?.model ?? diversityEval.candidate)
+            : (node.model ?? this.definition(run).agentModel);
+        const selectedModelSource =
+          diversityEval?.status === 'selected'
+            ? ('node' as const)
+            : node.model
+              ? ('node' as const)
+              : ('workflow' as const);
+        const effectiveExecutor =
+          node.executor === null
+            ? undefined
+            : (matchedCandidateProfile?.id ??
+              node.executor ??
+              this.definition(run).executor);
+
         const work: WorkRequest = {
-          ...((
-            node.executor === null
-              ? undefined
-              : (node.executor ?? this.definition(run).executor)
-          )
+          ...(node.executor !== null && selectedModel
             ? {
-                executor: node.executor ?? this.definition(run).executor,
-                ...((node.model ?? this.definition(run).agentModel)
-                  ? {
-                      executorModel:
-                        node.model ?? this.definition(run).agentModel,
-                      executorModelSource: node.model
-                        ? ('node' as const)
-                        : ('workflow' as const),
-                    }
-                  : {}),
+                executorModel: selectedModel,
+                executorModelSource: selectedModelSource,
+              }
+            : {}),
+          ...(effectiveExecutor
+            ? {
+                executor: effectiveExecutor,
                 ...(node.effort !== undefined ||
                 this.definition(run).agentEffort !== undefined
                   ? {
@@ -1837,6 +1920,21 @@ export class Engine {
             : {}),
           outputSchema: node.outputSchema,
           ...(node.resultRules ? { resultRules: node.resultRules } : {}),
+          ...(node.distinctProviderFrom
+            ? { distinctProviderFrom: node.distinctProviderFrom }
+            : {}),
+          ...(node.candidateModels
+            ? { candidateModels: node.candidateModels }
+            : {}),
+          ...(diversityEval?.status === 'blocked'
+            ? {
+                providerDiversityBlocked: {
+                  reason: diversityEval.reason,
+                  excludedProviders: diversityEval.excludedProviders,
+                  details: diversityEval.details,
+                },
+              }
+            : {}),
           status: 'available',
           attempt: 0,
           maxAttempts: node.maxAttempts,
@@ -2912,6 +3010,42 @@ export class Engine {
         throw new InterlockError('Work is not available');
       if (work.cwdBlocked) {
         throw new InterlockError(work.cwdBlocked.reason);
+      }
+      if (work.providerDiversityBlocked) {
+        throw new InterlockError(
+          `Cannot claim work ${work.id}: ${work.providerDiversityBlocked.reason}`,
+        );
+      }
+      if (work.distinctProviderFrom && work.distinctProviderFrom.length > 0) {
+        const declaredProvider = resolveProvider({
+          model: worker.modelSelection?.model,
+          catalogProvider: worker.modelSelection?.provider,
+          prefixOverrides: this.executors.settings().providerPrefixes,
+        });
+        if (declaredProvider) {
+          const run = this.run(work.runId);
+          const node = this.definition(run).nodes.find(
+            (n) => n.id === work.nodeId,
+          ) as Extract<WorkflowNode, { kind: 'agent' }> | undefined;
+          if (node) {
+            const evalCheck = evaluateProviderDiversity({
+              run,
+              node,
+              definition: this.definition(run),
+              engine: this,
+              profiles: this.executors.profiles(),
+              prefixOverrides: this.executors.settings().providerPrefixes,
+            });
+            if (
+              evalCheck &&
+              evalCheck.excludedProviders.includes(declaredProvider)
+            ) {
+              throw new InterlockError(
+                `Cannot claim work: declared model provider "${declaredProvider}" is excluded by distinctProviderFrom`,
+              );
+            }
+          }
+        }
       }
       this.pauses.assert(this.run(work.runId));
       this.executors.assertClaim(work, worker);

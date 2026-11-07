@@ -151,6 +151,9 @@ export class Continuation {
       ...(work.heldClaimCount ? { heldClaimCount: work.heldClaimCount } : {}),
       ...(work.resolvedCwd ? { resolvedCwd: work.resolvedCwd } : {}),
       ...(work.cwdBlocked ? { cwdBlocked: work.cwdBlocked } : {}),
+      ...(work.providerDiversityBlocked
+        ? { providerDiversityBlocked: work.providerDiversityBlocked }
+        : {}),
       ...(work.hold
         ? {
             hold: {
@@ -227,17 +230,19 @@ export class Continuation {
                         ? 'resource_blocked'
                         : assignment?.cwdBlocked
                           ? 'cwd_blocked'
-                          : assignment
-                            ? 'available_work'
-                            : execution?.kind === 'input' &&
-                                execution.status === 'waiting'
-                              ? 'external_input'
-                              : execution?.kind === 'wait'
-                                ? 'wait'
-                                : execution?.kind === 'batch' ||
-                                    execution?.kind === 'workflow'
-                                  ? 'children'
-                                  : 'executing';
+                          : assignment?.providerDiversityBlocked
+                            ? assignment.providerDiversityBlocked.reason
+                            : assignment
+                              ? 'available_work'
+                              : execution?.kind === 'input' &&
+                                  execution.status === 'waiting'
+                                ? 'external_input'
+                                : execution?.kind === 'wait'
+                                  ? 'wait'
+                                  : execution?.kind === 'batch' ||
+                                      execution?.kind === 'workflow'
+                                    ? 'children'
+                                    : 'executing';
         return {
           ...reference(run.id, execution?.id),
           lifecycleRunId: run.lifecycleRunId,
@@ -252,6 +257,11 @@ export class Continuation {
             : {}),
           ...(assignment?.cwdBlocked
             ? { cwdBlocked: assignment.cwdBlocked }
+            : {}),
+          ...(assignment?.providerDiversityBlocked
+            ? {
+                providerDiversityBlocked: assignment.providerDiversityBlocked,
+              }
             : {}),
           ...(run.status === 'queued' ? { admission: run.admission } : {}),
           error: run.error,

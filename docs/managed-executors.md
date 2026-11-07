@@ -214,6 +214,52 @@ Interlock records verified execution provenance on every completed node executio
 - **Loop visit count**: `visitCount` records the 1-based completed execution count of `<nodeId>` in the current run and Batch scope, enabling direct loop counting and termination without pass-through state.
 - **Script injection**: Foreground and background scripts receive `INTERLOCK_EXECUTION_PROVENANCE_FILE` containing all prior node execution records.
 
+## Provider diversity constraints (`distinctProviderFrom`)
+
+Multi-agent code review and verification workflows require review steps to execute on distinct model providers from the author and preceding reviewers (for example, Anthropic vs. OpenAI vs. Google). Interlock supports declarative provider diversity constraints directly on Agent nodes without external glue scripts.
+
+### Configuration
+
+On any `kind: "agent"` node:
+
+- `distinctProviderFrom: string[]`: Upstream Agent node IDs whose executing model providers must differ from this step.
+- `candidateModels?: string[]`: Ordered candidate models or profile targets to evaluate against diversity constraints.
+
+```json
+{
+  "id": "reviewer",
+  "kind": "agent",
+  "label": "Independent Reviewer",
+  "prompt": "Review the author's implementation...",
+  "distinctProviderFrom": ["author"],
+  "candidateModels": ["claude-3-7-sonnet", "gpt-4o", "gemini-2.0-flash"]
+}
+```
+
+### Deterministic selection and resolution order
+
+At dispatch time, Interlock iterates through candidate models in order and selects the first candidate whose provider does not collide with the actual providers recorded in execution provenance by completed executions of referenced upstream nodes:
+
+1. **Catalog & Slash notation**: Model strings containing a slash (e.g. `anthropic/claude-3-5-sonnet`, `openai/gpt-4o`) extract the substring preceding `/`.
+2. **Profile explicit provider**: Explicit `provider` declared on an executor profile.
+3. **Configurable prefix table**: Server settings in `providerPrefixes` extending or overriding default mappings.
+4. **Built-in prefix defaults**:
+   - `claude*` -> `anthropic`
+   - `gpt*`, `chatgpt*`, `o1*`, `o3*`, `o4*` -> `openai`
+   - `gemini*` -> `google`
+   - `deepseek*` -> `deepseek`
+   - `mistral*`, `codestral*` -> `mistral`
+   - `qwen*` -> `alibaba`
+   - `llama*` -> `meta`
+
+### Anti-collusion and blocker semantics
+
+Interlock guarantees that review steps never silently fall back to an excluded provider:
+
+- **`provider_diversity_unmet`**: If any referenced upstream node has not executed yet or its provider cannot be determined, the work remains unclaimed.
+- **`provider_diversity_exhausted`**: If all candidate models belong to excluded providers, or if a pinned continuity group session provider collides with upstream providers, the work remains unclaimed with this blocker reason.
+- Attempting to claim blocked work or claiming with a conflicting model/provider is rejected.
+
 ## Test an installed Pi
 
 After authenticating Pi, run the opt-in live check from a checkout:

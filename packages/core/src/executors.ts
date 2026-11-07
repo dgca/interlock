@@ -82,6 +82,9 @@ export const executorSettingsSchema = z
       .describe(
         'Server-wide allowed root directories for dynamic cwd binding.',
       ),
+    providerPrefixes: z
+      .record(z.string().trim().min(1), z.string().trim().min(1))
+      .optional(),
   })
   .strict();
 export const executorSettingsUpdateSchema = z
@@ -94,6 +97,9 @@ export const executorSettingsUpdateSchema = z
       .describe(
         'Server-wide allowed root directories for dynamic cwd binding.',
       ),
+    providerPrefixes: z
+      .record(z.string().trim().min(1), z.string().trim().min(1))
+      .optional(),
   })
   .strict();
 export const harnessNameSchema = z.enum([
@@ -166,6 +172,7 @@ export const executorProfileSchema = z
       .array(allowedRootSchema)
       .optional()
       .describe('Allowed root directories for dynamic cwd binding.'),
+    provider: z.string().trim().min(1).max(200).optional(),
     model: executorModelSchema.optional().describe('Default model ID.'),
     effort: executorEffortSchema
       .nullable()
