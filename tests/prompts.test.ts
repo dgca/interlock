@@ -390,3 +390,113 @@ it('imports deleted prompts above retained history and keeps subsequent edits us
   importWorkflows(empty.store, bundle);
   expect(empty.prompts.get(p.id).revision).toBe(p.revision);
 });
+
+it('pins prompt revisions at publish when pinPromptsAtPublish is true and runs capture pinned revisions', () => {
+  const engine = setup();
+  const p1 = prompt(engine, 'Prompt 1 v1');
+  const p2 = prompt(engine, 'Prompt 2 v1');
+  const d = definition([p1.id, p2.id]);
+  d.pinPromptsAtPublish = true;
+
+  const w = engine.create('Pinned prompt workflow', '', d);
+  engine.publish(w.id);
+
+  const v1 = engine.store.getVersion(w.id, 1)!;
+  expect(v1.pinnedPromptRevisions).toEqual({
+    [p1.id]: 1,
+    [p2.id]: 1,
+  });
+
+  // Mutate prompts to revision 2
+  update(engine, p1.id, 'Prompt 1 v2');
+  update(engine, p2.id, 'Prompt 2 v2');
+  expect(engine.prompts.get(p1.id).revision).toBe(2);
+  expect(engine.prompts.get(p2.id).revision).toBe(2);
+
+  // Run of v1 must capture revision 1 prompts, NOT revision 2
+  const run1 = engine.start(w.id, null, 1).run;
+  expect(run1.promptSnapshots).toEqual([
+    expect.objectContaining({ id: p1.id, revision: 1, content: 'Prompt 1 v1' }),
+    expect.objectContaining({ id: p2.id, revision: 1, content: 'Prompt 2 v1' }),
+  ]);
+
+  // Claim work and verify instructions contain the pinned v1 prompt content
+  const work = engine.available(run1.id)[0];
+  const claim = engine.claim(work.id, worker);
+  expect(claim.prompt).toContain(
+    '## Saved prompt: Research standards\n\nPrompt 1 v1',
+  );
+  expect(claim.prompt).toContain('Prompt 2 v1');
+  expect(claim.prompt).not.toContain('v2');
+  engine.submit(work.id, claim.token!, {});
+
+  // Unpinned workflow floats to latest prompt revisions
+  const dUnpinned = definition([p1.id]);
+  dUnpinned.pinPromptsAtPublish = false;
+  const wUnpinned = engine.create('Unpinned workflow', '', dUnpinned);
+  engine.publish(wUnpinned.id);
+  expect(
+    engine.store.getVersion(wUnpinned.id, 1)!.pinnedPromptRevisions,
+  ).toBeUndefined();
+
+  const runUnpinned = engine.start(wUnpinned.id, null, 1).run;
+  expect(runUnpinned.promptSnapshots).toEqual([
+    expect.objectContaining({ id: p1.id, revision: 2, content: 'Prompt 1 v2' }),
+  ]);
+
+  // Export bundle and verify pinnedPromptRevisions transfer
+  // Create workflow and export at prompt revision 1
+  const dGit = definition([p1.id]);
+  dGit.pinPromptsAtPublish = true;
+  const wGit = engine.create('GitOps workflow', '', dGit);
+  // Restore prompt to revision 3 matching new content
+  const pGit = prompt(engine, 'Git prompt v1');
+  const agentGit = dGit.nodes.find((n) => n.kind === 'agent')!;
+  agentGit.promptIds = [pGit.id];
+  engine.update(wGit.id, { draft: dGit, draftRevision: wGit.draftRevision });
+  engine.publish(wGit.id);
+
+  const bundle = exportWorkflows(engine.store, wGit.id);
+  expect(bundle.workflows[0].versions[0].pinnedPromptRevisions).toEqual({
+    [pGit.id]: 1,
+  });
+
+  // Import into a fresh target environment
+  const fresh = setup();
+  importWorkflows(fresh.store, bundle);
+  expect(fresh.store.getVersion(wGit.id, 1)!.pinnedPromptRevisions).toEqual({
+    [pGit.id]: 1,
+  });
+
+  // Mutate prompt in target environment to revision 2
+  update(fresh, pGit.id, 'Git prompt v2 mutated locally');
+
+  // Run of v1 in target environment must still capture pinned revision 1
+  const freshRun = fresh.start(wGit.id, null, 1).run;
+  expect(freshRun.promptSnapshots).toEqual([
+    expect.objectContaining({
+      id: pGit.id,
+      revision: 1,
+      content: 'Git prompt v1',
+    }),
+  ]);
+});
+
+it('fails run startup when a pinned prompt revision does not exist', () => {
+  const engine = setup();
+  const p = prompt(engine, 'Original content');
+  const d = definition([p.id]);
+  d.pinPromptsAtPublish = true;
+
+  const w = engine.create('Missing revision workflow', '', d);
+  engine.publish(w.id);
+
+  // Corrupt pinned revision in store to non-existent revision 99
+  const v = engine.store.getVersion(w.id, 1)!;
+  v.pinnedPromptRevisions = { [p.id]: 99 };
+  engine.store.version(v);
+
+  expect(() => engine.start(w.id, null, 1)).toThrow(
+    /Saved prompt .* revision 99 does not exist/,
+  );
+});

@@ -60,6 +60,9 @@ export const workflowBundleSchema = z
             z.object({
               version: z.number().int().positive(),
               definition: definitionSchema,
+              pinnedPromptRevisions: z
+                .record(z.string(), z.number().int().positive())
+                .optional(),
             }),
           ),
         }),

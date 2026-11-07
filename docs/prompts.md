@@ -23,7 +23,16 @@ Editing a saved prompt changes the guidance used by future runs of every workflo
 
 Each workflow run captures the latest content when it starts. Later Agent steps, loops, Batch items, claim recovery, retries, and server restart keep that content. A Workflow node starts a separate run that captures the latest instructions at its own startup. A parent and child can use different revisions if a prompt changes between their start times. Detached workflows follow the same rule.
 
-Open **Captured prompts** in run inspection to see the actual content and revisions. Agent assignments show the composed instructions and their saved prompt revisions. MCP `get_prompt` supports bounded revision history and exact revision reads. History restoration UI and prompt pinning in ordinary workflow definitions are outside the current scope.
+### Opt-in prompt pinning at publish
+
+Workflows can opt into prompt pinning by setting `pinPromptsAtPublish: true` in their workflow definition:
+
+- When publishing a workflow version with `pinPromptsAtPublish: true`, Interlock captures the exact current `revision` of every referenced saved prompt into the immutable `WorkflowVersion.pinnedPromptRevisions`.
+- Runs of that published workflow version capture those exact pinned prompt revisions and content at run startup, instead of floating to newer saved prompt revisions.
+- If a pinned prompt revision is missing, starting a run fails with a descriptive error.
+- Workflows that omit or set `pinPromptsAtPublish: false` continue to float to the latest saved revisions when runs start.
+
+Open **Captured prompts** in run inspection to see the actual content and revisions. Agent assignments show the composed instructions and their saved prompt revisions. MCP `get_prompt` supports bounded revision history and exact revision reads. History restoration UI and prompt pinning in individual nodes are outside the current scope.
 
 ## Remove an unused prompt
 

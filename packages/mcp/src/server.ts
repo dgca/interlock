@@ -452,7 +452,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'import_workflows',
-    'For an explicit starter, pass starterId from list_workflows source:starters and a stable requestId; copy:true requests another copy. New copies publish without running. Otherwise transactionally upsert portable bundle formats 1 through 7. Format 7 adds webhooks with Secret requirements, and format 5 adds schedules. Included triggers always import disabled even with force; inspect and explicitly enable later. Format 6 adds model-alias requirements. Format 4 carries safe variable requirements; variableBindings must bind each ID to a same-kind local variable or provision an unset value. Values and keys never transfer. Retained version numbers can have gaps. Identical workflow definitions are unchanged; included triggers are disabled and revisioned, automatic pause/failure state resets, and local history remains. Schedules also reset next slot/interval anchor and measured lag. Trigger identities cannot change workflow or kind. Ordinary imports skip deleted versions; restoreDeletedVersions:true explicitly restores original definitions after ownership and dependency checks. Format 3 cannot delete versions retained locally. To replace existing drafts, supply draftRevisions keyed by target workflow ID, or force:true. Force cannot overwrite published versions, shared prompt content, change ownership, or authorize restoration. Use preview_workflow_ownership and set_workflow_owner to move workflows. Prompt-bearing bundles must include referenced prompts; divergent content rejects even with force. Conflicts roll back the entire bundle. Existing runs and archive flags remain unchanged.',
+    'For an explicit starter, pass starterId from list_workflows source:starters and a stable requestId; copy:true requests another copy. New copies publish without running. Otherwise transactionally upsert portable bundle formats 1 through 7. Pass dryRun:true to preview semantic diffs against published definitions without mutating the store. Pass publish:true (with optional cascade:true) to atomically publish imported workflows. Format 7 adds webhooks with Secret requirements, and format 5 adds schedules. Included triggers always import disabled even with force; inspect and explicitly enable later. Format 6 adds model-alias requirements. Format 4 carries safe variable requirements; variableBindings must bind each ID to a same-kind local variable or provision an unset value. Values and keys never transfer. Retained version numbers can have gaps. Identical workflow definitions are unchanged; included triggers are disabled and revisioned, automatic pause/failure state resets, and local history remains. Schedules also reset next slot/interval anchor and measured lag. Trigger identities cannot change workflow or kind. Ordinary imports skip deleted versions; restoreDeletedVersions:true explicitly restores original definitions after ownership and dependency checks. Format 3 cannot delete versions retained locally. To replace existing drafts, supply draftRevisions keyed by target workflow ID, or force:true. Force cannot overwrite published versions, shared prompt content, change ownership, or authorize restoration. Use preview_workflow_ownership and set_workflow_owner to move workflows. Prompt-bearing bundles must include referenced prompts; divergent content rejects even with force. Conflicts roll back the entire bundle. Existing runs and archive flags remain unchanged.',
     {
       starterId: z.string().min(1).max(64).optional(),
       requestId: z
@@ -478,6 +478,24 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
         .describe(
           'Explicitly restore original deleted definitions from this backup. Defaults to false. Review restored callers and dependency/ownership constraints first; force does not enable restoration.',
         ),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe(
+          'Preview semantic diff against published definitions without mutating the database.',
+        ),
+      publish: z
+        .boolean()
+        .optional()
+        .describe(
+          'Atomically publish imported workflows in dependency order inside the same transaction.',
+        ),
+      cascade: z
+        .boolean()
+        .optional()
+        .describe(
+          'Cascade publication through calling workflows, updating node version references atomically.',
+        ),
     },
     (input) => {
       if (input.starterId) {
@@ -487,7 +505,10 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
           input.force !== undefined ||
           input.draftRevisions ||
           input.restoreDeletedVersions !== undefined ||
-          input.variableBindings !== undefined
+          input.variableBindings !== undefined ||
+          input.dryRun !== undefined ||
+          input.publish !== undefined ||
+          input.cascade !== undefined
         )
           throw new Error(
             'Starter imports require requestId and cannot use bundle replacement options',
@@ -512,6 +533,9 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
         draftRevisions: input.draftRevisions,
         restoreDeletedVersions: input.restoreDeletedVersions,
         variableBindings: input.variableBindings,
+        dryRun: input.dryRun,
+        publish: input.publish,
+        cascade: input.cascade,
       });
     },
   );

@@ -7,7 +7,7 @@ import {
   type VariableRequirement,
 } from '@interlock/core';
 import { Engine } from './index.js';
-import { importWorkflows } from './transfer.js';
+import { importWorkflows, type WorkflowImportResult } from './transfer.js';
 import {
   parseImportDocument,
   type ImportDocument,
@@ -276,7 +276,7 @@ export function importSelection(
   const documents = data.map((item) => inspectImportDocument(item).document);
   const bundle = combineBundles(documents);
   return engine.store.transaction(() => {
-    let imported: ReturnType<typeof importWorkflows> | undefined;
+    let imported: WorkflowImportResult | undefined;
     if (bundle) {
       try {
         imported = importWorkflows(engine.store, bundle, { variableBindings });

@@ -1015,34 +1015,38 @@ export class Engine {
       );
     return this.create(`${w.name} copy`, w.description, w.draft);
   }
-  publish(id: string, cascade = false) {
+  publish(id: string | string[], cascade = false) {
+    const targetIds = Array.isArray(id) ? id : [id];
     return this.store.transaction(() => {
-      if (!cascade) return this.publishVersion(id);
+      if (!cascade && targetIds.length === 1)
+        return this.publishVersion(targetIds[0]);
       const workflows = this.store.workflows();
       const definitions = new Map(
         workflows.map((w) => [
           w.id,
-          w.id === id
+          targetIds.includes(w.id)
             ? w.draft
             : this.store.getVersion(w.id, w.latestVersion)?.definition,
         ]),
       );
-      this.workflow(id);
-      const affected = new Set([id]);
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const w of workflows) {
-          if (
-            !affected.has(w.id) &&
-            definitions
-              .get(w.id)
-              ?.nodes.some(
-                (n) => n.kind === 'workflow' && affected.has(n.workflowId),
-              )
-          ) {
-            affected.add(w.id);
-            changed = true;
+      for (const targetId of targetIds) this.workflow(targetId);
+      const affected = new Set(targetIds);
+      if (cascade) {
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const w of workflows) {
+            if (
+              !affected.has(w.id) &&
+              definitions
+                .get(w.id)
+                ?.nodes.some(
+                  (n) => n.kind === 'workflow' && affected.has(n.workflowId),
+                )
+            ) {
+              affected.add(w.id);
+              changed = true;
+            }
           }
         }
       }
@@ -1066,20 +1070,28 @@ export class Engine {
       for (const workflowId of affected) visit(workflowId);
       for (const workflowId of ordered) {
         const w = this.workflow(workflowId);
-        if (workflowId !== id) {
+        if (!targetIds.includes(workflowId)) {
           if (!isDeepStrictEqual(w.draft, definitions.get(workflowId)))
             throw new InterlockError(
               `Cannot cascade: "${w.name}" has unpublished definition edits. Publish or discard them first.`,
             );
-          for (const node of w.draft.nodes)
-            if (node.kind === 'workflow' && affected.has(node.workflowId))
+        }
+        if (cascade) {
+          let updated = false;
+          for (const node of w.draft.nodes) {
+            if (node.kind === 'workflow' && affected.has(node.workflowId)) {
               node.version = this.workflow(node.workflowId).latestVersion;
-          w.draftRevision++;
-          this.store.put('workflows', w);
+              updated = true;
+            }
+          }
+          if (updated) {
+            w.draftRevision++;
+            this.store.put('workflows', w);
+          }
         }
         this.publishVersion(workflowId);
       }
-      return this.workflow(id);
+      return this.workflow(targetIds[targetIds.length - 1]);
     });
   }
   private publishVersion(id: string) {
@@ -1098,12 +1110,21 @@ export class Engine {
           `${n.label}: referenced workflow version does not exist`,
         );
     }
+    const pinnedPromptRevisions = definition.pinPromptsAtPublish
+      ? Object.fromEntries(
+          promptIds(definition).map((promptId) => [
+            promptId,
+            this.prompts.get(promptId).revision,
+          ]),
+        )
+      : undefined;
     w.latestVersion++;
     w.updatedAt = now();
     this.store.version({
       workflowId: id,
       version: w.latestVersion,
       definition,
+      ...(pinnedPromptRevisions ? { pinnedPromptRevisions } : {}),
       createdAt: now(),
     });
     this.store.put('workflows', w);
@@ -1132,6 +1153,7 @@ export class Engine {
     // dependencies are rejected before startup so deleted history is not replayed.
     this.versions.assertRunnable({ workflowId, version }, true);
     const definition = this.definition({ workflowId, version });
+    const targetVersion = this.store.getVersion(workflowId, version);
     const rollover = definition.nodes.find(
       (n) => n.kind === 'exit' && n.continueAsNew,
     );
@@ -1199,7 +1221,10 @@ export class Engine {
                   );
                 return prompt;
               })
-            : this.prompts.capture(definition),
+            : this.prompts.capture(
+                definition,
+                targetVersion?.pinnedPromptRevisions,
+              ),
       ...(variableReferences(definition).length
         ? {
             variableCaptures: this.options.substituteOperation

@@ -124,7 +124,12 @@ export class Prompts {
       return { id };
     });
   }
-  capture(definition: WorkflowDefinition) {
-    return promptIds(definition).map((id) => snapshotPrompt(this.get(id)));
+  capture(
+    definition: WorkflowDefinition,
+    pinnedRevisions?: Record<string, number>,
+  ) {
+    return promptIds(definition).map((id) =>
+      snapshotPrompt(this.get(id, pinnedRevisions?.[id])),
+    );
   }
 }
