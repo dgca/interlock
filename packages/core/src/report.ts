@@ -2,32 +2,10 @@ import { z } from 'zod';
 
 export const reportFilterSchema = z
   .object({
-    workflowId: z
-      .string()
-      .trim()
-      .min(1)
-      .max(256)
-      .optional()
-      .describe('Filter by workflow ID. Omission reports across the library.'),
-    since: z
-      .string()
-      .datetime({ offset: true })
-      .optional()
-      .describe('Start of the reporting window (ISO timestamp).'),
-    until: z
-      .string()
-      .datetime({ offset: true })
-      .optional()
-      .describe('End of the reporting window (ISO timestamp).'),
-    limit: z
-      .number()
-      .int()
-      .min(1)
-      .max(5000)
-      .default(500)
-      .describe(
-        'Maximum number of runs to aggregate, default 500, range 1..5000.',
-      ),
+    workflowId: z.string().trim().min(1).max(256).optional(),
+    since: z.string().datetime({ offset: true }).optional(),
+    until: z.string().datetime({ offset: true }).optional(),
+    limit: z.number().int().min(1).max(5000).default(500),
   })
   .strict();
 

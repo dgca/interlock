@@ -164,20 +164,19 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   }
   tool(
     'doctor',
-    'Read-only health and readiness check for storage integrity, disk space, enabled harness binaries, active triggers, blockers, and workflow dependencies. Optional live:true probes enabled harness model connectivity.',
+    'Read-only readiness check across storage, disk, harnesses, triggers, blockers, and dependencies. Optional live:true probes model connectivity.',
     doctorOptionsSchema,
     (options) => client.system.doctor(options),
-    doctorReportSchema,
   );
   tool(
     'workflow_report',
-    'Bounded workflow performance and cost summary: run durations, H8 admission wait, human wait, stage/node percentiles, claim wait (new vs continuing session), reliability counts, token/cost attribution, and Exit node outcomes.',
+    'Bounded workflow performance and cost report: run durations, queue wait, human wait, stage/node percentiles, claim wait, reliability, spend/coverage, and exit outcomes.',
     reportFilterSchema,
     (filter) => client.report.summary(filter),
   );
   tool(
     'workflow_simulation',
-    'Simulate a published workflow with ordered case fixtures; no model calls, scripts or network effects. action:run requires suiteId, suiteRevision, caseId, version, unique requestId; retries recover report. Returns immediately; poll action:get with id, offset, limit (default 20/max 100). Reports provide simulated contract/routing evidence with route coverage metrics, not live comparison baselines. Supports Entry, Exit, Agent, Script, Fetch, Condition, Switch, Wait (virtual clock duration/polling), and waited Workflow nodes; detached workflows, Batch, and continue-as-new Exits reject before execution. Agent unclaimed timeouts (timedOut) and onFailure:route branches are simulated. Outcomes consume matching fixtures in order. Expected Agent rejection preserves claim for correcting fixture. Max 4 active simulations. action:list filters workflowId with offset/limit. action:capture returns definition, case, prompts, and output. action:cancel stops simulation; restart marks unfinished reports interrupted. Simulation history is local and removed with its workflow.',
+    'Simulate a published workflow with ordered case fixtures; no model calls or network effects. action:run requires suiteId, suiteRevision, caseId, version, unique requestId. Poll action:get with id, offset, limit (default 20/max 100). Supports Entry, Exit, Agent, Script, Fetch, Condition, Switch, Wait, and waited Workflow nodes; detached workflows, Batch, and continue-as-new Exits reject before execution. Agent unclaimed timeouts and onFailure:route branches are simulated. Max 4 active simulations. action:list filters workflowId. action:capture returns definition, case, prompts, and output. action:cancel stops simulation.',
     simulationToolSchema,
     ({ request }) => client.testbench.simulation(request),
   );
@@ -195,7 +194,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'save_test_suite',
-    'Save a local suite without executing workflows. action:create requires workflowId and content; action:update requires id, expected revision, replacement content. Optional case fixtures (max 1000) are ordered {nodeId,kind:agent|script|fetch|workflow|wait,output|error|timedOut,expectRejection?} substitutions for workflow_simulation only; comparisons ignore them. Supply output or error, or timedOut for Agent/Wait timeouts. expectRejection requires Agent output; Fetch output is {status:100–599,headers:string record,body:JSON}. Suites have 1–25 cases, up to 50 assertions/case. Each case supplies explicit input or sourceRunId. Assertions check output paths (exists/equals/gte/lte) or root nodeId/visit/port. Invalid or stale saves reject. Updates increment revision once; no-ops preserve revision. Prior comparisons retain captures. Read current revision with read_test_suites action:get. Local suites excluded from portable bundles.',
+    'Save a local suite without executing workflows. action:create requires workflowId and content; action:update requires id, expected revision, replacement content. Optional case fixtures (max 1000) are ordered substitutions for workflow_simulation only; comparisons ignore them. Supply output or error, or timedOut for Agent/Wait timeouts. Suites have 1–25 cases, up to 50 assertions/case. Assertions check output paths or root nodeId/visit/port. Stale saves reject. Read current revision with read_test_suites action:get.',
     testSuiteSaveSchema,
     ({ request }) => {
       if (request.action === 'create') {
@@ -208,19 +207,19 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'preview_workflow_comparison',
-    'Read-only plan for two exact published versions of a suite workflow on identical saved inputs. Defaults: repetitions 1, concurrency 2; bounds: repetitions 1–10, concurrency 1–10, max 100 root runs, 64 version pins, 64 prompt IDs, 128 selected revisions totaling 1 MiB. Returns cases/input and assertion hashes, rootRunCount, dependency pins, per-side configuration identities/prompt hashes/differences, up to 50 blocker details with blockerCount, canStart and confirmation. Root-only checks validated before execution. Real runs use configured executors and may perform Script/Fetch actions. Optional sampleBudget installs independent tree-scope Agent budget on each sample. Optional configurations selects per-side complete transitive promptRevisions; omission captures current prompts. Optional trialSetup:{kind:"local_git",repository:absolutePath,commit:fullSHA} gates each sample on an independent checkout; native Fetch, Fetch polling, tracked symlinks and submodules unsupported. Scripts use clean environment and trial cwd. Use start_workflow_comparison with confirmation and unique requestId.',
+    'Read-only plan for two published versions of a suite workflow on identical saved inputs. Defaults: repetitions 1, concurrency 2. Returns cases, hashes, dependency pins, configuration identities, blocker details, and confirmation. Real runs use configured executors and may perform Script/Fetch actions. Optional sampleBudget sets per-sample Agent budget. Optional trialSetup:{kind:"local_git",repository,commit} runs each sample in an isolated checkout. Use start_workflow_comparison with confirmation and unique requestId.',
     comparisonPreviewSchema,
     (input) => client.testbench.preview(input),
   );
   tool(
     'start_workflow_comparison',
-    'Start a previewed paired live comparison. Rechecks confirmation and suite revision transactionally before creating experiment state. Changes to selected content, pins, suite or metadata require a new preview. Repeat same requestId and arguments after lost response to recover original comparison; conflicting reuse rejects. Max four active comparisons and ten active execution trees globally. Per-comparison concurrency counts root plus active descendants, including detached runs. Retries that need a new slot reject while capacity is full. Captured sampleBudget policies install atomically on each root. Captured suite/pins and prompt content persist through delayed samples and descendants. Managed Git preparation reserves capacity before root creation. Returns compact progress with configurationIds, not outputs. Use list_work/claim_work/submit_result to execute Agent work, and read_workflow_comparisons action:report to inspect progress/results. No publication or promotion occurs.',
+    'Start a previewed paired live comparison. Rechecks confirmation and suite revision transactionally. Max 4 active comparisons and 10 active execution trees. Concurrency counts root plus active descendants. Captured sampleBudget policies install on each root. Returns compact progress with configurationIds. Use list_work/claim_work/submit_result to execute Agent work, and read_workflow_comparisons action:report to inspect results.',
     comparisonStartSchema,
     (input) => client.testbench.start(input),
   );
   tool(
     'read_workflow_comparisons',
-    'Read local comparisons without executing or claiming work. request.action:list returns compact items/exact total with optional workflowId and limit default 20/max 100. Progress includes sampleBudget, running/completed/cancelled, observed/queued/activeTrees, and activeDetachedCount. action:report requires id; returns paged sample/run/counterpart links, execution errors, pass/fail/unknown checks, captured pins/prompt revisions, configurations and quality judgments. executorConditions separates requested preferences from claim declarations and reported models. metricsDetail defaults summary; full adds sample measurements and per-case statistics. Defaults: samples 10/max 25, checks 5/max 10, judgments 10/max 25, cases 5/max 25. JSON cap 256 KiB; nextOffset, nextJudgmentOffset, and truncated preserve continuation. Reports omit arbitrary inputs/outputs and tokens; use get_run_result for values. action:case returns the full immutable case, expectations and quality guidance. action:trial with id and sampleId returns trial setup, preparation/cleanup status, errors, workspace and artifact paths.',
+    'Read local comparisons without executing or claiming work. action:list returns compact items and total with optional workflowId. action:report requires id; returns paged sample links, execution errors, pass/fail checks, configurations, and quality judgments. metricsDetail:full adds sample measurements. Reports omit arbitrary inputs/outputs; use get_run_result for values. action:case returns the immutable case, expectations, and quality guidance. action:trial with id and sampleId returns trial setup, cleanup status, errors, and paths.',
     comparisonReadSchema,
     ({ request }) => {
       switch (request.action) {
@@ -412,25 +411,10 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     'list_workflows',
     'Discover workflows as compact summaries by default: id, name, description, ownerWorkflowId, archived, latestVersion, draftRevision, createdAt, updatedAt, and draftMatchesLatest. Summaries omit draft nodes, prompts, and contracts. Use get_workflow for one full draft, or includeDraft:true for the legacy full list. draftRevision counts draft saves; latestVersion is the highest published number, not the count of retained definitions. draftMatchesLatest is structural equality with the latest published definition, or null when unpublished. Omit ownerWorkflowId for all workflows, use null for the library, or a parent ID for its children.',
     {
-      source: z
-        .enum(['library', 'starters'])
-        .default('library')
-        .describe(
-          'Starters returns bundled choices and existing-copy references without definitions; library filters do not apply.',
-        ),
-      includeDraft: z
-        .boolean()
-        .default(false)
-        .describe(
-          'Include full draft definitions in every result. Omit for compact discovery summaries; get_workflow reads one full draft.',
-        ),
+      source: z.enum(['library', 'starters']).default('library'),
+      includeDraft: z.boolean().default(false),
       ownerWorkflowId: z.string().nullable().optional(),
-      includeArchived: z
-        .boolean()
-        .default(true)
-        .describe(
-          'False hides archived workflows and children of archived owners. Omission preserves all workflows.',
-        ),
+      includeArchived: z.boolean().default(true),
     },
     async ({ includeDraft, source, ...input }) => {
       if (source === 'starters') return client.workflows.starters();
@@ -482,40 +466,14 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
         .refine((v) => /\S/.test(v), 'Use a nonblank request key')
         .optional(),
       copy: z.boolean().optional(),
-      bundle: workflowBundleSchema
-        .optional()
-        .describe('Portable workflow bundle from export_workflow.'),
+      bundle: workflowBundleSchema.optional(),
       force: z.boolean().optional(),
-      variableBindings: variableImportBindingsSchema
-        .optional()
-        .describe(
-          'Format 4 requires an explicit choice for each portable variable ID: bind to a compatible local variableId, or provision an unset local value with an optional unique name. No value is imported; names never auto-bind.',
-        ),
+      variableBindings: variableImportBindingsSchema.optional(),
       draftRevisions: z.record(z.number().int().positive()).optional(),
-      restoreDeletedVersions: z
-        .boolean()
-        .optional()
-        .describe(
-          'Explicitly restore original deleted definitions from this backup. Defaults to false. Review restored callers and dependency/ownership constraints first; force does not enable restoration.',
-        ),
-      dryRun: z
-        .boolean()
-        .optional()
-        .describe(
-          'Preview semantic diff against published definitions without mutating the database.',
-        ),
-      publish: z
-        .boolean()
-        .optional()
-        .describe(
-          'Atomically publish imported workflows in dependency order inside the same transaction.',
-        ),
-      cascade: z
-        .boolean()
-        .optional()
-        .describe(
-          'Cascade publication through calling workflows, updating node version references atomically.',
-        ),
+      restoreDeletedVersions: z.boolean().optional(),
+      dryRun: z.boolean().optional(),
+      publish: z.boolean().optional(),
+      cascade: z.boolean().optional(),
     },
     (input) => {
       if (input.starterId) {
@@ -566,9 +524,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
       name: z.string(),
       detail: authoringDetailSchema,
       description: z.string().optional(),
-      definition: definitionSchema
-        .describe('Editable definition with flat nodes and edges arrays.')
-        .optional(),
+      definition: definitionSchema.optional(),
       layout: draftLayoutSchema.optional(),
       ownerWorkflowId: z.string().nullable().optional(),
     },
@@ -585,18 +541,9 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
       id: z.string(),
       name: z.string().optional(),
       description: z.string().optional(),
-      draft: definitionSchema
-        .describe(
-          'Replacement definition in the same format as create_workflow.',
-        )
-        .optional(),
+      draft: definitionSchema.optional(),
       layout: draftLayoutSchema.optional(),
-      archived: z
-        .boolean()
-        .optional()
-        .describe(
-          'Archive or restore without deleting versions or history. Archive prevents direct new runs; existing pinned invocations and active runs remain valid.',
-        ),
+      archived: z.boolean().optional(),
       draftRevision: z.number().int().optional(),
       detail: authoringDetailSchema,
     },
@@ -612,12 +559,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     {
       id: z.string(),
       draftRevision: z.number().int().positive(),
-      diagnostics: z
-        .enum(['all', 'summary'])
-        .default('all')
-        .describe(
-          'summary includes all errors and new/changed warnings anywhere in the graph, plus up to five unchanged warnings and exact counts that include every error and deduplicate only exact warnings. all (default) returns every diagnostic. Whole-graph validation always runs.',
-        ),
+      diagnostics: z.enum(['all', 'summary']).default('all'),
       edits: workflowEditsSchema,
       layout: draftLayoutSchema.optional(),
     },
@@ -629,18 +571,14 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     'Read-only preflight of the stored draft or optional candidate definition. Returns current draftRevision, saveable, publishable, and diagnostics {severity, category, stable code, path, message, optional nodeId/edgeId}. Save errors are malformed structure, unknown fields, or child ownership conflicts. Publication blockers include graph, contracts, scopes, bindings, duplicate or missing saved prompt IDs and unavailable versions. Contract warnings check a bounded primitive/object/array subset and known missing binding paths. Ambiguous sources or unsupported schemas report unknown; explicit input contracts do not hide upstream conflicts. Warnings do not prove compatibility or earlier-node availability. Runtime contract checks remain authoritative. Does not save, publish, or start a run. Requests are limited to 2 MiB including the transport envelope; oversized requests fail without saving. Reduce the request size, or omit definition to validate an already saved draft.',
     {
       id: z.string(),
-      definition: jsonSchema
-        .optional()
-        .describe(
-          'Candidate definition in the same format as create_workflow. Omit to validate the stored draft.',
-        ),
+      definition: jsonSchema.optional(),
     },
     (input) => client.workflows.validate(input),
   );
   tool(
     'list_workflow_versions',
     'List retained published definitions in numeric order with their original version numbers. Cleanup can leave gaps. latestVersion remains the publication counter; never infer retained versions from the counter. Use export_workflow to save a backup before cleanup.',
-    { id: z.string().describe('Workflow ID.') },
+    { id: z.string() },
     (input) => client.workflows.versions(input),
   );
   tool(
@@ -698,13 +636,9 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     'Start a retained published version, latest if omitted. requestId recovers the original run read-only; keep creation arguments identical. Tags inherit through children/chains. Capacity/after gates may return queued without assignments; dependencies require success, priority descends/FIFO ties. Summary supplies runId/cursor/next work; ok means accepted, not completed. Continue via briefing/waits/claims. full returns inspection; detached work may outlive parents.',
     {
       detail: mcpMutationDetailSchema,
-      limit: continuationLimitSchema.describe(
-        'Maximum nextWork items in summary mode, default 20, range 1..100. Ignored in full mode. Bounds records, not arbitrary metadata bytes.',
-      ),
+      limit: continuationLimitSchema,
       ...runStartSchema.shape,
-      input: jsonSchema.describe(
-        'A JSON value matching the workflow input contract. Pass objects and arrays directly; do not JSON-encode them into strings.',
-      ),
+      input: jsonSchema,
     },
     ({ detail, limit, ...input }) =>
       detail === 'summary'
@@ -821,14 +755,8 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
       freshContext: z.boolean().default(false),
       tools: z.array(z.string()).default([]),
       skills: z.array(z.string()).default([]),
-      claimTicket: z.string().optional().describe('One-time launcher ticket.'),
-      leaseSeconds: z
-        .number()
-        .int()
-        .min(10)
-        .max(3600)
-        .optional()
-        .describe('Override claim duration in seconds (10..3600).'),
+      claimTicket: z.string().optional(),
+      leaseSeconds: z.number().int().min(10).max(3600).optional(),
     },
     (input) => client.work.claim(input),
     claimResponseSchema,
@@ -877,14 +805,10 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     'Submit JSON satisfying the captured output contract/resultRules; preflight_result checks read-only. Rejection resultCheck supplies claimUsable, nextAction and diagnostics. Correct output under the active claim. Stop subprocesses/resource use first. Acceptance releases reservations; rejection retains them. Identical retries recover acceptance; changed output or invalid ownership rejects. Summary supplies workId/workRunId, continuation runId/runStatus, projections, cursor and next work/action. Use continuation runId/cursor with change waits. Inspect briefing for blocked or queued runs; empty work is not completion. detail:full inspects the immediate assignment run. get_run_result reads transformed output; usage reporting is separate.',
     {
       detail: mcpMutationDetailSchema,
-      limit: continuationLimitSchema.describe(
-        'Maximum nextWork items in summary mode, default 20, range 1..100. Ignored in full mode. Bounds records, not arbitrary metadata bytes.',
-      ),
+      limit: continuationLimitSchema,
       workId: z.string(),
       token: z.string(),
-      output: jsonSchema.describe(
-        'A JSON value matching the assignment output contract. Pass objects and arrays directly; do not JSON-encode them into strings.',
-      ),
+      output: jsonSchema,
     },
     ({ detail, limit, ...input }) =>
       detail === 'summary'
@@ -898,15 +822,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     {
       workId: z.string(),
       token: z.string(),
-      leaseSeconds: z
-        .number()
-        .int()
-        .min(10)
-        .max(3600)
-        .optional()
-        .describe(
-          'Seconds from now for this renewal only. Omit to reuse the original claim duration, or 300 seconds when claimLeaseSeconds is absent. An explicit value can shorten the lease.',
-        ),
+      leaseSeconds: z.number().int().min(10).max(3600).optional(),
     },
     (input) => client.work.renew(input),
   );
