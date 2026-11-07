@@ -1,0 +1,126 @@
+import { z } from 'zod';
+import {
+  executorModelSchema,
+  executorEffortSchema,
+  executorReferenceSchema,
+} from './executors.js';
+import type { WorkflowDefinition } from './index.js';
+
+export const modelAliasCandidateSchema = z
+  .object({
+    model: executorModelSchema.describe('Model ID or name for this candidate.'),
+    effort: executorEffortSchema
+      .nullable()
+      .optional()
+      .describe(
+        'Thinking effort override for this candidate; omit to inherit, null for native default.',
+      ),
+    profileId: executorReferenceSchema
+      .optional()
+      .describe('Optional executor profile override for this candidate.'),
+  })
+  .strict();
+export type ModelAliasCandidate = z.infer<typeof modelAliasCandidateSchema>;
+
+export const modelAliasNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(120)
+  .regex(
+    /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/,
+    'Use an alias name starting with an alphanumeric character, up to 120 characters.',
+  );
+
+export interface SavedModelAlias {
+  id: string;
+  name: string;
+  description: string;
+  candidates: ModelAliasCandidate[];
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ModelAliasCapture {
+  aliasId: string;
+  name: string;
+  revision: number;
+  candidates: ModelAliasCandidate[];
+}
+
+export interface ModelAliasRequirement {
+  name: string;
+  description?: string;
+}
+
+export const modelAliasRequirementSchema = z
+  .object({
+    name: modelAliasNameSchema,
+    description: z.string().max(2000).optional(),
+  })
+  .strict();
+
+export const modelAliasReadSchema = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('list'),
+      search: z.string().max(120).optional(),
+      offset: z.number().int().min(0).default(0),
+      limit: z.number().int().min(1).max(100).default(25),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('inspect'),
+      id: z.string().min(1).max(120),
+    })
+    .strict(),
+]);
+
+export const modelAliasMutationSchema = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('create'),
+      name: modelAliasNameSchema,
+      description: z.string().max(2000).default(''),
+      candidates: z.array(modelAliasCandidateSchema).min(1).max(32),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('update'),
+      id: z.string().min(1).max(120),
+      expectedRevision: z.number().int().positive(),
+      name: modelAliasNameSchema.optional(),
+      description: z.string().max(2000).optional(),
+      candidates: z.array(modelAliasCandidateSchema).min(1).max(32).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('delete'),
+      id: z.string().min(1).max(120),
+      expectedRevision: z.number().int().positive(),
+    })
+    .strict(),
+]);
+
+export type ModelAliasRead = z.input<typeof modelAliasReadSchema>;
+export type ModelAliasMutation = z.input<typeof modelAliasMutationSchema>;
+
+export function modelReferences(definition: WorkflowDefinition): string[] {
+  const refs = new Set<string>();
+  if (definition.agentModel) refs.add(definition.agentModel);
+  for (const node of definition.nodes) {
+    if (node.kind === 'agent') {
+      if (node.model) refs.add(node.model);
+      if (node.candidateModels) {
+        for (const m of node.candidateModels) {
+          if (m) refs.add(m);
+        }
+      }
+    }
+  }
+  return [...refs];
+}

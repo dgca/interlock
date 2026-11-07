@@ -72,6 +72,8 @@ import {
   setBudgetSchema,
   historyPreviewSchema,
   historyDeletionSchema,
+  modelAliasReadSchema,
+  modelAliasMutationSchema,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import {
@@ -222,6 +224,14 @@ export const appRouter = t.router({
         }),
       )
       .mutation(({ ctx, input }) => ctx.engine.variables.mutate(input)),
+  }),
+  modelAliases: t.router({
+    read: p
+      .input(modelAliasReadSchema)
+      .query(({ ctx, input }) => ctx.engine.modelAliases.read(input)),
+    mutate: p
+      .input(modelAliasMutationSchema)
+      .mutation(({ ctx, input }) => ctx.engine.modelAliases.mutate(input)),
   }),
   executors: t.router({
     settings: p.query(({ ctx }) => ctx.engine.executors.settings()),

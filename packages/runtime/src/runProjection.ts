@@ -137,6 +137,13 @@ export function projectRun(
         work.cwdBlocked.reason,
         work.createdAt ?? at,
       );
+    else if (work?.providerDiversityBlocked)
+      wait(
+        'human_request',
+        'person',
+        work.providerDiversityBlocked.reason,
+        work.createdAt ?? at,
+      );
     else if (
       managed &&
       ['needs_human', 'needs_model', 'interrupted', 'blocked'].includes(

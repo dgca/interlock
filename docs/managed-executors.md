@@ -293,3 +293,28 @@ The recovery count is persisted on the assignment and does not reset across clai
 A renewal or progress callback cancels pending escalation. Completion, a hold or a changed claim prevents a stale asynchronous response from redispatching work. Pause time is excluded from both idle intervals and no recovery starts while paused. Restart treats the old managed session as uncertain and requires the existing stop confirmation; it never replays a persisted nudge or stop as proof of safety. See [active clocks](timers.md#stall-detection-and-active-attempt-deadlines).
 
 Active execution deadline revocation also interrupts managed supervision. Retryable work is held with recovery attention, and exhausted work retains recovery attention when stop confirmation is still needed. A configured launcher stop operation is requested, but its response alone does not clear uncertain ownership. Confirm the session and subprocesses stopped through `reconcile`. Reconciliation waits for an in-flight stop operation to settle, releases exact-attempt reservations and permits a fresh ticket only for work that can still run. It does not reset failure or claim budgets. Late nudge failures and stale status responses cannot revive the revoked attempt.
+
+## Model aliases
+
+Workflows and Agent nodes can reference logical model aliases (e.g. `builder`, `reviewer`, `evaluator`) instead of hardcoded model IDs. Aliases map to an ordered list of candidate targets:
+
+```json
+{
+  "name": "reviewer",
+  "description": "Code and architecture review alias",
+  "candidates": [
+    {
+      "model": "claude-3-7-sonnet",
+      "effort": "high",
+      "profileId": "claude-code"
+    },
+    { "model": "gpt-4o", "effort": "medium" }
+  ]
+}
+```
+
+- **Referencing aliases**: Use an alias anywhere a model ID is accepted, including workflow `agentModel`, Agent node `model`, Agent node `candidateModels`, and `distinctProviderFrom` constraints.
+- **Candidate fallback**: Candidates are evaluated in declared order. The first candidate whose executor profile is available and enabled (or unconstrained) and matches any applicable provider diversity constraint is selected.
+- **Run-start pinning**: Runs capture resolved alias definitions and revisions at start time in `modelAliasCaptures` (alongside `variableCaptures`). Editing or deleting an alias mid-run never mutates active runs; continued runs and batch items inherit the pinned captures.
+- **Portable bundles**: Bundles export alias requirements (`modelAliases: [{ name: "reviewer" }]`) without local candidate overrides or private profile IDs (format version 6).
+- **Management tool**: Manage aliases with the `manage_model_aliases` tool (`create`, `update`, `delete`, `list`, `inspect`). Updates and deletion require `expectedRevision`.

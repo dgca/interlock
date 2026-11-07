@@ -4,6 +4,7 @@ import { definitionSchema } from './index.js';
 import { savedPromptSchema, promptIds } from './prompts.js';
 import { deletedVersionSchema } from './versionCleanup.js';
 import { variableRequirementSchema, variableReferences } from './variables.js';
+import { modelAliasRequirementSchema } from './modelAliases.js';
 
 export const workflowBundleSchema = z
   .object({
@@ -14,9 +15,11 @@ export const workflowBundleSchema = z
       z.literal(3),
       z.literal(4),
       z.literal(5),
+      z.literal(6),
     ]),
     variables: z.array(variableRequirementSchema).max(4096).optional(),
     prompts: z.array(savedPromptSchema).optional(),
+    modelAliases: z.array(modelAliasRequirementSchema).max(4096).optional(),
     rootId: z.string().min(1),
     workflows: z
       .array(
@@ -50,6 +53,11 @@ export const workflowBundleSchema = z
       .min(1),
   })
   .superRefine((bundle, ctx) => {
+    if (bundle.formatVersion < 6 && bundle.modelAliases?.length)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Model aliases require bundle formatVersion 6',
+      });
     if (
       bundle.formatVersion < 5 &&
       bundle.workflows.some((w) => w.schedules?.length)
