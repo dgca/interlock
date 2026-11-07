@@ -84,13 +84,11 @@ const detail = (t = trigger()) => ({
 beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   vi.clearAllMocks();
-  window.matchMedia = vi
-    .fn()
-    .mockReturnValue({
-      matches: false,
-      addEventListener() {},
-      removeEventListener() {},
-    });
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  });
   HTMLElement.prototype.scrollIntoView = vi.fn();
   vi.stubGlobal(
     'ResizeObserver',
