@@ -43,13 +43,15 @@ const stallLabels = {
 };
 type Detail = Awaited<ReturnType<typeof api.runs.get.query>> & {
   availableWork: Awaited<ReturnType<typeof api.work.list.query>>;
+  cancellableRunCount: number;
 };
 async function inspectRun(id: string): Promise<Detail> {
-  const [detail, availableWork] = await Promise.all([
+  const [detail, availableWork, cancellation] = await Promise.all([
     api.runs.get.query({ id }),
     api.work.list.query({ runId: id }),
+    api.runs.previewCancellation.query({ id, includeDetached: true, limit: 1 }),
   ]);
-  return { ...detail, availableWork };
+  return { ...detail, availableWork, cancellableRunCount: cancellation.total };
 }
 
 export function RunInspector({
@@ -367,14 +369,7 @@ export function RunInspector({
               Cancel run
             </Button>
           )}
-          {(['queued', 'running', 'waiting'].includes(run.status) ||
-            descendants.some((child) =>
-              ['queued', 'running', 'waiting'].includes(child.status),
-            ) ||
-            (data.chain &&
-              ['queued', 'running', 'waiting'].includes(
-                data.chain.latestStatus,
-              ))) && (
+          {data.cancellableRunCount > 0 && (
             <Button onClick={() => setCancellationDialog(true)}>
               Cancel run tree
             </Button>
