@@ -416,3 +416,87 @@ it.each(['continuation', 'transient'])(
     ).toHaveLength(1);
   },
 );
+it('starts a fresh availability clock after a held claim, but retains available-time before an unclaimed hold', () => {
+  const e = setup();
+  const r = start(e, { unclaimedStallMs: 1000 });
+  const c = e.claim(e.available(r.id)[0].id, worker);
+  at(2000);
+  e.manageWorkHold({
+    action: 'hold',
+    workId: c.id,
+    expectedAttempt: 1,
+    expectedRevision: 0,
+    actor: 'test',
+    category: 'other',
+    reason: 'held claim',
+    checkpointRef: 'checkpoint',
+    token: c.token,
+  });
+  at(5000);
+  e.manageWorkHold({
+    action: 'resume',
+    workId: c.id,
+    expectedAttempt: 1,
+    expectedRevision: 1,
+    actor: 'test',
+  });
+  expect(stalls(e, r.id)).toEqual([]);
+  at(5999);
+  e.pump();
+  expect(stalls(e, r.id)).toEqual([]);
+  at(6000);
+  e.pump();
+  expect(stalls(e, r.id)).toMatchObject([{ activeMs: 1000 }]);
+  const next = start(e, { unclaimedStallMs: 1000 });
+  const available = e.available(next.id)[0];
+  at(6400);
+  e.manageWorkHold({
+    action: 'hold',
+    workId: available.id,
+    expectedAttempt: 0,
+    expectedRevision: 0,
+    actor: 'test',
+    category: 'other',
+    reason: 'available hold',
+    checkpointRef: 'checkpoint',
+  });
+  at(9400);
+  e.manageWorkHold({
+    action: 'resume',
+    workId: available.id,
+    expectedAttempt: 0,
+    expectedRevision: 1,
+    actor: 'test',
+  });
+  at(9999);
+  e.pump();
+  expect(stalls(e, next.id)).toEqual([]);
+  at(10000);
+  e.pump();
+  expect(stalls(e, next.id)).toMatchObject([{ activeMs: 1000 }]);
+});
+it('keeps hot monitoring and attention off the resolved stall-history collection', () => {
+  const e = setup();
+  const r = start(e, { unclaimedStallMs: 1 });
+  at(1);
+  e.pump();
+  const active = stalls(e, r.id)[0];
+  e.store.transaction(() => {
+    for (let i = 0; i < 10000; i++)
+      e.store.put('stalls', {
+        ...active,
+        id: 'history-' + i,
+        resolvedAt: new Date().toISOString(),
+      });
+  });
+  const original = e.store.list.bind(e.store);
+  vi.spyOn(e.store, 'list').mockImplementation((collection: string) => {
+    if (collection === 'stalls')
+      throw Error('Hot path parsed historical stall collection');
+    return original(collection);
+  });
+  expect(() => e.pump()).not.toThrow();
+  expect(e.runAttention()).toMatchObject([{ reasons: ['stalled'] }]);
+  expect(e.stalls.inspect(r.id).total).toBe(1);
+  expect(e.store.forRuns('stalls', new Set([r.id]))).toHaveLength(10001);
+});

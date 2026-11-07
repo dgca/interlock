@@ -70,9 +70,9 @@ const next = [
 it('initializes empty databases and reopens current databases without a backup', () => {
   const file = path();
   const db = open(file);
-  expect(migrate(db, file)).toEqual({ from: 0, to: 10 });
+  expect(migrate(db, file)).toEqual({ from: 0, to: 11 });
   expect(db.prepare('PRAGMA synchronous').get()).toEqual({ synchronous: 2 });
-  expect(migrate(db, file)).toEqual({ from: 10, to: 10 });
+  expect(migrate(db, file)).toEqual({ from: 11, to: 11 });
   expect(existsSync(`${file}.backups`)).toBe(false);
 });
 
@@ -95,7 +95,7 @@ it('indexes queued comparison roots during schema-8 upgrade without rewriting ru
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   expect(migrate(db, file)).toMatchObject({
     from: 8,
-    to: 10,
+    to: 11,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -274,7 +274,7 @@ it('opens the previous release without rewriting records and executes its publis
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 1,
-    to: 10,
+    to: 11,
     backup: expect.any(String),
   });
   expect(
@@ -323,7 +323,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 2,
-    to: 10,
+    to: 11,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -336,7 +336,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   expect(revision).toBeGreaterThan(0);
   const reopened = new Store(file);
   connections.push(reopened);
-  expect(reopened.migration).toEqual({ from: 10, to: 10 });
+  expect(reopened.migration).toEqual({ from: 11, to: 11 });
   expect(reopened.continuation(run.id).revision).toBe(revision);
   store.remove('runs', run.id);
   expect(
@@ -358,7 +358,7 @@ it('adds run summary indexes to schema-6 databases without rewriting records', (
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 6,
-    to: 10,
+    to: 11,
     backup: expect.any(String),
   });
   expect(store.get('runs', run.id)).toEqual(run);
@@ -426,4 +426,45 @@ it('indexes human attention independently of completed assignment history', () =
     )
     .all();
   expect(JSON.stringify(plan)).toContain('work_attention');
+});
+
+it('indexes unresolved stalls during schema-10 upgrade without discarding resolved history', () => {
+  const file = path(),
+    db = open(file);
+  migrate(db, file, migrations.slice(0, 10));
+  for (const [id, resolvedAt] of [
+    ['active', null],
+    ['resolved', '2026-11-07T00:00:00Z'],
+  ])
+    db.prepare('INSERT INTO documents VALUES (?,?,?)').run(
+      'stalls',
+      id,
+      JSON.stringify({
+        id,
+        runId: 'run',
+        resolvedAt,
+        detectedAt: '2026-11-06T00:00:00Z',
+      }),
+    );
+  const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
+  expect(migrate(db, file)).toMatchObject({
+    from: 10,
+    to: 11,
+    backup: expect.any(String),
+  });
+  expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
+    before,
+  );
+  const plan = db
+    .prepare(
+      "EXPLAIN QUERY PLAN SELECT value FROM documents INDEXED BY stalls_unresolved WHERE collection = 'stalls' AND json_extract(value, '$.resolvedAt') IS NULL AND json_extract(value, '$.runId') = ?",
+    )
+    .all('run');
+  expect(JSON.stringify(plan)).toContain(
+    'SEARCH documents USING INDEX stalls_unresolved',
+  );
+  const store = new Store(file);
+  connections.push(store);
+  expect(store.currentStalls('run')).toMatchObject([{ id: 'active' }]);
+  expect(store.forRuns('stalls', new Set(['run']))).toHaveLength(2);
 });

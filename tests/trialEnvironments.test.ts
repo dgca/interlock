@@ -88,6 +88,7 @@ function plan(
   agent = false,
   language?: 'javascript' | 'legacy',
   command?: string,
+  agentSettings: Record<string, unknown> = {},
 ) {
   const d = blankDefinition();
   if (!agent)
@@ -100,6 +101,7 @@ function plan(
         command ??
         "const fs = require('node:fs'); const before = fs.readFileSync('message.txt', 'utf8'); fs.writeFileSync('message.txt', before + 'baseline'); return {before, cwd: process.cwd()};",
     });
+  if (agent) Object.assign(d.nodes[1], agentSettings);
   const w = f.engine.create('Local trial', '', d);
   f.engine.publish(w.id);
   if (!agent && d.nodes[1].kind === 'script')
@@ -1010,3 +1012,55 @@ it('requires reconciliation for pending polling Scripts after restart', async ()
     ),
   );
 });
+
+it.each([1, 2])(
+  'retains trial workspace and requires quiescence after deadline with maxAttempts %i',
+  async (maxAttempts) => {
+    const f = setup(),
+      c = plan(f, true, undefined, undefined, {
+        maxExecutionMs: 100,
+        maxAttempts,
+        maxLeaseExpiries: 3,
+      });
+    await until(() => expect(f.engine.available()).toHaveLength(2));
+    const claimed = f.engine.claim(f.engine.available()[0].id, worker);
+    const workspace = claimed.trialEnvironment!.workspace;
+    const time = Date.parse(claimed.claimedAt!);
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(time + 100);
+    try {
+      f.engine.pump();
+    } finally {
+      clock.mockRestore();
+    }
+    const report = f.engine.testbench.report({ id: c.id });
+    const sample = report.samples.find((s) => s.runId === claimed.runId)!;
+    await until(() => {
+      f.engine.pump();
+      expect(
+        f.engine.testbench.readTrial({ id: c.id, sampleId: sample.id }),
+      ).toMatchObject({ requiresQuiescence: true, cleanup: 'blocked' });
+    });
+    expect(existsSync(workspace)).toBe(true);
+    expect(f.store.get('work', claimed.id)).toMatchObject({
+      status: 'failed',
+      failureCount: 1,
+      leaseExpiryCount: 0,
+    });
+    expect(() =>
+      f.engine.testbench.cleanupTrial({ id: c.id, sampleId: sample.id }),
+    ).toThrow(/quiescent/);
+    expect(f.engine.available(claimed.runId)).toEqual([]);
+    f.engine.testbench.cleanupTrial({
+      id: c.id,
+      sampleId: sample.id,
+      quiescent: true,
+    });
+    await until(() => {
+      f.engine.pump();
+      expect(
+        f.engine.testbench.readTrial({ id: c.id, sampleId: sample.id }).cleanup,
+      ).toBe('complete');
+    });
+    expect(existsSync(workspace)).toBe(false);
+  },
+);

@@ -92,7 +92,7 @@ The same MCP tool, API operation, or CLI command accepts this request. The run i
 
 Holding claimed work ends that usage attempt as `held`. Successful claim counts remain monotonic and still count toward run budgets. A hold does not spend the Agent's failure or lease-expiry allowance. Optional `heldClaimCount` identifies released claims when interpreting the legacy combined allowance. A new claim can therefore have an attempt number above `maxAttempts` without exhausting recovery.
 
-Available work retains its remaining unclaimed timeout while held. Claimed work resumes with a full unclaimed interval. Budget gates remain in force and can keep the interval suspended after resumption. Elapsed deadlines win at equality, including a deadline crossing after the engine's initial check. Holds and intervals survive restart. Cancelling a run closes affected holds; detached descendants keep their independent lifetime.
+Available work retains its remaining unclaimed timeout while held. Claimed work resumes with a full unclaimed timeout and a fresh unclaimed-stall interval; earlier claimed execution does not count as available time. Budget gates remain in force and can keep the interval suspended after resumption. Elapsed deadlines win at equality, including a deadline crossing after the engine's initial check. Holds and intervals survive restart. Cancelling a run closes affected holds; detached descendants keep their independent lifetime.
 
 ### Inspect blockers and history
 
@@ -106,6 +106,6 @@ Read older intervals through the same tool:
 { "action": "history", "workId": "WORK_ID", "offset": 0, "limit": 20 }
 ```
 
-History reads do not pump timers, renew claims, or write state. Limits default to 20, range from 1 through 100, and offsets range from 0 through 1,000,000. `items`, `total`, and `nextOffset` support pagination. Intervals record server `heldAt`, optional `endedAt`, actors, category, reason, checkpoint reference, assignment attempt, and hold revision. End reasons distinguish `resumed` and `cancelled`.
+History reads do not pump timers, renew claims, or write state. Limits default to 20, range from 1 through 100, and offsets range from 0 through 1,000,000. `items`, `total`, and `nextOffset` support pagination. Intervals record server `heldAt`, optional `endedAt`, actors, category, reason, checkpoint reference, assignment attempt, hold revision and optional `wasClaimed`, which identifies a hold taken from an active claim. End reasons distinguish `resumed` and `cancelled`.
 
 `wallMs`, `declaredHeldMs`, and `elapsedExcludingHoldsMs` describe the assignment since it became available, including a current hold. They do not measure actual model active time or change historical benchmark timings. Terminal assignments stop accumulating elapsed time. Workflow deletion removes associated intervals; portable workflow bundles exclude run and hold state. Holds use additive document records and optional fields without a database schema migration.

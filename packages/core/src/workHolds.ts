@@ -45,6 +45,7 @@ export type WorkHoldChange = Exclude<
   { action: 'history' }
 >;
 export interface WorkHold {
+  wasClaimed?: boolean;
   revision: number;
   category: z.infer<typeof holdCategorySchema>;
   reason: string;

@@ -3416,6 +3416,20 @@ export class Engine {
     work.token = undefined;
     work.leaseUntil = undefined;
     const run = this.run(work.runId);
+    if (reason === 'deadline' && work.trialEnvironment) {
+      const interrupted = this.trials.interrupt(run);
+      work.status = 'failed';
+      this.store.put('work', work);
+      this.fail(
+        run,
+        run.executions.find((e) => e.id === work.executionId)!,
+        error,
+      );
+      for (const id of interrupted) if (id !== run.id) this.cancelTree(id);
+      this.executors.deadlineRevoked(work);
+      return;
+    }
+
     if (exhausted) {
       work.status = 'failed';
       this.fail(
@@ -3435,6 +3449,7 @@ export class Engine {
       this.event(run, 'work.retry', `${work.label}: ${error}`);
     }
     this.store.put('work', work);
+    if (reason === 'deadline') this.executors.deadlineRevoked(work);
   }
   reportFailure(id: string, token: string, error: string) {
     const runId = this.withClaim(id, token, (work) => {

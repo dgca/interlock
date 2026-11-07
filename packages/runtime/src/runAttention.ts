@@ -57,9 +57,7 @@ export function runAttention(store: Store): RunAttention[] {
         },
       });
   }
-  for (const stall of store
-    .list<StallRecord>('stalls')
-    .filter((r) => !r.resolvedAt)) {
+  for (const stall of store.currentStalls()) {
     const found = store.get<Run>('runs', stall.runId);
     if (!found || !['running', 'waiting'].includes(found.status)) continue;
     let run: Run = found;

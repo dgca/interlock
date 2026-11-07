@@ -149,6 +149,7 @@ export class ExecutorManager {
   private launchedWork = new Map<string, LauncherSession>();
   private launchIdempotency = new Map<string, LauncherSession>();
   private idleRecovering = new Set<string>();
+  private launcherStops = new Map<string, Promise<void>>();
   private running = false;
   private stopped = false;
   private scheduled = false;
@@ -1150,7 +1151,7 @@ export class ExecutorManager {
         void this.pollLauncherStatus(session).catch(() => {});
       }
       if (current?.status === 'claimed')
-        void this.recoverIdleLauncher(session, current);
+        void this.recoverIdleLauncher(session, current).catch(() => {});
       const runEnded =
         run && ['completed', 'failed', 'cancelled'].includes(run.status);
       const workEnded =
@@ -1463,6 +1464,7 @@ export class ExecutorManager {
       return w?.status === 'claimed' &&
         w.managedExecution?.state !== 'needs_human' &&
         w.attempt === captured.attempt &&
+        !this.engine.stalls.deadlineExpired(w) &&
         w.token === captured.token &&
         w.lastActivityAt === captured.lastActivityAt
         ? w
@@ -1490,7 +1492,7 @@ export class ExecutorManager {
         return;
       }
       if (!session.profile.stopCommand && !session.profile.stopUrl) return;
-      await this.stopLauncherSession(session);
+      await this.requestLauncherStop(session);
       await this.pollLauncherStatus(session);
       const work = owned();
       if (!work) return;
@@ -1521,28 +1523,19 @@ export class ExecutorManager {
       }
       this.schedule();
     } catch (error) {
-      const work = owned();
-      if (work) {
-        this.engine.manageWorkHold({
-          action: 'hold',
-          workId: work.id,
-          expectedAttempt: work.attempt,
-          expectedRevision: work.holdRevision ?? 0,
-          token: work.token,
-          actor: 'managed-idle-recovery',
-          category: 'other',
-          reason: ('Idle recovery uncertain: ' + errorText(error)).slice(
-            0,
-            1000,
-          ),
-          checkpointRef: `idle:${work.id}:${work.attempt}`,
-        });
-        const record = this.latest(work.id);
-        if (record) {
-          record.state = 'interrupted';
-          record.error = 'Idle recovery requires stop reconciliation';
-          this.write(record);
-        }
+      // Deadline/lease processing can revoke the snapshot while external delivery waits.
+      // Hold admission pumps too, so interruption must tolerate a second revocation.
+      try {
+        this.engine.pump();
+        const work = owned();
+        const record = work && this.latest(work.id);
+        if (record)
+          this.interrupted(
+            record,
+            ('Idle recovery uncertain: ' + errorText(error)).slice(0, 1000),
+          );
+      } catch {
+        // The claim may have ended, or the engine may have closed during delivery.
       }
     } finally {
       this.idleRecovering.delete(captured.id);
@@ -1663,6 +1656,19 @@ export class ExecutorManager {
         child.stdin.end();
       });
     }
+  }
+  private requestLauncherStop(session: LauncherSession) {
+    const pending = this.launcherStops.get(session.workId);
+    if (pending) return pending;
+    const stop = this.stopLauncherSession(session);
+    this.launcherStops.set(session.workId, stop);
+    void stop
+      .finally(() => {
+        if (this.launcherStops.get(session.workId) === stop)
+          this.launcherStops.delete(session.workId);
+      })
+      .catch(() => {});
+    return stop;
   }
   private async stopLauncherSession(session: LauncherSession) {
     const tokenMap = {
@@ -2400,6 +2406,35 @@ export class ExecutorManager {
     pending.resolve(q.answer);
     return { applied: true };
   }
+  deadlineRevoked(work: WorkRequest) {
+    const record = this.latest(work.id);
+    if (!record || record.attempt !== work.attempt) return;
+    const launcher = this.launchedWork.get(work.id);
+    const job = this.jobs.get(work.id);
+    if (!launcher && !job && !active(record)) return;
+    const reason =
+      'Active execution deadline expired. Stop the old session and subprocesses, then confirm before retrying.';
+    this.claimTickets.delete(work.id);
+    this.interrupted(record, reason);
+    if (work.status === 'available')
+      this.engine.holds.change({
+        action: 'hold',
+        workId: work.id,
+        expectedAttempt: work.attempt,
+        expectedRevision: work.holdRevision ?? 0,
+        actor: 'managed-executor',
+        category: 'other',
+        reason,
+        checkpointRef: `execution:${record.id}`,
+      });
+    if (job) {
+      job.abort.abort();
+      for (const answer of job.answers.values())
+        answer.reject(new Error(reason));
+      job.answers.clear();
+    }
+    if (launcher) void this.requestLauncherStop(launcher).catch(() => {});
+  }
   private interrupted(record: ManagedExecution, reason: string) {
     for (const session of this.engine.store.forRuns<Session>(
       sessionsCollection,
@@ -2452,7 +2487,7 @@ export class ExecutorManager {
     if (!record) throw new InterlockError('Execution not found');
     const launcherSession = this.launchedWork.get(record.workId);
     if (launcherSession) {
-      void this.stopLauncherSession(launcherSession).catch(() => {});
+      void this.requestLauncherStop(launcherSession).catch(() => {});
       this.interrupted(record, 'Execution stopped by the user.');
       return { stopping: true };
     }
@@ -2474,7 +2509,7 @@ export class ExecutorManager {
     );
     if (!record || record.state !== 'interrupted')
       throw new InterlockError('Interrupted execution not found');
-    if (this.jobs.has(record.workId))
+    if (this.jobs.has(record.workId) || this.launcherStops.has(record.workId))
       throw new InterlockError('The old harness is still stopping');
     const work = this.engine.store.get<WorkRequest>('work', record.workId);
     if (!work || work.attempt !== record.attempt)
@@ -2488,6 +2523,12 @@ export class ExecutorManager {
     });
     record.state = 'failed';
     this.write(record);
+    const launcher = this.launchedWork.get(work.id);
+    if (launcher) {
+      this.launchedWork.delete(work.id);
+      this.launchIdempotency.delete(launcher.idempotencyKey);
+      this.claimTickets.delete(work.id);
+    }
     if (work.status === 'held')
       this.engine.manageWorkHold({
         action: 'resume',

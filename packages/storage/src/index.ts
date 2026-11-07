@@ -79,6 +79,17 @@ export class Store {
       this.changed('runs');
     });
   }
+  currentStalls(runId?: string): import('@interlock/core').StallRecord[] {
+    const scoped =
+      runId === undefined ? '' : " AND json_extract(value, '$.runId') = ?";
+    return this.db
+      .prepare(
+        "SELECT value FROM documents INDEXED BY stalls_unresolved WHERE collection = 'stalls' AND json_extract(value, '$.resolvedAt') IS NULL" +
+          scoped,
+      )
+      .all(...(runId === undefined ? [] : [runId]))
+      .map((row) => JSON.parse(row.value as string));
+  }
   continuation(id: string) {
     return continuationState(this.db, id);
   }

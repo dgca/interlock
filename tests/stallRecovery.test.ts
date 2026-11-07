@@ -49,7 +49,7 @@ beforeEach(() => {
       }
       if (path.endsWith('/stop')) {
         stopCount++;
-        onStop?.();
+        await onStop?.();
         return Response.json({ ok: true });
       }
       return onStatus?.() ?? Response.json({ status });
@@ -292,4 +292,83 @@ it('ignores a stale status poll after confirmed recovery launches a new session'
   await settle();
   expect(e.executors.inspect(claim.id).items[0].state).toBe('running');
   expect(e.store.work()[0].status).toBe('claimed');
+});
+it('revokes a launcher deadline into stop reconciliation before a fresh ticket can dispatch', async () => {
+  const { r, claim } = await start({
+    maxExecutionMs: 100,
+    maxLeaseExpiries: 3,
+    maxAttempts: 2,
+  });
+  await tick(100);
+  expect(e.executors.inspect(claim.id).items[0].state).toBe('interrupted');
+  expect(e.runAttention()[0].reasons).toContain('recovery');
+  expect(e.store.work()[0]).toMatchObject({
+    attempt: 1,
+    failureCount: 1,
+    leaseExpiryCount: 0,
+  });
+  expect(() => e.claim(claim.id, { ...worker, claimTicket: ticket })).toThrow();
+  expect(launchCount).toBe(1);
+  expect(stopCount).toBe(1);
+  expect(e.run(r.id).status).toBe('waiting');
+  const oldTicket = ticket;
+  const interrupted = e.executors.inspect(claim.id).items[0];
+  e.executors.confirmStopped(interrupted.id, true);
+  await settle();
+  expect(launchCount).toBe(2);
+  expect(ticket).not.toBe(oldTicket);
+  const next = e.claim(claim.id, { ...worker, claimTicket: ticket });
+  expect(next).toMatchObject({
+    attempt: 2,
+    failureCount: 1,
+    leaseExpiryCount: 0,
+  });
+});
+
+it('does not acknowledge quiescence while a deadline stop request can still affect the session', async () => {
+  const { claim } = await start({ maxExecutionMs: 100, maxAttempts: 2 });
+  let release = () => {};
+  onStop = () =>
+    new Promise<void>((resolve) => {
+      release = resolve;
+    });
+  await tick(100);
+  const record = e.executors.inspect(claim.id).items[0];
+  try {
+    expect(() => e.executors.confirmStopped(record.id, true)).toThrow(
+      /stopping/,
+    );
+    expect(launchCount).toBe(1);
+  } finally {
+    release();
+    await settle();
+  }
+  e.executors.confirmStopped(record.id, true);
+  await settle();
+  expect(launchCount).toBe(2);
+});
+it('retains uncertain launcher resources and recovery attention after an exhausted deadline', async () => {
+  const { r, claim } = await start({
+    maxExecutionMs: 100,
+    maxAttempts: 1,
+    maxLeaseExpiries: 3,
+    resources: [{ source: 'literal', value: 'deadline-resource' }],
+  });
+  await tick(100);
+  expect(e.run(r.id).status).toBe('failed');
+  expect(e.store.work()[0]).toMatchObject({
+    status: 'failed',
+    failureCount: 1,
+    leaseExpiryCount: 0,
+  });
+  expect(e.inspect(r.id).work[0].resourceReservations).toMatchObject([
+    { state: 'uncertain' },
+  ]);
+  expect(e.runAttention()[0].reasons).toContain('recovery');
+  expect(stopCount).toBe(1);
+  e.executors.confirmStopped(e.executors.inspect(claim.id).items[0].id, true);
+  await settle();
+  expect(launchCount).toBe(1);
+  expect(e.inspect(r.id).work[0].resourceReservations).toBeUndefined();
+  expect(e.runAttention()).toEqual([]);
 });

@@ -137,8 +137,7 @@ export class Stalls {
   }
   inspect(runId: string, offset = 0, limit = 20) {
     const records = this.store
-      .forRuns<StallRecord>('stalls', new Set([runId]))
-      .filter((r) => !r.resolvedAt)
+      .currentStalls(runId)
       .sort((a, b) => a.detectedAt.localeCompare(b.detectedAt));
     return {
       items: records.slice(offset, offset + limit),
@@ -147,9 +146,7 @@ export class Stalls {
     };
   }
   tick() {
-    const existing = this.store
-      .list<StallRecord>('stalls')
-      .filter((r) => !r.resolvedAt);
+    const existing = this.store.currentStalls();
     const current = new Set<string>();
     for (const run of this.store.activeRuns()) {
       if (run.status === 'queued') continue;
