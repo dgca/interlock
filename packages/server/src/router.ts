@@ -563,8 +563,17 @@ export const appRouter = t.router({
       .query(({ ctx, input }) => ctx.engine.continuation.result(input)),
     find: p
       .input(runQuerySchema.default({}))
-      .query(({ ctx, input }) => ctx.engine.store.findRuns(input)),
-    list: p.query(({ ctx }) => ctx.engine.store.runs().reverse()),
+      .query(({ ctx, input }) =>
+        ctx.engine.store
+          .findRuns(input)
+          .map((run) => ({ ...run, ...ctx.engine.projectRun(run.id) })),
+      ),
+    list: p.query(({ ctx }) =>
+      ctx.engine.store
+        .runs()
+        .reverse()
+        .map((run) => ({ ...run, ...ctx.engine.projectRun(run.id) })),
+    ),
     summaries: p
       .input(runSummaryQuerySchema.default({}))
       .query(({ ctx, input }) => {
@@ -578,6 +587,7 @@ export const appRouter = t.router({
           ...page,
           items: page.items.map((run) => ({
             ...run,
+            ...ctx.engine.projectRun(run.id),
             attention: attention.get(run.id),
           })),
         };

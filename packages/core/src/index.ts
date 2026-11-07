@@ -232,6 +232,7 @@ export const resourceBindingsSchema = z.array(valueBindingSchema).max(8);
 const nodeBase = {
   id: z.string().min(1),
   label: z.string().min(1),
+  stage: z.string().trim().min(1).max(200).optional(),
   batchId: z.string().min(1).optional(),
   position: z.object({ x: z.number(), y: z.number() }).default({ x: 0, y: 0 }),
   inputSchema: contractSchema.default({}),
@@ -602,6 +603,8 @@ export type RunSummary = Pick<
   | 'parentMode'
   | 'parentExecutionId'
   | 'comparison'
+  | 'startRequestId'
+  | 'externalTask'
 > & {
   executionCount: number;
   parentWorkflowName?: string;
@@ -693,6 +696,9 @@ export interface RunEvent {
   type: string;
   message: string;
   at: string;
+  stage?: string | null;
+  waiting?: import('./runProjection.js').RunWaiting | null;
+  actor?: import('./runProjection.js').RunProjection['actor'];
 }
 export class InterlockError extends Error {}
 export class ExternalInputConflict extends InterlockError {}
@@ -1222,3 +1228,4 @@ export {
 } from './evaluation.js';
 
 export { nextCallSchema, withNextCall } from './continuation.js';
+export * from './runProjection.js';

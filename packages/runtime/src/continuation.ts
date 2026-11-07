@@ -1,4 +1,5 @@
 import { resourceCollection, resourceOwner } from './workResources.js';
+import { projectRun } from './runProjection.js';
 import type { ResourceReservation } from '@interlock/core';
 import { randomUUID } from 'node:crypto';
 import { fingerprint } from './versionIdentity.js';
@@ -39,7 +40,10 @@ const bounded = <T>(items: T[], limit: number) => ({
 export class Continuation {
   private incarnation = randomUUID();
   private stopped = new AbortController();
-  constructor(private store: Store) {}
+  constructor(
+    private store: Store,
+    private snapshot: Store['continuation'] = (id) => store.continuation(id),
+  ) {}
   stop() {
     this.stopped.abort(
       new InterlockError('Engine stopped; reconnect for a new snapshot'),
@@ -52,6 +56,9 @@ export class Continuation {
       ok: true,
       runId: snapshot.run.id,
       runStatus: snapshot.run.status,
+      stage: snapshot.run.stage,
+      waiting: snapshot.run.waiting,
+      actor: snapshot.run.actor,
       ...(snapshot.run.startRequestId !== undefined
         ? { startRequestId: snapshot.run.startRequestId }
         : {}),
@@ -81,7 +88,7 @@ export class Continuation {
 
   briefing(query: BriefingQuery) {
     const { id, limit } = briefingQuerySchema.parse(query);
-    const state = this.store.continuation(id);
+    const state = this.snapshot(id);
     const requested = state.runs.find((run) => run.id === id);
     if (!requested) throw new InterlockError('Run not found');
     const byId = new Map(state.runs.map((run) => [run.id, run]));
@@ -285,6 +292,7 @@ export class Continuation {
       });
     const summaries = state.runs.map((run) => ({
       ...run,
+      ...projectRun(this.store, run.id, state),
       definitionAvailable: Boolean(
         this.store.getVersion(run.workflowId, run.version),
       ),

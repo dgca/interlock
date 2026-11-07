@@ -18,6 +18,7 @@ export type ExecutionMetadata = Omit<
   runId: string;
   hasOutput: boolean;
   check?: Omit<NonNullable<NodeExecution['check']>, 'output'>;
+  checkSummary?: { output: string; truncated: number };
 };
 export type WorkMetadata = Pick<
   WorkRequest,
@@ -29,6 +30,7 @@ export type WorkMetadata = Pick<
   | 'executorEffortSource'
   | 'managedExecution'
   | 'id'
+  | 'createdAt'
   | 'runId'
   | 'executionId'
   | 'nodeId'
@@ -72,7 +74,7 @@ const tree = `WITH RECURSIVE tree(id, lifecycle) AS (
 const parse = <T>(rows: Record<string, unknown>[]) =>
   rows.map((row) => JSON.parse(row.value as string) as T);
 
-/** Projects only metadata. Stored inputs, outputs, prompts, and tokens never leave SQLite here. */
+/** Projects metadata plus a bounded poll-output preview. Other payloads and tokens stay in SQLite. */
 export function continuationState(db: DatabaseSync, id: string) {
   const runs = parse<RunMetadata>(
     db
@@ -89,7 +91,10 @@ export function continuationState(db: DatabaseSync, id: string) {
       .prepare(
         `${tree}
     SELECT json_set(json_remove(e.value, '$.input', '$.output', '$.result', '$.originalInput', '$.request', '$.retryChildRunIds', '$.check.output'),
-      '$.runId', d.id, '$.hasOutput', json_type(e.value, '$.output') IS NOT NULL) AS value
+      '$.runId', d.id, '$.hasOutput', json_type(e.value, '$.output') IS NOT NULL,
+      '$.checkSummary', CASE WHEN json_type(e.value, '$.check.output') IS NOT NULL THEN json_object(
+        'output', substr(e.value -> '$.check.output', 1, 512),
+        'truncated', length(e.value -> '$.check.output') > 512) END) AS value
     FROM tree JOIN documents d ON d.collection = 'runs' AND d.id = tree.id, json_each(d.value, '$.executions') e
     ORDER BY d.rowid, CAST(e.key AS INTEGER)
   `,

@@ -175,6 +175,27 @@ it.each(['stdio', 'http'])(
       });
       const toolDiscovery = await client.listTools();
       const { tools, nextCursor } = toolDiscovery;
+      expect(
+        tools.find((t) => t.name === 'start_run')!.inputSchema.properties!
+          .externalTask,
+      ).toMatchObject({
+        properties: { title: { minLength: 1, maxLength: 200 } },
+      });
+      for (const name of ['start_run', 'submit_result']) {
+        expect(
+          JSON.stringify(tools.find((t) => t.name === name)!.outputSchema),
+        ).toContain('admission_queue');
+        expect(
+          JSON.stringify(tools.find((t) => t.name === name)!.outputSchema),
+        ).toContain('lastCheck');
+      }
+      const staged = blankDefinition();
+      staged.nodes[1].stage = 'Build';
+      assertContract(
+        tools.find((t) => t.name === 'create_workflow')!.inputSchema,
+        jsonSchema.parse({ name: 'Staged', definition: staged }),
+        'staged definition',
+      );
       const instructions = client.getInstructions() ?? '';
       expect(nextCursor).toBeUndefined();
       expect(

@@ -24,6 +24,23 @@ import {
 } from '@interlock/core';
 import type { Engine } from '../index.js';
 import { validateDirectoryContainment } from '../workingDirectory.js';
+
+// Inspection needs assignment identity and configuration, never task payloads.
+type ManagedAssignment = Pick<
+  WorkRequest,
+  | 'id'
+  | 'runId'
+  | 'attempt'
+  | 'status'
+  | 'executor'
+  | 'executorModel'
+  | 'executorModelSource'
+  | 'executorEffort'
+  | 'executorPermissions'
+> & {
+  context: Pick<WorkRequest['context'], 'continuityGroup' | 'tools' | 'skills'>;
+  trialEnvironment?: { id: string };
+};
 import {
   HarnessResultError,
   HarnessModelError,
@@ -395,7 +412,7 @@ export class ExecutorManager {
       .forWork<ManagedExecution>(attemptsCollection, workId)
       .sort((a, b) => b.attempt - a.attempt)[0];
   }
-  describe(work: WorkRequest): ManagedWorkSummary | undefined {
+  describe(work: ManagedAssignment): ManagedWorkSummary | undefined {
     const record = this.latest(work.id);
     if (
       record &&
@@ -438,6 +455,10 @@ export class ExecutorManager {
       owned?.profile ??
       record?.profile ??
       (profile && this.assignmentProfile(work, profile));
+    const effort =
+      !owned && !record && resolvedProfile
+        ? this.effortProblem(resolvedProfile)
+        : undefined;
     const reason =
       binding && (binding.executorId !== work.executor || !owned)
         ? 'This continuity group is bound to another executor session'
@@ -449,14 +470,14 @@ export class ExecutorManager {
               ? 'Configure this local harness profile'
               : !profile.enabled
                 ? 'Automatic execution is disabled for this profile'
-                : (this.incompatible(work, resolvedProfile!) ??
-                  (owned || record
-                    ? undefined
-                    : this.effortProblem(resolvedProfile!)));
+                : (this.incompatible(work, resolvedProfile!) ?? effort?.reason);
     return {
       profileId: work.executor,
       harness: profile?.harness,
-      state: reason ? 'blocked' : 'queued',
+      state:
+        reason && !(effort?.pending && reason === effort.reason)
+          ? 'blocked'
+          : 'queued',
       ...(reason
         ? { reason }
         : this.atCapacity()
@@ -464,7 +485,7 @@ export class ExecutorManager {
           : {}),
     };
   }
-  private incompatible(work: WorkRequest, profile: ExecutorProfile) {
+  private incompatible(work: ManagedAssignment, profile: ExecutorProfile) {
     if (work.trialEnvironment)
       return 'Managed local Git trials require a scoped external executor; native harness dispatch is not supported';
     const missing = [
@@ -476,7 +497,7 @@ export class ExecutorManager {
       : undefined;
   }
   private assignmentProfile(
-    work: WorkRequest,
+    work: ManagedAssignment,
     configured: ExecutorProfile,
   ): ExecutorProfile {
     return {
@@ -489,7 +510,7 @@ export class ExecutorManager {
       permissions: work.executorPermissions ?? configured.permissions,
     };
   }
-  private continuityProblem(work: WorkRequest, session: Session) {
+  private continuityProblem(work: ManagedAssignment, session: Session) {
     if (
       work.executorModel !== undefined &&
       (session.requestedModel !== undefined ||
@@ -508,20 +529,32 @@ export class ExecutorManager {
     )
       return 'This continuity group already uses another thinking effort. Use the same effort or a separate continuity group.';
   }
-  private effortProblem(profile: ExecutorProfile) {
+  private effortProblem(
+    profile: ExecutorProfile,
+  ): { reason: string; pending?: boolean } | undefined {
     if (!profile.effort) return;
     if (!profile.model)
-      return 'Select a model before configuring thinking effort';
+      return { reason: 'Select a model before configuring thinking effort' };
     const catalog = this.catalogs.get(this.catalogKey(profile))?.result;
     if (!catalog)
-      return 'Checking thinking effort support for the selected model';
+      return {
+        reason: 'Checking thinking effort support for the selected model',
+        pending: true,
+      };
     if (catalog.status !== 'ready')
-      return `Thinking effort support could not be checked: ${catalog.message ?? 'model discovery unavailable'}`;
+      return {
+        reason: `Thinking effort support could not be checked: ${catalog.message ?? 'model discovery unavailable'}`,
+      };
     const model = catalog.models.find((m) => m.id === profile.model);
     if (!model?.effortLevels)
-      return 'This model does not report thinking effort choices. Use native default or select a model with reported support.';
+      return {
+        reason:
+          'This model does not report thinking effort choices. Use native default or select a model with reported support.',
+      };
     if (!model.effortLevels.includes(profile.effort))
-      return `Thinking effort ${profile.effort} is not supported by ${profile.model}. Choose a supported level or use native default.`;
+      return {
+        reason: `Thinking effort ${profile.effort} is not supported by ${profile.model}. Choose a supported level or use native default.`,
+      };
   }
   assertClaim(work: WorkRequest) {
     const record = this.latest(work.id);

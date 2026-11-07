@@ -1,5 +1,29 @@
 # Author and operate workflows
 
+## Project run stages and waiting
+
+Nodes can set optional `stage` text, trimmed to 1–200 characters. Use the node editor's Stage field or the same field in definitions and `edit_workflow` node updates. This changes reporting, not routing.
+
+All run summaries, full run/descendant inspection, briefings, compact start/submission responses, and new event snapshots expose `stage`, `waiting`, and `actor`. Stage is the deepest active label across waited children and Batch items; detached children stay independent. Equal depths use latest execution start, then ascending run/node IDs. An unlabeled child falls back to its labeled active ancestor. Terminal runs return null stage and waiting, and engine actor.
+
+`waiting` is null during execution, or `{kind, detail, since}`. Detail identifies the run, node, execution, and assignment when present. `since` uses a persisted execution, assignment, hold or budget timestamp; reads and restart do not reset it. Resource waits use assignment creation as their available persisted anchor.
+
+| Kind             | Current meaning                                                       | Actor                                     |
+| ---------------- | --------------------------------------------------------------------- | ----------------------------------------- |
+| `claim_queue`    | Connected Agent available                                             | agent                                     |
+| `managed_launch` | Managed assignment awaiting dispatch                                  | engine                                    |
+| `human_request`  | Managed permission, question, configuration, model choice or recovery | person                                    |
+| `input_node`     | External submission or acceptance required                            | agent                                     |
+| `hold`           | Assignment or external-input acceptance held                          | person                                    |
+| `budget`         | New claim blocked by budget                                           | person                                    |
+| `resource`       | Shared resource occupied                                              | engine, or person for uncertain ownership |
+| `timer`          | Wait deadline pending                                                 | engine                                    |
+| `poll`           | Polling Wait pending                                                  | engine                                    |
+
+Person applies only when every active waited leaf requires intervention. A branch that can progress takes precedence, then agent before engine, then the stage tie order. External input uses agent because an integration can submit and accept automatically. Read briefing blocker lists to see branches omitted by the single waiting choice. Claimed connected work uses agent with null waiting; native execution uses engine.
+
+Polling detail includes deadlines and `lastCheck` with count, at, optional error capped at 500 characters, and optional JSON output text capped at 512 characters. `truncated` indicates an incomplete preview; use full inspection for the original output. `pause` and `admission_queue` are reserved kinds and are not emitted on this baseline. Existing `waitReason` stays compatible. Historical events can omit projection fields; new events capture them when recorded.
+
 ## Manage run budgets
 
 Optional [run budgets](run-budgets.md) stop new Agent claims when limits are reached. Use `get_run_budget` to inspect policy and usage, and `set_run_budget` for an authorized adjustment. `next:adjust_budget` and budget blockers identify recoverable gates; already claimed work can finish. Keep detached scope and incomplete-report policy explicit.

@@ -1,6 +1,7 @@
 import { BackgroundScripts, UncertainScript } from './backgroundScripts.js';
 import { scriptOperationSchema, type ScriptOperation } from '@interlock/core';
 import { runAttention } from './runAttention.js';
+import { projectRun } from './runProjection.js';
 import { WorkResources } from './workResources.js';
 import { ExecutorManager } from './executors/manager.js';
 import { resolveAndValidateCwd } from './workingDirectory.js';
@@ -174,7 +175,9 @@ export class Engine {
     this.executors = new ExecutorManager(this, cwd);
     this.simulations = new Simulations(store, cwd);
     this.chains = new RunChains(store);
-    this.continuation = new Continuation(store);
+    this.continuation = new Continuation(store, (id) =>
+      this.projectionState(id),
+    );
     this.externalInputs = new ExternalInputs(store, {
       run: (id) => this.run(id),
       node: (run, execution) => {
@@ -339,6 +342,7 @@ export class Engine {
       type,
       message: text,
       at: now(),
+      ...this.projectRun(run.id, run),
     });
     queueMicrotask(() => this.listeners.forEach((listener) => listener()));
   }
@@ -1109,6 +1113,15 @@ export class Engine {
   runAttention() {
     return runAttention(this.store);
   }
+  private projectionState(id: string) {
+    const state = this.store.continuation(id);
+    for (const work of state.work)
+      if (work.executor) work.managedExecution = this.executors.describe(work);
+    return state;
+  }
+  projectRun(id: string, override?: Run) {
+    return projectRun(this.store, id, this.projectionState(id), override);
+  }
   inspect(id: string) {
     const run = this.run(id);
     const handledFailure = this.handledWorkflowFailure(run);
@@ -1138,7 +1151,7 @@ export class Engine {
     }
     const chain = this.chains.read(run);
     return {
-      run,
+      run: { ...run, ...this.projectRun(id) },
       externalInputHeldByRunId: this.store.externalInputHoldOwner(run.id),
       ...(handledFailure ? { handledFailure } : {}),
       ...(chain
@@ -1150,9 +1163,9 @@ export class Engine {
           }
         : {}),
       counterpartRunId: this.testbench.counterpart(run),
-      descendants: allRuns.filter(
-        (child) => child.id !== id && ids.has(child.id),
-      ),
+      descendants: allRuns
+        .filter((child) => child.id !== id && ids.has(child.id))
+        .map((child) => ({ ...child, ...this.projectRun(child.id) })),
       descendantWork: this.store
         .work()
         .filter((work) => ids.has(work.runId))

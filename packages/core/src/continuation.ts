@@ -11,6 +11,7 @@ import {
 import { z } from 'zod';
 import { modelTierSchema } from './modelTiers.js';
 import { runChainLinkSchema } from './runChains.js';
+import { runProjectionSchema } from './runProjection.js';
 
 export const briefingQuerySchema = z.object({
   id: z
@@ -164,6 +165,7 @@ export const heldWorkSchema = z.object({
   truncated: z.boolean(),
 });
 export const mutationSummarySchema = z.object({
+  ...runProjectionSchema.shape,
   chain: runChainLinkSchema.optional(),
   ok: z.literal(true),
   startRequestId: z.string().optional(),

@@ -123,6 +123,18 @@ export function NodeInspector({
             value={node.label}
             onChange={(e) => patch({ label: e.target.value })}
           />
+          <TextInput
+            mb="md"
+            label="Stage"
+            description="Optional label used in run summaries."
+            maxLength={200}
+            value={node.stage ?? ''}
+            onChange={(e) =>
+              patch({
+                stage: e.target.value.trim() ? e.target.value : undefined,
+              })
+            }
+          />
         </NodeSection>
         {node.kind === 'fetch' && (
           <NodeSection name="work">

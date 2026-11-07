@@ -3,6 +3,7 @@ import {
   Placeholder,
 } from '../../components/LoadingSkeleton/LoadingSkeleton';
 import { attentionText, waitReasonText, type RunTab } from './runAttention';
+import { runProjectionText } from './runProjectionText';
 import { Button, Group, Tabs, Text } from '@mantine/core';
 import { useEffect, useRef, useState } from 'react';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
@@ -187,15 +188,26 @@ export function RunList({
                   </span>
                   <span className="run-status">
                     <Badge status={r.status} />
-                    {r.attention ? (
-                      <small className="run-attention">
-                        {attentionText(r.attention)}
+                    {r.actor ? (
+                      <small className="run-wait-reason">
+                        {runProjectionText(
+                          r,
+                          r.waiting?.kind === 'human_request' && r.attention
+                            ? attentionText(r.attention)
+                            : undefined,
+                        )}
                       </small>
-                    ) : r.waitReason ? (
+                    ) : r.waitReason && !r.attention ? (
                       <small className="run-wait-reason">
                         {waitReasonText[r.waitReason]}
                       </small>
                     ) : null}
+                    {r.attention &&
+                      (!r.actor || r.waiting?.kind !== 'human_request') && (
+                        <small className="run-attention">
+                          {attentionText(r.attention)}
+                        </small>
+                      )}
                   </span>
                   <span>{new Date(r.createdAt).toLocaleString()}</span>
                   <span>{r.executionCount}</span>

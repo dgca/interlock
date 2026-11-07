@@ -20,6 +20,12 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Node**: A step in a workflow. A node can invoke another workflow.
 
+**Stage**: An optional author-chosen label on a node. A run's stage is the deepest active label in its waited run tree.
+
+**Waiting reason**: One structured explanation of what a run currently awaits, with its persisted start time and bounded detail.
+
+**Run actor**: The agent, engine, or person able to move a run forward. Person applies only when every active waited branch requires intervention.
+
 **Fetch**: A step that binds incoming data into an HTTP request and returns its response status, headers, and body.
 
 **Wait**: A step that pauses until a persisted deadline and passes its input through unchanged, or re-runs a check on a schedule until its result matches and continues with that result merged into the input.
