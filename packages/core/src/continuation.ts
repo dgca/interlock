@@ -129,6 +129,7 @@ export const continuationWorkSchema = z.object({
   }),
   attempt: z.number().int().nonnegative(),
   maxAttempts: z.number().int().positive(),
+  maxExecutionMs: z.number().int().positive().optional(),
   maxLeaseExpiries: z.number().int().min(1).max(10).optional(),
   failureCount: z.number().int().nonnegative().optional(),
   leaseExpiryCount: z.number().int().nonnegative().optional(),

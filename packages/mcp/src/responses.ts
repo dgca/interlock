@@ -36,6 +36,13 @@ export { withNextCall } from '@interlock/core';
 // Required compact fields are validated by the runtime's complete summary schema.
 // Legacy payloads stay open-ended and are never transformed by these schemas.
 const inspectionFields = {
+  stalls: z
+    .object({
+      items: z.array(z.record(z.unknown())),
+      total: z.number().int(),
+      nextOffset: z.number().int().nullable(),
+    })
+    .optional(),
   run: z
     .object({ id: z.string(), status: mutationSummarySchema.shape.runStatus })
     .passthrough()
@@ -102,6 +109,7 @@ export const workListResponseSchema = z
             instructions: z.string().optional(),
           }),
           attempt: z.number().int().nonnegative(),
+          maxExecutionMs: z.number().int().positive().optional(),
           maxAttempts: z.number().int().positive(),
           maxLeaseExpiries: z.number().int().min(1).max(10).optional(),
           failureCount: z.number().int().nonnegative().optional(),
@@ -174,6 +182,9 @@ export const claimResponseSchema = z
     token: z.string(),
     workerId: z.string(),
     leaseUntil: z.string(),
+    maxExecutionMs: z.number().int().positive().optional(),
+    claimedAt: z.string().optional(),
+    lastActivityAt: z.string().optional(),
     claimLeaseSeconds: z.number().int().min(10).max(3600),
     leaseSeconds: z.number().int().min(10).max(3600).optional(),
     attempt: z.number().int().positive(),

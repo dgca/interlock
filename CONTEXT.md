@@ -85,3 +85,5 @@ Interlock defines repeatable procedures that agents and people can execute and i
 **Workflow trigger**: A configured cause of new runs, managed separately from a workflow draft. A schedule trigger starts runs at periodic slots under its overlap and missed-fire policies.
 
 **Schedule fire**: One recorded attempt or policy skip for a schedule slot. Its admission outcome is distinct from the resulting run's completion outcome.
+
+**Stall**: An observational Needs attention item emitted after an opt-in active-time threshold. Pauses and declared holds freeze its clock. Stalls preserve run status and actor; Agent active execution deadlines separately spend ordinary failure allowance. See [timers](docs/timers.md#stall-detection-and-active-attempt-deadlines).

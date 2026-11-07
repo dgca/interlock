@@ -1,3 +1,4 @@
+import { formatDuration } from '../workflows/DurationInput';
 import { PauseBanner } from '../pauses/PauseControls';
 import {
   LoadingSkeleton,
@@ -31,6 +32,12 @@ import styles from './RunInspector.module.css';
 import { ComparisonContext } from './ComparisonContext';
 import { RunUsage } from './RunUsage';
 import { runProjectionText } from './runProjectionText';
+const stallLabels = {
+  unclaimedStallMs: 'Unclaimed stall',
+  claimedIdleStallMs: 'Claimed idle stall',
+  humanWaitStallMs: 'External input stall',
+  runStallMs: 'Run transition stall',
+};
 type Detail = Awaited<ReturnType<typeof api.runs.get.query>> & {
   availableWork: Awaited<ReturnType<typeof api.work.list.query>>;
 };
@@ -677,6 +684,32 @@ export function RunInspector({
             {execution?.kind === 'switch' && execution.port && (
               <p className="hint">Followed route {execution.port}.</p>
             )}
+            {data.stalls?.items
+              .filter((s) => s.executionId === execution?.id)
+              .map((s) => (
+                <section key={s.id}>
+                  <h3>Stalled</h3>
+                  <p>
+                    {stallLabels[s.kind]} after {formatDuration(s.thresholdMs)}{' '}
+                    of active time. Waiting since{' '}
+                    {new Date(s.since).toLocaleString()}.
+                  </p>
+                </section>
+              ))}
+            {execution &&
+              data.work
+                .filter(
+                  (w) => w.executionId === execution.id && w.maxExecutionMs,
+                )
+                .map((w) => (
+                  <p className="hint" key={w.id}>
+                    {w.status === 'claimed'
+                      ? `Attempt ${w.attempt} active execution limit`
+                      : 'Active execution limit per attempt'}
+                    : {formatDuration(w.maxExecutionMs!)}. Lease renewal does
+                    not extend this limit.
+                  </p>
+                ))}
             {execution?.error && (
               <details>
                 <summary>Error details</summary>

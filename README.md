@@ -394,3 +394,5 @@ Agent assignments can [hold for external blockers](docs/work-holds.md) and resum
 ### Periodic workflow starts
 
 Manage durable interval or five-field cron schedules from each workflow's **Schedules** tab, `interlock schedules`, or MCP `read_workflow_triggers` and `manage_workflow_triggers`. New and imported schedules start disabled. Fires use idempotent starts, honor library/workflow named holds and admission limits, and expose missed fires, lag and optional automatic failure pause in inspection and **Needs attention**. See [workflow schedules](docs/schedules.md) for policies, input bindings and CLI examples.
+
+Use opt-in [stall thresholds and Agent attempt limits](docs/timers.md#stall-detection-and-active-attempt-deadlines) to surface unattended work in Needs attention. Configure local defaults through Harnesses, `interlock stalls` or MCP `manage_stalls`; workflow and node settings override them.

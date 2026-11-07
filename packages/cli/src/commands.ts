@@ -132,6 +132,10 @@ export async function runCommand(argv: string[]) {
       const { action: _action, ...input } = request;
       return client.runs.deleteHistory.mutate(input);
     }
+    case 'stalls':
+      return client.stalls.manage.mutate(
+        args.length ? await parse(args[0]) : { action: 'settings' },
+      );
     case 'executors':
       return client.executors.manage.mutate(
         args.length ? await parse(args[0]) : { action: 'list' },
@@ -490,6 +494,7 @@ export async function runCommand(argv: string[]) {
         usage: [
           'schedules <read|manage> <json|@file> (durable schedule configuration, preview, paged fires and attention; mutations use expectedRevision; create/import disabled)',
           'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value; write-only Secret creation/replacement through stdin)',
+          'stalls [json|@file] (settings by default; configure with expectedRevision/policy, inspect with runId/offset/limit)',
           'executors [json|@file] (list by default; settings/save_settings for shared concurrency, save local profiles with optional concurrency, discover models/efforts, inspect work, respond, retry_model after a model refusal, stop or reconcile an interrupted execution)',
           'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
           'workflow <id>',

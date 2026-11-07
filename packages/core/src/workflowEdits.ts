@@ -41,7 +41,7 @@ export const workflowEditsSchema = z
   .array(z.lazy(() => jsonSchema))
   .max(100)
   .describe(
-    'Ordered list, at most 100 edits. Each edit has op: add_node with node; update_node with id, set and optional unset; remove_node with id; add_edge with edge; update_edge with id, set and optional unset; remove_edge with id; or update_settings with set and optional unset. Updates replace named fields shallowly. IDs and node kinds cannot change. Settings are inputSchema, outputSchema, maxSteps, maxActiveRuns, excludeStages, executor, agentPermissions, agentModel, agentEffort, continueOnMissingResult, transientRetry. Agent model/effort override workflow defaults. agentModel/agentEffort set workflow defaults; omission inherits harness settings. Null effort uses native defaults. executor is a local profile reference. agentPermissions overrides managed Agent defaults with read-only, standard or full-access; unset inherits each harness default. Unknown fields reject the indexed operation. Node/edge objects use the workflow definition format. Added scripts default to JavaScript; existing omitted language retains Bash.',
+    'Ordered list, at most 100 edits. Each edit has op: add_node with node; update_node with id, set and optional unset; remove_node with id; add_edge with edge; update_edge with id, set and optional unset; remove_edge with id; or update_settings with set and optional unset. Updates replace named fields shallowly. IDs and node kinds cannot change. Settings include unclaimedStallMs, claimedIdleStallMs, humanWaitStallMs, runStallMs, idleRecovery, inputSchema, outputSchema, maxSteps, maxActiveRuns, excludeStages, executor, agentPermissions, agentModel, agentEffort, continueOnMissingResult, transientRetry. Agent model/effort override workflow defaults. agentModel/agentEffort set workflow defaults; omission inherits harness settings. Null effort uses native defaults. executor is a local profile reference. agentPermissions overrides managed Agent defaults with read-only, standard or full-access; unset inherits each harness default. Unknown fields reject the indexed operation. Node/edge objects use the workflow definition format. Added scripts default to JavaScript; existing omitted language retains Bash.',
   );
 function parseStrict<S extends z.ZodTypeAny>(
   schema: S,
@@ -110,6 +110,11 @@ export function draftChanges(
       'agentEffort',
       'continueOnMissingResult',
       'transientRetry',
+      'unclaimedStallMs',
+      'claimedIdleStallMs',
+      'humanWaitStallMs',
+      'runStallMs',
+      'idleRecovery',
     ].filter(
       (key) =>
         !structuralEqual(
@@ -209,6 +214,22 @@ export function applyWorkflowEdits(
         else definition.edges.splice(index, 1);
       } else {
         const current = {
+          ...(definition.unclaimedStallMs !== undefined
+            ? { unclaimedStallMs: definition.unclaimedStallMs }
+            : {}),
+          ...(definition.claimedIdleStallMs !== undefined
+            ? { claimedIdleStallMs: definition.claimedIdleStallMs }
+            : {}),
+          ...(definition.humanWaitStallMs !== undefined
+            ? { humanWaitStallMs: definition.humanWaitStallMs }
+            : {}),
+          ...(definition.runStallMs !== undefined
+            ? { runStallMs: definition.runStallMs }
+            : {}),
+          ...(definition.idleRecovery !== undefined
+            ? { idleRecovery: definition.idleRecovery }
+            : {}),
+
           ...(definition.agentEffort !== undefined
             ? { agentEffort: definition.agentEffort }
             : {}),
@@ -243,6 +264,12 @@ export function applyWorkflowEdits(
             agentEffort: true,
             continueOnMissingResult: true,
             transientRetry: true,
+            unclaimedStallMs: true,
+            claimedIdleStallMs: true,
+            humanWaitStallMs: true,
+            runStallMs: true,
+            idleRecovery: true,
+
             inputSchema: true,
             outputSchema: true,
             maxSteps: true,
@@ -259,6 +286,12 @@ export function applyWorkflowEdits(
         delete definition.agentEffort;
         delete definition.continueOnMissingResult;
         delete definition.transientRetry;
+        delete definition.unclaimedStallMs;
+        delete definition.claimedIdleStallMs;
+        delete definition.humanWaitStallMs;
+        delete definition.runStallMs;
+        delete definition.idleRecovery;
+
         Object.assign(definition, nextSettings);
       }
     } catch (error) {

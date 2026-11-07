@@ -1,3 +1,4 @@
+import { stallSettingsUpdateSchema, stallRequestSchema } from '@interlock/core';
 import {
   scheduleMutationSchema,
   scheduleReadSchema,
@@ -181,6 +182,25 @@ export const appRouter = t.router({
     manage: p.input(scheduleMutationSchema).mutation(({ ctx, input }) => {
       return ctx.engine.triggers.mutate(input);
     }),
+  }),
+  stalls: t.router({
+    manage: p.input(stallRequestSchema).mutation(({ ctx, input }) => {
+      if (input.action === 'settings') return ctx.engine.stalls.settings();
+      if (input.action === 'configure') {
+        const { action, ...q } = input;
+        return ctx.engine.stalls.configure(q);
+      }
+      return ctx.engine.stalls.inspect(input.runId, input.offset, input.limit);
+    }),
+    settings: p.query(({ ctx }) => ctx.engine.stalls.settings()),
+    configure: p
+      .input(stallSettingsUpdateSchema)
+      .mutation(({ ctx, input }) => ctx.engine.stalls.configure(input)),
+    inspect: p
+      .input(stallRequestSchema.options[2].omit({ action: true }))
+      .query(({ ctx, input }) =>
+        ctx.engine.stalls.inspect(input.runId, input.offset, input.limit),
+      ),
   }),
   variables: t.router({
     read: p

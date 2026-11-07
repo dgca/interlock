@@ -133,6 +133,7 @@ export const errorClassSchema = z.enum([
   'transient',
   'permanent',
   'missing_result',
+  'idle',
 ]);
 export type ErrorClass = z.infer<typeof errorClassSchema>;
 
@@ -141,6 +142,8 @@ export const recoveryActionSchema = z.enum([
   'retry',
   'escalate',
   'fail',
+  'nudge',
+  'relaunch',
 ]);
 export type RecoveryAction = z.infer<typeof recoveryActionSchema>;
 

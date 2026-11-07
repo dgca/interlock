@@ -21,6 +21,18 @@ const rpc = vi.hoisted(() => ({
 }));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
+    stalls: {
+      settings: {
+        query: async () => ({ id: 'library', revision: 0, policy: {} }),
+      },
+      configure: {
+        mutate: async (q: { expectedRevision: number; policy: unknown }) => ({
+          id: 'library',
+          revision: q.expectedRevision + 1,
+          policy: q.policy,
+        }),
+      },
+    },
     executors: {
       profiles: { query: rpc.profiles },
       settings: { query: rpc.settings },

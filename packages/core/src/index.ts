@@ -1,3 +1,9 @@
+export * from './stalls.js';
+import {
+  stallFields,
+  idleRecoverySchema,
+  activeClockMsSchema,
+} from './stalls.js';
 export {
   scriptOperationSchema,
   type ScriptOperation,
@@ -301,6 +307,7 @@ export const routingSchema = z.object({
 });
 export const resourceBindingsSchema = z.array(valueBindingSchema).max(8);
 const nodeBase = {
+  runStallMs: stallFields.runStallMs,
   id: z.string().min(1),
   label: z.string().min(1),
   stage: z.string().trim().min(1).max(200).optional(),
@@ -348,6 +355,14 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase,
     kind: z.literal('agent'),
+    unclaimedStallMs: stallFields.unclaimedStallMs,
+    claimedIdleStallMs: stallFields.claimedIdleStallMs,
+    idleRecovery: idleRecoverySchema.nullable().optional(),
+    maxExecutionMs: activeClockMsSchema
+      .optional()
+      .describe(
+        'Maximum total active wall-clock duration per claim attempt, independent of renewals. Pauses and declared holds are excluded.',
+      ),
     cwd: cwdBindingSchema
       .optional()
       .describe(
@@ -450,7 +465,11 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     }),
     ...fetchRequestFields,
   }),
-  z.object({ ...nodeBase, kind: z.literal('input') }),
+  z.object({
+    ...nodeBase,
+    kind: z.literal('input'),
+    humanWaitStallMs: stallFields.humanWaitStallMs,
+  }),
   z.object({
     ...nodeBase,
     kind: z.literal('wait'),
@@ -513,6 +532,8 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
 export const nodeSchema = z.preprocess(checkVariableDelivery, nodeShapeSchema);
 export type WorkflowNode = z.infer<typeof nodeSchema>;
 export const definitionSchema = z.object({
+  ...stallFields,
+  idleRecovery: idleRecoverySchema.nullable().optional(),
   cwd: cwdBindingSchema
     .optional()
     .describe(
@@ -727,6 +748,12 @@ export interface RunAncestry {
   rootWorkflowId: string;
 }
 export interface WorkRequest {
+  maxExecutionMs?: number;
+  claimedAt?: string;
+  lastActivityAt?: string;
+  availableSince?: string;
+  idleRecoveryCount?: number;
+  idleNudge?: { attempt: number; activityAt: string; at: string };
   executor?: string;
   executorPermissions?: import('./executors.js').ExecutorPermissionMode;
   executorModel?: string;

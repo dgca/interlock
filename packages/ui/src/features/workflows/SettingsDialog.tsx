@@ -1,3 +1,4 @@
+import { StallPolicyEditor } from '../executors/StallSettings';
 import { ExecutorSelect } from '../executors/ExecutorSelect';
 import {
   Button as MantineButton,
@@ -416,6 +417,10 @@ export function SettingsDialog({
                       onChange={(executor) =>
                         patchDefinition({ executor: executor ?? undefined })
                       }
+                    />
+                    <StallPolicyEditor
+                      value={settings.definition}
+                      onChange={patchDefinition}
                     />
                     <ContractEditor
                       label="Workflow input"

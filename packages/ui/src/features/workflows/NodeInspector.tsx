@@ -1,3 +1,4 @@
+import { StallPolicyEditor } from '../executors/StallSettings';
 import { ExecutorSelect } from '../executors/ExecutorSelect';
 import { AgentResourcesEditor } from './AgentResourcesEditor';
 import { useRef, useState } from 'react';
@@ -135,6 +136,24 @@ export function NodeInspector({
               })
             }
           />
+        </NodeSection>
+        <NodeSection name="work">
+          <details>
+            <summary>Stall detection</summary>
+            <StallPolicyEditor
+              value={node}
+              onChange={patch}
+              showRecovery={node.kind === 'agent'}
+              showHeading={false}
+              thresholds={
+                node.kind === 'agent'
+                  ? ['unclaimedStallMs', 'claimedIdleStallMs', 'runStallMs']
+                  : node.kind === 'input'
+                    ? ['humanWaitStallMs', 'runStallMs']
+                    : ['runStallMs']
+              }
+            />
+          </details>
         </NodeSection>
         {node.kind === 'fetch' && (
           <NodeSection name="work">
@@ -367,6 +386,27 @@ export function NodeInspector({
                 value={node.resources}
                 onChange={(resources) => patch({ resources })}
               />
+              <Switch
+                mb="md"
+                label="Limit active execution per attempt"
+                checked={node.maxExecutionMs !== undefined}
+                onChange={(e) =>
+                  patch({
+                    maxExecutionMs: e.currentTarget.checked
+                      ? 3600000
+                      : undefined,
+                  })
+                }
+              />
+              {node.maxExecutionMs !== undefined && (
+                <DurationInput
+                  label="Maximum active execution"
+                  min={1}
+                  max={2592000000}
+                  value={node.maxExecutionMs}
+                  onChange={(maxExecutionMs) => patch({ maxExecutionMs })}
+                />
+              )}
               <Switch
                 mb="md"
                 label="Route on unclaimed timeout"
