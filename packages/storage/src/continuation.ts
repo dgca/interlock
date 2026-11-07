@@ -3,7 +3,12 @@ import type { Run, NodeExecution, WorkRequest } from '@interlock/core';
 
 export type RunMetadata = Omit<
   Run,
-  'input' | 'output' | 'value' | 'executions' | 'promptSnapshots'
+  | 'input'
+  | 'output'
+  | 'value'
+  | 'executions'
+  | 'promptSnapshots'
+  | 'versionChanges'
 > & { lifecycleRunId: string };
 export type ExecutionMetadata = Omit<
   NodeExecution,
@@ -85,7 +90,7 @@ export function continuationState(db: DatabaseSync, id: string) {
     db
       .prepare(
         `${tree}
-    SELECT json_set(json_remove(d.value, '$.input', '$.output', '$.value', '$.executions', '$.promptSnapshots'), '$.lifecycleRunId', tree.lifecycle) AS value
+    SELECT json_set(json_remove(d.value, '$.input', '$.output', '$.value', '$.executions', '$.promptSnapshots', '$.versionChanges'), '$.lifecycleRunId', tree.lifecycle) AS value
     FROM tree JOIN documents d ON d.collection = 'runs' AND d.id = tree.id ORDER BY d.rowid
   `,
       )

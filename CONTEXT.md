@@ -46,7 +46,9 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Item path**: The connected work inside a Batch group, from Start to End. Each item follows this path independently and supplies its output through End.
 
-**Node execution**: One invocation of a node within a run.
+**Node execution**: One invocation of a node within a run, recording the published version that governed it.
+
+**Run version policy**: A run-local choice to remain pinned or consider the latest compatible publication before each new execution. Existing work retains its captured definition.
 
 **Tool requirement**: A named capability an agent assignment requires its executor to provide.
 

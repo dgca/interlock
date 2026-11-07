@@ -122,13 +122,34 @@ export class VersionCleanup {
     }
     blockers.sort((a, b) => fingerprint(a).localeCompare(fingerprint(b)));
     const affectedRuns = runs
-      .filter((run) => selected.has(key(run)))
+      .filter(
+        (run) =>
+          selected.has(key(run)) ||
+          run.executions.some((execution) =>
+            selected.has(
+              key({
+                workflowId: run.workflowId,
+                version: execution.version ?? run.version,
+              }),
+            ),
+          ),
+      )
       .map((run) => ({
         runId: run.id,
         workflowId: run.workflowId,
         name: run.workflowName,
         version: run.version,
         status: run.status,
+        currentDefinitionDeleted: selected.has(key(run)),
+        executionVersions: [
+          ...new Set(
+            run.executions
+              .map((execution) => execution.version ?? run.version)
+              .filter((version) =>
+                selected.has(key({ workflowId: run.workflowId, version })),
+              ),
+          ),
+        ].sort((a, b) => a - b),
       }))
       .sort((a, b) => a.runId.localeCompare(b.runId));
     const impact = {
@@ -136,7 +157,7 @@ export class VersionCleanup {
       blockers,
       affectedRuns,
       consequences:
-        'Selected definitions are deleted. Affected runs retain inputs, outputs, executions, events, prompts, and ancestry, but lose graph inspection and retry. Ordinary imports do not restore deleted versions. Explicit restoration requires an original-definition backup and valid ownership and dependencies.',
+        'Selected definitions are deleted. Affected runs retain inputs, outputs, executions, events, prompts, and ancestry. Runs bound to a selected version lose graph inspection and retry; executions from selected historical versions lose their original graph definition. Current definitions and retries remain available when not selected. Ordinary imports do not restore deleted versions. Explicit restoration requires an original-definition backup and valid ownership and dependencies.',
     };
     return {
       ...impact,

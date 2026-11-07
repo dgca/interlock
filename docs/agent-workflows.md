@@ -85,6 +85,14 @@ Work summaries also include `workflowId`, optional `parentRunId`, optional `pare
 
 Work summaries omit prompts, inputs, output schemas, and execution instructions. `claim_work` returns the complete assignment. Use `fields: "full"` to inspect complete assignments before claiming. CLI callers can use `interlock work RUN_ID --summary`. The shared API exposes `work.summaries` and `work.list`.
 
+## Manage an existing run's version
+
+By default a run stays on its starting version. `start_run.versionPolicy: "latest-compatible"` opts into compatibility checks before each new execution. Use `manage_run_version` with `request.action: "read"` for the current version, policy revision, blocker, and bounded change history. Use `"policy"` with `expectedRevision` to change that run's policy. Policy updates do not replace available or claimed assignments.
+
+For an explicit move, use `request.action: "preview"` with `runId` and an exact newer `version`, then `"apply"` with the same request, returned `confirmation`, and a reason. Preview is read-only; apply rejects stale state or blockers atomically. Available assignments, timers, input waits, active Batches, and waited calls are active executions rather than safe boundaries. Enable policy while they finish, or use a named pause to retain the next boundary for explicit apply.
+
+Saved prompts stay captured unless preview and apply both explicitly set `recapturePrompts: true`. Recapture follows the target publication's prompt pins. Variables and model aliases retain captured revisions. Inspect [run version behavior](workflow-execution.md#move-a-run-to-a-newer-version) for Batch, child, chain, and cleanup rules. Execute the assignment you actually claimed, including its captured prompt and contracts.
+
 ## Continue with compact mutation responses
 
 `start_run` and `submit_result` default to `detail: "summary"`. They return run status and continuation guidance without workflow definitions or accumulated execution payloads. Explicit `detail: "full"` includes the definition, execution history, input/output payloads, and assignments. `list_work` defaults to summaries; `claim_work` returns the complete assignment.
@@ -507,7 +515,7 @@ Compact mutation responses add `heldWork` only when needed. Their existing `next
 
 ## Continue recurring work as new
 
-A standalone workflow can opt into [continue as new](continue-as-new.md) on Exit with `continueAsNew:{maxRuns:100}`. The Exit checkpoint must match workflow inputSchema. Successors retain the published version and original prompt capture, with fresh step history and run-local input/session scopes. All budget scopes count the chain; a later policy cannot reset earlier consumption.
+A standalone workflow can opt into [continue as new](continue-as-new.md) on Exit with `continueAsNew:{maxRuns:100}`. The Exit checkpoint must match workflow inputSchema. Successors inherit the predecessor's current version, policy, and prompt capture, with fresh step history and run-local input/session scopes. Pinned chains retain their original version by default. All budget scopes count the chain; a later policy cannot reset earlier consumption.
 
 Briefings and compact mutations include chain links. On `next:continue_as_new`, follow `nextCall` to `chain.nextRunId` instead of treating the completed predecessor as a final result. Its Exit execution stores the checkpoint; final run output is available only from a normal Exit. Existing briefings and finite waits remain scoped to one run and its children.
 

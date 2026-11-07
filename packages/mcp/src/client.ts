@@ -69,6 +69,10 @@ export function createMcpClient(url?: string) {
       publish: client.workflows.publish.mutate,
     },
     runs: {
+      versionPolicy: client.runs.versionPolicy.query,
+      setVersionPolicy: client.runs.setVersionPolicy.mutate,
+      previewVersionMove: client.runs.previewVersionMove.query,
+      applyVersionMove: client.runs.applyVersionMove.mutate,
       script: client.runs.script.mutate,
       externalInputStatus: client.runs.externalInputStatus.query,
       externalInput: client.runs.externalInput.mutate,

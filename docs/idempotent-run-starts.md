@@ -2,6 +2,8 @@
 
 Use an ordinary start's optional `requestId` when an event or heartbeat can deliver the same request twice. Interlock creates the run once and returns that original run on identical redelivery, including after a lost response or server restart. Omit the key to keep existing fresh-run behavior.
 
+The optional `versionPolicy` is part of start-request identity. Keep it identical when replaying a request key. Omission preserves the pinned default; `latest-compatible` opts the created run into [safe-boundary upgrades](workflow-execution.md#move-a-run-to-a-newer-version). Inspect or update that existing run through version-policy operations instead of changing the arguments of a receipt replay.
+
 ## Start one task attempt
 
 Call MCP `start_run` with the task's original input and a stable key for this attempt:
@@ -74,7 +76,7 @@ The receipt fingerprint includes:
 - Workflow ID and original JSON input, with object key order ignored.
 - Requested version intent. An omitted version means "select latest for this new start" and remains distinct from an explicit version number.
 - The parsed optional budget and external task metadata.
-- Supplied `priority`, `after`, and `onActiveExternalTask` options. Omitted options remain distinct from explicit values.
+- Supplied `priority`, `after`, `onActiveExternalTask`, and `versionPolicy` options. Omitted options remain distinct from explicit values.
 
 If the original request omitted `version`, repeating it still returns the original run after newer versions are published. Replacing that omission with its resolved version number is a conflicting request. Current prompt edits and library archive state do not change an accepted start's identity or its captured prompt content.
 

@@ -1,4 +1,6 @@
 import { EventTriggers } from './eventTriggers.js';
+import { RunVersions } from './runVersions.js';
+import { modelReferences } from '@interlock/core';
 import {
   sourceQuiescence,
   uncertainClaimCollection,
@@ -179,6 +181,7 @@ export class Engine {
   readonly simulations: Simulations;
   readonly usage: Usage;
   private readonly chains: RunChains;
+  readonly runVersions: RunVersions;
   readonly budgets: Budgets;
   readonly assignmentSizes: AssignmentSizes;
   readonly pauses: PauseHolds;
@@ -265,6 +268,35 @@ export class Engine {
       this.describeWork(work),
     );
     this.versions = new VersionCleanup(store);
+    this.runVersions = new RunVersions(store, {
+      input: (run, definition) => {
+        const node = definition.nodes.find((node) => node.id === run.cursor)!;
+        return node.inputBindings
+          ? resolveBindingFields(
+              node.inputBindings,
+              this.bindingSource(run, run.value),
+            )
+          : run.value;
+      },
+      prompts: (definition, pins) => this.prompts.capture(definition, pins),
+      validateCaptures: (run, definition) => {
+        this.variables.capture(definition, run.variableCaptures ?? []);
+        for (const ref of modelReferences(definition)) {
+          const inherited = run.modelAliasCaptures?.some(
+            (capture) =>
+              capture.aliasId === ref ||
+              capture.name.toLowerCase() === ref.toLowerCase(),
+          );
+          if (!inherited && this.modelAliases.get(ref))
+            throw new InterlockError(
+              `Model alias capture ${ref} is missing. Start a new run to capture it.`,
+            );
+        }
+      },
+      save: (run) => this.save(run),
+      event: (run, type, message) => this.event(run, type, message),
+      assertRunnable: (run) => this.versions.assertRunnable(run, true),
+    });
     this.ownership = new Ownership(store);
     this.usage = new Usage(store, (runId) => {
       this.budgets.refresh();
@@ -1303,6 +1335,11 @@ export class Engine {
     triggerChain ??=
       continuedFrom?.triggerChain ??
       (parentRunId ? this.run(parentRunId).triggerChain : undefined);
+    const versionPolicy =
+      continuedFrom?.versionPolicy ??
+      (batchNodeId && parentRunId
+        ? this.run(parentRunId).versionPolicy
+        : startOptions?.versionPolicy);
     const run: Run = {
       ...(triggerChain ? { triggerChain: [...triggerChain] } : {}),
       ...(startOptions?.requestId !== undefined
@@ -1319,6 +1356,7 @@ export class Engine {
       workflowId,
       workflowName: w.name,
       version,
+      ...(versionPolicy ? { versionPolicy } : {}),
       parentRunId,
       batchNodeId,
       status: 'running',
@@ -1990,6 +2028,8 @@ export class Engine {
       if (pending?.resourceBlocked) this.admitOperation(run, pending, false);
       return false;
     }
+    const pending = run.executions.at(-1);
+    if (!pending || terminal(pending.status)) this.runVersions.advance(run);
     const definition = this.definition(run),
       node = definition.nodes.find((n) => n.id === run.cursor)!;
     let execution = run.executions.at(-1);
@@ -1999,6 +2039,7 @@ export class Engine {
       delete run.nextScriptAttempt;
       execution = {
         id: randomUUID(),
+        version: run.version,
         nodeId: node.id,
         kind: node.kind,
         label: node.label,

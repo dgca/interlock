@@ -19,9 +19,9 @@ Saved prompt sections precede the node's task instructions. The existing Context
 
 ## Apply improvements centrally
 
-Editing a saved prompt changes the guidance used by future runs of every workflow referencing it, including published workflows. You do not need to republish those workflows. Published definitions keep the same prompt IDs.
+Editing a saved prompt changes the guidance used by future runs of workflows that capture current revisions. Publish-pinned versions keep their selected revisions. Published definitions keep the same prompt IDs.
 
-Each workflow run captures the latest content when it starts. Later Agent steps, loops, Batch items, claim recovery, retries, and server restart keep that content. A Workflow node starts a separate run that captures the latest instructions at its own startup. A parent and child can use different revisions if a prompt changes between their start times. Detached workflows follow the same rule.
+Each workflow run captures current content when it starts, or the selected published revisions when prompt pinning is enabled. Later Agent steps, loops, Batch items, claim recovery, retries, and server restart keep that content. A Workflow node starts a separate run that captures current instructions at its own startup, subject to its published prompt pins. A parent and child can use different revisions if a prompt changes between their start times. Detached workflows follow the same rule.
 
 ### Opt-in prompt pinning at publish
 
@@ -31,6 +31,8 @@ Workflows can opt into prompt pinning by setting `pinPromptsAtPublish: true` in 
 - Runs of that published workflow version capture those exact pinned prompt revisions and content at run startup, instead of floating to newer saved prompt revisions.
 - If a pinned prompt revision is missing, starting a run fails with a descriptive error.
 - Workflows that omit or set `pinPromptsAtPublish: false` continue to float to the latest saved revisions when runs start.
+
+A [run version move](workflow-execution.md#move-a-run-to-a-newer-version) preserves its existing capture unless the operator explicitly requests `recapturePrompts: true`. Recapture follows the target version's publish pins, so it can select an older retained revision even when newer saved content exists. A target requiring an uncaptured prompt blocks the move until explicit recapture.
 
 Open **Captured prompts** in run inspection to see the actual content and revisions. Agent assignments show the composed instructions and their saved prompt revisions. MCP `get_prompt` supports bounded revision history and exact revision reads. History restoration UI and prompt pinning in individual nodes are outside the current scope.
 

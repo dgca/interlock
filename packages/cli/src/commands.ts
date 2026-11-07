@@ -7,6 +7,11 @@ import {
   withNextCall,
   testSuiteSaveSchema,
   testSuiteReadSchema,
+  runVersionReadSchema,
+  setRunVersionPolicySchema,
+  runVersionPreviewSchema,
+  runVersionApplySchema,
+  runVersionPolicySchema,
 } from '@interlock/core';
 const parse = async (value: string | undefined) => {
   if (value === undefined) throw new Error('Missing JSON argument');
@@ -32,6 +37,7 @@ function parseSummaryArgs(args: string[], withBudget = false) {
         '--priority',
         '--after',
         '--on-active-external-task',
+        '--version-policy',
       ].includes(arg)
     ) {
       if (i + 1 < args.length) optionArgs.push(`${arg}=${args[++i]}`);
@@ -58,6 +64,7 @@ function parseSummaryArgs(args: string[], withBudget = false) {
             priority: { type: 'string' as const },
             after: { type: 'string' as const },
             'on-active-external-task': { type: 'string' as const },
+            'version-policy': { type: 'string' as const },
           }
         : {}),
     },
@@ -269,9 +276,13 @@ export async function runCommand(argv: string[]) {
       const { values, positionals } = parseSummaryArgs(args, true);
       if (positionals.length < 2 || positionals.length > 3)
         throw new Error(
-          'Usage: start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous]',
+          'Usage: start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
         );
       const input = {
+        versionPolicy:
+          values['version-policy'] === undefined
+            ? undefined
+            : runVersionPolicySchema.parse(values['version-policy']),
         priority:
           typeof values.priority === 'string'
             ? Number(values.priority)
@@ -352,6 +363,35 @@ export async function runCommand(argv: string[]) {
                 },
         }),
       );
+    }
+    case 'run-version': {
+      if (args.length !== 1)
+        throw new Error(
+          'Usage: run-version <json|@file> (action: read|policy|preview|apply)',
+        );
+      const { action, ...input } = await parse(args[0]);
+      switch (action) {
+        case 'read':
+          return client.runs.versionPolicy.query(
+            runVersionReadSchema.parse(input),
+          );
+        case 'policy':
+          return client.runs.setVersionPolicy.mutate(
+            setRunVersionPolicySchema.parse(input),
+          );
+        case 'preview':
+          return client.runs.previewVersionMove.query(
+            runVersionPreviewSchema.parse(input),
+          );
+        case 'apply':
+          return client.runs.applyVersionMove.mutate(
+            runVersionApplySchema.parse(input),
+          );
+        default:
+          throw new Error(
+            'run-version action must be read, policy, preview or apply',
+          );
+      }
     }
     case 'run':
       return client.runs.get.query({ id: args[0] });
@@ -516,9 +556,10 @@ export async function runCommand(argv: string[]) {
           'export <id>',
           'publish <id> [--cascade]',
           'work-resources <json|@file> (inspect by workId or runId+executionId; release exact uncertain attempt after stop confirmation)',
-          'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous]',
+          'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
           'runs [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
+          'run-version <json|@file> (action: read with runId/offset/limit; policy with expectedRevision and pinned|latest-compatible; preview with newer version and optional recapturePrompts; apply requires the exact preview confirmation and reason)',
           'run-history <json|@file> (action: preview with workflowId/before/rootRunIds and offset/limit; delete requires roots with preview confirmations and acknowledgeHistoryLoss:true; workflows and published versions remain)',
           'context-group <run-id> <group> [options-json|@file] (binding and history; offset, limit)',
           'handoff-context <json|@file> (runId, group, expectedRevision, session, actor, reason, checkpointRef)',

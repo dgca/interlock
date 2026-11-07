@@ -42,6 +42,10 @@ import {
   runQuerySchema,
   runSummaryQuerySchema,
   runStartSchema,
+  runVersionReadSchema,
+  setRunVersionPolicySchema,
+  runVersionPreviewSchema,
+  runVersionApplySchema,
   cancelRunSchema,
   ExternalInputConflict,
   InterlockError,
@@ -629,6 +633,18 @@ export const appRouter = t.router({
     budget: p
       .input(z.object({ runId: z.string().min(1) }))
       .query(({ ctx, input }) => ctx.engine.budgets.read(input.runId)),
+    versionPolicy: p
+      .input(runVersionReadSchema)
+      .query(({ ctx, input }) => ctx.engine.runVersions.read(input)),
+    setVersionPolicy: p
+      .input(setRunVersionPolicySchema)
+      .mutation(({ ctx, input }) => ctx.engine.runVersions.setPolicy(input)),
+    previewVersionMove: p
+      .input(runVersionPreviewSchema)
+      .query(({ ctx, input }) => ctx.engine.runVersions.preview(input)),
+    applyVersionMove: p
+      .input(runVersionApplySchema)
+      .mutation(({ ctx, input }) => ctx.engine.runVersions.apply(input)),
     setBudget: p
       .input(setBudgetSchema)
       .mutation(({ ctx, input }) => ctx.engine.budgets.set(input)),
@@ -650,6 +666,7 @@ export const appRouter = t.router({
             priority: input.priority,
             after: input.after,
             onActiveExternalTask: input.onActiveExternalTask,
+            versionPolicy: input.versionPolicy,
           },
         ),
       ),
@@ -719,6 +736,7 @@ export const appRouter = t.router({
           priority: input.priority,
           after: input.after,
           onActiveExternalTask: input.onActiveExternalTask,
+          versionPolicy: input.versionPolicy,
         },
       ),
     ),

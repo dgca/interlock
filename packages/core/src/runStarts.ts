@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { jsonSchema } from './index.js';
 import { budgetPolicySchema } from './budgets.js';
+import { runVersionPolicySchema } from './runVersions.js';
 
 export const startRequestIdSchema = z
   .string()
@@ -54,6 +55,11 @@ export interface RunAdmission {
 }
 export const runStartOptionsSchema = z
   .object({
+    versionPolicy: runVersionPolicySchema
+      .optional()
+      .describe(
+        'Default pinned. latest-compatible checks the newest published definition before creating each execution; existing work and captures stay fixed.',
+      ),
     requestId: startRequestIdSchema
       .optional()
       .describe(
