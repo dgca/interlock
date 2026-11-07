@@ -962,6 +962,7 @@ function EventEditor({
 }) {
   const [config, setConfig] = useState(initial);
   const [tags, setTags] = useState(() => tagRows(initial.tags));
+  const [tagsError, setTagsError] = useState('');
   const [error, setError] = useState('');
   const [issues, setIssues] = useState<Record<string, string>>({});
   const dirty =
@@ -999,7 +1000,7 @@ function EventEditor({
         tags: tagsFromRows(tags),
       });
     } catch (error) {
-      setError(errorMessage(error));
+      setTagsError(errorMessage(error));
       return;
     }
     if (!parsed.success) {
@@ -1013,6 +1014,8 @@ function EventEditor({
       );
       return;
     }
+    setTagsError('');
+    setError('');
     void onSave(parsed.data).catch((e) => setError(errorMessage(e)));
   };
   return (
@@ -1128,7 +1131,11 @@ function EventEditor({
             />
             <TagFields
               rows={tags}
-              onChange={setTags}
+              onChange={(rows) => {
+                setTags(rows);
+                setTagsError('');
+              }}
+              error={tagsError}
               description="Applied to handler runs. Source run tags remain in the event payload. Up to 16 tags, 64 characters per key or value."
             />
             <NumberInput
@@ -1190,6 +1197,7 @@ function EventEditor({
                 .then((current) => {
                   setConfig(current);
                   setTags(tagRows(current.tags));
+                  setTagsError('');
                   setIssues({});
                   setError('');
                 })
@@ -1358,6 +1366,7 @@ function ScheduleEditor({
 }) {
   const [config, setConfig] = useState(initial);
   const [tags, setTags] = useState(() => tagRows(initial.tags));
+  const [tagsError, setTagsError] = useState('');
   const [section, setSection] = useState<Section>('timing');
   const [error, setError] = useState('');
   const [issues, setIssues] = useState<Record<string, string>>({});
@@ -1418,7 +1427,7 @@ function ScheduleEditor({
       });
     } catch (error) {
       setSection('input');
-      setError(errorMessage(error));
+      setTagsError(errorMessage(error));
       return;
     }
     if (!jsonValid) {
@@ -1445,6 +1454,7 @@ function ScheduleEditor({
       return;
     }
     setIssues({});
+    setTagsError('');
     try {
       await onSave(parsed.data);
     } catch (e) {
@@ -1482,7 +1492,8 @@ function ScheduleEditor({
                     Object.keys(issues).some(
                       (path) => path === 'timing' || path.startsWith('timing.'),
                     ))) ||
-                (s === 'input' && (issues.input || issues.bindings)) ||
+                (s === 'input' &&
+                  (issues.input || issues.bindings || tagsError)) ||
                 (s === 'policies' && issues.pauseAfterConsecutiveFailures)
                   ? ' · Error'
                   : ''}
@@ -1621,7 +1632,14 @@ function ScheduleEditor({
           )}
           <div hidden={section !== 'input'}>
             <div style={{ marginBottom: 20 }}>
-              <TagFields rows={tags} onChange={setTags} />
+              <TagFields
+                rows={tags}
+                onChange={(rows) => {
+                  setTags(rows);
+                  setTagsError('');
+                }}
+                error={tagsError}
+              />
             </div>
             <JsonEditor
               key={jsonReset}
@@ -1761,6 +1779,7 @@ function ScheduleEditor({
                       .then((current) => {
                         setConfig(current);
                         setTags(tagRows(current.tags));
+                        setTagsError('');
                         setJsonReset((value) => value + 1);
                         setJsonValid(true);
                         setIssues({});

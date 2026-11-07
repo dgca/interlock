@@ -44,8 +44,10 @@ export function RunDialog({
   onStarted: (id: string) => void;
 }) {
   const fieldsRef = useRef<HTMLDivElement>(null);
+  const tagsDetailsRef = useRef<HTMLDetailsElement>(null);
   const [raw, setRaw] = useState(false);
   const [tags, setTags] = useState<TagRow[]>([]);
+  const [tagsError, setTagsError] = useState('');
   const [versionPolicy, setVersionPolicy] =
     useState<RunVersionPolicy>('pinned');
   const [versions, setVersions] = useState<WorkflowVersion[]>([]),
@@ -162,10 +164,18 @@ export function RunDialog({
                   onChange={(e) => setInput(e.target.value)}
                 />
               )}
-              <details style={{ marginBottom: 16 }}>
+              <details ref={tagsDetailsRef} style={{ marginBottom: 16 }}>
                 <summary>Tags{tags.length ? ` (${tags.length})` : ''}</summary>
                 <div style={{ marginTop: 12 }}>
-                  <TagFields rows={tags} onChange={setTags} showLabel={false} />
+                  <TagFields
+                    rows={tags}
+                    onChange={(rows) => {
+                      setTags(rows);
+                      setTagsError('');
+                    }}
+                    error={tagsError}
+                    showLabel={false}
+                  />
                 </div>
               </details>
             </div>
@@ -193,6 +203,15 @@ export function RunDialog({
           variant="primary"
           disabled={busy || !schema}
           onClick={async () => {
+            let metadata: ReturnType<typeof tagsFromRows>;
+            try {
+              metadata = tagsFromRows(tags);
+              setTagsError('');
+            } catch (error) {
+              if (tagsDetailsRef.current) tagsDetailsRef.current.open = true;
+              setTagsError(errorMessage(error));
+              return;
+            }
             const invalid =
               fieldsRef.current?.querySelector<HTMLInputElement>(':invalid');
             if (invalid) {
@@ -200,6 +219,7 @@ export function RunDialog({
               invalid.reportValidity();
               return;
             }
+            setError('');
             setBusy(true);
             try {
               const result = await api.runs.start.mutate({
@@ -207,7 +227,7 @@ export function RunDialog({
                 version,
                 versionPolicy,
                 input: JSON.parse(input),
-                tags: tagsFromRows(tags),
+                tags: metadata,
               });
               onStarted(result.run.id);
             } catch (e) {

@@ -553,3 +553,76 @@ it('UI241 removes terminal-only settings when attention events or library scope 
     }),
   );
 });
+
+const tagFields = () =>
+  document.querySelector<HTMLFieldSetElement>('fieldset[aria-label="Tags"]')!;
+const tagInput = (label: string) =>
+  document.querySelector<HTMLInputElement>(
+    `input[aria-label="Tags ${label}"]`,
+  )!;
+
+it('UI249 reveals the schedule input section for duplicate tags and keeps local feedback separate from API failures', async () => {
+  await renderSchedules();
+  await click('Edit schedule');
+  await click('Run input');
+  await click('Add tag');
+  await fill(tagInput('key 1'), 'batch');
+  await fill(tagInput('value 1'), 'nightly');
+  await click('Add tag');
+  await fill(tagInput('key 2'), 'batch');
+  await fill(tagInput('value 2'), 'High');
+  await click('Policies');
+  await click('Save schedule');
+  expect(rpc.manage).not.toHaveBeenCalled();
+  expect(button('Run input · Error').getAttribute('aria-current')).toBe('true');
+  const error = tagFields().querySelector('[role="alert"]')!;
+  expect(error.textContent).toBe('Each tag key must be unique.');
+  expect(document.activeElement).toBe(error);
+  expect(tagFields().getAttribute('aria-describedby')).toBe(error.id);
+  expect(tagFields().closest('[hidden]')).toBeNull();
+  await fill(tagInput('key 2'), 'priority');
+  expect(tagFields().querySelector('[role="alert"]')).toBeNull();
+  expect(button('Run input').getAttribute('aria-current')).toBe('true');
+  rpc.manage.mockRejectedValueOnce(new Error('Schedule revision conflict'));
+  await click('Save schedule');
+  expect(document.body.textContent).toContain('Schedule revision conflict');
+  expect(tagInput('value 1').value).toBe('nightly');
+  expect(tagInput('value 2').value).toBe('High');
+  expect(tagFields().querySelector('[role="alert"]')).toBeNull();
+  await click('Save schedule');
+  expect(rpc.manage).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      config: expect.objectContaining({
+        tags: { batch: 'nightly', priority: 'High' },
+      }),
+    }),
+  );
+});
+
+it('UI249 puts event tag bounds errors beside the rows and allows correction without losing other edits', async () => {
+  await renderSchedules();
+  await click('Add event trigger');
+  await fill(input('Trigger name'), 'Tagged cleanup');
+  await click('Add tag');
+  await fill(tagInput('key 1'), 'x'.repeat(65));
+  await fill(tagInput('value 1'), 'Retained');
+  await click('Save event trigger');
+  expect(rpc.manage).not.toHaveBeenCalled();
+  const error = tagFields().querySelector('[role="alert"]')!;
+  expect(error.textContent).toContain('at most 64 characters');
+  expect(document.activeElement).toBe(error);
+  expect(tagFields().getAttribute('aria-describedby')).toBe(error.id);
+  expect(input('Trigger name').value).toBe('Tagged cleanup');
+  await fill(tagInput('key 1'), 'handler');
+  expect(tagFields().querySelector('[role="alert"]')).toBeNull();
+  expect(tagFields().hasAttribute('aria-invalid')).toBe(false);
+  await click('Save event trigger');
+  expect(rpc.manage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      config: expect.objectContaining({
+        name: 'Tagged cleanup',
+        tags: { handler: 'Retained' },
+      }),
+    }),
+  );
+});

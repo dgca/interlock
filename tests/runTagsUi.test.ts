@@ -86,8 +86,14 @@ async function render() {
   );
   return started;
 }
+async function toggleTags() {
+  await act(async () => document.querySelector('summary')!.click());
+}
+const tagFields = () =>
+  document.querySelector<HTMLFieldSetElement>('fieldset[aria-label="Tags"]')!;
 it('starts with literal metadata and retains tag edits after a rejected start', async () => {
   const started = await render();
+  await toggleTags();
   await click('Add tag');
   await input('Tags key 1', 'repo.name');
   await input('Tags value 1', 'org/repo');
@@ -110,21 +116,55 @@ it('starts with literal metadata and retains tag edits after a rejected start', 
   );
   expect(started).toHaveBeenCalledWith('new-run');
 });
-it('blocks duplicate keys without losing rows and allows correction', async () => {
+it('reveals collapsed duplicate tags, focuses local feedback, and clears it on correction', async () => {
   await render();
+  await toggleTags();
   await click('Add tag');
   await input('Tags key 1', 'batch');
   await click('Add tag');
   await input('Tags key 2', 'batch');
+  await toggleTags();
+  expect(tagFields().closest('details')!.open).toBe(false);
   await click('Start run');
   expect(start).not.toHaveBeenCalled();
-  expect(document.body.textContent).toContain('Each tag key must be unique.');
+  expect(tagFields().closest('details')!.open).toBe(true);
+  const error = tagFields().querySelector('[role="alert"]')!;
+  expect(error.textContent).toBe('Each tag key must be unique.');
+  expect(document.activeElement).toBe(error);
+  expect(tagFields().getAttribute('aria-describedby')).toBe(error.id);
+  expect(document.querySelector('.error-text')).toBeNull();
   await input('Tags key 2', 'priority');
+  expect(tagFields().querySelector('[role="alert"]')).toBeNull();
+  expect(tagFields().hasAttribute('aria-invalid')).toBe(false);
   await click('Start run');
   expect(start).toHaveBeenCalledWith(
     expect.objectContaining({ tags: { batch: '', priority: '' } }),
   );
 });
+it.each(['', 'x'.repeat(65)])(
+  'shows local feedback for invalid key %j before native validity or an API call',
+  async (key) => {
+    await render();
+    await toggleTags();
+    await click('Add tag');
+    await input('Tags key 1', key);
+    await input('Tags value 1', 'Retained');
+    await toggleTags();
+    await click('Start run');
+    expect(start).not.toHaveBeenCalled();
+    expect(tagFields().closest('details')!.open).toBe(true);
+    expect(tagFields().querySelector('[role="alert"]')!.textContent).toContain(
+      'nonempty keys',
+    );
+    expect(document.querySelector('.error-text')).toBeNull();
+    await input('Tags key 1', 'corrected');
+    expect(tagFields().querySelector('[role="alert"]')).toBeNull();
+    await click('Start run');
+    expect(start).toHaveBeenCalledWith(
+      expect.objectContaining({ tags: { corrected: 'Retained' } }),
+    );
+  },
+);
 it('preserves exact tag filters through list and inspector URLs', () => {
   const tags = JSON.parse(
     '{"repo.name":"org/repo","__proto__":"","priority":"High"}',

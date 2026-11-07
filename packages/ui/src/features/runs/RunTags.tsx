@@ -8,6 +8,7 @@ import {
 } from '@mantine/core';
 import { Plus, X } from 'lucide-react';
 import { runTagsSchema } from '@interlock/core';
+import { useEffect, useId, useRef } from 'react';
 import styles from './RunTags.module.css';
 
 export type TagRow = { key: string; value: string };
@@ -43,8 +44,18 @@ export function TagFields({
   error?: string;
   showLabel?: boolean;
 }) {
+  const errorId = useId();
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
   return (
-    <fieldset className={styles.fields} aria-label={label}>
+    <fieldset
+      className={styles.fields}
+      aria-label={label}
+      aria-invalid={error ? true : undefined}
+      aria-describedby={error ? errorId : undefined}
+    >
       {showLabel && <legend>{label}</legend>}
       <Stack gap="xs">
         <Text size="xs" c="dimmed">
@@ -108,7 +119,14 @@ export function TagFields({
           </Button>
         </Group>
         {error && (
-          <Text size="xs" c="red" role="alert">
+          <Text
+            id={errorId}
+            ref={errorRef}
+            tabIndex={-1}
+            size="xs"
+            c="red"
+            role="alert"
+          >
             {error}
           </Text>
         )}
