@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interlock - Harnesses & Custom Profile Editor Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+      
+      --bg: #141517;
+      --surface: #1a1b1e;
+      --surface-raised: #25262b;
+      --surface-hover: #2c2e33;
+      --canvas: #101113;
+      --border: #2c2e33;
+      --border-strong: #373a40;
+      --text: #c1c2c5;
+      --text-secondary: #a6a7ab;
+      --muted: #909296;
+      --text-dim: #5c5f66;
+      --accent: #4dabf7;
+      --accent-hover: #74c0fc;
+      --accent-text: #a5d8ff;
+      --accent-soft: #192639;
+      --accent-border: #2b456b;
+      --danger: #fa5252;
+      --danger-soft: #381a1d;
+      --success: #40c057;
+      --success-soft: #152b1b;
+      --warning: #fcc419;
+      --warning-soft: #332b13;
+      --badge-custom: #da77f2;
+      --badge-custom-soft: #2e1a33;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* Top control bar for reviewing prototype */
+    .prototype-bar {
+      background: #1e1f24;
+      border-bottom: 1px solid var(--border-strong);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .prototype-bar-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      color: var(--accent-text);
+    }
+
+    .prototype-bar-title span {
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-border);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+
+    .prototype-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .viewport-btn-group, .scenario-btn-group {
+      display: flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .ctrl-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      padding: 4px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-family: inherit;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .ctrl-btn:hover {
+      color: var(--text);
+      background: var(--surface-raised);
+    }
+
+    .ctrl-btn.active {
+      background: var(--accent);
+      color: #000;
+      font-weight: 600;
+    }
+
+    /* Outer preview container for testing responsive widths */
+    .viewport-wrapper {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      padding: 24px 16px 64px;
+      transition: max-width 0.25s ease;
+      width: 100%;
+    }
+
+    .app-canvas {
+      width: 100%;
+      max-width: 1180px;
+      transition: max-width 0.2s ease;
+    }
+
+    /* Page Layout */
+    .page-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .page-header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .page-header p {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* Shared Execution Settings */
+    .shared-settings {
+      padding: 16px 0 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    .shared-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .shared-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .shared-copy p {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+      max-width: 64ch;
+    }
+
+    .shared-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Profile List & Rows */
+    .profile-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .profile-row {
+      border-bottom: 1px solid var(--border);
+      padding: 20px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .row-heading {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .profile-icon {
+      color: var(--accent);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .profile-icon.custom {
+      color: var(--badge-custom);
+    }
+
+    .profile-identity {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .profile-identity h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .profile-identity p {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Mantine Badges */
+    .badge {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .badge-blue {
+      background: var(--accent-soft);
+      color: var(--accent-text);
+      border: 1px solid var(--accent-border);
+    }
+
+    .badge-gray {
+      background: var(--surface-raised);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .badge-purple {
+      background: var(--badge-custom-soft);
+      color: var(--badge-custom);
+      border: 1px solid #5a3066;
+    }
+
+    /* Mantine Switch */
+    .switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 12px;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    .switch-track {
+      width: 36px;
+      height: 20px;
+      background: var(--surface-raised);
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      position: relative;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .switch.active .switch-track {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .switch-thumb {
+      width: 14px;
+      height: 14px;
+      background: #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s;
+    }
+
+    .switch.active .switch-thumb {
+      transform: translateX(16px);
+      background: #000;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      border: 1px solid transparent;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    .btn-default {
+      background: var(--surface-raised);
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+
+    .btn-default:hover {
+      background: var(--surface-hover);
+      color: #fff;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text);
+    }
+
+    .btn-ghost:hover {
+      background: var(--surface-raised);
+      color: #fff;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-sm {
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+
+    .btn-danger-ghost {
+      background: transparent;
+      color: var(--danger);
+      padding: 4px;
+      border-radius: 4px;
+    }
+
+    .btn-danger-ghost:hover {
+      background: var(--danger-soft);
+    }
+
+    /* Bottom section */
+    .page-bottom {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      padding-top: 24px;
+    }
+
+    .page-bottom p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+      max-width: 65ch;
+    }
+
+    /* New Profile Form (Expanded at bottom) */
+    .new-profile-card {
+      margin-top: 24px;
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .new-profile-card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 16px;
+    }
+
+    .fields-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* Form Inputs */
+    .field-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .field-label span.req {
+      color: var(--danger);
+      margin-left: 2px;
+    }
+
+    .field-desc {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .input-text, .select-native {
+      background: var(--canvas);
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 13px;
+      color: #fff;
+      font-family: inherit;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .input-text:focus, .select-native:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    .input-mono {
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    /* MODAL OVERLAY & DIALOG */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(2px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 1000;
+      opacity: 1;
+      transition: opacity 0.2s ease;
+    }
+
+    .modal-backdrop.hidden {
+      display: none;
+    }
+
+    .modal-dialog {
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 8px;
+      width: 100%;
+      max-width: 760px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+      animation: modalSlide 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalSlide {
+      from {
+        transform: translateY(12px) scale(0.98);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+      }
+    }
+
+    .modal-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-shrink: 0;
+      background: var(--surface);
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-close:hover {
+      background: var(--surface-raised);
+      color: #fff;
+    }
+
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .modal-footer {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+
+    /* Segmented Control (Mantine style) */
+    .segmented-control {
+      display: inline-flex;
+      background: var(--canvas);
+      padding: 3px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      gap: 2px;
+      width: fit-content;
+    }
+
+    .seg-item {
+      padding: 5px 14px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .seg-item:hover {
+      color: var(--text);
+    }
+
+    .seg-item.selected {
+      background: var(--surface-raised);
+      color: #fff;
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+
+    /* Section Fieldsets */
+    .form-section {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      background: rgba(255, 255, 255, 0.015);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .form-section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .form-section-subtitle {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: -8px;
+    }
+
+    /* Key-Value Tables (Headers & Env Vars) */
+    .kv-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 4px;
+    }
+
+    .kv-table th {
+      text-align: left;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+      padding: 4px 8px;
+    }
+
+    .kv-table td {
+      padding: 4px 6px;
+    }
+
+    .kv-table td:last-child {
+      width: 32px;
+      text-align: center;
+    }
+
+    .chip-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .var-chip {
+      background: var(--canvas);
+      border: 1px solid var(--border);
+      color: var(--accent-text);
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .var-chip:hover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    /* Collapsible Hook Card (Launcher Mode) */
+    .hook-card {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--canvas);
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .hook-header {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      background: var(--surface-raised);
+    }
+
+    .hook-header:hover {
+      background: var(--surface-hover);
+    }
+
+    .hook-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 500;
+      font-size: 12px;
+      color: #fff;
+    }
+
+    .hook-badge {
+      font-size: 10px;
+      font-family: var(--mono);
+      color: var(--muted);
+      background: var(--canvas);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    .hook-body {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      border-top: 1px solid var(--border);
+      background: var(--canvas);
+    }
+
+    .hook-body.collapsed {
+      display: none;
+    }
+
+    /* Error alert in modal footer */
+    .validation-alert {
+      color: var(--danger);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Responsive Viewport Queries */
+    @media (max-width: 850px) {
+      .shared-form {
+        grid-template-columns: 1fr;
+      }
+      .fields-row {
+        grid-template-columns: 1fr;
+      }
+      .row-heading {
+        flex-wrap: wrap;
+      }
+      .profile-identity {
+        flex: 1 0 calc(100% - 40px);
+      }
+      .page-bottom {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Prototype Control Bar -->
+  <div class="prototype-bar">
+    <div class="prototype-bar-title">
+      <span>Issue #233 UI Prototype</span>
+      H6: Custom Harness Definitions & Launcher Adapter
+    </div>
+
+    <div class="prototype-controls">
+      <!-- Scenario Selector -->
+      <span style="color: var(--muted)">Scenario:</span>
+      <div class="scenario-btn-group">
+        <button class="ctrl-btn active" id="btn-scene-list" onclick="setScenario('list')">Main Listing</button>
+        <button class="ctrl-btn" id="btn-scene-direct" onclick="setScenario('direct')">Direct Mode Dialog</button>
+        <button class="ctrl-btn" id="btn-scene-launcher" onclick="setScenario('launcher')">Launcher Mode Dialog</button>
+      </div>
+
+      <!-- Viewport Selector -->
+      <span style="color: var(--muted)">Width:</span>
+      <div class="viewport-btn-group">
+        <button class="ctrl-btn active" id="btn-vp-desktop" onclick="setViewport(1180)">1180px Desktop</button>
+        <button class="ctrl-btn" id="btn-vp-tablet" onclick="setViewport(768)">768px Tablet</button>
+        <button class="ctrl-btn" id="btn-vp-mobile" onclick="setViewport(390)">390px Mobile</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Responsive Wrapper -->
+  <div class="viewport-wrapper" id="viewport-wrapper">
+    <main class="app-canvas" id="app-canvas">
+      
+      <!-- Main Page Header -->
+      <header class="page-header">
+        <div>
+          <h1>Harnesses</h1>
+          <p>Choose which local agents and custom launchers Interlock can execute.</p>
+        </div>
+        <button class="btn btn-default" title="Check installations">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+          Check installations
+        </button>
+      </header>
+
+      <!-- Shared Concurrency Settings -->
+      <section class="shared-settings" aria-label="Shared execution settings">
+        <div class="shared-form">
+          <div class="shared-copy">
+            <div class="shared-label">Concurrent assignments</div>
+            <p>Maximum Agent assignments Interlock runs at once across all harnesses and workflows. Additional assignments wait.</p>
+          </div>
+          <div class="shared-controls">
+            <select class="select-native" style="width: 120px;">
+              <option value="limited">Limit to</option>
+              <option value="unlimited">Unlimited</option>
+            </select>
+            <input type="number" class="input-text" style="width: 72px;" value="3" min="1">
+            <button class="btn btn-primary btn-sm">Save limit</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Harness Profiles List -->
+      <div class="profile-list">
+        
+        <!-- Built-in 1: Claude Code -->
+        <div class="profile-row">
+          <div class="row-heading">
+            <div class="profile-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            </div>
+            <div class="profile-identity">
+              <h2>Claude Code</h2>
+              <p>CLI default · standard permissions</p>
+            </div>
+            <span class="badge badge-blue">Detected (v0.2.29)</span>
+            <div class="switch active">
+              <div class="switch-track"><div class="switch-thumb"></div></div>
+              <span>Enabled</span>
+            </div>
+            <button class="btn btn-ghost btn-sm">Configure</button>
+          </div>
+        </div>
+
+        <!-- Built-in 2: Codex -->
+        <div class="profile-row">
+          <div class="row-heading">
+            <div class="profile-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            </div>
+            <div class="profile-identity">
+              <h2>Codex</h2>
+              <p>CLI default · standard permissions</p>
+            </div>
+            <span class="badge badge-blue">Detected (v1.0.12)</span>
+            <div class="switch active">
+              <div class="switch-track"><div class="switch-thumb"></div></div>
+              <span>Enabled</span>
+            </div>
+            <button class="btn btn-ghost btn-sm">Configure</button>
+          </div>
+        </div>
+
+        <!-- Custom Profile 1: Direct Subprocess Turn Runner -->
+        <div class="profile-row" style="background: rgba(218, 119, 242, 0.02); border-left: 2px solid var(--badge-custom); padding-left: 12px; margin-left: -14px;">
+          <div class="row-heading">
+            <div class="profile-icon custom">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m10 8 4 4-4 4"/></svg>
+            </div>
+            <div class="profile-identity">
+              <h2>
+                Local Python Agent
+                <span class="badge badge-purple">custom: direct</span>
+              </h2>
+              <p>Subprocess CLI · Turn command: python -m my_agent.turn · Timeout: 120s · standard permissions</p>
+            </div>
+            <span class="badge badge-gray">Configured</span>
+            <div class="switch active">
+              <div class="switch-track"><div class="switch-thumb"></div></div>
+              <span>Enabled</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="openCustomDialog('direct')">Configure</button>
+          </div>
+        </div>
+
+        <!-- Custom Profile 2: Delegated Claim-Ticket Launcher -->
+        <div class="profile-row" style="background: rgba(218, 119, 242, 0.02); border-left: 2px solid var(--badge-custom); padding-left: 12px; margin-left: -14px;">
+          <div class="row-heading">
+            <div class="profile-icon custom">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+            </div>
+            <div class="profile-identity">
+              <h2>
+                Remote Docker Launcher
+                <span class="badge badge-purple">custom: launcher</span>
+              </h2>
+              <p>HTTP POST https://agent-gateway.internal/launch · 4 hooks configured · full-access</p>
+            </div>
+            <span class="badge badge-blue">Ready</span>
+            <div class="switch active">
+              <div class="switch-track"><div class="switch-thumb"></div></div>
+              <span>Enabled</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="openCustomDialog('launcher')">Configure</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Page Bottom Guidance & Add Button -->
+      <footer class="page-bottom">
+        <p>Installation checks make no model calls. Authentication is checked when the harness runs. Custom harnesses execute assignments via configured commands or HTTP endpoints.</p>
+        <button class="btn btn-ghost" onclick="toggleNewProfileCard()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add configuration
+        </button>
+      </footer>
+
+      <!-- Add Configuration Inline Form (Simulated) -->
+      <div class="new-profile-card" id="new-profile-card" style="display: none;">
+        <h3>Add harness configuration</h3>
+        <div class="fields-row">
+          <div class="field-wrapper">
+            <label class="field-label">Name <span class="req">*</span></label>
+            <input type="text" class="input-text" id="new-name" placeholder="e.g. My Custom Agent Gateway">
+          </div>
+          <div class="field-wrapper">
+            <label class="field-label">Harness</label>
+            <select class="select-native" id="new-harness" onchange="handleHarnessSelect(this.value)">
+              <option value="codex">Codex</option>
+              <option value="claude-code">Claude Code</option>
+              <option value="pi">Pi</option>
+              <option value="custom" selected>Custom Harness (harness: "custom")</option>
+            </select>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
+          <button class="btn btn-default" onclick="toggleNewProfileCard()">Cancel</button>
+          <button class="btn btn-primary" onclick="startNewCustomProfile()">Continue with Custom Setup…</button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- CUSTOM PROFILE EDITOR MODAL -->
+  <div class="modal-backdrop hidden" id="custom-modal">
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title-text">
+      
+      <!-- Modal Header -->
+      <header class="modal-header">
+        <div class="modal-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--badge-custom);"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m10 8 4 4-4 4"/></svg>
+          <span id="modal-title-text">Configure Custom Harness Profile</span>
+        </div>
+        <button class="modal-close" onclick="closeCustomDialog()" aria-label="Close dialog">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </header>
+
+      <!-- Modal Body -->
+      <div class="modal-body">
+        
+        <!-- SECTION 1: GENERAL IDENTITY -->
+        <section class="form-section">
+          <div class="form-section-title">General Information</div>
+          <div class="fields-row">
+            <div class="field-wrapper">
+              <label class="field-label">Configuration Name <span class="req">*</span></label>
+              <input type="text" class="input-text" id="cfg-name" value="Local Python Agent" maxlength="120">
+            </div>
+            <div class="field-wrapper">
+              <label class="field-label">Configuration ID</label>
+              <input type="text" class="input-text input-mono" id="cfg-id" value="custom-python-agent" readonly>
+              <span class="field-desc">Stable identifier referenced in workflow definitions and MCP.</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 2: MODE & EXECUTION -->
+        <section class="form-section">
+          <div class="form-section-title">Execution Mode & Transport</div>
+          
+          <!-- Mode Selector (Direct vs Launcher) -->
+          <div class="field-wrapper">
+            <label class="field-label">Execution Mode</label>
+            <div class="segmented-control">
+              <div class="seg-item selected" id="seg-mode-direct" onclick="selectMode('direct')">Direct Turn Mode</div>
+              <div class="seg-item" id="seg-mode-launcher" onclick="selectMode('launcher')">Delegated Claim-Ticket Mode (Launcher)</div>
+            </div>
+            <span class="field-desc" id="mode-desc">
+              Interlock executes each assignment as an immediate single turn via subprocess or HTTP POST and awaits result.
+            </span>
+          </div>
+
+          <!-- Transport Selector (Subprocess vs HTTP) -->
+          <div class="field-wrapper">
+            <label class="field-label">Transport Protocol</label>
+            <div class="segmented-control">
+              <div class="seg-item selected" id="seg-trans-sub" onclick="selectTransport('subprocess')">Subprocess (CLI)</div>
+              <div class="seg-item" id="seg-trans-http" onclick="selectTransport('http')">HTTP Endpoint</div>
+            </div>
+          </div>
+
+          <!-- Timeout & Concurrency -->
+          <div class="fields-row">
+            <div class="field-wrapper">
+              <label class="field-label">Execution Timeout (seconds)</label>
+              <input type="number" class="input-text" id="cfg-timeout" value="120" min="1" placeholder="Optional (e.g. 300)">
+              <span class="field-desc">Interlock interrupts the execution when exceeded. Omit for unlimited.</span>
+            </div>
+            <div class="field-wrapper">
+              <label class="field-label">Default Permissions</label>
+              <select class="select-native" id="cfg-perms">
+                <option value="standard" selected>Standard (Interlock tool approval policy)</option>
+                <option value="read-only">Read-only (Deny file/command writes)</option>
+                <option value="full-access">Full access (Execute without routine approval stops)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Environment Variables Editor -->
+          <div class="field-wrapper">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label class="field-label">Environment Variables</label>
+              <button class="btn btn-ghost btn-sm" onclick="addEnvRow()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add variable
+              </button>
+            </div>
+            <table class="kv-table" id="env-table">
+              <thead>
+                <tr>
+                  <th style="width: 40%">Variable Name</th>
+                  <th>Value</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input type="text" class="input-text input-mono" value="AGENT_LOG_LEVEL"></td>
+                  <td><input type="text" class="input-text input-mono" value="debug"></td>
+                  <td>
+                    <button class="btn-danger-ghost" onclick="this.closest('tr').remove()" title="Delete">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><input type="text" class="input-text input-mono" value="MODEL_NAME"></td>
+                  <td><input type="text" class="input-text input-mono" value="claude-3-7-sonnet"></td>
+                  <td>
+                    <button class="btn-danger-ghost" onclick="this.closest('tr').remove()" title="Delete">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="field-desc">
+              Subprocess receives these variables. Template tokens:
+              <div class="chip-group">
+                <span class="var-chip" onclick="insertToken('$INTERLOCK_WORK_ID')">$INTERLOCK_WORK_ID</span>
+                <span class="var-chip" onclick="insertToken('$INTERLOCK_RUN_ID')">$INTERLOCK_RUN_ID</span>
+                <span class="var-chip" onclick="insertToken('$INTERLOCK_CWD')">$INTERLOCK_CWD</span>
+                <span class="var-chip" onclick="insertToken('$INTERLOCK_CLAIM_TOKEN')">$INTERLOCK_CLAIM_TOKEN</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 3: ENDPOINTS & COMMANDS -->
+        <section class="form-section" id="section-endpoints">
+          <div class="form-section-title">
+            <span id="endpoints-title">Turn Command & Invocation</span>
+          </div>
+
+          <!-- DIRECT + SUBPROCESS VIEW -->
+          <div id="view-direct-sub">
+            <div class="field-wrapper">
+              <label class="field-label">Turn Command <span class="req">*</span></label>
+              <input type="text" class="input-text input-mono" id="cmd-direct" value="python -m my_agent.turn --work-id $INTERLOCK_WORK_ID" placeholder="e.g. node ./runner.js --work-id $INTERLOCK_WORK_ID">
+              <span class="field-desc">Subprocess command line executed for each turn. STDOUT receives task result JSON.</span>
+            </div>
+          </div>
+
+          <!-- DIRECT + HTTP VIEW -->
+          <div id="view-direct-http" style="display: none;">
+            <div class="field-wrapper">
+              <label class="field-label">Endpoint URL <span class="req">*</span></label>
+              <input type="url" class="input-text input-mono" id="url-direct" placeholder="https://agent-service.internal/api/turn">
+              <span class="field-desc">HTTP POST endpoint receiving the assignment context and returning the result.</span>
+            </div>
+            
+            <!-- HTTP Headers Table -->
+            <div class="field-wrapper" style="margin-top: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label class="field-label">HTTP Headers</label>
+                <button class="btn btn-ghost btn-sm" onclick="addHeaderRow()">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Add header
+                </button>
+              </div>
+              <table class="kv-table" id="headers-table">
+                <thead>
+                  <tr>
+                    <th style="width: 40%">Header Name</th>
+                    <th>Header Value</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input type="text" class="input-text input-mono" value="Authorization"></td>
+                    <td><input type="text" class="input-text input-mono" value="Bearer secret-token-xyz"></td>
+                    <td>
+                      <button class="btn-danger-ghost" onclick="this.closest('tr').remove()" title="Delete">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- LAUNCHER VIEW (CLAIM-TICKET DELEGATION) -->
+          <div id="view-launcher" style="display: none;">
+            <div class="field-wrapper" style="margin-bottom: 16px;">
+              <label class="field-label">Launch Command / Endpoint <span class="req">*</span></label>
+              <input type="text" class="input-text input-mono" id="cmd-launcher" value="docker run -d --name agent-$INTERLOCK_WORK_ID my-agent:latest --claim $INTERLOCK_CLAIM_TOKEN" placeholder="e.g. docker run -d ... or https://orchestrator/launch">
+              <span class="field-desc">Dispatches the assignment claim ticket to spin up an independent agent daemon or container.</span>
+            </div>
+
+            <div class="field-label" style="margin-bottom: 8px;">Lifecycle Hooks (Optional)</div>
+            
+            <!-- Hook 1: Status -->
+            <div class="hook-card">
+              <div class="hook-header" onclick="toggleHook('hook-status')">
+                <div class="hook-header-left">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <span>Status Polling Hook</span>
+                  <span class="hook-badge">GET / Polling</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 11px; color: var(--accent-text);">Configured</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+              </div>
+              <div class="hook-body collapsed" id="hook-status">
+                <div class="field-wrapper">
+                  <label class="field-label">Status Check Command or URL</label>
+                  <input type="text" class="input-text input-mono" value="docker inspect --format='{{.State.Status}}' agent-$INTERLOCK_WORK_ID">
+                  <span class="field-desc">Polled periodically to monitor running, completed, or failed state.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hook 2: Message / Human Input -->
+            <div class="hook-card">
+              <div class="hook-header" onclick="toggleHook('hook-message')">
+                <div class="hook-header-left">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  <span>Message & Human Input Hook</span>
+                  <span class="hook-badge">POST / Input</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 11px; color: var(--muted);">Optional</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+              </div>
+              <div class="hook-body collapsed" id="hook-message">
+                <div class="field-wrapper">
+                  <label class="field-label">Message Delivery Command or URL</label>
+                  <input type="text" class="input-text input-mono" placeholder="e.g. curl -X POST https://agent-gateway/message -d '$INTERLOCK_INPUT'">
+                  <span class="field-desc">Invoked when a human replies to an agent question or approval request.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hook 3: Stop Hook -->
+            <div class="hook-card">
+              <div class="hook-header" onclick="toggleHook('hook-stop')">
+                <div class="hook-header-left">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><rect width="6" height="6" x="9" y="9"/></svg>
+                  <span>Stop & Cancellation Hook</span>
+                  <span class="hook-badge">POST / Abort</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 11px; color: var(--accent-text);">Configured</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+              </div>
+              <div class="hook-body collapsed" id="hook-stop">
+                <div class="field-wrapper">
+                  <label class="field-label">Stop Command or URL</label>
+                  <input type="text" class="input-text input-mono" value="docker stop -t 10 agent-$INTERLOCK_WORK_ID">
+                  <span class="field-desc">Invoked when a user stops an assignment or cancels the run.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hook 4: Archive Hook -->
+            <div class="hook-card">
+              <div class="hook-header" onclick="toggleHook('hook-archive')">
+                <div class="hook-header-left">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+                  <span>Archive & Cleanup Hook</span>
+                  <span class="hook-badge">Cleanup</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 11px; color: var(--muted);">Optional</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+              </div>
+              <div class="hook-body collapsed" id="hook-archive">
+                <div class="field-wrapper">
+                  <label class="field-label">Archive Command or URL</label>
+                  <input type="text" class="input-text input-mono" value="docker rm -f agent-$INTERLOCK_WORK_ID">
+                  <span class="field-desc">Invoked after execution completes or fails to release container and disk resources.</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </section>
+
+        <!-- SECTION 4: CONTAINMENT & SECURITY -->
+        <section class="form-section">
+          <div class="form-section-title">Directory Containment & Working Directory</div>
+          <div class="form-section-subtitle">Constrain where subprocesses run and which directories dynamic tasks can access.</div>
+
+          <div class="field-wrapper">
+            <label class="field-label">Working Directory (cwd)</label>
+            <input type="text" class="input-text input-mono" id="cfg-cwd" value="/Users/dan/dev/interlock" placeholder="Leave blank to use Interlock’s working directory">
+            <span class="field-desc">Default starting folder for subprocesses. Must be an absolute path if provided.</span>
+          </div>
+
+          <!-- Allowed Roots (Dynamic CWD containment per #232) -->
+          <div class="field-wrapper" style="margin-top: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label class="field-label">Allowed Roots (allowedRoots)</label>
+              <button class="btn btn-ghost btn-sm" onclick="addAllowedRoot()">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add allowed root
+              </button>
+            </div>
+            <div id="allowed-roots-list" style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="text" class="input-text input-mono" value="/Users/dan/dev" placeholder="/absolute/path">
+                <button class="btn-danger-ghost" onclick="this.closest('div').remove()" title="Delete">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+                </button>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="text" class="input-text input-mono" value="/tmp/agent-workspaces" placeholder="/absolute/path">
+                <button class="btn-danger-ghost" onclick="this.closest('div').remove()" title="Delete">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+                </button>
+              </div>
+            </div>
+            <span class="field-desc">Constrains dynamic working directory binding. Assignments resolving outside declared roots fail with cwd_blocked.</span>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <footer class="modal-footer">
+        <div id="modal-validation-error" class="validation-alert" style="visibility: hidden;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span id="validation-msg">Validation error message</span>
+        </div>
+        <div style="display: flex; gap: 10px; margin-left: auto;">
+          <button class="btn btn-default" onclick="closeCustomDialog()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveCustomDialog()">Save configuration</button>
+        </div>
+      </footer>
+
+    </div>
+  </div>
+
+  <script>
+    // State management for prototype
+    let currentMode = 'direct'; // 'direct' | 'launcher'
+    let currentTransport = 'subprocess'; // 'subprocess' | 'http'
+
+    function setViewport(width) {
+      document.getElementById('app-canvas').style.maxWidth = width + 'px';
+      document.querySelectorAll('.viewport-btn-group .ctrl-btn').forEach(b => b.classList.remove('active'));
+      if (width === 1180) document.getElementById('btn-vp-desktop').classList.add('active');
+      if (width === 768) document.getElementById('btn-vp-tablet').classList.add('active');
+      if (width === 390) document.getElementById('btn-vp-mobile').classList.add('active');
+    }
+
+    function setScenario(scene) {
+      document.querySelectorAll('.scenario-btn-group .ctrl-btn').forEach(b => b.classList.remove('active'));
+      if (scene === 'list') {
+        document.getElementById('btn-scene-list').classList.add('active');
+        closeCustomDialog();
+      } else if (scene === 'direct') {
+        document.getElementById('btn-scene-direct').classList.add('active');
+        openCustomDialog('direct');
+      } else if (scene === 'launcher') {
+        document.getElementById('btn-scene-launcher').classList.add('active');
+        openCustomDialog('launcher');
+      }
+    }
+
+    function openCustomDialog(mode) {
+      document.getElementById('custom-modal').classList.remove('hidden');
+      if (mode === 'direct') {
+        selectMode('direct');
+        selectTransport('subprocess');
+        document.getElementById('cfg-name').value = 'Local Python Agent';
+        document.getElementById('cfg-id').value = 'custom-python-agent';
+      } else if (mode === 'launcher') {
+        selectMode('launcher');
+        selectTransport('http');
+        document.getElementById('cfg-name').value = 'Remote Docker Launcher';
+        document.getElementById('cfg-id').value = 'custom-docker-launcher';
+      }
+    }
+
+    function closeCustomDialog() {
+      document.getElementById('custom-modal').classList.add('hidden');
+      document.querySelectorAll('.scenario-btn-group .ctrl-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('btn-scene-list').classList.add('active');
+    }
+
+    function selectMode(mode) {
+      currentMode = mode;
+      document.getElementById('seg-mode-direct').classList.toggle('selected', mode === 'direct');
+      document.getElementById('seg-mode-launcher').classList.toggle('selected', mode === 'launcher');
+      
+      const desc = document.getElementById('mode-desc');
+      if (mode === 'direct') {
+        desc.textContent = 'Interlock executes each assignment as an immediate single turn via subprocess or HTTP POST and awaits result.';
+        document.getElementById('endpoints-title').textContent = 'Turn Command & Invocation';
+        updateEndpointsView();
+      } else {
+        desc.textContent = 'Interlock delegates assignment claim tickets to an external launcher/orchestrator (Docker, VM, worker daemon) with optional lifecycle hooks.';
+        document.getElementById('endpoints-title').textContent = 'Launcher Command & Lifecycle Hooks';
+        document.getElementById('view-direct-sub').style.display = 'none';
+        document.getElementById('view-direct-http').style.display = 'none';
+        document.getElementById('view-launcher').style.display = 'block';
+      }
+    }
+
+    function selectTransport(trans) {
+      currentTransport = trans;
+      document.getElementById('seg-trans-sub').classList.toggle('selected', trans === 'subprocess');
+      document.getElementById('seg-trans-http').classList.toggle('selected', trans === 'http');
+      
+      if (currentMode === 'direct') {
+        updateEndpointsView();
+      }
+    }
+
+    function updateEndpointsView() {
+      if (currentMode === 'direct') {
+        document.getElementById('view-launcher').style.display = 'none';
+        if (currentTransport === 'subprocess') {
+          document.getElementById('view-direct-sub').style.display = 'block';
+          document.getElementById('view-direct-http').style.display = 'none';
+        } else {
+          document.getElementById('view-direct-sub').style.display = 'none';
+          document.getElementById('view-direct-http').style.display = 'block';
+        }
+      }
+    }
+
+    function toggleHook(hookId) {
+      const el = document.getElementById(hookId);
+      el.classList.toggle('collapsed');
+    }
+
+    function addEnvRow() {
+      const tbody = document.querySelector('#env-table tbody');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" class="input-text input-mono" placeholder="KEY"></td>
+        <td><input type="text" class="input-text input-mono" placeholder="value"></td>
+        <td>
+          <button class="btn-danger-ghost" onclick="this.closest('tr').remove()" title="Delete">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    function addHeaderRow() {
+      const tbody = document.querySelector('#headers-table tbody');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" class="input-text input-mono" placeholder="Header-Name"></td>
+        <td><input type="text" class="input-text input-mono" placeholder="Header-Value"></td>
+        <td>
+          <button class="btn-danger-ghost" onclick="this.closest('tr').remove()" title="Delete">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    function addAllowedRoot() {
+      const container = document.getElementById('allowed-roots-list');
+      const div = document.createElement('div');
+      div.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+      div.innerHTML = `
+        <input type="text" class="input-text input-mono" placeholder="/absolute/path">
+        <button class="btn-danger-ghost" onclick="this.closest('div').remove()" title="Delete">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+        </button>
+      `;
+      container.appendChild(div);
+    }
+
+    function insertToken(token) {
+      if (currentMode === 'direct' && currentTransport === 'subprocess') {
+        const input = document.getElementById('cmd-direct');
+        input.value += (input.value ? ' ' : '') + token;
+        input.focus();
+      } else if (currentMode === 'launcher') {
+        const input = document.getElementById('cmd-launcher');
+        input.value += (input.value ? ' ' : '') + token;
+        input.focus();
+      }
+    }
+
+    function toggleNewProfileCard() {
+      const card = document.getElementById('new-profile-card');
+      card.style.display = card.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function handleHarnessSelect(val) {
+      // If custom is picked, give direct hint
+    }
+
+    function startNewCustomProfile() {
+      const name = document.getElementById('new-name').value || 'New Custom Harness';
+      toggleNewProfileCard();
+      openCustomDialog('direct');
+      document.getElementById('cfg-name').value = name;
+      document.getElementById('cfg-id').value = 'custom-' + Math.random().toString(36).slice(2, 9);
+    }
+
+    function saveCustomDialog() {
+      // Validation check simulation
+      const name = document.getElementById('cfg-name').value.trim();
+      const errBox = document.getElementById('modal-validation-error');
+      const msg = document.getElementById('validation-msg');
+      
+      if (!name) {
+        errBox.style.visibility = 'visible';
+        msg.textContent = 'Configuration name cannot be blank';
+        return;
+      }
+      
+      if (currentMode === 'direct') {
+        if (currentTransport === 'subprocess' && !document.getElementById('cmd-direct').value.trim()) {
+          errBox.style.visibility = 'visible';
+          msg.textContent = 'Turn command line cannot be blank';
+          return;
+        }
+        if (currentTransport === 'http') {
+          const url = document.getElementById('url-direct').value.trim();
+          if (!url || !url.startsWith('http')) {
+            errBox.style.visibility = 'visible';
+            msg.textContent = 'Valid HTTP/HTTPS endpoint URL is required';
+            return;
+          }
+        }
+      } else {
+        if (!document.getElementById('cmd-launcher').value.trim()) {
+          errBox.style.visibility = 'visible';
+          msg.textContent = 'Launch command or endpoint cannot be blank';
+          return;
+        }
+      }
+
+      errBox.style.visibility = 'hidden';
+      closeCustomDialog();
+    }
+    function checkHashRoute() {
+      const hash = window.location.hash.replace('#', '');
+      if (hash === 'direct') {
+        setScenario('direct');
+      } else if (hash === 'launcher') {
+        setScenario('launcher');
+      } else if (hash === 'mobile') {
+        setViewport(390);
+      } else if (hash === 'mobile-direct') {
+        setViewport(390);
+        setScenario('direct');
+      } else {
+        setScenario('list');
+      }
+    }
+
+    window.addEventListener('load', checkHashRoute);
+    window.addEventListener('hashchange', checkHashRoute);
+  </script>
+</body>
+</html>
