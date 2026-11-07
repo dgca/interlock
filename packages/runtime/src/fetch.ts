@@ -1,5 +1,8 @@
 import { jsonSchema, type Json, type FetchRequest } from '@interlock/core';
 
+/** The client stopped observing a dispatched request before its full response. */
+export class UncertainFetch extends Error {}
+
 /** One request per explicit attempt. Timeout includes reading the response body. */
 export async function executeFetch(
   request: FetchRequest,
@@ -15,15 +18,20 @@ export async function executeFetch(
   const abort = () => controller.abort(new Error('Fetch cancelled'));
   signal.addEventListener('abort', abort, { once: true });
   if (signal.aborted) abort();
+  let dispatched = false,
+    responseComplete = false;
   try {
-    const response = await fetch(request.url, {
+    const options: RequestInit = {
       method: request.method,
       headers: request.headers,
       body:
         request.body === undefined ? undefined : JSON.stringify(request.body),
       redirect: allowRedirects ? 'follow' : 'manual',
       signal: controller.signal,
-    });
+    };
+    controller.signal.throwIfAborted();
+    dispatched = true;
+    const response = await fetch(request.url, options);
     if (
       !allowRedirects &&
       [301, 302, 303, 307, 308].includes(response.status) &&
@@ -53,6 +61,7 @@ export async function executeFetch(
         reader.releaseLock();
       }
     }
+    responseComplete = true;
     const text = Buffer.concat(chunks).toString('utf8');
     const contentType =
       response.headers
@@ -79,8 +88,14 @@ export async function executeFetch(
       body,
     };
   } catch (error) {
-    if (controller.signal.aborted) throw controller.signal.reason;
-    throw error;
+    const failure = controller.signal.aborted
+      ? controller.signal.reason
+      : error;
+    if (dispatched && !responseComplete)
+      throw new UncertainFetch(
+        failure instanceof Error ? failure.message : String(failure),
+      );
+    throw failure;
   } finally {
     clearTimeout(timer);
     signal.removeEventListener('abort', abort);

@@ -89,7 +89,7 @@ import {
   type DraftLayout,
 } from '@interlock/core';
 import { assignmentInstructions } from './agentInstructions.js';
-import { executeFetch } from './fetch.js';
+import { executeFetch, UncertainFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 import { RunStarts } from './runStarts.js';
 import { RunAdmission } from './runAdmission.js';
@@ -379,6 +379,25 @@ export class Engine {
       this.trials,
     );
     for (const id of this.trials.recover()) this.cancelTree(id);
+    // Deterministic ownership survives a lost process outcome. Background supervisors
+    // keep their reservation while authenticated recovery establishes their result.
+    for (const run of store.runs()) {
+      let changed = false;
+      for (const execution of run.executions) {
+        if (!execution.resourceActive) continue;
+        if (
+          run.status === 'running' &&
+          execution.background &&
+          ['launching', 'running', 'completed'].includes(
+            execution.background.state,
+          )
+        )
+          continue;
+        this.resources.endExecution(run.id, execution, true);
+        changed = true;
+      }
+      if (changed) this.save(run);
+    }
     // A process interruption gives no evidence that local work or remote side effects completed.
     for (const run of store.runs()) {
       const execution = run.executions.at(-1);
@@ -386,7 +405,8 @@ export class Engine {
         run.status === 'running' &&
         (execution?.kind === 'script' || execution?.kind === 'fetch') &&
         execution.status === 'running' &&
-        !execution.background
+        !execution.background &&
+        (!execution.resources?.length || execution.operationStartedAt)
       ) {
         this.fail(
           run,
@@ -1388,6 +1408,8 @@ export class Engine {
     return caller ? { runId: parent.id, executionId: caller.id } : undefined;
   }
   private fail(run: Run, execution: NodeExecution, error: string) {
+    if (execution.resourceActive)
+      this.resources.endExecution(run.id, execution, true);
     for (const id of execution.childRunIds)
       if (
         this.run(id).parentMode !== 'detached' &&
@@ -1725,12 +1747,12 @@ export class Engine {
     this.event(run, 'node.completed', execution.label);
   }
   private advance(run: Run): boolean {
-    if (
-      run.status === 'queued' ||
-      terminal(run.status) ||
-      this.pauses.applicable(run.workflowId).length
-    )
+    if (run.status === 'queued' || terminal(run.status)) return false;
+    if (this.pauses.applicable(run.workflowId).length) {
+      const pending = run.executions.at(-1);
+      if (pending?.resourceBlocked) this.admitOperation(run, pending, false);
       return false;
+    }
     const definition = this.definition(run),
       node = definition.nodes.find((n) => n.id === run.cursor)!;
     let execution = run.executions.at(-1);
@@ -1773,6 +1795,24 @@ export class Engine {
           execution.input,
           `${node.label} input`,
         );
+        if (
+          (node.kind === 'script' ||
+            node.kind === 'fetch' ||
+            isPollWait(node)) &&
+          node.resources?.length
+        )
+          execution.resources = resourceNamesSchema
+            .parse(
+              Object.values(
+                resolveBindingFields(
+                  Object.fromEntries(
+                    node.resources.map((binding, i) => [String(i), binding]),
+                  ),
+                  this.bindingSource(run, execution.input),
+                ),
+              ),
+            )
+            .sort();
       } catch (error) {
         this.fail(run, execution, message(error));
         return true;
@@ -2126,7 +2166,13 @@ export class Engine {
             `${node.label}: checking every ${Math.round(node.timing.everyMs / 1000)}s${execution.timeoutAt ? ` until ${execution.timeoutAt}` : ''}`,
           );
         }
-        if (this.finishPollTimeout(run, execution, node)) return true;
+        if (
+          !execution.resourceBlocked &&
+          this.finishPollTimeout(run, execution, node)
+        )
+          return true;
+        if (Date.parse(execution.nextCheckAt!) <= Date.now())
+          this.admitOperation(run, execution);
         return false;
       }
       if (node.kind === 'wait') {
@@ -2172,6 +2218,7 @@ export class Engine {
           changed = true;
         }
         if (changed) this.save(run);
+        this.admitOperation(run, execution);
         return false;
       }
       if (node.kind === 'workflow' && node.mode === 'detached') {
@@ -2405,12 +2452,57 @@ export class Engine {
     }
   }
   stop() {
+    if (this.stopped) return;
     void this.executors.stop();
     this.trials.stop();
     this.simulations.stop();
     this.continuation.stop();
     this.stopped = true;
+    this.store.transaction(() => {
+      for (const run of this.store.activeRuns()) {
+        const execution = run.executions.at(-1);
+        if (execution?.resourceActive && !execution.background) {
+          this.resources.endExecution(run.id, execution, true);
+          this.save(run);
+        }
+      }
+    });
     for (const controller of this.localJobs.values()) controller.abort();
+  }
+  private admitOperation(run: Run, execution: NodeExecution, acquire = true) {
+    if (!execution.resources?.length || execution.resourceActive) return true;
+    const owners = this.resources.owners(execution.resources);
+    if (owners.length) {
+      if (!isDeepStrictEqual(execution.resourceBlocked?.owners, owners)) {
+        execution.resourceBlocked = {
+          owners,
+          since: execution.resourceBlocked?.since ?? now(),
+          remainingMs:
+            execution.resourceBlocked?.remainingMs ??
+            (execution.timeoutAt
+              ? Math.max(0, Date.parse(execution.timeoutAt) - Date.now())
+              : undefined),
+        };
+        // Only resource queue time is excluded from the polling Wait deadline.
+        execution.timeoutAt = undefined;
+        this.save(run);
+      }
+      return false;
+    }
+    if (execution.resourceBlocked?.remainingMs !== undefined)
+      execution.timeoutAt = new Date(
+        Date.now() + execution.resourceBlocked.remainingMs,
+      ).toISOString();
+    const wasBlocked = !!execution.resourceBlocked;
+    execution.resourceBlocked = undefined;
+    if (!acquire) {
+      if (wasBlocked) this.save(run);
+      return false;
+    }
+    this.resources.acquireExecution(run.id, execution);
+    execution.operationStartedAt = now();
+    this.save(run);
+    return true;
   }
   pump() {
     if (this.stopped) return;
@@ -2470,11 +2562,13 @@ export class Engine {
             continuedChains.add(candidate.chain.rootRunId);
         }
       }
+      this.resources.refresh();
     });
     for (const run of this.store.activeRuns()) {
       const execution = run.executions.at(-1);
       if (
         !execution ||
+        (execution.resources?.length && !execution.resourceActive) ||
         this.localJobs.has(execution.id) ||
         (this.pauses.applicable(run.workflowId).length && !execution.background)
       )
@@ -2528,7 +2622,9 @@ export class Engine {
           (error) => ({
             ok: false as const,
             error: message(error),
-            uncertain: error instanceof UncertainScript,
+            uncertain:
+              error instanceof UncertainScript ||
+              error instanceof UncertainFetch,
           }),
         )
         .then((result) => {
@@ -2541,6 +2637,14 @@ export class Engine {
             )
               return;
             const current = latest.executions.at(-1)!;
+            this.resources.endExecution(
+              latest.id,
+              current,
+              !result.ok &&
+                (result.uncertain ||
+                  (!!current.background &&
+                    current.background.state !== 'completed')),
+            );
             if (result.ok && result.resolvedCwd) {
               current.resolvedCwd = result.resolvedCwd;
             }
@@ -2550,6 +2654,10 @@ export class Engine {
                 (result.uncertain || current.background.state !== 'completed')
               ) {
                 current.background.state = 'uncertain';
+                this.fail(latest, current, node.label + ': ' + result.error);
+                return;
+              }
+              if (result.uncertain && current.resources?.length) {
                 this.fail(latest, current, node.label + ': ' + result.error);
                 return;
               }
@@ -2602,8 +2710,11 @@ export class Engine {
             if (
               latest.status === 'running' &&
               latest.executions.at(-1)?.id === execution.id
-            )
-              this.fail(latest, latest.executions.at(-1)!, message(error));
+            ) {
+              const current = latest.executions.at(-1)!;
+              this.resources.endExecution(latest.id, current, true);
+              this.fail(latest, current, message(error));
+            }
           });
         })
         .finally(() => {
@@ -2622,6 +2733,8 @@ export class Engine {
     if (!execution.timeoutAt || Date.parse(execution.timeoutAt) > Date.now())
       return false;
     this.localJobs.get(execution.id)?.abort();
+    if (execution.resourceActive)
+      this.resources.endExecution(run.id, execution, true);
     this.event(
       run,
       'node.timed_out',
@@ -2896,6 +3009,8 @@ export class Engine {
       return { output: redact.json(output), resolvedCwd: effectiveCwd };
     } catch (error) {
       if (error instanceof UncertainScript) throw error;
+      if (error instanceof UncertainFetch)
+        throw new UncertainFetch(redact.text(message(error)));
       throw new InterlockError(redact.text(message(error)));
     }
   }
@@ -2947,6 +3062,7 @@ export class Engine {
     const settle = (result: {
       output?: Json;
       error?: string;
+      uncertain?: boolean;
       resolvedCwd?: string;
     }) => {
       if (this.stopped) return;
@@ -2959,6 +3075,7 @@ export class Engine {
           current.status !== 'waiting'
         )
           return;
+        this.resources.endExecution(latest.id, current, result.uncertain);
         if (result.resolvedCwd) current.resolvedCwd = result.resolvedCwd;
         if (this.finishPollTimeout(latest, current, node)) return;
         const checked = now();
@@ -2968,6 +3085,12 @@ export class Engine {
           output: result.output,
           error: result.error,
         };
+        if (result.uncertain && current.resources?.length) {
+          current.nextCheckAt = checked;
+          current.resumeAt = checked;
+          this.admitOperation(latest, current);
+          return;
+        }
         if (result.error === undefined) {
           let value: Json;
           try {
@@ -3009,7 +3132,11 @@ export class Engine {
     void job
       .then(
         (res) => settle({ output: res.output, resolvedCwd: res.resolvedCwd }),
-        (error) => settle({ error: message(error) }),
+        (error) =>
+          settle({
+            error: message(error),
+            uncertain: error instanceof UncertainFetch,
+          }),
       )
       .finally(() => {
         this.localJobs.delete(execution.id);
@@ -3148,14 +3275,26 @@ export class Engine {
   manageWorkResources(input: WorkResourceRequest) {
     const q = workResourceRequestSchema.parse(input);
     if (q.action === 'inspect')
-      return {
-        workId: q.workId,
-        reservations: this.resources.forWork(q.workId),
-      };
+      return 'workId' in q
+        ? { workId: q.workId, reservations: this.resources.forWork(q.workId) }
+        : {
+            runId: q.runId,
+            executionId: q.executionId,
+            reservations: this.resources.forExecution(q.runId, q.executionId),
+          };
     this.pump();
-    return this.store.transaction(() =>
-      this.resources.release(q.workId, q.expectedAttempt, q.actor),
+    const result = this.store.transaction(() =>
+      'workId' in q
+        ? this.resources.release(q.workId, q.expectedAttempt, q.actor)
+        : this.resources.releaseExecution(
+            q.runId,
+            q.executionId,
+            q.expectedAttempt,
+            q.actor,
+          ),
     );
+    this.pump();
+    return result;
   }
   handoffContext(input: ContextHandoffInput) {
     this.pump();
@@ -3620,20 +3759,29 @@ export class Engine {
         throw new InterlockError(message(error));
       }
     }
-    if (input.action === 'reconcile') {
-      if (execution.background.state !== 'uncertain')
-        throw new InterlockError(
-          'Only uncertain background Scripts can be reconciled',
+    const background = execution.background;
+    if (input.action === 'reconcile')
+      this.store.transaction(() => {
+        if (background.state !== 'uncertain')
+          throw new InterlockError(
+            'Only uncertain background Scripts can be reconciled',
+          );
+        background.state = 'reconciled';
+        this.resources.endExecution(run.id, execution, true);
+        this.resources.releaseExecution(
+          run.id,
+          execution.id,
+          execution.resourceAttempt ?? 1,
+          'script reconciliation',
         );
-      execution.background.state = 'reconciled';
-      this.save(run);
-      this.event(
-        run,
-        'script.reconciled',
-        'Original Script confirmed stopped and effects inspected: ' +
-          input.reason,
-      );
-    }
+        this.save(run);
+        this.event(
+          run,
+          'script.reconciled',
+          'Original Script confirmed stopped and effects inspected: ' +
+            input.reason,
+        );
+      });
     return {
       runId: run.id,
       executionId: execution.id,
@@ -3650,6 +3798,8 @@ export class Engine {
       this.cancelTree(child.id, afterCommit);
     run.status = 'cancelled';
     const execution = run.executions.at(-1);
+    if (execution?.resourceActive)
+      this.resources.endExecution(run.id, execution, true);
     const stop = () => {
       if (
         execution?.background &&

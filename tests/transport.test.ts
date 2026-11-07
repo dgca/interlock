@@ -34,6 +34,7 @@ function leaseDeadline(value: unknown): number {
 
 let testbenchDiscovery: unknown;
 let scheduleDiscovery: unknown;
+let resourceDiscovery: unknown;
 
 it.each(['stdio', 'http'])(
   'completes a workflow through MCP %s and the shared HTTP and SQLite interfaces',
@@ -175,6 +176,38 @@ it.each(['stdio', 'http'])(
         draftRevision: engine.workflow(w.id).draftRevision,
       });
       const toolDiscovery = await client.listTools();
+      const resourceTool = toolDiscovery.tools.find(
+        (t) => t.name === 'manage_work_resources',
+      )!;
+      if (resourceDiscovery) expect(resourceTool).toEqual(resourceDiscovery);
+      else resourceDiscovery = resourceTool;
+      for (const request of [
+        { action: 'inspect', workId: 'agent-id' },
+        { action: 'inspect', runId: 'run-id', executionId: 'step-id' },
+        {
+          action: 'release',
+          runId: 'run-id',
+          executionId: 'step-id',
+          expectedAttempt: 1,
+          actor: 'test',
+          confirmStopped: true,
+        },
+      ])
+        assertContract(
+          resourceTool.inputSchema,
+          jsonSchema.parse({ request }),
+          'resource request',
+        );
+      expect(
+        await call('manage_work_resources', {
+          request: {
+            action: 'inspect',
+            runId: 'run-id',
+            executionId: 'step-id',
+          },
+        }),
+      ).toEqual({ runId: 'run-id', executionId: 'step-id', reservations: [] });
+
       const scheduleTools = toolDiscovery.tools.filter((t) =>
         ['read_workflow_triggers', 'manage_workflow_triggers'].includes(t.name),
       );
