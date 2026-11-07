@@ -1,9 +1,11 @@
-import { EventTriggers } from './eventTriggers.js';
+import { EventTriggers, type EventWebhookFetch } from './eventTriggers.js';
+import { DesktopNotifier } from './notifications.js';
 import { RunVersions } from './runVersions.js';
 import { modelReferences } from '@interlock/core';
 import { runDoctor } from './doctor.js';
 import { generateWorkflowReport } from './report.js';
 import type {
+  DesktopNotificationSender,
   DoctorOptions,
   DoctorReport,
   ReportFilter,
@@ -195,6 +197,7 @@ export class Engine {
   readonly pauses: PauseHolds;
   readonly holds: WorkHolds;
   readonly externalInputs: ExternalInputs;
+  readonly notifications: DesktopNotifier;
   private readonly resources: WorkResources;
   readonly contextGroups: ContextContinuityGroups;
   private readonly starts: RunStarts;
@@ -210,6 +213,9 @@ export class Engine {
       trialRoot?: string;
       allowedRoots?: string[];
       clock?: { now: () => number };
+      desktopNotifications?: boolean;
+      desktopNotifier?: DesktopNotificationSender;
+      webhookFetch?: EventWebhookFetch;
       substituteWorkflow?: (
         node: Extract<WorkflowNode, { kind: 'workflow' }>,
         execution: NodeExecution,
@@ -222,6 +228,10 @@ export class Engine {
       ) => Promise<Json>;
     } = {},
   ) {
+    this.notifications = new DesktopNotifier({
+      enabled: options.desktopNotifications,
+      sender: options.desktopNotifier,
+    });
     this.stalls = new Stalls(store, (run, type, message) =>
       this.event(run, type, message),
     );
@@ -478,6 +488,7 @@ export class Engine {
           return this.run(result.id);
         },
         (runId) => this.quiescence(runId),
+        options.webhookFetch ?? globalThis.fetch,
       ),
     );
     this.history = new RunHistory(
@@ -2839,12 +2850,16 @@ export class Engine {
       return true;
     }
   }
+  async drain(): Promise<void> {
+    await this.triggers.events.drain();
+  }
   stop() {
     if (this.stopped) return;
     void this.executors.stop();
     this.trials.stop();
     this.simulations.stop();
     this.continuation.stop();
+    this.triggers.events.stop();
     this.stopped = true;
     this.store.transaction(() => {
       for (const run of this.store.activeRuns()) {
@@ -3114,11 +3129,31 @@ export class Engine {
     }
     this.store.transaction(() => {
       this.stalls.tick();
-      const attention = new Set(this.runAttention().map((item) => item.runId));
-      for (const runId of attention) {
-        if (!this.store.get('eventAttentionStates', runId)) {
-          this.store.put('eventAttentionStates', { id: runId, runId });
-          this.event(this.run(runId), 'needs_attention', 'Run needs attention');
+      const attentionList = this.runAttention();
+      const attention = new Set(attentionList.map((item) => item.runId));
+      for (const item of attentionList) {
+        if (!this.store.get('eventAttentionStates', item.runId)) {
+          this.store.put('eventAttentionStates', {
+            id: item.runId,
+            runId: item.runId,
+          });
+          const run = this.run(item.runId);
+          this.event(run, 'needs_attention', 'Run needs attention');
+          if (this.notifications.isEnabled) {
+            const workflow = this.store.get<Workflow>(
+              'workflows',
+              run.workflowId,
+            );
+            this.notifications.notify({
+              runId: run.id,
+              workflowId: run.workflowId,
+              workflowName: workflow?.name,
+              title: 'Interlock: Needs attention',
+              message: `Run ${run.id.slice(0, 8)} (${workflow?.name ?? run.workflowId}) needs attention: ${item.reasons.join(', ')}`,
+              reasons: item.reasons,
+              occurredAt: new Date().toISOString(),
+            });
+          }
         }
       }
       for (const state of this.store.list<{ id: string }>(

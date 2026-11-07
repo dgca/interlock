@@ -132,9 +132,14 @@ export const workflowBundleSchema = z
           variableReferences,
         ),
         ...(w.webhooks ?? []).map((t) => t.config.authentication.secretId),
+        ...(w.eventTriggers ?? []).flatMap((t) =>
+          t.config.action?.type === 'webhook' && t.config.action.secretId
+            ? [t.config.action.secretId]
+            : [],
+        ),
       ]),
     );
-    for (const w of bundle.workflows)
+    for (const w of bundle.workflows) {
       for (const hook of w.webhooks ?? [])
         if (
           !bundle.variables?.some(
@@ -147,6 +152,23 @@ export const workflowBundleSchema = z
             code: 'custom',
             message: 'Webhook authentication requires a Secret requirement',
           });
+      for (const evt of w.eventTriggers ?? []) {
+        const secretId =
+          evt.config.action?.type === 'webhook'
+            ? evt.config.action.secretId
+            : undefined;
+        if (
+          secretId &&
+          !bundle.variables?.some(
+            (v) => v.id === secretId && v.kind === 'secret',
+          )
+        )
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Webhook action requires a Secret requirement',
+          });
+      }
+    }
     const required = new Set((bundle.variables ?? []).map((v) => v.id));
     if (
       required.size !== (bundle.variables?.length ?? 0) ||

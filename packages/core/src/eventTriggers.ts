@@ -21,6 +21,27 @@ export const eventScopeSchema = z.discriminatedUnion('type', [
     })
     .strict(),
 ]);
+export const eventWebhookActionSchema = z
+  .object({
+    type: z.literal('webhook'),
+    url: z.string().url(),
+    secretId: z.string().min(1).max(200).optional(),
+    headers: z.record(z.string().min(1)).optional(),
+    timeoutMs: z.number().int().min(500).max(60000).default(5000),
+  })
+  .strict();
+export type EventWebhookAction = z.infer<typeof eventWebhookActionSchema>;
+export const eventWorkflowActionSchema = z
+  .object({
+    type: z.literal('workflow'),
+  })
+  .strict();
+export type EventWorkflowAction = z.infer<typeof eventWorkflowActionSchema>;
+export const eventActionSchema = z.discriminatedUnion('type', [
+  eventWorkflowActionSchema,
+  eventWebhookActionSchema,
+]);
+export type EventAction = z.infer<typeof eventActionSchema>;
 export const eventConfigSchema = z
   .object({
     kind: z.literal('event'),
@@ -28,6 +49,7 @@ export const eventConfigSchema = z
     tags: runTagsSchema.optional(),
     events: z.array(lifecycleEventKindSchema).min(1).max(5),
     scope: eventScopeSchema,
+    action: eventActionSchema.optional(),
     exitNodeId: z.string().min(1).max(200).optional(),
     waitForQuiescence: z.boolean().default(false),
     maxTriggerDepth: z.number().int().min(1).max(20).default(2),
@@ -97,7 +119,8 @@ export interface EventDelivery {
     | 'started'
     | 'queued'
     | 'suppressed'
-    | 'failed';
+    | 'failed'
+    | 'delivered';
   reason?: string;
   runId?: string;
   settled?: boolean;

@@ -607,11 +607,17 @@ Schema 12 indexes outcome-only `webhookDeliveries`, persistent `webhookReceipts`
 
 Runtime captures compact lifecycle context with the source transition and creates durable event/trigger receipts in the same transaction. Event triggers observe completed, failed, cancelled, needs_attention and stalled transitions, with library or workflow scope and optional owned children. A completed Exit filter narrows completion delivery. Handler startup uses ordinary RunStarts and admission, the latest published target, and the shared pause/failure gates. See [event contracts](events.md).
 
+Event triggers default to starting a workflow (`action.type: 'workflow'`), but also support optional outbound HMAC-signed HTTP POST webhook alerts (`action.type: 'webhook'`) directly to external URLs (e.g. chat or pager webhooks) without running a handler workflow. Webhook actions support an optional Secret variable for HMAC-SHA256 signing (`X-Interlock-Signature: sha256=<hex>`, `X-Interlock-Signature-256: <hex>`, and `X-Interlock-Timestamp`), custom headers, and request timeouts. Deliveries settle as `delivered` on success or `failed` on error, participating in the shared consecutive-failure tracking and automatic pause.
+
 Each handler run persists a causal `triggerChain`, inherited by child, detached and continued runs. A chain cannot repeat a trigger, and configurable `maxTriggerDepth` defaults to 2 with a 1–20 bound. Suppressed transitions remain inspectable. Delivery history retains at most 200 settled rows plus pending work. Pair receipts survive log trimming, so restart and repeated events cannot repeat the effect. Pending compact context stays internal to dispatch; ordinary inspection returns bounded metadata.
 
 Terminal triggers can set `waitForQuiescence: true`. Runtime checks the entire source tree, including detached and continued runs, Scripts, managed executions, active claims, uncertain resource ownership, revoked Agent attempts, interrupted Fetch operations and foreground Scripts interrupted by restart, even without named resources. Expiry or cancellation does not prove stop. Existing explicit stop/reconciliation operations release uncertainty before dispatch. Briefings expose bounded blockers. This gate does not change ordinary cancellation boundaries or stop external processes.
 
 Shared trigger CRUD and inspection serve UI, CLI and both MCP transports. Portable format 8 exports safe event configuration with source workflow dependencies. Imports disable included triggers, omit operational history and receipts, and reset local event delivery state. Existing schedule and webhook histories remain.
+
+### Desktop notifications
+
+Operators can opt into local OS desktop notifications for unattended runs transitioning into `Needs attention` (via environment variable `INTERLOCK_DESKTOP_NOTIFICATIONS=1` or engine options). Notifications dispatch platform-appropriate alerts (`osascript` on macOS, `notify-send` on Linux, PowerShell on Windows) in a detached process, displaying run identity, workflow name, and attention reasons (`approval`, `question`, `model`, `recovery`, `stalled`). Transition tracking via `eventAttentionStates` ensures alerts fire exactly once when attention is required, deduplicating subsequent polling ticks until the attention state is cleared.
 
 ## Stall monitoring
 

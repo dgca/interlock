@@ -37,7 +37,10 @@ export class WorkflowTriggers {
     if (!trigger) throw new InterlockError('Trigger not found');
     return trigger;
   }
-  private assertTarget(trigger: Pick<WorkflowTrigger, 'workflowId'>) {
+  private assertTarget(
+    trigger: Pick<WorkflowTrigger, 'workflowId'> &
+      Partial<Pick<WorkflowTrigger, 'kind'>> & { action?: { type: string } },
+  ) {
     const w = this.store.get<Workflow>('workflows', trigger.workflowId);
     if (!w) throw new InterlockError('Workflow not found');
     if (
@@ -48,6 +51,8 @@ export class WorkflowTriggers {
       throw new InterlockError(
         'Restore this workflow before enabling its trigger',
       );
+    if (trigger.kind === 'event' && trigger.action?.type === 'webhook')
+      return w;
     if (!w.latestVersion || !this.store.getVersion(w.id, w.latestVersion))
       throw new InterlockError(
         'Publish this workflow before enabling its trigger',
@@ -294,7 +299,7 @@ export class WorkflowTriggers {
       } else if (q.action === 'enable') {
         this.assertTarget(trigger);
         if (trigger.kind === 'webhook') this.webhooks.validate(trigger, true);
-        if (trigger.kind === 'event') this.events.validate(trigger);
+        if (trigger.kind === 'event') this.events.validate(trigger, true);
         trigger.enabled = true;
         trigger.autoPaused = undefined;
         trigger.consecutiveFailures = 0;
