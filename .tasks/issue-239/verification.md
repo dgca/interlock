@@ -1,5 +1,17 @@
 # Verification
 
+## Review revision 1
+
+Checked source: `d6057f1ab336bcc67569a9f0fcd6f0913610b01f`. Latest fetched main remains `e9179503567b0577dade57e1021c52396b2cc32b`.
+
+`pnpm test` passes 133 files and 1,581 tests. `pnpm build`, `pnpm format:check`, `git diff --check` and `pnpm test:package` after that build pass. Logs are `/tmp/interlock-239-d6057f1-{tests,build,format,package}.log`. The later artifact commit changes only this directory.
+
+[Review fixes](review-fixes.md) maps all five stable review finding IDs to red-to-green tests, original probe reruns and current source provenance. No UI source changed; the original actual-control evidence below is retained with its original source commit.
+
+Current full HTTP and stdio discovery envelopes both measure 280,092 bytes. Arrays measure 280,082 bytes, initialization instructions remain 9,973 bytes and tool count remains 60. The 304-byte increase since the prior review is lifecycle guidance for deadline reconciliation and resumed availability. Baseline stays 267,709 envelope bytes / 267,699 array bytes / 9,979 instruction bytes / 59 tools. The envelope ceiling remains 283,000 bytes. See [exact measurements](mcp-discovery.json).
+
+## Initial candidate evidence retained
+
 Source commit: `63c1142740f48121779d9ca79ac721bf5f70395b`.
 Original and freshly fetched main baseline: `e9179503567b0577dade57e1021c52396b2cc32b`.
 The later evidence commit changes only this directory. The source and test results below remain applicable.
