@@ -8,6 +8,8 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { createCipheriv, randomBytes } from 'node:crypto';
+import { batchDefinition } from './fixtures/batch';
+import { workflowCall } from './fixtures/detached';
 import { BackgroundScripts } from '../packages/runtime/src/backgroundScripts';
 import { tmpdir } from 'node:os';
 import { blankDefinition, nodeSchema, type Run } from '@interlock/core';
@@ -458,3 +460,131 @@ it('bounds multibyte progress and rejects oversized stdout', async () => {
   expect(run.error).toContain('exceeded 1 MiB');
   expect(step(engine, large).background?.state).toBe('completed');
 });
+
+it.each(['workflow', 'batch'] as const)(
+  'blocks %s parent retries until every resumed uncertain Script is reconciled',
+  async (kind) => {
+    const { open, root } = setup();
+    const first = open();
+    const script = nodeSchema.parse({
+      id: 'work',
+      kind: 'script',
+      label: 'Effect',
+      language: 'javascript',
+      executionMode: 'background',
+      timeoutMs: 30000,
+      command:
+        "require('node:fs').appendFileSync('effects', String(input)); if (input === 1 && process.env.INTERLOCK_ATTEMPT === '1') await new Promise(resolve => setTimeout(resolve, 30000)); return input;",
+    });
+    const publish = (
+      definition: import('@interlock/core').WorkflowDefinition,
+    ) => {
+      const workflow = first.create('Retry boundary', '', definition);
+      first.publish(workflow.id);
+      return workflow.id;
+    };
+    let parentWorkflowId: string;
+    if (kind === 'batch') {
+      parentWorkflowId = publish(batchDefinition(script, { concurrency: 1 }));
+    } else {
+      const leaf = blankDefinition();
+      leaf.nodes[1] = { ...script, id: 'agent' };
+      const leafId = publish(leaf);
+      // Two waited callers exercise the full recursive retry selection, not just an immediate parent.
+      parentWorkflowId = publish(workflowCall(publish(workflowCall(leafId))));
+    }
+    // Normal completion is the control for the same parent path.
+    const control = first.start(parentWorkflowId, kind === 'batch' ? [0] : 0)
+      .run.id;
+    await state(first, control);
+    expect(readFileSync(join(root, 'effects'), 'utf8')).toBe('0');
+    const parentId = first.start(
+      parentWorkflowId,
+      kind === 'batch' ? [0, 1] : 1,
+    ).run.id;
+    let childId = '';
+    await vi.waitFor(() => {
+      first.pump();
+      const child = first.store
+        .runs()
+        .find(
+          (run) =>
+            run.id !== control &&
+            run.executions.some(
+              (execution) =>
+                execution.kind === 'script' &&
+                execution.input === 1 &&
+                execution.background?.state === 'running',
+            ),
+        );
+      expect(child).toBeDefined();
+      childId = child!.id;
+      expect(readFileSync(join(root, 'effects'), 'utf8')).toBe(
+        kind === 'batch' ? '001' : '01',
+      );
+    });
+    const execution = step(first, childId);
+    const files = new BackgroundFiles(first.store);
+    const job = first.store.get<BackgroundJob>('backgroundJobs', execution.id)!;
+    const identity = files.read(job, 'identity')!;
+    receipt(files, job, 'identity', { ...identity, start: 'wrong-start' });
+    first.stop();
+    first.store.close();
+    const next = open();
+    await state(next, parentId, 'failed');
+    expect(step(next, childId).background?.state).toBe('uncertain');
+    const before = {
+      runs: next.store.runs(),
+      events: next.store.list('events'),
+      work: next.store.work(),
+      effects: readFileSync(join(root, 'effects'), 'utf8'),
+    };
+    expect(() => next.retry(childId)).toThrow('Reconcile');
+    expect(() => next.retry(parentId)).toThrow('Reconcile');
+    expect({
+      runs: next.store.runs(),
+      events: next.store.list('events'),
+      work: next.store.work(),
+      effects: readFileSync(join(root, 'effects'), 'utf8'),
+    }).toEqual(before);
+    // Restore the known original identity so its supervisor can be explicitly stopped and verified.
+    receipt(new BackgroundFiles(next.store), job, 'identity', identity);
+    next.manageScript({
+      action: 'stop',
+      runId: childId,
+      executionId: execution.id,
+    });
+    await vi.waitFor(() =>
+      expect(new BackgroundFiles(next.store).read(job, 'result')).toBeDefined(),
+    );
+    next.manageScript({
+      action: 'reconcile',
+      runId: childId,
+      executionId: execution.id,
+      stopped: true,
+      reason: 'Original supervisor stopped; original external effect inspected',
+    });
+    next.retry(parentId);
+    await state(next, parentId);
+    expect(readFileSync(join(root, 'effects'), 'utf8')).toBe(
+      kind === 'batch' ? '0011' : '011',
+    );
+    expect(
+      next
+        .run(childId)
+        .executions.filter((execution) => execution.kind === 'script'),
+    ).toHaveLength(2);
+    if (kind === 'batch') {
+      const children = next
+        .run(parentId)
+        .executions.find((execution) => execution.kind === 'batch')!
+        .childRunIds.map((id) => next.run(id));
+      expect(children[0].status).toBe('completed');
+      expect(
+        children[0].executions.filter(
+          (execution) => execution.kind === 'script',
+        ),
+      ).toHaveLength(1);
+    }
+  },
+);

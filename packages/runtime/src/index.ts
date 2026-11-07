@@ -3018,7 +3018,30 @@ export class Engine {
     this.pump();
     return this.inspect(id);
   }
+  private assertResumeSafe(run: Run, checked = new Set<string>()) {
+    if (checked.has(run.id)) return;
+    checked.add(run.id);
+    const uncertain = run.executions.find(
+      (step) => step.background?.state === 'uncertain',
+    );
+    if (uncertain)
+      throw new InterlockError(
+        `Reconcile the uncertain background Script in run ${run.id}, execution ${uncertain.id}, with stopped:true after inspecting processes and effects before retrying`,
+      );
+    const execution = run.executions.at(-1);
+    if (execution?.kind !== 'workflow' && execution?.kind !== 'batch') return;
+    for (const id of execution.childRunIds) {
+      const child = this.run(id);
+      if (
+        child.parentMode !== 'detached' &&
+        (child.status === 'failed' || child.status === 'cancelled')
+      )
+        this.assertResumeSafe(child, checked);
+    }
+  }
   private resumeStep(run: Run) {
+    // Retry admission also applies when a Workflow or Batch resumes a retained child.
+    this.assertResumeSafe(run);
     const execution = run.executions.at(-1);
     run.status = 'running';
     run.error = undefined;
@@ -3056,10 +3079,7 @@ export class Engine {
       const run = this.run(id);
       if (run.status !== 'failed')
         throw new InterlockError('Only failed runs can be retried');
-      if (run.executions.some((step) => step.background?.state === 'uncertain'))
-        throw new InterlockError(
-          'Reconcile the uncertain background Script with stopped:true after inspecting processes and effects before retrying',
-        );
+      this.assertResumeSafe(run);
       this.chains.assertRetry(run);
       if (this.handledWorkflowFailure(run))
         throw new InterlockError(
