@@ -18,7 +18,5 @@ export const runTagsSchema = z
         });
     }
   })
-  .describe(
-    'Non-secret exact, case-sensitive tags: max 16 pairs; keys 1..64 chars, values 0..64.',
-  );
+  .describe('Non-secret case-sensitive tags, max 16 pairs.');
 export type RunTags = z.infer<typeof runTagsSchema>;
