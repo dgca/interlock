@@ -564,6 +564,21 @@ it.each(['stdio', 'http'])(
         eventBundle.workflows.find((entry: any) => entry.id === w.id)
           .eventTriggers[0].enabled,
       ).toBe(false);
+      const beforeEventPreview = store.get('workflowTriggers', eventTrigger.id);
+      const eventPreview = await call('import_workflows', {
+        bundle: eventBundle,
+        dryRun: true,
+      });
+      expect(eventPreview.triggers).toContainEqual(
+        expect.objectContaining({
+          id: eventTrigger.id,
+          kind: 'event',
+          status: 'unchanged',
+        }),
+      );
+      expect(store.get('workflowTriggers', eventTrigger.id)).toEqual(
+        beforeEventPreview,
+      );
       const disabledEvent = (
         await call('manage_workflow_triggers', {
           request: {

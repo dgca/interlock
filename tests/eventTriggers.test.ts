@@ -619,3 +619,42 @@ it('keeps quiescence pending after lease expiry until the revoked attempt is con
   });
   expect(deliveries(e, t)[0].outcome).toBe('started');
 });
+
+it('captures publish-pinned prompts in event-started handlers while retaining causal identity', () => {
+  const e = setup(),
+    source = publish(e);
+  const prompt = e.prompts.create({
+    name: 'Pinned handler',
+    description: '',
+    content: 'Pinned handler guidance',
+  });
+  const definition = blankDefinition();
+  definition.pinPromptsAtPublish = true;
+  Object.assign(
+    definition.nodes.find((node) => node.kind === 'agent')!,
+    { promptIds: [prompt.id] },
+  );
+  const target = publish(e, definition),
+    t = trigger(e, target, config(source));
+  e.prompts.update(prompt.id, prompt.revision, {
+    ...prompt,
+    content: 'Latest unpinned guidance',
+  });
+  const root = start(e, source);
+  complete(e, root.id);
+  const handler = e.run(deliveries(e, t)[0].runId!);
+  expect(handler.promptSnapshots).toEqual([
+    expect.objectContaining({
+      id: prompt.id,
+      revision: prompt.revision,
+      content: 'Pinned handler guidance',
+    }),
+  ]);
+  expect(handler.triggerChain).toEqual([t.id]);
+  expect(e.available(handler.id)[0].prompt).toContain(
+    'Pinned handler guidance',
+  );
+  expect(e.available(handler.id)[0].prompt).not.toContain(
+    'Latest unpinned guidance',
+  );
+});

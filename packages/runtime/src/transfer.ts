@@ -207,7 +207,7 @@ export interface BundleDryRunResult {
   triggers?: Array<{
     id: string;
     workflowId: string;
-    kind: 'schedule' | 'webhook';
+    kind: WorkflowTrigger['kind'];
     status: 'added' | 'changed' | 'unchanged' | 'conflict';
   }>;
 }
@@ -273,15 +273,16 @@ export function diffBundleImport(
   });
 
   const triggers = bundle.workflows.flatMap((entry) =>
-    [...(entry.schedules ?? []), ...(entry.webhooks ?? [])].map((trigger) => {
+    [
+      ...(entry.schedules ?? []),
+      ...(entry.webhooks ?? []),
+      ...(entry.eventTriggers ?? []),
+    ].map((trigger) => {
       const existing = store.get<WorkflowTrigger>(
         'workflowTriggers',
         trigger.id,
       );
-      const kind =
-        'timing' in trigger.config
-          ? ('schedule' as const)
-          : ('webhook' as const);
+      const kind = trigger.config.kind;
       const status: 'added' | 'changed' | 'unchanged' | 'conflict' = !existing
         ? 'added'
         : existing.workflowId !== entry.id

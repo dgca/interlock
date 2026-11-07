@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { serve, type ServerType } from '@hono/node-server';
 import {
   blankDefinition,
+  eventConfigSchema,
   nodeSchema,
   type WorkflowDefinition,
 } from '@interlock/core';
@@ -223,4 +224,74 @@ it('interlock import --publish --cascade rolls back completely when a cycle is i
   expect(engine.workflow(root.id).latestVersion).toBe(rootBefore.latestVersion);
   expect(store.getVersion(child.id, 2)).toBeUndefined();
   expect(store.getVersion(root.id, 2)).toBeUndefined();
+});
+
+it('previews and publishes portable event triggers through bundle sync without mutating a dry-run', async () => {
+  const source = createWorkflowWithCall('Event source');
+  const handler = createWorkflowWithCall('Event handler');
+  const trigger = engine.triggers.mutate({
+    action: 'create',
+    workflowId: handler.id,
+    config: eventConfigSchema.parse({
+      kind: 'event',
+      name: 'Original event',
+      events: ['completed'],
+      scope: { type: 'workflow', workflowId: source.id },
+    }),
+  }).trigger!;
+  engine.triggers.mutate({
+    action: 'enable',
+    id: trigger.id,
+    expectedRevision: trigger.revision,
+  });
+  const bundle = exportWorkflows(store, handler.id);
+  expect(bundle.formatVersion).toBe(8);
+  expect(bundle.workflows.some((w) => w.id === source.id)).toBe(true);
+  bundle.workflows.find(
+    (w) => w.id === handler.id,
+  )!.eventTriggers![0].config.name = 'Changed event';
+  const protectedState = () =>
+    Object.fromEntries(
+      [
+        'workflows',
+        'versions',
+        'workflowTriggers',
+        'runs',
+        'work',
+        'events',
+        'eventDeliveries',
+        'eventTriggerReceipts',
+        'prompts',
+        'promptRevisions',
+      ].map((collection) => [collection, store.list(collection)]),
+    );
+  const before = protectedState();
+  const preview = (await runCommand([
+    'import',
+    JSON.stringify(bundle),
+    '--dry-run',
+  ])) as any;
+  expect(preview.triggers).toEqual([
+    expect.objectContaining({
+      id: trigger.id,
+      kind: 'event',
+      status: 'changed',
+    }),
+  ]);
+  expect(protectedState()).toEqual(before);
+  const result = (await runCommand([
+    'import',
+    JSON.stringify(bundle),
+    '--force',
+    '--publish',
+    '--cascade',
+  ])) as any;
+  expect(result.published.map((w: any) => w.id).sort()).toEqual(
+    [handler.id, source.id].sort(),
+  );
+  expect(engine.triggers.inspect(trigger.id).trigger).toMatchObject({
+    kind: 'event',
+    name: 'Changed event',
+    enabled: false,
+  });
 });
