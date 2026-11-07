@@ -216,18 +216,28 @@ it('rejects a tampered Script stop receipt and requires explicit stop reconcilia
   await running(e, descendant.id, root);
   const step = script(e, descendant.id),
     job = e.store.get<BackgroundJob>('backgroundJobs', step.id)!;
-  e.cancel(descendant.id);
   const files = new BackgroundFiles(e.store);
-  await vi.waitFor(
-    () =>
-      expect(files.read(job, 'result')?.outcome?.error).toBe('Script stopped'),
-    { timeout: 5000, interval: 30 },
-  );
-  // The supervisor has stopped. Corrupt its final receipt before the engine observes it.
-  writeFileSync(
-    join(e.store.path + '.scripts', step.id, 'result'),
-    'unauthenticated stop',
-  );
+  // Cancellation and monitor cleanup can pump independently. Hold those reads
+  // until the authentic receipt is observed and corrupted, then use real verification.
+  const suspendedPump = vi.spyOn(e, 'pump').mockImplementation(() => {});
+  try {
+    e.cancel(descendant.id);
+    await vi.waitFor(
+      () =>
+        expect(files.read(job, 'result')?.outcome?.error).toBe(
+          'Script stopped',
+        ),
+      { timeout: 5000, interval: 30 },
+    );
+    expect(script(e, descendant.id).background?.state).toBe('running');
+    writeFileSync(
+      join(e.store.path + '.scripts', step.id, 'result'),
+      'unauthenticated stop',
+    );
+    expect(() => files.read(job, 'result')).toThrow();
+  } finally {
+    suspendedPump.mockRestore();
+  }
   e.pump();
   expect(script(e, descendant.id).background?.state).toBe('uncertain');
   expect(delivery(e, t).outcome).toBe('pending_quiescence');
@@ -252,9 +262,15 @@ it('rejects a tampered Script stop receipt and requires explicit stop reconcilia
     reason:
       'Authenticated stop result observed before corruption; no late effect exists',
   });
-  e.pump();
   expect(script(e, descendant.id).background?.state).toBe('reconciled');
-  expect(delivery(e, t).outcome).toBe('started');
+  await vi.waitFor(
+    () => {
+      e.pump();
+      expect(e.quiescence(source.id).quiescent).toBe(true);
+      expect(delivery(e, t).outcome).toBe('started');
+    },
+    { timeout: 5000, interval: 30 },
+  );
   expect(existsSync(join(root, 'finished'))).toBe(false);
 });
 
