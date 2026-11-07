@@ -207,7 +207,17 @@ it.each(['stdio', 'http'])(
             executionId: 'step-id',
           },
         }),
-      ).toEqual({ runId: 'run-id', executionId: 'step-id', reservations: [] });
+      ).toEqual({
+        runId: 'run-id',
+        executionId: 'step-id',
+        reservations: [],
+        uncertainOperations: [],
+      });
+
+      expect(
+        toolDiscovery.tools.find((tool) => tool.name === 'manage_executors')!
+          .description,
+      ).toContain('ended needs_human with no pending requests');
 
       const scheduleTools = toolDiscovery.tools.filter((t) =>
         ['read_workflow_triggers', 'manage_workflow_triggers'].includes(t.name),
@@ -216,6 +226,11 @@ it.each(['stdio', 'http'])(
       if (scheduleDiscovery) expect(scheduleTools).toEqual(scheduleDiscovery);
       else scheduleDiscovery = scheduleTools;
       expect(JSON.stringify(scheduleTools)).toContain('expectedRevision');
+      const triggerManagement = scheduleTools.find(
+        (tool) => tool.name === 'manage_workflow_triggers',
+      )!.description;
+      expect(triggerManagement).toContain('event receipts survive');
+      expect(triggerManagement).toContain('webhook receipts are removed');
       const schedule = (
         await call('manage_workflow_triggers', {
           request: {
@@ -391,6 +406,11 @@ it.each(['stdio', 'http'])(
         hookBundle.workflows.find((entry: any) => entry.id === w.id).webhooks[0]
           .enabled,
       ).toBe(false);
+      expect(
+        store
+          .list<{ id: string; triggerId: string }>('webhookReceipts')
+          .filter((receipt) => receipt.triggerId === hook.id),
+      ).toHaveLength(1);
       await call('manage_workflow_triggers', {
         request: {
           action: 'delete',
@@ -398,6 +418,194 @@ it.each(['stdio', 'http'])(
           expectedRevision: hookEnabled.revision,
         },
       });
+
+      expect(
+        store
+          .list<{ id: string; triggerId: string }>('webhookReceipts')
+          .filter((receipt) => receipt.triggerId === hook.id),
+      ).toHaveLength(0);
+
+      const eventDefinition = blankDefinition();
+      eventDefinition.nodes = eventDefinition.nodes.filter(
+        (node) => node.kind !== 'agent',
+      );
+      eventDefinition.edges = [
+        {
+          id: 'event-source-edge',
+          source: 'entry',
+          target: 'exit',
+          port: 'default',
+        },
+      ];
+      const eventSource = engine.create(
+        'Lifecycle source',
+        '',
+        eventDefinition,
+      );
+      engine.publish(eventSource.id);
+      const eventConfig = {
+        kind: 'event',
+        name: 'Transport lifecycle',
+        events: ['completed'],
+        scope: {
+          type: 'workflow',
+          workflowId: eventSource.id,
+          includeChildren: true,
+        },
+        exitNodeId: 'exit',
+        waitForQuiescence: true,
+        maxTriggerDepth: 2,
+      };
+      assertContract(
+        scheduleTools.find((tool) => tool.name === 'manage_workflow_triggers')!
+          .inputSchema,
+        jsonSchema.parse({
+          request: { action: 'create', workflowId: w.id, config: eventConfig },
+        }),
+        'event trigger discovery',
+      );
+      const eventTrigger = (
+        await call('manage_workflow_triggers', {
+          request: { action: 'create', workflowId: w.id, config: eventConfig },
+        })
+      ).trigger;
+      expect(eventTrigger).toMatchObject({
+        enabled: false,
+        kind: 'event',
+        maxTriggerDepth: 2,
+      });
+      const invalidEvent = await client.callTool({
+        name: 'manage_workflow_triggers',
+        arguments: {
+          request: {
+            action: 'update',
+            id: eventTrigger.id,
+            expectedRevision: eventTrigger.revision,
+            config: {
+              ...eventConfig,
+              events: ['stalled'],
+              exitNodeId: undefined,
+            },
+          },
+        },
+      });
+      expect(invalidEvent.isError).toBe(true);
+      const updatedEvent = (
+        await call('manage_workflow_triggers', {
+          request: {
+            action: 'update',
+            id: eventTrigger.id,
+            expectedRevision: eventTrigger.revision,
+            config: { ...eventConfig, name: 'Changed lifecycle' },
+          },
+        })
+      ).trigger;
+      const enabledEvent = (
+        await call('manage_workflow_triggers', {
+          request: {
+            action: 'enable',
+            id: eventTrigger.id,
+            expectedRevision: updatedEvent.revision,
+          },
+        })
+      ).trigger;
+      const lifecycleSourceRun = await call('start_run', {
+        workflowId: eventSource.id,
+        input: { privateData: 'never in event payload' },
+        externalTask: { system: 'test', id: 'lifecycle' },
+      });
+      engine.pump();
+      const eventInspection = await call('read_workflow_triggers', {
+        request: { action: 'inspect', id: eventTrigger.id, limit: 1 },
+      });
+      expect(eventInspection.deliveries).toMatchObject({
+        total: 1,
+        items: [
+          expect.objectContaining({
+            sourceRunId: lifecycleSourceRun.runId,
+            outcome: 'started',
+          }),
+        ],
+      });
+      const handlerId = eventInspection.deliveries.items[0].runId;
+      expect((await call('get_run', { id: handlerId })).run).toMatchObject({
+        input: {
+          type: 'completed',
+          runId: lifecycleSourceRun.runId,
+          workflowId: eventSource.id,
+          version: 1,
+          externalTask: { system: 'test', id: 'lifecycle' },
+        },
+        triggerChain: [eventTrigger.id],
+      });
+      expect(
+        JSON.stringify((await call('get_run', { id: handlerId })).run.input),
+      ).not.toContain('privateData');
+      expect(JSON.stringify(eventInspection.deliveries)).not.toContain(
+        'payload',
+      );
+      expect(
+        (
+          await call('read_workflow_triggers', {
+            request: { action: 'list', workflowId: w.id, kind: 'event' },
+          })
+        ).total,
+      ).toBe(1);
+      expect(
+        (await api.triggers.list.query({ workflowId: w.id, kind: 'event' }))
+          .total,
+      ).toBe(1);
+      const eventBundle = await call('export_workflow', { id: w.id });
+      expect(eventBundle.formatVersion).toBe(8);
+      expect(
+        eventBundle.workflows.some((entry: any) => entry.id === eventSource.id),
+      ).toBe(true);
+      expect(
+        eventBundle.workflows.find((entry: any) => entry.id === w.id)
+          .eventTriggers[0].enabled,
+      ).toBe(false);
+      const beforeEventPreview = store.get('workflowTriggers', eventTrigger.id);
+      const eventPreview = await call('import_workflows', {
+        bundle: eventBundle,
+        dryRun: true,
+      });
+      expect(eventPreview.triggers).toContainEqual(
+        expect.objectContaining({
+          id: eventTrigger.id,
+          kind: 'event',
+          status: 'unchanged',
+        }),
+      );
+      expect(store.get('workflowTriggers', eventTrigger.id)).toEqual(
+        beforeEventPreview,
+      );
+      const disabledEvent = (
+        await call('manage_workflow_triggers', {
+          request: {
+            action: 'disable',
+            id: eventTrigger.id,
+            expectedRevision: enabledEvent.revision,
+          },
+        })
+      ).trigger;
+      const eventReceipts = store
+        .list<{ id: string; triggerId: string }>('eventTriggerReceipts')
+        .filter((receipt) => receipt.triggerId === eventTrigger.id);
+      expect(eventReceipts).toHaveLength(1);
+      await call('manage_workflow_triggers', {
+        request: {
+          action: 'delete',
+          id: eventTrigger.id,
+          expectedRevision: disabledEvent.revision,
+        },
+      });
+
+      expect(store.eventDeliveries(eventTrigger.id).total).toBe(0);
+      expect(
+        store
+          .list<{ id: string; triggerId: string }>('eventTriggerReceipts')
+          .filter((receipt) => receipt.triggerId === eventTrigger.id),
+      ).toEqual(eventReceipts);
 
       const { tools, nextCursor } = toolDiscovery;
       const admissionSchema = tools.find((t) => t.name === 'start_run')!
@@ -1245,6 +1453,7 @@ it.each(['stdio', 'http'])(
         (t) => t.name === 'delete_workflow',
       )!.description;
       expect(deletionScope).toContain('Batch item runs and detached runs');
+      expect(deletionScope).toContain('Durable event-trigger receipts remain');
       expect(deletionScope).toContain(
         'ancestor runs and the entire run tree remain intact',
       );

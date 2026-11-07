@@ -1,3 +1,8 @@
+import {
+  sourceQuiescence,
+  uncertainClaimCollection,
+  type UncertainClaim,
+} from './quiescence.js';
 import { resourceCollection, resourceOwner } from './workResources.js';
 import { projectRun } from './runProjection.js';
 import type { ResourceReservation } from '@interlock/core';
@@ -42,6 +47,7 @@ export class Continuation {
   constructor(
     private store: Store,
     private snapshot: Store['continuation'] = (id) => store.continuation(id),
+    private quiescence = (id: string) => sourceQuiescence(store, id),
   ) {}
   stop() {
     this.stopped.abort(
@@ -74,6 +80,9 @@ export class Continuation {
       nextDeadline: snapshot.nextDeadline,
       ...(snapshot.resourceBlocked
         ? { resourceBlocked: snapshot.resourceBlocked }
+        : {}),
+      ...(snapshot.uncertainClaims
+        ? { uncertainClaims: snapshot.uncertainClaims }
         : {}),
       ...(snapshot.resourceReservations
         ? { resourceReservations: snapshot.resourceReservations }
@@ -380,7 +389,17 @@ export class Continuation {
         ) ||
         (w.managedExecution?.state === 'needs_model' && w.status === 'held'),
     );
+    const uncertainClaims = this.store
+      .forRuns<UncertainClaim>(
+        uncertainClaimCollection,
+        new Set(state.runs.map((run) => run.id)),
+      )
+      .map(({ id: _id, ...claim }) => claim);
     return {
+      quiescence: this.quiescence(id),
+      ...(uncertainClaims.length
+        ? { uncertainClaims: bounded(uncertainClaims, limit) }
+        : {}),
       ...(resourceBlocked.length
         ? { resourceBlocked: bounded(resourceBlocked, limit) }
         : {}),

@@ -178,6 +178,17 @@ function combineBundles(
           );
         if (!old) (previous.webhooks ??= []).push(structuredClone(webhook));
       }
+      for (const trigger of entry.eventTriggers ?? []) {
+        const old = previous.eventTriggers?.find(
+          (item) => item.id === trigger.id,
+        );
+        if (old && !isDeepStrictEqual(old.config, trigger.config))
+          throw new InterlockError(
+            `Selected files conflict for event trigger ${trigger.id}`,
+          );
+        if (!old)
+          (previous.eventTriggers ??= []).push(structuredClone(trigger));
+      }
       for (const version of entry.versions) {
         if (
           previous.deletedVersions?.some((v) => v.version === version.version)
@@ -241,19 +252,25 @@ function combineBundles(
   return rootId
     ? {
         format: 'interlock-workflows',
-        formatVersion: [...workflows.values()].some((w) => w.webhooks?.length)
-          ? 7
-          : modelAliases.size
-            ? 6
-            : [...workflows.values()].some((w) => w.schedules?.length)
-              ? 5
-              : variables.size
-                ? 4
-                : [...workflows.values()].some((w) => w.deletedVersions?.length)
-                  ? 3
-                  : prompts.size
-                    ? 2
-                    : 1,
+        formatVersion: [...workflows.values()].some(
+          (w) => w.eventTriggers?.length,
+        )
+          ? 8
+          : [...workflows.values()].some((w) => w.webhooks?.length)
+            ? 7
+            : modelAliases.size
+              ? 6
+              : [...workflows.values()].some((w) => w.schedules?.length)
+                ? 5
+                : variables.size
+                  ? 4
+                  : [...workflows.values()].some(
+                        (w) => w.deletedVersions?.length,
+                      )
+                    ? 3
+                    : prompts.size
+                      ? 2
+                      : 1,
         rootId,
         ...(modelAliases.size
           ? { modelAliases: [...modelAliases.values()] }

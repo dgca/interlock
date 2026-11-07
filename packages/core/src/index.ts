@@ -704,6 +704,8 @@ export interface PollCheckResult {
   error?: string;
 }
 export interface Run {
+  /** Trigger identities inherited by all causal descendants and continuations. */
+  triggerChain?: string[];
   schedule?: {
     triggerId: string;
     scheduledAt: string;
@@ -1424,3 +1426,4 @@ export * from './workflowTriggers.js';
 export * from './webhooks.js';
 
 export * from './workflowDiff.js';
+export * from './eventTriggers.js';

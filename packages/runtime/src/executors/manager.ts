@@ -2721,8 +2721,14 @@ export class ExecutorManager {
       attemptsCollection,
       executionId,
     );
-    if (!record || record.state !== 'interrupted')
-      throw new InterlockError('Interrupted execution not found');
+    const endedAttention =
+      record?.state === 'needs_human' &&
+      !!record.endedAt &&
+      !record.requests.some((request) => request.state === 'pending');
+    if (!record || (record.state !== 'interrupted' && !endedAttention))
+      throw new InterlockError(
+        'Only interrupted executions or ended attention holds can be reconciled',
+      );
     if (this.jobs.has(record.workId) || this.launcherStops.has(record.workId))
       throw new InterlockError('The old harness is still stopping');
     const work = this.engine.store.get<WorkRequest>('work', record.workId);

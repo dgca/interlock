@@ -1,3 +1,11 @@
+import { EventTriggers } from './eventTriggers.js';
+import {
+  sourceQuiescence,
+  uncertainClaimCollection,
+  type UncertainClaim,
+  uncertainOperationCollection,
+  type UncertainOperation,
+} from './quiescence.js';
 import { Webhooks, WebhookRejection } from './webhooks.js';
 import { Stalls } from './stalls.js';
 import { WorkflowTriggers } from './workflowTriggers.js';
@@ -210,8 +218,10 @@ export class Engine {
     this.executors = new ExecutorManager(this, cwd);
     this.simulations = new Simulations(store, cwd);
     this.chains = new RunChains(store);
-    this.continuation = new Continuation(store, (id) =>
-      this.projectionState(id),
+    this.continuation = new Continuation(
+      store,
+      (id) => this.projectionState(id),
+      (id) => this.quiescence(id),
     );
     this.externalInputs = new ExternalInputs(store, {
       run: (id) => this.run(id),
@@ -390,6 +400,35 @@ export class Engine {
         return this.run(result.id);
       },
       this.webhooks,
+      new EventTriggers(
+        store,
+        (trigger, payload, eventId, chain) => {
+          const workflow = this.workflow(trigger.workflowId);
+          const q = {
+            workflowId: trigger.workflowId,
+            version: workflow.latestVersion,
+            input: payload as unknown as Json,
+            requestId: `event:${trigger.id}:${eventId}`,
+          };
+          const result = this.starts.resolve(q, () => ({
+            run: this.newRun(
+              trigger.workflowId,
+              q.version,
+              q.input,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              q,
+              undefined,
+              chain,
+            ),
+            reused: false,
+          }));
+          return this.run(result.id);
+        },
+        (runId) => this.quiescence(runId),
+      ),
     );
     this.history = new RunHistory(
       store,
@@ -431,6 +470,24 @@ export class Engine {
           if (!(error instanceof InterlockError)) throw error;
           blockers.push(error.message);
         }
+        if (
+          store.forRuns<UncertainClaim>(uncertainClaimCollection, ids).length ||
+          store.forRuns<UncertainOperation>(uncertainOperationCollection, ids)
+            .length
+        )
+          blockers.push(
+            'Uncertain claims or operations must be confirmed stopped before deleting history.',
+          );
+        if (
+          store
+            .pendingEventDeliveries()
+            .some(
+              (delivery) => !delivery.runId && ids.has(delivery.sourceRunId),
+            )
+        )
+          blockers.push(
+            'Pending lifecycle deliveries retain their source tree until dispatch or suppression.',
+          );
         return blockers;
       },
       () =>
@@ -484,12 +541,32 @@ export class Engine {
     for (const run of store.runs()) {
       const execution = run.executions.at(-1);
       if (
+        run.status === 'waiting' &&
+        execution?.kind === 'wait' &&
+        execution.operationStartedAt
+      ) {
+        this.resources.uncertainExecution(
+          run.id,
+          execution,
+          'Service interrupted during polling check',
+          true,
+        );
+        execution.operationStartedAt = undefined;
+        this.save(run);
+      }
+      if (
         run.status === 'running' &&
         (execution?.kind === 'script' || execution?.kind === 'fetch') &&
         execution.status === 'running' &&
         !execution.background &&
         (!execution.resources?.length || execution.operationStartedAt)
       ) {
+        this.resources.uncertainExecution(
+          run.id,
+          execution,
+          'Service interrupted during operation',
+          true,
+        );
         this.fail(
           run,
           execution,
@@ -511,14 +588,16 @@ export class Engine {
         run.id,
         type === 'external_input.held',
       );
-    this.store.put('events', {
+    const event = {
       id: randomUUID(),
       runId: run.id,
       type,
       message: text,
       at: now(),
       ...this.projectRun(run.id, run),
-    });
+    };
+    this.store.put('events', event);
+    this.triggers?.events.capture(run, event);
     queueMicrotask(() => this.listeners.forEach((listener) => listener()));
   }
   private save(run: Run) {
@@ -970,6 +1049,30 @@ export class Engine {
       ))
         if (removed.has(event.runId)) this.store.remove('events', event.id);
       this.resources.assertDelete(removed);
+      if (
+        this.store.forRuns<UncertainClaim>(uncertainClaimCollection, removed)
+          .length ||
+        this.store.forRuns<UncertainOperation>(
+          uncertainOperationCollection,
+          removed,
+        ).length
+      )
+        throw new InterlockError(
+          'Uncertain claims or operations must be confirmed stopped before deleting workflow history.',
+        );
+      if (
+        this.store
+          .pendingEventDeliveries()
+          .some(
+            (delivery) =>
+              !delivery.runId &&
+              removed.has(delivery.sourceRunId) &&
+              delivery.workflowId !== id,
+          )
+      )
+        throw new InterlockError(
+          'Pending lifecycle deliveries retain this source history until dispatch or suppression.',
+        );
       this.starts.deleted(removed);
       for (const collection of [
         'externalInputValues',
@@ -1000,6 +1103,7 @@ export class Engine {
         this.store.deleteScheduleFires(trigger.id);
         this.store.remove('workflowTriggers', trigger.id);
         this.store.deleteWebhookHistory(trigger.id);
+        this.store.deleteEventHistory(trigger.id);
       }
       this.store.remove('workflows', id);
       return { id };
@@ -1147,6 +1251,7 @@ export class Engine {
     continuedFrom?: Run,
     startOptions?: RunStartOptions,
     schedule?: Run['schedule'],
+    triggerChain?: string[],
   ): Run {
     const w = this.workflow(workflowId);
     // Preserve existing dispatch-time failures for invalid nested pins; cleanup
@@ -1182,7 +1287,11 @@ export class Engine {
       ? this.testbench.promptsFor(comparison)
       : undefined;
     const time = now();
+    triggerChain ??=
+      continuedFrom?.triggerChain ??
+      (parentRunId ? this.run(parentRunId).triggerChain : undefined);
     const run: Run = {
+      ...(triggerChain ? { triggerChain: [...triggerChain] } : {}),
       ...(startOptions?.requestId !== undefined
         ? { startRequestId: startOptions.requestId }
         : {}),
@@ -1494,6 +1603,7 @@ export class Engine {
         }),
       stalls: this.stalls.inspect(id),
       events: this.store.events(id),
+      quiescence: this.quiescence(id),
       children: this.store.runs().filter((r) => r.parentRunId === id),
     };
   }
@@ -2621,6 +2731,7 @@ export class Engine {
   pump() {
     if (this.stopped) return;
     this.store.transaction(() => {
+      this.refreshTerminalScripts();
       this.triggers.tick();
       this.pauses.refresh();
       this.budgets.refresh();
@@ -2702,6 +2813,7 @@ export class Engine {
         (n) => n.id === execution.nodeId,
       )!;
       if (node.kind !== 'script' && node.kind !== 'fetch') continue;
+      this.markOperationStarted(run, execution);
       const controller = new AbortController();
       this.localJobs.set(execution.id, controller);
       const job: Promise<LocalOperationResult> = (() => {
@@ -2836,8 +2948,60 @@ export class Engine {
           this.pump();
         });
     }
-    this.store.transaction(() => this.stalls.tick());
+    this.store.transaction(() => {
+      this.stalls.tick();
+      const attention = new Set(this.runAttention().map((item) => item.runId));
+      for (const runId of attention) {
+        if (!this.store.get('eventAttentionStates', runId)) {
+          this.store.put('eventAttentionStates', { id: runId, runId });
+          this.event(this.run(runId), 'needs_attention', 'Run needs attention');
+        }
+      }
+      for (const state of this.store.list<{ id: string }>(
+        'eventAttentionStates',
+      ))
+        if (!attention.has(state.id))
+          this.store.remove('eventAttentionStates', state.id);
+      this.triggers.events.tick();
+    });
     this.trials.pump(new Set(this.localJobs.keys()));
+  }
+  quiescence(runId: string) {
+    return sourceQuiescence(this.store, runId, new Set(this.localJobs.keys()));
+  }
+  private refreshTerminalScripts() {
+    for (const run of this.store.terminalBackgroundRuns()) {
+      if (!terminal(run.status)) continue;
+      for (const execution of run.executions) {
+        if (
+          !execution.background ||
+          !['launching', 'running'].includes(execution.background.state)
+        )
+          continue;
+        try {
+          const node = this.definition(run).nodes.find(
+            (n) => n.id === execution.nodeId,
+          );
+          if (node?.kind !== 'script') continue;
+          const resolved = this.variables.resolve(
+            run,
+            (node.environment ?? []).map((entry) => entry.variableId),
+          );
+          const snapshot = this.backgroundScripts.snapshot(
+            run,
+            execution,
+            resolved.secrets,
+          );
+          if (snapshot?.state === 'completed') {
+            execution.background = snapshot;
+            this.save(run);
+          }
+        } catch {
+          execution.background.state = 'uncertain';
+          this.save(run);
+        }
+      }
+    }
   }
   private finishPollTimeout(
     run: Run,
@@ -2846,6 +3010,12 @@ export class Engine {
   ): boolean {
     if (!execution.timeoutAt || Date.parse(execution.timeoutAt) > Date.now())
       return false;
+    if (this.localJobs.has(execution.id))
+      this.resources.uncertainExecution(
+        run.id,
+        execution,
+        'Polling check timed out while remote work may still be active',
+      );
     this.localJobs.get(execution.id)?.abort();
     if (execution.resourceActive)
       this.resources.endExecution(run.id, execution, true);
@@ -3128,6 +3298,13 @@ export class Engine {
       throw new InterlockError(redact.text(message(error)));
     }
   }
+  private markOperationStarted(run: Run, execution: NodeExecution) {
+    if (execution.resources?.length && execution.operationStartedAt) return;
+    if (!execution.resources?.length)
+      execution.resourceAttempt = (execution.resourceAttempt ?? 0) + 1;
+    execution.operationStartedAt = now();
+    this.save(run);
+  }
   private pollCheckChanged(runId: string) {
     if (this.stopped) return;
     this.store.touchRun(runId);
@@ -3151,6 +3328,7 @@ export class Engine {
     )
       return;
     const { timing } = node;
+    this.markOperationStarted(run, execution);
     const controller = new AbortController();
     this.localJobs.set(execution.id, controller);
     this.pollCheckChanged(run.id);
@@ -3390,11 +3568,24 @@ export class Engine {
     const q = workResourceRequestSchema.parse(input);
     if (q.action === 'inspect')
       return 'workId' in q
-        ? { workId: q.workId, reservations: this.resources.forWork(q.workId) }
+        ? {
+            workId: q.workId,
+            reservations: this.resources.forWork(q.workId),
+            uncertainClaims: this.store
+              .forWork<UncertainClaim>(uncertainClaimCollection, q.workId)
+              .map(({ id: _id, ...claim }) => claim),
+          }
         : {
             runId: q.runId,
             executionId: q.executionId,
             reservations: this.resources.forExecution(q.runId, q.executionId),
+            uncertainOperations: this.store
+              .forRuns<UncertainOperation>(
+                uncertainOperationCollection,
+                new Set([q.runId]),
+              )
+              .filter((operation) => operation.executionId === q.executionId)
+              .map(({ id: _id, ...operation }) => operation),
           };
     this.pump();
     const result = this.store.transaction(() =>
@@ -3914,6 +4105,12 @@ export class Engine {
     const execution = run.executions.at(-1);
     if (execution?.resourceActive)
       this.resources.endExecution(run.id, execution, true);
+    if (execution && this.localJobs.has(execution.id))
+      this.resources.uncertainExecution(
+        run.id,
+        execution,
+        'Cancelled request may still be running remotely',
+      );
     const stop = () => {
       if (
         execution?.background &&

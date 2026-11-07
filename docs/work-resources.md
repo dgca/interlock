@@ -88,6 +88,8 @@ The inspection request is `{ "request": { "action": "inspect", "runId": "OWNER_R
 
 The release is atomic and applies only to the specified owner and attempt. It rejects active reservations. Repeating it after release is harmless and cannot release a replacement owner's reservation. The confirmation is a declaration by the caller, not proof or process fencing. Inspection is read-only and excludes claim tokens and internal hashes. Briefing lists remain bounded by their existing limit.
 
+Revoked Agent attempts also retain `uncertainClaims`, including Agents without named resources. Inspect by `workId` and confirm the exact attempt stopped through the same `release` operation. Interrupted Fetch steps and polling Fetch checks retain `uncertainOperations` even without named resources. A foreground Script interrupted by server restart also retains an uncertain operation until its processes are confirmed stopped. Inspect and release the exact execution attempt through the same operation after verifying remote termination. These records block [quiescent event teardown](events.md#quiescent-teardown) until reconciliation.
+
 Uncertain reservations remain visible from their owning run even after it fails or is cancelled. Reconcile reservations before deleting the owning history. Ordinary server restart preserves active, unexpired ownership and converts ended or expired claims conservatively. Full database backups carry reservations; portable workflow bundles do not. Do not discard reservation records or downgrade to a server that ignores them while workers can still be active.
 
 For CLI callers, pass the inner request as JSON or `@file`:

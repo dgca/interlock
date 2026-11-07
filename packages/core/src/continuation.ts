@@ -222,6 +222,21 @@ export const mutationSummarySchema = z.object({
       truncated: z.boolean(),
     })
     .optional(),
+  uncertainClaims: z
+    .object({
+      items: z.array(
+        z.object({
+          workId: z.string(),
+          runId: z.string(),
+          attempt: z.number().int().positive(),
+          revokedAt: z.string(),
+          reason: z.string(),
+        }),
+      ),
+      total: z.number().int().nonnegative(),
+      truncated: z.boolean(),
+    })
+    .optional(),
   resourceReservations: z
     .object({
       items: z.array(resourceOwnerSchema).max(100),

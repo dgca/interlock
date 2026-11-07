@@ -1006,7 +1006,7 @@ it('opens the published 0.1.18 database unchanged and preserves old claims and J
   const { engine, store } = setup(path);
   expect(store.migration).toMatchObject({
     from: 3,
-    to: 12,
+    to: 13,
     backup: expect.any(String),
   });
   for (const [collection, records] of Object.entries(previousRelease.documents))
