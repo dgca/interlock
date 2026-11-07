@@ -258,7 +258,7 @@ Restart reconnects to the same run and execution. OS PID, process start identity
 
 Cancellation writes a durable stop request to the verified supervisor, which kills its Script process group. A stop during the launch handshake is recorded for the original supervisor before it starts the Script. `stop` also cancels the owning run. Use `inspect` afterward to confirm cleanup; an unverifiable supervisor requires explicit stopped reconciliation. Server shutdown only disconnects background monitoring. Deadlines remain enforced offline. Polling Script checks keep their existing server-owned behavior.
 
-Run inspection includes `execution.background` with state, deadline, supervisor PID/start identity and at most 8 KiB of recent stderr progress. JavaScript console logs use stderr; stdout remains one JSON value with a 1 MiB limit. Secret-consuming Scripts suppress live stderr until completion, then apply the existing complete-buffer redaction before tail selection. Their buffered stderr is bounded to 1 MiB and encrypted on disk. Non-secret progress retains a bounded tail. Success data is redacted before validation and persistence, as with foreground Scripts. Owner-only spool files retain encrypted receipts with run history; global spool retention is not automatic. History deletion blocks unfinished or uncertain background executions until outcome inspection or explicit stopped reconciliation.
+Run inspection includes `execution.background` with state, deadline, supervisor PID/start identity and at most 8 KiB of recent stderr progress. JavaScript console logs use stderr; stdout remains one JSON value with a 1 MiB limit. Secret-consuming Scripts suppress live stderr until completion, then apply the existing complete-buffer redaction before tail selection. Their buffered stderr is bounded to 1 MiB and encrypted on disk. Non-secret progress retains a bounded tail. Success data is redacted before validation and persistence, as with foreground Scripts. Owner-only spool files, their protected encryption keys and launch records are retained separately from run history; deleting run history does not remove them. Spool retention is not automatic. History deletion blocks unfinished or uncertain background executions until outcome inspection or explicit stopped reconciliation.
 
 This mode does not survive host loss, guarantee transactional external effects, or manage detached processes that leave the Script's process group. If a supervisor disappears without a valid result, inspect effects and recover explicitly.
 
@@ -293,8 +293,10 @@ A workflow or node ID is omitted if it contains a NUL byte, cannot be
 represented as UTF-8, or exceeds 16 KiB in UTF-8. Existing definitions with
 these IDs can still execute.
 
-If adding context exceeds the OS process launch limit, Interlock uses the
-original environment. This fallback applies only before the Script starts.
+For foreground Scripts, if adding context exceeds the OS process launch limit,
+Interlock uses the original environment. This fallback applies only before the
+Script starts. The background supervisor records Script child-launch errors as
+operation failures; a missing supervisor leaves an uncertain outcome.
 
 A retry of a retained execution without an attempt record treats that
 execution as attempt 1.
