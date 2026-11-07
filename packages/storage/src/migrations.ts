@@ -226,6 +226,34 @@ export const migrations: readonly Migration[] = [
         WHEN OLD.collection = 'runs' BEGIN DELETE FROM active_background_runs WHERE run_id = OLD.id; END;`);
     },
   },
+  {
+    version: 14,
+    up(db) {
+      db.exec(`
+        CREATE TABLE run_tags (
+          run_id TEXT NOT NULL, tag_key TEXT NOT NULL, tag_value TEXT NOT NULL,
+          PRIMARY KEY (run_id, tag_key)
+        );
+        CREATE INDEX run_tags_match ON run_tags(tag_key, tag_value, run_id);
+        INSERT INTO run_tags
+          SELECT d.id, tags.key, tags.value FROM documents d, json_each(d.value, '$.tags') tags
+          WHERE d.collection = 'runs' AND tags.type = 'text';
+        CREATE TRIGGER run_tags_insert AFTER INSERT ON documents WHEN NEW.collection = 'runs' BEGIN
+          INSERT INTO run_tags SELECT NEW.id, key, value FROM json_each(NEW.value, '$.tags') WHERE type = 'text';
+        END;
+        CREATE TRIGGER run_tags_update AFTER UPDATE ON documents
+          WHEN (OLD.collection = 'runs' OR NEW.collection = 'runs') AND
+            (OLD.id IS NOT NEW.id OR OLD.collection IS NOT NEW.collection OR
+             json_extract(OLD.value, '$.tags') IS NOT json_extract(NEW.value, '$.tags')) BEGIN
+          DELETE FROM run_tags WHERE run_id = OLD.id;
+          INSERT INTO run_tags SELECT NEW.id, key, value FROM json_each(NEW.value, '$.tags') WHERE NEW.collection = 'runs' AND type = 'text';
+        END;
+        CREATE TRIGGER run_tags_delete AFTER DELETE ON documents WHEN OLD.collection = 'runs' BEGIN
+          DELETE FROM run_tags WHERE run_id = OLD.id;
+        END;
+      `);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

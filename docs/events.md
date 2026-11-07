@@ -13,6 +13,7 @@ Create a trigger on the handler workflow. The handler receives the compact event
   "config": {
     "kind": "event",
     "name": "Clean up finished work",
+    "tags": { "pipeline": "cleanup" },
     "events": ["completed", "failed", "cancelled"],
     "scope": {
       "type": "workflow",
@@ -41,9 +42,11 @@ Only future transitions observed while a trigger is enabled create deliveries. E
 
 ## Event input and causal chains
 
-The event object contains `eventId`, `type`, `occurredAt`, `runId`, `workflowId`, and `version`. It includes `externalTask`, `stage`, `waiting`, a failing node reference, and an error summary when available. Text is bounded. Workflow inputs, outputs, claim tokens, and full event history are excluded.
+The event object contains `eventId`, `type`, `occurredAt`, `runId`, `workflowId`, and `version`. It includes source `tags`, `externalTask`, `stage`, `waiting`, a failing node reference, and an error summary when available. Text is bounded. Workflow inputs, outputs, claim tokens, and full event history are excluded.
 
 The resulting run stores a `triggerChain` of trigger IDs. Child runs, detached descendants, and continued runs inherit that chain. A trigger already in the chain never fires again. Both repeated triggers and depth overflow produce a visible suppressed delivery. Durable `(eventId, triggerId)` receipts prevent repeated effects after restart or delivery-log trimming.
+
+Optional `config.tags` labels handler runs with the [ordinary tag bounds](idempotent-run-starts.md#tag-and-filter-runs). Handlers use those configured tags rather than inheriting the source run's tags. Source tags remain in the event input.
 
 Handler runs use ordinary idempotent starts and admission. A capacity limit can queue a handler. The latest published handler version is captured at dispatch. Library and target workflow pause holds defer pending deliveries. Automatic failure pauses also defer them. Disabling a trigger prevents pending dispatch, and deleting it removes its delivery state. Neither operation cancels handler runs already created.
 

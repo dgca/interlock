@@ -1,9 +1,27 @@
 import type { RunTab } from '../features/runs/runAttention';
-function runListSearch(tab: RunTab, offset: number) {
+import { runTagsSchema } from '@interlock/core';
+function runListSearch(
+  tab: RunTab,
+  offset: number,
+  tags?: Record<string, string>,
+) {
   const query = new URLSearchParams();
   if (tab !== 'active') query.set('tab', tab);
   if (offset > 0) query.set('offset', String(offset));
+  if (tags && Object.keys(tags).length) query.set('tags', JSON.stringify(tags));
   return query;
+}
+
+export function runTagFilter(value: string | null) {
+  if (!value) return undefined;
+  try {
+    const parsed = runTagsSchema.safeParse(JSON.parse(value));
+    return parsed.success && Object.keys(parsed.data).length
+      ? parsed.data
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function runOffset(value: string | null) {
@@ -23,12 +41,17 @@ export const paths = {
   workflowSchedule: (id: string, triggerId?: string) =>
     `/workflows/${encodeURIComponent(id)}?view=schedules${triggerId ? `&schedule=${encodeURIComponent(triggerId)}` : ''}`,
   workflow: (id: string) => `/workflows/${encodeURIComponent(id)}`,
-  runs: (tab: RunTab = 'active', offset = 0) => {
-    const query = runListSearch(tab, offset);
+  runs: (tab: RunTab = 'active', offset = 0, tags?: Record<string, string>) => {
+    const query = runListSearch(tab, offset, tags);
     return `/runs${query.size ? `?${query}` : ''}`;
   },
-  workflowRuns: (id: string, tab: RunTab = 'active', offset = 0) => {
-    const query = runListSearch(tab, offset);
+  workflowRuns: (
+    id: string,
+    tab: RunTab = 'active',
+    offset = 0,
+    tags?: Record<string, string>,
+  ) => {
+    const query = runListSearch(tab, offset, tags);
     return `/workflows/${encodeURIComponent(id)}?view=runs${query.size ? `&${query}` : ''}`;
   },
   run: (
@@ -37,12 +60,15 @@ export const paths = {
     tab: RunTab = 'active',
     executionId?: string,
     offset = 0,
+    tags?: Record<string, string>,
   ) => {
     const query = new URLSearchParams();
     if (workflowId) query.set('workflow', workflowId);
     if (workflowId || tab !== 'active') query.set('tab', tab);
     if (executionId) query.set('execution', executionId);
     if (offset > 0) query.set('offset', String(offset));
+    if (tags && Object.keys(tags).length)
+      query.set('tags', JSON.stringify(tags));
     return `/runs/${encodeURIComponent(id)}${query.size ? `?${query}` : ''}`;
   },
 };

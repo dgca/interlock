@@ -25,6 +25,8 @@ export { matchRouting } from './resultRouting.js';
 export * from './simulation.js';
 export * from './runChains.js';
 export * from './runStarts.js';
+export * from './runTags.js';
+import { runTagsSchema } from './runTags.js';
 export * from './runVersions.js';
 import {
   startRequestIdSchema,
@@ -644,6 +646,7 @@ export type RunStatus =
 export const runQuerySchema = z.object({
   requestId: startRequestIdSchema.optional(),
   externalTask: externalTaskIdentitySchema.optional(),
+  tags: runTagsSchema.optional(),
   chainRootRunId: z.string().min(1).optional(),
   workflowId: z.string().optional(),
   status: z
@@ -655,7 +658,7 @@ export const runQuerySchema = z.object({
 });
 export type RunQuery = z.infer<typeof runQuerySchema>;
 export const runSummaryQuerySchema = runQuerySchema
-  .pick({ workflowId: true, status: true })
+  .pick({ workflowId: true, status: true, tags: true })
   .extend({
     tab: z.enum(['active', 'attention', 'history']).optional(),
     offset: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),
@@ -722,6 +725,7 @@ export interface Run {
   admission?: import('./runStarts.js').RunAdmission;
   startRequestId?: string;
   externalTask?: import('./runStarts.js').ExternalTask;
+  tags?: import('./runTags.js').RunTags;
   chain?: import('./runChains.js').RunChainLink;
   contextRevision?: number;
   externalInputHold?: import('./externalInput.js').ExternalInputHold;
@@ -767,6 +771,7 @@ export type RunSummary = Pick<
   | 'comparison'
   | 'startRequestId'
   | 'externalTask'
+  | 'tags'
 > & {
   executionCount: number;
   parentWorkflowName?: string;

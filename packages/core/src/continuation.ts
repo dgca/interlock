@@ -4,6 +4,7 @@ import {
   managedWorkSummarySchema,
 } from './executors.js';
 import { externalTaskSchema } from './runStarts.js';
+import { runTagsSchema } from './runTags.js';
 import {
   continuitySchema,
   continuityGroupSchema,
@@ -171,6 +172,7 @@ export const mutationSummarySchema = z.object({
   ok: z.literal(true),
   startRequestId: z.string().optional(),
   externalTask: externalTaskSchema.optional(),
+  tags: runTagsSchema.optional(),
   runId: z
     .string()
     .describe(

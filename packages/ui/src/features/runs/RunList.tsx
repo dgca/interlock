@@ -14,6 +14,14 @@ import layout from '../../components/PageLayout/PageLayout.module.css';
 import { Badge } from '../../components/Badge/Badge';
 import { ComparisonContext } from './ComparisonContext';
 import { api, errorMessage } from '../../lib/api';
+import {
+  RunTags,
+  TagFields,
+  tagRows,
+  tagsFromRows,
+  type TagRow,
+} from './RunTags';
+import tagStyles from './RunTags.module.css';
 
 type Page = Awaited<ReturnType<typeof api.runs.summaries.query>>;
 const pageSize = 100;
@@ -28,6 +36,8 @@ export function RunList({
   workflowId,
   act,
   workflows,
+  tags,
+  onTagsChange,
 }: {
   tick: number;
   offset: number;
@@ -38,11 +48,30 @@ export function RunList({
   workflowId?: string;
   act?: Action;
   workflows: { id: string; name: string }[];
+  tags?: Record<string, string>;
+  onTagsChange?: (tags?: Record<string, string>) => void;
 }) {
+  const [localTags, setLocalTags] = useState(tags);
+  const selectedTags = onTagsChange ? tags : localTags;
+  const tagsKey = JSON.stringify(selectedTags ?? {});
+  const [filterRows, setFilterRows] = useState<TagRow[]>(tagRows(selectedTags));
+  const [filterError, setFilterError] = useState('');
+  useEffect(() => {
+    setFilterRows(tagRows(selectedTags));
+    setFilterError('');
+  }, [tagsKey]);
+  const changeTags = (next?: Record<string, string>) => {
+    if (onTagsChange) onTagsChange(next);
+    else {
+      setLocalTags(next);
+      onOffsetChange(0);
+    }
+  };
   const [cleanup, setCleanup] = useState(false);
   const [snapshot, setSnapshot] = useState<{
     tab: RunTab;
     workflowId?: string;
+    tagsKey: string;
     page: Page;
   }>();
   const [error, setError] = useState('');
@@ -64,11 +93,12 @@ export function RunList({
           const page = await api.runs.summaries.query({
             tab,
             workflowId,
+            tags: selectedTags,
             offset,
             limit: pageSize,
           });
           if (current) {
-            setSnapshot({ tab, workflowId, page });
+            setSnapshot({ tab, workflowId, tagsKey, page });
             setError('');
           }
         } catch (error) {
@@ -82,9 +112,15 @@ export function RunList({
       current = false;
       refresh.current = undefined;
     };
-  }, [tab, workflowId, offset]);
-  useEffect(() => refresh.current?.(), [tab, workflowId, offset, tick]);
-  const scoped = snapshot?.workflowId === workflowId ? snapshot : undefined;
+  }, [tab, workflowId, offset, tagsKey]);
+  useEffect(
+    () => refresh.current?.(),
+    [tab, workflowId, offset, tagsKey, tick],
+  );
+  const scoped =
+    snapshot?.workflowId === workflowId && snapshot?.tagsKey === tagsKey
+      ? snapshot
+      : undefined;
   const lastPage = scoped?.tab === tab ? scoped.page : undefined;
   const page = lastPage?.offset === offset ? lastPage : undefined;
   const counts = scoped?.page.counts;
@@ -119,6 +155,51 @@ export function RunList({
           </Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value={tab} pt="md">
+          <details className={tagStyles.filter}>
+            <summary>
+              Filter by tags
+              {Object.keys(selectedTags ?? {}).length
+                ? ` (${Object.keys(selectedTags!).length})`
+                : ''}
+            </summary>
+            <TagFields
+              label="Matching tags"
+              showLabel={false}
+              description="Match every key and value exactly. Up to 16 pairs."
+              rows={filterRows}
+              onChange={(rows) => {
+                setFilterRows(rows);
+                setFilterError('');
+              }}
+              error={filterError}
+            />
+            <Group mt="sm" gap="xs">
+              <Button
+                size="xs"
+                onClick={() => {
+                  try {
+                    changeTags(tagsFromRows(filterRows));
+                    setFilterError('');
+                  } catch (error) {
+                    setFilterError(errorMessage(error));
+                  }
+                }}
+              >
+                Apply filters
+              </Button>
+              <Button
+                size="xs"
+                variant="subtle"
+                onClick={() => {
+                  setFilterRows([]);
+                  setFilterError('');
+                  changeTags(undefined);
+                }}
+              >
+                Clear filters
+              </Button>
+            </Group>
+          </details>
           {tab === 'attention' && (
             <ScheduleAlerts
               key={
@@ -191,6 +272,7 @@ export function RunList({
                       v{r.version} · {r.id.slice(0, 8)}
                     </small>
                     <ComparisonContext comparison={r.comparison} />
+                    <RunTags tags={r.tags} compact />
                     {r.parentMode === 'detached' && (
                       <small>
                         Started independently · from{' '}
@@ -233,20 +315,24 @@ export function RunList({
             <div className="empty">
               <Activity size={28} />
               <h2>
-                {tab === 'active'
-                  ? 'No active runs.'
-                  : tab === 'attention'
-                    ? 'No runs need your attention.'
-                    : 'No history yet.'}
+                {Object.keys(selectedTags ?? {}).length
+                  ? 'No runs match these tags.'
+                  : tab === 'active'
+                    ? 'No active runs.'
+                    : tab === 'attention'
+                      ? 'No runs need your attention.'
+                      : 'No history yet.'}
               </h2>
               <p>
-                {tab === 'active'
-                  ? workflowId
-                    ? 'Choose Run above to start a published version of this workflow.'
-                    : 'Open a published workflow and choose Run to start.'
-                  : tab === 'attention'
-                    ? 'Approval requests, questions, and recovery checks appear here.'
-                    : 'Completed, failed, and cancelled runs appear here.'}
+                {Object.keys(selectedTags ?? {}).length
+                  ? 'Change or clear the tag filters to see other runs.'
+                  : tab === 'active'
+                    ? workflowId
+                      ? 'Choose Run above to start a published version of this workflow.'
+                      : 'Open a published workflow and choose Run to start.'
+                    : tab === 'attention'
+                      ? 'Approval requests, questions, and recovery checks appear here.'
+                      : 'Completed, failed, and cancelled runs appear here.'}
               </p>
             </div>
           )}

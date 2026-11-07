@@ -16,6 +16,7 @@ import {
 import { Button } from '../../components/Button/Button';
 import { SchemaInput } from '../../components/SchemaInput/SchemaInput';
 import { api, errorMessage } from '../../lib/api';
+import { TagFields, tagsFromRows, type TagRow } from './RunTags';
 function sample(schema: Record<string, any>): Json {
   if (schema.default !== undefined) return schema.default;
   if (schema.enum?.length) return schema.enum[0];
@@ -43,7 +44,10 @@ export function RunDialog({
   onStarted: (id: string) => void;
 }) {
   const fieldsRef = useRef<HTMLDivElement>(null);
+  const tagsDetailsRef = useRef<HTMLDetailsElement>(null);
   const [raw, setRaw] = useState(false);
+  const [tags, setTags] = useState<TagRow[]>([]);
+  const [tagsError, setTagsError] = useState('');
   const [versionPolicy, setVersionPolicy] =
     useState<RunVersionPolicy>('pinned');
   const [versions, setVersions] = useState<WorkflowVersion[]>([]),
@@ -160,6 +164,20 @@ export function RunDialog({
                   onChange={(e) => setInput(e.target.value)}
                 />
               )}
+              <details ref={tagsDetailsRef} style={{ marginBottom: 16 }}>
+                <summary>Tags{tags.length ? ` (${tags.length})` : ''}</summary>
+                <div style={{ marginTop: 12 }}>
+                  <TagFields
+                    rows={tags}
+                    onChange={(rows) => {
+                      setTags(rows);
+                      setTagsError('');
+                    }}
+                    error={tagsError}
+                    showLabel={false}
+                  />
+                </div>
+              </details>
             </div>
             <details>
               <summary>Input contract</summary>
@@ -185,12 +203,23 @@ export function RunDialog({
           variant="primary"
           disabled={busy || !schema}
           onClick={async () => {
+            let metadata: ReturnType<typeof tagsFromRows>;
+            try {
+              metadata = tagsFromRows(tags);
+              setTagsError('');
+            } catch (error) {
+              if (tagsDetailsRef.current) tagsDetailsRef.current.open = true;
+              setTagsError(errorMessage(error));
+              return;
+            }
             const invalid =
               fieldsRef.current?.querySelector<HTMLInputElement>(':invalid');
             if (invalid) {
+              invalid.closest('details')?.setAttribute('open', '');
               invalid.reportValidity();
               return;
             }
+            setError('');
             setBusy(true);
             try {
               const result = await api.runs.start.mutate({
@@ -198,6 +227,7 @@ export function RunDialog({
                 version,
                 versionPolicy,
                 input: JSON.parse(input),
+                tags: metadata,
               });
               onStarted(result.run.id);
             } catch (e) {

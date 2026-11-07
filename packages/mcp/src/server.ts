@@ -261,7 +261,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'manage_workflow_triggers',
-    'Create schedule/webhook/event config with workflowId, disabled; otherwise use inspected id/expectedRevision. Update replaces config, not kind. Enable needs retained published unarchived target and ready webhook Secret; resets automatic pause/failures, not named holds. Schedules: interval >=30s or five-field cron/IANA zone; overlap skip/queue/allow, missed skip/run_once. Re-enable run_once may fire immediately. Webhook HMAC covers raw body and referenced headers, including delivery ID/time. Header parts: unique, no signature header or separator in values. Input submits pending data for exactly one externalTask/nodeId match, event time >= wait start; acceptance explicit. Named pauses allow input submission, reject other webhook actions. Events: five lifecycle kinds; library/workflow scope, optional owned children. exitNodeId: completed-only workflow scope. waitForQuiescence: terminal events only, entire source tree including detached work/uncertain claims. maxTriggerDepth: default 2, range 1..20; causal repeats/overflow log suppression. Handler input is the compact event; pauses defer dispatch. Disable/delete preserve runs; Delete removes logs; event receipts survive, webhook receipts are removed. Imports disable. Reinspect conflicts.',
+    'Create disabled schedule/webhook/event with workflowId; other writes need inspected id/expectedRevision. Update replaces config, never kind; config.tags labels new starts. Enable needs retained published unarchived target and ready webhook Secret; resets automatic pauses/failures, not named holds. Schedules: interval>=30s or five-field cron/IANA zone. Re-enable schedule run_once may fire immediately. Webhook HMAC covers raw body and referenced headers, including delivery ID/time. Header parts: unique, no signature header or separator in values. Input targets exactly one externalTask/nodeId, event time>=wait start; acceptance explicit. Pauses permit input submission, reject other hook actions. Event exit filters need completed workflow scope; quiescence is terminal-only, including detached/uncertain work. Causal repeats/depth overflow suppress. Handlers get compact events; pauses defer dispatch. Disable/delete preserve runs; delete clears logs; event receipts survive, webhook receipts are removed. Imports disable; reinspect conflicts.',
     z.object({ request: scheduleManageInputSchema }).strict(),
     ({ request }) => client.triggers.manage(request),
   );
@@ -385,7 +385,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'get_run_briefing',
-    'Read bounded stage/waiting/actor, lifecycle/independent progress, work/blockers, failures, deadlines/result refs. Lists default 20/max 100 with totals/truncated; no payloads/tokens. Queued starts have admission_queue, no work. Follow pause/hold/budget/resource/cwd recovery. Quiescence/uncertainClaims include resource-free revoked Agents. Resource blockers identify executions/owners; queued time excludes timeouts. Reconcile stopped attempts via manage_work_resources. Input blockers identify execution/revision. Poll lastCheck caps 512 chars; deadlines distinguish poll_check/poll_timeout. manage_stalls inspects observational stalls; manage_run_version reads upgrade details. Empty work is not completion.',
+    'Read bounded stage/waiting/actor, tags, lifecycle/independent progress, work/blockers, failures, deadlines/result refs. Lists default 20/max 100 with totals/truncated; no payloads/tokens. Queued starts have admission_queue, no work. Follow pause/hold/budget/resource/cwd recovery. Quiescence/uncertainClaims include resource-free revoked Agents. Resource blockers identify executions/owners; queued time excludes timeouts. Reconcile stopped attempts via manage_work_resources. Input blockers identify execution/revision. Poll lastCheck caps 512 chars; deadlines distinguish poll_check/poll_timeout. manage_stalls inspects observational stalls; manage_run_version reads upgrade details. Empty work is not completion.',
     briefingQuerySchema.shape,
     (input) => client.runs.briefing(input),
   );
@@ -688,7 +688,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'start_run',
-    'Start a retained published version; omission selects latest. requestId retries recover the original run read-only; conflicting arguments or deleted history reject. Keep version intent, versionPolicy, input, budget, correlation and admission options identical; detail/limit affect responses only. versionPolicy defaults pinned; latest-compatible checks before new executions. Capture prompts using publish pins or current revisions, plus variable/alias revisions; replays skip validation. externalTask is non-secret correlation. Active-task policy is library-wide, default allow; alternatives require externalTask. Capacity/after gates return queued, admission_queue blockers and no assignments. Dependencies require success; priority descends with FIFO ties. Summary returns status/projections, runId/cursor, next work/action; ok acknowledges acceptance, empty work is not completion. Resume via briefing/waits/claims. full returns inspection; detached work can outlive parents.',
+    'Start a retained published version, latest if omitted. requestId recovers the original run read-only; keep creation arguments identical. Tags inherit through children/chains. Capacity/after gates may return queued without assignments; dependencies require success, priority descends/FIFO ties. Summary supplies runId/cursor/next work; ok means accepted, not completed. Continue via briefing/waits/claims. full returns inspection; detached work may outlive parents.',
     {
       detail: mcpMutationDetailSchema,
       limit: continuationLimitSchema.describe(
@@ -713,7 +713,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'list_runs',
-    'Find newest run summaries including queued status, stage/waiting/actor, correlation and chain/ancestry links. Exact requestId, externalTask:{system,id}, workflow, status, rootOnly, chain and inputMatch filters combine. Dot paths select input; blank selects all; equality is structural. Limit defaults 50/max 1000. rootOnly excludes detached children too. Lookup reserves nothing; start_run provides retry recovery and active-task policies. Continue-as-new inherits externalTask, not the original request key.',
+    'Find newest run summaries with projections, tags, correlation and ancestry. Filters combine; tags require every exact case-sensitive pair. inputMatch uses dot paths, blank for whole input, structural equality. Limit default 50/max 1000. rootOnly excludes all children, including detached. Lookup reserves nothing; use start_run for retry/active-task policy. Chains inherit externalTask, not requestId.',
     runQuerySchema.shape,
     (input) => client.runs.find(input),
   );

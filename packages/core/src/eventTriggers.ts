@@ -1,3 +1,4 @@
+import { runTagsSchema } from './runTags.js';
 import { z } from 'zod';
 import type { ExternalTask } from './runStarts.js';
 import type { RunWaiting } from './runProjection.js';
@@ -24,6 +25,7 @@ export const eventConfigSchema = z
   .object({
     kind: z.literal('event'),
     name: z.string().trim().min(1).max(120),
+    tags: runTagsSchema.optional(),
     events: z.array(lifecycleEventKindSchema).min(1).max(5),
     scope: eventScopeSchema,
     exitNodeId: z.string().min(1).max(200).optional(),
@@ -74,6 +76,7 @@ export interface EventPayload {
   workflowId: string;
   version: number;
   externalTask?: ExternalTask;
+  tags?: import('./runTags.js').RunTags;
   stage?: string | null;
   waiting?: RunWaiting | null;
   failingNode?: { id: string; label: string };

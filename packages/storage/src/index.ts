@@ -642,6 +642,12 @@ export class Store {
   findRuns(query: RunQuery) {
     const filters = ["collection = 'runs'"];
     const parameters: string[] = [];
+    for (const [key, value] of Object.entries(query.tags ?? {})) {
+      filters.push(
+        'id IN (SELECT run_id FROM run_tags WHERE tag_key = ? AND tag_value = ?)',
+      );
+      parameters.push(key, value);
+    }
     if (query.requestId !== undefined) {
       filters.push("json_extract(value, '$.startRequestId') = ?");
       parameters.push(query.requestId);
@@ -689,6 +695,7 @@ export class Store {
       | 'chain'
       | 'startRequestId'
       | 'externalTask'
+      | 'tags'
     > &
       RunAncestry)[] = [];
     for (const row of rows) {
@@ -738,6 +745,7 @@ export class Store {
           ? { startRequestId: run.startRequestId }
           : {}),
         ...(run.externalTask ? { externalTask: run.externalTask } : {}),
+        ...(run.tags !== undefined ? { tags: run.tags } : {}),
         ...(run.chain ? { chain: run.chain } : {}),
       });
       if (result.length === query.limit) break;

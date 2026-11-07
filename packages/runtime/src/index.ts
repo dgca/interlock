@@ -340,6 +340,7 @@ export class Engine {
           {
             requestId: request.requestId,
             externalTask: request.externalTask,
+            tags: trigger.tags,
             onActiveExternalTask: trigger.action.onActiveExternalTask,
           },
           effects,
@@ -415,6 +416,7 @@ export class Engine {
           input,
           version: workflow.latestVersion,
           requestId: `schedule:${trigger.id}:${slot}`,
+          ...(trigger.tags !== undefined ? { tags: trigger.tags } : {}),
         };
         const result = this.starts.resolve(q, () => ({
           run: this.newRun(
@@ -450,6 +452,7 @@ export class Engine {
             version: workflow.latestVersion,
             input: payload as unknown as Json,
             requestId: `event:${trigger.id}:${eventId}`,
+            ...(trigger.tags !== undefined ? { tags: trigger.tags } : {}),
           };
           const result = this.starts.resolve(q, () => ({
             run: this.newRun(
@@ -1345,7 +1348,12 @@ export class Engine {
       (batchNodeId && parentRunId
         ? this.run(parentRunId).versionPolicy
         : startOptions?.versionPolicy);
+    const tags =
+      continuedFrom?.tags ??
+      startOptions?.tags ??
+      (parentRunId ? this.run(parentRunId).tags : undefined);
     const run: Run = {
+      ...(tags !== undefined ? { tags: structuredClone(tags) } : {}),
       ...(triggerChain ? { triggerChain: [...triggerChain] } : {}),
       ...(startOptions?.requestId !== undefined
         ? { startRequestId: startOptions.requestId }

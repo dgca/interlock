@@ -593,6 +593,7 @@ export function importWorkflows(
           throw new InterlockError('Trigger identity cannot change kind');
         store.put<WorkflowTrigger>('workflowTriggers', {
           ...existing,
+          tags: schedule.config.tags,
           ...schedule.config,
           id: schedule.id,
           workflowId: entry.id,

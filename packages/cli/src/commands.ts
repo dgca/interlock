@@ -12,6 +12,7 @@ import {
   runVersionPreviewSchema,
   runVersionApplySchema,
   runVersionPolicySchema,
+  runTagsSchema,
   type DoctorReport,
   type DiagnosticCategory,
 } from '@interlock/core';
@@ -21,6 +22,17 @@ const parse = async (value: string | undefined) => {
     value.startsWith('@') ? await readFile(value.slice(1), 'utf8') : value,
   );
 };
+function parseTags(values: string[] | undefined) {
+  if (!values) return undefined;
+  const entries = values.map((value) => {
+    const equals = value.indexOf('=');
+    if (equals < 1) throw new Error('Use --tag KEY=VALUE with a nonempty key');
+    return [value.slice(0, equals), value.slice(equals + 1)] as const;
+  });
+  if (new Set(entries.map(([key]) => key)).size !== entries.length)
+    throw new Error('Supply each --tag key once');
+  return runTagsSchema.parse(Object.fromEntries(entries));
+}
 function parseSummaryArgs(args: string[], withBudget = false) {
   const optionArgs: string[] = [];
   const positionals: string[] = [];
@@ -33,6 +45,7 @@ function parseSummaryArgs(args: string[], withBudget = false) {
     if (
       withBudget &&
       [
+        '--tag',
         '--budget',
         '--request-id',
         '--external-task',
@@ -60,6 +73,7 @@ function parseSummaryArgs(args: string[], withBudget = false) {
       summary: { type: 'boolean' },
       ...(withBudget
         ? {
+            tag: { type: 'string' as const, multiple: true as const },
             budget: { type: 'string' as const },
             'request-id': { type: 'string' as const },
             'external-task': { type: 'string' as const },
@@ -278,9 +292,10 @@ export async function runCommand(argv: string[]) {
       const { values, positionals } = parseSummaryArgs(args, true);
       if (positionals.length < 2 || positionals.length > 3)
         throw new Error(
-          'Usage: start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
+          'Usage: start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--tag KEY=VALUE ...] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
         );
       const input = {
+        tags: parseTags(Array.isArray(values.tag) ? values.tag : undefined),
         versionPolicy:
           values['version-policy'] === undefined
             ? undefined
@@ -324,6 +339,7 @@ export async function runCommand(argv: string[]) {
       const { values } = parseArgs({
         args,
         options: {
+          tag: { type: 'string', multiple: true },
           workflow: { type: 'string' },
           status: { type: 'string' },
           'root-only': { type: 'boolean' },
@@ -343,6 +359,7 @@ export async function runCommand(argv: string[]) {
       const { runQuerySchema } = await import('@interlock/core');
       return client.runs.find.query(
         runQuerySchema.parse({
+          tags: parseTags(Array.isArray(values.tag) ? values.tag : undefined),
           workflowId: values.workflow,
           requestId:
             typeof values['request-id'] === 'string'
@@ -569,8 +586,8 @@ export async function runCommand(argv: string[]) {
           'export <id>',
           'publish <id> [--cascade]',
           'work-resources <json|@file> (inspect by workId or runId+executionId; release exact uncertain attempt after stop confirmation)',
-          'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
-          'runs [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
+          'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--tag KEY=VALUE ...] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
+          'runs [--tag KEY=VALUE ...] [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
           'run-version <json|@file> (action: read with runId/offset/limit; policy with expectedRevision and pinned|latest-compatible; preview with newer version and optional recapturePrompts; apply requires the exact preview confirmation and reason)',
           'run-history <json|@file> (action: preview with workflowId/before/rootRunIds and offset/limit; delete requires roots with preview confirmations and acknowledgeHistoryLoss:true; workflows and published versions remain)',

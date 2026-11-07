@@ -1,3 +1,4 @@
+import { runTagsSchema } from './runTags.js';
 import { z } from 'zod';
 import { jsonSchema, type Json } from './index.js';
 
@@ -109,6 +110,7 @@ export const webhookConfigSchema = z
   .object({
     kind: z.literal('webhook'),
     name: z.string().trim().min(1).max(120),
+    tags: runTagsSchema.optional(),
     authentication: z
       .object({
         secretId: z.string().min(1).max(200),

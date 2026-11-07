@@ -1,3 +1,4 @@
+import { runTagsSchema } from './runTags.js';
 import { z } from 'zod';
 import { webhookConfigSchema, type WebhookConfig } from './webhooks.js';
 import { eventConfigSchema, type EventConfig } from './eventTriggers.js';
@@ -102,6 +103,7 @@ export const scheduleConfigSchema = z
   .object({
     kind: z.literal('schedule').default('schedule'),
     name: z.string().trim().min(1).max(120),
+    tags: runTagsSchema.optional(),
     timing: scheduleTimingSchema,
     input: z.lazy(() => jsonSchema).default({}),
     bindings: scheduleBindingsSchema.default({}),
@@ -148,6 +150,7 @@ export function triggerConfig(trigger: WorkflowTrigger): TriggerConfig {
       ? [
           'kind',
           'name',
+          'tags',
           'timing',
           'input',
           'bindings',
@@ -159,6 +162,7 @@ export function triggerConfig(trigger: WorkflowTrigger): TriggerConfig {
         ? [
             'kind',
             'name',
+            'tags',
             'events',
             'scope',
             'exitNodeId',
@@ -169,6 +173,7 @@ export function triggerConfig(trigger: WorkflowTrigger): TriggerConfig {
         : [
             'kind',
             'name',
+            'tags',
             'authentication',
             'deliveryId',
             'timestamp',

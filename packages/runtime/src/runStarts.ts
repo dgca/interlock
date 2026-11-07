@@ -24,6 +24,7 @@ export class RunStarts {
         version: q.version ?? null,
         budget: q.budget ?? null,
         externalTask: q.externalTask ?? null,
+        ...(q.tags !== undefined ? { tags: q.tags } : {}),
         ...(q.versionPolicy !== undefined
           ? { versionPolicy: q.versionPolicy }
           : {}),

@@ -92,6 +92,7 @@ export class EventTriggers {
       workflowId: run.workflowId,
       version: run.version,
       ...(run.externalTask ? { externalTask: run.externalTask } : {}),
+      ...(run.tags !== undefined ? { tags: structuredClone(run.tags) } : {}),
       stage: event.stage ?? node?.stage ?? null,
       waiting,
       ...(type === 'failed' && execution

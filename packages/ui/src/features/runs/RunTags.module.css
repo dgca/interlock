@@ -1,0 +1,48 @@
+.fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.fields legend {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+.field {
+  flex: 1;
+  min-width: 0;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.tag {
+  overflow-wrap: anywhere;
+}
+.compact {
+  display: flex;
+  margin-top: 5px;
+  font-size: 11px;
+}
+.compact .tag {
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.filter {
+  margin-bottom: 16px;
+  max-width: 560px;
+}
+.filter summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.filter[open] summary {
+  margin-bottom: 12px;
+}

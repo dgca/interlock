@@ -274,3 +274,117 @@ it('29f3cb6-attention-row: preserves stage and actor with specific attention and
     container.remove();
   }
 });
+
+it('applies all exact tag pairs before paging and clears the filter', async () => {
+  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
+  const base = {
+    workflowId: 'workflow',
+    updatedAt: new Date().toISOString(),
+    status: 'completed',
+    version: 1,
+    createdAt: new Date().toISOString(),
+    executionCount: 0,
+  };
+  const runs = [
+    {
+      ...base,
+      id: 'match',
+      workflowName: 'Match',
+      tags: { 'repo.name': 'org/repo', priority: 'High' },
+    },
+    {
+      ...base,
+      id: 'other',
+      workflowName: 'Other',
+      tags: { 'repo.name': 'org/repo', priority: 'low' },
+    },
+  ];
+  query.mockImplementation(async ({ offset, tags }) => {
+    const items = runs.filter((run) =>
+      Object.entries(tags ?? {}).every(
+        ([key, value]) => run.tags[key as keyof typeof run.tags] === value,
+      ),
+    );
+    return {
+      items,
+      counts: { active: 0, attention: 0, history: items.length },
+      offset,
+      nextOffset: null,
+      total: items.length,
+    };
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  function Harness() {
+    const [offset, setOffset] = useState(100);
+    return h(
+      MantineProvider,
+      { env: 'test' },
+      h(RunList, {
+        tick: 0,
+        offset,
+        onOffsetChange: setOffset,
+        workflows: [],
+        tab: 'history',
+        onTabChange: vi.fn(),
+        onOpen: vi.fn(),
+      }),
+    );
+  }
+  const click = async (label: string) =>
+    act(async () =>
+      [...container.querySelectorAll<HTMLButtonElement>('button')]
+        .find((element) => element.textContent === label)!
+        .click(),
+    );
+  const input = async (label: string, value: string) =>
+    act(async () => {
+      const field = container.querySelector<HTMLInputElement>(
+        `input[aria-label="${label}"]`,
+      )!;
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )!.set!.call(field, value);
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  try {
+    await act(async () => root.render(h(Harness)));
+    expect(container.textContent).toContain('repo.name=org/repo');
+    await click('Add tag');
+    await input('Matching tags key 1', 'repo.name');
+    await input('Matching tags value 1', 'org/repo');
+    await click('Add tag');
+    await input('Matching tags key 2', 'priority');
+    await input('Matching tags value 2', 'High');
+    expect(query).toHaveBeenLastCalledWith(
+      expect.objectContaining({ tags: undefined, offset: 100 }),
+    );
+    await click('Apply filters');
+    expect(query).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        tags: { 'repo.name': 'org/repo', priority: 'High' },
+        offset: 0,
+      }),
+    );
+    expect(
+      [...container.querySelectorAll('button.run-row strong')].map(
+        (name) => name.textContent,
+      ),
+    ).toEqual(['Match']);
+    await click('Clear filters');
+    expect(query).toHaveBeenLastCalledWith(
+      expect.objectContaining({ tags: undefined, offset: 0 }),
+    );
+    expect(container.querySelectorAll('button.run-row')).toHaveLength(2);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
