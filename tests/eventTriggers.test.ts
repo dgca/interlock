@@ -439,7 +439,7 @@ it('settles failed handler runs into the shared automatic failure pause', () => 
       tools: [],
       skills: [],
     });
-    e.reportFailure(w.id, c.token!, 'handler failed');
+    e.reportFailure(w.id, c.token!, 'handler failed ' + 'x'.repeat(1500));
   }
   e.pump();
   expect(e.triggers.inspect(t.id).trigger).toMatchObject({
@@ -449,6 +449,10 @@ it('settles failed handler runs into the shared automatic failure pause', () => 
   expect(deliveries(e, t)[0]).toMatchObject({
     settled: true,
     runStatus: 'failed',
+    error: ('handler failed ' + 'x'.repeat(1500)).slice(0, 1000),
+  });
+  expect(e.triggers.inspect(t.id).deliveries.items[0]).toMatchObject({
+    error: ('handler failed ' + 'x'.repeat(1500)).slice(0, 1000),
   });
 });
 

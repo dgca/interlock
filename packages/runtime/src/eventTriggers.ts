@@ -196,9 +196,14 @@ export class EventTriggers {
         if (run) delivery.runStatus = run.status;
         if (!run || !active(run)) {
           delivery.settled = true;
-          if (run?.status === 'failed')
-            this.failure(trigger, run.error ?? 'Event handler failed');
-          else if (run?.status === 'completed') trigger.consecutiveFailures = 0;
+          if (run?.status === 'failed') {
+            delivery.error = (run.error ?? 'Event handler failed').slice(
+              0,
+              1000,
+            );
+            this.failure(trigger, delivery.error);
+          } else if (run?.status === 'completed')
+            trigger.consecutiveFailures = 0;
           this.store.put('workflowTriggers', trigger);
         }
       } else if (!trigger.enabled) {

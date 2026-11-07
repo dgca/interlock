@@ -214,6 +214,11 @@ it.each(['stdio', 'http'])(
         uncertainOperations: [],
       });
 
+      expect(
+        toolDiscovery.tools.find((tool) => tool.name === 'manage_executors')!
+          .description,
+      ).toContain('ended needs_human with no pending requests');
+
       const scheduleTools = toolDiscovery.tools.filter((t) =>
         ['read_workflow_triggers', 'manage_workflow_triggers'].includes(t.name),
       );
@@ -221,6 +226,11 @@ it.each(['stdio', 'http'])(
       if (scheduleDiscovery) expect(scheduleTools).toEqual(scheduleDiscovery);
       else scheduleDiscovery = scheduleTools;
       expect(JSON.stringify(scheduleTools)).toContain('expectedRevision');
+      const triggerManagement = scheduleTools.find(
+        (tool) => tool.name === 'manage_workflow_triggers',
+      )!.description;
+      expect(triggerManagement).toContain('event receipts survive');
+      expect(triggerManagement).toContain('webhook receipts are removed');
       const schedule = (
         await call('manage_workflow_triggers', {
           request: {
@@ -396,6 +406,11 @@ it.each(['stdio', 'http'])(
         hookBundle.workflows.find((entry: any) => entry.id === w.id).webhooks[0]
           .enabled,
       ).toBe(false);
+      expect(
+        store
+          .list<{ id: string; triggerId: string }>('webhookReceipts')
+          .filter((receipt) => receipt.triggerId === hook.id),
+      ).toHaveLength(1);
       await call('manage_workflow_triggers', {
         request: {
           action: 'delete',
@@ -403,6 +418,12 @@ it.each(['stdio', 'http'])(
           expectedRevision: hookEnabled.revision,
         },
       });
+
+      expect(
+        store
+          .list<{ id: string; triggerId: string }>('webhookReceipts')
+          .filter((receipt) => receipt.triggerId === hook.id),
+      ).toHaveLength(0);
 
       const eventDefinition = blankDefinition();
       eventDefinition.nodes = eventDefinition.nodes.filter(
@@ -552,6 +573,10 @@ it.each(['stdio', 'http'])(
           },
         })
       ).trigger;
+      const eventReceipts = store
+        .list<{ id: string; triggerId: string }>('eventTriggerReceipts')
+        .filter((receipt) => receipt.triggerId === eventTrigger.id);
+      expect(eventReceipts).toHaveLength(1);
       await call('manage_workflow_triggers', {
         request: {
           action: 'delete',
@@ -559,6 +584,13 @@ it.each(['stdio', 'http'])(
           expectedRevision: disabledEvent.revision,
         },
       });
+
+      expect(store.eventDeliveries(eventTrigger.id).total).toBe(0);
+      expect(
+        store
+          .list<{ id: string; triggerId: string }>('eventTriggerReceipts')
+          .filter((receipt) => receipt.triggerId === eventTrigger.id),
+      ).toEqual(eventReceipts);
 
       const { tools, nextCursor } = toolDiscovery;
       const admissionSchema = tools.find((t) => t.name === 'start_run')!
@@ -1406,6 +1438,7 @@ it.each(['stdio', 'http'])(
         (t) => t.name === 'delete_workflow',
       )!.description;
       expect(deletionScope).toContain('Batch item runs and detached runs');
+      expect(deletionScope).toContain('Durable event-trigger receipts remain');
       expect(deletionScope).toContain(
         'ancestor runs and the entire run tree remain intact',
       );

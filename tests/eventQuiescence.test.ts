@@ -196,9 +196,11 @@ it('keeps cancelled Script teardown pending until its authenticated stop result 
       ).toBe('Script stopped'),
     { timeout: 5000, interval: 30 },
   );
-  e.pump();
-  expect(delivery(e, t).outcome).toBe('started');
-  expect(e.quiescence(source.id).quiescent).toBe(true);
+  await vi.waitFor(() => {
+    e.pump();
+    expect(delivery(e, t).outcome).toBe('started');
+    expect(e.quiescence(source.id).quiescent).toBe(true);
+  });
   expect(e.store.terminalBackgroundRuns()).toEqual([]);
   expect(existsSync(join(root, 'finished'))).toBe(false);
   expect(e.run(descendant.id)).not.toHaveProperty('output');
@@ -660,4 +662,137 @@ it('keeps a foreground Script interrupted by restart uncertain after its old pro
     uncertainOperationsReleased: 1,
   });
   expect(delivery(recovered, t).outcome).toBe('started');
+});
+
+it('reconciles an ended managed attention hold before cancelled-source teardown', async () => {
+  const { engine: e } = setup();
+  e.executors.saveProfile({
+    id: 'codex',
+    harness: 'codex',
+    name: 'Recovery test',
+    enabled: true,
+    expectedRevision: 0,
+    transientRetry: { maxRetries: 1, windowMs: 30000, initialBackoffMs: 0 },
+  });
+  let attempts = 0;
+  e.executors.start([
+    {
+      id: 'codex',
+      detect: async () => ({ status: 'detected', command: '/fake/codex' }),
+      run: async () => {
+        attempts++;
+        throw new Error('HTTP 429 rate limit');
+      },
+    },
+  ]);
+  const definition = blankDefinition();
+  definition.executor = 'codex';
+  const sourceId = publish(e, definition),
+    target = publish(e);
+  const created = e.triggers.mutate({
+    action: 'create',
+    workflowId: target,
+    config: eventConfigSchema.parse({
+      kind: 'event',
+      name: 'Cancelled teardown',
+      events: ['cancelled'],
+      scope: { type: 'workflow', workflowId: sourceId },
+      waitForQuiescence: true,
+    }),
+  }).trigger!;
+  const t = e.triggers.mutate({
+    action: 'enable',
+    id: created.id,
+    expectedRevision: created.revision,
+  }).trigger as EventTrigger;
+  const source = e.start(sourceId, {}).run;
+  await vi.waitFor(() => {
+    const work = e.store.work(undefined, source.id)[0];
+    expect(work?.status).toBe('held');
+    expect(e.executors.inspect(work.id).items[0]).toMatchObject({
+      state: 'needs_human',
+      endedAt: expect.any(String),
+      requests: [],
+    });
+  });
+  expect(attempts).toBe(2);
+  const work = e.store.work(undefined, source.id)[0],
+    record = e.executors.inspect(work.id).items[0];
+  e.cancel(source.id);
+  e.pump();
+  expect(delivery(e, t).outcome).toBe('pending_quiescence');
+  expect(e.quiescence(source.id).blockers.items).toEqual([
+    expect.objectContaining({
+      kind: 'managed_execution',
+      executionId: record.id,
+    }),
+  ]);
+  await vi.waitFor(async () =>
+    expect(
+      await e.executors.manage({
+        action: 'reconcile',
+        executionId: record.id,
+        confirmStopped: true,
+      }),
+    ).toMatchObject({ applied: true }),
+  );
+  e.pump();
+  expect(e.executors.inspect(work.id).items[0].state).toBe('failed');
+  expect(e.quiescence(source.id).quiescent).toBe(true);
+  expect(delivery(e, t).outcome).toBe('started');
+});
+
+it('rejects reconciliation for a live managed permission request', async () => {
+  const { engine: e } = setup();
+  e.executors.saveProfile({
+    id: 'codex',
+    harness: 'codex',
+    name: 'Live request test',
+    enabled: true,
+    expectedRevision: 0,
+  });
+  e.executors.start([
+    {
+      id: 'codex',
+      detect: async () => ({ status: 'detected', command: '/fake/codex' }),
+      run: async (input) => {
+        await input.request({
+          kind: 'permission',
+          title: 'Use tool',
+          detail: 'Wait for user permission',
+        });
+        return { output: {} };
+      },
+    },
+  ]);
+  const definition = blankDefinition();
+  definition.executor = 'codex';
+  const source = e.start(publish(e, definition), {}).run;
+  await vi.waitFor(() =>
+    expect(e.store.work(undefined, source.id)[0]?.managedExecution?.state).toBe(
+      'needs_human',
+    ),
+  );
+  const work = e.store.work(undefined, source.id)[0],
+    record = e.executors.inspect(work.id).items[0];
+  expect(record.endedAt).toBeUndefined();
+  await expect(
+    e.executors.manage({
+      action: 'reconcile',
+      executionId: record.id,
+      confirmStopped: true,
+    }),
+  ).rejects.toThrow();
+  expect(e.executors.inspect(work.id).items[0].state).toBe('needs_human');
+  expect(e.quiescence(source.id).blockers.items).toContainEqual(
+    expect.objectContaining({
+      kind: 'managed_execution',
+      executionId: record.id,
+    }),
+  );
+  e.executors.stopExecution(record.id);
+  e.cancel(source.id);
+  await vi.waitFor(() =>
+    expect(() => e.executors.confirmStopped(record.id, true)).not.toThrow(),
+  );
 });
