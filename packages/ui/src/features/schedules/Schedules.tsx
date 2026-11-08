@@ -1054,16 +1054,17 @@ function EventEditor({
   };
   const submit = () => {
     if (config.action?.type === 'webhook' && !headersValid) return;
-    let parsed;
+    let savedTags = config.tags;
     try {
-      parsed = eventConfigSchema.safeParse({
-        ...config,
-        tags: tagsFromRows(tags),
-      });
+      savedTags = tagsFromRows(tags);
     } catch (error) {
-      setTagsError(errorMessage(error));
-      return;
+      if (config.action?.type !== 'webhook') {
+        setTagsError(errorMessage(error));
+        return;
+      }
+      // Inactive handler drafts must not block outbound actions. Keep saved tags.
     }
+    const parsed = eventConfigSchema.safeParse({ ...config, tags: savedTags });
     if (!parsed.success) {
       setIssues(
         Object.fromEntries(

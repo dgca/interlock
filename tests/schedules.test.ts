@@ -140,7 +140,7 @@ afterEach(async () => {
   container.remove();
   vi.unstubAllGlobals();
 });
-async function renderSchedules(visible = true) {
+async function renderSchedules(visible = true, currentWorkflow = workflow) {
   await act(async () =>
     root.render(
       h(
@@ -149,7 +149,12 @@ async function renderSchedules(visible = true) {
         h(
           MemoryRouter,
           { initialEntries: ['/workflows/w?view=schedules&schedule=t'] },
-          h(Schedules, { workflow, tick: 0, visible, onDirty: dirty }),
+          h(Schedules, {
+            workflow: currentWorkflow,
+            tick: 0,
+            visible,
+            onDirty: dirty,
+          }),
         ),
       ),
     ),
@@ -777,5 +782,71 @@ it('inspects safe outbound metadata and reopens the complete webhook action for 
     id: 't',
     expectedRevision: 2,
     config: { ...config, name: 'Updated alerts' },
+  });
+});
+
+it('does not let an inactive invalid handler tag draft silently block an outbound save', async () => {
+  const config = eventConfigSchema.parse({
+    kind: 'event',
+    name: 'Tagged handler',
+    events: ['completed'],
+    scope: { type: 'library' },
+    tags: { retained: 'value' },
+  });
+  const t = { ...trigger(), ...config };
+  rpc.list.mockResolvedValue({ items: [t], total: 1, nextOffset: null });
+  rpc.inspect.mockResolvedValue({
+    ...detail(t as any),
+    deliveries: { items: [], total: 0, nextOffset: null },
+  });
+  await renderSchedules();
+  await click('Edit event');
+  await click('Add tag');
+  await choose('Action', 'Outbound webhook');
+  await fill(input('Webhook URL'), 'https://example.test/notify');
+  await click('Save event trigger');
+  expect(rpc.manage).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      config: expect.objectContaining({
+        tags: { retained: 'value' },
+        action: expect.objectContaining({ type: 'webhook' }),
+      }),
+    }),
+  );
+});
+
+it('offers outbound enablement on an unpublished workflow', async () => {
+  const config = eventConfigSchema.parse({
+    kind: 'event',
+    name: 'Unpublished alert',
+    events: ['failed'],
+    scope: { type: 'library' },
+    action: { type: 'webhook', url: 'https://example.test/notify' },
+  });
+  const t = {
+    ...trigger(),
+    ...config,
+    publishedVersion: null,
+    canEnable: true,
+  };
+  rpc.list.mockResolvedValue({ items: [t], total: 1, nextOffset: null });
+  rpc.inspect.mockResolvedValue({
+    ...detail(t as any),
+    deliveries: { items: [], total: 0, nextOffset: null },
+  });
+  await renderSchedules(true, { ...workflow, latestVersion: 0 });
+  expect(button('Enable event').disabled).toBe(false);
+  expect(container.textContent).toContain(
+    'Outbound event webhooks do not start handler runs',
+  );
+  await click('Enable event');
+  const confirm = [
+    ...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'),
+  ].find((button) => button.textContent === 'Enable event')!;
+  await act(async () => confirm.click());
+  expect(rpc.manage).toHaveBeenLastCalledWith({
+    action: 'enable',
+    id: 't',
+    expectedRevision: 1,
   });
 });
