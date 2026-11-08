@@ -614,27 +614,13 @@ export async function runCommand(argv: string[]) {
       return client.system.doctor.query({ live: values.live });
     }
     case 'report': {
-      const { values } = parseArgs({
-        args,
-        options: {
-          workflow: { type: 'string' },
-          since: { type: 'string' },
-          until: { type: 'string' },
-          limit: { type: 'string' },
-          json: { type: 'boolean' },
-        },
-      });
-      return client.report.summary.query({
-        workflowId: values.workflow,
-        since: values.since,
-        until: values.until,
-        limit: values.limit ? Number(values.limit) : undefined,
-      });
+      const { filter } = parseReportArgs(args);
+      return client.report.summary.query(filter);
     }
     default:
       return {
         usage: [
-          'report [--workflow <id>] [--since <date>] [--until <date>] [--limit <n>] [--json] (workflow performance and cost report over time window)',
+          'report [--workflow <id>] [--since <ISO datetime>] [--until <ISO datetime>] [--limit <n>] [--tag KEY=VALUE ...] [--json] (workflow performance and cost report over time window)',
           'doctor [--live] [--json] (read-only system health and readiness check; returns non-zero on failure)',
           'triggers <read|manage> <json|@file> (schedule/webhook/event configuration, paged fires/deliveries and attention; mutations use expectedRevision; create/import disabled; schedules alias retained)',
           'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value; write-only Secret creation/replacement through stdin)',
@@ -739,6 +725,28 @@ export function formatDoctorReport(report: DoctorReport): string {
   );
   lines.push(`Overall status: ${report.status.toUpperCase()}`);
   return lines.join('\n');
+}
+
+export function parseReportArgs(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      workflow: { type: 'string' },
+      since: { type: 'string' },
+      until: { type: 'string' },
+      limit: { type: 'string' },
+      tag: { type: 'string', multiple: true },
+      json: { type: 'boolean' },
+    },
+  });
+  const filter: ReportFilter = {
+    workflowId: values.workflow,
+    since: values.since,
+    until: values.until,
+    limit: values.limit ? Number(values.limit) : undefined,
+    ...(values.tag ? { tags: parseTags(values.tag) } : {}),
+  };
+  return { filter, json: values.json };
 }
 
 export async function runReportCommand(filter: ReportFilter) {

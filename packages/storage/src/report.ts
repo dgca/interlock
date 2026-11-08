@@ -1,9 +1,20 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { ReportFilter, Run } from '@interlock/core';
+import {
+  reportDateBoundMs,
+  type ReportFilter,
+  type Run,
+} from '@interlock/core';
 
 export function runsForReport(db: DatabaseSync, filter: ReportFilter): Run[] {
   const conditions = ["collection = 'runs'"];
   const params: (string | number)[] = [];
+
+  for (const [key, value] of Object.entries(filter.tags ?? {})) {
+    conditions.push(
+      'id IN (SELECT run_id FROM run_tags WHERE tag_key = ? AND tag_value = ?)',
+    );
+    params.push(key, value);
+  }
 
   if (filter.workflowId !== undefined) {
     conditions.push("json_extract(value, '$.workflowId') = ?");
@@ -11,11 +22,11 @@ export function runsForReport(db: DatabaseSync, filter: ReportFilter): Run[] {
   }
   if (filter.since !== undefined) {
     conditions.push("json_extract(value, '$.createdAt') >= ?");
-    params.push(filter.since);
+    params.push(new Date(reportDateBoundMs(filter.since, true)).toISOString());
   }
   if (filter.until !== undefined) {
     conditions.push("json_extract(value, '$.createdAt') <= ?");
-    params.push(filter.until);
+    params.push(new Date(reportDateBoundMs(filter.until, false)).toISOString());
   }
 
   const limit = filter.limit ?? 500;

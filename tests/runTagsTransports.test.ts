@@ -66,7 +66,7 @@ it.each(['http', 'stdio'])(
           `Tagged MCP discovery: ${tools.length} tools, ${Buffer.byteLength(JSON.stringify(tools))} bytes`,
         );
       }
-      for (const name of ['start_run', 'list_runs'])
+      for (const name of ['start_run', 'list_runs', 'workflow_report'])
         expect(
           tools.find((tool) => tool.name === name)?.inputSchema.properties,
         ).toHaveProperty('tags');
@@ -76,6 +76,15 @@ it.each(['http', 'stdio'])(
             ?.inputSchema,
         ),
       ).toContain('tags');
+      expect(Buffer.byteLength(JSON.stringify(tools))).toBeLessThanOrEqual(
+        300_000,
+      );
+      const reportTool = tools.find((tool) => tool.name === 'workflow_report')!;
+      expect(reportTool.inputSchema.properties?.limit).toMatchObject({
+        default: 500,
+        maximum: 5000,
+      });
+      expect(reportTool.description).toContain('before sampling');
       const tags = { repo: 'dgca/interlock', batch: 'factory=7', empty: '' };
       const request = {
         workflowId: workflow.id,
@@ -121,6 +130,175 @@ it.each(['http', 'stdio'])(
       });
       expect(matching.map((run: { id: string }) => run.id)).toEqual([id]);
       expect(matching[0].tags).toEqual(tags);
+      vi.stubEnv('INTERLOCK_URL', url);
+      // Exercise the same exact creation instant written with an offset and
+      // without milliseconds through every report caller and both MCP bridges.
+      const createdAt = engine.run(id).createdAt;
+      const offsetBound = new Date(Date.parse(createdAt) + 60 * 60 * 1000)
+        .toISOString()
+        .replace('Z', '+01:00');
+      const noMillisBound = createdAt.replace(/\.\d{3}Z$/, 'Z');
+      const noMillisRun = {
+        ...store.get<import('@interlock/core').Run>('runs', id)!,
+        id: 'date-boundary-' + mode,
+        createdAt: new Date(noMillisBound).toISOString(),
+        tags: { date: 'boundary' },
+      };
+      store.put('runs', noMillisRun);
+      const dateCases: [string, Record<string, string>, string][] = [
+        [id, { batch: tags.batch }, offsetBound],
+        [noMillisRun.id, { date: 'boundary' }, noMillisBound],
+      ];
+      for (const [selectedId, dateTags, value] of dateCases) {
+        const exactDate = {
+          workflowId: workflow.id,
+          tags: dateTags,
+          since: value,
+          until: value,
+        };
+        expect(
+          (await call('workflow_report', exactDate)).usage.byRun.map(
+            (run: { runId: string }) => run.runId,
+          ),
+        ).toEqual([selectedId]);
+        for (const procedure of [api.report.summary, api.system.report])
+          expect(
+            (await procedure.query(exactDate)).usage.byRun.map(
+              (run) => run.runId,
+            ),
+          ).toEqual([selectedId]);
+        const cli = (await runCommand([
+          'report',
+          '--workflow',
+          workflow.id,
+          '--tag',
+          Object.entries(dateTags)[0].join('='),
+          '--since',
+          value,
+          '--until',
+          value,
+        ])) as import('@interlock/core').WorkflowReport;
+        expect(cli.usage.byRun.map((run) => run.runId)).toEqual([selectedId]);
+        expect(
+          (
+            await call('workflow_report', {
+              ...exactDate,
+              since: new Date(Date.parse(value) + 1).toISOString(),
+            })
+          ).summary.totalRuns,
+        ).toBe(0);
+        expect(
+          (
+            await call('workflow_report', {
+              ...exactDate,
+              until: new Date(Date.parse(value) - 1).toISOString(),
+            })
+          ).summary.totalRuns,
+        ).toBe(0);
+      }
+
+      const invalidDateBounds = [
+        { since: '2026-11-03T00:00:00+24:00' },
+        { until: '2026-11-03T00:00:00+01:99' },
+        { since: '2026-11-03T00:00:00+99:99' },
+        { since: '2026-02-30T00:00:00Z' },
+        { until: '2025-02-29T00:00:00Z' },
+        { since: '9999-12-31T23:59:59-01:00' },
+        { until: '9999-12-31T23:59:59-01:00' },
+        { since: '9999-12-31T23:59:59.9999Z' },
+        { until: '0000-01-01T00:00:00+01:00' },
+      ];
+      for (const bound of invalidDateBounds) {
+        for (const [name, procedure] of [
+          ['report.summary', api.report.summary],
+          ['system.report', api.system.report],
+        ] as const) {
+          await expect(procedure.query(bound)).rejects.toMatchObject({
+            data: { code: 'BAD_REQUEST', httpStatus: 400 },
+          });
+          const response = await fetch(
+            url +
+              '/trpc/' +
+              name +
+              '?input=' +
+              encodeURIComponent(JSON.stringify(bound)),
+          );
+          expect(response.status, JSON.stringify(bound)).toBe(400);
+          expect(await response.text()).toContain('BAD_REQUEST');
+        }
+        const rejected = await client.callTool({
+          name: 'workflow_report',
+          arguments: bound,
+        });
+        expect(rejected.isError, JSON.stringify(bound)).toBe(true);
+        expect(JSON.stringify(rejected.content)).toMatch(/datetime/i);
+        expect(JSON.stringify(rejected.content)).not.toContain(
+          'Invalid time value',
+        );
+        const [field, value] = Object.entries(bound)[0];
+        await expect(
+          runCommand(['report', '--' + field, value]),
+        ).rejects.toMatchObject({
+          data: { code: 'BAD_REQUEST', httpStatus: 400 },
+        });
+      }
+      const supportedRange = {
+        tags: { batch: tags.batch },
+        since: '0000-01-01T01:00:00+01:00',
+        until: '9999-12-31T23:59:59.9999Z',
+      };
+      expect(
+        (await call('workflow_report', supportedRange)).usage.byRun.map(
+          (run: { runId: string }) => run.runId,
+        ),
+      ).toEqual([id]);
+      for (const procedure of [api.report.summary, api.system.report])
+        expect(
+          (await procedure.query(supportedRange)).usage.byRun.map(
+            (run) => run.runId,
+          ),
+        ).toEqual([id]);
+
+      const reportFilter = {
+        workflowId: workflow.id,
+        tags: { repo: tags.repo, batch: tags.batch },
+        limit: 1,
+      };
+      const report = await call('workflow_report', reportFilter);
+      expect(report).toMatchObject({
+        filter: reportFilter,
+        summary: { totalRuns: 1 },
+        usage: { byRun: [{ runId: id }] },
+      });
+      expect(
+        (await api.report.summary.query(reportFilter)).usage.byRun.map(
+          (run) => run.runId,
+        ),
+      ).toEqual([id]);
+      expect(
+        (await api.system.report.query(reportFilter)).summary.totalRuns,
+      ).toBe(1);
+      expect(
+        (await call('workflow_report', { tags: { repo: 'DGCA/interlock' } }))
+          .summary.totalRuns,
+      ).toBe(0);
+      const literalTags = JSON.parse(
+        '{"__proto__":"literal","constructor":"metadata","a.b":"factory=7"}',
+      );
+      const literalStart = await call('start_run', {
+        workflowId: workflow.id,
+        input: {},
+        tags: literalTags,
+      });
+      expect(
+        (await call('workflow_report', { tags: literalTags })).usage.byRun.map(
+          (run: { runId: string }) => run.runId,
+        ),
+      ).toEqual([literalStart.runId]);
+      expect(
+        (await call('workflow_report', { tags: {} })).summary.totalRuns,
+      ).toBe(5);
+
       expect(
         await call('list_runs', { tags: { repo: 'DGCA/interlock' } }),
       ).toEqual([]);
@@ -159,6 +337,23 @@ it.each(['http', 'stdio'])(
         'batch=' + tags.batch,
       ])) as { id: string }[];
       expect(cliRuns.map((run) => run.id)).toEqual([id]);
+      const cliReport = (await runCommand([
+        'report',
+        '--workflow',
+        workflow.id,
+        '--tag',
+        'repo=' + tags.repo,
+        '--tag',
+        'batch=' + tags.batch,
+        '--limit',
+        '1',
+      ])) as {
+        summary: { totalRuns: number };
+        usage: { byRun: { runId: string }[] };
+      };
+      expect(cliReport.summary.totalRuns).toBe(1);
+      expect(cliReport.usage.byRun.map((run) => run.runId)).toEqual([id]);
+
       await expect(
         runCommand(['runs', '--tag', 'missing-equals']),
       ).rejects.toThrow('KEY=VALUE');
@@ -180,6 +375,20 @@ it.each(['http', 'stdio'])(
           arguments: { workflowId: workflow.id, input: {}, tags: badTags },
         });
         expect(invalid.isError).toBe(true);
+        expect(
+          (
+            await client.callTool({
+              name: 'workflow_report',
+              arguments: { tags: badTags },
+            })
+          ).isError,
+        ).toBe(true);
+        await expect(
+          api.report.summary.query({ tags: badTags as any }),
+        ).rejects.toThrow();
+        await expect(
+          api.system.report.query({ tags: badTags as any }),
+        ).rejects.toThrow();
       }
       const trigger = await call('manage_workflow_triggers', {
         request: {

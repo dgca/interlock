@@ -194,7 +194,7 @@ Standalone recurring Agent workflows can use an Exit with `continueAsNew:{maxRun
 
 ### Retry a task start safely
 
-Optional `start_run.requestId` recovers the original run after repeated delivery or a lost response. `externalTask` links a run to a non-secret task identity for existing lookup tools. Old keys cannot recreate deleted history; deliberate new attempts use new keys. Optional [run tags](docs/idempotent-run-starts.md#tag-and-filter-runs) label ordinary and triggered runs with up to 16 string pairs. Filter Runs, MCP `list_runs`, or `interlock runs --tag repo=dgca/interlock` by exact pairs. Tags inherit through child runs and chains. See [idempotent run starts](docs/idempotent-run-starts.md) for MCP, CLI and retention rules.
+Optional `start_run.requestId` recovers the original run after repeated delivery or a lost response. `externalTask` links a run to a non-secret task identity for existing lookup tools. Old keys cannot recreate deleted history; deliberate new attempts use new keys. Optional [run tags](docs/idempotent-run-starts.md#tag-and-filter-runs) label ordinary and triggered runs with up to 16 string pairs. Filter Runs, MCP `list_runs`, or `interlock runs --tag repo=dgca/interlock` by exact pairs. Reports accept the same filter through the UI, MCP `workflow_report`, or `interlock report --tag repo=dgca/interlock`. Tags inherit through child runs and chains. See [idempotent run starts](docs/idempotent-run-starts.md) for MCP, CLI and retention rules.
 
 ### Coordinate shared resources
 
@@ -303,7 +303,7 @@ Executor scripts can use `interlock work --summary` to route assignments by `roo
 
 Executors can report measured token usage and costs for each claim attempt. Measuring observers can report ended attempts without claim tokens; their snapshots take precedence in totals and budgets without double counting. The run inspector, `interlock usage`, and MCP expose totals and attribution with unknown or partial coverage when data is missing. See [usage reporting](docs/usage-reporting.md). Optional [run budgets](docs/run-budgets.md) gate new Agent claims by attempt count or reported usage.
 
-Run `interlock report` to evaluate workflow performance and cost over a bounded window, including run and stage durations, admission and human wait times, claim wait splits by new versus continuing sessions, failure and stall reliability metrics, model spend/coverage, and terminal exit outcomes. Also available via UI **Reports** (`/report`) and MCP `workflow_report`.
+Run `interlock report` to evaluate workflow performance and cost for the newest matching runs, including run and stage durations, admission and human wait times, claim wait splits by new versus continuing sessions, failure and stall reliability metrics, reported model spend, and terminal exit outcomes. Repeat `--tag KEY=VALUE` to require every exact tag pair, such as `interlock report --tag repo=dgca/interlock --tag batch=factory-7`. Optional `--since` and `--until` bound run creation time. The default sample limit is 500, with a maximum of 5000 and no default date window. UI **Reports** (`/report`) and MCP `workflow_report` provide the same operation. See [report metrics and limits](docs/usage-reporting.md#workflow-performance-and-cost-reports).
 
 JSON arguments also accept `@filename`, such as `interlock start WORKFLOW_ID @input.json`. Run `interlock commands` for the full command list or `interlock --help` for server options.
 

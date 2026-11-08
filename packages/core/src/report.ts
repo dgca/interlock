@@ -1,10 +1,44 @@
 import { z } from 'zod';
+import { runTagsSchema } from './runTags.js';
+
+const firstReportInstant = Date.parse('0000-01-01T00:00:00.000Z');
+const lastReportInstant = Date.parse('9999-12-31T23:59:59.999Z');
+
+// Bound rounding belongs to the shared contract so validation and storage use
+// the same inclusive millisecond instant, including finer input fractions.
+export function reportDateBoundMs(value: string, lower: boolean): number {
+  const fraction = value.match(/\.(\d+)(?:Z|[+-]\d{2}:?\d{2})$/)?.[1] ?? '';
+  const roundUp = lower && /[1-9]/.test(fraction.slice(3));
+  return Date.parse(value) + (roundUp ? 1 : 0);
+}
+
+function reportDateBoundSchema(lower: boolean) {
+  return z
+    .string()
+    .datetime({ offset: true })
+    .refine((value) => {
+      const instant = reportDateBoundMs(value, lower);
+      return (
+        Number.isFinite(instant) &&
+        instant >= firstReportInstant &&
+        instant <= lastReportInstant
+      );
+    }, 'Use a valid datetime whose inclusive UTC bound is within years 0000 through 9999.')
+    .describe(
+      'Inclusive creation-time bound. Valid ISO offset datetime; its rounded UTC instant must remain within years 0000 through 9999.',
+    );
+}
 
 export const reportFilterSchema = z
   .object({
+    tags: runTagsSchema
+      .optional()
+      .describe(
+        'Every exact case-sensitive pair must match; max 16 pairs, keys/values max 64 characters.',
+      ),
     workflowId: z.string().trim().min(1).max(256).optional(),
-    since: z.string().datetime({ offset: true }).optional(),
-    until: z.string().datetime({ offset: true }).optional(),
+    since: reportDateBoundSchema(true).optional(),
+    until: reportDateBoundSchema(false).optional(),
     limit: z.number().int().min(1).max(5000).default(500),
   })
   .strict();

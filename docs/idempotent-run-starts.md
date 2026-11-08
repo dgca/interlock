@@ -121,7 +121,7 @@ MCP `list_runs`, shared `runs.find`, and the paginated `runs.summaries` query ac
 { "tags": { "repo": "dgca/interlock", "batch": "factory-7" }, "limit": 20 }
 ```
 
-Run tags support grouping through existing queries. General M10 performance reports and tag-based cost aggregation are not implemented. Existing usage inspection and workflow comparison reports keep their current scopes.
+MCP `workflow_report` and shared `report.summary` accept the same `tags` filter. The [performance report](usage-reporting.md#workflow-performance-and-cost-reports) applies every exact pair before its sample limit, then aggregates metrics and reported usage for the selected runs. Tags select the sample; they do not add tag grouping. Existing per-run usage inspection and workflow comparison reports keep their current scopes.
 
 ## Recover after deletion or restart
 
@@ -141,10 +141,11 @@ Save non-secret task metadata in `task.json` and, if needed, a policy in `budget
 interlock start WORKFLOW_ID '{"task":"Review issue 181"}' --request-id github:dgca/interlock:181:attempt-1 --external-task @task.json --budget @budget.json --tag repo=dgca/interlock --tag batch=factory-7 --summary
 interlock runs --request-id github:dgca/interlock:181:attempt-1
 interlock runs --tag repo=dgca/interlock --tag batch=factory-7
+interlock report --tag repo=dgca/interlock --tag batch=factory-7
 interlock runs --external-task '{"system":"github","id":"dgca/interlock#181"}' --root-only
 ```
 
-Inline JSON and `@file` work for task metadata and budgets. Repeat `--tag KEY=VALUE` for each tag on starts or run queries. Values can contain `=` and can be empty; duplicate keys reject. Omit `--summary` for full inspection; it does not change request identity. The optional positional version retains its existing meaning.
+Inline JSON and `@file` work for task metadata and budgets. Repeat `--tag KEY=VALUE` for each tag on starts, run queries, or performance reports. Values can contain `=` and can be empty; duplicate keys reject. Omit `--summary` for full inspection; it does not change request identity. The optional positional version retains its existing meaning.
 
 Shared `runs.start` and `runs.startSummary` accept `requestId`, `externalTask`, `tags`, `priority`, `after`, and `onActiveExternalTask` beside their existing fields. Direct Engine callers can supply `{requestId, externalTask, tags, priority, after, onActiveExternalTask}` as the final optional options argument after `budget`, preserving existing positional calls. Shared and MCP result references, cancellation, claims, budgets, ordinary/detached lifecycles and explicit retries keep their existing rules.
 
