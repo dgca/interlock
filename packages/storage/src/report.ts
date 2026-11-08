@@ -1,6 +1,14 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { ReportFilter, Run } from '@interlock/core';
 
+// Run creation timestamps are stored as canonical UTC milliseconds. Round a
+// finer lower bound up to the next stored instant, and an upper bound down.
+function reportBoundary(value: string, lower: boolean): string {
+  const fraction = value.match(/\.(\d+)(?:Z|[+-]\d{2}:?\d{2})$/)?.[1] ?? '';
+  const roundUp = lower && /[1-9]/.test(fraction.slice(3));
+  return new Date(Date.parse(value) + (roundUp ? 1 : 0)).toISOString();
+}
+
 export function runsForReport(db: DatabaseSync, filter: ReportFilter): Run[] {
   const conditions = ["collection = 'runs'"];
   const params: (string | number)[] = [];
@@ -18,11 +26,11 @@ export function runsForReport(db: DatabaseSync, filter: ReportFilter): Run[] {
   }
   if (filter.since !== undefined) {
     conditions.push("json_extract(value, '$.createdAt') >= ?");
-    params.push(filter.since);
+    params.push(reportBoundary(filter.since, true));
   }
   if (filter.until !== undefined) {
     conditions.push("json_extract(value, '$.createdAt') <= ?");
-    params.push(filter.until);
+    params.push(reportBoundary(filter.until, false));
   }
 
   const limit = filter.limit ?? 500;

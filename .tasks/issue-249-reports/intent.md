@@ -23,3 +23,7 @@ The user explicitly authorized unattended SDLC execution with reviewPolicy auto,
 At baseline, core reportFilterSchema accepts workflowId/since/until/limit only; storage runsForReport never queries run_tags. App.tsx short-circuits two useMatch hooks. Report docs claim date defaults and limits absent from code and nearest-rank percentiles despite interpolation. Use live implementation as the compatibility contract and correct those descriptions.
 
 Preserve local .interlock data and use temporary test databases. No new database migration or unrelated report redesign is needed.
+
+## Review correction authorization
+
+The parent follow-up after fresh review of 890d23060d609d4292afcd62e02c3423c19660f9 explicitly requires fixing failed-filter result attribution and the accepted ISO date boundary semantics. Preserve the same run and baseline, stable finding IDs, report defaults and calculations. Normalize accepted timestamps rather than documenting a known semantic error. Independent final review and publication restrictions remain unchanged.

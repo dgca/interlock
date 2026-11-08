@@ -81,6 +81,7 @@ export function WorkflowReportView({
   const fetchReport = useCallback(async () => {
     const request = ++requestSequence.current;
     setLoading(true);
+    setReport(null);
     setError(null);
 
     let since: string | undefined;

@@ -2,4 +2,4 @@
 '@type_of/interlock': patch
 ---
 
-Filter performance and cost reports by exact run tags across the UI, CLI, MCP, and shared API. Fix navigation to Reports and correct documented report defaults and metric limits.
+Filter performance and cost reports by exact run tags across the UI, CLI, MCP, and shared API. Fix navigation to Reports, hide obsolete metrics when a new report request fails, and preserve inclusive date bounds across equivalent timestamp formats. Correct documented report defaults and metric limits.

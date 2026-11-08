@@ -63,7 +63,13 @@ function report(totalRuns = 4): WorkflowReport {
         cachedInputTokens: 0,
         reasoningOutputTokens: 0,
       },
-      costs: [],
+      costs: [
+        {
+          currency: 'USD',
+          amountMicros: totalRuns * 1_000_000,
+          formatted: `${totalRuns}.0000 USD`,
+        },
+      ],
       coverage: {
         measuredPercentage: 0,
         unknownPercentage: 0,
@@ -275,4 +281,105 @@ it('keeps the current filtered report when an earlier request finishes later', a
   expect(runCount()).toContain('1');
   await act(async () => resolve(report(4)));
   expect(runCount()).toContain('1');
+});
+
+function pendingReport() {
+  let resolve!: (value: WorkflowReport) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<WorkflowReport>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
+function expectNoMetrics() {
+  expect(container.textContent).not.toContain('Total Runs');
+  expect(container.textContent).not.toContain('Attributed Spend');
+  expect(container.textContent).not.toMatch(/[14]\.0000 USD/);
+}
+async function addRepoFilter() {
+  await openTags();
+  await click('Add tag');
+  await input('Matching tags key 1', 'repo');
+  await input('Matching tags value 1', 'private/repo');
+}
+it('hides earlier totals and spend while Apply loads or fails, then retries the current tags', async () => {
+  await mount();
+  expect(runCount()).toContain('4');
+  expect(container.textContent).toContain('4.0000 USD');
+  await addRepoFilter();
+  const pending = pendingReport();
+  query.mockReturnValueOnce(pending.promise);
+  await click('Apply filters');
+  expect(container.querySelector('summary')!.textContent).toContain('(1)');
+  expect(query).toHaveBeenLastCalledWith(
+    expect.objectContaining({ tags: { repo: 'private/repo' } }),
+  );
+  expect(container.textContent).toContain('Aggregating workflow performance');
+  expectNoMetrics();
+  await act(async () =>
+    pending.reject(new Error('Filtered report unavailable')),
+  );
+  expect(container.textContent).toContain('Filtered report unavailable');
+  expectNoMetrics();
+  await click('Refresh');
+  expect(query).toHaveBeenLastCalledWith(
+    expect.objectContaining({ tags: { repo: 'private/repo' } }),
+  );
+  expect(container.textContent).not.toContain('Filtered report unavailable');
+  expect(runCount()).toContain('1');
+  expect(container.textContent).toContain('1.0000 USD');
+});
+it('hides filtered totals and spend when Clear fails, then retries the unfiltered scope', async () => {
+  await mount();
+  await addRepoFilter();
+  await click('Apply filters');
+  expect(runCount()).toContain('1');
+  expect(container.textContent).toContain('1.0000 USD');
+  const pending = pendingReport();
+  query.mockReturnValueOnce(pending.promise);
+  await click('Clear filters');
+  expect(query.mock.lastCall![0]).not.toHaveProperty('tags');
+  expect(container.querySelector('summary')!.textContent).not.toContain('(1)');
+  expectNoMetrics();
+  await act(async () =>
+    pending.reject(new Error('Unfiltered report unavailable')),
+  );
+  expect(container.textContent).toContain('Unfiltered report unavailable');
+  expectNoMetrics();
+  await click('Refresh');
+  expect(query.mock.lastCall![0]).not.toHaveProperty('tags');
+  expect(runCount()).toContain('4');
+  expect(container.textContent).toContain('4.0000 USD');
+});
+it.each(['resolve', 'reject'] as const)(
+  'ignores an older request that later %ss after the current scope fails',
+  async (outcome) => {
+    const earlier = pendingReport();
+    query.mockReturnValueOnce(earlier.promise);
+    await mount();
+    await addRepoFilter();
+    query.mockRejectedValueOnce(new Error('Current tagged request failed'));
+    await click('Apply filters');
+    expectNoMetrics();
+    await act(async () => {
+      if (outcome === 'resolve') earlier.resolve(report(4));
+      else earlier.reject(new Error('Obsolete request failed'));
+    });
+    expect(container.textContent).toContain('Current tagged request failed');
+    expect(container.textContent).not.toContain('Obsolete request failed');
+    expectNoMetrics();
+  },
+);
+it('ignores an obsolete request error after a newer tagged result succeeds', async () => {
+  const earlier = pendingReport();
+  query.mockReturnValueOnce(earlier.promise);
+  await mount();
+  await addRepoFilter();
+  await click('Apply filters');
+  expect(runCount()).toContain('1');
+  await act(async () => earlier.reject(new Error('Obsolete failure')));
+  expect(container.textContent).not.toContain('Obsolete failure');
+  expect(runCount()).toContain('1');
+  expect(container.textContent).toContain('1.0000 USD');
 });

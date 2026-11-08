@@ -519,6 +519,12 @@ try {
       bin,
       [
         'report',
+        '--since',
+        new Date(Date.parse(result.run.createdAt) + 60 * 60 * 1000)
+          .toISOString()
+          .replace('Z', '+01:00'),
+        '--until',
+        result.run.createdAt,
         '--tag',
         'repo=package-smoke',
         '--tag',

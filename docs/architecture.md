@@ -330,7 +330,7 @@ Run budget contracts and metric checks live in `core`; `runtime` evaluates retai
 
 ## Performance and cost reporting
 
-Workflow performance and cost reporting contracts live in `core`, query operations in `storage`, and aggregation logic in `runtime`. Storage selects the newest matching runs by creation time. Optional workflow, inclusive `since`/`until`, and exact all-pairs tag filters apply before the sample limit. The default limit is 500, the maximum is 5000, and omitted dates impose no restriction. Tag lookups reuse the indexed `run_tags` table.
+Workflow performance and cost reporting contracts live in `core`, query operations in `storage`, and aggregation logic in `runtime`. Storage selects the newest matching runs by creation time. Optional workflow, inclusive `since`/`until`, and exact all-pairs tag filters apply before the sample limit. Date bounds normalize equivalent ISO offsets and timestamp precision to inclusive stored UTC millisecond instants. The default limit is 500, the maximum is 5000, and omitted dates impose no restriction. Tag lookups reuse the indexed `run_tags` table.
 
 Runtime aggregates only the selected run IDs and their retained attempts, streams, events, and holds. Metrics include run durations, admission queue delays, Input and work-hold wait times, stage and node duration distributions, claim wait split by new versus continuing sessions, reliability, reported usage, and Exit outcomes. Percentiles interpolate between sorted observations. Usage groups use reported provider/model identities; coverage counts attempts with a selected model snapshot. See [report metrics and limits](usage-reporting.md#metrics-and-limits) for attribution and historical-data limits.
 

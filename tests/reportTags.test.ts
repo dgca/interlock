@@ -282,3 +282,52 @@ it('shares repeatable report CLI tag parsing and rejects ambiguous keys', () => 
   ])
     expect(() => parseReportArgs(args)).toThrow();
 });
+
+it('compares inclusive report bounds by instant across offsets and timestamp precision', () => {
+  const { store, engine, workflowId } = setup();
+  const boundary = seed(store, workflowId, 'at-boundary', 3);
+  for (const [id, createdAt] of [
+    ['before-boundary', '2026-11-02T23:59:59.999Z'],
+    ['after-boundary', '2026-11-03T00:00:00.001Z'],
+  ]) {
+    store.put('runs', { ...boundary, id, createdAt });
+  }
+  for (const value of [
+    '2026-11-03T00:00:00.000Z',
+    '2026-11-03T00:00:00Z',
+    '2026-11-03T01:00:00+01:00',
+    '2026-11-02T17:00:00-07:00',
+    '2026-11-03T00:00:00.0000Z',
+  ]) {
+    const report = engine.report({
+      workflowId,
+      tags,
+      since: value,
+      until: value,
+    });
+    expect(report.summary.totalRuns, value).toBe(1);
+    expect(
+      report.usage.byRun.map((r) => r.runId),
+      value,
+    ).toEqual(['at-boundary']);
+    expect(report.window).toEqual({ since: value, until: value });
+    expect(
+      engine.report({ workflowId, tags, since: value }).summary.totalRuns,
+      value,
+    ).toBe(2);
+    expect(
+      engine.report({ workflowId, tags, until: value }).summary.totalRuns,
+      value,
+    ).toBe(2);
+  }
+  expect(
+    engine
+      .report({ workflowId, tags, since: '2026-11-03T00:00:00.0001Z' })
+      .usage.byRun.map((r) => r.runId),
+  ).toEqual(['after-boundary']);
+  expect(
+    engine
+      .report({ workflowId, tags, until: '2026-11-02T23:59:59.9999Z' })
+      .usage.byRun.map((r) => r.runId),
+  ).toEqual(['before-boundary']);
+});

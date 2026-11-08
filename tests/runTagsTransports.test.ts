@@ -130,6 +130,73 @@ it.each(['http', 'stdio'])(
       });
       expect(matching.map((run: { id: string }) => run.id)).toEqual([id]);
       expect(matching[0].tags).toEqual(tags);
+      vi.stubEnv('INTERLOCK_URL', url);
+      // Exercise the same exact creation instant written with an offset and
+      // without milliseconds through every report caller and both MCP bridges.
+      const createdAt = engine.run(id).createdAt;
+      const offsetBound = new Date(Date.parse(createdAt) + 60 * 60 * 1000)
+        .toISOString()
+        .replace('Z', '+01:00');
+      const noMillisBound = createdAt.replace(/\.\d{3}Z$/, 'Z');
+      const noMillisRun = {
+        ...store.get<import('@interlock/core').Run>('runs', id)!,
+        id: 'date-boundary-' + mode,
+        createdAt: new Date(noMillisBound).toISOString(),
+        tags: { date: 'boundary' },
+      };
+      store.put('runs', noMillisRun);
+      const dateCases: [string, Record<string, string>, string][] = [
+        [id, { batch: tags.batch }, offsetBound],
+        [noMillisRun.id, { date: 'boundary' }, noMillisBound],
+      ];
+      for (const [selectedId, dateTags, value] of dateCases) {
+        const exactDate = {
+          workflowId: workflow.id,
+          tags: dateTags,
+          since: value,
+          until: value,
+        };
+        expect(
+          (await call('workflow_report', exactDate)).usage.byRun.map(
+            (run: { runId: string }) => run.runId,
+          ),
+        ).toEqual([selectedId]);
+        for (const procedure of [api.report.summary, api.system.report])
+          expect(
+            (await procedure.query(exactDate)).usage.byRun.map(
+              (run) => run.runId,
+            ),
+          ).toEqual([selectedId]);
+        const cli = (await runCommand([
+          'report',
+          '--workflow',
+          workflow.id,
+          '--tag',
+          Object.entries(dateTags)[0].join('='),
+          '--since',
+          value,
+          '--until',
+          value,
+        ])) as import('@interlock/core').WorkflowReport;
+        expect(cli.usage.byRun.map((run) => run.runId)).toEqual([selectedId]);
+        expect(
+          (
+            await call('workflow_report', {
+              ...exactDate,
+              since: new Date(Date.parse(value) + 1).toISOString(),
+            })
+          ).summary.totalRuns,
+        ).toBe(0);
+        expect(
+          (
+            await call('workflow_report', {
+              ...exactDate,
+              until: new Date(Date.parse(value) - 1).toISOString(),
+            })
+          ).summary.totalRuns,
+        ).toBe(0);
+      }
+
       const reportFilter = {
         workflowId: workflow.id,
         tags: { repo: tags.repo, batch: tags.batch },
@@ -168,7 +235,7 @@ it.each(['http', 'stdio'])(
       ).toEqual([literalStart.runId]);
       expect(
         (await call('workflow_report', { tags: {} })).summary.totalRuns,
-      ).toBe(4);
+      ).toBe(5);
 
       expect(
         await call('list_runs', { tags: { repo: 'DGCA/interlock' } }),
