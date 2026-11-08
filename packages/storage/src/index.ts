@@ -855,8 +855,16 @@ export class Store {
     };
   }
   savePrompt(prompt: SavedPrompt) {
+    this.retainPromptRevision(prompt);
+    this.put('prompts', prompt);
+  }
+  /** Retain an exact historical identity without changing the current edit revision. */
+  retainPromptRevision(prompt: SavedPrompt) {
     const key = `${prompt.id}:${prompt.revision}`;
-    const previous = this.get<SavedPrompt>('promptRevisions', key);
+    const current = this.get<SavedPrompt>('prompts', prompt.id);
+    const previous =
+      this.promptRevision(prompt.id, prompt.revision) ??
+      (current?.revision === prompt.revision ? current : undefined);
     if (
       previous &&
       !isDeepStrictEqual(
@@ -873,8 +881,7 @@ export class Store {
       )
     )
       throw new InterlockError(`Prompt revision conflict for ${key}`);
-    this.put('prompts', prompt);
-    if (!previous)
+    if (!this.get('promptRevisions', key))
       this.put('promptRevisions', { ...prompt, promptId: prompt.id, id: key });
   }
   events(runId: string) {

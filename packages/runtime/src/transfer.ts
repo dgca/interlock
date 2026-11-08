@@ -18,6 +18,7 @@ import {
   type SavedPrompt,
   promptIds,
   snapshotPrompt,
+  type PromptSnapshot,
   type DeletedWorkflowVersion,
 } from '@interlock/core';
 import { definitionHash } from './versionIdentity.js';
@@ -139,6 +140,25 @@ export function exportWorkflows(
       );
     return snapshotPrompt(prompt);
   });
+  const promptRevisions = new Map<string, PromptSnapshot>();
+  for (const workflow of records)
+    for (const version of workflow.versions)
+      for (const [id, revision] of Object.entries(
+        version.pinnedPromptRevisions ?? {},
+      )) {
+        const key = `${id}:${revision}`;
+        if (promptRevisions.has(key)) continue;
+        const prompt =
+          store.promptRevision(id, revision) ??
+          prompts.find(
+            (prompt) => prompt.id === id && prompt.revision === revision,
+          );
+        if (!prompt)
+          throw new InterlockError(
+            `Cannot export: saved prompt ${id} revision ${revision} does not exist`,
+          );
+        promptRevisions.set(key, snapshotPrompt(prompt));
+      }
   const variables = new Variables(store).requirements([
     ...new Set(
       records.flatMap((w) => [
@@ -166,22 +186,27 @@ export function exportWorkflows(
   const modelAliases = new ModelAliases(store).requirements(referencedModels);
   return {
     format: 'interlock-workflows',
-    formatVersion: records.some((w) => w.eventTriggers?.length)
-      ? 8
-      : records.some((w) => w.webhooks?.length)
-        ? 7
-        : modelAliases.length
-          ? 6
-          : records.some((w) => w.schedules?.length)
-            ? 5
-            : variables.length
-              ? 4
-              : records.some((w) => w.deletedVersions?.length)
-                ? 3
-                : prompts.length
-                  ? 2
-                  : 1,
+    formatVersion: promptRevisions.size
+      ? 9
+      : records.some((w) => w.eventTriggers?.length)
+        ? 8
+        : records.some((w) => w.webhooks?.length)
+          ? 7
+          : modelAliases.length
+            ? 6
+            : records.some((w) => w.schedules?.length)
+              ? 5
+              : variables.length
+                ? 4
+                : records.some((w) => w.deletedVersions?.length)
+                  ? 3
+                  : prompts.length
+                    ? 2
+                    : 1,
     ...(prompts.length ? { prompts } : {}),
+    ...(promptRevisions.size
+      ? { promptRevisions: [...promptRevisions.values()] }
+      : {}),
     ...(variables.length ? { variables } : {}),
     ...(modelAliases.length ? { modelAliases } : {}),
     rootId,
@@ -433,6 +458,28 @@ export function importWorkflows(
           updatedAt: now,
         });
     }
+    const pins = bundle.workflows.flatMap((workflow) =>
+      workflow.versions.flatMap((version) =>
+        Object.entries(version.pinnedPromptRevisions ?? {}).map(
+          ([id, revision]) => ({ id, revision }),
+        ),
+      ),
+    );
+    // Legacy bundles may supply their exact pins in the current snapshot alone.
+    for (const prompt of [
+      ...(bundle.promptRevisions ?? []),
+      ...includedPrompts.filter((prompt) =>
+        pins.some(
+          (pin) => pin.id === prompt.id && pin.revision === prompt.revision,
+        ),
+      ),
+    ])
+      store.retainPromptRevision({ ...prompt, createdAt: now, updatedAt: now });
+    for (const pin of pins)
+      if (!store.promptRevision(pin.id, pin.revision))
+        throw new InterlockError(
+          `Bundle is missing saved prompt ${pin.id} revision ${pin.revision}`,
+        );
     const changed: string[] = [];
     const skippedVersions: { workflowId: string; version: number }[] = [];
     const restoredVersions: { workflowId: string; version: number }[] = [];

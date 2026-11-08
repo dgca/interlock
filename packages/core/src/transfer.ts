@@ -20,9 +20,11 @@ export const workflowBundleSchema = z
       z.literal(6),
       z.literal(7),
       z.literal(8),
+      z.literal(9),
     ]),
     variables: z.array(variableRequirementSchema).max(4096).optional(),
     prompts: z.array(savedPromptSchema).optional(),
+    promptRevisions: z.array(savedPromptSchema).optional(),
     modelAliases: z.array(modelAliasRequirementSchema).max(4096).optional(),
     rootId: z.string().min(1),
     workflows: z
@@ -84,6 +86,48 @@ export const workflowBundleSchema = z
       .min(1),
   })
   .superRefine((bundle, ctx) => {
+    const revisions = bundle.promptRevisions ?? [];
+    const pinned = new Set(
+      bundle.workflows.flatMap((workflow) =>
+        workflow.versions.flatMap((version) =>
+          Object.entries(version.pinnedPromptRevisions ?? {}).map(
+            ([id, revision]) => `${id}:${revision}`,
+          ),
+        ),
+      ),
+    );
+    if (revisions.length && bundle.formatVersion < 9)
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Pinned prompt snapshots require bundle formatVersion 9',
+      });
+    const keys = revisions.map((prompt) => `${prompt.id}:${prompt.revision}`);
+    if (
+      new Set(keys).size !== keys.length ||
+      revisions.some(
+        (prompt) =>
+          !pinned.has(`${prompt.id}:${prompt.revision}`) ||
+          !bundle.prompts?.some((current) => current.id === prompt.id),
+      )
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'Pinned prompt snapshots must have unique referenced identities and revisions',
+      });
+    if (bundle.formatVersion === 9) {
+      const supplied = new Set([
+        ...keys,
+        ...(bundle.prompts ?? []).map(
+          (prompt) => `${prompt.id}:${prompt.revision}`,
+        ),
+      ]);
+      if ([...pinned].some((key) => !supplied.has(key)))
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Bundle is missing a pinned prompt revision snapshot',
+        });
+    }
     if (
       bundle.formatVersion < 8 &&
       bundle.workflows.some((w) => w.eventTriggers?.length)

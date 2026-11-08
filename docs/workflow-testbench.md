@@ -113,7 +113,7 @@ Preview and report `configurations.baseline` and `.candidate` identify each side
 
 The comparison retains the selected content once per distinct revision, independently of later library edits or lost revision records. Both sides together allow 64 distinct prompt IDs and at most 128 revisions totaling 1 MiB. Each side manifest has at most 64 entries. Legacy comparisons retain their shared capture and return `configurations:null` with their existing prompt metadata. No storage migration is required.
 
-Retained prompt revisions survive normal prompt deletion. Comparisons do not restore deleted prompts, change ordinary startup rules, or alter portable workflows. Normal workflow deletion removes its comparison records; workflow exports exclude experiments, revision history, and environment references. Deleting a comparison's retained history removes that evidence rather than reconstructing it from current state.
+Retained prompt revisions survive normal prompt deletion. Comparisons do not restore deleted prompts, change ordinary startup rules, or alter portable workflows. Normal workflow deletion removes its comparison records; workflow exports exclude experiments, unrelated prompt revision history, and environment references. Published prompt pins carry their required exact snapshots. Deleting a comparison's retained history removes that evidence rather than reconstructing it from current state.
 
 ### Executor and environment attribution
 
