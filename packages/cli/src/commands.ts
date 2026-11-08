@@ -883,6 +883,21 @@ export function formatWorkflowReport(report: WorkflowReport): string {
       );
     }
   }
+  if (report.usage.byAlias?.length) {
+    lines.push('  By Captured Alias:');
+    for (const group of report.usage.byAlias) {
+      const alias = group.alias
+        ? `${group.alias.name}@${group.alias.revision}`
+        : 'Unknown';
+      const cost =
+        group.costMicros !== null
+          ? `${(group.costMicros / 1_000_000).toFixed(4)} ${group.currency ?? ''}`
+          : 'unknown';
+      lines.push(
+        `    ${alias} (${group.scope}) candidate=${group.alias?.candidateModel ?? 'unknown'} reported=${group.provider}/${group.model} count=${group.count} input=${group.inputTokens} output=${group.outputTokens} cost=${cost}`,
+      );
+    }
+  }
   lines.push('');
 
   lines.push('TERMINAL OUTCOMES');

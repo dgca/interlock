@@ -49,6 +49,19 @@ export interface ModelAliasCapture {
   candidates: ModelAliasCandidate[];
 }
 
+export const modelAliasSelectionSchema = z
+  .object({
+    aliasId: z.string().min(1),
+    name: modelAliasNameSchema,
+    revision: z.number().int().positive(),
+    candidateModel: executorModelSchema,
+  })
+  .strict();
+export type ModelAliasSelection = z.infer<typeof modelAliasSelectionSchema>;
+export type ExpandedModelCandidate = ModelAliasCandidate & {
+  modelAliasSelection?: ModelAliasSelection;
+};
+
 export interface ModelAliasRequirement {
   name: string;
   description?: string;

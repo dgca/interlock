@@ -24,6 +24,9 @@ import {
   type UsageByModel,
   type UsageByProvider,
   type CostAmount,
+  type UsageByAlias,
+  type ModelUsage,
+  type ModelAliasSelection,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { Engine } from './index.js';
@@ -114,6 +117,7 @@ export function generateWorkflowReport(
         byNode: [],
         byModel: [],
         byProvider: [],
+        byAlias: [],
       },
       terminalOutcomes: {
         totalRuns: 0,
@@ -514,6 +518,41 @@ export function generateWorkflowReport(
     }
   >();
 
+  const aliasUsageMap = new Map<string, UsageByAlias>();
+  function addAliasUsage(
+    alias: ModelAliasSelection | undefined,
+    scope: 'attempt' | 'run',
+    model: ModelUsage,
+  ) {
+    const key = JSON.stringify([
+      alias?.aliasId,
+      alias?.name,
+      alias?.revision,
+      alias?.candidateModel,
+      scope,
+      model.provider,
+      model.model,
+      model.cost?.currency,
+    ]);
+    const entry = aliasUsageMap.get(key) ?? {
+      alias: alias ?? null,
+      scope,
+      model: model.model,
+      provider: model.provider,
+      inputTokens: 0,
+      outputTokens: 0,
+      costMicros: null,
+      count: 0,
+      ...(model.cost ? { currency: model.cost.currency } : {}),
+    };
+    entry.inputTokens += model.inputTokens ?? 0;
+    entry.outputTokens += model.outputTokens ?? 0;
+    entry.count++;
+    if (model.cost)
+      entry.costMicros = (entry.costMicros ?? 0) + model.cost.amountMicros;
+    aliasUsageMap.set(key, entry);
+  }
+
   for (const attempt of attemptsList) {
     const report = selectedUsageReport(attempt);
     const models = report?.snapshot.models ?? [];
@@ -540,6 +579,7 @@ export function generateWorkflowReport(
     if (isMeasured) nodeEntry.measured++;
 
     for (const m of models) {
+      addAliasUsage(attempt.modelAliasSelection, 'attempt', m);
       const inTok = m.inputTokens ?? 0;
       const outTok = m.outputTokens ?? 0;
       const cached = m.cachedInputTokens ?? 0;
@@ -623,6 +663,7 @@ export function generateWorkflowReport(
     if (runEntry && models.length > 0) runEntry.measured = true;
 
     for (const m of models) {
+      addAliasUsage(undefined, 'run', m);
       const inTok = m.inputTokens ?? 0;
       const outTok = m.outputTokens ?? 0;
       const cached = m.cachedInputTokens ?? 0;
@@ -888,6 +929,7 @@ export function generateWorkflowReport(
       byNode,
       byModel,
       byProvider,
+      byAlias: [...aliasUsageMap.values()].sort((a, b) => b.count - a.count),
     },
     terminalOutcomes: {
       totalRuns: totalRunsCount,

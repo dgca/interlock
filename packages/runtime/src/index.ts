@@ -2314,7 +2314,7 @@ export class Engine {
             })
           : null;
         let resolvedAliasCandidate:
-          import('@interlock/core').ModelAliasCandidate | undefined;
+          import('@interlock/core').ExpandedModelCandidate | undefined;
         if (!diversityEval) {
           const targetModelOrAlias =
             node.model ?? this.definition(run).agentModel;
@@ -2325,18 +2325,15 @@ export class Engine {
             candidatePool.push(targetModelOrAlias);
           }
 
-          const expandedCandidates: import('@interlock/core').ModelAliasCandidate[] =
+          const expandedCandidates: import('@interlock/core').ExpandedModelCandidate[] =
             [];
           for (const item of candidatePool) {
-            const aliasList = this.modelAliases.resolveCandidates(
-              run.modelAliasCaptures,
-              item,
+            expandedCandidates.push(
+              ...this.modelAliases.expandCandidates(
+                run.modelAliasCaptures,
+                item,
+              ),
             );
-            if (aliasList?.length) {
-              expandedCandidates.push(...aliasList);
-            } else {
-              expandedCandidates.push({ model: item });
-            }
           }
 
           if (expandedCandidates.length > 0) {
@@ -2402,7 +2399,14 @@ export class Engine {
                 ? node.effort
                 : this.definition(run).agentEffort;
 
+        const modelAliasSelection =
+          diversityEval?.status === 'selected'
+            ? diversityEval.modelAliasSelection
+            : resolvedAliasCandidate?.modelAliasSelection;
         const work: WorkRequest = {
+          ...(node.executor !== null && modelAliasSelection
+            ? { modelAliasSelection }
+            : {}),
           ...(node.executor !== null && selectedModel
             ? {
                 executorModel: selectedModel,

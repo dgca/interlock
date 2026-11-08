@@ -219,6 +219,7 @@ export type UsageOutcome =
   | 'unknown';
 /** Internal persisted receipt. Never return tokenHash through inspection. */
 export interface UsageAttempt {
+  modelAliasSelection?: import('./modelAliases.js').ModelAliasSelection;
   // null means captured executor default; omission means unknown legacy data.
   requestedTier?: ModelTier | null;
   modelSelection?: ModelSelection;

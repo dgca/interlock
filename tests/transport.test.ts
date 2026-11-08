@@ -180,6 +180,14 @@ it.each(['stdio', 'http'])(
       expect(
         toolDiscovery.tools.find((tool) => tool.name === 'workflow_report')
           ?.description,
+      ).toContain('usage.byAlias');
+      expect(
+        (await call('workflow_report', { workflowId: w.id })).usage.byAlias,
+      ).toEqual([]);
+
+      expect(
+        toolDiscovery.tools.find((tool) => tool.name === 'workflow_report')
+          ?.description,
       ).toContain('pausedMs/activeMs');
       expect(
         (await call('workflow_report', { workflowId: w.id })).summary
