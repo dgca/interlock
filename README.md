@@ -317,7 +317,7 @@ interlock doctor --json
 interlock doctor --live
 ```
 
-`interlock doctor` performs read-only diagnostics across SQLite integrity, schema version, free disk space, history size, enabled harness binaries and allowed roots, active trigger lag, pause holds, uncertain resource reservations, work stalls, and published workflow variable dependencies. Adding `--live` performs a live model connectivity check on enabled harnesses. The CLI exits with code 0 on passing/warning checks and code 1 on failure. These diagnostics are also accessible via UI **Diagnostics**, MCP `doctor`, and the shared API `system.doctor`.
+`interlock doctor` performs read-only diagnostics across SQLite integrity, schema version, free disk space, history size, enabled harness binaries and allowed roots, schedule lag, failures and automatic pauses across all trigger kinds, webhook rejections from the last hour, active pause holds, uncertain resource reservations, work stalls, and latest published workflow variable, known alias, and saved prompt dependencies including exact prompt pins. Adding `--live` performs a live model connectivity check on enabled harnesses. The CLI exits with code 0 on passing/warning checks and code 1 on failure. These diagnostics are also accessible via UI **Diagnostics**, MCP `doctor`, and the shared API `system.doctor`.
 
 ## Current scope
 

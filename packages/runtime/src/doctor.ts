@@ -10,6 +10,8 @@ import {
   type DoctorReport,
   variableReferences,
   modelReferences,
+  promptIds,
+  type ResourceReservation,
   type ManagedExecution,
   type PauseHold,
   type WorkflowTrigger,
@@ -332,38 +334,38 @@ export async function runDoctor(
     let triggerIssues = 0;
 
     for (const trigger of triggers) {
-      if (trigger.kind === 'schedule') {
-        if (trigger.autoPaused) {
-          triggerIssues++;
-          checks.push({
-            category: 'triggers',
-            name: `Auto-paused schedule: ${trigger.name}`,
-            status: 'fail',
-            message: `Schedule "${trigger.name}" is auto-paused after repeated failures (${trigger.consecutiveFailures ?? 0} failures)`,
-            details: {
-              triggerId: trigger.id,
-              workflowId: trigger.workflowId,
-              consecutiveFailures: trigger.consecutiveFailures,
-            },
-            remediation:
-              'Check failure reasons in Run History and resume schedule.',
-          });
-        } else if ((trigger.consecutiveFailures ?? 0) > 0) {
-          triggerIssues++;
-          checks.push({
-            category: 'triggers',
-            name: `Consecutive failures: ${trigger.name}`,
-            status: 'warn',
-            message: `Schedule "${trigger.name}" has ${trigger.consecutiveFailures} consecutive failure(s)`,
-            details: {
-              triggerId: trigger.id,
-              workflowId: trigger.workflowId,
-              consecutiveFailures: trigger.consecutiveFailures,
-            },
-            remediation: 'Inspect recent schedule run failures.',
-          });
-        }
+      if (trigger.autoPaused) {
+        triggerIssues++;
+        checks.push({
+          category: 'triggers',
+          name: `Auto-paused ${trigger.kind}: ${trigger.name}`,
+          status: 'fail',
+          message: `${trigger.kind} trigger "${trigger.name}" is auto-paused after repeated failures (${trigger.consecutiveFailures ?? 0} failures)`,
+          details: {
+            triggerId: trigger.id,
+            workflowId: trigger.workflowId,
+            consecutiveFailures: trigger.consecutiveFailures,
+          },
+          remediation:
+            'Inspect trigger outcomes and re-enable after resolving the failure.',
+        });
+      } else if ((trigger.consecutiveFailures ?? 0) > 0) {
+        triggerIssues++;
+        checks.push({
+          category: 'triggers',
+          name: `Consecutive failures: ${trigger.name}`,
+          status: 'warn',
+          message: `${trigger.kind} trigger "${trigger.name}" has ${trigger.consecutiveFailures} consecutive failure(s)`,
+          details: {
+            triggerId: trigger.id,
+            workflowId: trigger.workflowId,
+            consecutiveFailures: trigger.consecutiveFailures,
+          },
+          remediation: 'Inspect recent trigger outcomes and handler failures.',
+        });
+      }
 
+      if (trigger.kind === 'schedule') {
         // Schedule lag
         if (trigger.enabled && !trigger.autoPaused) {
           const lagMs = Date.now() - Date.parse(trigger.nextFireAt);
@@ -414,7 +416,7 @@ export async function runDoctor(
         category: 'triggers',
         name: 'Triggers and schedules',
         status: 'ok',
-        message: `${triggers.length} trigger(s) configured, no lag or auto-paused schedules`,
+        message: `${triggers.length} trigger(s) configured, no lag, trigger failures, or automatic pauses`,
         details: { totalTriggers: triggers.length },
       });
     }
@@ -434,7 +436,9 @@ export async function runDoctor(
     let blockerIssues = 0;
 
     // 4a. H3 pauses
-    const pauses = engine.store.list<PauseHold>('pauseHolds');
+    const pauses = engine.store
+      .list<PauseHold>('pauseHolds')
+      .filter((hold) => !hold.releasedAt);
     if (pauses.length > 0) {
       blockerIssues++;
       checks.push({
@@ -456,16 +460,24 @@ export async function runDoctor(
     // 4b. Uncertain resource/executor holds
     const uncertainClaims = engine.store.list(uncertainClaimCollection);
     const uncertainOps = engine.store.list(uncertainOperationCollection);
-    if (uncertainClaims.length > 0 || uncertainOps.length > 0) {
+    const uncertainReservations = engine.store
+      .list<ResourceReservation>('workResources')
+      .filter((reservation) => reservation.state === 'uncertain');
+    if (
+      uncertainClaims.length > 0 ||
+      uncertainOps.length > 0 ||
+      uncertainReservations.length > 0
+    ) {
       blockerIssues++;
       checks.push({
         category: 'blockers',
         name: 'Uncertain resource reservations',
         status: 'warn',
-        message: `${uncertainClaims.length} uncertain claim(s) and ${uncertainOps.length} uncertain operation(s) holding resources`,
+        message: `${uncertainClaims.length} uncertain claim(s) and ${uncertainOps.length} uncertain operation(s), and ${uncertainReservations.length} uncertain resource reservation(s)`,
         details: {
           uncertainClaimsCount: uncertainClaims.length,
           uncertainOperationsCount: uncertainOps.length,
+          uncertainReservationsCount: uncertainReservations.length,
         },
         remediation:
           'Confirm whether stopped processes exited and reconcile resource reservations.',
@@ -601,11 +613,58 @@ export async function runDoctor(
             }
           }
 
+          for (const promptId of promptIds(version.definition)) {
+            const revision = version.pinnedPromptRevisions?.[promptId];
+            try {
+              if (
+                version.definition.pinPromptsAtPublish &&
+                revision === undefined
+              )
+                throw new Error('Published prompt pin metadata is missing');
+              engine.prompts.get(promptId, revision);
+            } catch {
+              workflowIssues++;
+              checks.push({
+                category: 'workflows',
+                name: `Unavailable saved prompt in workflow: ${workflow.name}`,
+                status: 'fail',
+                message: `Published workflow "${workflow.name}" requires unavailable prompt ${promptId}${revision === undefined ? '' : ` revision ${revision}`}`,
+                details: {
+                  workflowId: workflow.id,
+                  version: workflow.latestVersion,
+                  promptId,
+                  ...(revision === undefined ? {} : { revision }),
+                },
+                remediation:
+                  version.definition.pinPromptsAtPublish ||
+                  revision !== undefined
+                    ? 'Restore the exact published prompt revision and pin metadata, or publish a corrected workflow version.'
+                    : 'Restore the current saved prompt or update and publish the workflow reference.',
+              });
+            }
+          }
+
           // Check model aliases referenced
           const modelRefs = modelReferences(version.definition);
           for (const mRef of modelRefs) {
             const alias = engine.modelAliases.get(mRef);
-            if (alias && alias.candidates.length === 0) {
+            const requirement = engine.modelAliases.requirement(mRef);
+            if (!alias && requirement) {
+              workflowIssues++;
+              checks.push({
+                category: 'workflows',
+                name: `Missing model alias in workflow: ${workflow.name}`,
+                status: 'fail',
+                message: `Published workflow "${workflow.name}" requires missing local alias "${requirement.name}"`,
+                details: {
+                  workflowId: workflow.id,
+                  version: workflow.latestVersion,
+                  reference: mRef,
+                  aliasName: requirement.name,
+                },
+                remediation: `Configure local alias "${requirement.name}" before starting a new run.`,
+              });
+            } else if (alias && alias.candidates.length === 0) {
               workflowIssues++;
               checks.push({
                 category: 'workflows',

@@ -591,9 +591,9 @@ Core owns the diagnostic schemas (`diagnosticCategorySchema`, `diagnosticStatusS
 
 1. **System**: Checks engine version match, SQLite database integrity (`PRAGMA quick_check`), schema migration version, database file size and run history count, and available disk space (`statfsSync`).
 2. **Harnesses**: Verifies enabled harness profiles, binary detection, version discovery, `cwd` and `allowedRoots` existence, and optional live single-turn auth/model verification (`--live`).
-3. **Triggers**: Checks schedule execution lag (>60s), consecutive trigger failures, auto-paused schedules, and recent webhook rejections (last 24 hours).
-4. **Blockers**: Inspects active library and workflow pause holds (`pauseHolds`), uncertain resource and executor holds (`uncertainClaims`, `uncertainOperations`), active stalled work items (`currentStalls`), and `needs_model` execution holds (`managedExecutions`).
-5. **Workflows**: Validates missing or disabled variables and aliases referenced by published workflows, and detects workflows with unpublished draft edits.
+3. **Triggers**: Checks schedule execution lag (>60s), consecutive failures and automatic pauses across schedule, inbound webhook, and lifecycle event triggers, including outbound webhook actions, and recent webhook rejections (last hour).
+4. **Blockers**: Inspects active library and workflow pause holds (`pauseHolds`), uncertain resource and executor holds (`uncertainClaims`, `uncertainOperations`, and uncertain `workResources` reservations), active stalled work items (`currentStalls`), and `needs_model` execution holds (`managedExecutions`).
+5. **Workflows**: Validates missing or disabled variables, known missing aliases, and required saved prompt content or exact publish pins in latest published workflows. Literal native model IDs remain valid. Released pauses do not count as active blockers. Detects workflows with unpublished draft edits.
 
 The overall status evaluates to `ok` if all checks pass, `warn` if warnings exist without errors, and `fail` if any check fails. The CLI exits with code 0 on `ok` and `warn`, and code 1 on `fail`.
 
