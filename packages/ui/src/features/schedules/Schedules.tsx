@@ -278,7 +278,7 @@ export function Schedules({
       <Text size="xs" c="dimmed" mb="lg">
         {workflow.latestVersion
           ? `Run-start triggers use the latest published version, currently v${workflow.latestVersion}. Draft edits do not affect active runs.`
-          : 'Publish this workflow before enabling a trigger. You can save disabled configurations now.'}
+          : 'Triggers that start runs require a published version. Outbound event webhooks do not start handler runs.'}
       </Text>
       {success && (
         <Alert mb="md" role="status" color="green">
@@ -628,8 +628,10 @@ export function Schedules({
                 </Group>
                 {!trigger.canEnable && (
                   <Text size="xs" c="dimmed" mb="md">
-                    Restore the workflow and retain a published version before
-                    enabling.
+                    {trigger.kind === 'event' &&
+                    trigger.action?.type === 'webhook'
+                      ? 'Outbound webhooks need an unarchived workflow and a ready signing Secret when configured.'
+                      : 'Restore the workflow and retain a published version before enabling.'}
                   </Text>
                 )}
                 {trigger.kind !== 'schedule' ? (
@@ -1249,15 +1251,17 @@ function EventEditor({
               disabled={!terminalOnly}
               onChange={(e) => field('waitForQuiescence', e.target.checked)}
             />
-            <TagFields
-              rows={tags}
-              onChange={(rows) => {
-                setTags(rows);
-                setTagsError('');
-              }}
-              error={tagsError}
-              description="Applied to handler runs. Source run tags remain in the event payload. Up to 16 tags, 64 characters per key or value."
-            />
+            {config.action?.type !== 'webhook' && (
+              <TagFields
+                rows={tags}
+                onChange={(rows) => {
+                  setTags(rows);
+                  setTagsError('');
+                }}
+                error={tagsError}
+                description="Applied to handler runs. Source run tags remain in the event payload. Up to 16 tags, 64 characters per key or value."
+              />
+            )}
             <NumberInput
               label="Maximum trigger depth"
               description="A trigger already in the causal chain is always suppressed."

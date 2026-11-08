@@ -740,7 +740,7 @@ it('inspects safe outbound metadata and reopens the complete webhook action for 
   );
   await click('Edit event');
   expect(input('Webhook URL').value).toBe(
-    config.action!.type === 'webhook' ? config.action.url : '',
+    config.action?.type === 'webhook' ? config.action.url : '',
   );
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
   try {
@@ -761,7 +761,7 @@ it('inspects safe outbound metadata and reopens the complete webhook action for 
       )!.value,
     ).toBe(
       JSON.stringify(
-        config.action!.type === 'webhook' ? config.action.headers : {},
+        config.action?.type === 'webhook' ? config.action.headers : {},
         null,
         2,
       ),
