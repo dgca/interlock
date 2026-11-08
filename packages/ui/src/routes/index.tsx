@@ -18,9 +18,9 @@ import { lazy, Suspense, useState } from 'react';
 import { Button, Center, Loader } from '@mantine/core';
 import { RouteSkeleton, type LoadingSubject } from './RouteSkeleton';
 
-const Schedules = lazy(() =>
-  import('../features/schedules/Schedules').then((m) => ({
-    default: m.Schedules,
+const Automations = lazy(() =>
+  import('../features/automations/Automations').then((m) => ({
+    default: m.Automations,
   })),
 );
 const WorkflowLibrary = lazy(() =>
@@ -249,6 +249,16 @@ function WorkflowRoute() {
   const workflow = context.workflows.find((w) => w.id === workflowId);
   if (!context.loaded) return <Loading subject="workflow" />;
   if (!workflow) return <NotFound title="Workflow not found" />;
+  if (search.get('view') === 'schedules')
+    return (
+      <Navigate
+        replace
+        to={paths.workflowSchedule(
+          workflow.id,
+          search.get('schedule') ?? undefined,
+        )}
+      />
+    );
   return (
     <Suspense fallback={<RouteSkeleton subject="workflow" />}>
       <WorkflowEditor
@@ -257,15 +267,6 @@ function WorkflowRoute() {
         workflows={context.workflows}
         prompts={context.prompts}
         act={context.act}
-        schedulesView={
-          <Schedules
-            workflow={workflow}
-            onDirty={context.onScheduleDirty}
-            onPending={context.onSchedulePending}
-            tick={context.tick}
-            visible={search.get('view') === 'schedules'}
-          />
-        }
         onDirty={context.onDirty}
         onSaved={context.onSaved}
         onRun={context.onRun}
@@ -286,22 +287,24 @@ function WorkflowRoute() {
           );
         }}
         section={
-          search.get('view') === 'schedules'
-            ? 'schedules'
-            : search.get('view') === 'runs'
-              ? 'runs'
-              : search.get('view') === 'children' && !workflow.ownerWorkflowId
-                ? 'children'
-                : 'editor'
+          search.get('view') === 'runs'
+            ? 'runs'
+            : search.get('view') === 'children' && !workflow.ownerWorkflowId
+              ? 'children'
+              : 'editor'
         }
-        onSectionChange={(section) =>
+        onSectionChange={(section) => {
+          if (section === 'schedules') {
+            void navigate(paths.workflowSchedule(workflow.id));
+            return;
+          }
           setSearch((previous) => {
             const next = new URLSearchParams(previous);
             if (section !== 'editor') next.set('view', section);
             else next.delete('view');
             return next;
-          })
-        }
+          });
+        }}
         runsView={
           <Suspense fallback={<RouteLoading label="Loading runs…" />}>
             <RunList
@@ -418,6 +421,38 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <Navigate to={paths.workflows} replace /> },
       { path: 'workflows', Component: LibraryRoute },
+      {
+        path: 'automations',
+        element: (
+          <Suspense fallback={<RouteLoading label="Loading automations…" />}>
+            <Automations />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'automations/new',
+        element: (
+          <Suspense fallback={<RouteLoading label="Loading automation…" />}>
+            <Automations />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'automations/:automationId',
+        element: (
+          <Suspense fallback={<RouteLoading label="Loading automation…" />}>
+            <Automations />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'automations/:automationId/edit',
+        element: (
+          <Suspense fallback={<RouteLoading label="Loading automation…" />}>
+            <Automations />
+          </Suspense>
+        ),
+      },
       { path: 'prompts', Component: PromptsRoute },
       { path: 'variables', Component: VariablesRoute },
       { path: 'variables/:variableId', Component: VariableItemRoute },

@@ -53,8 +53,10 @@ bindings, Agent prompts, or harness profiles.
 
 ## Authenticate a webhook
 
-Create a Secret for the sender's shared HMAC key. In the workflow's **Triggers** tab,
-select **Add webhook** and set `authentication.secretId` to that Secret's ID.
+Create a Secret for the sender's shared HMAC key. Create or edit the webhook
+through CLI `interlock triggers` or MCP `manage_workflow_triggers`, setting
+`authentication.secretId` to that Secret's ID. Existing webhook configurations
+and activity are visible in **Automations**.
 Inspect the configuration, then enable the trigger. Every used header, including
 header-based delivery identity and event time, must belong to the signed material.
 See [webhook configuration and signing](webhooks.md#authentication-and-signed-time).

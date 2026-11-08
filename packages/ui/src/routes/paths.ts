@@ -31,6 +31,10 @@ export function runOffset(value: string | null) {
 
 // Resource URLs use stable IDs, independent of names or future folder membership.
 export const paths = {
+  automations: '/automations',
+  automationNew: '/automations/new',
+  automation: (id: string) => `/automations/${encodeURIComponent(id)}`,
+  automationEdit: (id: string) => `/automations/${encodeURIComponent(id)}/edit`,
   report: '/report',
   workflowReport: (id: string) => `/workflows/${encodeURIComponent(id)}/report`,
   diagnostics: '/settings/diagnostics',
@@ -41,7 +45,9 @@ export const paths = {
   prompt: (id: string) => `/prompts/${encodeURIComponent(id)}`,
   workflows: '/workflows',
   workflowSchedule: (id: string, triggerId?: string) =>
-    `/workflows/${encodeURIComponent(id)}?view=schedules${triggerId ? `&schedule=${encodeURIComponent(triggerId)}` : ''}`,
+    triggerId
+      ? `/automations/${encodeURIComponent(triggerId)}?from=${encodeURIComponent(new URLSearchParams({ workflow: id }).toString())}`
+      : `/automations?workflow=${encodeURIComponent(id)}`,
   workflow: (id: string) => `/workflows/${encodeURIComponent(id)}`,
   runs: (tab: RunTab = 'active', offset = 0, tags?: Record<string, string>) => {
     const query = runListSearch(tab, offset, tags);

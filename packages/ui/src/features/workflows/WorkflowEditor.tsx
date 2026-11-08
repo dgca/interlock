@@ -767,7 +767,7 @@ export function WorkflowEditor({
         <Tabs.List className={styles.subnav} aria-label="Workflow sections">
           <Tabs.Tab value="editor">Editor</Tabs.Tab>
           <Tabs.Tab value="runs">Runs</Tabs.Tab>
-          <Tabs.Tab value="schedules">Triggers</Tabs.Tab>
+          <Tabs.Tab value="schedules">Automations</Tabs.Tab>
           {!workflow.ownerWorkflowId && (
             <Tabs.Tab value="children">Child workflows</Tabs.Tab>
           )}

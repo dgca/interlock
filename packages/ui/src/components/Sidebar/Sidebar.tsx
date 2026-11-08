@@ -8,6 +8,7 @@ import {
   KeyRound,
   Stethoscope,
   BarChart2,
+  Zap,
 } from 'lucide-react';
 import { VERSION } from '../../../../core/src/version';
 import { Link } from 'react-router';
@@ -24,6 +25,7 @@ export function Sidebar({
   page:
     | 'workflows'
     | 'runs'
+    | 'automations'
     | 'report'
     | 'prompts'
     | 'variables'
@@ -51,6 +53,12 @@ export function Sidebar({
               to: paths.workflows,
             },
             { id: 'runs', label: 'Runs', Icon: Activity, to: paths.runs() },
+            {
+              id: 'automations',
+              label: 'Automations',
+              Icon: Zap,
+              to: paths.automations,
+            },
             {
               id: 'report',
               label: 'Report',

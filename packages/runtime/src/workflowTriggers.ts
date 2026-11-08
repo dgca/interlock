@@ -108,6 +108,10 @@ export class WorkflowTriggers {
     offset = 0,
     limit = 20,
     kind?: 'schedule' | 'webhook' | 'event',
+    filters: {
+      search?: string;
+      status?: 'all' | 'enabled' | 'disabled' | 'attention';
+    } = {},
   ) {
     const q = scheduleReadSchema.parse({
       action: 'list',
@@ -115,14 +119,43 @@ export class WorkflowTriggers {
       workflowId,
       offset,
       limit,
+      ...filters,
     });
     if (q.action !== 'list') throw new Error('Invalid list');
-    const rows = this.store
+    const search = q.search?.toLocaleLowerCase();
+    const scoped = this.store
       .workflowTriggers(q.workflowId)
-      .filter((t) => !q.kind || t.kind === q.kind);
+      .filter((t) => !q.kind || t.kind === q.kind)
+      .map((t) => this.summary(t))
+      .filter(
+        (t) =>
+          !search ||
+          `${t.name} ${t.workflowName}`.toLocaleLowerCase().includes(search),
+      );
+    const matches = (t: (typeof scoped)[number], status: typeof q.status) =>
+      status === 'all' ||
+      (status === 'disabled'
+        ? !t.enabled
+        : status === 'enabled'
+          ? t.enabled && !t.autoPaused
+          : t.enabled && !!(t.autoPaused || t.excessiveLag));
+    const rows = scoped.filter((t) => matches(t, q.status));
+    const counts = {
+      all: scoped.length,
+      enabled: scoped.filter((t) => matches(t, 'enabled')).length,
+      disabled: scoped.filter((t) => matches(t, 'disabled')).length,
+      attention: scoped.filter((t) => matches(t, 'attention')).length,
+    };
     return {
       items: rows.slice(q.offset, q.offset + q.limit).map((t) => {
-        const compact = { ...this.summary(t) };
+        const compact = {
+          ...t,
+          actionType:
+            t.kind === 'event'
+              ? (t.action?.type ?? 'workflow')
+              : ('workflow' as const),
+          lastActivity: this.lastActivity(t),
+        };
         for (const key of [
           'input',
           'bindings',
@@ -136,8 +169,42 @@ export class WorkflowTriggers {
         return compact;
       }),
       total: rows.length,
+      counts,
       nextOffset: q.offset + q.limit < rows.length ? q.offset + q.limit : null,
     };
+  }
+  private lastActivity(trigger: WorkflowTrigger) {
+    if (trigger.kind === 'schedule') {
+      const fire = this.store.scheduleFires(trigger.id, 0, 1).items[0];
+      return fire
+        ? {
+            at: fire.firedAt,
+            outcome: fire.outcome,
+            runId: fire.runId,
+            runStatus: fire.runStatus,
+          }
+        : null;
+    }
+    if (trigger.kind === 'event') {
+      const delivery = this.store.eventDeliveries(trigger.id, 0, 1).items[0];
+      return delivery
+        ? {
+            at: delivery.createdAt,
+            outcome: delivery.outcome,
+            runId: delivery.runId,
+            runStatus: delivery.runStatus,
+          }
+        : null;
+    }
+    const delivery = this.store.webhookDeliveries(trigger.id, 0, 1).items[0];
+    return delivery
+      ? {
+          at: delivery.receivedAt,
+          outcome: delivery.outcome,
+          runId: delivery.runId,
+          runStatus: undefined,
+        }
+      : null;
   }
   inspect(id: string, offset = 0, limit = 20) {
     const q = scheduleReadSchema.parse({
@@ -150,7 +217,10 @@ export class WorkflowTriggers {
     const trigger = this.get(id);
     if (trigger.kind === 'event')
       return {
-        trigger: this.summary(trigger),
+        trigger: {
+          ...this.summary(trigger),
+          lastActivity: this.lastActivity(trigger),
+        },
         deliveries: this.events.inspect(id, q.offset, q.limit),
         endpoint: null,
         upcoming: [],
@@ -162,7 +232,10 @@ export class WorkflowTriggers {
       };
     if (trigger.kind === 'webhook')
       return {
-        trigger: this.summary(trigger),
+        trigger: {
+          ...this.summary(trigger),
+          lastActivity: this.lastActivity(trigger),
+        },
         deliveries: this.store.webhookDeliveries(id, q.offset, q.limit),
         endpoint: `/hooks/${trigger.id}`,
         upcoming: [],
@@ -174,7 +247,10 @@ export class WorkflowTriggers {
       };
     const fires = this.store.scheduleFires(id, q.offset, q.limit);
     return {
-      trigger: this.summary(trigger),
+      trigger: {
+        ...this.summary(trigger),
+        lastActivity: this.lastActivity(trigger),
+      },
       upcoming: this.preview(trigger.timing).upcoming,
       deliveries: {
         items: [] as import('@interlock/core').WebhookDelivery[],
@@ -225,7 +301,10 @@ export class WorkflowTriggers {
     const q = scheduleReadSchema.parse(input);
     switch (q.action) {
       case 'list':
-        return this.list(q.workflowId, q.offset, q.limit, q.kind);
+        return this.list(q.workflowId, q.offset, q.limit, q.kind, {
+          search: q.search,
+          status: q.status,
+        });
       case 'inspect':
         return this.inspect(q.id, q.offset, q.limit);
       case 'preview':
@@ -248,7 +327,7 @@ export class WorkflowTriggers {
           id: randomUUID(),
           workflowId: q.workflowId,
           revision: 1,
-          enabled: false,
+          enabled: q.enabled,
           createdAt: at,
           updatedAt: at,
           ...(q.config.kind === 'schedule'
@@ -261,6 +340,11 @@ export class WorkflowTriggers {
               : {}),
           consecutiveFailures: 0,
         } as WorkflowTrigger;
+        if (q.enabled) {
+          this.assertTarget(trigger);
+          if (trigger.kind === 'webhook') this.webhooks.validate(trigger, true);
+          if (trigger.kind === 'event') this.events.validate(trigger, true);
+        }
         this.store.put('workflowTriggers', trigger);
         return { applied: true, trigger };
       }

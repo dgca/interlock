@@ -195,16 +195,18 @@ export function triggerConfig(trigger: WorkflowTrigger): TriggerConfig {
     ),
   );
 }
+export const triggerListQuerySchema = z
+  .object({
+    kind: z.enum(['schedule', 'webhook', 'event']).optional(),
+    workflowId: z.string().min(1).optional(),
+    search: z.string().trim().max(200).optional(),
+    status: z.enum(['all', 'enabled', 'disabled', 'attention']).default('all'),
+    offset: z.number().int().min(0).default(0),
+    limit: z.number().int().min(1).max(100).default(20),
+  })
+  .strict();
 export const scheduleReadSchema = z.discriminatedUnion('action', [
-  z
-    .object({
-      action: z.literal('list'),
-      kind: z.enum(['schedule', 'webhook', 'event']).optional(),
-      workflowId: z.string().min(1).optional(),
-      offset: z.number().int().min(0).default(0),
-      limit: z.number().int().min(1).max(100).default(20),
-    })
-    .strict(),
+  triggerListQuerySchema.extend({ action: z.literal('list') }),
   z
     .object({
       action: z.literal('inspect'),
@@ -231,6 +233,7 @@ export const scheduleMutationSchema = z.discriminatedUnion('action', [
       action: z.literal('create'),
       workflowId: z.string().min(1),
       config: triggerConfigSchema,
+      enabled: z.boolean().default(false),
     })
     .strict(),
   z
@@ -376,6 +379,12 @@ export const scheduleManageInputSchema = z
   .object({
     action: z.enum(['create', 'update', 'enable', 'disable', 'delete']),
     workflowId: z.string().min(1).optional().describe('Required for create.'),
+    enabled: z
+      .boolean()
+      .optional()
+      .describe(
+        'Create only; defaults false. True validates enablement and creates enabled atomically.',
+      ),
     id: z
       .string()
       .min(1)

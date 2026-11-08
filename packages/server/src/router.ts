@@ -8,6 +8,7 @@ import {
   scheduleMutationSchema,
   scheduleReadSchema,
   scheduleTimingSchema,
+  triggerListQuerySchema,
 } from '@interlock/core';
 import {
   pauseCreateSchema,
@@ -153,20 +154,14 @@ export const appRouter = t.router({
       .input(scheduleReadSchema)
       .query(({ ctx, input }) => ctx.engine.triggers.read(input)),
     list: p
-      .input(
-        z.object({
-          workflowId: z.string().optional(),
-          kind: z.enum(['schedule', 'webhook', 'event']).optional(),
-          offset: z.number().int().min(0).default(0),
-          limit: z.number().int().min(1).max(100).default(20),
-        }),
-      )
+      .input(triggerListQuerySchema)
       .query(({ ctx, input }) =>
         ctx.engine.triggers.list(
           input.workflowId,
           input.offset,
           input.limit,
           input.kind,
+          { search: input.search, status: input.status },
         ),
       ),
     inspect: p

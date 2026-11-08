@@ -1,4 +1,4 @@
-import { ScheduleAlerts } from '../schedules/Schedules';
+import { AutomationAlerts } from '../automations/AutomationAlerts';
 import {
   LoadingSkeleton,
   Placeholder,
@@ -203,7 +203,7 @@ export function RunList({
             </Group>
           </details>
           {tab === 'attention' && (
-            <ScheduleAlerts
+            <AutomationAlerts
               key={
                 workflowId === undefined ? 'library' : `workflow:${workflowId}`
               }

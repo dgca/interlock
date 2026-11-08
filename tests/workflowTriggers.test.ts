@@ -730,3 +730,117 @@ it.each([false, true])(
     expect(e.triggers.attention().total).toBe(0);
   },
 );
+
+it('creates enabled atomically, defaults to disabled, and rolls back invalid enablement', async () => {
+  const e = setup(),
+    w = workflow(e),
+    caller = appRouter.createCaller({ engine: e });
+  const disabled = (
+    await caller.triggers.manage({
+      action: 'create',
+      workflowId: w.id,
+      config: config(),
+    })
+  ).trigger!;
+  expect(disabled).toMatchObject({ enabled: false, revision: 1 });
+  const enabled = (
+    await caller.triggers.manage({
+      action: 'create',
+      workflowId: w.id,
+      config: config(),
+      enabled: true,
+    })
+  ).trigger!;
+  expect(enabled).toMatchObject({ enabled: true, revision: 1 });
+  const draft = e.create('Unpublished', '', blankDefinition());
+  const before = e.triggers.list().total;
+  await expect(
+    caller.triggers.manage({
+      action: 'create',
+      workflowId: draft.id,
+      config: config(),
+      enabled: true,
+    }),
+  ).rejects.toThrow(/Publish/);
+  expect(e.triggers.list().total).toBe(before);
+  e.update(w.id, { archived: true });
+  await expect(
+    caller.triggers.manage({
+      action: 'create',
+      workflowId: w.id,
+      config: config(),
+      enabled: true,
+    }),
+  ).rejects.toThrow(/Restore/);
+  expect(e.triggers.list().total).toBe(before);
+  await expect(
+    caller.triggers.manage({
+      action: 'disable',
+      id: disabled.id,
+      expectedRevision: 1,
+      enabled: true,
+    } as any),
+  ).rejects.toThrow();
+});
+
+it('filters before paging, counts within search scope, and keeps list activity compact', async () => {
+  const e = setup(),
+    w = workflow(e),
+    other = workflow(e),
+    caller = appRouter.createCaller({ engine: e });
+  const disabled = e.triggers.mutate({
+    action: 'create',
+    workflowId: w.id,
+    config: config({
+      name: 'Repository disabled',
+      input: { private: 'payload must stay private' },
+    }),
+  }).trigger!;
+  const enabled = create(e, w.id, { name: 'Repository enabled' });
+  const paused = create(e, w.id, { name: 'Repository attention' });
+  e.store.put('workflowTriggers', {
+    ...paused,
+    autoPaused: { at: base, reason: 'Failed admissions' },
+  });
+  create(e, other.id, { name: 'Unrelated' });
+  at(e, 30000);
+  const page = await caller.triggers.list({
+    search: 'repository',
+    status: 'enabled',
+    limit: 1,
+  });
+  expect(page.items.map((t) => t.id)).toEqual([enabled.id]);
+  expect(page).toMatchObject({
+    total: 1,
+    nextOffset: null,
+    counts: { all: 3, enabled: 1, disabled: 1, attention: 1 },
+  });
+  expect(page.items[0].lastActivity).toMatchObject({
+    at: new Date(Date.parse(base) + 30000).toISOString(),
+    outcome: 'started',
+  });
+  expect(page.items[0]).not.toHaveProperty('input');
+  const attention = e.triggers.read({
+    action: 'list',
+    workflowId: w.id,
+    status: 'attention',
+    offset: 0,
+    limit: 1,
+  });
+  expect(attention).toMatchObject({ total: 1, items: [{ id: paused.id }] });
+  const byWorkflowName = await caller.triggers.list({
+    search: 'HEARTBEAT',
+    workflowId: w.id,
+    status: 'disabled',
+  });
+  expect(byWorkflowName.items.map((t) => t.id)).toEqual([disabled.id]);
+  expect(JSON.stringify(byWorkflowName)).not.toContain(
+    'payload must stay private',
+  );
+  await expect(
+    caller.triggers.list({ search: 'x'.repeat(201) }),
+  ).rejects.toThrow();
+  await expect(
+    caller.triggers.list({ status: 'unknown' } as any),
+  ).rejects.toThrow();
+});
