@@ -17,6 +17,7 @@ import { flushSync } from 'react-dom';
 import { lazy, Suspense, useState } from 'react';
 import { Button, Center, Loader } from '@mantine/core';
 import { RouteSkeleton, type LoadingSubject } from './RouteSkeleton';
+import { AutomationListSkeleton } from '../features/automations/AutomationListSkeleton';
 
 const Automations = lazy(() =>
   import('../features/automations/Automations').then((m) => ({
@@ -424,7 +425,7 @@ export const routes: RouteObject[] = [
       {
         path: 'automations',
         element: (
-          <Suspense fallback={<RouteLoading label="Loading automations…" />}>
+          <Suspense fallback={<AutomationListSkeleton />}>
             <Automations />
           </Suspense>
         ),

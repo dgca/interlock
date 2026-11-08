@@ -28,6 +28,10 @@ import { api, errorMessage } from '../../lib/api';
 import { AutomationEditor } from './AutomationEditor';
 import { AutomationDetail } from './AutomationDetail';
 import {
+  AutomationListSkeleton,
+  AutomationRowsSkeleton,
+} from './AutomationListSkeleton';
+import {
   automationStatus,
   eventLabels,
   listHref,
@@ -46,6 +50,12 @@ export function Automations() {
   const { automationId } = useParams();
   const location = useLocation();
   const [search] = useSearchParams();
+  if (
+    !context.loaded &&
+    !context.loadError &&
+    location.pathname === paths.automations
+  )
+    return <AutomationListSkeleton />;
   if (!context.loaded)
     return (
       <section className={workspacePage.page}>
@@ -246,7 +256,7 @@ function AutomationList() {
           </Alert>
         )}
         {!page ? (
-          !error && <Loader aria-label="Loading automations" />
+          !error && <AutomationRowsSkeleton />
         ) : page.items.length ? (
           <>
             <div className={classes.list}>

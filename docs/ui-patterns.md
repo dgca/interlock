@@ -67,6 +67,8 @@ Use the shared `Modal`, `ModalBody`, and `ModalFooter` from `components/Modal`. 
 
 Use static skeletons shaped like the content being loaded. Keep the loading announcement available to assistive technology and hide the decorative placeholders from it. Preserve the action label when a write is in progress.
 
+The Automations list keeps its shared header and status tabs in place during route and initial data loading. Placeholder rows match the list columns. Background refreshes retain loaded rows; errors show retry feedback instead of an indefinite skeleton.
+
 ## Review before shipping
 
 For a changed interaction, inspect the rendered path at desktop, intermediate, and phone widths. Check keyboard navigation, visible focus, long content, and meaningful status announcements. Exercise loading, pending submission, success, rejection, failure, and recovery where they apply. Use temporary workflow data and simulated adapters for repeatable UI checks. Keep native harness validation separate and identify which harnesses were actually exercised.

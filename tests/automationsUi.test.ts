@@ -474,3 +474,35 @@ it('accepts an empty required string when the workflow contract allows it', asyn
     }),
   );
 });
+
+it('keeps list context visible while loading without showing a false empty state', async () => {
+  let finish!: (value: unknown) => void;
+  rpc.list.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render('/automations?status=disabled&search=review');
+  expect(document.querySelector('h1')?.textContent).toBe('Automations');
+  expect(
+    document.querySelector(
+      'nav[aria-label="Automation views"] a[aria-current=page]',
+    )?.textContent,
+  ).toBe('Disabled');
+  expect(document.querySelector('[role=status]')?.textContent).toBe(
+    'Loading automations…',
+  );
+  expect(document.body.textContent).not.toContain('No automations yet');
+  expect(document.body.textContent).not.toContain('No matching automations');
+  await act(async () =>
+    finish({
+      items: [],
+      total: 0,
+      nextOffset: null,
+      counts: { all: 0, enabled: 0, disabled: 0, attention: 0 },
+    }),
+  );
+  expect(document.body.textContent).toContain('No matching automations');
+  expect(document.body.textContent).not.toContain('Loading automations…');
+});
