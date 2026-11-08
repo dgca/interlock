@@ -666,3 +666,162 @@ it('preserves the configured Wait duration when returning from polling', async (
     }),
   );
 });
+
+const pollTiming = {
+  kind: 'poll',
+  everyMs: 1000,
+  path: 'ready',
+  equals: true,
+  check: {
+    kind: 'script',
+    language: 'javascript',
+    command: 'return { ready: true };',
+  },
+};
+const resourceNodes = [
+  { kind: 'agent', prompt: 'Work' },
+  { kind: 'script', language: 'javascript', command: 'return input;' },
+  { kind: 'fetch', url: 'https://example.test' },
+  { kind: 'wait', timing: pollTiming },
+];
+const resourceBindings = [
+  { source: 'literal', value: 'checkout:integration' },
+  { source: 'runInput', path: 'browserResource' },
+];
+it.each(resourceNodes)(
+  'edits, saves and reopens shared resource bindings on $kind steps',
+  async (config) => {
+    const { onApply } = await render(config);
+    await click('Execution');
+    expect(field('Exclusive resources')).toBeTruthy();
+    const disclosure = field('Resource bindings').closest('details')!;
+    await act(async () => disclosure.querySelector('summary')!.click());
+    await fill('Resource bindings', JSON.stringify(resourceBindings));
+    await click('Apply changes');
+    const saved = onApply.mock.calls[0][0].definition.nodes[0];
+    expect(saved.resources).toEqual(resourceBindings);
+    const raw = nodeSchema.parse(JSON.parse(JSON.stringify(saved)));
+    const reopened = await render(raw);
+    await click('Execution');
+    expect(JSON.parse(field('Resource bindings').value)).toEqual(
+      resourceBindings,
+    );
+    await click(
+      config.kind === 'agent'
+        ? 'Assignment'
+        : config.kind === 'script'
+          ? 'Code'
+          : config.kind === 'fetch'
+            ? 'Request'
+            : 'Wait',
+    );
+    await fill('Name', 'Edited step');
+    await click('Apply changes');
+    expect(reopened.onApply.mock.calls[0][0].definition.nodes[0]).toMatchObject(
+      { label: 'Edited step', resources: resourceBindings },
+    );
+  },
+);
+
+it('rejects resource JSON above the shared eight-binding limit and accepts correction', async () => {
+  const { onApply } = await render({
+    kind: 'script',
+    language: 'javascript',
+    command: 'return input;',
+  });
+  await click('Execution');
+  await act(async () =>
+    field('Resource bindings')
+      .closest('details')!
+      .querySelector('summary')!
+      .click(),
+  );
+  const bindings = Array.from({ length: 9 }, (_, i) => ({
+    source: 'literal',
+    value: `resource-${i}`,
+  }));
+  await fill('Resource bindings', JSON.stringify(bindings));
+  await click('Apply changes');
+  expect(onApply).not.toHaveBeenCalled();
+  expect(field('Resource bindings').validationMessage).toContain('eight');
+  await fill('Resource bindings', JSON.stringify(bindings.slice(0, 8)));
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].resources).toHaveLength(
+    8,
+  );
+});
+
+it('keeps polling resources while toggling modes and omits them when saving a timer', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: pollTiming,
+    resources: resourceBindings,
+  });
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>('input[value="duration"]')!
+      .click(),
+  );
+  expect(field('Exclusive resources')).toBeUndefined();
+  expect(
+    [...container.querySelectorAll('nav button')].some(
+      (button) => button.textContent === 'Execution',
+    ),
+  ).toBe(false);
+  await act(async () =>
+    container.querySelector<HTMLInputElement>('input[value="poll"]')!.click(),
+  );
+  await click('Execution');
+  expect(JSON.parse(field('Resource bindings').value)).toEqual(
+    resourceBindings,
+  );
+  await click('Wait');
+  await act(async () =>
+    container.querySelector<HTMLInputElement>('input[value="until"]')!.click(),
+  );
+  await fill('Timestamp input path', 'resumeAt');
+  await click('Apply changes');
+  const saved = onApply.mock.calls[0][0].definition.nodes[0];
+  expect(saved.resources).toBeUndefined();
+  expect(saved.timing.kind).toBe('until');
+});
+it('isolates invalid resource drafts when changing node type', async () => {
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(SettingsDialog, {
+          creating: true,
+          name: 'Test',
+          description: '',
+          definition: definitionSchema.parse({
+            nodes: [
+              { id: 'entry', kind: 'entry', label: 'Entry' },
+              { id: 'exit', kind: 'exit', label: 'Exit' },
+            ],
+            edges: [],
+          }),
+          workflows: [],
+          onApply,
+          onClose: vi.fn(),
+        }),
+      ),
+    ),
+  );
+  await select('Node type', 'script');
+  await click('Execution');
+  await act(async () =>
+    field('Resource bindings')
+      .closest('details')!
+      .querySelector('summary')!
+      .click(),
+  );
+  await fill('Resource bindings', '{broken');
+  expect(field('Resource bindings').validationMessage).toBeTruthy();
+  await select('Node type', 'fetch');
+  await click('Execution');
+  expect(field('Resource bindings').value).toBe('[]');
+  expect(field('Resource bindings').validationMessage).toBe('');
+});

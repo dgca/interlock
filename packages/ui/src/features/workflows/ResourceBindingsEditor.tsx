@@ -1,4 +1,4 @@
-import { Stack, TagsInput } from '@mantine/core';
+import { Stack, TagsInput, Text } from '@mantine/core';
 import {
   resourceNamesSchema,
   resourceBindingsSchema,
@@ -6,7 +6,7 @@ import {
 } from '@interlock/core';
 import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 const bindings = resourceBindingsSchema;
-export function AgentResourcesEditor({
+export function ResourceBindingsEditor({
   value,
   onChange,
 }: {
@@ -25,7 +25,7 @@ export function AgentResourcesEditor({
       {!bound && (
         <TagsInput
           label="Exclusive resources"
-          description="Names are shared across this library. Coordinates Agent claims only; Script and Fetch nodes are not covered."
+          description="Names are shared across this Interlock library."
           placeholder="Add a resource name"
           value={names}
           acceptValueOnBlur
@@ -64,6 +64,12 @@ export function AgentResourcesEditor({
           }
         />
       </details>
+      {!!value?.length && (
+        <Text size="xs" c="dimmed">
+          Busy names queue this step. If a prior owner’s stop is uncertain,
+          confirm it stopped before releasing its reservations.
+        </Text>
+      )}
     </Stack>
   );
 }

@@ -1,6 +1,6 @@
 import { StallPolicyEditor } from '../executors/StallSettings';
 import { ExecutorSelect } from '../executors/ExecutorSelect';
-import { AgentResourcesEditor } from './AgentResourcesEditor';
+import { ResourceBindingsEditor } from './ResourceBindingsEditor';
 import { useRef, useState } from 'react';
 import {
   NodeSettingsSections,
@@ -26,6 +26,7 @@ import {
   MAX_BATCH_ITEMS,
   MAX_SCRIPT_TIMEOUT_MS,
   nodeInputHint,
+  isPollWait,
   type WorkflowDefinition,
   type Workflow,
   type WorkflowNode,
@@ -75,6 +76,14 @@ export function NodeInspector({
   const [localSection, setLocalSection] = useState<NodeSectionName>('work');
   const active = section ?? localSection;
   const waitModes = useRef<Partial<Record<WaitTiming['kind'], WaitTiming>>>({});
+  const pollResources = useRef(
+    node.kind === 'wait' ? node.resources : undefined,
+  );
+  const resourceStep =
+    node.kind === 'agent' ||
+    node.kind === 'script' ||
+    node.kind === 'fetch' ||
+    isPollWait(node);
   const workLabel = (
     {
       agent: 'Assignment',
@@ -109,10 +118,7 @@ export function NodeInspector({
       onChange={onSectionChange ?? setLocalSection}
       workLabel={workLabel}
       execution={
-        node.kind === 'agent' ||
-        node.kind === 'script' ||
-        node.kind === 'fetch' ||
-        (node.kind === 'workflow' && node.mode !== 'detached')
+        resourceStep || (node.kind === 'workflow' && node.mode !== 'detached')
       }
       boundary={node.kind === 'entry' || node.kind === 'exit'}
     >
@@ -189,7 +195,11 @@ export function NodeInspector({
                 onChange={(value) => {
                   const kind = value as WaitTiming['kind'];
                   waitModes.current[node.timing.kind] = node.timing;
+                  if (node.timing.kind === 'poll')
+                    pollResources.current = node.resources;
                   patch({
+                    resources:
+                      kind === 'poll' ? pollResources.current : undefined,
                     timing:
                       waitModes.current[kind] ??
                       (kind === 'duration'
@@ -382,10 +392,6 @@ export function NodeInspector({
                 }
               />
 
-              <AgentResourcesEditor
-                value={node.resources}
-                onChange={(resources) => patch({ resources })}
-              />
               <Switch
                 mb="md"
                 label="Limit active execution per attempt"
@@ -542,6 +548,15 @@ export function NodeInspector({
               />
             </NodeSection>
           </>
+        )}
+        {resourceStep && (
+          <NodeSection name="execution">
+            <ResourceBindingsEditor
+              key={`${node.id}:${node.kind}`}
+              value={node.resources}
+              onChange={(resources) => patch({ resources })}
+            />
+          </NodeSection>
         )}
         {(node.kind === 'script' ||
           node.kind === 'fetch' ||
