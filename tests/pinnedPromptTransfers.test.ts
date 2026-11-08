@@ -9,6 +9,7 @@ import {
   exportWorkflows,
   importWorkflows,
 } from '../packages/runtime/src/transfer';
+import { importSelection } from '../packages/runtime/src/importSelection';
 
 const environments: { engine: Engine; directory: string }[] = [];
 function setup() {
@@ -138,6 +139,12 @@ it('rejects historical revision conflicts even when current prompt content match
   target.store.savePrompt({ ...prompt, content: 'Different first revision' });
   target.store.savePrompt(source.prompts.get(prompt.id));
   const before = target.store.list('promptRevisions');
+  const preview = importWorkflows(
+    target.store,
+    exportWorkflows(source.store, workflow.id),
+    { dryRun: true },
+  );
+  expect(preview.prompts?.[0].status).toBe('conflict');
   expect(() =>
     importWorkflows(target.store, exportWorkflows(source.store, workflow.id)),
   ).toThrow(/revision conflict/i);
@@ -208,4 +215,44 @@ it('retains imported history without rebinding an identical current prompt or co
   });
   expect(edited.revision).toBe(3);
   expect(target.prompts.get(prompt.id, 2).content).toBe('Second');
+});
+
+it('preserves exact pins through selected-set imports and rejects cross-file history or pin conflicts', () => {
+  const { source, prompt, workflow } = fixture();
+  const bundle = exportWorkflows(source.store, workflow.id);
+  const target = setup();
+  importSelection(target, [bundle, bundle]);
+  expect(
+    target.start(workflow.id, null, 1).run.promptSnapshots?.[0].content,
+  ).toBe('First');
+  const conflict = structuredClone(bundle);
+  conflict.promptRevisions![0].content = 'Different first revision';
+  const fresh = setup();
+  expect(() => importSelection(fresh, [bundle, conflict])).toThrow(/conflict/i);
+  expect(fresh.store.list('prompts')).toEqual([]);
+  const differentPins = structuredClone(bundle);
+  differentPins.workflows[0].versions[0].pinnedPromptRevisions![prompt.id] = 2;
+  differentPins.promptRevisions = differentPins.promptRevisions?.filter(
+    (snapshot) => snapshot.revision === 2,
+  );
+  expect(() => importSelection(fresh, [bundle, differentPins])).toThrow(
+    /published version/,
+  );
+  expect(fresh.store.workflows()).toEqual([]);
+});
+
+it('rejects missing and extraneous publish-pin metadata instead of floating to current guidance', () => {
+  const { source, workflow } = fixture();
+  const bundle = exportWorkflows(source.store, workflow.id);
+  bundle.workflows[0].versions[0].pinnedPromptRevisions = undefined;
+  bundle.promptRevisions = bundle.promptRevisions?.filter(
+    (snapshot) => snapshot.revision === 2,
+  );
+  const target = setup();
+  expect(() => importWorkflows(target.store, bundle)).toThrow(/pin map/i);
+  const extra = exportWorkflows(source.store, workflow.id);
+  extra.workflows[0].versions[0].pinnedPromptRevisions!['unknown-prompt'] = 1;
+  expect(() => importWorkflows(target.store, extra)).toThrow(/pin map/i);
+  expect(target.store.workflows()).toEqual([]);
+  expect(target.store.list('prompts')).toEqual([]);
 });

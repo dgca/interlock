@@ -7,6 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import {
   readPath,
   InterlockError,
+  samePromptContent,
   type RunQuery,
   type ReportFilter,
 } from '@interlock/core';
@@ -865,21 +866,7 @@ export class Store {
     const previous =
       this.promptRevision(prompt.id, prompt.revision) ??
       (current?.revision === prompt.revision ? current : undefined);
-    if (
-      previous &&
-      !isDeepStrictEqual(
-        {
-          name: previous.name,
-          description: previous.description,
-          content: previous.content,
-        },
-        {
-          name: prompt.name,
-          description: prompt.description,
-          content: prompt.content,
-        },
-      )
-    )
+    if (previous && !samePromptContent(previous, prompt))
       throw new InterlockError(`Prompt revision conflict for ${key}`);
     if (!this.get('promptRevisions', key))
       this.put('promptRevisions', { ...prompt, promptId: prompt.id, id: key });

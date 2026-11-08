@@ -1375,6 +1375,7 @@ export {
   promptReadSchema,
   promptIds,
   snapshotPrompt,
+  samePromptContent,
   composePrompt,
   type SavedPrompt,
   type PromptSnapshot,

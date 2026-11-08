@@ -3,7 +3,7 @@ import { webhookConfigSchema } from './webhooks.js';
 import { scheduleConfigSchema } from './workflowTriggers.js';
 import { z } from 'zod';
 import { definitionSchema } from './index.js';
-import { savedPromptSchema, promptIds } from './prompts.js';
+import { savedPromptSchema, promptIds, samePromptContent } from './prompts.js';
 import { deletedVersionSchema } from './versionCleanup.js';
 import { variableRequirementSchema, variableReferences } from './variables.js';
 import { modelAliasRequirementSchema } from './modelAliases.js';
@@ -86,6 +86,21 @@ export const workflowBundleSchema = z
       .min(1),
   })
   .superRefine((bundle, ctx) => {
+    for (const workflow of bundle.workflows)
+      for (const version of workflow.versions) {
+        const references = promptIds(version.definition);
+        const pins = Object.keys(version.pinnedPromptRevisions ?? {});
+        if (
+          pins.some((id) => !references.includes(id)) ||
+          (version.definition.pinPromptsAtPublish &&
+            references.some((id) => !pins.includes(id)))
+        )
+          ctx.addIssue({
+            code: 'custom',
+            message:
+              'Published prompt pin map must match its referenced prompts',
+          });
+      }
     const revisions = bundle.promptRevisions ?? [];
     const pinned = new Set(
       bundle.workflows.flatMap((workflow) =>
@@ -102,6 +117,19 @@ export const workflowBundleSchema = z
         message: 'Pinned prompt snapshots require bundle formatVersion 9',
       });
     const keys = revisions.map((prompt) => `${prompt.id}:${prompt.revision}`);
+    if (
+      revisions.some((snapshot) => {
+        const current = bundle.prompts?.find(
+          (prompt) =>
+            prompt.id === snapshot.id && prompt.revision === snapshot.revision,
+        );
+        return current && !samePromptContent(current, snapshot);
+      })
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Conflicting pinned prompt snapshot content',
+      });
     if (
       new Set(keys).size !== keys.length ||
       revisions.some(

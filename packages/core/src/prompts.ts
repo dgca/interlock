@@ -29,6 +29,13 @@ export const savedPromptSchema = promptContentSchema.extend({
 });
 export type PromptSnapshot = z.infer<typeof savedPromptSchema>;
 export type PromptContent = z.infer<typeof promptContentSchema>;
+export function samePromptContent(a: PromptContent, b: PromptContent) {
+  return (
+    a.name === b.name &&
+    a.description === b.description &&
+    a.content === b.content
+  );
+}
 export interface SavedPrompt extends PromptSnapshot {
   createdAt: string;
   updatedAt: string;

@@ -18,6 +18,7 @@ import {
   type SavedPrompt,
   promptIds,
   snapshotPrompt,
+  samePromptContent,
   type PromptSnapshot,
   type DeletedWorkflowVersion,
 } from '@interlock/core';
@@ -277,24 +278,38 @@ export function diffBundleImport(
     };
   });
 
+  const pins = bundle.workflows.flatMap((workflow) =>
+    workflow.versions.flatMap((version) =>
+      Object.entries(version.pinnedPromptRevisions ?? {}).map(
+        ([id, revision]) => ({ id, revision }),
+      ),
+    ),
+  );
+  const supplied = [
+    ...(bundle.promptRevisions ?? []),
+    ...(bundle.prompts ?? []),
+  ];
   const prompts = (bundle.prompts ?? []).map((prompt) => {
     const existing = store.get<SavedPrompt>('prompts', prompt.id);
-    const status: 'added' | 'unchanged' | 'conflict' = !existing
-      ? 'added'
-      : isDeepStrictEqual(
-            {
-              name: existing.name,
-              description: existing.description,
-              content: existing.content,
-            },
-            {
-              name: prompt.name,
-              description: prompt.description,
-              content: prompt.content,
-            },
-          )
-        ? 'unchanged'
-        : 'conflict';
+    const historicalConflict = pins
+      .filter((pin) => pin.id === prompt.id)
+      .some((pin) => {
+        const snapshot = supplied.find(
+          (item) => item.id === pin.id && item.revision === pin.revision,
+        );
+        const local =
+          store.promptRevision(pin.id, pin.revision) ??
+          (existing?.revision === pin.revision ? existing : undefined);
+        return snapshot
+          ? !!local && !samePromptContent(local, snapshot)
+          : !local;
+      });
+    const status: 'added' | 'unchanged' | 'conflict' =
+      historicalConflict || (existing && !samePromptContent(existing, prompt))
+        ? 'conflict'
+        : existing
+          ? 'unchanged'
+          : 'added';
     return {
       id: prompt.id,
       name: prompt.name,
@@ -429,21 +444,7 @@ export function importWorkflows(
       throw new InterlockError('Bundle must contain unique prompt IDs');
     for (const prompt of includedPrompts) {
       const existing = store.get<SavedPrompt>('prompts', prompt.id);
-      if (
-        existing &&
-        !isDeepStrictEqual(
-          {
-            name: existing.name,
-            description: existing.description,
-            content: existing.content,
-          },
-          {
-            name: prompt.name,
-            description: prompt.description,
-            content: prompt.content,
-          },
-        )
-      )
+      if (existing && !samePromptContent(existing, prompt))
         throw new InterlockError(
           `Prompt conflict for ${prompt.id}. Shared prompt content cannot be overwritten by workflow import, even with force.`,
         );

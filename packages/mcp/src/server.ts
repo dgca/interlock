@@ -300,7 +300,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'list_prompts',
-    'Discover saved prompts with stable IDs, names, descriptions and current revisions. Use get_prompt for Markdown instructions and dependent workflows. Content edits affect future ordinary workflow runs, including published workflows, without republishing. Existing comparisons retain their captured revisions, including queued samples.',
+    'Discover saved prompts with stable IDs, names, descriptions and current revisions. Use get_prompt for Markdown instructions and dependent workflows. Edits affect future runs of unpinned versions without republishing; publish-pinned versions retain their selected revisions. Existing comparisons retain their captured revisions, including queued samples.',
     {},
     async () =>
       (await client.prompts.list()).map(
@@ -314,7 +314,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'get_prompt',
-    'Read current saved prompt content and usage {workflowId,name,draft,versions}. Optional revision reads retained historical content, including deleted prompts, and adds currentRevision or null. Optional history:{offset,limit} lists retained revision/name metadata, default 10/max 25, newest first, with total/nextOffset; bodies are omitted. History may have gaps; unavailable revisions error. Historical reads do not restore a prompt or change current edit revisions. Ordinary runs use latest content; comparisons may select exact revisions.',
+    'Read current saved prompt content and usage {workflowId,name,draft,versions}. Optional revision reads retained historical content, including deleted prompts, and adds currentRevision or null. Optional history:{offset,limit} lists retained revision/name metadata, default 10/max 25, newest first, with total/nextOffset; bodies are omitted. History may have gaps; unavailable revisions error. Historical reads do not restore a prompt or change current edit revisions. Runs capture published pins when configured, otherwise current content; comparisons may select exact revisions.',
     promptReadSchema.shape,
     (input) => client.prompts.get(input),
   );
@@ -326,7 +326,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'update_prompt',
-    'Edit a saved prompt using the revision from get_prompt. Stale saves fail without overwriting content. Effective changes increment revision and preserve history; unchanged saves keep revision. Changes affect future ordinary runs that reference this ID, including published workflows, but do not change active runs, retries or existing comparison captures and queued samples. No republishing is needed.',
+    'Edit a saved prompt using the revision from get_prompt. Stale saves fail without overwriting content. Effective edits allocate above all retained revisions, including imported history; unchanged saves keep revision. Edits affect future unpinned runs without republishing. Publish-pinned versions, active runs, retries and existing comparison captures retain their instructions.',
     {
       ...promptContentSchema.shape,
       id: z.string().describe('Saved prompt ID.'),
