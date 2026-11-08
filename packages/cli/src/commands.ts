@@ -145,12 +145,22 @@ export async function runCommand(argv: string[]) {
     case 'run-history': {
       if (args.length !== 1)
         throw new Error(
-          'Usage: run-history <json|@file> (action: preview or delete; deletion requires reviewed root confirmations and acknowledgeHistoryLoss:true)',
+          'Usage: run-history <json|@file> (action: preview, delete, settings, configure or status; deletion requires reviewed root confirmations and acknowledgeHistoryLoss:true)',
         );
       const { historyRequestSchema } = await import('@interlock/core');
       const request = historyRequestSchema.parse({
         request: await parse(args[0]),
       }).request;
+      if (request.action === 'status')
+        return client.runs.retentionStatus.query();
+      if (request.action === 'settings') {
+        const { action: _action, ...input } = request;
+        return client.runs.retentionSettings.query(input);
+      }
+      if (request.action === 'configure') {
+        const { action: _action, ...input } = request;
+        return client.runs.configureRetention.mutate(input);
+      }
       if (request.action === 'preview') {
         const { action: _action, ...input } = request;
         return client.runs.previewHistoryDeletion.query(input);
@@ -647,7 +657,7 @@ export async function runCommand(argv: string[]) {
           'runs [--tag KEY=VALUE ...] [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id>',
           'run-version <json|@file> (action: read with runId/offset/limit; policy with expectedRevision and pinned|latest-compatible; preview with newer version and optional recapturePrompts; apply requires the exact preview confirmation and reason)',
-          'run-history <json|@file> (action: preview with workflowId/before/rootRunIds and offset/limit; delete requires roots with preview confirmations and acknowledgeHistoryLoss:true; workflows and published versions remain)',
+          'run-history <json|@file> (action: settings/configure/status for opt-in retention; configure requires expectedRevision, policy thresholds or null to disable or inherit for workflow overrides; preview with workflowId/before/rootRunIds and offset/limit; delete requires roots with preview confirmations and acknowledgeHistoryLoss:true; workflows and published versions remain)',
           'context-group <run-id> <group> [options-json|@file] (binding and history; offset, limit)',
           'handoff-context <json|@file> (runId, group, expectedRevision, session, actor, reason, checkpointRef)',
           'budget <run-id> (local revision/policy and governing budget status)',

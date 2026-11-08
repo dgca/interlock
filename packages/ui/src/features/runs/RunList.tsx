@@ -8,6 +8,7 @@ import { runProjectionText } from './runProjectionText';
 import { Button, Group, Tabs, Text } from '@mantine/core';
 import { useEffect, useRef, useState } from 'react';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
+import { RetentionSettingsDialog } from './RetentionSettings';
 import type { Action } from '../../lib/useActionFeedback';
 import { ArrowUpRight, Activity } from 'lucide-react';
 import layout from '../../components/PageLayout/PageLayout.module.css';
@@ -68,6 +69,7 @@ export function RunList({
     }
   };
   const [cleanup, setCleanup] = useState(false);
+  const [retention, setRetention] = useState(false);
   const [snapshot, setSnapshot] = useState<{
     tab: RunTab;
     workflowId?: string;
@@ -211,6 +213,9 @@ export function RunList({
           )}
           {tab === 'history' && act && (
             <Group justify="flex-end" mb="md">
+              <Button variant="subtle" onClick={() => setRetention(true)}>
+                Retention settings
+              </Button>
               <Button variant="light" onClick={() => setCleanup(true)}>
                 Clean up history
               </Button>
@@ -380,6 +385,13 @@ export function RunList({
           )}
         </Tabs.Panel>
       </Tabs>
+      {retention && (
+        <RetentionSettingsDialog
+          key={workflowId ?? 'library'}
+          workflowId={workflowId}
+          onClose={() => setRetention(false)}
+        />
+      )}
       {cleanup && act && (
         <HistoryCleanupDialog
           workflowId={workflowId}

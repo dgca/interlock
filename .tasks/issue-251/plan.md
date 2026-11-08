@@ -10,3 +10,17 @@ See [spec](spec.md) for AC1–AC8 and [intent](intent.md) for scope and authoriz
 6. Fetch/rebase latest main, repeat affected verification if candidate changes, commit all intended work and report exact HEAD/base/evidence. Stop before claiming fresh final review. Independent parent reviewer owns final diff and targeted boundary review; delivery remains parent-controlled.
 
 Highest risks: accidental deletion from an inherited default, count displacement by protected trees, loss of event or start receipts, stale policy saves, and partial cleanup after a storage exception. Direct tests must reach each boundary with a valid control and assert unchanged protected state on rejection. Physical file shrink is not a success criterion; free SQLite pages prove reclaim for reuse.
+
+
+## Build evidence
+
+AC6: The UI author exercised real controls against an explicitly temporary SQLite store and isolated backend/UI ports. Library count10 saved and survived reload. Workflow History opened Retention settings, saved Disabled then Inherit, and Escape restored trigger focus. Desktop and 390×844 layouts had no modal overflow, fields stacked and footer remained usable; browser console had zero errors. Screenshots: `/tmp/issue251-retention-workflow.png`, `/tmp/issue251-retention-mobile-inputs.png`. Preview servers and source files were removed. This is agent interaction evidence; the separately deferred combined human UI review is still pending.
+
+Build found a safety gap in existing manual cleanup metadata guards: missing forward chain links and recorded child references needed explicit protection. The shared path now guards both; a direct valid-control test verifies retention preserves incomplete trees while removing an unrelated eligible tree. Pending schedule/webhook/lifecycle-handler outcome references and queued admission prerequisites are also checked by the shared deletion guard.
+
+
+Final verification: `pnpm test` passed 1842 tests in 160 files. Targeted retention tests cover report counts before/after deletion in addition to retained receipt, archive and quiescence boundaries. `pnpm build`, `pnpm test:package`, `pnpm format:check` and `git diff --check` passed. Logs are outside the candidate at `/tmp/issue-251-final-tests.log`, `/tmp/issue-251-final-retention.log`, `/tmp/issue-251-final-build.log`, `/tmp/issue-251-final-package.log`, `/tmp/issue-251-final-format.log`.
+
+AC7 observed storage: allocated 2203648 bytes stayed constant; reusable pages grew from 0 to 2015232 bytes after deletion, then fell to 1003520 bytes after a 1 MB replacement payload without database growth. This proves reuse, not physical file shrinkage.
+
+AC5/AC8 affected MCP review covered `manage_run_history` selection, parameter contracts/defaults/bounds, returned fields, authorization and lifecycle guidance, plus existing manual preview/delete and workflow deletion interactions. HTTP and stdio discovery each report 66 tools and a 4301-byte history definition, with no new tool. Settings/configure/status responses are bounded and contain no history payloads; on-demand preview remains the path to individual blockers. README, history-cleanup, v1, architecture, agent-workflows and CLI help were checked against implementation. This is an affected-flow audit, not an audit of all MCP tools. Inherited report/tag/default/hook follow-up documentation stays under parent ownership.

@@ -51,6 +51,12 @@ it.each(['http', 'stdio'])(
         `${mode}: manage_run_history definition ${Buffer.byteLength(discovered)} B, ${tools.length} tools total`,
       );
       for (const field of [
+        'settings',
+        'configure',
+        'status',
+        'expectedRevision',
+        'maxAgeDays',
+        'maxCompletedRuns',
         'preview',
         'delete',
         'rootRunIds',
@@ -69,6 +75,41 @@ it.each(['http', 'stdio'])(
         expect(result.structuredContent).toEqual(data);
         return data;
       };
+      const settings = await call('manage_run_history', {
+        request: { action: 'settings' },
+      });
+      expect(settings).toMatchObject({
+        revision: 0,
+        policy: null,
+        effectivePolicy: null,
+      });
+      const configured = await call('manage_run_history', {
+        request: {
+          action: 'configure',
+          expectedRevision: 0,
+          policy: { maxAgeDays: 30 },
+        },
+      });
+      expect(configured).toMatchObject({
+        revision: 1,
+        policy: { maxAgeDays: 30 },
+      });
+      const stale = await client.callTool({
+        name: 'manage_run_history',
+        arguments: {
+          request: { action: 'configure', expectedRevision: 0, policy: null },
+        },
+      });
+      expect(stale.isError).toBe(true);
+      const status = await call('manage_run_history', {
+        request: { action: 'status' },
+      });
+      expect(status).toMatchObject({
+        batchLimit: 100,
+        intervalMs: 3600000,
+        lastError: null,
+      });
+      expect(Buffer.byteLength(JSON.stringify(status))).toBeLessThan(1500);
       const workflow = engine.create(
         'History transport',
         '',
@@ -115,6 +156,26 @@ it.each(['http', 'stdio'])(
       expect(invalid.isError).toBe(true);
       expect(engine.run(started.runId).status).toBe('completed');
       process.env.INTERLOCK_URL = url;
+      expect(
+        await runCommand([
+          'run-history',
+          JSON.stringify({ action: 'settings' }),
+        ]),
+      ).toMatchObject({ revision: 1 });
+      expect(
+        await runCommand([
+          'run-history',
+          JSON.stringify({
+            action: 'configure',
+            workflowId: workflow.id,
+            expectedRevision: 0,
+            policy: null,
+          }),
+        ]),
+      ).toMatchObject({ inherited: false, effectivePolicy: null });
+      expect(
+        await runCommand(['run-history', JSON.stringify({ action: 'status' })]),
+      ).toMatchObject({ batchLimit: 100 });
       const viaCli = (await runCommand([
         'run-history',
         JSON.stringify({ action: 'preview', rootRunIds: [started.runId] }),

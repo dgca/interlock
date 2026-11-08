@@ -699,9 +699,18 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'manage_run_history',
-    'Preview/delete whole trees including detached runs and chains; retains workflows/versions. Preview filters workflowId,before whole-tree update,rootRunIds; offset0,limit20/max100. Returns compact counts/bytes/blockers/confirmations. Children/later chain members cannot be deleted alone. Active/jobs/uncertain ownership/comparison/trial evidence blocks deletion. Obtain human agreement to roots and irreversible loss, then roots:[{runId,confirmation}],acknowledgeHistoryLoss:true. Transaction rechecks; changes require fresh preview/agreement. Deletes scoped values/work/events/usage/budgets/holds/context/settled sessions; retains profiles/start tombstones. JSON bytes are reusable SQLite space; backups/trial files remain. No automatic pruning/compaction.',
+    'Manage whole-tree history, preserving workflows/versions. Manual preview: workflowId,before (whole-tree update),rootRunIds,offset0,limit20/max100. Returns counts/bytes/blockers/confirmations. After human agreement to selected roots and irreversible loss, delete roots:[{runId,confirmation}],acknowledgeHistoryLoss:true; transaction rejects stale/protected selections. Trees include detached runs/chains; active/jobs/uncertainty/comparison/trigger evidence blocks cleanup. Settings/configure optionally scope workflowId; omission is library. Configure requires expectedRevision and whole policy: age/count thresholds, null disables, inherit removes workflow override. Enable only with authorization for permanent scheduled deletion. Library count pools inheritors; overrides count independently. Counts include failed/cancelled trees; either threshold expires by whole-tree last update. Hourly batches100; backlog/recent trees retry1min. Status returns bounded sweep/error/storage metadata without payloads. Cleanup retains start/trigger receipts; SQLite pages become reusable, no compaction. Native harness/trial files remain.',
     historyRequestSchema.shape,
     ({ request }) => {
+      if (request.action === 'status') return client.runs.retentionStatus();
+      if (request.action === 'settings') {
+        const { action: _action, ...input } = request;
+        return client.runs.retentionSettings(input);
+      }
+      if (request.action === 'configure') {
+        const { action: _action, ...input } = request;
+        return client.runs.configureRetention(input);
+      }
       if (request.action === 'preview') {
         const { action: _action, ...input } = request;
         return client.runs.previewHistoryDeletion(input);
