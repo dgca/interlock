@@ -1,10 +1,14 @@
 # Lifecycle event triggers
 
-Event triggers start a workflow when a run completes, fails, is cancelled, needs attention, or stalls. They share trigger management with [schedules](schedules.md) and [webhooks](webhooks.md).
+Event triggers start a workflow or send an outbound webhook when a run completes, fails, is cancelled, needs attention, or stalls. They share trigger management with [schedules](schedules.md) and [webhooks](webhooks.md).
 
 ## Configuration
 
-Create a trigger on the handler workflow. The handler receives the compact event object directly as its workflow input. The handler must have a compatible input contract and a retained published version before the trigger can be enabled. New triggers are disabled.
+In a workflow’s **Triggers** tab, choose **Add event trigger**, then select **Workflow handler** or **Outbound webhook** under **Action**. For an outbound webhook, enter its URL, optionally choose a saved Secret for HMAC signing, edit static headers as a JSON object of string values, and set a 500–60,000 ms timeout. Invalid header JSON blocks saving. Switching actions preserves the webhook fields while the editor stays open and keeps the trigger’s scope, transitions, tags, quiescence and failure settings. Saved webhook actions do not start a handler run.
+
+Inspection shows the action, destination origin, signing Secret reference, header names, and timeout. URL paths, credentials, query values and header values are omitted from this summary; editing reopens the full action configuration. Secret values are never loaded into the editor.
+
+For **Workflow handler** actions, create the trigger on the handler workflow. The handler receives the compact event object directly as its workflow input and needs a compatible input contract and a retained published version before enabling. Outbound webhook actions do not require a published handler. New triggers of either action type are disabled.
 
 ```json
 {

@@ -83,6 +83,14 @@ export class WorkflowTriggers {
           )
         : 0;
     const workflow = this.store.get<Workflow>('workflows', trigger.workflowId);
+    let canEnable = false;
+    try {
+      this.assertTarget(trigger);
+      canEnable = true;
+    } catch (error) {
+      // Unavailable targets remain inspectable; enable uses the same checks.
+      if (!(error instanceof InterlockError)) throw error;
+    }
     return {
       ...trigger,
       lagMs,
@@ -92,16 +100,7 @@ export class WorkflowTriggers {
       holdCount: holds.length,
       workflowName: workflow?.name ?? 'Missing workflow',
       publishedVersion: workflow?.latestVersion ?? null,
-      canEnable:
-        !!workflow &&
-        !workflow.archived &&
-        !!workflow.latestVersion &&
-        !!this.store.getVersion(workflow.id, workflow.latestVersion) &&
-        !(
-          workflow.ownerWorkflowId &&
-          this.store.get<Workflow>('workflows', workflow.ownerWorkflowId)
-            ?.archived
-        ),
+      canEnable,
     };
   }
   list(

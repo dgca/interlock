@@ -334,3 +334,44 @@ it('rejects trigger creation or enabling when secretId does not reference a Secr
     }),
   ).toThrow('Webhook action authentication requires a Secret variable');
 });
+
+it('reports outbound enablement on unpublished targets consistently with enabling', () => {
+  const engine = setup();
+  const workflow = engine.create(
+    'Unpublished outbound alerts',
+    '',
+    blankDefinition(),
+  );
+  const outbound = engine.triggers.mutate({
+    action: 'create',
+    workflowId: workflow.id,
+    config: eventConfigSchema.parse({
+      kind: 'event',
+      name: 'Alerts',
+      events: ['failed'],
+      scope: { type: 'library' },
+      action: { type: 'webhook', url: 'https://example.test/notify' },
+    }),
+  }).trigger!;
+  const handler = engine.triggers.mutate({
+    action: 'create',
+    workflowId: workflow.id,
+    config: eventConfigSchema.parse({
+      kind: 'event',
+      name: 'Handler',
+      events: ['failed'],
+      scope: { type: 'library' },
+    }),
+  }).trigger!;
+  expect(engine.triggers.inspect(outbound.id).trigger.canEnable).toBe(true);
+  expect(engine.triggers.inspect(handler.id).trigger.canEnable).toBe(false);
+  expect(
+    engine.triggers.mutate({
+      action: 'enable',
+      id: outbound.id,
+      expectedRevision: 1,
+    }).trigger?.enabled,
+  ).toBe(true);
+  engine.update(workflow.id, { archived: true });
+  expect(engine.triggers.inspect(outbound.id).trigger.canEnable).toBe(false);
+});
