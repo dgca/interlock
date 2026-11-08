@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { modelAliasSelectionSchema } from './modelAliases.js';
 import { runTagsSchema } from './runTags.js';
 
 const firstReportInstant = Date.parse('0000-01-01T00:00:00.000Z');
@@ -193,6 +194,12 @@ export const usageByProviderSchema = z
 
 export type UsageByProvider = z.infer<typeof usageByProviderSchema>;
 
+export const usageByAliasSchema = usageByModelSchema.extend({
+  alias: modelAliasSelectionSchema.nullable(),
+  scope: z.enum(['attempt', 'run']),
+});
+export type UsageByAlias = z.infer<typeof usageByAliasSchema>;
+
 export const usageCostReportSchema = z
   .object({
     tokens: tokenSummarySchema,
@@ -202,6 +209,7 @@ export const usageCostReportSchema = z
     byNode: z.array(usageByNodeSchema),
     byModel: z.array(usageByModelSchema),
     byProvider: z.array(usageByProviderSchema),
+    byAlias: z.array(usageByAliasSchema).optional(),
   })
   .strict();
 

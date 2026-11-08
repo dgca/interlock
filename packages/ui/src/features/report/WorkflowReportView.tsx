@@ -580,6 +580,87 @@ export function WorkflowReportView({
                 </Table.Tbody>
               </Table>
             )}
+            {usage?.byAlias && usage.byAlias.length > 0 && (
+              <>
+                <Title order={4} size="h5" mt="lg" mb="sm">
+                  Captured model aliases
+                </Title>
+                <Text size="xs" c="dimmed" mb="sm">
+                  Alias revisions describe assignment requests. Reported models
+                  describe supplied usage. Unknown includes legacy and native
+                  assignments; run overhead has no assigned alias.
+                </Text>
+                <Table.ScrollContainer minWidth={900}>
+                  <Table striped highlightOnHover>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Alias / revision</Table.Th>
+                        <Table.Th>Requested candidate</Table.Th>
+                        <Table.Th>Reported provider / model</Table.Th>
+                        <Table.Th>Scope</Table.Th>
+                        <Table.Th>Input tokens</Table.Th>
+                        <Table.Th>Output tokens</Table.Th>
+                        <Table.Th>Cost</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {usage.byAlias.map((group) => (
+                        <Table.Tr
+                          key={JSON.stringify([
+                            group.alias,
+                            group.scope,
+                            group.provider,
+                            group.model,
+                            group.currency,
+                          ])}
+                        >
+                          <Table.Td>
+                            {group.alias
+                              ? `${group.alias.name} @${group.alias.revision}`
+                              : 'Unknown'}
+                          </Table.Td>
+                          <Table.Td>
+                            {group.alias
+                              ? `${group.alias.candidateModel} (#${group.alias.candidateIndex + 1})`
+                              : '—'}
+                            {group.alias &&
+                              (group.alias.candidateProfileId ||
+                                group.alias.candidateEffort !== undefined) && (
+                                <Text size="xs" c="dimmed">
+                                  {group.alias.candidateProfileId ??
+                                    'Inherited profile'}{' '}
+                                  ·{' '}
+                                  {group.alias.candidateEffort === null
+                                    ? 'Native effort'
+                                    : (group.alias.candidateEffort ??
+                                      'Inherited effort')}
+                                </Text>
+                              )}
+                          </Table.Td>
+                          <Table.Td>
+                            {group.provider} / {group.model}
+                          </Table.Td>
+                          <Table.Td>
+                            {group.scope === 'run' ? 'Run overhead' : 'Attempt'}
+                          </Table.Td>
+                          <Table.Td>
+                            {group.inputTokens.toLocaleString()}
+                          </Table.Td>
+                          <Table.Td>
+                            {group.outputTokens.toLocaleString()}
+                          </Table.Td>
+                          <Table.Td>
+                            {group.costMicros !== null
+                              ? `${(group.costMicros / 1_000_000).toFixed(4)} ${group.currency ?? ''}`
+                              : '—'}
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </Table.ScrollContainer>
+              </>
+            )}
           </Card>
 
           {/* Node Durations */}

@@ -303,6 +303,11 @@ it('expands model aliases in distinctProviderFrom and blocks with runProjection 
     .work('available', run.id)
     .find((w) => w.nodeId === 'review')!;
   expect(reviewWork.executorModel).toBe('gpt-4o');
+  expect(reviewWork.modelAliasSelection).toMatchObject({
+    name: 'reviewer',
+    revision: 1,
+    candidateModel: 'gpt-4o',
+  });
   expect(reviewWork.providerDiversityBlocked).toBeUndefined();
 
   // Now test exhaustion: an alias where all candidates are anthropic
