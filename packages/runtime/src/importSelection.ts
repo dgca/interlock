@@ -160,12 +160,13 @@ function combineBundles(
       variables.set(variable.id, variable);
     }
     for (const alias of document.bundle.modelAliases ?? []) {
-      const old = modelAliases.get(alias.name.toLowerCase());
+      const key = (alias.reference ?? alias.name).toLowerCase();
+      const old = modelAliases.get(key);
       if (old && !isDeepStrictEqual(old, alias))
         throw new InterlockError(
           'Selected files conflict for a model alias requirement',
         );
-      modelAliases.set(alias.name.toLowerCase(), alias);
+      modelAliases.set(key, alias);
     }
     for (const entry of document.bundle.workflows) {
       const previous = workflows.get(entry.id);
@@ -265,25 +266,29 @@ function combineBundles(
   return rootId
     ? {
         format: 'interlock-workflows',
-        formatVersion: promptRevisions.size
-          ? 9
-          : [...workflows.values()].some((w) => w.eventTriggers?.length)
-            ? 8
-            : [...workflows.values()].some((w) => w.webhooks?.length)
-              ? 7
-              : modelAliases.size
-                ? 6
-                : [...workflows.values()].some((w) => w.schedules?.length)
-                  ? 5
-                  : variables.size
-                    ? 4
-                    : [...workflows.values()].some(
-                          (w) => w.deletedVersions?.length,
-                        )
-                      ? 3
-                      : prompts.size
-                        ? 2
-                        : 1,
+        formatVersion: [...modelAliases.values()].some(
+          (alias) => alias.reference,
+        )
+          ? 10
+          : promptRevisions.size
+            ? 9
+            : [...workflows.values()].some((w) => w.eventTriggers?.length)
+              ? 8
+              : [...workflows.values()].some((w) => w.webhooks?.length)
+                ? 7
+                : modelAliases.size
+                  ? 6
+                  : [...workflows.values()].some((w) => w.schedules?.length)
+                    ? 5
+                    : variables.size
+                      ? 4
+                      : [...workflows.values()].some(
+                            (w) => w.deletedVersions?.length,
+                          )
+                        ? 3
+                        : prompts.size
+                          ? 2
+                          : 1,
         rootId,
         ...(modelAliases.size
           ? { modelAliases: [...modelAliases.values()] }
