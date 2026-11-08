@@ -7,6 +7,7 @@ import {
   modelReferences,
   type SavedModelAlias,
   type ModelAliasCandidate,
+  type ExpandedModelCandidate,
   type ModelAliasCapture,
   type ModelAliasRequirement,
   type ModelAliasRead,
@@ -284,6 +285,37 @@ export class ModelAliases {
     const live = this.get(modelOrAlias);
     if (live) return live.candidates;
     return null;
+  }
+
+  expandCandidates(
+    captures: ModelAliasCapture[] | undefined,
+    reference: string,
+  ): ExpandedModelCandidate[] {
+    const candidates = this.resolveCandidates(captures, reference);
+    if (candidates === null) return [{ model: reference }];
+    // Resolution returns the captured array when historical evidence exists.
+    // Live-only legacy resolution must not invent a captured revision.
+    const capture = captures?.find((item) => item.candidates === candidates);
+    return candidates.map((candidate, candidateIndex) => ({
+      ...candidate,
+      ...(capture
+        ? {
+            modelAliasSelection: {
+              aliasId: capture.aliasId,
+              name: capture.name,
+              revision: capture.revision,
+              candidateModel: candidate.model,
+              candidateIndex,
+              ...(candidate.profileId
+                ? { candidateProfileId: candidate.profileId }
+                : {}),
+              ...(candidate.effort !== undefined
+                ? { candidateEffort: candidate.effort }
+                : {}),
+            },
+          }
+        : {}),
+    }));
   }
 
   requirements(referencedNames: string[]): ModelAliasRequirement[] {

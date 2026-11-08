@@ -544,6 +544,11 @@ it('expands model aliases in distinctProviderFrom and blocks with runProjection 
     .work('available', run.id)
     .find((w) => w.nodeId === 'review')!;
   expect(reviewWork.executorModel).toBe('gpt-4o');
+  expect(reviewWork.modelAliasSelection).toMatchObject({
+    name: 'reviewer',
+    revision: 1,
+    candidateModel: 'gpt-4o',
+  });
   expect(reviewWork.providerDiversityBlocked).toBeUndefined();
 
   // Now test exhaustion: an alias where all candidates are anthropic
@@ -652,4 +657,24 @@ it('exports workflow bundles with alias requirements without local overrides', (
   // Imported workflow exists
   const imported = newEngine.workflow(workflowId);
   expect(imported.name).toBe('Test Workflow');
+});
+
+it('keeps an empty captured alias from becoming a literal native-model request during expansion', () => {
+  const { engine } = setup();
+  expect(
+    engine.modelAliases.expandCandidates(
+      [
+        {
+          aliasId: 'unbound-role',
+          name: 'role',
+          revision: 1,
+          candidates: [],
+        },
+      ],
+      'role',
+    ),
+  ).toEqual([]);
+  expect(engine.modelAliases.expandCandidates([], 'native-model')).toEqual([
+    { model: 'native-model' },
+  ]);
 });

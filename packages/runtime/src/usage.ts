@@ -73,6 +73,9 @@ export class Usage {
       workerId: work.workerId ?? null,
       attempt: work.attempt,
       claimedAt,
+      ...(work.modelAliasSelection
+        ? { modelAliasSelection: work.modelAliasSelection }
+        : {}),
       ...(claimedAt !== null
         ? {
             requestedTier: work.context.tier ?? null,

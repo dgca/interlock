@@ -803,6 +803,7 @@ export interface WorkRequest {
   idleNudge?: { attempt: number; activityAt: string; at: string };
   executor?: string;
   executorPermissions?: import('./executors.js').ExecutorPermissionMode;
+  modelAliasSelection?: import('./modelAliases.js').ModelAliasSelection;
   executorModel?: string;
   executorModelSource?: 'node' | 'workflow';
   executorEffort?: string | null;

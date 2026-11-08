@@ -765,9 +765,9 @@ export function formatWorkflowReport(report: WorkflowReport): string {
     '',
     'SUMMARY',
     `  Total Runs:                     ${report.summary.totalRuns}`,
-    `  Run Duration:                   ${formatDist(report.summary.durationMs)}`,
-    `  Admission Queue Wait (H8):      ${formatDist(report.summary.admissionQueueWaitMs)}`,
-    `  Human Wait Time:                ${formatDist(report.summary.humanWaitMs)}`,
+    `  Run Duration:                   ${formatElapsedDist(report.summary.durationMs)}`,
+    `  Admission Queue Wait (H8):      ${formatElapsedDist(report.summary.admissionQueueWaitMs)}`,
+    `  Human Wait Time:                ${formatElapsedDist(report.summary.humanWaitMs)}`,
     '',
   ];
 
@@ -777,8 +777,10 @@ export function formatWorkflowReport(report: WorkflowReport): string {
       '  ' +
         'Stage'.padEnd(24) +
         'Runs'.padEnd(10) +
-        'Median (ms)'.padEnd(15) +
-        'P90 (ms)',
+        'Wall median (ms)'.padEnd(18) +
+        'Wall p90 (ms)'.padEnd(18) +
+        'Active median (ms)'.padEnd(20) +
+        'Paused median (ms)',
     );
     lines.push('  ' + '-'.repeat(60));
     for (const s of report.stages) {
@@ -786,8 +788,10 @@ export function formatWorkflowReport(report: WorkflowReport): string {
         '  ' +
           s.stage.padEnd(24) +
           String(s.runCount).padEnd(10) +
-          String(s.durationMs.median ?? 0).padEnd(15) +
-          String(s.durationMs.p90 ?? 0),
+          String(s.durationMs.median ?? 0).padEnd(18) +
+          String(s.durationMs.p90 ?? 0).padEnd(18) +
+          String(s.durationMs.activeMs?.median ?? '—').padEnd(20) +
+          String(s.durationMs.pausedMs?.median ?? '—'),
       );
     }
     lines.push('');
@@ -801,8 +805,10 @@ export function formatWorkflowReport(report: WorkflowReport): string {
         'Label'.padEnd(24) +
         'Kind'.padEnd(12) +
         'Execs'.padEnd(8) +
-        'Median (ms)'.padEnd(15) +
-        'P90 (ms)',
+        'Wall median (ms)'.padEnd(18) +
+        'Wall p90 (ms)'.padEnd(18) +
+        'Active median (ms)'.padEnd(20) +
+        'Paused median (ms)',
     );
     lines.push('  ' + '-'.repeat(88));
     for (const n of report.nodes.slice(0, 20)) {
@@ -812,8 +818,10 @@ export function formatWorkflowReport(report: WorkflowReport): string {
           n.label.slice(0, 22).padEnd(24) +
           n.kind.padEnd(12) +
           String(n.executionCount).padEnd(8) +
-          String(n.durationMs.median ?? 0).padEnd(15) +
-          String(n.durationMs.p90 ?? 0),
+          String(n.durationMs.median ?? 0).padEnd(18) +
+          String(n.durationMs.p90 ?? 0).padEnd(18) +
+          String(n.durationMs.activeMs?.median ?? '—').padEnd(20) +
+          String(n.durationMs.pausedMs?.median ?? '—'),
       );
     }
     lines.push('');
@@ -821,10 +829,10 @@ export function formatWorkflowReport(report: WorkflowReport): string {
 
   lines.push('CLAIMS');
   lines.push(
-    `  Wait to Claim (New session):        ${formatDist(report.claims.newSession)}`,
+    `  Wait to Claim (New session):        ${formatElapsedDist(report.claims.newSession)}`,
   );
   lines.push(
-    `  Wait to Claim (Continuing session): ${formatDist(report.claims.continuingSession)}`,
+    `  Wait to Claim (Continuing session): ${formatElapsedDist(report.claims.continuingSession)}`,
   );
   lines.push(
     `  Total Attempts:                     ${report.claims.totalAttempts}`,
@@ -875,6 +883,21 @@ export function formatWorkflowReport(report: WorkflowReport): string {
       );
     }
   }
+  if (report.usage.byAlias?.length) {
+    lines.push('  By Captured Alias:');
+    for (const group of report.usage.byAlias) {
+      const alias = group.alias
+        ? `${group.alias.name}@${group.alias.revision}`
+        : 'Unknown';
+      const cost =
+        group.costMicros !== null
+          ? `${(group.costMicros / 1_000_000).toFixed(4)} ${group.currency ?? ''}`
+          : 'unknown';
+      lines.push(
+        `    ${alias} (${group.scope}) candidate=${group.alias ? `${group.alias.candidateModel}#${group.alias.candidateIndex + 1}` : 'unknown'} profile=${group.alias?.candidateProfileId ?? 'inherited'} effort=${group.alias?.candidateEffort === null ? 'native' : (group.alias?.candidateEffort ?? 'inherited')} reported=${group.provider}/${group.model} count=${group.count} input=${group.inputTokens} output=${group.outputTokens} cost=${cost}`,
+      );
+    }
+  }
   lines.push('');
 
   lines.push('TERMINAL OUTCOMES');
@@ -911,6 +934,18 @@ export function formatWorkflowReport(report: WorkflowReport): string {
 
   lines.push('============================================================');
   return lines.join('\n');
+}
+
+function formatElapsedDist(
+  dist: Parameters<typeof formatDist>[0] & {
+    activeMs?: Parameters<typeof formatDist>[0];
+    pausedMs?: Parameters<typeof formatDist>[0];
+  },
+): string {
+  const parts = [`wall: ${formatDist(dist)}`];
+  if (dist.activeMs) parts.push(`active: ${formatDist(dist.activeMs)}`);
+  if (dist.pausedMs) parts.push(`paused: ${formatDist(dist.pausedMs)}`);
+  return parts.join('; ');
 }
 
 function formatDist(

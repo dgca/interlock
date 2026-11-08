@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { modelAliasSelectionSchema } from './modelAliases.js';
 import { runTagsSchema } from './runTags.js';
 
 const firstReportInstant = Date.parse('0000-01-01T00:00:00.000Z');
@@ -58,10 +59,19 @@ export const distributionMetricSchema = z
 
 export type DistributionMetric = z.infer<typeof distributionMetricSchema>;
 
+/** Existing distribution values remain wall time; nested distributions share its observations. */
+export const elapsedDistributionMetricSchema = distributionMetricSchema.extend({
+  pausedMs: distributionMetricSchema.optional(),
+  activeMs: distributionMetricSchema.optional(),
+});
+export type ElapsedDistributionMetric = z.infer<
+  typeof elapsedDistributionMetricSchema
+>;
+
 export const stageDurationMetricSchema = z
   .object({
     stage: z.string(),
-    durationMs: distributionMetricSchema,
+    durationMs: elapsedDistributionMetricSchema,
     runCount: z.number().int().min(0),
   })
   .strict();
@@ -74,7 +84,7 @@ export const nodeDurationMetricSchema = z
     label: z.string(),
     kind: z.string(),
     stage: z.string().nullable().optional(),
-    durationMs: distributionMetricSchema,
+    durationMs: elapsedDistributionMetricSchema,
     executionCount: z.number().int().min(0),
   })
   .strict();
@@ -83,8 +93,8 @@ export type NodeDurationMetric = z.infer<typeof nodeDurationMetricSchema>;
 
 export const claimWaitReportSchema = z
   .object({
-    newSession: distributionMetricSchema,
-    continuingSession: distributionMetricSchema,
+    newSession: elapsedDistributionMetricSchema,
+    continuingSession: elapsedDistributionMetricSchema,
     totalAttempts: z.number().int().min(0),
     leaseExpiries: z.number().int().min(0),
     failures: z.number().int().min(0),
@@ -184,6 +194,12 @@ export const usageByProviderSchema = z
 
 export type UsageByProvider = z.infer<typeof usageByProviderSchema>;
 
+export const usageByAliasSchema = usageByModelSchema.extend({
+  alias: modelAliasSelectionSchema.nullable(),
+  scope: z.enum(['attempt', 'run']),
+});
+export type UsageByAlias = z.infer<typeof usageByAliasSchema>;
+
 export const usageCostReportSchema = z
   .object({
     tokens: tokenSummarySchema,
@@ -193,6 +209,7 @@ export const usageCostReportSchema = z
     byNode: z.array(usageByNodeSchema),
     byModel: z.array(usageByModelSchema),
     byProvider: z.array(usageByProviderSchema),
+    byAlias: z.array(usageByAliasSchema).optional(),
   })
   .strict();
 
@@ -229,9 +246,9 @@ export type TerminalOutcomesReport = z.infer<
 export const workflowReportSummarySchema = z
   .object({
     totalRuns: z.number().int().min(0),
-    durationMs: distributionMetricSchema,
-    admissionQueueWaitMs: distributionMetricSchema,
-    humanWaitMs: distributionMetricSchema,
+    durationMs: elapsedDistributionMetricSchema,
+    admissionQueueWaitMs: elapsedDistributionMetricSchema,
+    humanWaitMs: elapsedDistributionMetricSchema,
   })
   .strict();
 
