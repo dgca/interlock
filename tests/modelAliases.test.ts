@@ -11,6 +11,7 @@ import {
   type WorkflowDefinition,
 } from '@interlock/core';
 import { projectRun } from '../packages/runtime/src/runProjection';
+import { importSelection } from '../packages/runtime/src/importSelection';
 import {
   exportWorkflows,
   importWorkflows,
@@ -52,6 +53,175 @@ function publish(engine: Engine, definition: WorkflowDefinition) {
   engine.publish(workflow.id);
   return workflow.id;
 }
+
+function aliasWorkflow(model: string) {
+  const definition = blankDefinition();
+  definition.executor = 'codex';
+  definition.nodes.find((node) => node.kind === 'agent')!.model = model;
+  return definition;
+}
+
+it('rejects deleted alias names and IDs before creating runs while preserving active captures', () => {
+  const { engine } = setup();
+  const alias = engine.modelAliases.mutate({
+    action: 'create',
+    name: 'builder',
+    candidates: [{ model: 'native-model' }],
+  }) as import('@interlock/core').SavedModelAlias;
+  const named = publish(engine, aliasWorkflow(alias.name));
+  const identified = publish(engine, aliasWorkflow(alias.id));
+  const active = engine.start(named, {}).run;
+  engine.modelAliases.mutate({
+    action: 'delete',
+    id: alias.id,
+    expectedRevision: 1,
+  });
+  for (const id of [named, identified])
+    expect(() => engine.start(id, {})).toThrow(/model alias.*missing/i);
+  expect(engine.store.runs()).toHaveLength(1);
+  expect(
+    engine.modelAliases.resolveCandidates(
+      active.modelAliasCaptures,
+      alias.name,
+    ),
+  ).toEqual([{ model: 'native-model' }]);
+  expect(exportWorkflows(engine.store, named).modelAliases).toEqual([
+    { name: 'builder' },
+  ]);
+});
+
+it('rejects unbound imported alias requirements until configured and captures only the repaired start', () => {
+  const { engine } = setup();
+  engine.modelAliases.mutate({
+    action: 'create',
+    name: 'builder',
+    candidates: [{ model: 'source-model' }],
+  });
+  const id = publish(engine, aliasWorkflow('builder'));
+  const { engine: target } = setup();
+  importWorkflows(target.store, exportWorkflows(engine.store, id));
+  expect(() => target.start(id, {})).toThrow(/model alias.*missing/i);
+  expect(target.store.runs()).toEqual([]);
+  target.modelAliases.mutate({
+    action: 'create',
+    name: 'builder',
+    candidates: [{ model: 'target-model' }],
+  });
+  const run = target.start(id, {}).run;
+  expect(target.store.work('available', run.id)[0]).toMatchObject({
+    attempt: 0,
+    executorModel: 'target-model',
+  });
+});
+
+it('rejects aliases whose candidate profiles are all missing or disabled', () => {
+  const { engine } = setup();
+  engine.modelAliases.mutate({
+    action: 'create',
+    name: 'builder',
+    candidates: [{ model: 'native-model', profileId: 'missing-profile' }],
+  });
+  const id = publish(engine, aliasWorkflow('builder'));
+  expect(() => engine.start(id, {})).toThrow(/model alias.*enabled.*profile/i);
+  engine.executors.saveProfile({
+    id: 'missing-profile',
+    harness: 'codex',
+    name: 'Disabled',
+    enabled: false,
+    expectedRevision: 0,
+  });
+  expect(() => engine.start(id, {})).toThrow(/model alias.*enabled.*profile/i);
+  expect(engine.store.runs()).toEqual([]);
+  const profileSelectedByAlias = aliasWorkflow('builder');
+  delete profileSelectedByAlias.executor;
+  expect(() =>
+    engine.start(publish(engine, profileSelectedByAlias), {}),
+  ).toThrow(/model alias.*enabled.*profile/i);
+});
+
+it('keeps literal model IDs literal when an alias with that name is created after startup', () => {
+  const { engine } = setup();
+  const id = publish(engine, aliasWorkflow('native-model'));
+  const run = engine.start(id, {}).run;
+  expect(engine.store.work('available', run.id)[0].executorModel).toBe(
+    'native-model',
+  );
+  engine.modelAliases.mutate({
+    action: 'create',
+    name: 'native-model',
+    candidates: [{ model: 'different-model' }],
+  });
+  expect(
+    engine.modelAliases.resolveCandidates(
+      run.modelAliasCaptures,
+      'native-model',
+    ),
+  ).toBeNull();
+});
+
+it('round-trips authored alias IDs and binds them to locally configured names without changing captures', () => {
+  const { engine } = setup();
+  const alias = engine.modelAliases.mutate({
+    action: 'create',
+    name: 'builder',
+    candidates: [{ model: 'source-model' }],
+  }) as import('@interlock/core').SavedModelAlias;
+  const id = publish(engine, aliasWorkflow(alias.id));
+  const bundle = exportWorkflows(engine.store, id);
+  expect(bundle.formatVersion).toBe(10);
+  expect(bundle.modelAliases).toEqual([
+    { name: 'builder', reference: alias.id },
+  ]);
+  const { engine: target } = setup();
+  importSelection(target, [bundle, bundle]);
+  expect(() => target.start(id, {})).toThrow(/model alias.*missing/i);
+  target.modelAliases.mutate({
+    action: 'create',
+    name: 'builder',
+    candidates: [{ model: 'local-model' }],
+  });
+  const run = target.start(id, {}).run;
+  expect(target.store.work('available', run.id)[0].executorModel).toBe(
+    'local-model',
+  );
+  expect(run.modelAliasCaptures?.[0].reference).toBe(alias.id);
+  expect(exportWorkflows(target.store, id).modelAliases).toEqual(
+    bundle.modelAliases,
+  );
+  expect(() =>
+    target.modelAliases.mutate({
+      action: 'create',
+      name: alias.id,
+      candidates: [{ model: 'wrong-model' }],
+    }),
+  ).toThrow(/imported reference/);
+  const conflict = structuredClone(bundle);
+  conflict.modelAliases![0].name = 'different-role';
+  expect(() => importWorkflows(target.store, conflict)).toThrow(
+    /requirement conflict/,
+  );
+  expect(
+    target.modelAliases.resolveCandidates(run.modelAliasCaptures, alias.id),
+  ).toEqual([{ model: 'local-model' }]);
+});
+
+it('keeps valid native fallback candidates when an alias profile is unavailable', () => {
+  const { engine } = setup();
+  engine.modelAliases.mutate({
+    action: 'create',
+    name: 'builder',
+    candidates: [{ model: 'blocked-model', profileId: 'missing-profile' }],
+  });
+  const definition = aliasWorkflow('builder');
+  definition.nodes.find((node) => node.kind === 'agent')!.candidateModels = [
+    'builder',
+    'native-fallback',
+  ];
+  const run = engine.start(publish(engine, definition), {}).run;
+  expect(engine.store.work('available', run.id)[0].executorModel).toBe(
+    'native-fallback',
+  );
+});
 
 it('manages model aliases with revision protection and prevents duplicate names', () => {
   const { engine } = setup();

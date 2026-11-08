@@ -223,7 +223,7 @@ export function evaluateProviderDiversity(options: {
       run.modelAliasCaptures,
       raw,
     );
-    if (aliasCandidates && aliasCandidates.length > 0) {
+    if (aliasCandidates) {
       for (const ac of aliasCandidates) {
         candidates.push({
           model: ac.model,
