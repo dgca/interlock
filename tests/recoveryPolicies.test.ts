@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  Engine,
-  type HarnessAdapter,
-  type HarnessRun,
-} from '@interlock/runtime';
+import { Engine, type HarnessAdapter } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import {
   blankDefinition,

@@ -2,7 +2,6 @@ import { afterEach, expect, it } from 'vitest';
 import {
   blankDefinition,
   nodeSchema,
-  InterlockError,
   validateDefinition,
   diagnoseDraft,
   type WorkflowDefinition,

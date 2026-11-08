@@ -1,11 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
-import {
-  blankDefinition,
-  validateDefinition,
-  type Json,
-} from '@interlock/core';
+import { validateDefinition, type Json } from '@interlock/core';
 import { importStarter } from '../packages/server/src/starters';
 function addSdlc(engine: Engine) {
   importStarter(engine, { starterId: 'sdlc', requestId: 'sdlc-fixture' });

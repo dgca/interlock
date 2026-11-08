@@ -11,7 +11,6 @@ import {
   nodeSchema,
   testAssertionSchema,
   type Run,
-  type WorkflowDefinition,
 } from '@interlock/core';
 import { appRouter } from '../packages/server/src/router';
 import { workflowCall } from './fixtures/detached';

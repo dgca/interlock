@@ -3,7 +3,6 @@ import { dirname, resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import {
   VERSION,
-  type DiagnosticCategory,
   type DiagnosticCheck,
   type DiagnosticStatus,
   type DoctorOptions,
@@ -14,8 +13,6 @@ import {
   type ResourceReservation,
   type ManagedExecution,
   type PauseHold,
-  type WorkflowTrigger,
-  type Workflow,
 } from '@interlock/core';
 import type { Engine } from './index.js';
 import {

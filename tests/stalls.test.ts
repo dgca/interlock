@@ -9,7 +9,6 @@ import {
   blankDefinition,
   definitionSchema,
   stallPolicySchema,
-  type Json,
   type StallPolicy,
 } from '@interlock/core';
 const engines: Engine[] = [],

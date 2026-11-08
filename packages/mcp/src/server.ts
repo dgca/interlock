@@ -60,7 +60,6 @@ import {
   usageQuerySchema,
   setBudgetSchema,
   doctorOptionsSchema,
-  doctorReportSchema,
   reportFilterSchema,
 } from '@interlock/core';
 import {

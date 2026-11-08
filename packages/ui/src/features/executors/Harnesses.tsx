@@ -15,11 +15,7 @@ import {
   Cpu,
   Plus,
 } from 'lucide-react';
-import {
-  executorProfileSchema,
-  type ExecutorProfile,
-  type ExecutorProfileUpdate,
-} from '@interlock/core';
+import { executorProfileSchema, type ExecutorProfile } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { ActionError } from '../../components/ActionError/ActionError';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';

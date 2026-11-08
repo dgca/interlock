@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router';
 import {
   ActionIcon,
   Button as MantineButton,
-  Group,
   Menu,
   Stack,
   Text,

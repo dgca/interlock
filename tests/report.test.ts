@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { serve } from '@hono/node-server';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,13 +8,11 @@ import { Store } from '@interlock/storage';
 import {
   workflowReportSchema,
   blankDefinition,
-  type WorkflowDefinition,
   type Run,
   type WorkRequest,
   type UsageAttempt,
   type StallRecord,
   type ContextEvent,
-  type WorkHoldInterval,
 } from '@interlock/core';
 import { createApp } from '../packages/server/src/app.js';
 import { createClient } from '@interlock/client';
@@ -23,7 +21,6 @@ import {
   formatWorkflowReport,
   runReportCommand,
 } from '../packages/cli/src/commands.js';
-import { createMcpServer } from '../packages/mcp/src/server.js';
 import { createMcpClient } from '../packages/mcp/src/client.js';
 
 describe('Workflow performance and cost report (interlock report)', () => {

@@ -5,13 +5,7 @@ import { tmpdir } from 'node:os';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
-import {
-  blankDefinition,
-  definitionSchema,
-  executorProfileSchema,
-  type Json,
-  InterlockError,
-} from '@interlock/core';
+import { blankDefinition, definitionSchema } from '@interlock/core';
 import { nativeAdapters } from '../packages/runtime/src/executors/native';
 
 const engines: Engine[] = [];

@@ -26,7 +26,6 @@ import {
   type WorkRequest,
   type ModelUsage,
   type RecoveryEvent,
-  type ErrorClass,
   type Run,
   type WorkflowDefinition,
   type PauseHold,

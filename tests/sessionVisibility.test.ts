@@ -2,11 +2,7 @@ import { createServer } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
-import {
-  blankDefinition,
-  definitionSchema,
-  executorProfileSchema,
-} from '@interlock/core';
+import { blankDefinition, definitionSchema } from '@interlock/core';
 import { nativeAdapters } from '../packages/runtime/src/executors/native.js';
 import {
   evaluateSessionNameTemplate,

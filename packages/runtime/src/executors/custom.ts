@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process';
-import { setTimeout as delay } from 'node:timers/promises';
 import type { HarnessAdapter, HarnessRun, HarnessResult } from './contracts.js';
 import { HarnessResultError } from './contracts.js';
 import type { Json, ModelUsage } from '@interlock/core';

@@ -18,12 +18,9 @@ import {
 import {
   Clock,
   Coins,
-  BarChart2,
   CheckCircle2,
-  AlertTriangle,
   RefreshCw,
   Layers,
-  Cpu,
   UserCheck,
   AlertCircle,
 } from 'lucide-react';

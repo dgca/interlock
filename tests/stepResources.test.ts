@@ -7,7 +7,6 @@ import {
   nodeSchema,
   type Json,
   type Run,
-  type WorkflowNode,
   validateDefinition,
 } from '@interlock/core';
 import { Engine } from '@interlock/runtime';

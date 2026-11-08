@@ -1,9 +1,4 @@
-import type {
-  Run,
-  StallRecord,
-  RunAttention,
-  RunAttentionReason,
-} from '@interlock/core';
+import type { Run, RunAttention, RunAttentionReason } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 
 /** Human decisions roll up through owned work and stop at detached boundaries. */

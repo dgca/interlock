@@ -8,7 +8,6 @@ import {
   runQuerySchema,
   STARTED_RUN_SCHEMA,
   validateDefinition,
-  type WorkflowDefinition,
 } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
