@@ -218,9 +218,10 @@ export class ModelAliases {
       }
       if (inheritedCaptures !== undefined) continue;
       const alias = this.get(ref);
-      if (!alias && this.requirement(ref))
+      const requirement = this.requirement(ref);
+      if (!alias && requirement)
         throw new InterlockError(
-          `Model alias "${ref}" is missing. Configure its portable name before starting a new run.`,
+          `Model alias "${ref}" is missing. Configure local alias "${requirement.name}" before starting a new run.`,
         );
       if (alias) {
         captures.push({
