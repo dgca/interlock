@@ -76,6 +76,23 @@ export class HistoryRetention {
       return this.settings({ workflowId: query.workflowId });
     });
   }
+  deleteWorkflow(workflowId: string) {
+    this.store.remove('historyRetention', this.id(workflowId));
+    if (
+      !this.store
+        .list<PolicyRecord>('historyRetention')
+        .some((record) => !!record.policy)
+    ) {
+      const state = this.state();
+      if (state.nextCheckAt !== null) {
+        this.store.put('historyRetentionState', {
+          ...state,
+          nextCheckAt: null,
+        });
+        this.failedState = undefined;
+      }
+    }
+  }
   private state(): RetentionState {
     return (
       this.failedState ??

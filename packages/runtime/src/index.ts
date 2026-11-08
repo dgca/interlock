@@ -1225,7 +1225,7 @@ export class Engine {
         this.store.deleteWebhookHistory(trigger.id);
         this.store.deleteEventHistory(trigger.id);
       }
-      this.store.remove('historyRetention', `workflow:${id}`);
+      this.retention.deleteWorkflow(id);
       this.store.remove('workflows', id);
       return { id };
     });

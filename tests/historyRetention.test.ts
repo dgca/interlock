@@ -496,3 +496,51 @@ it('preserves completed prerequisites while a paused queued run needs their succ
   e.pump();
   expect(kept(e, upstream.id)).toBe(false);
 });
+
+it.each(['none', 'library', 'workflow'] as const)(
+  'updates the persisted deadline after policy workflow deletion with remaining %s policy',
+  (remaining) => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2030-01-01T00:00:00Z'));
+    const dir = mkdtempSync(join(tmpdir(), 'interlock-retention-delete-'));
+    paths.push(dir);
+    const path = join(dir, 'store.sqlite');
+    let e = setup(path);
+    const deleted = workflow(e),
+      survivor = workflow(e);
+    configure(e, { maxCompletedRuns: 0 }, deleted);
+    if (remaining === 'library') configure(e, { maxCompletedRuns: 0 });
+    if (remaining === 'workflow')
+      configure(e, { maxCompletedRuns: 0 }, survivor);
+    // Establish a future persisted deadline, then add old history before it is due.
+    e.pump();
+    const nextCheckAt = e.retention.status().nextCheckAt;
+    expect(nextCheckAt).toBe('2030-01-01T01:00:00.000Z');
+    const run = complete(e, survivor, 10);
+    e.deleteWorkflow(deleted);
+    expect(
+      e.store.get('historyRetention', `workflow:${deleted}`),
+    ).toBeUndefined();
+    expect(e.retention.status().nextCheckAt).toBe(
+      remaining === 'none' ? null : nextCheckAt,
+    );
+    const afterDeletion = e.retention.status();
+    e.pump();
+    expect(e.retention.status()).toEqual(afterDeletion);
+    expect(kept(e, run.id)).toBe(true);
+    e.stop();
+    e.store.close();
+    engines.splice(engines.indexOf(e), 1);
+    e = setup(path);
+    e.pump();
+    expect(e.retention.status().nextCheckAt).toBe(
+      remaining === 'none' ? null : nextCheckAt,
+    );
+    vi.setSystemTime(new Date('2030-01-01T02:00:00Z'));
+    e.pump();
+    expect(kept(e, run.id)).toBe(remaining === 'none');
+    expect(e.retention.status().nextCheckAt).toBe(
+      remaining === 'none' ? null : '2030-01-01T03:00:00.000Z',
+    );
+  },
+);
