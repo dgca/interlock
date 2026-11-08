@@ -785,3 +785,43 @@ it('keeps polling resources while toggling modes and omits them when saving a ti
   expect(saved.resources).toBeUndefined();
   expect(saved.timing.kind).toBe('until');
 });
+it('isolates invalid resource drafts when changing node type', async () => {
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(SettingsDialog, {
+          creating: true,
+          name: 'Test',
+          description: '',
+          definition: definitionSchema.parse({
+            nodes: [
+              { id: 'entry', kind: 'entry', label: 'Entry' },
+              { id: 'exit', kind: 'exit', label: 'Exit' },
+            ],
+            edges: [],
+          }),
+          workflows: [],
+          onApply,
+          onClose: vi.fn(),
+        }),
+      ),
+    ),
+  );
+  await select('Node type', 'script');
+  await click('Execution');
+  await act(async () =>
+    field('Resource bindings')
+      .closest('details')!
+      .querySelector('summary')!
+      .click(),
+  );
+  await fill('Resource bindings', '{broken');
+  expect(field('Resource bindings').validationMessage).toBeTruthy();
+  await select('Node type', 'fetch');
+  await click('Execution');
+  expect(field('Resource bindings').value).toBe('[]');
+  expect(field('Resource bindings').validationMessage).toBe('');
+});

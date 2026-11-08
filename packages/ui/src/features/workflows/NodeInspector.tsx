@@ -552,6 +552,7 @@ export function NodeInspector({
         {resourceStep && (
           <NodeSection name="execution">
             <ResourceBindingsEditor
+              key={`${node.id}:${node.kind}`}
               value={node.resources}
               onChange={(resources) => patch({ resources })}
             />
