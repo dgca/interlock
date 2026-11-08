@@ -208,6 +208,61 @@ describe('doctor health and readiness check', () => {
   });
 
   describe('trigger checks', () => {
+    it.each(['schedule', 'webhook', 'event'])(
+      'ignores disabled %s trigger failure history',
+      async (kind) => {
+        const { engine, store } = createEnv();
+        const workflow = engine.create('Disabled trigger');
+        engine.publish(workflow.id);
+        store.put('workflowTriggers', {
+          id: 'disabled-trigger',
+          kind,
+          workflowId: workflow.id,
+          name: 'Deliberately disabled',
+          enabled: false,
+          consecutiveFailures: 3,
+          autoPaused: { at: new Date().toISOString(), reason: 'Old failure' },
+          nextFireAt: new Date(0).toISOString(),
+        });
+        expect((await engine.doctor()).status).toBe('ok');
+      },
+    );
+    it.each(['webhook', 'event'])(
+      'detects failure and automatic pause for %s triggers',
+      async (kind) => {
+        const { engine, store } = createEnv();
+        const workflow = engine.create('Trigger target');
+        engine.publish(workflow.id);
+        store.put('workflowTriggers', {
+          id: 'failed-trigger',
+          kind,
+          workflowId: workflow.id,
+          name: 'Failing delivery',
+          enabled: true,
+          consecutiveFailures: 2,
+        });
+        expect((await engine.doctor()).checks).toContainEqual(
+          expect.objectContaining({
+            category: 'triggers',
+            status: 'warn',
+            details: expect.objectContaining({ triggerId: 'failed-trigger' }),
+          }),
+        );
+        store.put('workflowTriggers', {
+          id: 'failed-trigger',
+          kind,
+          workflowId: workflow.id,
+          name: 'Failing delivery',
+          enabled: true,
+          consecutiveFailures: 3,
+          autoPaused: {
+            at: new Date().toISOString(),
+            reason: 'Repeated failure',
+          },
+        });
+        expect((await engine.doctor()).status).toBe('fail');
+      },
+    );
     it('detects auto-paused schedules and consecutive failures', async () => {
       const { engine, store } = createEnv();
       const wf = engine.create('Target Workflow');
@@ -280,11 +335,48 @@ describe('doctor health and readiness check', () => {
   });
 
   describe('blocker checks', () => {
+    it('ignores released pauses and detects uncertain reservations without companion operation records', async () => {
+      const { engine, store } = createEnv();
+      const hold = engine.pauses.create({
+        target: { scope: 'library' },
+        actor: 'test',
+        reason: 'Maintenance',
+      });
+      engine.pauses.resume(hold.id);
+      expect((await engine.doctor()).status).toBe('ok');
+      const workflow = engine.create('Scoped pause');
+      const scoped = engine.pauses.create({
+        target: { scope: 'workflow', workflowId: workflow.id },
+        actor: 'test',
+        reason: 'Workflow maintenance',
+      });
+      expect((await engine.doctor()).status).toBe('warn');
+      engine.pauses.resume(scoped.id);
+      expect((await engine.doctor()).status).toBe('ok');
+      store.put('workResources', {
+        id: 'reservation',
+        name: 'deployment',
+        runId: 'run',
+        executionId: 'script',
+        attempt: 1,
+        state: 'uncertain',
+        acquiredAt: new Date().toISOString(),
+        tokenHash: '',
+      });
+      const report = await engine.doctor();
+      expect(report.checks).toContainEqual(
+        expect.objectContaining({
+          name: 'Uncertain resource reservations',
+          status: 'warn',
+          details: expect.objectContaining({ uncertainReservationsCount: 1 }),
+        }),
+      );
+    });
     it('detects active H3 pause holds', async () => {
       const { engine, store } = createEnv();
       store.put('pauseHolds', {
         id: 'hold-1',
-        scope: 'workspace',
+        scope: 'library',
         reason: 'Maintenance pause',
         actor: 'operator',
         createdAt: new Date().toISOString(),
@@ -430,6 +522,66 @@ describe('doctor health and readiness check', () => {
       expect(varCheck!.message).toContain(
         'references disabled variable "API_KEY"',
       );
+    });
+
+    it('reports deleted aliases and unavailable pinned prompts while retaining literal model support', async () => {
+      const { engine, store } = createEnv();
+      const alias = engine.modelAliases.mutate({
+        action: 'create',
+        name: 'builder',
+        candidates: [{ model: 'native-model' }],
+      }) as import('@interlock/core').SavedModelAlias;
+      const prompt = engine.prompts.create({
+        name: 'Pinned',
+        description: '',
+        content: 'Original',
+      });
+      const definition = blankDefinition();
+      definition.pinPromptsAtPublish = true;
+      const node = definition.nodes.find((node) => node.kind === 'agent')!;
+      node.model = alias.name;
+      node.promptIds = [prompt.id];
+      const workflow = engine.create('Readiness dependencies', '', definition);
+      engine.publish(workflow.id);
+      engine.modelAliases.mutate({
+        action: 'delete',
+        id: alias.id,
+        expectedRevision: 1,
+      });
+      engine.prompts.update(prompt.id, 1, { ...prompt, content: 'Current' });
+      store.remove('promptRevisions', `${prompt.id}:1`);
+      const report = await engine.doctor();
+      expect(report.status).toBe('fail');
+      expect(report.checks).toContainEqual(
+        expect.objectContaining({
+          name: expect.stringContaining('Missing model alias'),
+          details: expect.objectContaining({
+            workflowId: workflow.id,
+            aliasName: 'builder',
+          }),
+        }),
+      );
+      expect(report.checks).toContainEqual(
+        expect.objectContaining({
+          name: expect.stringContaining('Unavailable saved prompt'),
+          details: expect.objectContaining({
+            promptId: prompt.id,
+            revision: 1,
+          }),
+        }),
+      );
+      expect(JSON.stringify(report)).not.toContain('Original');
+      expect(JSON.stringify(report)).not.toContain('Current');
+      const literal = blankDefinition();
+      literal.agentModel = 'valid-native-model';
+      const native = engine.create('Native model', '', literal);
+      engine.publish(native.id);
+      expect(
+        (await engine.doctor()).checks.filter(
+          (check) =>
+            check.details?.workflowId === native.id && check.status !== 'ok',
+        ),
+      ).toEqual([]);
     });
 
     it('surfaces workflows with unpublished draft edits', async () => {
