@@ -587,3 +587,118 @@ it('refreshes tree cancellation availability when detached work beneath a termin
     engine.store.close();
   }
 });
+
+const liveSummary = () =>
+  container.querySelector<HTMLElement>('[role="status"][aria-live="polite"]')!;
+function summaryFixture() {
+  const engine = new Engine(new Store(':memory:'), process.cwd());
+  const definition = blankDefinition();
+  definition.nodes[1].label = 'Draft report';
+  definition.nodes[1].stage = 'Draft report';
+  const workflow = engine.create('Summary fixture', '', definition);
+  engine.publish(workflow.id);
+  const run = engine.start(workflow.id, {}).run;
+  detail = engine.inspect(run.id);
+  rpc.work.mockResolvedValue([]);
+  return { engine, id: run.id };
+}
+
+it.each([
+  ['claim_queue', 'Waiting for an agent', 'agent'],
+  ['managed_launch', 'Waiting for managed launch', 'engine'],
+  ['pause', 'Paused', 'person'],
+  ['resource', 'Waiting for a shared resource', 'engine'],
+  ['input_node', 'Waiting for external input', 'person'],
+])('announces %s once and shows the stage once', async (kind, title, actor) => {
+  const { engine, id } = summaryFixture();
+  try {
+    detail.run.waiting = {
+      kind,
+      detail: { runId: id, nodeId: 'agent' },
+      since: new Date().toISOString(),
+    };
+    detail.run.actor = actor;
+    await render(0, id);
+    const summary = liveSummary();
+    expect(summary.querySelector('strong')?.textContent).toBe(title);
+    expect(summary.textContent?.split(title).length).toBe(2);
+    expect(summary.textContent?.split('Draft report').length).toBe(2);
+    expect(summary.textContent).toContain(
+      actor[0].toUpperCase() + actor.slice(1),
+    );
+    expect(summary.getAttribute('aria-live')).toBe('polite');
+  } finally {
+    engine.stop();
+    engine.store.close();
+  }
+});
+
+it('keeps distinct step labels, recovery guidance and failed-run detail', async () => {
+  const { engine, id } = summaryFixture();
+  try {
+    detail.run.stage = 'Investigation';
+    detail.run.status = 'failed';
+    detail.run.waiting = null;
+    detail.run.actor = 'engine';
+    detail.run.error = 'Tool failed\nPrivate stack';
+    detail.handledFailure = true;
+    await render(0, id);
+    expect(liveSummary().querySelector('strong')?.textContent).toBe('Failed');
+    expect(liveSummary().textContent).toContain('Investigation');
+    expect(liveSummary().textContent).toContain('Draft report');
+    expect(liveSummary().textContent).toContain('Tool failed');
+    expect(liveSummary().textContent).toContain(
+      'Failure handled by parent recovery.',
+    );
+    const assignment = (detail.descendantWork ?? detail.work)[0];
+    assignment.status = 'held';
+    assignment.managedExecution = {
+      state: 'interrupted',
+      profileId: 'profile',
+      pendingRequests: 0,
+    };
+    detail.run.status = 'waiting';
+    detail.run.waiting = {
+      kind: 'human_request',
+      detail: { runId: id, nodeId: 'agent' },
+      since: new Date().toISOString(),
+    };
+    detail.run.actor = 'person';
+    await render(1, id);
+    expect(liveSummary().querySelector('strong')?.textContent).toBe(
+      'Recovery needed',
+    );
+    expect(liveSummary().textContent?.split('Recovery needed').length).toBe(2);
+  } finally {
+    engine.stop();
+    engine.store.close();
+  }
+});
+
+it('keeps cancellation reasons and continuation context in the live summary', async () => {
+  const { engine, id } = summaryFixture();
+  try {
+    detail.run.status = 'cancelled';
+    detail.run.waiting = null;
+    detail.run.actor = 'engine';
+    detail.run.cancellationReason = 'Stopped by operator';
+    await render(0, id);
+    expect(liveSummary().querySelector('strong')?.textContent).toBe(
+      'Cancelled',
+    );
+    expect(liveSummary().textContent).toContain(
+      'Cancellation reason: Stopped by operator',
+    );
+    detail.run.status = 'completed';
+    detail.run.chain = { index: 1, rootRunId: id, nextRunId: 'next-run' };
+    detail.chain = { maxRuns: 3, latestStatus: 'completed' };
+    await render(1, id);
+    expect(liveSummary().querySelector('strong')?.textContent).toBe(
+      'Continued as new',
+    );
+    expect(liveSummary().textContent).toContain('Chain run 1 · 3 run limit');
+  } finally {
+    engine.stop();
+    engine.store.close();
+  }
+});
