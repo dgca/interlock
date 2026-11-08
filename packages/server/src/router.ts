@@ -81,6 +81,8 @@ import {
   reportUsageSchema,
   usageQuerySchema,
   setBudgetSchema,
+  retentionScopeSchema,
+  retentionUpdateSchema,
   historyPreviewSchema,
   historyDeletionSchema,
   modelAliasReadSchema,
@@ -625,6 +627,13 @@ export const appRouter = t.router({
           throw error;
         }
       }),
+    retentionSettings: p
+      .input(retentionScopeSchema.default({}))
+      .query(({ ctx, input }) => ctx.engine.retention.settings(input)),
+    configureRetention: p
+      .input(retentionUpdateSchema)
+      .mutation(({ ctx, input }) => ctx.engine.retention.configure(input)),
+    retentionStatus: p.query(({ ctx }) => ctx.engine.retention.status()),
     previewHistoryDeletion: p
       .input(historyPreviewSchema)
       .query(({ ctx, input }) => ctx.engine.history.preview(input)),

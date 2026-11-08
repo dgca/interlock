@@ -114,6 +114,7 @@ import { executeFetch, UncertainFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 import { RunStarts } from './runStarts.js';
 import { RunAdmission } from './runAdmission.js';
+import { HistoryRetention } from './historyRetention.js';
 import { RunHistory, discoverRunTree } from './runHistory.js';
 import {
   previewRunCancellationSchema,
@@ -186,6 +187,7 @@ export class Engine {
   readonly triggers: WorkflowTriggers;
   readonly webhooks: Webhooks;
   readonly history: RunHistory;
+  readonly retention: HistoryRetention;
   readonly executors: ExecutorManager;
   readonly continuation: Continuation;
   readonly prompts: Prompts;
@@ -531,6 +533,18 @@ export class Engine {
           blockers.push(
             'Background Scripts must have a verified outcome or explicit stopped reconciliation before deleting history.',
           );
+        if (
+          store
+            .runTrees(ids)
+            .some((run) =>
+              run.executions.some((execution) =>
+                execution.childRunIds?.some((id) => !ids.has(id)),
+              ),
+            )
+        )
+          blockers.push(
+            'Incomplete descendant history must be recovered before cleanup.',
+          );
         try {
           this.executors.assertDelete(ids);
         } catch (error) {
@@ -555,11 +569,38 @@ export class Engine {
           blockers.push(
             'Pending lifecycle deliveries retain their source tree until dispatch or suppression.',
           );
+        if (
+          store
+            .pendingScheduleFires()
+            .some((fire) => fire.runId && ids.has(fire.runId)) ||
+          store
+            .pendingWebhookOutcomes()
+            .some((outcome) => ids.has(outcome.runId)) ||
+          store
+            .pendingEventDeliveries()
+            .some((delivery) => delivery.runId && ids.has(delivery.runId))
+        )
+          blockers.push(
+            'Trigger outcomes must be observed before deleting history.',
+          );
+        if (
+          store
+            .queuedRuns()
+            .some((run) =>
+              run.admission?.after.some(
+                (dependency) => dependency.runId && ids.has(dependency.runId),
+              ),
+            )
+        )
+          blockers.push(
+            'Queued admission dependencies retain this history until promotion or cancellation.',
+          );
         return blockers;
       },
       () =>
         queueMicrotask(() => this.listeners.forEach((listener) => listener())),
     );
+    this.retention = new HistoryRetention(store, this.history);
     this.trials = new TrialEnvironments(store, options.trialRoot, () =>
       this.pump(),
     );
@@ -1184,6 +1225,7 @@ export class Engine {
         this.store.deleteWebhookHistory(trigger.id);
         this.store.deleteEventHistory(trigger.id);
       }
+      this.retention.deleteWorkflow(id);
       this.store.remove('workflows', id);
       return { id };
     });
@@ -3169,6 +3211,7 @@ export class Engine {
           this.store.remove('eventAttentionStates', state.id);
       this.triggers.events.tick();
     });
+    this.retention.tick();
     this.trials.pump(new Set(this.localJobs.keys()));
   }
   quiescence(runId: string) {

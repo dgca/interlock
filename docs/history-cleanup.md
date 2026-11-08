@@ -1,6 +1,6 @@
 # Clean up run history
 
-Remove selected run trees without deleting their workflows or published versions. Cleanup is manual and permanent. It removes run values, executions, assignments, events, usage attempts, budgets, holds, context history, and settled managed execution/session records. It does not delete local harness profiles, native harness session files, backups or trial files.
+Remove selected run trees without deleting their workflows or published versions. Cleanup is permanent. You can select trees manually or enable an automatic retention policy. It removes run values, executions, assignments, events, usage attempts, budgets, holds, context history, and settled managed execution/session records. It does not delete local harness profiles, native harness session files, backups or trial files.
 
 ## Use the browser
 
@@ -36,7 +36,7 @@ Filters match root workflows. A child invocation cannot be removed independently
 
 ## Resolve protected history
 
-Finish or cancel active runs and descendants before cleanup. [Tree cancellation](workflow-execution.md#cancel-a-run-tree) can explicitly include detached descendants in one operation. Wait for native operations to close after cancellation. Whole trees and chains retain the history needed by active budget scopes.
+Finish or cancel active runs and descendants before cleanup. [Tree cancellation](workflow-execution.md#cancel-a-run-tree) can explicitly include detached descendants in one operation. Wait for native operations to close after cancellation. Whole trees and chains retain the history needed by active budget scopes. Queued admission dependencies keep their prerequisite history until promotion or cancellation.
 
 Reconcile resource reservations only after their workers stop. Uncertain reservations remain protected after cancellation or expiry. See [resource recovery](work-resources.md).
 
@@ -52,4 +52,34 @@ Minimal start-request receipts survive as deleted tombstones. Repeating an old r
 
 `storage.databaseBytes` reports SQLite's allocated pages. `storage.reusableBytes` reports whole free pages available for reuse; partially empty pages can contain additional reusable space. Deletion usually leaves the database file allocated so subsequent writes can reuse it. Offline SQLite `VACUUM` can return unused space to the filesystem, but requires maintenance time and spare disk space. Stop Interlock and preserve a backup before external database maintenance. See [SQLite compaction](https://www.sqlite.org/lang_vacuum.html).
 
-Cleanup does not run compaction or install an automatic age or count policy.
+Neither manual cleanup nor automatic retention runs compaction.
+
+## Enable automatic retention
+
+Library retention is disabled by default. Open **Harnesses → History retention**, choose **Enabled**, enter an age or count limit, and save. Workflow **Runs → History → Retention settings** offers **Inherit library policy**, **Disabled**, or **Override library policy**. Saving an enabled policy authorizes permanent scheduled deletion. Settings apply immediately without publishing a workflow. These local settings stay outside portable exports and imports.
+
+A workflow override replaces the entire library policy. Disabling an override protects that workflow from library retention. Returning to inheritance removes the override. Scope follows the root workflow, including all invoked children regardless of their own settings. Archived workflows retain their policy and remain eligible for cleanup.
+
+The library count pool contains all completed trees whose root workflows inherit the library policy. Each enabled workflow override has its own count pool. A completed tree has only terminal runs, including failed and cancelled runs. Active trees do not count. A detached descendant or rollover successor keeps its entire tree active until it ends.
+
+`maxAgeDays` accepts whole days from 1 through 36500. A tree expires only when every member was last updated before the cutoff. `maxCompletedRuns` accepts 0 through 1000000 and counts whole trees, newest first by the most recent member update, then root ID. Zero retains no unprotected completed trees. If both limits are set, exceeding either limit selects a tree. Protected completed trees still count toward the limit, but never cause deletion of an otherwise retained newest tree.
+
+The existing engine pump runs an overdue sweep after startup and checks every hour. Saving a policy makes the next check due immediately. A sweep removes at most 100 eligible roots in one transaction; eligible backlog retries after one minute. Recent terminal trees have a one-minute observation window. Pending trigger outcomes and lifecycle sources stay protected until observed or dispatched. All manual cleanup protections apply, including uncertainty, comparison evidence, detached descendants and chains. Protected history can keep the stored total above the configured count.
+
+Failed sweeps roll back the entire deletion and record a bounded error, then retry after one hour. If the database cannot store that error, the running engine retains the error and retry deadline in memory. Restart uses the persisted deadline and rechecks current policies and protections. Cleanup never stops workers, reconciles ownership, or deletes durable start, webhook, or lifecycle-trigger receipts. Scheduled cleanup removes historical reports and usage for deleted runs, just as manual cleanup does.
+
+### Configure through CLI, MCP or API
+
+Read the current scope revision before saving:
+
+```sh
+interlock run-history '{"action":"settings"}'
+interlock run-history '{"action":"configure","expectedRevision":0,"policy":{"maxAgeDays":30,"maxCompletedRuns":1000}}'
+interlock run-history '{"action":"settings","workflowId":"WORKFLOW_ID"}'
+interlock run-history '{"action":"configure","workflowId":"WORKFLOW_ID","expectedRevision":0,"policy":null}'
+interlock run-history '{"action":"status"}'
+```
+
+Use the returned `revision` as `expectedRevision`; stale saves reject without changing the policy. Set `policy:null` to disable a scope. Set `policy:"inherit"` on a workflow to remove its override. An enabled policy requires at least one threshold. Settings return `policy`, `effectivePolicy`, `inherited` and the scope revision. MCP uses the same requests inside `manage_run_history.request`; no new tool is needed. Shared API callers use `runs.retentionSettings`, `runs.configureRetention`, and `runs.retentionStatus`.
+
+Status returns `nextCheckAt`, a bounded `lastError`, `lastSweep` counts and removed JSON bytes, the interval and batch limit, and SQLite allocated and reusable bytes. It contains no run inputs, outputs or candidate lists. Use manual preview for individual tree blockers. Reusable pages reduce future database growth; allocated file size can remain unchanged. Offline VACUUM remains a separate maintenance operation.

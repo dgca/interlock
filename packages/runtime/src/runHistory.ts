@@ -58,13 +58,8 @@ export class RunHistory {
     private notify: () => void,
   ) {}
 
-  private plan(input: HistorySelection) {
-    const query = historyPreviewSchema.parse(input);
-    if (
-      query.rootRunIds &&
-      new Set(query.rootRunIds).size !== query.rootRunIds.length
-    )
-      throw new InterlockError('Select each history root only once');
+  /** Metadata only, shared by manual cleanup and automatic retention. */
+  trees() {
     const runs = this.store.historyRuns();
     const byId = new Map(runs.map((run) => [run.id, run]));
     // Parent and rollover links both join histories whose accounting and retry
@@ -114,6 +109,17 @@ export class RunHistory {
           b.root.createdAt.localeCompare(a.root.createdAt) ||
           a.root.id.localeCompare(b.root.id),
       );
+    return { byId, roots };
+  }
+
+  private plan(input: HistorySelection) {
+    const query = historyPreviewSchema.parse(input);
+    if (
+      query.rootRunIds &&
+      new Set(query.rootRunIds).size !== query.rootRunIds.length
+    )
+      throw new InterlockError('Select each history root only once');
+    const { byId, roots } = this.trees();
     if (
       query.rootRunIds?.some((id) => !roots.some((item) => item.root.id === id))
     )
@@ -142,7 +148,8 @@ export class RunHistory {
         members.some(
           (run) =>
             (run.parentRunId && !byId.has(run.parentRunId)) ||
-            (run.chainRootRunId && !byId.has(run.chainRootRunId)),
+            (run.chainRootRunId && !byId.has(run.chainRootRunId)) ||
+            (run.chainNextRunId && !byId.has(run.chainNextRunId)),
         )
       )
         blockers.push(

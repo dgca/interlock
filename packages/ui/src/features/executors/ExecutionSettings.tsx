@@ -1,4 +1,5 @@
 import { StallSettings } from './StallSettings';
+import { RetentionSettings } from '../runs/RetentionSettings';
 import { useEffect, useId, useState } from 'react';
 import {
   NativeSelect,
@@ -18,6 +19,7 @@ export function ExecutionSettings({
 }) {
   const inputId = useId();
   const [stallDirty, setStallDirty] = useState(false);
+  const [retentionDirty, setRetentionDirty] = useState(false);
   const [settings, setSettings] =
     useState<Awaited<ReturnType<typeof api.executors.settings.query>>>();
   const [value, setValue] = useState<string | number>(3);
@@ -49,7 +51,10 @@ export function ExecutionSettings({
     (typeof value === 'number' && Number.isSafeInteger(value) && value >= 1);
   const concurrency = mode === 'unlimited' ? null : value;
   const dirty = !!settings && concurrency !== settings.concurrency;
-  useEffect(() => onDirty?.(dirty || stallDirty), [dirty, stallDirty, onDirty]);
+  useEffect(
+    () => onDirty?.(dirty || stallDirty || retentionDirty),
+    [dirty, stallDirty, retentionDirty, onDirty],
+  );
   return (
     <>
       <section
@@ -175,6 +180,7 @@ export function ExecutionSettings({
         )}
       </section>
       <StallSettings onDirty={setStallDirty} />
+      <RetentionSettings onDirty={setRetentionDirty} />
     </>
   );
 }
