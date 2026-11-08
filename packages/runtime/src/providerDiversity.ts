@@ -249,6 +249,11 @@ export function evaluateProviderDiversity(options: {
     const matchedProfile = candidate.profileId
       ? profiles.find((p) => p.id === candidate.profileId)
       : profiles.find((p) => p.id === candidate.model);
+    if (
+      (candidate.profileId && !matchedProfile) ||
+      matchedProfile?.enabled === false
+    )
+      continue;
     const candidateProvider = resolveProvider({
       model: matchedProfile ? matchedProfile.model : candidate.model,
       profile: matchedProfile ?? configuredProfile,
@@ -275,6 +280,6 @@ export function evaluateProviderDiversity(options: {
     status: 'blocked',
     reason: 'provider_diversity_exhausted',
     excludedProviders: Array.from(excludedProviders),
-    details: `All candidate models [${candidates.map((c) => c.model).join(', ')}] belong to excluded providers [${Array.from(excludedProviders).join(', ')}]`,
+    details: `No available candidate model [${candidates.map((c) => c.model).join(', ')}] satisfies provider diversity; excluded providers [${Array.from(excludedProviders).join(', ')}]`,
   };
 }

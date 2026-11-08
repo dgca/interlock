@@ -174,7 +174,7 @@ it('round-trips authored alias IDs and binds them to locally configured names wi
   ]);
   const { engine: target } = setup();
   importSelection(target, [bundle, bundle]);
-  expect(() => target.start(id, {})).toThrow(/model alias.*missing/i);
+  expect(() => target.start(id, {})).toThrow(/configure.*builder/i);
   target.modelAliases.mutate({
     action: 'create',
     name: 'builder',
@@ -222,6 +222,77 @@ it('keeps valid native fallback candidates when an alias profile is unavailable'
     'native-fallback',
   );
 });
+
+it.each(['missing', 'disabled'])(
+  'skips %s alias profiles before selecting a diverse review model',
+  (state) => {
+    const { engine } = setup();
+    if (state === 'disabled')
+      engine.executors.saveProfile({
+        id: 'bad',
+        harness: 'codex',
+        name: 'Bad',
+        enabled: false,
+        model: 'gpt-bad',
+        expectedRevision: 0,
+      });
+    engine.executors.saveProfile({
+      id: 'good',
+      harness: 'codex',
+      name: 'Good',
+      enabled: true,
+      model: 'gpt-good',
+      expectedRevision: 0,
+    });
+    engine.modelAliases.mutate({
+      action: 'create',
+      name: 'reviewer',
+      candidates: [
+        { model: 'gpt-bad', profileId: 'bad' },
+        { model: 'gpt-good', profileId: 'good' },
+      ],
+    });
+    const definition = blankDefinition();
+    definition.nodes[1] = nodeSchema.parse({
+      id: 'author',
+      kind: 'agent',
+      label: 'Author',
+      model: 'claude-sonnet',
+      prompt: 'Author',
+    });
+    definition.nodes.push(
+      nodeSchema.parse({
+        id: 'review',
+        kind: 'agent',
+        label: 'Review',
+        model: 'reviewer',
+        distinctProviderFrom: ['author'],
+        prompt: 'Review',
+      }),
+    );
+    definition.edges = [
+      { id: 'a', source: 'entry', port: 'default', target: 'author' },
+      { id: 'b', source: 'author', port: 'default', target: 'review' },
+      { id: 'c', source: 'review', port: 'default', target: 'exit' },
+    ];
+    const run = engine.start(publish(engine, definition), {}).run;
+    const work = engine.store.work('available', run.id)[0];
+    const claim = engine.claim(work.id, {
+      workerId: 'test',
+      tools: [],
+      skills: [],
+      freshContext: false,
+      modelSelection: { model: 'claude-sonnet', provider: 'anthropic' },
+    });
+    engine.submit(work.id, claim.token!, {});
+    expect(engine.store.work('available', run.id)[0]).toMatchObject({
+      nodeId: 'review',
+      executor: 'good',
+      executorModel: 'gpt-good',
+      attempt: 0,
+    });
+  },
+);
 
 it('manages model aliases with revision protection and prevents duplicate names', () => {
   const { engine } = setup();
