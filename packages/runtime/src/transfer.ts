@@ -187,23 +187,25 @@ export function exportWorkflows(
   const modelAliases = new ModelAliases(store).requirements(referencedModels);
   return {
     format: 'interlock-workflows',
-    formatVersion: promptRevisions.size
-      ? 9
-      : records.some((w) => w.eventTriggers?.length)
-        ? 8
-        : records.some((w) => w.webhooks?.length)
-          ? 7
-          : modelAliases.length
-            ? 6
-            : records.some((w) => w.schedules?.length)
-              ? 5
-              : variables.length
-                ? 4
-                : records.some((w) => w.deletedVersions?.length)
-                  ? 3
-                  : prompts.length
-                    ? 2
-                    : 1,
+    formatVersion: modelAliases.some((alias) => alias.reference)
+      ? 10
+      : promptRevisions.size
+        ? 9
+        : records.some((w) => w.eventTriggers?.length)
+          ? 8
+          : records.some((w) => w.webhooks?.length)
+            ? 7
+            : modelAliases.length
+              ? 6
+              : records.some((w) => w.schedules?.length)
+                ? 5
+                : variables.length
+                  ? 4
+                  : records.some((w) => w.deletedVersions?.length)
+                    ? 3
+                    : prompts.length
+                      ? 2
+                      : 1,
     ...(prompts.length ? { prompts } : {}),
     ...(promptRevisions.size
       ? { promptRevisions: [...promptRevisions.values()] }
@@ -427,6 +429,7 @@ export function importWorkflows(
   }
   const bundle = workflowBundleSchema.parse(data);
   return store.transaction(() => {
+    new ModelAliases(store).importRequirements(bundle.modelAliases ?? []);
     new Variables(store).importRequirements(
       bundle.variables ?? [],
       options.variableBindings,

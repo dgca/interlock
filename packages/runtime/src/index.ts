@@ -311,9 +311,18 @@ export class Engine {
           const inherited = run.modelAliasCaptures?.some(
             (capture) =>
               capture.aliasId === ref ||
+              capture.reference?.toLowerCase() === ref.toLowerCase() ||
               capture.name.toLowerCase() === ref.toLowerCase(),
           );
-          if (!inherited && this.modelAliases.get(ref))
+          const originalLiteral =
+            run.modelAliasCaptures !== undefined &&
+            modelReferences(this.definition(run)).includes(ref) &&
+            !inherited;
+          if (
+            !inherited &&
+            !originalLiteral &&
+            this.modelAliases.requirement(ref)
+          )
             throw new InterlockError(
               `Model alias capture ${ref} is missing. Start a new run to capture it.`,
             );
@@ -1502,7 +1511,7 @@ export class Engine {
                   this.run(parentRunId).modelAliasCaptures ?? [],
                 )
               : this.modelAliases.capture(definition);
-        return captures.length ? { modelAliasCaptures: captures } : {};
+        return { modelAliasCaptures: captures };
       })(),
     };
     if (
@@ -2332,7 +2341,7 @@ export class Engine {
               run.modelAliasCaptures,
               item,
             );
-            if (aliasList?.length) {
+            if (aliasList) {
               expandedCandidates.push(...aliasList);
             } else {
               expandedCandidates.push({ model: item });

@@ -43,6 +43,7 @@ export interface SavedModelAlias {
 }
 
 export interface ModelAliasCapture {
+  reference?: string;
   aliasId: string;
   name: string;
   revision: number;
@@ -52,12 +53,18 @@ export interface ModelAliasCapture {
 export interface ModelAliasRequirement {
   name: string;
   description?: string;
+  reference?: string;
 }
 
 export const modelAliasRequirementSchema = z
   .object({
     name: modelAliasNameSchema,
     description: z.string().max(2000).optional(),
+    reference: executorModelSchema
+      .optional()
+      .describe(
+        'Authored alias identity when it differs from the portable name. Binds to a local alias by name.',
+      ),
   })
   .strict();
 
