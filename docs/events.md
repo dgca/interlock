@@ -8,7 +8,7 @@ In a workflow’s **Triggers** tab, choose **Add event trigger**, then select **
 
 Inspection shows the action, destination origin, signing Secret reference, header names, and timeout. URL paths, credentials, query values and header values are omitted from this summary; editing reopens the full action configuration. Secret values are never loaded into the editor.
 
-Create a trigger on the handler workflow. The handler receives the compact event object directly as its workflow input. The handler must have a compatible input contract and a retained published version before the trigger can be enabled. New triggers are disabled.
+For **Workflow handler** actions, create the trigger on the handler workflow. The handler receives the compact event object directly as its workflow input and needs a compatible input contract and a retained published version before enabling. Outbound webhook actions do not require a published handler. New triggers of either action type are disabled.
 
 ```json
 {
