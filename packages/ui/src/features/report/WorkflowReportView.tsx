@@ -27,7 +27,10 @@ import {
   UserCheck,
   AlertCircle,
 } from 'lucide-react';
-import type { WorkflowReport } from '@interlock/core';
+import type {
+  WorkflowReport,
+  ElapsedDistributionMetric,
+} from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 import { TagFields, tagRows, tagsFromRows, type TagRow } from '../runs/RunTags';
@@ -48,6 +51,11 @@ export function WorkflowReportView({
   workflowId?: string;
 }) {
   const [report, setReport] = useState<WorkflowReport | null>(null);
+  const [timeBasis, setTimeBasis] = useState<'wall' | 'activeMs' | 'pausedMs'>(
+    'wall',
+  );
+  const metric = (value?: ElapsedDistributionMetric) =>
+    timeBasis === 'wall' ? value : value?.[timeBasis];
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,7 +128,10 @@ export function WorkflowReportView({
 
   return (
     <div className={layout.page}>
-      <header className={layout.header}>
+      <header
+        className={layout.header}
+        style={{ flexDirection: 'column', alignItems: 'stretch' }}
+      >
         <div>
           <Title order={1}>Performance & Cost Report</Title>
           <Text c="dimmed" size="sm">
@@ -129,6 +140,20 @@ export function WorkflowReportView({
           </Text>
         </div>
         <Group gap="sm">
+          <Select
+            aria-label="Duration basis"
+            value={timeBasis}
+            onChange={(value) =>
+              setTimeBasis((value as typeof timeBasis) ?? 'wall')
+            }
+            data={[
+              { value: 'wall', label: 'Wall time' },
+              { value: 'activeMs', label: 'Active time (excludes pauses)' },
+              { value: 'pausedMs', label: 'Paused time' },
+            ]}
+            size="sm"
+            style={{ width: 270, maxWidth: '100%' }}
+          />
           <Select
             placeholder="All Workflows"
             clearable
@@ -262,10 +287,10 @@ export function WorkflowReportView({
                 <Clock size={16} />
               </Group>
               <Text fz="xl" fw={700}>
-                {formatMs(summary?.durationMs.median)}
+                {formatMs(metric(summary?.durationMs)?.median)}
               </Text>
               <Text size="xs" c="dimmed">
-                p90: {formatMs(summary?.durationMs.p90)}
+                p90: {formatMs(metric(summary?.durationMs)?.p90)}
               </Text>
             </Card>
 
@@ -277,10 +302,10 @@ export function WorkflowReportView({
                 <Clock size={16} />
               </Group>
               <Text fz="xl" fw={700}>
-                {formatMs(summary?.admissionQueueWaitMs.median)}
+                {formatMs(metric(summary?.admissionQueueWaitMs)?.median)}
               </Text>
               <Text size="xs" c="dimmed">
-                p90: {formatMs(summary?.admissionQueueWaitMs.p90)}
+                p90: {formatMs(metric(summary?.admissionQueueWaitMs)?.p90)}
               </Text>
             </Card>
 
@@ -292,10 +317,10 @@ export function WorkflowReportView({
                 <UserCheck size={16} />
               </Group>
               <Text fz="xl" fw={700}>
-                {formatMs(summary?.humanWaitMs.median)}
+                {formatMs(metric(summary?.humanWaitMs)?.median)}
               </Text>
               <Text size="xs" c="dimmed">
-                p90: {formatMs(summary?.humanWaitMs.p90)}
+                p90: {formatMs(metric(summary?.humanWaitMs)?.p90)}
               </Text>
             </Card>
 
@@ -340,15 +365,15 @@ export function WorkflowReportView({
                 <Group justify="space-between">
                   <Text size="sm">New Session Wait (Median / P90):</Text>
                   <Text size="sm" fw={600}>
-                    {formatMs(claims?.newSession.median)} /{' '}
-                    {formatMs(claims?.newSession.p90)}
+                    {formatMs(metric(claims?.newSession)?.median)} /{' '}
+                    {formatMs(metric(claims?.newSession)?.p90)}
                   </Text>
                 </Group>
                 <Group justify="space-between">
                   <Text size="sm">Continuing Session Wait (Median / P90):</Text>
                   <Text size="sm" fw={600}>
-                    {formatMs(claims?.continuingSession.median)} /{' '}
-                    {formatMs(claims?.continuingSession.p90)}
+                    {formatMs(metric(claims?.continuingSession)?.median)} /{' '}
+                    {formatMs(metric(claims?.continuingSession)?.p90)}
                   </Text>
                 </Group>
                 <Group justify="space-between">
@@ -429,8 +454,12 @@ export function WorkflowReportView({
                       <Table.Tr key={st.stage}>
                         <Table.Td fw={500}>{st.stage}</Table.Td>
                         <Table.Td>{st.runCount}</Table.Td>
-                        <Table.Td>{formatMs(st.durationMs.median)}</Table.Td>
-                        <Table.Td>{formatMs(st.durationMs.p90)}</Table.Td>
+                        <Table.Td>
+                          {formatMs(metric(st.durationMs)?.median)}
+                        </Table.Td>
+                        <Table.Td>
+                          {formatMs(metric(st.durationMs)?.p90)}
+                        </Table.Td>
                       </Table.Tr>
                     ))}
                   </Table.Tbody>
@@ -551,6 +580,87 @@ export function WorkflowReportView({
                 </Table.Tbody>
               </Table>
             )}
+            {usage?.byAlias && usage.byAlias.length > 0 && (
+              <>
+                <Title order={4} size="h5" mt="lg" mb="sm">
+                  Captured model aliases
+                </Title>
+                <Text size="xs" c="dimmed" mb="sm">
+                  Alias revisions describe assignment requests. Reported models
+                  describe supplied usage. Unknown includes legacy and native
+                  assignments; run overhead has no assigned alias.
+                </Text>
+                <Table.ScrollContainer minWidth={900}>
+                  <Table striped highlightOnHover>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Alias / revision</Table.Th>
+                        <Table.Th>Requested candidate</Table.Th>
+                        <Table.Th>Reported provider / model</Table.Th>
+                        <Table.Th>Scope</Table.Th>
+                        <Table.Th>Input tokens</Table.Th>
+                        <Table.Th>Output tokens</Table.Th>
+                        <Table.Th>Cost</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {usage.byAlias.map((group) => (
+                        <Table.Tr
+                          key={JSON.stringify([
+                            group.alias,
+                            group.scope,
+                            group.provider,
+                            group.model,
+                            group.currency,
+                          ])}
+                        >
+                          <Table.Td>
+                            {group.alias
+                              ? `${group.alias.name} @${group.alias.revision}`
+                              : 'Unknown'}
+                          </Table.Td>
+                          <Table.Td>
+                            {group.alias
+                              ? `${group.alias.candidateModel} (#${group.alias.candidateIndex + 1})`
+                              : '—'}
+                            {group.alias &&
+                              (group.alias.candidateProfileId ||
+                                group.alias.candidateEffort !== undefined) && (
+                                <Text size="xs" c="dimmed">
+                                  {group.alias.candidateProfileId ??
+                                    'Inherited profile'}{' '}
+                                  ·{' '}
+                                  {group.alias.candidateEffort === null
+                                    ? 'Native effort'
+                                    : (group.alias.candidateEffort ??
+                                      'Inherited effort')}
+                                </Text>
+                              )}
+                          </Table.Td>
+                          <Table.Td>
+                            {group.provider} / {group.model}
+                          </Table.Td>
+                          <Table.Td>
+                            {group.scope === 'run' ? 'Run overhead' : 'Attempt'}
+                          </Table.Td>
+                          <Table.Td>
+                            {group.inputTokens.toLocaleString()}
+                          </Table.Td>
+                          <Table.Td>
+                            {group.outputTokens.toLocaleString()}
+                          </Table.Td>
+                          <Table.Td>
+                            {group.costMicros !== null
+                              ? `${(group.costMicros / 1_000_000).toFixed(4)} ${group.currency ?? ''}`
+                              : '—'}
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </Table.ScrollContainer>
+              </>
+            )}
           </Card>
 
           {/* Node Durations */}
@@ -577,8 +687,10 @@ export function WorkflowReportView({
                       <Table.Td>{n.kind}</Table.Td>
                       <Table.Td>{n.stage ?? '—'}</Table.Td>
                       <Table.Td>{n.executionCount}</Table.Td>
-                      <Table.Td>{formatMs(n.durationMs.median)}</Table.Td>
-                      <Table.Td>{formatMs(n.durationMs.p90)}</Table.Td>
+                      <Table.Td>
+                        {formatMs(metric(n.durationMs)?.median)}
+                      </Table.Td>
+                      <Table.Td>{formatMs(metric(n.durationMs)?.p90)}</Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Tbody>

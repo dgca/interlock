@@ -7,6 +7,7 @@ import {
   modelReferences,
   type SavedModelAlias,
   type ModelAliasCandidate,
+  type ExpandedModelCandidate,
   type ModelAliasCapture,
   type ModelAliasRequirement,
   type ModelAliasRead,
@@ -23,7 +24,61 @@ export class ModelAliases {
     const byId = this.store.get<SavedModelAlias>('modelAliases', idOrName);
     if (byId) return byId;
     const list = this.store.list<SavedModelAlias>('modelAliases');
-    return list.find((a) => a.name.toLowerCase() === idOrName.toLowerCase());
+    const name =
+      this.store.get<ModelAliasRequirement>(
+        'modelAliasRequirements',
+        idOrName.toLowerCase(),
+      )?.name ?? idOrName;
+    return list.find((a) => a.name.toLowerCase() === name.toLowerCase());
+  }
+
+  requirement(reference: string): ModelAliasRequirement | undefined {
+    const alias =
+      this.get(reference) ??
+      this.store.get<ModelAliasRequirement>(
+        'modelAliasRequirements',
+        reference.toLowerCase(),
+      );
+    if (!alias) return undefined;
+    return {
+      name: alias.name,
+      ...(alias.description ? { description: alias.description } : {}),
+      ...(reference.toLowerCase() !== alias.name.toLowerCase()
+        ? { reference }
+        : {}),
+    };
+  }
+
+  importRequirements(requirements: ModelAliasRequirement[]) {
+    for (const requirement of requirements) {
+      for (const reference of [
+        requirement.name,
+        ...(requirement.reference ? [requirement.reference] : []),
+      ]) {
+        const existing = this.requirement(reference);
+        if (
+          existing &&
+          existing.name.toLowerCase() !== requirement.name.toLowerCase()
+        )
+          throw new InterlockError(
+            `Model alias requirement conflict for ${reference}`,
+          );
+        this.store.put('modelAliasRequirements', {
+          id: reference.toLowerCase(),
+          name: requirement.name,
+          description: requirement.description,
+        });
+      }
+    }
+  }
+
+  private remember(alias: SavedModelAlias) {
+    for (const reference of [alias.id, alias.name])
+      this.store.put('modelAliasRequirements', {
+        id: reference.toLowerCase(),
+        name: alias.name,
+        description: alias.description,
+      });
   }
 
   list(options: { search?: string; offset?: number; limit?: number } = {}) {
@@ -76,6 +131,7 @@ export class ModelAliases {
           'Model alias changed elsewhere. Reload before saving. Your edits have not been saved.',
         );
       }
+      this.remember(existing);
       if (q.action === 'delete') {
         this.store.remove('modelAliases', existing.id);
         return { id: existing.id };
@@ -92,11 +148,20 @@ export class ModelAliases {
       existing.revision++;
       existing.updatedAt = stamp();
       this.store.put('modelAliases', existing);
+      this.remember(existing);
       return existing;
     });
   }
 
   private checkName(name: string, excludeId?: string) {
+    const requirement = this.store.get<ModelAliasRequirement>(
+      'modelAliasRequirements',
+      name.toLowerCase(),
+    );
+    if (requirement && requirement.name.toLowerCase() !== name.toLowerCase())
+      throw new InterlockError(
+        `Alias name "${name}" is an imported reference for "${requirement.name}". Choose a different name.`,
+      );
     const existing = this.store
       .list<SavedModelAlias>('modelAliases')
       .find(
@@ -127,6 +192,7 @@ export class ModelAliases {
       updatedAt: time,
     };
     this.store.put('modelAliases', alias);
+    this.remember(alias);
     return alias;
   }
 
@@ -141,16 +207,26 @@ export class ModelAliases {
     for (const ref of refs) {
       if (seen.has(ref)) continue;
       const inherited = inheritedCaptures?.find(
-        (c) => c.name.toLowerCase() === ref.toLowerCase() || c.aliasId === ref,
+        (c) =>
+          c.reference?.toLowerCase() === ref.toLowerCase() ||
+          c.name.toLowerCase() === ref.toLowerCase() ||
+          c.aliasId === ref,
       );
       if (inherited) {
         captures.push(inherited);
         seen.add(ref);
         continue;
       }
+      if (inheritedCaptures !== undefined) continue;
       const alias = this.get(ref);
+      const requirement = this.requirement(ref);
+      if (!alias && requirement)
+        throw new InterlockError(
+          `Model alias "${ref}" is missing. Configure local alias "${requirement.name}" before starting a new run.`,
+        );
       if (alias) {
         captures.push({
+          reference: ref,
           aliasId: alias.id,
           name: alias.name,
           revision: alias.revision,
@@ -159,6 +235,36 @@ export class ModelAliases {
         seen.add(ref);
       }
     }
+    if (inheritedCaptures === undefined)
+      for (const node of definition.nodes) {
+        if (node.kind !== 'agent' || node.executor === null) continue;
+        const model = node.model ?? definition.agentModel;
+        const pool = node.candidateModels?.length
+          ? node.candidateModels
+          : model
+            ? [model]
+            : [];
+        const aliases = pool.map((reference) =>
+          this.resolveCandidates(captures, reference),
+        );
+        if (!aliases.some((candidates) => candidates !== null)) continue;
+        const candidates = pool.flatMap(
+          (reference, index) => aliases[index] ?? [{ model: reference }],
+        );
+        if (
+          !candidates.some(
+            (candidate) =>
+              !candidate.profileId ||
+              this.store.get<{ enabled: boolean }>(
+                'executorProfiles',
+                candidate.profileId,
+              )?.enabled,
+          )
+        )
+          throw new InterlockError(
+            `Model alias candidates for "${node.label}" have no enabled executor profile. Configure an available candidate before starting a new run.`,
+          );
+      }
     return captures;
   }
 
@@ -170,13 +276,46 @@ export class ModelAliases {
       const captured = captures.find(
         (c) =>
           c.name.toLowerCase() === modelOrAlias.toLowerCase() ||
+          c.reference?.toLowerCase() === modelOrAlias.toLowerCase() ||
           c.aliasId === modelOrAlias,
       );
       if (captured) return captured.candidates;
+      return null;
     }
     const live = this.get(modelOrAlias);
     if (live) return live.candidates;
     return null;
+  }
+
+  expandCandidates(
+    captures: ModelAliasCapture[] | undefined,
+    reference: string,
+  ): ExpandedModelCandidate[] {
+    const candidates = this.resolveCandidates(captures, reference);
+    if (candidates === null) return [{ model: reference }];
+    // Resolution returns the captured array when historical evidence exists.
+    // Live-only legacy resolution must not invent a captured revision.
+    const capture = captures?.find((item) => item.candidates === candidates);
+    return candidates.map((candidate, candidateIndex) => ({
+      ...candidate,
+      ...(capture
+        ? {
+            modelAliasSelection: {
+              aliasId: capture.aliasId,
+              name: capture.name,
+              revision: capture.revision,
+              candidateModel: candidate.model,
+              candidateIndex,
+              ...(candidate.profileId
+                ? { candidateProfileId: candidate.profileId }
+                : {}),
+              ...(candidate.effort !== undefined
+                ? { candidateEffort: candidate.effort }
+                : {}),
+            },
+          }
+        : {}),
+    }));
   }
 
   requirements(referencedNames: string[]): ModelAliasRequirement[] {
@@ -184,11 +323,12 @@ export class ModelAliases {
     const seen = new Set<string>();
     for (const name of referencedNames) {
       if (seen.has(name.toLowerCase())) continue;
-      const alias = this.get(name);
+      const alias = this.requirement(name);
       if (alias) {
         requirements.push({
           name: alias.name,
           ...(alias.description ? { description: alias.description } : {}),
+          ...(alias.reference ? { reference: alias.reference } : {}),
         });
         seen.add(name.toLowerCase());
       }

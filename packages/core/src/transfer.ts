@@ -21,6 +21,7 @@ export const workflowBundleSchema = z
       z.literal(7),
       z.literal(8),
       z.literal(9),
+      z.literal(10),
     ]),
     variables: z.array(variableRequirementSchema).max(4096).optional(),
     prompts: z.array(savedPromptSchema).optional(),
@@ -86,6 +87,15 @@ export const workflowBundleSchema = z
       .min(1),
   })
   .superRefine((bundle, ctx) => {
+    if (
+      bundle.formatVersion < 10 &&
+      bundle.modelAliases?.some((alias) => alias.reference)
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'Authored model alias identities require bundle formatVersion 10',
+      });
     for (const workflow of bundle.workflows)
       for (const version of workflow.versions) {
         const references = promptIds(version.definition);
@@ -143,7 +153,7 @@ export const workflowBundleSchema = z
         message:
           'Pinned prompt snapshots must have unique referenced identities and revisions',
       });
-    if (bundle.formatVersion === 9) {
+    if (bundle.formatVersion >= 9) {
       const supplied = new Set([
         ...keys,
         ...(bundle.prompts ?? []).map(

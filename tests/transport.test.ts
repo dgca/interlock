@@ -89,6 +89,35 @@ it.each(['stdio', 'http'])(
     };
     try {
       await client.connect(transport);
+      // These assertions exercise pause readiness; keep harness discovery isolated
+      // from the native catalog mocks later in this shared transport scenario.
+      const readinessProfiles = vi
+        .spyOn(engine.executors, 'listProfiles')
+        .mockResolvedValue([]);
+      try {
+        const doctorPause = engine.pauses.create({
+          target: { scope: 'library' },
+          actor: 'transport-test',
+          reason: 'Readiness check',
+        });
+        const pausedReadiness = await call('doctor', {});
+        expect(pausedReadiness.checks).toContainEqual(
+          expect.objectContaining({
+            name: 'Active pause holds (H3)',
+            status: 'warn',
+          }),
+        );
+        engine.pauses.resume(doctorPause.id);
+        const resumedReadiness = await call('doctor', {});
+        expect(
+          resumedReadiness.checks.some(
+            (check: { name: string }) =>
+              check.name === 'Active pause holds (H3)',
+          ),
+        ).toBe(false);
+      } finally {
+        readinessProfiles.mockRestore();
+      }
       expect(
         (await call('list_workflows', {})).some(
           (item: { id: string }) => item.id === w.id,
@@ -177,6 +206,27 @@ it.each(['stdio', 'http'])(
         draftRevision: engine.workflow(w.id).draftRevision,
       });
       const toolDiscovery = await client.listTools();
+      expect(
+        toolDiscovery.tools.find((tool) => tool.name === 'workflow_report')
+          ?.description,
+      ).toContain('usage.byAlias');
+      expect(
+        (await call('workflow_report', { workflowId: w.id })).usage.byAlias,
+      ).toEqual([]);
+
+      expect(
+        toolDiscovery.tools.find((tool) => tool.name === 'workflow_report')
+          ?.description,
+      ).toContain('pausedMs/activeMs');
+      expect(
+        (await call('workflow_report', { workflowId: w.id })).summary
+          .durationMs,
+      ).toMatchObject({
+        count: 0,
+        pausedMs: { count: 0 },
+        activeMs: { count: 0 },
+      });
+
       const resourceTool = toolDiscovery.tools.find(
         (t) => t.name === 'manage_work_resources',
       )!;

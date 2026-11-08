@@ -6,6 +6,8 @@ import {
   type WorkflowNode,
   type WorkflowDefinition,
   type ExecutorProfile,
+  type ExpandedModelCandidate,
+  type ModelAliasSelection,
 } from '@interlock/core';
 import type { Engine } from './index.js';
 
@@ -13,6 +15,7 @@ export type ProviderDiversityEvaluation =
   | {
       status: 'selected';
       candidate: string;
+      modelAliasSelection?: ModelAliasSelection;
       candidateProfileId?: string;
       candidateEffort?: string | null;
       provider: string;
@@ -200,12 +203,6 @@ export function evaluateProviderDiversity(options: {
       ? profiles.find((p) => p.id === (node.executor ?? definition.executor))
       : null;
 
-  interface DiversityCandidate {
-    model: string;
-    profileId?: string;
-    effort?: string | null;
-  }
-
   const rawCandidates: string[] = [];
   if (node.candidateModels && node.candidateModels.length > 0) {
     rawCandidates.push(...node.candidateModels);
@@ -217,23 +214,11 @@ export function evaluateProviderDiversity(options: {
     rawCandidates.push(definition.agentModel);
   }
 
-  const candidates: DiversityCandidate[] = [];
+  const candidates: ExpandedModelCandidate[] = [];
   for (const raw of rawCandidates) {
-    const aliasCandidates = engine.modelAliases.resolveCandidates(
-      run.modelAliasCaptures,
-      raw,
+    candidates.push(
+      ...engine.modelAliases.expandCandidates(run.modelAliasCaptures, raw),
     );
-    if (aliasCandidates && aliasCandidates.length > 0) {
-      for (const ac of aliasCandidates) {
-        candidates.push({
-          model: ac.model,
-          profileId: ac.profileId,
-          effort: ac.effort,
-        });
-      }
-    } else {
-      candidates.push({ model: raw });
-    }
   }
 
   if (candidates.length === 0) {
@@ -249,6 +234,11 @@ export function evaluateProviderDiversity(options: {
     const matchedProfile = candidate.profileId
       ? profiles.find((p) => p.id === candidate.profileId)
       : profiles.find((p) => p.id === candidate.model);
+    if (
+      (candidate.profileId && !matchedProfile) ||
+      matchedProfile?.enabled === false
+    )
+      continue;
     const candidateProvider = resolveProvider({
       model: matchedProfile ? matchedProfile.model : candidate.model,
       profile: matchedProfile ?? configuredProfile,
@@ -259,6 +249,9 @@ export function evaluateProviderDiversity(options: {
       return {
         status: 'selected',
         candidate: candidate.model,
+        ...(candidate.modelAliasSelection
+          ? { modelAliasSelection: candidate.modelAliasSelection }
+          : {}),
         candidateProfileId:
           candidate.profileId ??
           (profiles.some((p) => p.id === candidate.model)
@@ -275,6 +268,6 @@ export function evaluateProviderDiversity(options: {
     status: 'blocked',
     reason: 'provider_diversity_exhausted',
     excludedProviders: Array.from(excludedProviders),
-    details: `All candidate models [${candidates.map((c) => c.model).join(', ')}] belong to excluded providers [${Array.from(excludedProviders).join(', ')}]`,
+    details: `No available candidate model [${candidates.map((c) => c.model).join(', ')}] satisfies provider diversity; excluded providers [${Array.from(excludedProviders).join(', ')}]`,
   };
 }

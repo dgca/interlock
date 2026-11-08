@@ -43,21 +43,44 @@ export interface SavedModelAlias {
 }
 
 export interface ModelAliasCapture {
+  reference?: string;
   aliasId: string;
   name: string;
   revision: number;
   candidates: ModelAliasCandidate[];
 }
 
+export const modelAliasSelectionSchema = z
+  .object({
+    aliasId: z.string().min(1),
+    name: modelAliasNameSchema,
+    revision: z.number().int().positive(),
+    candidateModel: executorModelSchema,
+    candidateIndex: z.number().int().min(0).max(31),
+    candidateProfileId: executorReferenceSchema.optional(),
+    candidateEffort: executorEffortSchema.nullable().optional(),
+  })
+  .strict();
+export type ModelAliasSelection = z.infer<typeof modelAliasSelectionSchema>;
+export type ExpandedModelCandidate = ModelAliasCandidate & {
+  modelAliasSelection?: ModelAliasSelection;
+};
+
 export interface ModelAliasRequirement {
   name: string;
   description?: string;
+  reference?: string;
 }
 
 export const modelAliasRequirementSchema = z
   .object({
     name: modelAliasNameSchema,
     description: z.string().max(2000).optional(),
+    reference: executorModelSchema
+      .optional()
+      .describe(
+        'Authored alias identity when it differs from the portable name. Binds to a local alias by name.',
+      ),
   })
   .strict();
 

@@ -113,6 +113,22 @@ it.each(['http', 'stdio'])(
       expect(bundle.modelAliases).toEqual([
         { name: 'builder', description: 'Builder agent' },
       ]);
+      const identified = structuredClone(d);
+      if (identified.nodes[1].kind !== 'agent') throw Error('Expected Agent');
+      identified.nodes[1].model = alias.id;
+      const identifiedWorkflow = await call('create_workflow', {
+        name: 'Alias ID workflow',
+        definition: identified,
+      });
+      await call('publish_workflow', { id: identifiedWorkflow.id });
+      const identifiedBundle = await call('export_workflow', {
+        id: identifiedWorkflow.id,
+      });
+      expect(identifiedBundle).toMatchObject({
+        formatVersion: 10,
+        modelAliases: [{ name: 'builder', reference: alias.id }],
+      });
+      await call('import_workflows', { bundle: identifiedBundle });
 
       // Update alias
       const updated = await call('manage_model_aliases', {
@@ -134,6 +150,34 @@ it.each(['http', 'stdio'])(
         },
       });
       expect(deleted.id).toBe(alias.id);
+      const before = engine.store.runs().length;
+      await call('start_run', { workflowId: w.id, input: {} }, true);
+      await call(
+        'start_run',
+        { workflowId: identifiedWorkflow.id, input: {} },
+        true,
+      );
+      expect(engine.store.runs()).toHaveLength(before);
+      const existing = await call('get_run', { id: run.runId });
+      expect(existing.run.modelAliasCaptures[0].candidates[0].model).toBe(
+        'claude-3-7-sonnet',
+      );
+      await call('manage_model_aliases', {
+        request: {
+          action: 'create',
+          name: 'builder',
+          candidates: [{ model: 'repaired-model' }],
+        },
+      });
+      const repaired = await call('start_run', {
+        workflowId: identifiedWorkflow.id,
+        input: {},
+      });
+      const repairedRun = await call('get_run', { id: repaired.runId });
+      expect(repairedRun.run.modelAliasCaptures[0]).toMatchObject({
+        reference: alias.id,
+        candidates: [{ model: 'repaired-model' }],
+      });
     } finally {
       await client.close();
       engine.stop();
