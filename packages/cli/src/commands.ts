@@ -894,7 +894,7 @@ export function formatWorkflowReport(report: WorkflowReport): string {
           ? `${(group.costMicros / 1_000_000).toFixed(4)} ${group.currency ?? ''}`
           : 'unknown';
       lines.push(
-        `    ${alias} (${group.scope}) candidate=${group.alias?.candidateModel ?? 'unknown'} reported=${group.provider}/${group.model} count=${group.count} input=${group.inputTokens} output=${group.outputTokens} cost=${cost}`,
+        `    ${alias} (${group.scope}) candidate=${group.alias ? `${group.alias.candidateModel}#${group.alias.candidateIndex + 1}` : 'unknown'} profile=${group.alias?.candidateProfileId ?? 'inherited'} effort=${group.alias?.candidateEffort === null ? 'native' : (group.alias?.candidateEffort ?? 'inherited')} reported=${group.provider}/${group.model} count=${group.count} input=${group.inputTokens} output=${group.outputTokens} cost=${cost}`,
       );
     }
   }

@@ -9,6 +9,7 @@ import {
   nodeSchema,
   workflowReportSchema,
   type Run,
+  type ModelAliasSelection,
 } from '@interlock/core';
 import { formatWorkflowReport } from '../packages/cli/src/commands.js';
 
@@ -24,12 +25,14 @@ const builder = {
   name: 'builder',
   revision: 1,
   candidateModel: 'concrete',
+  candidateIndex: 0,
 };
 const reviewer = {
   aliasId: 'reviewer-id',
   name: 'reviewer',
   revision: 2,
   candidateModel: 'concrete',
+  candidateIndex: 0,
 };
 const model = (tokens = 10, currency = 'USD') => ({
   provider: 'provider',
@@ -68,7 +71,7 @@ function setup() {
 }
 function attempt(
   id: string,
-  alias?: typeof builder,
+  alias?: ModelAliasSelection,
   tokens = 10,
   currency = 'USD',
 ) {
@@ -246,6 +249,62 @@ describe('captured alias report attribution', () => {
     engine = new Engine(store, dir);
     expect(engine.report({}).usage.byAlias).toEqual(report.usage.byAlias);
   });
+  it('distinguishes selected candidates sharing a model but differing in profile and effort', () => {
+    setup();
+    for (const id of ['primary', 'backup'])
+      engine.executors.saveProfile({
+        id,
+        name: id,
+        harness: 'codex',
+        enabled: true,
+        expectedRevision: 0,
+      });
+    engine.modelAliases.mutate({
+      action: 'create',
+      name: 'role',
+      candidates: [
+        { model: 'gpt-4o', profileId: 'primary', effort: 'low' },
+        { model: 'gpt-4o', profileId: 'backup', effort: 'high' },
+      ],
+    });
+    const def = blankDefinition();
+    def.nodes[1] = nodeSchema.parse({
+      id: 'agent',
+      kind: 'agent',
+      label: 'Agent',
+      prompt: 'Work',
+      model: 'role',
+    });
+    const wf = engine.create('Fallback candidate identity', '', def);
+    engine.publish(wf.id);
+    const firstRun = engine.start(wf.id, {}).run;
+    const first = store.work('available', firstRun.id)[0];
+    engine.executors.saveProfile({
+      id: 'primary',
+      name: 'primary',
+      harness: 'codex',
+      enabled: false,
+      expectedRevision: 1,
+    });
+    const secondRun = engine.start(wf.id, {}).run;
+    const second = store.work('available', secondRun.id)[0];
+    expect(first.modelAliasSelection).toMatchObject({
+      candidateIndex: 0,
+      candidateProfileId: 'primary',
+      candidateEffort: 'low',
+    });
+    expect(second.modelAliasSelection).toMatchObject({
+      candidateIndex: 1,
+      candidateProfileId: 'backup',
+      candidateEffort: 'high',
+    });
+    attempt('first-candidate', first.modelAliasSelection!);
+    attempt('second-candidate', second.modelAliasSelection!);
+    const groups = engine.report({}).usage.byAlias!;
+    expect(groups).toHaveLength(2);
+    expect(groups.map((group) => group.alias?.candidateIndex)).toEqual([0, 1]);
+  });
+
   it('keeps candidate, revision and currency groups separate without changing totals', () => {
     setup();
     attempt('one', builder);

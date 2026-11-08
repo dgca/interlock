@@ -189,7 +189,7 @@ export class ModelAliases {
     // Resolution returns the captured array when historical evidence exists.
     // Live-only legacy resolution must not invent a captured revision.
     const capture = captures?.find((item) => item.candidates === candidates);
-    return candidates.map((candidate) => ({
+    return candidates.map((candidate, candidateIndex) => ({
       ...candidate,
       ...(capture
         ? {
@@ -198,6 +198,13 @@ export class ModelAliases {
               name: capture.name,
               revision: capture.revision,
               candidateModel: candidate.model,
+              candidateIndex,
+              ...(candidate.profileId
+                ? { candidateProfileId: candidate.profileId }
+                : {}),
+              ...(candidate.effort !== undefined
+                ? { candidateEffort: candidate.effort }
+                : {}),
             },
           }
         : {}),

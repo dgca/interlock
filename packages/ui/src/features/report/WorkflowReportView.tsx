@@ -620,7 +620,22 @@ export function WorkflowReportView({
                               : 'Unknown'}
                           </Table.Td>
                           <Table.Td>
-                            {group.alias?.candidateModel ?? '—'}
+                            {group.alias
+                              ? `${group.alias.candidateModel} (#${group.alias.candidateIndex + 1})`
+                              : '—'}
+                            {group.alias &&
+                              (group.alias.candidateProfileId ||
+                                group.alias.candidateEffort !== undefined) && (
+                                <Text size="xs" c="dimmed">
+                                  {group.alias.candidateProfileId ??
+                                    'Inherited profile'}{' '}
+                                  ·{' '}
+                                  {group.alias.candidateEffort === null
+                                    ? 'Native effort'
+                                    : (group.alias.candidateEffort ??
+                                      'Inherited effort')}
+                                </Text>
+                              )}
                           </Table.Td>
                           <Table.Td>
                             {group.provider} / {group.model}

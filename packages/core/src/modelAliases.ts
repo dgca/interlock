@@ -55,6 +55,9 @@ export const modelAliasSelectionSchema = z
     name: modelAliasNameSchema,
     revision: z.number().int().positive(),
     candidateModel: executorModelSchema,
+    candidateIndex: z.number().int().min(0).max(31),
+    candidateProfileId: executorReferenceSchema.optional(),
+    candidateEffort: executorEffortSchema.nullable().optional(),
   })
   .strict();
 export type ModelAliasSelection = z.infer<typeof modelAliasSelectionSchema>;

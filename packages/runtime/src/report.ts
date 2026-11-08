@@ -529,6 +529,7 @@ export function generateWorkflowReport(
       alias?.name,
       alias?.revision,
       alias?.candidateModel,
+      alias?.candidateIndex,
       scope,
       model.provider,
       model.model,
