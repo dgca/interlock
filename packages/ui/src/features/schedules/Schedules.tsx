@@ -20,6 +20,8 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 import {
   scheduleConfigSchema,
   eventConfigSchema,
+  eventWebhookActionSchema,
+  type EventWebhookAction,
   webhookConfigSchema,
   triggerConfig,
   type WebhookConfig,
@@ -35,6 +37,7 @@ import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 import { api, errorMessage } from '../../lib/api';
 import { paths } from '../../routes/paths';
 import styles from './Schedules.module.css';
+import { VariablePicker } from '../variables/VariablePicker';
 import { RunTags, TagFields, tagRows, tagsFromRows } from '../runs/RunTags';
 
 type Inspection = Awaited<ReturnType<typeof api.triggers.inspect.query>>;
@@ -55,6 +58,14 @@ const timestamp = (at?: string) =>
   at
     ? new Date(at).toLocaleString(undefined, { timeZoneName: 'short' })
     : 'Never';
+const webhookOrigin = (value: string) => {
+  try {
+    const url = new URL(value);
+    return url.origin === 'null' ? url.protocol : url.origin;
+  } catch {
+    return 'Invalid URL';
+  }
+};
 const cadence = (
   t:
     | { kind: 'schedule'; timing: ScheduleConfig['timing'] }
@@ -435,6 +446,35 @@ export function Schedules({
                   </Stack>
                 ) : trigger.kind === 'event' ? (
                   <dl className={styles.policies}>
+                    <dt>Action</dt>
+                    <dd>
+                      {trigger.action?.type === 'webhook'
+                        ? 'Outbound webhook'
+                        : 'Workflow handler'}
+                    </dd>
+                    {trigger.action?.type === 'webhook' && (
+                      <>
+                        <dt>Destination origin</dt>
+                        <dd>{webhookOrigin(trigger.action.url)}</dd>
+                        <dt>Signing</dt>
+                        <dd>
+                          {trigger.action.secretId ? (
+                            <code>Secret {trigger.action.secretId}</code>
+                          ) : (
+                            'Unsigned'
+                          )}
+                        </dd>
+                        <dt>Header names</dt>
+                        <dd>
+                          {Object.keys(trigger.action.headers ?? {})
+                            .sort()
+                            .join(', ') || 'None'}
+                        </dd>
+                        <dt>Request timeout</dt>
+                        <dd>{trigger.action.timeoutMs} ms</dd>
+                      </>
+                    )}
+
                     <dt>Source</dt>
                     <dd>
                       {trigger.scope.type === 'library' ? (
@@ -945,6 +985,12 @@ const eventOptions = [
   { value: 'needs_attention', label: 'Needs attention' },
   { value: 'stalled', label: 'Stalled' },
 ];
+const defaultEventWebhook: EventWebhookAction = {
+  type: 'webhook',
+  url: '',
+  timeoutMs: 5000,
+};
+
 function EventEditor({
   initial,
   pending,
@@ -961,11 +1007,18 @@ function EventEditor({
   onReload?: () => Promise<EventConfig>;
 }) {
   const [config, setConfig] = useState(initial);
+  const [webhookAction, setWebhookAction] = useState<EventWebhookAction>(() =>
+    initial.action?.type === 'webhook' ? initial.action : defaultEventWebhook,
+  );
+  const [headersValid, setHeadersValid] = useState(true);
+  const [headersReset, setHeadersReset] = useState(0);
+
   const [tags, setTags] = useState(() => tagRows(initial.tags));
   const [tagsError, setTagsError] = useState('');
   const [error, setError] = useState('');
   const [issues, setIssues] = useState<Record<string, string>>({});
   const dirty =
+    (config.action?.type === 'webhook' && !headersValid) ||
     JSON.stringify(config) !== JSON.stringify(initial) ||
     JSON.stringify(tags) !== JSON.stringify(tagRows(initial.tags));
   const completedOnly =
@@ -992,7 +1045,13 @@ function EventEditor({
     setIssues({});
     setError('');
   };
+  const webhookField = (patch: Partial<EventWebhookAction>) => {
+    const next = { ...webhookAction, ...patch };
+    setWebhookAction(next);
+    field('action', next);
+  };
   const submit = () => {
+    if (config.action?.type === 'webhook' && !headersValid) return;
     let parsed;
     try {
       parsed = eventConfigSchema.safeParse({
@@ -1038,6 +1097,67 @@ function EventEditor({
               error={issues.name}
               onChange={(e) => field('name', e.target.value)}
             />
+            <Select
+              label="Action"
+              allowDeselect={false}
+              value={config.action?.type ?? 'workflow'}
+              data={[
+                { value: 'workflow', label: 'Workflow handler' },
+                { value: 'webhook', label: 'Outbound webhook' },
+              ]}
+              onChange={(value) => {
+                field(
+                  'action',
+                  value === 'webhook' ? webhookAction : { type: 'workflow' },
+                );
+                setHeadersValid(true);
+              }}
+            />
+            {config.action?.type === 'webhook' && (
+              <Stack gap="sm">
+                <TextInput
+                  label="Webhook URL"
+                  value={webhookAction.url}
+                  error={issues['action.url']}
+                  onChange={(e) => webhookField({ url: e.target.value })}
+                />
+                <VariablePicker
+                  label="Signing Secret"
+                  kind="secret"
+                  value={webhookAction.secretId ?? ''}
+                  onChange={(id) => webhookField({ secretId: id || undefined })}
+                />
+                <Text size="xs" c="dimmed">
+                  Optional HMAC signing. Only the Secret reference is saved
+                  here.
+                </Text>
+                <JsonEditor
+                  key={headersReset}
+                  label="Webhook headers"
+                  rows={4}
+                  value={webhookAction.headers ?? {}}
+                  onChange={(headers) => webhookField({ headers })}
+                  validate={(value) =>
+                    eventWebhookActionSchema.shape.headers.safeParse(value)
+                      .success
+                      ? undefined
+                      : 'Use a JSON object with string header values.'
+                  }
+                  onValidityChange={setHeadersValid}
+                />
+                <NumberInput
+                  label="Request timeout (ms)"
+                  value={webhookAction.timeoutMs}
+                  min={500}
+                  max={60000}
+                  allowDecimal={false}
+                  error={issues['action.timeoutMs']}
+                  onChange={(value) =>
+                    webhookField({ timeoutMs: Number(value) })
+                  }
+                />
+              </Stack>
+            )}
             <Select
               label="Source scope"
               allowDeselect={false}
@@ -1196,6 +1316,13 @@ function EventEditor({
               void onReload()
                 .then((current) => {
                   setConfig(current);
+                  setWebhookAction(
+                    current.action?.type === 'webhook'
+                      ? current.action
+                      : defaultEventWebhook,
+                  );
+                  setHeadersValid(true);
+                  setHeadersReset((value) => value + 1);
                   setTags(tagRows(current.tags));
                   setTagsError('');
                   setIssues({});
@@ -1210,7 +1337,11 @@ function EventEditor({
         <Button variant="default" disabled={pending} onClick={onClose}>
           Cancel
         </Button>
-        <Button loading={pending} onClick={submit}>
+        <Button
+          loading={pending}
+          disabled={config.action?.type === 'webhook' && !headersValid}
+          onClick={submit}
+        >
           Save event trigger
         </Button>
       </ModalFooter>

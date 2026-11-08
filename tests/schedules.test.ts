@@ -20,6 +20,7 @@ const rpc = vi.hoisted(() => ({
   manage: vi.fn(),
   attention: vi.fn(),
   summaries: vi.fn(),
+  variablesRead: vi.fn(),
 }));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
@@ -30,6 +31,7 @@ vi.mock('../packages/ui/src/lib/api', () => ({
       manage: { mutate: rpc.manage },
       attention: { query: rpc.attention },
     },
+    variables: { read: { query: rpc.variablesRead } },
     runs: { summaries: { query: rpc.summaries } },
   },
   errorMessage: (error: Error) => error.message,
@@ -86,6 +88,18 @@ const detail = (t = trigger()) => ({
 beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   vi.clearAllMocks();
+  rpc.variablesRead.mockResolvedValue({
+    items: [
+      {
+        id: 'signing-key',
+        name: 'Signing key',
+        kind: 'secret',
+        availability: 'ready',
+        description: '',
+      },
+    ],
+    total: 1,
+  });
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
     addEventListener() {},
@@ -625,4 +639,143 @@ it('UI249 puts event tag bounds errors beside the rows and allows correction wit
       }),
     }),
   );
+});
+
+async function choose(label: string, option: string) {
+  await act(async () => input(label).click());
+  const item = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((el) => el.textContent === option);
+  expect(item, option).toBeTruthy();
+  await act(async () => item!.click());
+}
+
+it('creates outbound lifecycle actions and preserves webhook fields while switching actions', async () => {
+  await renderSchedules();
+  await click('Add event trigger');
+  await choose('Action', 'Outbound webhook');
+  await fill(input('Webhook URL'), 'https://example.test/notify');
+  await fill(input('Request timeout (ms)'), '1700');
+  await act(async () => {
+    await vi.waitFor(() => expect(rpc.variablesRead).toHaveBeenCalled());
+  });
+  await choose('Signing Secret', 'Signing key · Secret');
+  await fill(
+    document.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Webhook headers"]',
+    )!,
+    '{"X-Team":"build"}',
+  );
+  await act(async () => input('Wait for the source tree to stop').click());
+  await fill(input('Maximum trigger depth'), '4');
+  await choose('Action', 'Workflow handler');
+  expect(document.body.textContent).not.toContain('Webhook URL');
+  await choose('Action', 'Outbound webhook');
+  expect(input('Webhook URL').value).toBe('https://example.test/notify');
+  expect(input('Request timeout (ms)').value).toBe('1700');
+  await fill(
+    document.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Webhook headers"]',
+    )!,
+    '{bad json',
+  );
+  expect(button('Save event trigger').disabled).toBe(true);
+  await fill(
+    document.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Webhook headers"]',
+    )!,
+    '{"X-Team":"build"}',
+  );
+  await click('Save event trigger');
+  expect(rpc.manage).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      action: 'create',
+      config: eventConfigSchema.parse({
+        kind: 'event',
+        name: 'Event trigger',
+        events: ['completed'],
+        scope: { type: 'workflow', workflowId: 'w' },
+        waitForQuiescence: true,
+        maxTriggerDepth: 4,
+        action: {
+          type: 'webhook',
+          url: 'https://example.test/notify',
+          secretId: 'signing-key',
+          headers: { 'X-Team': 'build' },
+          timeoutMs: 1700,
+        },
+      }),
+    }),
+  );
+});
+
+it('inspects safe outbound metadata and reopens the complete webhook action for edits', async () => {
+  const config = eventConfigSchema.parse({
+    kind: 'event',
+    name: 'Outbound alerts',
+    events: ['failed'],
+    scope: { type: 'library' },
+    action: {
+      type: 'webhook',
+      url: 'https://user:password@example.test/private-path?token=hidden',
+      secretId: 'signing-key',
+      headers: { 'X-Private': 'hidden-header-value' },
+      timeoutMs: 2200,
+    },
+    pauseAfterConsecutiveFailures: 3,
+  });
+  const t = { ...trigger(), ...config };
+  rpc.list.mockResolvedValue({ items: [t], total: 1, nextOffset: null });
+  rpc.inspect.mockResolvedValue({
+    ...detail(t as any),
+    deliveries: { items: [], total: 0, nextOffset: null },
+  });
+  await renderSchedules();
+  expect(container.textContent).toContain('Outbound webhook');
+  expect(container.textContent).toContain('https://example.test');
+  expect(container.textContent).toContain('signing-key');
+  expect(container.textContent).toContain('X-Private');
+  expect(container.textContent).not.toMatch(
+    /password|private-path|hidden-header-value|token=hidden/,
+  );
+  await click('Edit event');
+  expect(input('Webhook URL').value).toBe(
+    config.action!.type === 'webhook' ? config.action.url : '',
+  );
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  try {
+    await fill(
+      document.querySelector<HTMLTextAreaElement>(
+        'textarea[aria-label="Webhook headers"]',
+      )!,
+      '{invalid',
+    );
+    rpc.inspect.mockResolvedValue({
+      ...detail({ ...t, revision: 2 } as any),
+      deliveries: { items: [], total: 0, nextOffset: null },
+    });
+    await click('Reload current');
+    expect(
+      document.querySelector<HTMLTextAreaElement>(
+        'textarea[aria-label="Webhook headers"]',
+      )!.value,
+    ).toBe(
+      JSON.stringify(
+        config.action!.type === 'webhook' ? config.action.headers : {},
+        null,
+        2,
+      ),
+    );
+    expect(button('Save event trigger').disabled).toBe(false);
+  } finally {
+    confirm.mockRestore();
+  }
+  await fill(input('Trigger name'), 'Updated alerts');
+  await click('Save event trigger');
+  expect(rpc.manage).toHaveBeenLastCalledWith({
+    action: 'update',
+    id: 't',
+    expectedRevision: 2,
+    config: { ...config, name: 'Updated alerts' },
+  });
 });
