@@ -2,7 +2,6 @@ import { afterEach, expect, it, vi } from 'vitest';
 import {
   blankDefinition,
   nodeSchema,
-  InterlockError,
   type WorkflowDefinition,
 } from '@interlock/core';
 import { Engine } from '@interlock/runtime';

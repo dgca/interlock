@@ -4,12 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import {
-  blankDefinition,
-  nodeSchema,
-  type WorkRequest,
-  type WorkflowDefinition,
-} from '@interlock/core';
+import { blankDefinition, nodeSchema, type WorkRequest } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { exportWorkflows } from '../packages/runtime/src/transfer';
 import { Store } from '@interlock/storage';

@@ -5,7 +5,6 @@ import {
   type EventDelivery,
   type EventPayload,
   type EventTrigger,
-  type Json,
   type Run,
   type RunEvent,
   type Workflow,

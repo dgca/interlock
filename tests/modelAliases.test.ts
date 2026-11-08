@@ -10,7 +10,6 @@ import {
   InterlockError,
   type WorkflowDefinition,
 } from '@interlock/core';
-import { projectRun } from '../packages/runtime/src/runProjection';
 import { importSelection } from '../packages/runtime/src/importSelection';
 import {
   exportWorkflows,

@@ -3,11 +3,7 @@ import { act, createElement as h } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
 import { expect, it, vi } from 'vitest';
-import {
-  blankDefinition,
-  nodeSchema,
-  type WorkflowNode,
-} from '@interlock/core';
+import { blankDefinition, type WorkflowNode } from '@interlock/core';
 import { NodeInspector } from '../packages/ui/src/features/workflows/NodeInspector';
 
 it('edits Exit continuation without changing the workflow output contract', async () => {

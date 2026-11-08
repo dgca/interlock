@@ -3,7 +3,7 @@ import { serve } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { blankDefinition, type Json } from '@interlock/core';
+import { blankDefinition } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { createApp } from '../packages/server/src/app';

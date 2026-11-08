@@ -1,7 +1,6 @@
 import {
   normalizeProvider,
   resolveProvider,
-  type ProviderDiversityBlock,
   type Run,
   type WorkflowNode,
   type WorkflowDefinition,

@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serve } from '@hono/node-server';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Engine } from '@interlock/runtime';
@@ -11,22 +11,15 @@ import {
   blankDefinition,
   nodeSchema,
   type WorkflowDefinition,
-  type PauseHold,
-  type ManagedExecution,
 } from '@interlock/core';
 import { createApp } from '../packages/server/src/app.js';
 import { createClient } from '@interlock/client';
 import {
   runCommand,
   formatDoctorReport,
-  runDoctorCommand,
 } from '../packages/cli/src/commands.js';
-import { createMcpServer } from '../packages/mcp/src/server.js';
 import { createMcpClient } from '../packages/mcp/src/client.js';
-import {
-  uncertainClaimCollection,
-  uncertainOperationCollection,
-} from '../packages/runtime/src/quiescence.js';
+import { uncertainClaimCollection } from '../packages/runtime/src/quiescence.js';
 
 describe('doctor health and readiness check', () => {
   let tmpDirs: string[] = [];

@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import {
   mkdtempSync,
@@ -148,9 +148,6 @@ function usage(e: Engine, w: WorkRequest, cost = 10) {
       ],
     },
   });
-}
-async function wait(check: () => void) {
-  await vi.waitFor(check, { timeout: 10000, interval: 20 });
 }
 function prepare(f: ReturnType<typeof setup>, w: WorkRequest) {
   const e = f.e,

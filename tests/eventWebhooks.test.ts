@@ -5,7 +5,6 @@ import { Store } from '@interlock/storage';
 import {
   blankDefinition,
   eventConfigSchema,
-  type EventConfig,
   type EventTrigger,
   type Json,
   type SavedVariable,

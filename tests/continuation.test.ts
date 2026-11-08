@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
-import {
-  blankDefinition,
-  nodeSchema,
-  type WorkflowDefinition,
-} from '@interlock/core';
+import { blankDefinition, nodeSchema } from '@interlock/core';
 import { batchDefinition, itemAgent, nestedBatches } from './fixtures/batch';
 import { workflowCall } from './fixtures/detached';
 import { appRouter } from '../packages/server/src/router';

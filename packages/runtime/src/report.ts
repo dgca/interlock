@@ -1,6 +1,5 @@
 import {
   reportFilterSchema,
-  workflowReportSchema,
   calculateDistribution,
   elapsedExcludingPausesMs,
   formatCurrencyAmount,

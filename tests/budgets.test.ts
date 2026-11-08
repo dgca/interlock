@@ -13,7 +13,7 @@ import {
 } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
-import { batchDefinition, itemAgent } from './fixtures/batch';
+import { batchDefinition } from './fixtures/batch';
 import { workflowCall } from './fixtures/detached';
 
 const engines: Engine[] = [],
