@@ -89,7 +89,8 @@ export class Prompts {
       const prompt = {
         ...old,
         ...content,
-        revision: old.revision + 1,
+        revision:
+          Math.max(old.revision, this.store.latestPromptRevision(id)) + 1,
         updatedAt: new Date().toISOString(),
       };
       this.store.savePrompt(prompt);

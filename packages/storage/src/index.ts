@@ -7,6 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import {
   readPath,
   InterlockError,
+  samePromptContent,
   type RunQuery,
   type ReportFilter,
 } from '@interlock/core';
@@ -855,26 +856,19 @@ export class Store {
     };
   }
   savePrompt(prompt: SavedPrompt) {
-    const key = `${prompt.id}:${prompt.revision}`;
-    const previous = this.get<SavedPrompt>('promptRevisions', key);
-    if (
-      previous &&
-      !isDeepStrictEqual(
-        {
-          name: previous.name,
-          description: previous.description,
-          content: previous.content,
-        },
-        {
-          name: prompt.name,
-          description: prompt.description,
-          content: prompt.content,
-        },
-      )
-    )
-      throw new InterlockError(`Prompt revision conflict for ${key}`);
+    this.retainPromptRevision(prompt);
     this.put('prompts', prompt);
-    if (!previous)
+  }
+  /** Retain an exact historical identity without changing the current edit revision. */
+  retainPromptRevision(prompt: SavedPrompt) {
+    const key = `${prompt.id}:${prompt.revision}`;
+    const current = this.get<SavedPrompt>('prompts', prompt.id);
+    const previous =
+      this.promptRevision(prompt.id, prompt.revision) ??
+      (current?.revision === prompt.revision ? current : undefined);
+    if (previous && !samePromptContent(previous, prompt))
+      throw new InterlockError(`Prompt revision conflict for ${key}`);
+    if (!this.get('promptRevisions', key))
       this.put('promptRevisions', { ...prompt, promptId: prompt.id, id: key });
   }
   events(runId: string) {
