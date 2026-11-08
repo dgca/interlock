@@ -57,7 +57,7 @@ A terminal parent can still have active detached descendants or uncertain extern
 
 Inspect the source run briefing for bounded quiescence blockers. Stop and verify each owner before using its existing reconciliation operation. For connected Agent attempts, `manage_work_resources` with `action: "inspect"` and `workId` returns `uncertainClaims` even if the Agent declared no named resources. Uncertainty from an older attempt remains until that exact attempt is reconciled, even if a replacement is running. Its exact-attempt `release` requires `expectedAttempt`, `actor`, and `confirmStopped: true`. Interrupted Fetch steps and polling Fetch checks can also retain `uncertainOperations` without named resources. Inspect and release by exact `runId`, `executionId`, and `expectedAttempt` after confirming remote work stopped. Foreground Scripts interrupted by restart use exact-execution stop confirmation too. Managed sessions and background Scripts retain their existing stop and reconciliation operations.
 
-A detached handler is independent of its source tree. Event triggering does not change ordinary run cancellation boundaries or terminate external processes.
+A detached handler is independent of its source tree. Event triggering does not change ordinary run cancellation boundaries or terminate external processes. [Tree cancellation](workflow-execution.md#cancel-a-run-tree) can explicitly include detached descendants, but it preserves uncertain ownership and this full-tree quiescence gate. Logical cancellation alone never permits teardown. Cancellation lifecycle events commit with the selected run changes; normal handler dispatch can still follow those events.
 
 ## Inspection and portable bundles
 

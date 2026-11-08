@@ -149,7 +149,7 @@ If execution will exceed the lease, call `renew_claim` before it expires. Claims
 
 A fresh-context assignment includes `executionInstructions` for a fresh session or an isolated subagent without inherited conversation history. If the caller cannot provide isolation, these instructions require it to leave the assignment unclaimed and give the user a ready-to-paste prompt containing the existing run and assignment IDs. The prompt resumes the existing run instead of starting another one. For connected-agent claims, Interlock does not create sessions or verify isolation. Managed execution creates independent sessions for fresh assignments. Do not declare `freshContext: true` merely because the assignment has a focused prompt. Declare required tools and skills only when the executor can actually use them.
 
-Detached Workflow nodes can leave independent work active after the requested parent finishes. Inspect and report those run IDs; continue their assignments by their own run IDs. Global discovery still returns their work. Fresh-session instructions target the nearest detached run, while root identity fields retain the original ancestry. Cancelling a parent does not cancel detached work. See [Workflow execution](workflow-execution.md).
+Detached Workflow nodes can leave independent work active after the requested parent finishes. Inspect and report those run IDs; continue their assignments by their own run IDs. Global discovery still returns their work. Fresh-session instructions target the nearest detached run, while root identity fields retain the original ancestry. Ordinary `cancel_run` leaves detached work running. To stop the selected tree, preview with `preview_run_cancellation`, then use `cancel_run_tree` with an explicit reason and `includeDetached: true` when independent descendants must stop. Cancellation invalidates claims but preserves uncertain ownership until actual stop confirmation. See [tree cancellation](workflow-execution.md#cancel-a-run-tree).
 
 ## Redeliver task starts safely
 
@@ -205,22 +205,23 @@ Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `
 
 ## MCP tools
 
-| Tools                                                                           | Purpose                                                                           |
-| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Test-suite and workflow-comparison tools                                        | Save cases and run bounded paired comparisons through the connected executor.     |
-| `list_prompts`, `get_prompt`, `create_prompt`, `update_prompt`, `delete_prompt` | Discover and maintain shared instructions with revision and reference protection. |
-| `list_workflows`, `get_workflow`                                                | Find workflows and inspect drafts, contracts, and published version numbers.      |
-| `create_workflow`, `update_workflow`, `publish_workflow`                        | Author a draft and publish an immutable version.                                  |
-| `start_run`, `get_run`                                                          | Start a published version and inspect its execution and descendants.              |
-| `get_run_briefing`, `get_run_result`, `wait_for_run_change`                     | Resume with bounded snapshots, selected values, and finite scoped change waits.   |
-| `list_work`, `claim_work`                                                       | Discover available assignments and reserve one with declared capabilities.        |
-| `submit_result`, `fail_work`, `renew_claim`                                     | Complete or fail claimed work, or extend its lease.                               |
-| `manage_work_hold`                                                              | Hold/resume one assignment or read its bounded external-blocker history.          |
-| `cancel_run`, `retry_run`                                                       | Cancel unfinished work or explicitly retry a failed run.                          |
-| `list_runs`                                                                     | Find bounded run summaries by workflow, status, ancestry, and input.              |
-| `export_workflow`, `import_workflows`                                           | Transfer workflow drafts, dependencies, and published pins in portable bundles.   |
-| `preview_workflow_ownership`, `set_workflow_owner`                              | Preview and move existing workflows while preserving identity and history.        |
-| `delete_workflow`                                                               | Permanently remove an unreferenced workflow and its inactive history.             |
+| Tools                                                                           | Purpose                                                                                           |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Test-suite and workflow-comparison tools                                        | Save cases and run bounded paired comparisons through the connected executor.                     |
+| `list_prompts`, `get_prompt`, `create_prompt`, `update_prompt`, `delete_prompt` | Discover and maintain shared instructions with revision and reference protection.                 |
+| `list_workflows`, `get_workflow`                                                | Find workflows and inspect drafts, contracts, and published version numbers.                      |
+| `create_workflow`, `update_workflow`, `publish_workflow`                        | Author a draft and publish an immutable version.                                                  |
+| `start_run`, `get_run`                                                          | Start a published version and inspect its execution and descendants.                              |
+| `get_run_briefing`, `get_run_result`, `wait_for_run_change`                     | Resume with bounded snapshots, selected values, and finite scoped change waits.                   |
+| `list_work`, `claim_work`                                                       | Discover available assignments and reserve one with declared capabilities.                        |
+| `submit_result`, `fail_work`, `renew_claim`                                     | Complete or fail claimed work, or extend its lease.                                               |
+| `manage_work_hold`                                                              | Hold/resume one assignment or read its bounded external-blocker history.                          |
+| `cancel_run`, `retry_run`                                                       | Cancel unfinished work or explicitly retry a failed run.                                          |
+| `preview_run_cancellation`, `cancel_run_tree`                                   | Preview active descendants, then atomically cancel with a reason and explicit detached inclusion. |
+| `list_runs`                                                                     | Find bounded run summaries by workflow, status, ancestry, and input.                              |
+| `export_workflow`, `import_workflows`                                           | Transfer workflow drafts, dependencies, and published pins in portable bundles.                   |
+| `preview_workflow_ownership`, `set_workflow_owner`                              | Preview and move existing workflows while preserving identity and history.                        |
+| `delete_workflow`                                                               | Permanently remove an unreferenced workflow and its inactive history.                             |
 
 `list_work` returns available assignments, excluding claimed, held, resource-blocked and budget-blocked work. An empty list does not mean the execution has completed. A queued start has no assignment until admission; inspect its admission_queue waiting projection and dependency/capacity blockers. Use `get_run_briefing` for its status, claimed assignments, blockers, and detached progress. When given an existing run ID, resume it rather than calling `start_run` again.
 

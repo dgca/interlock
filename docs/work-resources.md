@@ -41,7 +41,7 @@ A resource-protected Fetch whose dispatched request times out, loses its connect
 
 ## Reconcile an uncertain stop
 
-Expiry, cancellation and a hold on claimed work invalidate the claim but do not prove the worker stopped. Interlock keeps its names reserved in `uncertain` state. This persists across restart and blocks both a replacement attempt and unrelated assignments requiring those names. Detached workers retain their normal independent lifetime when a parent is cancelled.
+Expiry, cancellation and a hold on claimed work invalidate the claim but do not prove the worker stopped. Interlock keeps its names reserved in `uncertain` state. This persists across restart and blocks both a replacement attempt and unrelated assignments requiring those names. Detached workers retain their normal independent lifetime under ordinary parent cancellation. [Tree cancellation](workflow-execution.md#cancel-a-run-tree) includes them only with `includeDetached: true`, and preserves the same uncertain-ownership rules. It invalidates claims atomically and requests external stops after commit. Cancellation never releases ownership merely because a claim token became invalid.
 
 For recognized early managed model refusals, Interlock confirms native cleanup and releases the attempt's reservations automatically. Those assignments wait for [model selection](managed-executors.md#replace-a-refused-model), without requiring stop confirmation.
 

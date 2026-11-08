@@ -182,20 +182,33 @@ it('keeps cancelled Script teardown pending until its authenticated stop result 
   await running(e, descendant.id, root);
   const step = script(e, descendant.id),
     job = e.store.get<BackgroundJob>('backgroundJobs', step.id)!;
-  e.cancel(descendant.id);
-  expect(e.run(descendant.id).status).toBe('cancelled');
-  expect(e.store.terminalBackgroundRuns().map((r) => r.id)).toEqual([
-    descendant.id,
-  ]);
-  expect(delivery(e, t).outcome).toBe('pending_quiescence');
-  expect(e.quiescence(source.id).quiescent).toBe(false);
-  await vi.waitFor(
-    () =>
-      expect(
-        new BackgroundFiles(e.store).read(job, 'result')?.outcome?.error,
-      ).toBe('Script stopped'),
-    { timeout: 5000, interval: 30 },
-  );
+  // A fast supervisor can finish before cancel's own pump runs. Keep receipt
+  // consumption behind this gate so the pending-state assertions have a fixed order.
+  const suspendedPump = vi.spyOn(e, 'pump').mockImplementation(() => {});
+  try {
+    e.cancel(descendant.id);
+    expect(e.run(descendant.id).status).toBe('cancelled');
+    expect(e.store.terminalBackgroundRuns().map((r) => r.id)).toEqual([
+      descendant.id,
+    ]);
+    expect(delivery(e, t).outcome).toBe('pending_quiescence');
+    expect(e.quiescence(source.id).quiescent).toBe(false);
+    await vi.waitFor(
+      () =>
+        expect(
+          new BackgroundFiles(e.store).read(job, 'result')?.outcome?.error,
+        ).toBe('Script stopped'),
+      { timeout: 5000, interval: 30 },
+    );
+    // Authenticated bytes exist, but the runtime has not observed them yet.
+    expect(e.store.terminalBackgroundRuns().map((r) => r.id)).toEqual([
+      descendant.id,
+    ]);
+    expect(delivery(e, t).outcome).toBe('pending_quiescence');
+    expect(e.quiescence(source.id).quiescent).toBe(false);
+  } finally {
+    suspendedPump.mockRestore();
+  }
   await vi.waitFor(() => {
     e.pump();
     expect(delivery(e, t).outcome).toBe('started');

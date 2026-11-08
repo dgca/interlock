@@ -976,11 +976,15 @@ export class ExecutorManager {
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
             const record: ManagedExecution = {
-              id: `${offered.id}:${offered.attempt}`,
+              id: `${offered.id}:launch:${offered.attempt}`,
               workId: offered.id,
               runId: offered.runId,
               attempt: offered.attempt,
-              state: 'failed',
+              state:
+                this.engine.store.get<WorkRequest>('work', offered.id)
+                  ?.status === 'cancelled'
+                  ? 'interrupted'
+                  : 'failed',
               profile: configured,
               command:
                 configured.launchCommand || configured.command || 'launch',
@@ -1257,7 +1261,18 @@ export class ExecutorManager {
         ['completed', 'failed', 'cancelled'].includes(current.status);
       if ((runEnded || workEnded) && !session.archived) {
         session.archived = true;
-        void this.archiveLauncherSession(session).catch(() => {});
+        if (current?.status === 'cancelled' || run?.status === 'cancelled') {
+          this.claimTickets.delete(workId);
+          const record = this.latest(workId);
+          if (record && record.state !== 'interrupted')
+            this.interrupted(
+              record,
+              'Run cancelled. Confirm the remote session and subprocesses stopped before reconciliation.',
+            );
+          void this.requestLauncherStop(session)
+            .then(() => this.archiveLauncherSession(session))
+            .catch(() => {});
+        } else void this.archiveLauncherSession(session).catch(() => {});
       }
     }
   }
@@ -1299,6 +1314,30 @@ export class ExecutorManager {
       sessionName,
       sessionId: logicalSession,
     };
+
+    const record: ManagedExecution = {
+      id: `${work.id}:launch:${work.attempt}`,
+      workId: work.id,
+      runId: work.runId,
+      attempt: work.attempt,
+      state: 'starting',
+      profile,
+      permissionSource: 'harness',
+      command: profile.launchCommand || profile.command || 'launch',
+      cwd,
+      sessionId: logicalSession,
+      sessionName,
+      startedAt: now(),
+      requests: [],
+      logs: [
+        {
+          at: now(),
+          message: `Launching ${profile.name}`,
+        },
+      ],
+      logCount: 1,
+    };
+    this.write(record);
 
     let remoteSessionId: string | undefined;
     let remoteResumeCommand: string | undefined;
@@ -1428,32 +1467,13 @@ export class ExecutorManager {
       archived: false,
     };
 
-    const record: ManagedExecution = {
-      id: `${work.id}:launch:${work.attempt}`,
-      workId: work.id,
-      runId: work.runId,
-      attempt: work.attempt,
+    Object.assign(record, {
       state: 'running',
-      profile,
-      permissionSource: 'harness',
-      command: profile.launchCommand || profile.command || 'launch',
-      cwd,
       sessionId: effectiveSessionId,
-      sessionName,
       resumeCommand,
       deepLink,
-      startedAt: now(),
-      requests: [],
-      logs: [
-        {
-          at: now(),
-          message: `Launched ${profile.name}`,
-        },
-      ],
-      logCount: 1,
-    };
+    });
     this.write(record);
-
     this.claimTickets.set(work.id, {
       ticket: claimTicket,
       workId: work.id,
@@ -1466,6 +1486,16 @@ export class ExecutorManager {
 
     this.launchedWork.set(work.id, sessionRecord);
     this.launchIdempotency.set(idempotencyKey, sessionRecord);
+    const current = this.engine.store.get<WorkRequest>('work', work.id);
+    if (
+      current?.status === 'cancelled' ||
+      this.engine.run(work.runId).status === 'cancelled'
+    ) {
+      // Cancellation may commit while the remote launch response is pending.
+      // Never issue a usable ticket or treat the late response as quiescence.
+      this.claimTickets.delete(work.id);
+      this.stopExecution(record.id);
+    }
     return sessionRecord;
   }
   private async pollLauncherStatus(session: LauncherSession) {
@@ -2729,18 +2759,25 @@ export class ExecutorManager {
       throw new InterlockError(
         'Only interrupted executions or ended attention holds can be reconciled',
       );
-    if (this.jobs.has(record.workId) || this.launcherStops.has(record.workId))
+    if (
+      this.jobs.has(record.workId) ||
+      this.pendingLaunches.has(record.workId) ||
+      this.launcherStops.has(record.workId)
+    )
       throw new InterlockError('The old harness is still stopping');
     const work = this.engine.store.get<WorkRequest>('work', record.workId);
     if (!work || work.attempt !== record.attempt)
       throw new InterlockError('The assignment attempt changed');
-    this.engine.manageWorkResources({
-      action: 'release',
-      workId: work.id,
-      expectedAttempt: record.attempt,
-      confirmStopped: true,
-      actor: 'managed-executor-reconciliation',
-    });
+    // A delegated launch can be cancelled before its first claim. Attempt zero
+    // has no reservations or revoked claim to release, but still needs stop proof.
+    if (record.attempt > 0)
+      this.engine.manageWorkResources({
+        action: 'release',
+        workId: work.id,
+        expectedAttempt: record.attempt,
+        confirmStopped: true,
+        actor: 'managed-executor-reconciliation',
+      });
     record.state = 'failed';
     this.write(record);
     const launcher = this.launchedWork.get(work.id);

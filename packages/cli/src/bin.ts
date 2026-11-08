@@ -42,7 +42,7 @@ mcp       Stdio MCP bridge to the running engine. Set INTERLOCK_URL to override
           http://127.0.0.1:4310. Stdout is reserved for the MCP protocol.
 
 Workflow commands: workflows, workflow, starters, import-starter, import, update, edit, export, publish, archive, restore, delete, start
-Run commands: runs, run, run-history, work, claim, submit, fail, renew, assignment-size, external-input, work-hold, work-resources, script, cancel, retry
+Run commands: runs, run, run-history, work, claim, submit, fail, renew, assignment-size, external-input, work-hold, work-resources, script, cancel-tree, cancel, retry
 Usage and budget commands: usage, report-usage, budget, set-budget
 Local harness configuration and execution: executors
 Workflow variables: variables <read|manage> <json|@file> [--value-stdin]
@@ -103,6 +103,7 @@ Variable encryption keys are held separately from the database. Back up keys sep
       'work-hold',
       'work-resources',
       'script',
+      'cancel-tree',
       'cancel',
       'retry',
       'usage',

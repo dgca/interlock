@@ -32,6 +32,7 @@ import styles from './RunInspector.module.css';
 import { ComparisonContext } from './ComparisonContext';
 import { RunUsage } from './RunUsage';
 import { RunVersionDialog } from './RunVersionDialog';
+import { RunCancellationDialog } from './RunCancellationDialog';
 import { runProjectionText } from './runProjectionText';
 import { RunTags } from './RunTags';
 const stallLabels = {
@@ -42,13 +43,15 @@ const stallLabels = {
 };
 type Detail = Awaited<ReturnType<typeof api.runs.get.query>> & {
   availableWork: Awaited<ReturnType<typeof api.work.list.query>>;
+  cancellableRunCount: number;
 };
 async function inspectRun(id: string): Promise<Detail> {
-  const [detail, availableWork] = await Promise.all([
+  const [detail, availableWork, cancellation] = await Promise.all([
     api.runs.get.query({ id }),
     api.work.list.query({ runId: id }),
+    api.runs.previewCancellation.query({ id, includeDetached: true, limit: 1 }),
   ]);
-  return { ...detail, availableWork };
+  return { ...detail, availableWork, cancellableRunCount: cancellation.total };
 }
 
 export function RunInspector({
@@ -76,6 +79,7 @@ export function RunInspector({
   const [retryRequested, setRetryRequested] = useState(false);
   const [retryError, setRetryError] = useState('');
   const [versionDialog, setVersionDialog] = useState(false);
+  const [cancellationDialog, setCancellationDialog] = useState(false);
   const [returnMenuFocus, setReturnMenuFocus] = useState(true);
   const [data, setData] = useState<Detail>(),
     [error, setError] = useState(''),
@@ -365,6 +369,11 @@ export function RunInspector({
               Cancel run
             </Button>
           )}
+          {data.cancellableRunCount > 0 && (
+            <Button onClick={() => setCancellationDialog(true)}>
+              Cancel run tree
+            </Button>
+          )}
           <Button onClick={() => download(`run-${id}.json`, data)}>
             <Download />
             Export run
@@ -387,6 +396,15 @@ export function RunInspector({
           onChanged={refresh}
         />
       )}
+      {cancellationDialog && (
+        <RunCancellationDialog
+          key={id}
+          runId={id}
+          onClose={() => setCancellationDialog(false)}
+          onCancelled={refresh}
+          onOpen={onOpen}
+        />
+      )}
       <PauseBanner workflowId={run.workflowId} run />
       <div className={styles.liveSummary} role="status" aria-live="polite">
         <strong>
@@ -405,6 +423,11 @@ export function RunInspector({
           <span>Failure handled by parent recovery.</span>
         )}
         <span>{runProjectionText(run)}</span>
+        {run.cancellationReason && (
+          <span className={styles.cancellationReason}>
+            Cancellation reason: {run.cancellationReason}
+          </span>
+        )}
         {progress.detail && <span>{progress.detail}</span>}
         {retryRequested && <span>Retry requested.</span>}
         {attention.length > 0 && (

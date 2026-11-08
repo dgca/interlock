@@ -6,15 +6,24 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { batchDefinition } from './fixtures/batch';
-import { blankDefinition } from '@interlock/core';
+import { blankDefinition, nodeSchema } from '@interlock/core';
 import { workflowCall } from './fixtures/detached';
 import { AgentHandoff } from '../packages/ui/src/features/runs/AgentHandoff';
 import { RunInspector } from '../packages/ui/src/features/runs/RunInspector';
 const graph = vi.hoisted(() => ({ props: undefined as any }));
-const rpc = vi.hoisted(() => ({ get: vi.fn(), work: vi.fn() }));
+const rpc = vi.hoisted(() => ({
+  get: vi.fn(),
+  work: vi.fn(),
+  preview: vi.fn(),
+  cancel: vi.fn(),
+}));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
-    runs: { get: { query: rpc.get } },
+    runs: {
+      get: { query: rpc.get },
+      previewCancellation: { query: rpc.preview },
+      cancelTree: { mutate: rpc.cancel },
+    },
     work: { list: { query: rpc.work } },
   },
   errorMessage: (e: Error) => e.message,
@@ -42,6 +51,18 @@ const onConnect = vi.fn(),
   writeText = vi.fn();
 beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  Object.defineProperty(document, 'fonts', {
+    configurable: true,
+    value: { addEventListener: vi.fn(), removeEventListener: vi.fn() },
+  });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   window.matchMedia = vi.fn().mockImplementation(() => ({
     matches: false,
     addEventListener: vi.fn(),
@@ -54,6 +75,8 @@ beforeEach(() => {
   writeText.mockReset().mockResolvedValue(undefined);
   onConnect.mockReset();
   onOpen.mockReset();
+  rpc.preview.mockReset().mockResolvedValue({ total: 1 });
+  rpc.cancel.mockReset();
   detail = {
     run: {
       id: 'root-run',
@@ -79,15 +102,16 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
 });
-async function render(tick = 0) {
+async function render(tick = 0, id = 'root-run') {
   await act(async () =>
     root.render(
       h(
         MantineProvider,
         {},
         h(RunInspector, {
-          id: 'root-run',
+          id,
           tick,
           onBack: vi.fn(),
           onOpen,
@@ -408,5 +432,158 @@ it('opens an invoked workflow for its own pending request instead of selecting a
     engine.stop();
   } finally {
     store.close();
+  }
+});
+
+function chainWithIndependentSuccessorWork(engine: Engine) {
+  const publish = (d = blankDefinition()) => {
+    const w = engine.create('Continuation scope', '', d);
+    engine.publish(w.id);
+    return w.id;
+  };
+  const finish = (id: string) => {
+    const work = engine.available(id).find((w) => w.runId === id)!;
+    const claimed = engine.claim(work.id, {
+      workerId: 'regression',
+      freshContext: false,
+      tools: [],
+      skills: [],
+    });
+    engine.submit(claimed.id, claimed.token!, null);
+  };
+  const leaf = publish();
+  const d = workflowCall(leaf, 'detached', true);
+  d.nodes[d.nodes.length - 1] = nodeSchema.parse({
+    ...d.nodes.at(-1)!,
+    continueAsNew: { maxRuns: 2 },
+  });
+  const first = engine.start(publish(d), null).run;
+  finish(engine.store.runs().find((r) => r.parentRunId === first.id)!.id);
+  finish(first.id);
+  engine.pump();
+  const successor = engine.run(first.id).chain!.nextRunId!;
+  finish(successor);
+  engine.pump();
+  const child = engine.store.runs().find((r) => r.parentRunId === successor)!;
+  expect(engine.run(first.id).status).toBe('completed');
+  expect(engine.run(successor).status).toBe('failed');
+  expect(
+    engine.inspect(first.id).descendants.every((r) => r.status === 'completed'),
+  ).toBe(true);
+  expect(
+    engine.previewRunCancellation({ id: first.id, includeDetached: true }),
+  ).toMatchObject({ total: 1, items: [{ id: child.id, status: 'waiting' }] });
+  rpc.get.mockImplementation(async ({ id }) => engine.inspect(id));
+  rpc.work.mockImplementation(async ({ runId }) =>
+    engine.available(runId, { advance: false }),
+  );
+  rpc.preview.mockImplementation(async (input) =>
+    engine.previewRunCancellation(input),
+  );
+  rpc.cancel.mockImplementation(async (input) => engine.cancelRunTree(input));
+  return { first: first.id, successor, child: child.id, finish };
+}
+
+it('opens tree cancellation from a completed predecessor whose terminal successor owns active detached work', async () => {
+  const engine = new Engine(new Store(':memory:'), process.cwd());
+  try {
+    const { first, successor, child } =
+      chainWithIndependentSuccessorWork(engine);
+    await render(0, first);
+    expect(
+      [...container.querySelectorAll('button')].some(
+        (b) => b.textContent === 'Cancel run tree',
+      ),
+    ).toBe(true);
+    expect(rpc.preview).toHaveBeenCalledWith({
+      id: first,
+      includeDetached: true,
+      limit: 1,
+    });
+    await click('Cancel run tree');
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog.textContent).toContain('No active runs in this selection.');
+    await act(async () =>
+      dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+    );
+    expect(dialog.textContent).toContain('1 active run will be cancelled.');
+    await act(async () => {
+      const reason = dialog.querySelector<HTMLTextAreaElement>('textarea')!;
+      Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+      )!.set!.call(reason, 'Stop successor descendant');
+      reason.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () =>
+      [...dialog.querySelectorAll('button')]
+        .find((b) => b.textContent === 'Cancel run tree')!
+        .click(),
+    );
+    expect(engine.run(child)).toMatchObject({
+      status: 'cancelled',
+      cancellationReason: 'Stop successor descendant',
+    });
+    expect(engine.run(first).status).toBe('completed');
+    expect(engine.run(successor).status).toBe('failed');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(
+      [...container.querySelectorAll('button')].some(
+        (b) => b.textContent === 'Cancel run tree',
+      ),
+    ).toBe(false);
+  } finally {
+    engine.stop();
+    engine.store.close();
+  }
+});
+
+it('refreshes tree cancellation availability when detached work beneath a terminal successor completes', async () => {
+  const engine = new Engine(new Store(':memory:'), process.cwd());
+  try {
+    const { first, child, finish } = chainWithIndependentSuccessorWork(engine);
+    await render(0, first);
+    expect(
+      [...container.querySelectorAll('button')].some(
+        (b) => b.textContent === 'Cancel run tree',
+      ),
+    ).toBe(true);
+    const stalePreview = engine.previewRunCancellation({
+      id: first,
+      includeDetached: true,
+      limit: 1,
+    });
+    let resolveStale!: (value: typeof stalePreview) => void;
+    rpc.preview.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveStale = resolve;
+        }),
+    );
+    await render(1, first);
+    finish(child);
+    const before = engine.store.historyRuns();
+    await render(2, first);
+    expect(rpc.preview).toHaveBeenLastCalledWith({
+      id: first,
+      includeDetached: true,
+      limit: 1,
+    });
+    expect(
+      [...container.querySelectorAll('button')].some(
+        (b) => b.textContent === 'Cancel run tree',
+      ),
+    ).toBe(false);
+    await act(async () => resolveStale(stalePreview));
+    expect(
+      [...container.querySelectorAll('button')].some(
+        (b) => b.textContent === 'Cancel run tree',
+      ),
+    ).toBe(false);
+    expect(engine.store.historyRuns()).toEqual(before);
+    expect(rpc.cancel).not.toHaveBeenCalled();
+  } finally {
+    engine.stop();
+    engine.store.close();
   }
 });

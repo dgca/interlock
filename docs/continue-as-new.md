@@ -62,6 +62,8 @@ interlock cancel RUN_ID --chain
 
 The shared API uses `runs.find({chainRootRunId})`, `runs.get({id})`, and `runs.cancel({id,scope:"chain"})`.
 
+[Tree cancellation](workflow-execution.md#cancel-a-run-tree) follows forward continuation links from the selected member and discovers descendants below terminal predecessors. Preview with `preview_run_cancellation`, then use `cancel_run_tree` with a reason. `includeDetached: true` also selects independent descendants. Selected chains cannot continue or retry; already terminal outcomes remain intact.
+
 ## Retention and limits
 
 Rollover bounds each run's history, not the total database size. Runs, checkpoints, work and usage remain retained. Execution reads active run documents without deserializing completed execution histories, but SQLite scans and usage/budget aggregation still grow with retained data. The 10,000-run validation bound is not a throughput guarantee or an indefinite monitoring service.

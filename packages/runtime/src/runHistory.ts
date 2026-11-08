@@ -13,6 +13,42 @@ const terminal = (run: HistoryRun) =>
 const spaceGuidance =
   'Removed document bytes are JSON data, not reclaimed file bytes. SQLite reuses deleted space; the file may not shrink. Offline VACUUM can compact it and needs maintenance time and spare disk space. Backups, native harness files and trial files are separate.';
 
+/** Shared directed ancestry and rollover links, independent of terminal status. */
+function historyEdges(runs: HistoryRun[], includeDetached = true) {
+  const edges = new Map<string, string[]>();
+  const add = (parent: string, child: string) => {
+    const children = edges.get(parent) ?? [];
+    children.push(child);
+    edges.set(parent, children);
+  };
+  for (const run of runs) {
+    if (run.parentRunId && (includeDetached || run.parentMode !== 'detached'))
+      add(run.parentRunId, run.id);
+    if (run.chainNextRunId) add(run.id, run.chainNextRunId);
+  }
+  return edges;
+}
+
+/** Descendants only: selecting a child never selects its parent or siblings. */
+export function discoverRunTree(
+  runs: HistoryRun[],
+  rootRunId: string,
+  includeDetached: boolean,
+) {
+  if (!runs.some((run) => run.id === rootRunId))
+    throw new InterlockError('Run not found');
+  const edges = historyEdges(runs, includeDetached);
+  const selected = new Set<string>();
+  const pending = [rootRunId];
+  for (let i = 0; i < pending.length; i++) {
+    const id = pending[i];
+    if (selected.has(id)) continue;
+    selected.add(id);
+    pending.push(...(edges.get(id) ?? []));
+  }
+  return runs.filter((run) => selected.has(run.id));
+}
+
 /** Whole-tree history removal, separate from workflow and definition deletion. */
 export class RunHistory {
   constructor(
@@ -41,9 +77,14 @@ export class RunHistory {
       parents.set(id, root);
       return root;
     };
+    for (const [parent, children] of historyEdges(runs))
+      for (const child of children)
+        if (byId.has(parent) && byId.has(child))
+          parents.set(find(child), find(parent));
+    // Retain incomplete chain-history protection when an intermediate link is missing.
     for (const run of runs)
-      for (const link of [run.parentRunId, run.chainRootRunId])
-        if (link && byId.has(link)) parents.set(find(run.id), find(link));
+      if (run.chainRootRunId && byId.has(run.chainRootRunId))
+        parents.set(find(run.id), find(run.chainRootRunId));
     const groups = new Map<string, HistoryRun[]>();
     for (const run of runs) {
       const id = find(run.id);

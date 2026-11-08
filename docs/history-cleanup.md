@@ -36,7 +36,7 @@ Filters match root workflows. A child invocation cannot be removed independently
 
 ## Resolve protected history
 
-Finish or cancel active runs and descendants before cleanup. Wait for native operations to close after cancellation. Whole trees and chains retain the history needed by active budget scopes.
+Finish or cancel active runs and descendants before cleanup. [Tree cancellation](workflow-execution.md#cancel-a-run-tree) can explicitly include detached descendants in one operation. Wait for native operations to close after cancellation. Whole trees and chains retain the history needed by active budget scopes.
 
 Reconcile resource reservations only after their workers stop. Uncertain reservations remain protected after cancellation or expiry. See [resource recovery](work-resources.md).
 

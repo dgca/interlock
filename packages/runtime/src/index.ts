@@ -114,7 +114,13 @@ import { executeFetch, UncertainFetch } from './fetch.js';
 import { executeScript } from './scripts.js';
 import { RunStarts } from './runStarts.js';
 import { RunAdmission } from './runAdmission.js';
-import { RunHistory } from './runHistory.js';
+import { RunHistory, discoverRunTree } from './runHistory.js';
+import {
+  previewRunCancellationSchema,
+  cancelRunTreeSchema,
+  type RunCancellationPreview,
+  type CancelRunTree,
+} from '@interlock/core';
 import { TrialEnvironments } from './trialEnvironments.js';
 import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
@@ -4316,7 +4322,12 @@ export class Engine {
       .runs()
       .filter((r) => r.parentRunId === id && r.parentMode !== 'detached'))
       this.cancelTree(child.id, afterCommit);
+    this.cancelOne(run, afterCommit);
+  }
+  private cancelOne(run: Run, afterCommit?: (() => void)[], reason?: string) {
+    const id = run.id;
     run.status = 'cancelled';
+    if (reason) run.cancellationReason = reason;
     const execution = run.executions.at(-1);
     if (execution?.resourceActive)
       this.resources.endExecution(run.id, execution, true);
@@ -4356,14 +4367,93 @@ export class Engine {
       )) {
       this.resources.end(work, 'cancelled');
       this.usage.ended(work, 'cancelled');
-      this.holds.close(work, now(), 'run cancellation', 'cancelled');
+      this.holds.close(work, now(), reason ?? 'run cancellation', 'cancelled');
       work.status = 'cancelled';
       work.endedAt = now();
       work.token = undefined;
       this.store.put('work', work);
     }
     this.save(run);
-    this.event(run, 'run.cancelled', 'Run cancelled');
+    this.event(
+      run,
+      'run.cancelled',
+      reason ? `Run cancelled: ${reason}` : 'Run cancelled',
+    );
+  }
+  private cancellationSelection(id: string, includeDetached: boolean) {
+    return discoverRunTree(this.store.historyRuns(), id, includeDetached);
+  }
+  private cancellationReference(run: ReturnType<Store['historyRuns']>[number]) {
+    return {
+      id: run.id,
+      workflowId: run.workflowId,
+      workflowName: run.workflowName,
+      status: run.status,
+      ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
+      ...(run.parentMode === 'detached'
+        ? { parentMode: 'detached' as const }
+        : {}),
+    };
+  }
+  previewRunCancellation(input: RunCancellationPreview) {
+    const query = previewRunCancellationSchema.parse(input);
+    return this.store.transaction(() => {
+      const active = this.cancellationSelection(
+        query.id,
+        query.includeDetached,
+      ).filter((run) => !terminal(run.status));
+      const items = active
+        .slice(query.offset, query.offset + query.limit)
+        .map((run) => this.cancellationReference(run));
+      return {
+        rootRunId: query.id,
+        includeDetached: query.includeDetached,
+        items,
+        total: active.length,
+        offset: query.offset,
+        nextOffset:
+          query.offset + items.length < active.length
+            ? query.offset + items.length
+            : null,
+        truncated:
+          query.offset > 0 || query.offset + items.length < active.length,
+      };
+    });
+  }
+  cancelRunTree(input: CancelRunTree) {
+    const query = cancelRunTreeSchema.parse(input);
+    const afterCommit: (() => void)[] = [];
+    const result = this.store.transaction(() => {
+      const selected = this.cancellationSelection(
+        query.id,
+        query.includeDetached,
+      );
+      const active = selected.filter((run) => !terminal(run.status));
+      for (const member of selected) {
+        const run = this.run(member.id);
+        if (run.chain) this.chains.cancel(run);
+        if (!terminal(run.status))
+          this.cancelOne(run, afterCommit, query.reason);
+      }
+      return {
+        rootRunId: query.id,
+        includeDetached: query.includeDetached,
+        reason: query.reason,
+        cancelled: {
+          items: active
+            .slice(0, query.limit)
+            .map((run) =>
+              this.cancellationReference({ ...run, status: 'cancelled' }),
+            ),
+          total: active.length,
+          truncated: active.length > query.limit,
+        },
+      };
+    });
+    // Never stop external work until all cancellation state and lifecycle receipts commit.
+    for (const effect of afterCommit) effect();
+    this.pump();
+    return result;
   }
   cancel(id: string, scope: 'run' | 'chain' = 'run') {
     this.store.transaction(() =>
