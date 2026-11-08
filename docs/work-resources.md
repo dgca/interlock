@@ -4,7 +4,7 @@ Use exclusive named resources when cooperating Agent assignments, Scripts, Fetch
 
 ## Declare resource names
 
-Add fixed names in the Agent editor's **Execution → Exclusive resources** field, or set `resources` on Agent, Script, Fetch, or polling Wait nodes through Raw or workflow authoring tools:
+Add fixed names in **Execution → Exclusive resources** on Agent, Script, Fetch, or polling Wait nodes. Expand **Use values from the run** for the shared binding editor, with at most eight bindings. Raw and workflow authoring tools use the same `resources` field:
 
 ```json
 {
@@ -31,7 +31,7 @@ Use `get_run_briefing` when discovery returns no work. `resourceBlocked` lists b
 
 ## Reserve resources for deterministic operations
 
-Script and Fetch steps reserve their complete set before launching. Their execution timeouts start after admission. Polling Waits reserve the set for each check and release it between checks. A queued check spends neither its probe timeout nor the polling Wait timeout. Other polling time retains its existing deadline behavior. Duration and timestamp Waits cannot declare resources.
+Script and Fetch steps reserve their complete set before launching. Their execution timeouts start after admission. Polling Waits reserve the set for each check and release it between checks. A queued check spends neither its probe timeout nor the polling Wait timeout. Other polling time retains its existing deadline behavior. Duration and timestamp Waits cannot declare resources. Their settings have no resource controls. Switching a polling Wait to either timer mode removes its declarations from the saved node; switching back before applying restores the polling declarations.
 
 A blocked execution exposes `resources` and `resourceBlocked` in run inspection. Run summaries report `waiting.kind: "resource"`; briefing blockers and `resourceBlocked` identify its `runId` and `executionId`. Ordinary contention has actor `engine`; uncertain ownership requires a stop declaration and uses `person`. No Agent assignment is created for a deterministic operation.
 
