@@ -281,8 +281,14 @@ export function runProgress(
   );
   if (attention && ['queued', 'running', 'waiting'].includes(run.status))
     title = managedAttentionLabel(attention);
-  if (!['completed', 'cancelled'].includes(run.status) && current)
-    title += ` · ${attention && ['queued', 'running', 'waiting'].includes(run.status) ? attention.label : current.label}`;
+  const status = title;
+  const nodeLabel =
+    !['completed', 'cancelled'].includes(run.status) && current
+      ? attention && ['queued', 'running', 'waiting'].includes(run.status)
+        ? attention.label
+        : current.label
+      : undefined;
+  if (nodeLabel !== undefined) title += ` · ${nodeLabel}`;
   return {
     nodes,
     runStates: Object.fromEntries(
@@ -294,6 +300,8 @@ export function runProgress(
       ]),
     ),
     title,
+    status,
+    nodeLabel,
     detail:
       run.status === 'failed'
         ? run.error?.split('\n', 1)[0]?.slice(0, 240)

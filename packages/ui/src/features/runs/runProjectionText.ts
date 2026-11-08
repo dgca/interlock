@@ -13,19 +13,24 @@ const labels: Record<RunWaiting['kind'], string> = {
   poll: 'Waiting for a polling check',
   admission_queue: 'Queued for admission',
 };
-export function runProjectionText(run: RunProjection, waitingText?: string) {
+export function runProjectionLabels(run: RunProjection, waitingText?: string) {
   const actor = { agent: 'Agent', person: 'Person', engine: 'Engine' }[
     run.actor
   ];
-  return [
-    run.stage,
-    run.waiting
+  return {
+    stage: run.stage,
+    waiting: run.waiting
       ? run.waiting.kind === 'admission_queue'
         ? `Queued · ${run.waiting.detail.message ?? `Position ${run.waiting.detail.position ?? 1}`}`
         : (waitingText ?? labels[run.waiting.kind])
       : null,
     actor,
-  ]
+  };
+}
+
+export function runProjectionText(run: RunProjection, waitingText?: string) {
+  const labels = runProjectionLabels(run, waitingText);
+  return [labels.stage, labels.waiting, labels.actor]
     .filter(Boolean)
     .join(' · ');
 }

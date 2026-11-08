@@ -33,7 +33,7 @@ import { ComparisonContext } from './ComparisonContext';
 import { RunUsage } from './RunUsage';
 import { RunVersionDialog } from './RunVersionDialog';
 import { RunCancellationDialog } from './RunCancellationDialog';
-import { runProjectionText } from './runProjectionText';
+import { runProjectionLabels } from './runProjectionText';
 import { RunTags } from './RunTags';
 const stallLabels = {
   unclaimedStallMs: 'Unclaimed stall',
@@ -203,6 +203,23 @@ export function RunInspector({
   const requestedExecution =
     !selected && run.executions.find((e) => e.id === initialExecutionId);
   const progress = runProgress(run, definition, descendants, allWork);
+  const projection = runProjectionLabels(run);
+  const attentionStatus =
+    attention.length && ['queued', 'running', 'waiting'].includes(run.status)
+      ? progress.status
+      : undefined;
+  const summaryTitle = run.chain?.nextRunId
+    ? 'Continued as new'
+    : run.waiting?.kind === 'human_request' && attentionStatus
+      ? attentionStatus
+      : (projection.waiting ?? progress.status);
+  const summaryContext = [
+    projection.stage,
+    progress.nodeLabel !== projection.stage ? progress.nodeLabel : null,
+    projection.actor,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const nodeId =
     selected?.nodeId ??
     (requestedExecution ? requestedExecution.nodeId : undefined) ??
@@ -407,13 +424,7 @@ export function RunInspector({
       )}
       <PauseBanner workflowId={run.workflowId} run />
       <div className={styles.liveSummary} role="status" aria-live="polite">
-        <strong>
-          {run.chain?.nextRunId
-            ? 'Continued as new'
-            : run.waiting?.kind === 'pause'
-              ? 'Paused'
-              : progress.title}
-        </strong>
+        <strong>{summaryTitle}</strong>
         {run.chain && data.chain && (
           <span>
             Chain run {run.chain.index} · {data.chain.maxRuns} run limit
@@ -422,7 +433,10 @@ export function RunInspector({
         {data.handledFailure && (
           <span>Failure handled by parent recovery.</span>
         )}
-        <span>{runProjectionText(run)}</span>
+        <span>{summaryContext}</span>
+        {attentionStatus && attentionStatus !== summaryTitle && (
+          <span>{attentionStatus}</span>
+        )}
         {run.cancellationReason && (
           <span className={styles.cancellationReason}>
             Cancellation reason: {run.cancellationReason}
