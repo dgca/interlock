@@ -1590,6 +1590,48 @@ it.each(['stdio', 'http'])(
       expect(
         (await call('import_workflows', { bundle: promptBundle })).changed,
       ).toEqual([]);
+      const pinnedPrompt = await call('create_prompt', {
+        name: 'Pinned transport guidance',
+        content: 'Pinned original',
+      });
+      const pinnedGraph = structuredClone(promptGraph);
+      pinnedGraph.pinPromptsAtPublish = true;
+      if (pinnedGraph.nodes[1].kind !== 'agent')
+        throw new Error('Expected Agent');
+      pinnedGraph.nodes[1].promptIds = [pinnedPrompt.id];
+      const pinnedWorkflow = await call('create_workflow', {
+        name: 'Pinned transport workflow',
+        definition: pinnedGraph,
+      });
+      await call('publish_workflow', { id: pinnedWorkflow.id });
+      await call('update_prompt', {
+        id: pinnedPrompt.id,
+        revision: 1,
+        name: pinnedPrompt.name,
+        content: 'Current transport guidance',
+      });
+      const pinnedBundle = await call('export_workflow', {
+        id: pinnedWorkflow.id,
+      });
+      expect(pinnedBundle).toMatchObject({
+        formatVersion: 9,
+        prompts: [expect.objectContaining({ revision: 2 })],
+        promptRevisions: [
+          expect.objectContaining({
+            id: pinnedPrompt.id,
+            revision: 1,
+            content: 'Pinned original',
+          }),
+        ],
+      });
+      const incompletePinnedBundle = await client.callTool({
+        name: 'import_workflows',
+        arguments: { bundle: { ...pinnedBundle, promptRevisions: [] } },
+      });
+      expect(incompletePinnedBundle.isError).toBe(true);
+      expect(
+        (await call('import_workflows', { bundle: pinnedBundle })).changed,
+      ).toEqual([]);
       await call('cancel_run', { id: latestRun.run.id });
       const unusedPrompt = await call('create_prompt', {
         name: 'Unused',

@@ -300,7 +300,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'list_prompts',
-    'Discover saved prompts with stable IDs, names, descriptions and current revisions. Use get_prompt for Markdown instructions and dependent workflows. Content edits affect future ordinary workflow runs, including published workflows, without republishing. Existing comparisons retain their captured revisions, including queued samples.',
+    'Discover saved prompts with stable IDs, names, descriptions and current revisions. Use get_prompt for Markdown instructions and dependent workflows. Edits affect future runs of unpinned versions without republishing; publish-pinned versions retain their selected revisions. Existing comparisons retain their captured revisions, including queued samples.',
     {},
     async () =>
       (await client.prompts.list()).map(
@@ -314,7 +314,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'get_prompt',
-    'Read current saved prompt content and usage {workflowId,name,draft,versions}. Optional revision reads retained historical content, including deleted prompts, and adds currentRevision or null. Optional history:{offset,limit} lists retained revision/name metadata, default 10/max 25, newest first, with total/nextOffset; bodies are omitted. History may have gaps; unavailable revisions error. Historical reads do not restore a prompt or change current edit revisions. Ordinary runs use latest content; comparisons may select exact revisions.',
+    'Read current saved prompt content and usage {workflowId,name,draft,versions}. Optional revision reads retained historical content, including deleted prompts, and adds currentRevision or null. Optional history:{offset,limit} lists retained revision/name metadata, default 10/max 25, newest first, with total/nextOffset; bodies are omitted. History may have gaps; unavailable revisions error. Historical reads do not restore a prompt or change current edit revisions. Runs capture published pins when configured, otherwise current content; comparisons may select exact revisions.',
     promptReadSchema.shape,
     (input) => client.prompts.get(input),
   );
@@ -326,7 +326,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'update_prompt',
-    'Edit a saved prompt using the revision from get_prompt. Stale saves fail without overwriting content. Effective changes increment revision and preserve history; unchanged saves keep revision. Changes affect future ordinary runs that reference this ID, including published workflows, but do not change active runs, retries or existing comparison captures and queued samples. No republishing is needed.',
+    'Edit a saved prompt using the revision from get_prompt. Stale saves fail without overwriting content. Effective edits allocate above all retained revisions, including imported history; unchanged saves keep revision. Edits affect future unpinned runs without republishing. Publish-pinned versions, active runs, retries and existing comparison captures retain their instructions.',
     {
       ...promptContentSchema.shape,
       id: z.string().describe('Saved prompt ID.'),
@@ -452,13 +452,13 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'export_workflow',
-    'Export stable IDs/drafts/version numbers, owners/children/transitive dependencies. Format 8:event triggers/source dependencies; Format 7:webhooks/Secret requirements; Format 6:model-alias requirements; Format 5:schedules; Format 4:variable requirements; Format 3:deleted-version hashes; Format 2:saved prompts; otherwise1. Triggers disabled; prompts retain ID/revision/content. No values/keys/model candidates/trigger state, runs/captures/start receipts, local testbench/evaluation or archive flags. Deleted definitions absent; back up before cleanup to restore. Missing referenced drafts reject. Includes scripts/config.',
+    'Export stable IDs/drafts/version numbers, owners/children/transitive dependencies. Format 9:exact pinned prompt snapshots; Format 8:event triggers/source dependencies; Format 7:webhooks/Secret requirements; Format 6:model-alias requirements; Format 5:schedules; Format 4:variable requirements; Format 3:deleted-version hashes; Format 2:saved prompts; otherwise1. Triggers disabled; prompts retain ID/revision/content; only required pinned history travels. No values/keys/model candidates/trigger state, runs/captures/start receipts, local testbench/evaluation or archive flags. Deleted definitions absent; back up before cleanup to restore. Missing referenced drafts reject. Includes scripts/config.',
     { id: z.string() },
     (input) => client.workflows.export(input),
   );
   tool(
     'import_workflows',
-    'Starter: starterId from list_workflows source:starters, stable requestId; copy:true duplicates. Copies publish without running. Otherwise atomic upsert formats1..8. dryRun previews published semantic diffs without mutation; publish atomically publishes imports, cascade includes callers. Triggers disabled/revisioned even with force; reset automatic pause/failures. Events reset logs/pending, retain receipts; others keep history. Schedules reset slot/anchor/lag. Trigger workflow/kind immutable. Format additions: export_workflow. variableBindings: same-kind local ID or unset provisioning. No values/keys. Version gaps allowed; identical definitions unchanged. Skip deleted versions unless restoreDeletedVersions:true restores originals with ownership/dependency checks. Format3 cannot delete local versions. Replace drafts via draftRevisions by workflow ID or force:true. Force cannot overwrite versions/shared prompts, change ownership or authorize restoration. Ownership moves use ownership tools. Prompt bundles require references; divergent content rejects even with force. Conflicts roll back all; runs/archive flags unchanged.',
+    'Starter: starterId from list_workflows source:starters, stable requestId; copy:true duplicates. Copies publish without running. Otherwise atomic upsert formats1..9. dryRun previews published semantic diffs without mutation; publish atomically publishes imports, cascade includes callers. Triggers disabled/revisioned even with force; reset automatic pause/failures. Events reset logs/pending, retain receipts; others keep history. Schedules reset slot/anchor/lag. Trigger workflow/kind immutable. Format additions: export_workflow. variableBindings: same-kind local ID or unset provisioning. No values/keys. Version gaps allowed; identical definitions unchanged. Skip deleted versions unless restoreDeletedVersions:true restores originals with ownership/dependency checks. Format3 cannot delete local versions. Replace drafts via draftRevisions by workflow ID or force:true. Force cannot overwrite versions/shared prompts, change ownership or authorize restoration. Ownership moves use ownership tools. Prompt bundles require references; divergent current or pinned content and unavailable pins reject even with force. Historical snapshots do not rebind current prompts. Conflicts roll back all; runs/archive flags unchanged.',
     {
       starterId: z.string().min(1).max(64).optional(),
       requestId: z

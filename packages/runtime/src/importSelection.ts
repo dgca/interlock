@@ -1,6 +1,12 @@
 import { isDeepStrictEqual } from 'node:util';
 import { Store } from '@interlock/storage';
-import { InterlockError, promptIds, blankDefinition } from '@interlock/core';
+import {
+  InterlockError,
+  promptIds,
+  blankDefinition,
+  samePromptContent,
+  type PromptSnapshot,
+} from '@interlock/core';
 import {
   variableReferences,
   type VariableImportBindings,
@@ -117,10 +123,34 @@ function combineBundles(
     string,
     NonNullable<WorkflowBundle['prompts']>[number]
   >();
+  const promptRevisions = new Map<string, PromptSnapshot>();
   let rootId = '';
   for (const document of documents) {
     if (document.kind !== 'bundle') continue;
     rootId ||= document.bundle.rootId;
+    const pins = new Set(
+      document.bundle.workflows.flatMap((workflow) =>
+        workflow.versions.flatMap((version) =>
+          Object.entries(version.pinnedPromptRevisions ?? {}).map(
+            ([id, revision]) => `${id}:${revision}`,
+          ),
+        ),
+      ),
+    );
+    for (const prompt of [
+      ...(document.bundle.promptRevisions ?? []),
+      ...(document.bundle.prompts ?? []).filter((prompt) =>
+        pins.has(`${prompt.id}:${prompt.revision}`),
+      ),
+    ]) {
+      const key = `${prompt.id}:${prompt.revision}`;
+      const previous = promptRevisions.get(key);
+      if (previous && !samePromptContent(previous, prompt))
+        throw new InterlockError(
+          `Selected files conflict for prompt revision ${key}`,
+        );
+      promptRevisions.set(key, prompt);
+    }
     for (const variable of document.bundle.variables ?? []) {
       const old = variables.get(variable.id);
       if (old && !isDeepStrictEqual(old, variable))
@@ -199,10 +229,7 @@ function combineBundles(
         const existing = previous.versions.find(
           (v) => v.version === version.version,
         );
-        if (
-          existing &&
-          !isDeepStrictEqual(existing.definition, version.definition)
-        )
+        if (existing && !isDeepStrictEqual(existing, version))
           throw new InterlockError(
             `Selected files conflict for published version ${entry.id}:${version.version}`,
           );
@@ -228,21 +255,7 @@ function combineBundles(
     }
     for (const prompt of document.bundle.prompts ?? []) {
       const previous = prompts.get(prompt.id);
-      if (
-        previous &&
-        !isDeepStrictEqual(
-          {
-            name: previous.name,
-            description: previous.description,
-            content: previous.content,
-          },
-          {
-            name: prompt.name,
-            description: prompt.description,
-            content: prompt.content,
-          },
-        )
-      )
+      if (previous && !samePromptContent(previous, prompt))
         throw new InterlockError(
           `Selected files conflict for saved prompt ${prompt.id}`,
         );
@@ -252,31 +265,34 @@ function combineBundles(
   return rootId
     ? {
         format: 'interlock-workflows',
-        formatVersion: [...workflows.values()].some(
-          (w) => w.eventTriggers?.length,
-        )
-          ? 8
-          : [...workflows.values()].some((w) => w.webhooks?.length)
-            ? 7
-            : modelAliases.size
-              ? 6
-              : [...workflows.values()].some((w) => w.schedules?.length)
-                ? 5
-                : variables.size
-                  ? 4
-                  : [...workflows.values()].some(
-                        (w) => w.deletedVersions?.length,
-                      )
-                    ? 3
-                    : prompts.size
-                      ? 2
-                      : 1,
+        formatVersion: promptRevisions.size
+          ? 9
+          : [...workflows.values()].some((w) => w.eventTriggers?.length)
+            ? 8
+            : [...workflows.values()].some((w) => w.webhooks?.length)
+              ? 7
+              : modelAliases.size
+                ? 6
+                : [...workflows.values()].some((w) => w.schedules?.length)
+                  ? 5
+                  : variables.size
+                    ? 4
+                    : [...workflows.values()].some(
+                          (w) => w.deletedVersions?.length,
+                        )
+                      ? 3
+                      : prompts.size
+                        ? 2
+                        : 1,
         rootId,
         ...(modelAliases.size
           ? { modelAliases: [...modelAliases.values()] }
           : {}),
         workflows: [...workflows.values()],
         ...(prompts.size ? { prompts: [...prompts.values()] } : {}),
+        ...(promptRevisions.size
+          ? { promptRevisions: [...promptRevisions.values()] }
+          : {}),
         ...(variables.size ? { variables: [...variables.values()] } : {}),
       }
     : undefined;
