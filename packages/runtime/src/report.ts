@@ -7,6 +7,7 @@ import {
   type ReportFilter,
   type WorkflowReport,
   type Run,
+  type NodeExecution,
   type WorkRequest,
   type UsageAttempt,
   type RunUsageReport,
@@ -122,21 +123,28 @@ export function generateWorkflowReport(
   const eventsList = store.eventTimesForRuns(runIds);
   const holdsList = store.forRuns<WorkHoldInterval>('workHolds', runIds);
 
-  // Cache workflow node definitions: workflowId:version -> nodes
+  // Explicit execution versions never fall back to a different definition.
   const nodeDefCache = new Map<string, WorkflowNode[]>();
-  function getWorkflowNodes(run: Run): WorkflowNode[] {
-    const key = `${run.workflowId}:${run.version ?? 0}`;
+  function getWorkflowNodes(
+    run: Run,
+    execution?: NodeExecution,
+  ): WorkflowNode[] {
+    const version = execution?.version ?? run.version;
+    const legacy = execution?.version === undefined;
+    const key = `${run.workflowId}:${version}:${legacy}`;
     let nodes = nodeDefCache.get(key);
     if (!nodes) {
-      const versionRecord = store.getVersion(run.workflowId, run.version);
+      const versionRecord = store.getVersion(run.workflowId, version);
       if (versionRecord) {
         nodes = versionRecord.definition?.nodes ?? [];
-      } else {
+      } else if (legacy) {
         const wf = store.get<{ draft?: { nodes: WorkflowNode[] } }>(
           'workflows',
           run.workflowId,
         );
         nodes = wf?.draft?.nodes ?? [];
+      } else {
+        nodes = [];
       }
       nodeDefCache.set(key, nodes);
     }
@@ -251,13 +259,12 @@ export function generateWorkflowReport(
   >();
 
   for (const run of runs) {
-    const nodes = getWorkflowNodes(run);
-    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-
     const perRunStageDuration = new Map<string, number>();
 
     for (const exec of run.executions) {
-      const node = nodeMap.get(exec.nodeId);
+      const node = getWorkflowNodes(run, exec).find(
+        (n) => n.id === exec.nodeId,
+      );
       const stage = node?.stage ?? null;
 
       if (!nodeMetaMap.has(exec.nodeId)) {
@@ -266,6 +273,8 @@ export function generateWorkflowReport(
           kind: exec.kind ?? node?.kind ?? 'unknown',
           stage,
         });
+      } else if (nodeMetaMap.get(exec.nodeId)!.stage !== stage) {
+        nodeMetaMap.get(exec.nodeId)!.stage = null;
       }
 
       if (exec.startedAt && exec.completedAt) {
@@ -742,10 +751,19 @@ export function generateWorkflowReport(
       const exitExecution = run.executions
         .slice()
         .reverse()
-        .find((e) => exitNodeIdSet.has(e.nodeId));
+        .find(
+          (e) =>
+            e.status === 'completed' &&
+            (e.kind === 'exit' ||
+              getWorkflowNodes(run, e).some(
+                (node) => node.id === e.nodeId && node.kind === 'exit',
+              )),
+        );
       if (exitExecution) {
         exitNodeId = exitExecution.nodeId;
-        const matched = exitNodes.find((n) => n.id === exitNodeId);
+        const matched = getWorkflowNodes(run, exitExecution).find(
+          (n) => n.id === exitNodeId,
+        );
         exitNodeLabel = matched?.label ?? exitExecution.label ?? exitNodeId;
       } else if (exitNodeIdSet.has(run.cursor)) {
         exitNodeId = run.cursor;
