@@ -2,6 +2,7 @@ import {
   reportFilterSchema,
   workflowReportSchema,
   calculateDistribution,
+  elapsedExcludingPausesMs,
   formatCurrencyAmount,
   selectedUsageReport,
   type ReportFilter,
@@ -39,20 +40,40 @@ interface RecoveryEventRecord {
   }[];
 }
 
+type Elapsed = ReturnType<typeof elapsedExcludingPausesMs>;
+const zeroElapsed = (): Elapsed => ({ wallMs: 0, pausedMs: 0, activeMs: 0 });
+function addElapsed(total: Elapsed, interval: Elapsed): void {
+  total.wallMs += interval.wallMs;
+  total.pausedMs += interval.pausedMs;
+  total.activeMs += interval.activeMs;
+}
+function elapsedDistribution(intervals: Elapsed[]) {
+  return {
+    ...calculateDistribution(intervals.map((interval) => interval.wallMs)),
+    pausedMs: calculateDistribution(
+      intervals.map((interval) => interval.pausedMs),
+    ),
+    activeMs: calculateDistribution(
+      intervals.map((interval) => interval.activeMs),
+    ),
+  };
+}
+
 export function generateWorkflowReport(
   store: Store,
   engine: Engine,
   input: ReportFilter,
 ): WorkflowReport {
+  const reportNowMs = Date.now();
   const filter = reportFilterSchema.parse(input);
   const runs = store.runsForReport(filter);
 
   // If no runs found
   if (runs.length === 0) {
-    const emptyDist = calculateDistribution([]);
+    const emptyDist = elapsedDistribution([]);
     return {
       filter,
-      generatedAt: new Date().toISOString(),
+      generatedAt: new Date(reportNowMs).toISOString(),
       window: {
         since: filter.since ?? null,
         until: filter.until ?? null,
@@ -151,10 +172,20 @@ export function generateWorkflowReport(
     return nodes;
   }
 
+  const pauseCache = new Map<string, ReturnType<Store['pauseHolds']>>();
+  function elapsed(run: Run, start: number, end: number): Elapsed {
+    let holds = pauseCache.get(run.workflowId);
+    if (!holds) {
+      holds = store.pauseHolds(run.workflowId, true);
+      pauseCache.set(run.workflowId, holds);
+    }
+    return elapsedExcludingPausesMs(start, end, holds);
+  }
+
   // 1. Run durations, Admission Queue wait (H8), and Human wait
-  const runDurations: number[] = [];
-  const admissionQueueWaits: number[] = [];
-  const humanWaits: number[] = [];
+  const runDurations: Elapsed[] = [];
+  const admissionQueueWaits: Elapsed[] = [];
+  const humanWaits: Elapsed[] = [];
   const runHumanWaitMap = new Map<string, number>();
 
   const workIdsByRun = new Map<string, Set<string>>();
@@ -193,9 +224,9 @@ export function generateWorkflowReport(
           : run.updatedAt
             ? Date.parse(run.updatedAt)
             : createdAtMs;
-      runDurations.push(Math.max(0, endMs - createdAtMs));
+      runDurations.push(elapsed(run, createdAtMs, endMs));
     } else {
-      runDurations.push(Math.max(0, Date.now() - createdAtMs));
+      runDurations.push(elapsed(run, createdAtMs, reportNowMs));
     }
 
     // Admission queue wait (H8)
@@ -203,20 +234,20 @@ export function generateWorkflowReport(
       const queuedAtMs = Date.parse(run.admission.queuedAt);
       if (run.admission.admittedAt) {
         admissionQueueWaits.push(
-          Math.max(0, Date.parse(run.admission.admittedAt) - queuedAtMs),
+          elapsed(run, queuedAtMs, Date.parse(run.admission.admittedAt)),
         );
       } else if (run.status === 'queued') {
-        admissionQueueWaits.push(Math.max(0, Date.now() - queuedAtMs));
+        admissionQueueWaits.push(elapsed(run, queuedAtMs, reportNowMs));
       } else {
-        admissionQueueWaits.push(0);
+        admissionQueueWaits.push(zeroElapsed());
       }
     } else {
       // Admitted immediately
-      admissionQueueWaits.push(0);
+      admissionQueueWaits.push(zeroElapsed());
     }
 
     // Human wait
-    let humanWaitMs = 0;
+    const humanWait = zeroElapsed();
     // (a) External input node executions
     for (const exec of run.executions) {
       if (exec.kind === 'input' && exec.startedAt) {
@@ -225,8 +256,8 @@ export function generateWorkflowReport(
           ? Date.parse(exec.completedAt)
           : run.updatedAt
             ? Date.parse(run.updatedAt)
-            : Date.now();
-        humanWaitMs += Math.max(0, end - start);
+            : reportNowMs;
+        addElapsed(humanWait, elapsed(run, start, end));
       }
     }
     // (b) Declared work holds (human intervention/holds)
@@ -239,27 +270,27 @@ export function generateWorkflowReport(
             ? Date.parse(hold.endedAt)
             : run.updatedAt
               ? Date.parse(run.updatedAt)
-              : Date.now();
-          humanWaitMs += Math.max(0, end - start);
+              : reportNowMs;
+          addElapsed(humanWait, elapsed(run, start, end));
         }
       }
     }
-    humanWaits.push(humanWaitMs);
-    runHumanWaitMap.set(run.id, humanWaitMs);
+    humanWaits.push(humanWait);
+    runHumanWaitMap.set(run.id, humanWait.wallMs);
   }
 
   // 2. Stage durations (H4) and Node durations
-  const stageDurationsMap = new Map<string, number[]>();
+  const stageDurationsMap = new Map<string, Elapsed[]>();
   const stageRunCountMap = new Map<string, Set<string>>();
 
-  const nodeDurationsMap = new Map<string, number[]>();
+  const nodeDurationsMap = new Map<string, Elapsed[]>();
   const nodeMetaMap = new Map<
     string,
     { label: string; kind: string; stage?: string | null }
   >();
 
   for (const run of runs) {
-    const perRunStageDuration = new Map<string, number>();
+    const perRunStageDuration = new Map<string, Elapsed>();
 
     for (const exec of run.executions) {
       const node = getWorkflowNodes(run, exec).find(
@@ -278,9 +309,10 @@ export function generateWorkflowReport(
       }
 
       if (exec.startedAt && exec.completedAt) {
-        const duration = Math.max(
-          0,
-          Date.parse(exec.completedAt) - Date.parse(exec.startedAt),
+        const duration = elapsed(
+          run,
+          Date.parse(exec.startedAt),
+          Date.parse(exec.completedAt),
         );
         let list = nodeDurationsMap.get(exec.nodeId);
         if (!list) {
@@ -290,10 +322,9 @@ export function generateWorkflowReport(
         list.push(duration);
 
         if (stage) {
-          perRunStageDuration.set(
-            stage,
-            (perRunStageDuration.get(stage) ?? 0) + duration,
-          );
+          const total = perRunStageDuration.get(stage) ?? zeroElapsed();
+          addElapsed(total, duration);
+          perRunStageDuration.set(stage, total);
         }
       }
     }
@@ -319,7 +350,7 @@ export function generateWorkflowReport(
     stageDurationsMap.entries(),
   ).map(([stage, durations]) => ({
     stage,
-    durationMs: calculateDistribution(durations),
+    durationMs: elapsedDistribution(durations),
     runCount: stageRunCountMap.get(stage)?.size ?? 0,
   }));
 
@@ -332,7 +363,7 @@ export function generateWorkflowReport(
       label: meta?.label ?? nodeId,
       kind: meta?.kind ?? 'unknown',
       stage: meta?.stage,
-      durationMs: calculateDistribution(durations),
+      durationMs: elapsedDistribution(durations),
       executionCount: durations.length,
     };
   });
@@ -341,8 +372,8 @@ export function generateWorkflowReport(
   nodeMetrics.sort((a, b) => b.executionCount - a.executionCount);
 
   // 3. Claims: claim wait (available -> claimed) split by new vs continuing session
-  const newSessionWaits: number[] = [];
-  const continuingSessionWaits: number[] = [];
+  const newSessionWaits: Elapsed[] = [];
+  const continuingSessionWaits: Elapsed[] = [];
 
   const workMap = new Map(workList.map((w) => [w.id, w]));
 
@@ -351,28 +382,20 @@ export function generateWorkflowReport(
     const work = workMap.get(attempt.workId);
     if (!work) continue;
 
-    let waitMs = 0;
-    if (attempt.attempt === 1) {
-      waitMs = Math.max(
-        0,
-        Date.parse(attempt.claimedAt) - Date.parse(work.createdAt),
-      );
-    } else {
-      const prevAttempt = attemptsList.find(
-        (a) => a.workId === attempt.workId && a.attempt === attempt.attempt - 1,
-      );
-      if (prevAttempt?.endedAt) {
-        waitMs = Math.max(
-          0,
-          Date.parse(attempt.claimedAt) - Date.parse(prevAttempt.endedAt),
-        );
-      } else {
-        waitMs = Math.max(
-          0,
-          Date.parse(attempt.claimedAt) - Date.parse(work.createdAt),
-        );
-      }
-    }
+    const run = runs.find((run) => run.id === work.runId);
+    if (!run) continue;
+    const previous =
+      attempt.attempt > 1
+        ? attemptsList.find(
+            (a) =>
+              a.workId === attempt.workId && a.attempt === attempt.attempt - 1,
+          )
+        : undefined;
+    const waitMs = elapsed(
+      run,
+      Date.parse(previous?.endedAt ?? work.createdAt),
+      Date.parse(attempt.claimedAt),
+    );
 
     const isContinuing = Boolean(
       work.context?.continuityGroup &&
@@ -824,22 +847,22 @@ export function generateWorkflowReport(
 
   return {
     filter,
-    generatedAt: new Date().toISOString(),
+    generatedAt: new Date(reportNowMs).toISOString(),
     window: {
       since: filter.since ?? null,
       until: filter.until ?? null,
     },
     summary: {
       totalRuns: totalRunsCount,
-      durationMs: calculateDistribution(runDurations),
-      admissionQueueWaitMs: calculateDistribution(admissionQueueWaits),
-      humanWaitMs: calculateDistribution(humanWaits),
+      durationMs: elapsedDistribution(runDurations),
+      admissionQueueWaitMs: elapsedDistribution(admissionQueueWaits),
+      humanWaitMs: elapsedDistribution(humanWaits),
     },
     stages: stageMetrics,
     nodes: nodeMetrics,
     claims: {
-      newSession: calculateDistribution(newSessionWaits),
-      continuingSession: calculateDistribution(continuingSessionWaits),
+      newSession: elapsedDistribution(newSessionWaits),
+      continuingSession: elapsedDistribution(continuingSessionWaits),
       totalAttempts,
       leaseExpiries,
       failures,

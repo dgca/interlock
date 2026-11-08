@@ -27,7 +27,10 @@ import {
   UserCheck,
   AlertCircle,
 } from 'lucide-react';
-import type { WorkflowReport } from '@interlock/core';
+import type {
+  WorkflowReport,
+  ElapsedDistributionMetric,
+} from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 import { TagFields, tagRows, tagsFromRows, type TagRow } from '../runs/RunTags';
@@ -48,6 +51,11 @@ export function WorkflowReportView({
   workflowId?: string;
 }) {
   const [report, setReport] = useState<WorkflowReport | null>(null);
+  const [timeBasis, setTimeBasis] = useState<'wall' | 'activeMs' | 'pausedMs'>(
+    'wall',
+  );
+  const metric = (value?: ElapsedDistributionMetric) =>
+    timeBasis === 'wall' ? value : value?.[timeBasis];
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,6 +137,20 @@ export function WorkflowReportView({
           </Text>
         </div>
         <Group gap="sm">
+          <Select
+            aria-label="Duration basis"
+            value={timeBasis}
+            onChange={(value) =>
+              setTimeBasis((value as typeof timeBasis) ?? 'wall')
+            }
+            data={[
+              { value: 'wall', label: 'Wall time' },
+              { value: 'activeMs', label: 'Active time (excludes pauses)' },
+              { value: 'pausedMs', label: 'Paused time' },
+            ]}
+            size="sm"
+            style={{ width: 230 }}
+          />
           <Select
             placeholder="All Workflows"
             clearable
@@ -262,10 +284,10 @@ export function WorkflowReportView({
                 <Clock size={16} />
               </Group>
               <Text fz="xl" fw={700}>
-                {formatMs(summary?.durationMs.median)}
+                {formatMs(metric(summary?.durationMs)?.median)}
               </Text>
               <Text size="xs" c="dimmed">
-                p90: {formatMs(summary?.durationMs.p90)}
+                p90: {formatMs(metric(summary?.durationMs)?.p90)}
               </Text>
             </Card>
 
@@ -277,10 +299,10 @@ export function WorkflowReportView({
                 <Clock size={16} />
               </Group>
               <Text fz="xl" fw={700}>
-                {formatMs(summary?.admissionQueueWaitMs.median)}
+                {formatMs(metric(summary?.admissionQueueWaitMs)?.median)}
               </Text>
               <Text size="xs" c="dimmed">
-                p90: {formatMs(summary?.admissionQueueWaitMs.p90)}
+                p90: {formatMs(metric(summary?.admissionQueueWaitMs)?.p90)}
               </Text>
             </Card>
 
@@ -292,10 +314,10 @@ export function WorkflowReportView({
                 <UserCheck size={16} />
               </Group>
               <Text fz="xl" fw={700}>
-                {formatMs(summary?.humanWaitMs.median)}
+                {formatMs(metric(summary?.humanWaitMs)?.median)}
               </Text>
               <Text size="xs" c="dimmed">
-                p90: {formatMs(summary?.humanWaitMs.p90)}
+                p90: {formatMs(metric(summary?.humanWaitMs)?.p90)}
               </Text>
             </Card>
 
@@ -340,15 +362,15 @@ export function WorkflowReportView({
                 <Group justify="space-between">
                   <Text size="sm">New Session Wait (Median / P90):</Text>
                   <Text size="sm" fw={600}>
-                    {formatMs(claims?.newSession.median)} /{' '}
-                    {formatMs(claims?.newSession.p90)}
+                    {formatMs(metric(claims?.newSession)?.median)} /{' '}
+                    {formatMs(metric(claims?.newSession)?.p90)}
                   </Text>
                 </Group>
                 <Group justify="space-between">
                   <Text size="sm">Continuing Session Wait (Median / P90):</Text>
                   <Text size="sm" fw={600}>
-                    {formatMs(claims?.continuingSession.median)} /{' '}
-                    {formatMs(claims?.continuingSession.p90)}
+                    {formatMs(metric(claims?.continuingSession)?.median)} /{' '}
+                    {formatMs(metric(claims?.continuingSession)?.p90)}
                   </Text>
                 </Group>
                 <Group justify="space-between">
@@ -429,8 +451,12 @@ export function WorkflowReportView({
                       <Table.Tr key={st.stage}>
                         <Table.Td fw={500}>{st.stage}</Table.Td>
                         <Table.Td>{st.runCount}</Table.Td>
-                        <Table.Td>{formatMs(st.durationMs.median)}</Table.Td>
-                        <Table.Td>{formatMs(st.durationMs.p90)}</Table.Td>
+                        <Table.Td>
+                          {formatMs(metric(st.durationMs)?.median)}
+                        </Table.Td>
+                        <Table.Td>
+                          {formatMs(metric(st.durationMs)?.p90)}
+                        </Table.Td>
                       </Table.Tr>
                     ))}
                   </Table.Tbody>
@@ -577,8 +603,10 @@ export function WorkflowReportView({
                       <Table.Td>{n.kind}</Table.Td>
                       <Table.Td>{n.stage ?? '—'}</Table.Td>
                       <Table.Td>{n.executionCount}</Table.Td>
-                      <Table.Td>{formatMs(n.durationMs.median)}</Table.Td>
-                      <Table.Td>{formatMs(n.durationMs.p90)}</Table.Td>
+                      <Table.Td>
+                        {formatMs(metric(n.durationMs)?.median)}
+                      </Table.Td>
+                      <Table.Td>{formatMs(metric(n.durationMs)?.p90)}</Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Tbody>

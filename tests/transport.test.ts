@@ -177,6 +177,19 @@ it.each(['stdio', 'http'])(
         draftRevision: engine.workflow(w.id).draftRevision,
       });
       const toolDiscovery = await client.listTools();
+      expect(
+        toolDiscovery.tools.find((tool) => tool.name === 'workflow_report')
+          ?.description,
+      ).toContain('pausedMs/activeMs');
+      expect(
+        (await call('workflow_report', { workflowId: w.id })).summary
+          .durationMs,
+      ).toMatchObject({
+        count: 0,
+        pausedMs: { count: 0 },
+        activeMs: { count: 0 },
+      });
+
       const resourceTool = toolDiscovery.tools.find(
         (t) => t.name === 'manage_work_resources',
       )!;

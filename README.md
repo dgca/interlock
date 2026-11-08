@@ -194,7 +194,7 @@ Standalone recurring Agent workflows can use an Exit with `continueAsNew:{maxRun
 
 ### Retry a task start safely
 
-Optional `start_run.requestId` recovers the original run after repeated delivery or a lost response. `externalTask` links a run to a non-secret task identity for existing lookup tools. Old keys cannot recreate deleted history; deliberate new attempts use new keys. Optional [run tags](docs/idempotent-run-starts.md#tag-and-filter-runs) label ordinary and triggered runs with up to 16 string pairs. Filter Runs, MCP `list_runs`, or `interlock runs --tag repo=dgca/interlock` by exact pairs. Reports accept the same filter through the UI, MCP `workflow_report`, or `interlock report --tag repo=dgca/interlock`. Tags inherit through child runs and chains. See [idempotent run starts](docs/idempotent-run-starts.md) for MCP, CLI and retention rules.
+Optional `start_run.requestId` recovers the original run after repeated delivery or a lost response. `externalTask` links a run to a non-secret task identity for existing lookup tools. Old keys cannot recreate deleted history; deliberate new attempts use new keys. Optional [run tags](docs/idempotent-run-starts.md#tag-and-filter-runs) label ordinary and triggered runs with up to 16 string pairs. Filter Runs, MCP `list_runs`, or `interlock runs --tag repo=dgca/interlock` by exact pairs. Reports expose wall, paused, and active elapsed time; the UI’s Duration basis selects which to display. Reports accept the same filter through the UI, MCP `workflow_report`, or `interlock report --tag repo=dgca/interlock`. Tags inherit through child runs and chains. See [idempotent run starts](docs/idempotent-run-starts.md) for MCP, CLI and retention rules.
 
 ### Coordinate shared resources
 
