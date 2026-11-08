@@ -197,6 +197,68 @@ it.each(['http', 'stdio'])(
         ).toBe(0);
       }
 
+      const invalidDateBounds = [
+        { since: '2026-11-03T00:00:00+24:00' },
+        { until: '2026-11-03T00:00:00+01:99' },
+        { since: '2026-11-03T00:00:00+99:99' },
+        { since: '2026-02-30T00:00:00Z' },
+        { until: '2025-02-29T00:00:00Z' },
+        { since: '9999-12-31T23:59:59-01:00' },
+        { until: '9999-12-31T23:59:59-01:00' },
+        { since: '9999-12-31T23:59:59.9999Z' },
+        { until: '0000-01-01T00:00:00+01:00' },
+      ];
+      for (const bound of invalidDateBounds) {
+        for (const [name, procedure] of [
+          ['report.summary', api.report.summary],
+          ['system.report', api.system.report],
+        ] as const) {
+          await expect(procedure.query(bound)).rejects.toMatchObject({
+            data: { code: 'BAD_REQUEST', httpStatus: 400 },
+          });
+          const response = await fetch(
+            url +
+              '/trpc/' +
+              name +
+              '?input=' +
+              encodeURIComponent(JSON.stringify(bound)),
+          );
+          expect(response.status, JSON.stringify(bound)).toBe(400);
+          expect(await response.text()).toContain('BAD_REQUEST');
+        }
+        const rejected = await client.callTool({
+          name: 'workflow_report',
+          arguments: bound,
+        });
+        expect(rejected.isError, JSON.stringify(bound)).toBe(true);
+        expect(JSON.stringify(rejected.content)).toMatch(/datetime/i);
+        expect(JSON.stringify(rejected.content)).not.toContain(
+          'Invalid time value',
+        );
+        const [field, value] = Object.entries(bound)[0];
+        await expect(
+          runCommand(['report', '--' + field, value]),
+        ).rejects.toMatchObject({
+          data: { code: 'BAD_REQUEST', httpStatus: 400 },
+        });
+      }
+      const supportedRange = {
+        tags: { batch: tags.batch },
+        since: '0000-01-01T01:00:00+01:00',
+        until: '9999-12-31T23:59:59.9999Z',
+      };
+      expect(
+        (await call('workflow_report', supportedRange)).usage.byRun.map(
+          (run: { runId: string }) => run.runId,
+        ),
+      ).toEqual([id]);
+      for (const procedure of [api.report.summary, api.system.report])
+        expect(
+          (await procedure.query(supportedRange)).usage.byRun.map(
+            (run) => run.runId,
+          ),
+        ).toEqual([id]);
+
       const reportFilter = {
         workflowId: workflow.id,
         tags: { repo: tags.repo, batch: tags.batch },

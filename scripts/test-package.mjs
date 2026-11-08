@@ -174,6 +174,24 @@ try {
   assert.deepEqual(connection.args, ['mcp']);
   assert.equal(connection.env.INTERLOCK_URL, url);
   assert.equal(connection.development, false);
+  const assertInvalidReportBounds = async () => {
+    for (const bounds of [
+      { since: '2026-11-03T00:00:00+24:00' },
+      { until: '9999-12-31T23:59:59-01:00' },
+      { since: '9999-12-31T23:59:59.9999Z' },
+    ]) {
+      const rejected = await client.callTool({
+        name: 'workflow_report',
+        arguments: bounds,
+      });
+      assert.equal(rejected.isError, true);
+      assert.match(JSON.stringify(rejected.content), /valid datetime/i);
+      assert.doesNotMatch(
+        JSON.stringify(rejected.content),
+        /RangeError|Invalid time value/,
+      );
+    }
+  };
   client = new Client({ name: 'package-smoke', version: '1.0.0' });
   await client.connect(
     new StdioClientTransport({
@@ -195,12 +213,14 @@ try {
   assert(!stdioWorkflows.isError, JSON.stringify(stdioWorkflows));
   const starters = JSON.parse(stdioWorkflows.content[0].text);
   assert.deepEqual(starters, []);
+  await assertInvalidReportBounds();
   await client.close();
   client = new Client({ name: 'package-http-smoke', version: '1.0.0' });
   await client.connect(
     new StreamableHTTPClientTransport(new URL(connection.mcpUrl)),
   );
   assert.equal(client.getServerVersion().version, version);
+  await assertInvalidReportBounds();
   const call = async (name, args = {}) => {
     const response = await client.callTool({ name, arguments: args });
     assert(!response.isError, JSON.stringify(response));
@@ -550,6 +570,21 @@ try {
     repo: 'package-smoke',
     batch: 'report=7',
   });
+
+  for (const bound of [
+    '2026-11-03T00:00:00+24:00',
+    '9999-12-31T23:59:59-01:00',
+    '9999-12-31T23:59:59.9999Z',
+  ]) {
+    const invalidReport = spawnSync(
+      bin,
+      ['report', '--since', bound, '--json'],
+      { cwd: workdir, env: { ...env, INTERLOCK_URL: url }, encoding: 'utf8' },
+    );
+    assert.equal(invalidReport.status, 1);
+    assert.match(invalidReport.stderr, /valid datetime/i);
+    assert.doesNotMatch(invalidReport.stderr, /RangeError|Invalid time value/);
+  }
 
   // macOS resolves /var to /private/var for the working directory.
   const { realpath } = await import('node:fs/promises');

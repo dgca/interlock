@@ -51,6 +51,7 @@ Workflow triggers: triggers (schedules is an alias) <read|manage> <json|@file>
 Kinds: schedule, webhook, event. Event triggers match run transitions with optional quiescence.
 Named pause holds: pause, pause-holds, resume
 Workflow performance and cost report: report [--workflow <id>] [--since <ISO datetime>] [--until <ISO datetime>] [--limit <n>] [--tag KEY=VALUE ...] [--json]
+Report dates must be valid ISO datetimes whose rounded UTC bounds stay within years 0000 through 9999.
 System readiness check: doctor [--live] [--json]
 Run 'interlock commands' for argument syntax.
 

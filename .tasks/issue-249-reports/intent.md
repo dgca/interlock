@@ -27,3 +27,5 @@ Preserve local .interlock data and use temporary test databases. No new database
 ## Review correction authorization
 
 The parent follow-up after fresh review of 890d23060d609d4292afcd62e02c3423c19660f9 explicitly requires fixing failed-filter result attribution and the accepted ISO date boundary semantics. Preserve the same run and baseline, stable finding IDs, report defaults and calculations. Normalize accepted timestamps rather than documenting a known semantic error. Independent final review and publication restrictions remain unchanged.
+
+The subsequent parent correction request explicitly authorizes supported timestamp bounds with clear validation errors for malformed or out-of-range dates. It does not request broader date parsing. Preserve normal accepted date and tag semantics while preventing server errors and inverted selections.

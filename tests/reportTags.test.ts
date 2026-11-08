@@ -331,3 +331,77 @@ it('compares inclusive report bounds by instant across offsets and timestamp pre
       .usage.byRun.map((r) => r.runId),
   ).toEqual(['before-boundary']);
 });
+
+it('rejects malformed or out-of-range date bounds in the actual core schema before execution', () => {
+  const { engine } = setup();
+  const malformed = [
+    '2026-11-03T00:00:00+24:00',
+    '2026-11-03T00:00:00+01:99',
+    '2026-11-03T00:00:00+99:99',
+    '2026-02-30T00:00:00Z',
+    '2025-02-29T00:00:00Z',
+    '2026-11-03T24:00:00Z',
+  ];
+  for (const key of ['since', 'until'] as const) {
+    for (const value of [
+      ...malformed,
+      '9999-12-31T23:59:59-01:00',
+      '0000-01-01T00:00:00+01:00',
+    ]) {
+      expect(
+        reportFilterSchema.safeParse({ [key]: value }).success,
+        key + ' ' + value,
+      ).toBe(false);
+      expect(() => engine.report({ [key]: value })).toThrow();
+    }
+  }
+  expect(
+    reportFilterSchema.safeParse({ since: '9999-12-31T23:59:59.9999Z' })
+      .success,
+  ).toBe(false);
+  expect(
+    reportFilterSchema.safeParse({ until: '9999-12-31T23:59:59.9999Z' })
+      .success,
+  ).toBe(true);
+  expect(
+    engine.report({
+      since: '0000-01-01T00:00:00Z',
+      until: '9999-12-31T23:59:59.9999Z',
+    }).summary.totalRuns,
+  ).toBe(0);
+});
+
+it('keeps supported year limits inclusive after offset and fraction normalization', () => {
+  const { store, engine, workflowId } = setup();
+  const run = seed(store, workflowId, 'current', 3);
+  for (const [id, createdAt] of [
+    ['first', '0000-01-01T00:00:00.000Z'],
+    ['last', '9999-12-31T23:59:59.999Z'],
+  ])
+    store.put('runs', {
+      ...run,
+      id,
+      createdAt,
+      updatedAt: createdAt,
+      executions: [],
+    });
+  expect(
+    engine.report({
+      since: '0000-01-01T01:00:00+01:00',
+      until: '9999-12-31T23:59:59.9999Z',
+    }).summary.totalRuns,
+  ).toBe(3);
+  expect(
+    engine
+      .report({
+        since: '9999-12-31T23:59:59.999Z',
+        until: '9999-12-31T23:59:59.9999Z',
+      })
+      .usage.byRun.map((r) => r.runId),
+  ).toEqual(['last']);
+  expect(
+    engine
+      .report({ since: '0000-01-01T00:00:00.0001Z' })
+      .usage.byRun.map((r) => r.runId),
+  ).not.toContain('first');
+});
