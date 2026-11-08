@@ -87,8 +87,9 @@ export class WorkflowTriggers {
     try {
       this.assertTarget(trigger);
       canEnable = true;
-    } catch {
+    } catch (error) {
       // Unavailable targets remain inspectable; enable uses the same checks.
+      if (!(error instanceof InterlockError)) throw error;
     }
     return {
       ...trigger,
