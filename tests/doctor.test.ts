@@ -208,6 +208,25 @@ describe('doctor health and readiness check', () => {
   });
 
   describe('trigger checks', () => {
+    it.each(['schedule', 'webhook', 'event'])(
+      'ignores disabled %s trigger failure history',
+      async (kind) => {
+        const { engine, store } = createEnv();
+        const workflow = engine.create('Disabled trigger');
+        engine.publish(workflow.id);
+        store.put('workflowTriggers', {
+          id: 'disabled-trigger',
+          kind,
+          workflowId: workflow.id,
+          name: 'Deliberately disabled',
+          enabled: false,
+          consecutiveFailures: 3,
+          autoPaused: { at: new Date().toISOString(), reason: 'Old failure' },
+          nextFireAt: new Date(0).toISOString(),
+        });
+        expect((await engine.doctor()).status).toBe('ok');
+      },
+    );
     it.each(['webhook', 'event'])(
       'detects failure and automatic pause for %s triggers',
       async (kind) => {

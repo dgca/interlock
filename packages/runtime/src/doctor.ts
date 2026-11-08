@@ -334,6 +334,7 @@ export async function runDoctor(
     let triggerIssues = 0;
 
     for (const trigger of triggers) {
+      if (!trigger.enabled) continue;
       if (trigger.autoPaused) {
         triggerIssues++;
         checks.push({
