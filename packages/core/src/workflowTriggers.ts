@@ -165,6 +165,7 @@ export function triggerConfig(trigger: WorkflowTrigger): TriggerConfig {
             'tags',
             'events',
             'scope',
+            'action',
             'exitNodeId',
             'waitForQuiescence',
             'maxTriggerDepth',

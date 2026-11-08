@@ -146,6 +146,11 @@ export function exportWorkflows(
           variableReferences,
         ),
         ...(w.webhooks ?? []).map((t) => t.config.authentication.secretId),
+        ...(w.eventTriggers ?? []).flatMap((t) =>
+          t.config.action?.type === 'webhook' && t.config.action.secretId
+            ? [t.config.action.secretId]
+            : [],
+        ),
       ]),
     ),
   ]);
