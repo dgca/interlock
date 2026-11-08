@@ -43,8 +43,9 @@ export function App() {
   const variableMatch = useMatch('/variables/*');
   const harnessMatch = useMatch('/settings/harnesses');
   const diagnosticsMatch = useMatch('/settings/diagnostics');
-  const reportMatch =
-    useMatch('/report') || useMatch('/workflows/:workflowId/report');
+  const libraryReportMatch = useMatch('/report');
+  const workflowReportMatch = useMatch('/workflows/:workflowId/report');
+  const reportMatch = libraryReportMatch || workflowReportMatch;
   const page = diagnosticsMatch
     ? 'diagnostics'
     : reportMatch

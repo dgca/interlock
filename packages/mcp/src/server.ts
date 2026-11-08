@@ -172,7 +172,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'workflow_report',
-    'Bounded workflow performance and cost report: run durations, queue wait, human wait, stage/node percentiles, claim wait, reliability, spend/coverage, and exit outcomes.',
+    'Workflow/library performance and cost for newest matching runs: durations, waits, reliability, measured spend/coverage and exits. Optional tags require every exact case-sensitive pair via the tag index before sampling. Limit default500/max5000; since/until filter createdAt, with no date default. All metrics cover only the selected sample.',
     reportFilterSchema,
     (filter) => client.report.summary(filter),
   );

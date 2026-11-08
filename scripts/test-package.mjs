@@ -503,6 +503,7 @@ try {
   const started = await call('start_run', {
     workflowId: workflow.id,
     input: 21,
+    tags: { repo: 'package-smoke', batch: 'report=7' },
   });
   let result;
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -513,6 +514,37 @@ try {
   }
   assert.equal(result.run.status, 'completed', JSON.stringify(result));
   assert.equal(result.run.output.number, 42);
+  const taggedReport = JSON.parse(
+    execFileSync(
+      bin,
+      [
+        'report',
+        '--tag',
+        'repo=package-smoke',
+        '--tag',
+        'batch=report=7',
+        '--limit',
+        '1',
+        '--json',
+      ],
+      {
+        cwd: workdir,
+        env: { ...env, INTERLOCK_URL: url },
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    ),
+  );
+  assert.equal(taggedReport.summary.totalRuns, 1);
+  assert.deepEqual(
+    taggedReport.usage.byRun.map((run) => run.runId),
+    [started.runId],
+  );
+  assert.deepEqual(taggedReport.filter.tags, {
+    repo: 'package-smoke',
+    batch: 'report=7',
+  });
+
   // macOS resolves /var to /private/var for the working directory.
   const { realpath } = await import('node:fs/promises');
   assert.equal(result.run.output.cwd, await realpath(workdir));

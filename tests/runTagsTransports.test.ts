@@ -66,7 +66,7 @@ it.each(['http', 'stdio'])(
           `Tagged MCP discovery: ${tools.length} tools, ${Buffer.byteLength(JSON.stringify(tools))} bytes`,
         );
       }
-      for (const name of ['start_run', 'list_runs'])
+      for (const name of ['start_run', 'list_runs', 'workflow_report'])
         expect(
           tools.find((tool) => tool.name === name)?.inputSchema.properties,
         ).toHaveProperty('tags');
@@ -76,6 +76,15 @@ it.each(['http', 'stdio'])(
             ?.inputSchema,
         ),
       ).toContain('tags');
+      expect(Buffer.byteLength(JSON.stringify(tools))).toBeLessThanOrEqual(
+        300_000,
+      );
+      const reportTool = tools.find((tool) => tool.name === 'workflow_report')!;
+      expect(reportTool.inputSchema.properties?.limit).toMatchObject({
+        default: 500,
+        maximum: 5000,
+      });
+      expect(reportTool.description).toContain('before sampling');
       const tags = { repo: 'dgca/interlock', batch: 'factory=7', empty: '' };
       const request = {
         workflowId: workflow.id,
@@ -121,6 +130,46 @@ it.each(['http', 'stdio'])(
       });
       expect(matching.map((run: { id: string }) => run.id)).toEqual([id]);
       expect(matching[0].tags).toEqual(tags);
+      const reportFilter = {
+        workflowId: workflow.id,
+        tags: { repo: tags.repo, batch: tags.batch },
+        limit: 1,
+      };
+      const report = await call('workflow_report', reportFilter);
+      expect(report).toMatchObject({
+        filter: reportFilter,
+        summary: { totalRuns: 1 },
+        usage: { byRun: [{ runId: id }] },
+      });
+      expect(
+        (await api.report.summary.query(reportFilter)).usage.byRun.map(
+          (run) => run.runId,
+        ),
+      ).toEqual([id]);
+      expect(
+        (await api.system.report.query(reportFilter)).summary.totalRuns,
+      ).toBe(1);
+      expect(
+        (await call('workflow_report', { tags: { repo: 'DGCA/interlock' } }))
+          .summary.totalRuns,
+      ).toBe(0);
+      const literalTags = JSON.parse(
+        '{"__proto__":"literal","constructor":"metadata","a.b":"factory=7"}',
+      );
+      const literalStart = await call('start_run', {
+        workflowId: workflow.id,
+        input: {},
+        tags: literalTags,
+      });
+      expect(
+        (await call('workflow_report', { tags: literalTags })).usage.byRun.map(
+          (run: { runId: string }) => run.runId,
+        ),
+      ).toEqual([literalStart.runId]);
+      expect(
+        (await call('workflow_report', { tags: {} })).summary.totalRuns,
+      ).toBe(4);
+
       expect(
         await call('list_runs', { tags: { repo: 'DGCA/interlock' } }),
       ).toEqual([]);
@@ -159,6 +208,23 @@ it.each(['http', 'stdio'])(
         'batch=' + tags.batch,
       ])) as { id: string }[];
       expect(cliRuns.map((run) => run.id)).toEqual([id]);
+      const cliReport = (await runCommand([
+        'report',
+        '--workflow',
+        workflow.id,
+        '--tag',
+        'repo=' + tags.repo,
+        '--tag',
+        'batch=' + tags.batch,
+        '--limit',
+        '1',
+      ])) as {
+        summary: { totalRuns: number };
+        usage: { byRun: { runId: string }[] };
+      };
+      expect(cliReport.summary.totalRuns).toBe(1);
+      expect(cliReport.usage.byRun.map((run) => run.runId)).toEqual([id]);
+
       await expect(
         runCommand(['runs', '--tag', 'missing-equals']),
       ).rejects.toThrow('KEY=VALUE');
@@ -180,6 +246,20 @@ it.each(['http', 'stdio'])(
           arguments: { workflowId: workflow.id, input: {}, tags: badTags },
         });
         expect(invalid.isError).toBe(true);
+        expect(
+          (
+            await client.callTool({
+              name: 'workflow_report',
+              arguments: { tags: badTags },
+            })
+          ).isError,
+        ).toBe(true);
+        await expect(
+          api.report.summary.query({ tags: badTags as any }),
+        ).rejects.toThrow();
+        await expect(
+          api.system.report.query({ tags: badTags as any }),
+        ).rejects.toThrow();
       }
       const trigger = await call('manage_workflow_triggers', {
         request: {

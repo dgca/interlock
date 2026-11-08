@@ -5,6 +5,13 @@ export function runsForReport(db: DatabaseSync, filter: ReportFilter): Run[] {
   const conditions = ["collection = 'runs'"];
   const params: (string | number)[] = [];
 
+  for (const [key, value] of Object.entries(filter.tags ?? {})) {
+    conditions.push(
+      'id IN (SELECT run_id FROM run_tags WHERE tag_key = ? AND tag_value = ?)',
+    );
+    params.push(key, value);
+  }
+
   if (filter.workflowId !== undefined) {
     conditions.push("json_extract(value, '$.workflowId') = ?");
     params.push(filter.workflowId);

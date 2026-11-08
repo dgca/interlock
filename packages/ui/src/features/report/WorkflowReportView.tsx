@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Badge,
   Card,
@@ -30,6 +30,8 @@ import {
 import type { WorkflowReport } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
 import layout from '../../components/PageLayout/PageLayout.module.css';
+import { TagFields, tagRows, tagsFromRows, type TagRow } from '../runs/RunTags';
+import tagStyles from '../runs/RunTags.module.css';
 
 function formatMs(ms: number | null | undefined): string {
   if (ms === null || ms === undefined) return '—';
@@ -53,6 +55,10 @@ export function WorkflowReportView({
     initialWorkflowId ?? null,
   );
   const [timePreset, setTimePreset] = useState<TimePreset>('7d');
+  const [tags, setTags] = useState<Record<string, string>>();
+  const [filterRows, setFilterRows] = useState<TagRow[]>(tagRows());
+  const [filterError, setFilterError] = useState('');
+  const requestSequence = useRef(0);
   const [workflowsList, setWorkflowsList] = useState<
     { value: string; label: string }[]
   >([]);
@@ -73,6 +79,7 @@ export function WorkflowReportView({
   }, []);
 
   const fetchReport = useCallback(async () => {
+    const request = ++requestSequence.current;
     setLoading(true);
     setError(null);
 
@@ -91,14 +98,15 @@ export function WorkflowReportView({
         workflowId: selectedWorkflowId || undefined,
         since,
         limit: 1000,
+        ...(tags !== undefined ? { tags } : {}),
       });
-      setReport(result);
+      if (request === requestSequence.current) setReport(result);
     } catch (err) {
-      setError(errorMessage(err));
+      if (request === requestSequence.current) setError(errorMessage(err));
     } finally {
-      setLoading(false);
+      if (request === requestSequence.current) setLoading(false);
     }
-  }, [selectedWorkflowId, timePreset]);
+  }, [selectedWorkflowId, timePreset, tags]);
 
   useEffect(() => {
     void fetchReport();
@@ -157,6 +165,52 @@ export function WorkflowReportView({
           </Button>
         </Group>
       </header>
+
+      <details className={tagStyles.filter}>
+        <summary>
+          Filter by tags
+          {Object.keys(tags ?? {}).length
+            ? ` (${Object.keys(tags!).length})`
+            : ''}
+        </summary>
+        <TagFields
+          label="Matching tags"
+          showLabel={false}
+          description="Match every key and value exactly. Up to 16 pairs."
+          rows={filterRows}
+          onChange={(rows) => {
+            setFilterRows(rows);
+            setFilterError('');
+          }}
+          error={filterError}
+        />
+        <Group mt="sm" gap="xs">
+          <Button
+            size="xs"
+            onClick={() => {
+              try {
+                setTags(tagsFromRows(filterRows));
+                setFilterError('');
+              } catch (error) {
+                setFilterError(errorMessage(error));
+              }
+            }}
+          >
+            Apply filters
+          </Button>
+          <Button
+            size="xs"
+            variant="subtle"
+            onClick={() => {
+              setFilterRows([]);
+              setFilterError('');
+              setTags(undefined);
+            }}
+          >
+            Clear filters
+          </Button>
+        </Group>
+      </details>
 
       {error && (
         <Alert

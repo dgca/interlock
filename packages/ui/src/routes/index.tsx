@@ -115,7 +115,10 @@ function ReportRoute() {
     <Suspense
       fallback={<RouteLoading label="Loading performance and cost report…" />}
     >
-      <WorkflowReportView workflowId={workflowId} />
+      <WorkflowReportView
+        key={workflowId ?? 'library'}
+        workflowId={workflowId}
+      />
     </Suspense>
   );
 }

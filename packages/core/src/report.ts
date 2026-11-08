@@ -1,7 +1,13 @@
 import { z } from 'zod';
+import { runTagsSchema } from './runTags.js';
 
 export const reportFilterSchema = z
   .object({
+    tags: runTagsSchema
+      .optional()
+      .describe(
+        'Every exact case-sensitive pair must match; max 16 pairs, keys/values max 64 characters.',
+      ),
     workflowId: z.string().trim().min(1).max(256).optional(),
     since: z.string().datetime({ offset: true }).optional(),
     until: z.string().datetime({ offset: true }).optional(),

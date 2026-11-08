@@ -183,20 +183,36 @@ Attempt groups include `wallMs`, `pausedMs`, and `activeMs`, with null values wh
 
 Use `interlock report`, the MCP tool `workflow_report`, the shared API `report.summary`, or the UI **Reports** view (`/report` or `/workflows/:id/report`) to generate operational performance and cost reports over a single workflow or across the entire library.
 
-Reports evaluate runs within a bounded time window (`since` and `until`, defaulting to the past 30 days) and sample limit (default 100, maximum 1000 runs):
+Reports select the newest matching runs by creation time. Optional `since` and `until` timestamps are inclusive and accept ISO datetimes with a timezone offset. Omitted dates impose no restriction. The sample limit defaults to 500 and accepts 1 through 5000 runs. The UI initially selects the past seven days and requests up to 1000 runs.
 
 ```sh
 interlock report
-interlock report --workflow WORKFLOW_ID --since 2026-01-01 --limit 50
-interlock report --json
+interlock report --workflow WORKFLOW_ID --since 2026-01-01T00:00:00Z --limit 50
+interlock report --tag repo=dgca/interlock --tag batch=factory-7 --json
 ```
 
-### Metrics and aggregations
+Repeat `--tag KEY=VALUE` for each required pair. Keys and values are literal, case-sensitive, and untrimmed. Values may be empty or contain `=`; duplicate keys reject. Reports use the existing tag bounds of 16 pairs, keys of 1 through 64 characters, and values of 0 through 64 characters. All pairs must match, and tag filters combine with workflow and date filters. An empty tag filter imposes no restriction.
 
-Each report aggregates operational metrics across completed, failed, and active runs in the window:
+MCP `workflow_report` and shared `report.summary` accept the same filter:
 
-- **Run duration & wait times**: Reports median (p50) and 90th percentile (p90) wall time for terminal runs, active runs, admission queue wait (time between start request and admission when concurrency or stage exclusion gates apply), and human wait (time spent awaiting human input on Input nodes plus duration under declared pause holds).
-- **Stage and node durations**: Breaks down execution time by configured stage (H4) and per node (p50 and p90 durations), highlighting workflow bottlenecks.
-- **Claim latency and reliability**: Measures claim wait (available to claimed) separately for fresh sessions versus continuing continuity group sessions. Reliability metrics aggregate total claim attempts, lease expiries, attempt failures, managed harness recoveries (H7 restarts, nudges, retries), and inactivity stalls (H12).
-- **Spend and coverage**: Total input/output/cached/reasoning tokens and attributed costs aggregated by run, node, model/alias, and provider. Each metric explicitly states measured versus unknown coverage percentages so partial telemetry is never mistaken for complete measurement.
-- **Terminal outcomes and escalation rate**: Groups terminal runs by Exit node, tracking the count, percentage, unattended completion rate, and human escalation rate (runs finishing at escalation or human-review exit nodes).
+```json
+{
+  "tags": { "repo": "dgca/interlock", "batch": "factory-7" },
+  "since": "2026-01-01T00:00:00Z",
+  "limit": 50
+}
+```
+
+The Reports UI provides **Filter by tags** with **Apply filters** and **Clear filters** actions. Storage applies indexed tag matching before the sample limit. Every report metric and usage breakdown covers only the selected sample. Tags select runs; they do not create a tag grouping or automatically expand the sample to include descendants.
+
+### Metrics and limits
+
+- Run duration measures terminal wall time or active elapsed time. Admission queue wait measures time between queuing and admission. Human wait sums Input node execution time and declared work-hold intervals. Library and workflow pause intervals are not included in this human-wait metric.
+- Node durations include executions with both start and completion timestamps. Stage durations sum those node durations per stage within each run. Median and p90 interpolate between sorted observations at `(count - 1) * percentile`, rounded to two decimals. For example, observations of 1 and 10 produce p90 of 9.1.
+- Claim wait measures availability to claim, split by new versus continuing sessions. Reliability includes attempts, lease expiries, failures, managed recovery events, and inactivity stalls.
+- Usage totals sum supplied token and cost figures. Selected observer attempt snapshots take precedence over executor snapshots. Groups cover run, node, reported provider/model, and provider; model aliases have no separate grouping. Run-level observer streams contribute to totals and run, model, and provider groups, but not node groups or attempt coverage.
+- Measured coverage is the percentage of retained attempts with at least one selected model snapshot. It does not establish that each token or cost field is known or final. Missing numeric fields contribute zero to these report sums. Use `get_run_usage` or `interlock usage RUN_ID` for per-metric completeness, finality, overflow handling, and attempt details.
+- Top-level costs stay separated by currency. Each run, node, model, or provider breakdown has one cost amount and currency field. Use top-level currency totals when the selected data contains multiple currencies. Node and Exit group identities use node IDs across the sample, so reused IDs in different workflows can share a group.
+- Exit counts describe completed runs and percentages of completed runs. Unattended completion requires completion, zero recorded human wait, and an Exit label without `escalat`, `human`, or `manual`, compared case-insensitively. Human escalation includes any run with recorded human wait or a matching Exit label. Both rates use the entire selected sample as their denominator.
+
+Historical data can lack execution timestamps, usage receipts, or retained version definitions. Reports use retained evidence and may fall back to the current draft for missing node definitions. They do not reconstruct unavailable measurements. The sample limit bounds selected runs, not response bytes or the number of executions and receipts retained for each run.
