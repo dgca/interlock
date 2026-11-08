@@ -129,6 +129,76 @@ describe('captured alias report attribution', () => {
       store.list('usageAttempts').find((item: any) => item.workId === work.id),
     ).toMatchObject({ modelAliasSelection: { ...builder, aliasId: alias.id } });
   });
+  it('retains alias attribution when a diversity block clears', () => {
+    setup();
+    const alias = engine.modelAliases.mutate({
+      action: 'create',
+      name: 'reviewer',
+      candidates: [{ model: 'unmapped-review-model' }],
+    }) as import('@interlock/core').SavedModelAlias;
+    const def = blankDefinition();
+    def.nodes[1] = nodeSchema.parse({
+      id: 'author',
+      kind: 'agent',
+      label: 'Author',
+      prompt: 'Write',
+      model: 'claude-sonnet',
+    });
+    def.nodes.push(
+      nodeSchema.parse({
+        id: 'review',
+        kind: 'agent',
+        label: 'Review',
+        prompt: 'Review',
+        model: 'reviewer',
+        distinctProviderFrom: ['author'],
+      }),
+    );
+    def.edges = [
+      { id: 'a', source: 'entry', target: 'author', port: 'default' },
+      { id: 'b', source: 'author', target: 'review', port: 'default' },
+      { id: 'c', source: 'review', target: 'exit', port: 'default' },
+    ];
+    const workflow = engine.create('Diversity aliases', '', def);
+    engine.publish(workflow.id);
+    const run = engine.start(workflow.id, {}).run;
+    const author = store.work('available', run.id)[0];
+    const claim = engine.claim(
+      author.id,
+      { workerId: 'worker', freshContext: false, tools: [], skills: [] },
+      300,
+    );
+    engine.submit(author.id, claim.token!, {});
+    const review = store
+      .work('available', run.id)
+      .find((work) => work.nodeId === 'review')!;
+    expect(review.providerDiversityBlocked).toBeDefined();
+    expect(review.modelAliasSelection).toBeUndefined();
+    engine.executors.saveSettings({
+      expectedRevision: 0,
+      concurrency: 3,
+      providerPrefixes: { 'unmapped-review': 'openai' },
+    });
+    engine.pump();
+    expect(
+      store.work('available', run.id).find((work) => work.id === review.id)
+        ?.providerDiversityBlocked,
+    ).toBeUndefined();
+    engine.claim(
+      review.id,
+      { workerId: 'worker', freshContext: false, tools: [], skills: [] },
+      300,
+    );
+    expect(store.get('usageAttempts', `${review.id}:1`)).toMatchObject({
+      modelAliasSelection: {
+        aliasId: alias.id,
+        name: 'reviewer',
+        revision: 1,
+        candidateModel: 'unmapped-review-model',
+      },
+    });
+  });
+
   it('separates logical roles sharing a model and preserves observer selection and run overhead', () => {
     setup();
     attempt('builder', builder);
@@ -170,6 +240,11 @@ describe('captured alias report attribution', () => {
       ]),
     );
     expect(formatWorkflowReport(report)).toContain('builder@1');
+    engine.stop();
+    store.close();
+    store = new Store(join(dir, 'test.db'));
+    engine = new Engine(store, dir);
+    expect(engine.report({}).usage.byAlias).toEqual(report.usage.byAlias);
   });
   it('keeps candidate, revision and currency groups separate without changing totals', () => {
     setup();

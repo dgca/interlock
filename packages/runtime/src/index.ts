@@ -2212,6 +2212,11 @@ export class Engine {
             if (reEval) {
               if (reEval.status === 'selected') {
                 work.executorModel = reEval.candidate;
+                if (node.executor !== null && reEval.modelAliasSelection) {
+                  work.modelAliasSelection = reEval.modelAliasSelection;
+                } else {
+                  delete work.modelAliasSelection;
+                }
                 if (reEval.candidateProfileId) {
                   work.executor = reEval.candidateProfileId;
                 }
