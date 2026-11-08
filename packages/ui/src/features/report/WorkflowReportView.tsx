@@ -128,7 +128,10 @@ export function WorkflowReportView({
 
   return (
     <div className={layout.page}>
-      <header className={layout.header}>
+      <header
+        className={layout.header}
+        style={{ flexDirection: 'column', alignItems: 'stretch' }}
+      >
         <div>
           <Title order={1}>Performance & Cost Report</Title>
           <Text c="dimmed" size="sm">
@@ -149,7 +152,7 @@ export function WorkflowReportView({
               { value: 'pausedMs', label: 'Paused time' },
             ]}
             size="sm"
-            style={{ width: 230 }}
+            style={{ width: 270, maxWidth: '100%' }}
           />
           <Select
             placeholder="All Workflows"
