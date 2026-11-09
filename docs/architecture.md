@@ -411,7 +411,7 @@ Vite and the built server serve the app for direct page requests. A future host 
 
 ## UI components
 
-Automations and the global Runs list share the compact `PageHeader` title/action bar and adjoining surface-colored tab-row styles. `PageTabs` handles URL-backed views; `PageTabList` retains Mantine-controlled tab semantics for Runs. Both lists provide matching loading rows. Workflow-scoped run lists reuse the same tabs and table without a duplicate page header. Creation and editing use a contained form card and full-height preview rail. The global library pause bar is removed; workflow pause controls and the underlying library-hold APIs remain.
+Automations and the global Runs list share the compact `PageHeader` title/action bar and adjoining surface-colored tab-row styles. `PageTabs` handles URL-backed views; `PageTabList` retains Mantine-controlled tab semantics for Runs. The shared `PageTabsSkeleton` and `components/ListTable` modules provide their loading states and list presentation. `ListTableRow` retains native link or button behavior; feature code supplies columns, cell content, and actions. Reusable presentation lives in `packages/ui/src/components` rather than copied feature markup or CSS. Workflow-scoped run lists reuse the same tabs and table without a duplicate page header. Creation and editing use a contained form card and full-height preview rail. The global library pause bar is removed; workflow pause controls and the underlying library-hold APIs remain.
 
 [UI interaction patterns](ui-patterns.md) documents dialog layout, loading states, run attention, approval, recovery, and browser review conventions.
 

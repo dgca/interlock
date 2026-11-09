@@ -3,6 +3,7 @@ import { Tabs } from '@mantine/core';
 import { Link } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '../Button/Button';
+import { Placeholder } from '../LoadingSkeleton/LoadingSkeleton';
 import classes from './WorkspacePage.module.css';
 
 export function PageHeader({
@@ -45,6 +46,23 @@ export function PageHeader({
   );
 }
 
+function TabBar({
+  tabs,
+  children,
+  decorative = false,
+}: {
+  tabs: ReactNode;
+  children?: ReactNode;
+  decorative?: boolean;
+}) {
+  return (
+    <div className={classes.tabs} aria-hidden={decorative || undefined}>
+      {tabs}
+      {children && <div className={classes.filters}>{children}</div>}
+    </div>
+  );
+}
+
 export function PageTabs({
   items,
   value,
@@ -57,24 +75,27 @@ export function PageTabs({
   children?: ReactNode;
 }) {
   return (
-    <div className={classes.tabs}>
-      <nav aria-label={label} className={classes.tabLinks}>
-        {items.map((item) => (
-          <Link
-            key={item.value}
-            to={item.to}
-            className={classes.tab}
-            aria-current={value === item.value ? 'page' : undefined}
-          >
-            {item.label}
-            {item.count !== undefined && (
-              <span className={classes.count}>{item.count}</span>
-            )}
-          </Link>
-        ))}
-      </nav>
-      {children && <div className={classes.filters}>{children}</div>}
-    </div>
+    <TabBar
+      tabs={
+        <nav aria-label={label} className={classes.tabLinks}>
+          {items.map((item) => (
+            <Link
+              key={item.value}
+              to={item.to}
+              className={classes.tab}
+              aria-current={value === item.value ? 'page' : undefined}
+            >
+              {item.label}
+              {item.count !== undefined && (
+                <span className={classes.count}>{item.count}</span>
+              )}
+            </Link>
+          ))}
+        </nav>
+      }
+    >
+      {children}
+    </TabBar>
   );
 }
 
@@ -89,27 +110,62 @@ export function PageTabList({
   children?: ReactNode;
 }) {
   return (
-    <div className={classes.tabs}>
-      <Tabs.List className={classes.tabLinks} aria-label={label}>
-        {items.map((item) => (
-          <Tabs.Tab
-            unstyled
-            key={item.value}
-            value={item.value}
-            className={classes.tab}
-          >
-            {item.label}
-            {item.count !== undefined && (
-              <>
-                {' '}
-                <span className={classes.count}>{item.count}</span>
-              </>
-            )}
-          </Tabs.Tab>
-        ))}
-      </Tabs.List>
-      {children && <div className={classes.filters}>{children}</div>}
-    </div>
+    <TabBar
+      tabs={
+        <Tabs.List className={classes.tabLinks} aria-label={label}>
+          {items.map((item) => (
+            <Tabs.Tab
+              unstyled
+              key={item.value}
+              value={item.value}
+              className={classes.tab}
+            >
+              {item.label}
+              {item.count !== undefined && (
+                <>
+                  {' '}
+                  <span className={classes.count}>{item.count}</span>
+                </>
+              )}
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
+      }
+    >
+      {children}
+    </TabBar>
+  );
+}
+
+export function PageTabsSkeleton({
+  items,
+  value,
+  children,
+}: {
+  items: readonly { value: string; label: string }[];
+  value: string;
+  children?: ReactNode;
+}) {
+  return (
+    <TabBar
+      decorative
+      tabs={
+        <div className={classes.tabLinks}>
+          {items.map((item) => (
+            <span
+              key={item.value}
+              className={classes.tab}
+              aria-current={value === item.value ? 'page' : undefined}
+            >
+              {item.label}
+              <Placeholder h={10} w={10} />
+            </span>
+          ))}
+        </div>
+      }
+    >
+      {children}
+    </TabBar>
   );
 }
 

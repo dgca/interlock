@@ -1,3 +1,5 @@
+import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
+import { runColumns, runViews } from './runListConfig';
 import { AutomationAlerts } from '../automations/AutomationAlerts';
 import {
   PageHeader,
@@ -139,17 +141,15 @@ export function RunList({
         </Button>
       </>
     ) : null;
-  const tabItems = [
-    { value: 'active', label: 'Active', count: counts?.active },
-    {
-      value: 'attention',
-      label: 'Needs attention',
-      count: counts
-        ? counts.attention + (scoped?.page.scheduleAttentionCount ?? 0)
-        : undefined,
-    },
-    { value: 'history', label: 'History', count: counts?.history },
-  ];
+  const tabItems = runViews.map((view) => ({
+    ...view,
+    count: counts
+      ? counts[view.value] +
+        (view.value === 'attention'
+          ? (scoped?.page.scheduleAttentionCount ?? 0)
+          : 0)
+      : undefined,
+  }));
   return (
     <section className={workspacePage.page}>
       {!workflowId && <PageHeader title="Runs" actions={historyActions} />}
@@ -248,18 +248,11 @@ export function RunList({
           {!page ? (
             !error && <RunRowsSkeleton />
           ) : page.items.length ? (
-            <div className={classes.table}>
-              <div className={classes.heading}>
-                <span>Workflow</span>
-                <span>Status</span>
-                <span>Started</span>
-                <span>Steps</span>
-                <span />
-              </div>
+            <ListTable columns={runColumns}>
               {page.items.map((r) => {
                 const started = new Date(r.createdAt);
                 return (
-                  <button
+                  <ListTableRow
                     className={`run-row ${classes.row}`}
                     key={r.id}
                     onClick={() => {
@@ -327,10 +320,10 @@ export function RunList({
                     </span>
                     <span className={classes.steps}>{r.executionCount}</span>
                     <ChevronRight size={16} />
-                  </button>
+                  </ListTableRow>
                 );
               })}
-            </div>
+            </ListTable>
           ) : offset > 0 ? (
             <Text role="status">No runs on this page.</Text>
           ) : tab === 'attention' && page.scheduleAttentionCount > 0 ? null : (

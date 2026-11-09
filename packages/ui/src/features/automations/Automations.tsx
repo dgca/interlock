@@ -1,3 +1,4 @@
+import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import { useEffect, useState } from 'react';
 import {
   Link,
@@ -32,6 +33,7 @@ import {
   AutomationRowsSkeleton,
 } from './AutomationListSkeleton';
 import {
+  automationColumns,
   automationStatus,
   eventLabels,
   listHref,
@@ -259,14 +261,7 @@ function AutomationList() {
           !error && <AutomationRowsSkeleton />
         ) : page.items.length ? (
           <>
-            <div className={classes.list}>
-              <div className={classes.listHeader} aria-hidden="true">
-                <span>Automation</span>
-                <span>Workflow</span>
-                <span>Status</span>
-                <span>Activity</span>
-                <span />
-              </div>
+            <ListTable columns={automationColumns}>
               {page.items.map((trigger) => {
                 const state = automationStatus(trigger);
                 const sourceId =
@@ -288,7 +283,7 @@ function AutomationList() {
                       : `${source} · ${trigger.events.map((event) => eventLabels[event].toLowerCase()).join(', ')}`;
                 const latest = trigger.lastActivity;
                 return (
-                  <Link
+                  <ListTableRow
                     className={classes.listRow}
                     key={trigger.id}
                     to={
@@ -339,10 +334,10 @@ function AutomationList() {
                       </small>
                     </span>
                     <ChevronRight size={16} />
-                  </Link>
+                  </ListTableRow>
                 );
               })}
-            </div>
+            </ListTable>
             <div className={classes.pagination}>
               <span>
                 {page.total} automation{page.total === 1 ? '' : 's'}

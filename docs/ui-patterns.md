@@ -11,6 +11,8 @@ Interlock uses the Mantine theme in `packages/ui/src/theme/theme.ts` and the sha
 
 ## Page layout
 
+Keep reusable page presentation in `packages/ui/src/components`. `PageLayout` owns page headers, tab bars, and `PageTabsSkeleton`. `ListTable` owns the shared list container, headings, link/button rows, responsive spacing, focus/hover states, and `ListTableSkeleton`. Features supply their columns, cell content, state labels, and navigation or action callbacks. Use these shared modules when extending Runs and Automations.
+
 Tabs switch sections within the current resource or list. Use sidebar navigation or an explicit link to open another workspace.
 
 Automations and the global Runs list use the shared `PageHeader` and tab-row styles. Automations uses `PageTabs` for URL-backed views; Runs uses `PageTabList` within Mantine Tabs for controlled in-page sections. The header contains the page title and actions. Add Back on creation and resource pages; omit it on a top-level list. Place underline navigation directly below the header on the same surface background, with search and filters aligned to the right. Keep both visible while the workspace scrolls.

@@ -1,3 +1,4 @@
+import type { ListTableColumn } from '../../components/ListTable/ListTable';
 import type { EventConfig, ScheduleConfig } from '@interlock/core';
 import { api } from '../../lib/api';
 import { paths, runOffset } from '../../routes/paths';
@@ -172,3 +173,23 @@ export function initialConfig(kind: 'schedule' | 'event'): AutomationConfig {
         pauseAfterConsecutiveFailures: null,
       };
 }
+
+export const automationColumns: ListTableColumn[] = [
+  {
+    label: 'Automation',
+    width: 'minmax(200px, 1.35fr)',
+    compactWidth: 'minmax(190px, 1.4fr)',
+  },
+  {
+    label: 'Workflow',
+    width: 'minmax(150px, 1fr)',
+    compactWidth: 'minmax(120px, 1fr)',
+  },
+  { label: 'Status', width: '145px', compactWidth: '120px' },
+  {
+    label: 'Activity',
+    width: 'minmax(170px, 1.1fr)',
+    compactWidth: 'minmax(140px, 1fr)',
+  },
+  { label: '', width: '16px' },
+];

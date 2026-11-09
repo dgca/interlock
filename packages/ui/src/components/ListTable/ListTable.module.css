@@ -1,0 +1,70 @@
+.table {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.row,
+.heading {
+  display: grid;
+  grid-template-columns: var(--list-columns);
+  gap: 20px;
+  align-items: center;
+  padding: 22px 18px;
+  width: 100%;
+  text-align: left;
+}
+.heading {
+  padding-block: 14px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+}
+.row {
+  min-height: 92px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  letter-spacing: normal;
+  font-size: 13px;
+  text-decoration: none;
+}
+.row > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+a.row,
+button.row {
+  cursor: pointer;
+}
+a.row:hover,
+button.row:hover {
+  background: var(--surface-hover);
+}
+a.row:focus-visible,
+button.row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+@media (max-width: 1150px) {
+  .row,
+  .heading {
+    grid-template-columns: var(--list-columns-compact);
+    gap: 14px;
+  }
+}
+@media (max-width: 900px) {
+  .heading {
+    display: none;
+  }
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .row > svg,
+  .row > :last-child:not(span) {
+    display: none;
+  }
+}
