@@ -7,6 +7,8 @@ import {
   FormPlaceholder,
   LoadingSkeleton,
   Button,
+  Group,
+  ActionError,
 } from '../../design-system';
 
 import { useEffect, useState, useRef } from 'react';
@@ -18,6 +20,7 @@ import type {
   RunVersionPolicy,
 } from '@interlock/core';
 
+import styles from './RunForms.module.css';
 import { SchemaInput } from '../../components/SchemaInput/SchemaInput';
 import { api, errorMessage } from '../../lib/api';
 import { TagFields, tagsFromRows, type TagRow } from './RunTags';
@@ -156,11 +159,11 @@ export function RunDialog({
             />
 
             {canForm && (
-              <div className="actions" style={{ marginBottom: 16 }}>
+              <Group mb="md">
                 <Button variant="ghost" onClick={() => setRaw(!raw)}>
                   {raw ? 'Use input fields' : 'Edit as JSON'}
                 </Button>
-              </div>
+              </Group>
             )}
             <div ref={fieldsRef}>
               {canForm && !raw ? (
@@ -174,15 +177,15 @@ export function RunDialog({
                   mb="md"
                   label="Workflow input"
                   aria-label="Workflow input"
-                  styles={{ input: { fontFamily: 'var(--mono)' } }}
+                  classNames={{ input: styles.monoInput }}
                   rows={12}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                 />
               )}
-              <details ref={tagsDetailsRef} style={{ marginBottom: 16 }}>
+              <details ref={tagsDetailsRef} className={styles.tags}>
                 <summary>Tags{tags.length ? ` (${tags.length})` : ''}</summary>
-                <div style={{ marginTop: 12 }}>
+                <div className={styles.tagFields}>
                   <TagFields
                     rows={tags}
                     onChange={(rows) => {
@@ -207,11 +210,7 @@ export function RunDialog({
             </LoadingSkeleton>
           )
         )}
-        {error && (
-          <p className="error-text" role="alert">
-            {error}
-          </p>
-        )}
+        <ActionError message={error} />
       </ModalBody>
       <ModalFooter>
         <Button onClick={onClose}>Cancel</Button>

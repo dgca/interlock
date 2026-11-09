@@ -32,9 +32,9 @@
 .recovery {
   margin-top: 20px;
   padding: 20px;
-  background: var(--canvas);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--form);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 .noticeTitle {
   display: flex;
@@ -47,7 +47,7 @@
   color: var(--accent-text);
 }
 .recovery .noticeTitle > svg {
-  color: var(--mantine-color-yellow-3);
+  color: var(--attention-text);
 }
 .noticeTitle h3 {
   margin: 0;
@@ -75,11 +75,6 @@
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 20px;
-}
-.actions button,
-.confirmation button {
-  min-height: 36px;
-  font-size: 13px;
 }
 .questionFields {
   border: 0;
@@ -170,7 +165,7 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  color: var(--mantine-color-green-3);
+  color: var(--completed-text);
   font-size: 13px;
   line-height: 1.6;
   margin: 16px 0 0;
@@ -209,6 +204,7 @@
   border-radius: 8px;
 }
 .sessionMeta {
+  min-width: 0;
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -216,13 +212,12 @@
   font-size: 13px;
 }
 .sessionLabel {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
   color: var(--muted);
-  letter-spacing: 0.04em;
 }
 .sessionId {
+  overflow-wrap: anywhere;
   font-family: var(--mono);
   font-size: 12px;
   color: var(--text);
@@ -234,31 +229,16 @@
 .sessionName {
   font-size: 12px;
   color: var(--text-secondary);
-  max-width: 300px;
+  max-width: min(300px, 100%);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .sessionActions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-}
-.deepLinkBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--accent-text);
-  text-decoration: none;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--canvas);
-  transition: border-color 0.15s ease;
-}
-.deepLinkBtn:hover {
-  border-color: var(--accent-text);
 }
 .liveTailSection {
   margin-top: 18px;
@@ -282,7 +262,7 @@
   color: var(--text);
 }
 .logCountBadge {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   font-family: var(--mono);
 }

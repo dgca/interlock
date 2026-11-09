@@ -390,16 +390,17 @@ function Execution({
               </Button>
             )}
             {record.deepLink && (
-              <a
+              <Button
+                component="a"
+                variant="ghost"
                 href={record.deepLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={styles.deepLinkBtn}
                 title={record.deepLink}
               >
                 Open in harness
-                <ArrowUpRight size={12} />
-              </a>
+                <ArrowUpRight size={14} />
+              </Button>
             )}
           </div>
         </div>

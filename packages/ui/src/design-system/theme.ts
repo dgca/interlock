@@ -1,5 +1,7 @@
 import {
   ActionIcon,
+  Alert,
+  Divider,
   Badge,
   Button,
   Combobox,
@@ -11,10 +13,24 @@ import {
   SegmentedControl,
   Textarea,
   Tabs,
+  Table,
   Tooltip,
 } from '@mantine/core';
 import classes from './theme.module.css';
 import workspace from './PageLayout/WorkspacePage.module.css';
+
+const lightColors: Record<string, { background: string; color: string }> = {
+  green: { background: 'var(--completed-bg)', color: 'var(--completed-text)' },
+  blue: { background: 'var(--running-bg)', color: 'var(--running-text)' },
+  yellow: { background: 'var(--attention-bg)', color: 'var(--attention-text)' },
+  orange: { background: 'var(--attention-bg)', color: 'var(--attention-text)' },
+  red: {
+    background: 'color-mix(in srgb, var(--error-copy) 12%, var(--inset))',
+    color: 'var(--error-copy)',
+  },
+  gray: { background: 'var(--surface-hover)', color: 'var(--text-secondary)' },
+  dark: { background: 'var(--surface-hover)', color: 'var(--text-secondary)' },
+};
 
 /** Standard controls are styled here so native Mantine composition stays intact. */
 export const theme = createTheme({
@@ -115,12 +131,53 @@ export const theme = createTheme({
           ? {}
           : { list: workspace.attachedList, tab: workspace.tab },
     }),
-    Badge: Badge.extend({ classNames: { root: classes.badge } }),
+    Badge: Badge.extend({
+      classNames: { root: classes.badge },
+      vars: (_theme, props) => {
+        const colors = lightColors[props.color ?? _theme.primaryColor];
+        return {
+          root:
+            props.variant === 'light' && colors
+              ? {
+                  '--badge-bg': colors.background,
+                  '--badge-color': colors.color,
+                }
+              : {},
+        };
+      },
+    }),
+    Alert: Alert.extend({
+      classNames: {
+        wrapper: classes.alertContent,
+        body: classes.alertContent,
+        message: classes.alertMessage,
+      },
+      vars: (_theme, props) => {
+        const colors = lightColors[props.color ?? _theme.primaryColor];
+        return {
+          root:
+            (!props.variant || props.variant === 'light') && colors
+              ? {
+                  '--alert-bg': colors.background,
+                  '--alert-color': colors.color,
+                }
+              : {},
+        };
+      },
+    }),
+    Divider: Divider.extend({ classNames: { root: classes.divider } }),
+    Table: Table.extend({
+      vars: () => ({ table: { '--table-border-color': 'var(--border)' } }),
+    }),
     Combobox: Combobox.extend({
       classNames: { dropdown: classes.dropdown, option: classes.option },
     }),
     Menu: Menu.extend({
-      classNames: { dropdown: classes.dropdown, item: classes.menuItem },
+      classNames: {
+        dropdown: classes.dropdown,
+        item: classes.menuItem,
+        divider: classes.divider,
+      },
     }),
     Tooltip: Tooltip.extend({ classNames: { tooltip: classes.tooltip } }),
     Modal: Modal.extend({

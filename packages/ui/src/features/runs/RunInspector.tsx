@@ -7,6 +7,8 @@ import {
   Button,
   JsonEditor,
   ActionError,
+  PageHeader,
+  workspacePage,
 } from '../../design-system';
 
 import { formatDuration } from '../workflows/DurationInput';
@@ -16,13 +18,7 @@ import { nodeKindLabel, type RunStatus } from '@interlock/core';
 import type { Action } from '../../lib/useActionFeedback';
 import { useEffect, useRef, useState } from 'react';
 import { needsManagedAttention } from '../executors/managedStatus';
-import {
-  ArrowLeft,
-  ArrowUpRight,
-  RotateCcw,
-  Square,
-  Download,
-} from 'lucide-react';
+import { ArrowUpRight, RotateCcw, Square, Download } from 'lucide-react';
 
 import { api, download, errorMessage } from '../../lib/api';
 
@@ -141,7 +137,7 @@ export function RunInspector({
       </div>
     ) : (
       <LoadingSkeleton label="Loading run…" className={styles.page}>
-        <header className={styles.header}>
+        <header className={workspacePage.header} data-two-line>
           <Placeholder h={28} w={32} />
           <div>
             <Placeholder h={16} w="min(42vw, 200px)" />
@@ -310,100 +306,99 @@ export function RunInspector({
     <div
       className={`${styles.page} ${!definition ? styles.withoutDefinition : ''} ${run.comparison ? styles.comparison : ''}`}
     >
-      <header className={styles.header}>
-        <Button
-          variant="ghost"
-          onClick={() => onBack(run.status)}
-          aria-label="Back to runs"
-        >
-          <ArrowLeft />
-        </Button>
-        <div>
-          <h2>{run.workflowName}</h2>
-          <span className={styles.version}>Version {run.version}</span>
-          <ComparisonContext comparison={run.comparison} />
-        </div>
-        <StatusBadge
-          status={
-            run.status === 'queued'
-              ? 'queued'
-              : (progress.runStates[run.id] ?? run.status)
-          }
-        />
-        <div className="actions">
-          <Button onClick={() => setVersionDialog(true)}>Run version</Button>
-          {run.chain?.previousRunId && (
-            <Button onClick={() => onOpen(run.chain!.previousRunId!)}>
-              Previous run
-            </Button>
-          )}
-          {run.chain?.nextRunId && (
-            <Button onClick={() => onOpen(run.chain!.nextRunId!)}>
-              Next run
-            </Button>
-          )}
-          {data.chain &&
-            !data.chain.cancelledAt &&
-            ['queued', 'running', 'waiting', 'failed'].includes(
-              data.chain.latestStatus,
-            ) && (
+      <PageHeader
+        title={run.workflowName}
+        onBack={() => onBack(run.status)}
+        backLabel="Back to runs"
+        subtitle={
+          <div className={styles.metadata}>
+            <span>Version {run.version}</span>
+            <StatusBadge
+              status={
+                run.status === 'queued'
+                  ? 'queued'
+                  : (progress.runStates[run.id] ?? run.status)
+              }
+            />
+            <ComparisonContext comparison={run.comparison} />
+          </div>
+        }
+        actions={
+          <div className={styles.headerActions}>
+            <Button onClick={() => setVersionDialog(true)}>Run version</Button>
+            {run.chain?.previousRunId && (
+              <Button onClick={() => onOpen(run.chain!.previousRunId!)}>
+                Previous run
+              </Button>
+            )}
+            {run.chain?.nextRunId && (
+              <Button onClick={() => onOpen(run.chain!.nextRunId!)}>
+                Next run
+              </Button>
+            )}
+            {data.chain &&
+              !data.chain.cancelledAt &&
+              ['queued', 'running', 'waiting', 'failed'].includes(
+                data.chain.latestStatus,
+              ) && (
+                <Button
+                  onClick={() =>
+                    void act(async () => {
+                      await api.runs.cancel.mutate({ id, scope: 'chain' });
+                      refresh();
+                    }, 'Run chain stopped.')
+                  }
+                >
+                  <Square />
+                  Stop chain
+                </Button>
+              )}
+            {data.counterpartRunId && (
+              <Button onClick={() => onOpen(data.counterpartRunId!)}>
+                {run.comparison?.side === 'baseline'
+                  ? 'Candidate run'
+                  : 'Baseline run'}
+                <ArrowUpRight />
+              </Button>
+            )}
+            {run.parentRunId && (
+              <Button
+                onClick={() => onOpen(run.parentRunId!, run.parentExecutionId)}
+              >
+                {run.parentMode === 'detached' ? 'Started by' : 'Parent run'}
+              </Button>
+            )}
+            {run.status === 'failed' && definition && !data.handledFailure && (
+              <Button disabled={retrying} onClick={() => void retry()}>
+                <RotateCcw />
+                {retrying ? 'Requesting retry…' : 'Retry failed step'}
+              </Button>
+            )}
+            {['queued', 'running', 'waiting'].includes(run.status) && (
               <Button
                 onClick={() =>
                   void act(async () => {
-                    await api.runs.cancel.mutate({ id, scope: 'chain' });
+                    await api.runs.cancel.mutate({ id });
                     refresh();
-                  }, 'Run chain stopped.')
+                  }, 'Run cancelled.')
                 }
               >
                 <Square />
-                Stop chain
+                Cancel run
               </Button>
             )}
-          {data.counterpartRunId && (
-            <Button onClick={() => onOpen(data.counterpartRunId!)}>
-              {run.comparison?.side === 'baseline'
-                ? 'Candidate run'
-                : 'Baseline run'}
-              <ArrowUpRight />
+            {data.cancellableRunCount > 0 && (
+              <Button onClick={() => setCancellationDialog(true)}>
+                Cancel run tree
+              </Button>
+            )}
+            <Button onClick={() => download(`run-${id}.json`, data)}>
+              <Download />
+              Export run
             </Button>
-          )}
-          {run.parentRunId && (
-            <Button
-              onClick={() => onOpen(run.parentRunId!, run.parentExecutionId)}
-            >
-              {run.parentMode === 'detached' ? 'Started by' : 'Parent run'}
-            </Button>
-          )}
-          {run.status === 'failed' && definition && !data.handledFailure && (
-            <Button disabled={retrying} onClick={() => void retry()}>
-              <RotateCcw />
-              {retrying ? 'Requesting retry…' : 'Retry failed step'}
-            </Button>
-          )}
-          {['queued', 'running', 'waiting'].includes(run.status) && (
-            <Button
-              onClick={() =>
-                void act(async () => {
-                  await api.runs.cancel.mutate({ id });
-                  refresh();
-                }, 'Run cancelled.')
-              }
-            >
-              <Square />
-              Cancel run
-            </Button>
-          )}
-          {data.cancellableRunCount > 0 && (
-            <Button onClick={() => setCancellationDialog(true)}>
-              Cancel run tree
-            </Button>
-          )}
-          <Button onClick={() => download(`run-${id}.json`, data)}>
-            <Download />
-            Export run
-          </Button>
-        </div>
-      </header>
+          </div>
+        }
+      />
       {Object.keys(run.tags ?? {}).length > 0 && (
         <details className={styles.tags}>
           <summary>Tags ({Object.keys(run.tags!).length})</summary>

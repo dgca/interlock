@@ -5,6 +5,8 @@ import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { RunSummary } from '@interlock/core';
 import { RunList } from '../packages/ui/src/features/runs/RunList';
+import { RunListSkeleton } from '../packages/ui/src/features/runs/RunListSkeleton';
+import { MemoryRouter } from 'react-router';
 
 const query = vi.hoisted(() => vi.fn());
 vi.mock('../packages/ui/src/lib/api', () => ({
@@ -20,6 +22,12 @@ vi.mock('../packages/ui/src/lib/api', () => ({
 }));
 
 beforeEach(() => {
+  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  });
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -28,6 +36,142 @@ beforeEach(() => {
       disconnect() {}
     },
   );
+});
+
+it('keeps lazy and data loading shaped for the selected board or list presentation', async () => {
+  query.mockImplementation(() => new Promise(() => {}));
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    for (const path of ['/runs', '/runs?tab=history']) {
+      await act(async () =>
+        root.render(
+          h(
+            DesignSystemProvider,
+            { env: 'test' },
+            h(
+              MemoryRouter,
+              { initialEntries: [path], key: path },
+              h(RunListSkeleton),
+            ),
+          ),
+        ),
+      );
+      expect(container.querySelector('[role="status"]')?.textContent).toBe(
+        'Loading runs…',
+      );
+      if (path === '/runs') {
+        expect(container.textContent).toContain('Active runs');
+        expect(container.textContent).not.toContain('Started');
+      } else {
+        expect(container.textContent).toContain('Started');
+        expect(container.textContent).not.toContain('Active runs');
+      }
+    }
+    await act(async () =>
+      root.render(
+        h(
+          DesignSystemProvider,
+          { env: 'test' },
+          h(RunList, {
+            tick: 0,
+            offset: 0,
+            onOffsetChange: vi.fn(),
+            workflows: [],
+            tab: 'active',
+            onTabChange: vi.fn(),
+            onOpen: vi.fn(),
+          }),
+        ),
+      ),
+    );
+    expect(container.textContent).toContain('Active runs');
+    expect(container.textContent).not.toContain('Started');
+    await act(async () =>
+      container.querySelector<HTMLInputElement>('input[value="list"]')!.click(),
+    );
+    expect(container.textContent).toContain('Started');
+    expect(container.textContent).not.toContain('Active runs');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
+it('scopes empty board messages to exact tag filters and clears them through the existing reset action', async () => {
+  query.mockImplementation(async ({ tab, tags, offset }) => {
+    const items =
+      tab === 'active' && !tags
+        ? [
+            {
+              id: 'unfiltered',
+              workflowId: 'workflow',
+              workflowName: 'Available run',
+              version: 1,
+              status: 'waiting',
+              createdAt: '2026-11-09T12:00:00Z',
+              updatedAt: '2026-11-09T12:01:00Z',
+              executionCount: 1,
+            },
+          ]
+        : [];
+    return {
+      items,
+      counts: { active: tags ? 0 : 1, attention: 0, history: 0 },
+      total: items.length,
+      offset,
+      nextOffset: null,
+    };
+  });
+  function Harness() {
+    const [tags, setTags] = useState<Record<string, string> | undefined>({
+      priority: 'High',
+    });
+    return h(RunList, {
+      tick: 0,
+      offset: 0,
+      onOffsetChange: vi.fn(),
+      workflows: [],
+      tab: 'active',
+      onTabChange: vi.fn(),
+      onOpen: vi.fn(),
+      tags,
+      onTagsChange: setTags,
+    });
+  }
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () =>
+      root.render(h(DesignSystemProvider, { env: 'test' }, h(Harness))),
+    );
+    expect(container.textContent).toContain('No active runs match these tags.');
+    expect(container.textContent).toContain(
+      'No matching runs need your attention.',
+    );
+    expect(container.textContent).toContain(
+      'No completed runs match these tags.',
+    );
+    const clear = [
+      ...container.querySelectorAll<HTMLButtonElement>('button'),
+    ].find(
+      (button) =>
+        button.textContent === 'Clear filters' && !button.closest('[hidden]'),
+    )!;
+    await act(async () => clear.click());
+    expect(container.textContent).toContain('Available run');
+    expect(container.textContent).not.toContain(
+      'No active runs match these tags.',
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({ tab: 'active', tags: undefined, offset: 0 }),
+    );
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
 });
 afterEach(() => vi.unstubAllGlobals());
 

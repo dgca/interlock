@@ -1,0 +1,41 @@
+.monoInput {
+  font-family: var(--mono);
+}
+.tags {
+  margin-bottom: 16px;
+}
+.tagFields {
+  margin-top: 12px;
+}
+.workPanel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.workPanel :global(.section-heading) h3 {
+  font-size: 18px;
+}
+.workPanel :global(.hint) {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.workPanel :global(.actions) {
+  gap: 12px;
+}
+.manualForm {
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--form);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.divider {
+  margin-inline: -24px;
+}
+@media (max-width: 640px) {
+  .divider {
+    margin-inline: -16px;
+  }
+  .manualForm {
+    padding: 16px;
+  }
+}

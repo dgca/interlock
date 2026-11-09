@@ -123,8 +123,11 @@
   cursor: pointer;
   overflow: hidden;
 }
-.runCard:hover {
+.runCard:hover:not([data-loading]) {
   border-color: var(--border-strong);
+}
+.runCard[data-loading] {
+  cursor: default;
 }
 .runCard:focus-visible {
   outline: 2px solid var(--accent);

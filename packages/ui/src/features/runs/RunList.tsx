@@ -14,7 +14,7 @@ import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import { runColumns, runViews } from './runListConfig';
 import { AutomationAlerts } from '../automations/AutomationAlerts';
 
-import { RunRowsSkeleton } from './RunListSkeleton';
+import { RunBoardSkeleton, RunRowsSkeleton } from './RunListSkeleton';
 import classes from './RunList.module.css';
 import { attentionText, waitReasonText, type RunTab } from './runAttention';
 import { runProjectionText } from './runProjectionText';
@@ -78,6 +78,11 @@ export function RunList({
       setLocalTags(next);
       onOffsetChange(0);
     }
+  };
+  const clearFilters = () => {
+    setFilterRows([]);
+    setFilterError('');
+    changeTags(undefined);
   };
   const [filterOpen, setFilterOpen] = useState(false);
   const [presentation, setPresentation] = useState('board');
@@ -300,14 +305,7 @@ export function RunList({
               >
                 Apply filters
               </Button>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setFilterRows([]);
-                  setFilterError('');
-                  changeTags(undefined);
-                }}
-              >
+              <Button variant="ghost" onClick={clearFilters}>
                 Clear filters
               </Button>
             </Group>
@@ -334,7 +332,12 @@ export function RunList({
             </Alert>
           )}
           {!page ? (
-            !error && <RunRowsSkeleton />
+            !error &&
+            (tab === 'active' && presentation === 'board' ? (
+              <RunBoardSkeleton />
+            ) : (
+              <RunRowsSkeleton />
+            ))
           ) : tab === 'active' && presentation === 'board' ? (
             <RunListBoard
               page={page}
@@ -346,6 +349,11 @@ export function RunList({
               onOpen={onOpen}
               onTabChange={onTabChange}
               retry={() => setPreviewReload((value) => value + 1)}
+              onClearFilters={
+                Object.keys(selectedTags ?? {}).length
+                  ? clearFilters
+                  : undefined
+              }
             />
           ) : page.items.length ? (
             <ListTable columns={runColumns}>

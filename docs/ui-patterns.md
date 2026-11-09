@@ -49,6 +49,8 @@ The run summary identifies the action that needs attention. **Review request** o
 
 The selected step appears beside the graph on wide screens and before the graph on narrow screens. On narrow screens, selecting a graph node or timeline row moves focus to the details. Assignment actions precede the prompt and context disclosure. A manual result remains in the inspector while its claim is active, including when another step is selected.
 
+Narrow run inspection scrolls as one page so a long handoff or action header does not leave the graph and details in a small trapped pane. Wide inspection retains separate overview and detail scrolling. Shared headers keep room for their title and wrap actions when needed; icon-only Back actions use the standard 40px action control.
+
 An agent waiting for a human response is **Waiting for your response**, even while its ownership claim remains active. Interrupted managed work is **Recovery needed**. These are presentation labels; they do not change execution or claim state.
 
 ## Approval requests
@@ -87,7 +89,7 @@ Use the shared `Modal`, `ModalBody`, and `ModalFooter` from the design-system ba
 
 Use static skeletons shaped like the content being loaded. Keep the loading announcement available to assistive technology and hide the decorative placeholders from it. Preserve the action label when a write is in progress.
 
-The Automations and Runs lists keep their shared headers and status tabs in place during route and initial data loading. Placeholder rows match the list columns. Background refreshes retain loaded rows for the same query. Changing Automations filters or pages shows a loading state until that query succeeds; a failed read does not display another query's rows. Errors show retry feedback instead of an indefinite skeleton.
+The Automations and Runs lists keep their shared headers and status tabs in place during route and initial data loading. Active Runs uses a board-shaped placeholder in Board view, including lazy-route loading. List, Needs attention, and History use matching row placeholders. Tag-filtered board empty states explain their scope and offer the existing Clear filters action. Background refreshes retain loaded content for the same query. Changing Automations filters or pages shows a loading state until that query succeeds; a failed read does not display another query's rows. Errors show retry feedback instead of an indefinite skeleton.
 
 Workflow pause controls use a direct **Pause workflow** and **Resume workflow** toggle, with shared pending state and a fresh status check before writing. Each acknowledged change stays visible while status refresh is pending or unavailable. **Retry pause status** repeats only the read. Library holds remain visible blockers with CLI/MCP recovery guidance.
 

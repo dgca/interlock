@@ -337,11 +337,7 @@ export function ModelPicker({
       {allowAliases && (aliasError || referenceError) && (
         <Text size="xs" c="red" role="alert">
           Model aliases could not be loaded. {aliasError || referenceError}{' '}
-          <Button
-            size="compact-xs"
-            variant="ghost"
-            onClick={() => setAliasReload((n) => n + 1)}
-          >
+          <Button variant="ghost" onClick={() => setAliasReload((n) => n + 1)}>
             Retry aliases
           </Button>
         </Text>

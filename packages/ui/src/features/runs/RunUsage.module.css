@@ -1,6 +1,7 @@
 .panel {
-  padding: 14px 23px;
+  padding: 24px var(--workspace-padding);
   border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
 }
 .panel summary {
   cursor: pointer;
@@ -19,4 +20,14 @@
   padding: 8px 12px 8px 0;
   text-align: left;
   border-bottom: 1px solid var(--border);
+}
+
+.tableWrap td:nth-last-child(-n + 2) {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 600px) {
+  .panel {
+    padding: 20px 16px;
+  }
 }

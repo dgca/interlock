@@ -73,7 +73,7 @@ pre {
   margin-top: 5px;
 }
 .hint {
-  font-size: 11px;
+  font-size: var(--mantine-font-size-xs);
   color: var(--muted);
   line-height: 1.75;
 }
@@ -112,19 +112,20 @@ pre {
 }
 .section-heading code {
   margin-left: auto;
+  font-size: var(--mantine-font-size-xs);
   color: var(--muted);
 }
 .error-text {
-  color: #edaa95;
-  font-size: 11px;
+  color: var(--error-copy);
+  font-size: var(--mantine-font-size-xs);
 }
 .error-banner {
-  background: #38281f;
-  border: 1px solid #78513e;
+  background: color-mix(in srgb, var(--error-copy) 12%, var(--inset));
+  border: 1px solid var(--error-border);
   border-radius: 6px;
   padding: 12px;
-  font-size: 11px;
-  color: #edb99c;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--error-copy);
   overflow-wrap: anywhere;
 }
 .engine-warning {
@@ -141,7 +142,7 @@ pre {
   box-shadow: 0 8px 28px #0005;
 }
 summary {
-  font-size: 11px;
+  font-size: var(--mantine-font-size-xs);
   color: var(--muted);
   cursor: pointer;
   padding: 10px 0;

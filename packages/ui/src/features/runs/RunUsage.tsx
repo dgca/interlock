@@ -68,7 +68,7 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
     <section className={styles.panel} aria-label="Reported usage">
       <Stack gap="xs">
         <Group justify="space-between">
-          <Text fw={600} size="sm">
+          <Text component="h2" fw={600} size="lg" m={0}>
             Reported usage
           </Text>
           <Checkbox
