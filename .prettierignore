@@ -2,4 +2,5 @@ pnpm-lock.yaml
 node_modules
 dist
 .interlock
-/.tasks/
+.impeccable/
+.tasks/

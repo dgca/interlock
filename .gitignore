@@ -9,4 +9,5 @@ playwright-report/
 test-results/
 .playwright-cli/
 output/
-.impeccable/review/
+.impeccable/
+.tasks/
