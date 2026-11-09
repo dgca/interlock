@@ -631,10 +631,6 @@ Terminal triggers can set `waitForQuiescence: true`. Runtime checks the entire s
 
 Shared trigger CRUD and inspection serve UI, CLI and both MCP transports. Portable format 8 exports safe event configuration with source workflow dependencies. Imports disable included triggers, omit operational history and receipts, and reset local event delivery state. Existing schedule and webhook histories remain.
 
-### Desktop notifications
-
-Operators can opt into local OS desktop notifications for unattended runs transitioning into `Needs attention` (via environment variable `INTERLOCK_DESKTOP_NOTIFICATIONS=1` or engine options). Notifications dispatch platform-appropriate alerts (`osascript` on macOS, `notify-send` on Linux, PowerShell on Windows) in a detached process, displaying run identity, workflow name, and attention reasons (`approval`, `question`, `model`, `recovery`, `stalled`). Transition tracking via `eventAttentionStates` ensures alerts fire exactly once when attention is required, deduplicating subsequent polling ticks until the attention state is cleared.
-
 ## Stall monitoring
 
 Core owns optional flat stall fields on definitions and nodes, bounded local setting contracts and Agent `maxExecutionMs`. Runtime `Stalls` resolves each field node > workflow > library, persists observational `stalls` records and emits `stalled` lifecycle events through the normal event path. Event triggers can consume these transitions without external coordinator polling. Run attention rolls stalled execution references through ordinary ancestors and stops at detached boundaries. Shared inspection pages active records without payloads.
