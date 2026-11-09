@@ -37,10 +37,10 @@ export function ListTable({
 type RowProps = { children: ReactNode; className?: string } & (
   | { to: string; onClick?: never; placeholder?: never }
   | { onClick: () => void; to?: never; placeholder?: never }
-  | { placeholder: true; to?: never; onClick?: never }
+  | { placeholder?: true; to?: never; onClick?: never }
 );
 
-/** Preserve native link/button behavior while sharing row layout and feedback. */
+/** Links and buttons navigate; static rows can contain their own controls. */
 export function ListTableRow({
   children,
   className,
@@ -49,7 +49,8 @@ export function ListTableRow({
   placeholder,
 }: RowProps) {
   const rowClass = [classes.row, className].filter(Boolean).join(' ');
-  if (placeholder) return <div className={rowClass}>{children}</div>;
+  if (placeholder || (to === undefined && onClick === undefined))
+    return <div className={rowClass}>{children}</div>;
   if (to !== undefined)
     return (
       <Link className={rowClass} to={to}>

@@ -63,6 +63,20 @@ function TabBar({
   );
 }
 
+export function PageToolbar({
+  summary,
+  children,
+}: {
+  summary?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <TabBar tabs={<div className={classes.toolbarSummary}>{summary}</div>}>
+      {children}
+    </TabBar>
+  );
+}
+
 export function PageTabs({
   items,
   value,
@@ -141,10 +155,12 @@ export function PageTabsSkeleton({
   items,
   value,
   children,
+  showCounts = true,
 }: {
   items: readonly { value: string; label: string }[];
   value: string;
   children?: ReactNode;
+  showCounts?: boolean;
 }) {
   return (
     <TabBar
@@ -158,7 +174,7 @@ export function PageTabsSkeleton({
               aria-current={value === item.value ? 'page' : undefined}
             >
               {item.label}
-              <Placeholder h={10} w={10} />
+              {showCounts && <Placeholder h={10} w={10} />}
             </span>
           ))}
         </div>

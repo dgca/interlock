@@ -102,6 +102,15 @@
   overflow: auto;
   padding: 28px 40px;
 }
+.toolbarSummary {
+  font-size: 12px;
+  color: var(--muted);
+}
+.formContent {
+  width: 100%;
+  max-width: 850px;
+  margin: 0 auto;
+}
 .card {
   padding: 24px;
   background: var(--surface);

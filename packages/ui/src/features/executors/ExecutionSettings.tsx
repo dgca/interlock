@@ -11,6 +11,7 @@ import { executorSettingsSchema } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import styles from './Harnesses.module.css';
+import { workspacePage } from '../../components/PageLayout/PageLayout';
 
 export function ExecutionSettings({
   onDirty,
@@ -59,7 +60,7 @@ export function ExecutionSettings({
     <>
       <section
         id="concurrency"
-        className={styles.sharedSettings}
+        className={`${workspacePage.card} ${styles.sharedSettings}`}
         aria-label="Shared execution settings"
       >
         {settings ? (
@@ -179,8 +180,13 @@ export function ExecutionSettings({
           </div>
         )}
       </section>
-      <StallSettings onDirty={setStallDirty} />
-      <RetentionSettings onDirty={setRetentionDirty} />
+      <div className={workspacePage.card}>
+        <StallSettings onDirty={setStallDirty} />
+      </div>
+      <section className={workspacePage.card}>
+        <h2 className={styles.settingsHeading}>History retention</h2>
+        <RetentionSettings showHeading={false} onDirty={setRetentionDirty} />
+      </section>
     </>
   );
 }

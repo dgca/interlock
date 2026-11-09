@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import {
-  Modal,
   Button,
   TextInput,
   NumberInput,
@@ -10,7 +9,6 @@ import {
 import {
   ChevronDown,
   ChevronUp,
-  Cpu,
   Plus,
   Trash2,
   Info,
@@ -20,6 +18,9 @@ import {
   Layers,
 } from 'lucide-react';
 import type { ExecutorProfile, ExecutorProfileUpdate } from '@interlock/core';
+import { Modal } from '../../components/Modal/Modal';
+import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
+import { ActionError } from '../../components/ActionError/ActionError';
 import { KeyValueEditor } from './KeyValueEditor';
 import styles from './CustomProfileDialog.module.css';
 
@@ -30,6 +31,7 @@ export interface CustomProfileDialogProps {
   initialName?: string;
   onSave: (data: ExecutorProfileUpdate) => Promise<void>;
   isNew?: boolean;
+  returnFocusTo?: () => HTMLElement | null;
 }
 
 export function CustomProfileDialog({
@@ -39,7 +41,9 @@ export function CustomProfileDialog({
   initialName = '',
   onSave,
   isNew = false,
+  returnFocusTo,
 }: CustomProfileDialogProps) {
+  const formId = useId();
   const [name, setName] = useState('');
   const [id, setId] = useState('');
   const [mode, setMode] = useState<'direct' | 'launcher'>('direct');
@@ -174,6 +178,7 @@ export function CustomProfileDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     setError('');
 
     if (!name.trim()) {
@@ -275,547 +280,544 @@ export function CustomProfileDialog({
     }
   };
 
+  if (!opened) return null;
   return (
     <Modal
-      opened={opened}
       onClose={onClose}
-      title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Cpu size={18} color="var(--mantine-color-violet-4, #b197fc)" />
-          <span style={{ fontWeight: 600 }}>
-            {isNew
-              ? 'Configure New Custom Harness'
-              : 'Configure Custom Harness Profile'}
-          </span>
-        </div>
-      }
+      busy={busy}
+      returnFocusTo={returnFocusTo}
+      title={isNew ? 'New custom harness' : 'Configure custom harness'}
       size="xl"
+      height={760}
     >
-      <form onSubmit={handleSubmit} className={styles.dialogContent}>
-        {/* Card 1: General Information */}
-        <section className={styles.sectionCard}>
-          <div className={styles.sectionTitle}>
-            <Info size={14} />
-            <span>1. General Information</span>
-          </div>
-          <div className={styles.gridTwo}>
-            <TextInput
-              label="Configuration Name"
-              required
-              maxLength={120}
-              value={name}
-              onChange={(e) => setName(e.currentTarget.value)}
-              placeholder="e.g. Local Python Agent"
-            />
-            <TextInput
-              label="Configuration ID"
-              readOnly
-              value={id}
-              description="Stable identifier referenced in workflows and MCP."
-            />
-          </div>
-        </section>
-
-        {/* Card 2: Execution Mode & Transport */}
-        <section className={styles.sectionCard}>
-          <div className={styles.sectionTitle}>
-            <Layers size={14} />
-            <span>2. Execution Mode & Transport</span>
-          </div>
-
-          <div>
-            <label className={styles.fieldLabel}>Execution Mode</label>
-            <SegmentedControl
-              fullWidth
-              value={mode}
-              onChange={(v) => setMode(v as 'direct' | 'launcher')}
-              data={[
-                { label: 'Direct Turn Mode', value: 'direct' },
-                {
-                  label: 'Delegated Claim-Ticket Mode (Launcher)',
-                  value: 'launcher',
-                },
-              ]}
-              style={{ marginTop: 4, marginBottom: 4 }}
-            />
-            <p className={styles.fieldHelper}>
-              {mode === 'direct'
-                ? 'Direct Turn Mode invokes your harness per assignment turn and awaits the result envelope.'
-                : 'Delegated Launcher Mode dispatches an assignment claim ticket to an external agent orchestrator/daemon.'}
-            </p>
-          </div>
-
-          <div>
-            <label className={styles.fieldLabel}>Transport Protocol</label>
-            <SegmentedControl
-              fullWidth
-              value={transport}
-              onChange={(v) => setTransport(v as 'subprocess' | 'http')}
-              data={[
-                { label: 'Subprocess (CLI)', value: 'subprocess' },
-                { label: 'HTTP Endpoint', value: 'http' },
-              ]}
-              style={{ marginTop: 4 }}
-            />
-          </div>
-
-          <div className={styles.gridTwo}>
-            <NumberInput
-              label="Concurrent assignments"
-              description="Blank means no profile limit. The shared limit still applies."
-              min={1}
-              max={Number.MAX_SAFE_INTEGER}
-              allowDecimal={false}
-              disabled={busy}
-              value={concurrency}
-              onChange={(value) =>
-                setConcurrency(value === '' ? '' : Number(value))
-              }
-            />
-            <NumberInput
-              label="Execution Timeout (seconds)"
-              min={1}
-              value={timeoutSeconds}
-              onChange={(val) =>
-                setTimeoutSeconds(val === '' ? '' : Number(val))
-              }
-              placeholder="Optional (e.g. 120)"
-            />
-            <NativeSelect
-              label="Default Permissions"
-              value={permissions}
-              onChange={(e) => setPermissions(e.currentTarget.value as any)}
-              data={[
-                {
-                  label: 'Standard (Interlock tool approval policy)',
-                  value: 'standard',
-                },
-                {
-                  label: 'Read-only (deny file/env mutations)',
-                  value: 'read-only',
-                },
-                {
-                  label: 'Full Access (autonomous mode)',
-                  value: 'full-access',
-                },
-              ]}
-            />
-          </div>
-
-          <KeyValueEditor
-            label="Environment Variables"
-            values={env}
-            onChange={setEnv}
-            tokens={[
-              '$INTERLOCK_WORK_ID',
-              '$INTERLOCK_RUN_ID',
-              '$INTERLOCK_CWD',
-              mode === 'launcher'
-                ? '$INTERLOCK_CLAIM_TICKET'
-                : '$INTERLOCK_CLAIM_TOKEN',
-            ]}
-          />
-
-          {transport === 'http' && (
-            <KeyValueEditor
-              label="HTTP Headers"
-              values={headers}
-              onChange={setHeaders}
-              keyPlaceholder="Authorization"
-              valuePlaceholder="Bearer token"
-              tokens={[
-                '$INTERLOCK_WORK_ID',
-                '$INTERLOCK_RUN_ID',
-                '$INTERLOCK_CLAIM_TOKEN',
-              ]}
-            />
-          )}
-        </section>
-
-        {/* Card 3: Endpoints & Commands / Hooks */}
-        <section className={styles.sectionCard}>
-          <div className={styles.sectionTitle}>
-            {transport === 'http' ? (
-              <Globe size={14} />
-            ) : (
-              <Terminal size={14} />
-            )}
-            <span>
-              {mode === 'direct'
-                ? '3. Turn Command & Invocation'
-                : '3. Launcher Command & Lifecycle Hooks'}
-            </span>
-          </div>
-
-          {mode === 'direct' ? (
-            transport === 'subprocess' ? (
-              <TextInput
-                label="Turn Command"
-                required
-                className={styles.monoInput}
-                value={turnCommand}
-                onChange={(e) => setTurnCommand(e.currentTarget.value)}
-                placeholder="python -m my_agent.turn --work-id $INTERLOCK_WORK_ID"
-                description="Command line executed per turn. STDIN receives task payload JSON; STDOUT receives result JSON."
-              />
-            ) : (
-              <TextInput
-                label="Turn Endpoint URL"
-                required
-                className={styles.monoInput}
-                value={turnUrl}
-                onChange={(e) => setTurnUrl(e.currentTarget.value)}
-                placeholder="https://agent-service.internal/api/turn"
-                description="HTTP POST endpoint called per turn. Request and response bodies are JSON."
-              />
-            )
-          ) : (
-            <div>
-              {transport === 'subprocess' ? (
+      <ModalBody>
+        <form id={formId} onSubmit={handleSubmit}>
+          <fieldset disabled={busy} className={styles.dialogContent}>
+            <section className={styles.sectionCard}>
+              <div className={styles.sectionTitle}>
+                <Info size={14} />
+                <span>General Information</span>
+              </div>
+              <div className={styles.gridTwo}>
                 <TextInput
-                  label="Launch Command"
+                  label="Configuration Name"
                   required
-                  className={styles.monoInput}
-                  value={launchCommand}
-                  onChange={(e) => setLaunchCommand(e.currentTarget.value)}
-                  placeholder="docker run -d --name agent-$INTERLOCK_WORK_ID my-agent:latest --claim $INTERLOCK_CLAIM_TICKET"
-                  description="Command executed to launch external agent container or daemon."
+                  maxLength={120}
+                  value={name}
+                  onChange={(e) => setName(e.currentTarget.value)}
+                  placeholder="e.g. Local Python Agent"
                 />
-              ) : (
                 <TextInput
-                  label="Launch Endpoint URL"
-                  required
-                  className={styles.monoInput}
-                  value={launchUrl}
-                  onChange={(e) => setLaunchUrl(e.currentTarget.value)}
-                  placeholder="https://agent-gateway.internal/launch"
-                  description="HTTP POST endpoint called to dispatch launch ticket."
+                  label="Configuration ID"
+                  readOnly
+                  value={id}
+                  description="Stable identifier referenced in workflows and MCP."
+                />
+              </div>
+            </section>
+            <section className={styles.sectionCard}>
+              <div className={styles.sectionTitle}>
+                <Layers size={14} />
+                <span>Execution Mode & Transport</span>
+              </div>
+
+              <div>
+                <label className={styles.fieldLabel}>Execution Mode</label>
+                <SegmentedControl
+                  fullWidth
+                  value={mode}
+                  onChange={(v) => setMode(v as 'direct' | 'launcher')}
+                  data={[
+                    { label: 'Direct Turn Mode', value: 'direct' },
+                    {
+                      label: 'Delegated Claim-Ticket Mode (Launcher)',
+                      value: 'launcher',
+                    },
+                  ]}
+                  style={{ marginTop: 4, marginBottom: 4 }}
+                />
+                <p className={styles.fieldHelper}>
+                  {mode === 'direct'
+                    ? 'Direct Turn Mode invokes your harness per assignment turn and awaits the result envelope.'
+                    : 'Delegated Launcher Mode dispatches an assignment claim ticket to an external agent orchestrator/daemon.'}
+                </p>
+              </div>
+
+              <div>
+                <label className={styles.fieldLabel}>Transport Protocol</label>
+                <SegmentedControl
+                  fullWidth
+                  value={transport}
+                  onChange={(v) => setTransport(v as 'subprocess' | 'http')}
+                  data={[
+                    { label: 'Subprocess (CLI)', value: 'subprocess' },
+                    { label: 'HTTP Endpoint', value: 'http' },
+                  ]}
+                  style={{ marginTop: 4 }}
+                />
+              </div>
+
+              <div className={styles.gridTwo}>
+                <NumberInput
+                  label="Concurrent assignments"
+                  description="Blank means no profile limit. The shared limit still applies."
+                  min={1}
+                  max={Number.MAX_SAFE_INTEGER}
+                  allowDecimal={false}
+                  disabled={busy}
+                  value={concurrency}
+                  onChange={(value) =>
+                    setConcurrency(value === '' ? '' : Number(value))
+                  }
+                />
+                <NumberInput
+                  label="Execution Timeout (seconds)"
+                  min={1}
+                  value={timeoutSeconds}
+                  onChange={(val) =>
+                    setTimeoutSeconds(val === '' ? '' : Number(val))
+                  }
+                  placeholder="Optional (e.g. 120)"
+                />
+                <NativeSelect
+                  label="Default Permissions"
+                  value={permissions}
+                  onChange={(e) => setPermissions(e.currentTarget.value as any)}
+                  data={[
+                    {
+                      label: 'Standard (Interlock tool approval policy)',
+                      value: 'standard',
+                    },
+                    {
+                      label: 'Read-only (deny file/env mutations)',
+                      value: 'read-only',
+                    },
+                    {
+                      label: 'Full Access (autonomous mode)',
+                      value: 'full-access',
+                    },
+                  ]}
+                />
+              </div>
+
+              <KeyValueEditor
+                label="Environment Variables"
+                values={env}
+                onChange={setEnv}
+                tokens={[
+                  '$INTERLOCK_WORK_ID',
+                  '$INTERLOCK_RUN_ID',
+                  '$INTERLOCK_CWD',
+                  mode === 'launcher'
+                    ? '$INTERLOCK_CLAIM_TICKET'
+                    : '$INTERLOCK_CLAIM_TOKEN',
+                ]}
+              />
+
+              {transport === 'http' && (
+                <KeyValueEditor
+                  label="HTTP Headers"
+                  values={headers}
+                  onChange={setHeaders}
+                  keyPlaceholder="Authorization"
+                  valuePlaceholder="Bearer token"
+                  tokens={[
+                    '$INTERLOCK_WORK_ID',
+                    '$INTERLOCK_RUN_ID',
+                    '$INTERLOCK_CLAIM_TOKEN',
+                  ]}
                 />
               )}
-
-              <div className={styles.hooksContainer}>
-                <span className={styles.fieldLabel}>
-                  Optional Lifecycle Hooks:
+            </section>
+            <section className={styles.sectionCard}>
+              <div className={styles.sectionTitle}>
+                {transport === 'http' ? (
+                  <Globe size={14} />
+                ) : (
+                  <Terminal size={14} />
+                )}
+                <span>
+                  {mode === 'direct'
+                    ? 'Turn Command & Invocation'
+                    : 'Launcher Command & Lifecycle Hooks'}
                 </span>
-
-                {/* Status Hook */}
-                <div className={styles.hookCard}>
-                  <button
-                    type="button"
-                    className={styles.hookHeader}
-                    onClick={() => toggleHook('status')}
-                  >
-                    <div className={styles.hookTitleGroup}>
-                      <span>Status Polling Hook</span>
-                      <span className={styles.hookTag}>
-                        {statusCommand || statusUrl ? 'Configured' : 'Optional'}
-                      </span>
-                    </div>
-                    {openHooks.status ? (
-                      <ChevronUp size={14} />
-                    ) : (
-                      <ChevronDown size={14} />
-                    )}
-                  </button>
-                  {openHooks.status && (
-                    <div className={styles.hookBody}>
-                      <TextInput
-                        label={
-                          transport === 'http'
-                            ? 'Status Polling URL'
-                            : 'Status Command'
-                        }
-                        className={styles.monoInput}
-                        value={transport === 'http' ? statusUrl : statusCommand}
-                        onChange={(e) =>
-                          transport === 'http'
-                            ? setStatusUrl(e.currentTarget.value)
-                            : setStatusCommand(e.currentTarget.value)
-                        }
-                        placeholder={
-                          transport === 'http'
-                            ? 'https://agent-gateway.internal/status?workId=$INTERLOCK_WORK_ID'
-                            : 'docker inspect --format="{{.State.Status}}" agent-$INTERLOCK_WORK_ID'
-                        }
-                        description="Returns status: working | idle | needs_attention | ended."
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Message Hook */}
-                <div className={styles.hookCard}>
-                  <button
-                    type="button"
-                    className={styles.hookHeader}
-                    onClick={() => toggleHook('message')}
-                  >
-                    <div className={styles.hookTitleGroup}>
-                      <span>Message & Human Input Hook</span>
-                      <span className={styles.hookTag}>
-                        {messageCommand || messageUrl
-                          ? 'Configured'
-                          : 'Optional'}
-                      </span>
-                    </div>
-                    {openHooks.message ? (
-                      <ChevronUp size={14} />
-                    ) : (
-                      <ChevronDown size={14} />
-                    )}
-                  </button>
-                  {openHooks.message && (
-                    <div className={styles.hookBody}>
-                      <TextInput
-                        label={
-                          transport === 'http'
-                            ? 'Message Endpoint URL'
-                            : 'Message Command'
-                        }
-                        className={styles.monoInput}
-                        value={
-                          transport === 'http' ? messageUrl : messageCommand
-                        }
-                        onChange={(e) =>
-                          transport === 'http'
-                            ? setMessageUrl(e.currentTarget.value)
-                            : setMessageCommand(e.currentTarget.value)
-                        }
-                        placeholder={
-                          transport === 'http'
-                            ? 'https://agent-gateway.internal/message'
-                            : 'curl -X POST https://agent-gateway/message -d "$INTERLOCK_INPUT"'
-                        }
-                        description="Delivers questions, answers, and nudges to the running session."
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Stop Hook */}
-                <div className={styles.hookCard}>
-                  <button
-                    type="button"
-                    className={styles.hookHeader}
-                    onClick={() => toggleHook('stop')}
-                  >
-                    <div className={styles.hookTitleGroup}>
-                      <span>Stop & Cancellation Hook</span>
-                      <span className={styles.hookTag}>
-                        {stopCommand || stopUrl ? 'Configured' : 'Optional'}
-                      </span>
-                    </div>
-                    {openHooks.stop ? (
-                      <ChevronUp size={14} />
-                    ) : (
-                      <ChevronDown size={14} />
-                    )}
-                  </button>
-                  {openHooks.stop && (
-                    <div className={styles.hookBody}>
-                      <TextInput
-                        label={
-                          transport === 'http'
-                            ? 'Stop Endpoint URL'
-                            : 'Stop Command'
-                        }
-                        className={styles.monoInput}
-                        value={transport === 'http' ? stopUrl : stopCommand}
-                        onChange={(e) =>
-                          transport === 'http'
-                            ? setStopUrl(e.currentTarget.value)
-                            : setStopCommand(e.currentTarget.value)
-                        }
-                        placeholder={
-                          transport === 'http'
-                            ? 'https://agent-gateway.internal/stop'
-                            : 'docker stop -t 10 agent-$INTERLOCK_WORK_ID'
-                        }
-                        description="Called when execution is cancelled or stopped by the user."
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Archive Hook */}
-                <div className={styles.hookCard}>
-                  <button
-                    type="button"
-                    className={styles.hookHeader}
-                    onClick={() => toggleHook('archive')}
-                  >
-                    <div className={styles.hookTitleGroup}>
-                      <span>Archive & Cleanup Hook</span>
-                      <span className={styles.hookTag}>
-                        {archiveCommand || archiveUrl
-                          ? 'Configured'
-                          : 'Optional'}
-                      </span>
-                    </div>
-                    {openHooks.archive ? (
-                      <ChevronUp size={14} />
-                    ) : (
-                      <ChevronDown size={14} />
-                    )}
-                  </button>
-                  {openHooks.archive && (
-                    <div className={styles.hookBody}>
-                      <TextInput
-                        label={
-                          transport === 'http'
-                            ? 'Archive Endpoint URL'
-                            : 'Archive Command'
-                        }
-                        className={styles.monoInput}
-                        value={
-                          transport === 'http' ? archiveUrl : archiveCommand
-                        }
-                        onChange={(e) =>
-                          transport === 'http'
-                            ? setArchiveUrl(e.currentTarget.value)
-                            : setArchiveCommand(e.currentTarget.value)
-                        }
-                        placeholder={
-                          transport === 'http'
-                            ? 'https://agent-gateway.internal/archive'
-                            : 'docker rm -f agent-$INTERLOCK_WORK_ID'
-                        }
-                        description="Called when the session's final assignment in the run completes."
-                      />
-                    </div>
-                  )}
-                </div>
               </div>
-            </div>
-          )}
-        </section>
 
-        {/* Card 4: Directory Containment & Security */}
-        <section className={styles.sectionCard}>
-          <div className={styles.sectionTitle}>
-            <Shield size={14} />
-            <span>4. Directory Containment & Security</span>
-          </div>
-
-          <TextInput
-            label="Default Working Directory (cwd)"
-            className={styles.monoInput}
-            value={cwd}
-            onChange={(e) => setCwd(e.currentTarget.value)}
-            placeholder="/Users/dan/dev/interlock"
-            description="Default starting folder for subprocesses. Must be an absolute path if provided."
-          />
-
-          <div>
-            <div className={styles.keyValueHeader}>
-              <span className={styles.fieldLabel}>
-                Allowed Roots (allowedRoots)
-              </span>
-              <Button
-                variant="subtle"
-                size="xs"
-                leftSection={<Plus size={12} />}
-                onClick={handleAddRoot}
-              >
-                Add allowed root
-              </Button>
-            </div>
-            <p className={styles.fieldHelper}>
-              Constrains dynamic working directory binding. Resolving outside
-              roots fails with cwd_blocked.
-            </p>
-
-            {allowedRoots.length > 0 && (
-              <div className={styles.rootsList} style={{ marginTop: 8 }}>
-                {allowedRoots.map((root, idx) => (
-                  <div key={idx} className={styles.rootRow}>
+              {mode === 'direct' ? (
+                transport === 'subprocess' ? (
+                  <TextInput
+                    label="Turn Command"
+                    required
+                    className={styles.monoInput}
+                    value={turnCommand}
+                    onChange={(e) => setTurnCommand(e.currentTarget.value)}
+                    placeholder="python -m my_agent.turn --work-id $INTERLOCK_WORK_ID"
+                    description="Command line executed per turn. STDIN receives task payload JSON; STDOUT receives result JSON."
+                  />
+                ) : (
+                  <TextInput
+                    label="Turn Endpoint URL"
+                    required
+                    className={styles.monoInput}
+                    value={turnUrl}
+                    onChange={(e) => setTurnUrl(e.currentTarget.value)}
+                    placeholder="https://agent-service.internal/api/turn"
+                    description="HTTP POST endpoint called per turn. Request and response bodies are JSON."
+                  />
+                )
+              ) : (
+                <div>
+                  {transport === 'subprocess' ? (
                     <TextInput
-                      size="xs"
+                      label="Launch Command"
+                      required
                       className={styles.monoInput}
-                      style={{ flex: 1 }}
-                      placeholder="/Users/dan/dev"
-                      value={root}
-                      onChange={(e) =>
-                        handleRootChange(idx, e.currentTarget.value)
-                      }
+                      value={launchCommand}
+                      onChange={(e) => setLaunchCommand(e.currentTarget.value)}
+                      placeholder="docker run -d --name agent-$INTERLOCK_WORK_ID my-agent:latest --claim $INTERLOCK_CLAIM_TICKET"
+                      description="Command executed to launch external agent container or daemon."
                     />
-                    <Button
-                      variant="subtle"
-                      color="red"
-                      size="xs"
-                      onClick={() => handleRemoveRoot(idx)}
-                      aria-label="Remove root"
-                    >
-                      <Trash2 size={13} />
-                    </Button>
+                  ) : (
+                    <TextInput
+                      label="Launch Endpoint URL"
+                      required
+                      className={styles.monoInput}
+                      value={launchUrl}
+                      onChange={(e) => setLaunchUrl(e.currentTarget.value)}
+                      placeholder="https://agent-gateway.internal/launch"
+                      description="HTTP POST endpoint called to dispatch launch ticket."
+                    />
+                  )}
+
+                  <div className={styles.hooksContainer}>
+                    <span className={styles.fieldLabel}>
+                      Optional Lifecycle Hooks:
+                    </span>
+
+                    {/* Status Hook */}
+                    <div className={styles.hookCard}>
+                      <button
+                        type="button"
+                        className={styles.hookHeader}
+                        onClick={() => toggleHook('status')}
+                      >
+                        <div className={styles.hookTitleGroup}>
+                          <span>Status Polling Hook</span>
+                          <span className={styles.hookTag}>
+                            {statusCommand || statusUrl
+                              ? 'Configured'
+                              : 'Optional'}
+                          </span>
+                        </div>
+                        {openHooks.status ? (
+                          <ChevronUp size={14} />
+                        ) : (
+                          <ChevronDown size={14} />
+                        )}
+                      </button>
+                      {openHooks.status && (
+                        <div className={styles.hookBody}>
+                          <TextInput
+                            label={
+                              transport === 'http'
+                                ? 'Status Polling URL'
+                                : 'Status Command'
+                            }
+                            className={styles.monoInput}
+                            value={
+                              transport === 'http' ? statusUrl : statusCommand
+                            }
+                            onChange={(e) =>
+                              transport === 'http'
+                                ? setStatusUrl(e.currentTarget.value)
+                                : setStatusCommand(e.currentTarget.value)
+                            }
+                            placeholder={
+                              transport === 'http'
+                                ? 'https://agent-gateway.internal/status?workId=$INTERLOCK_WORK_ID'
+                                : 'docker inspect --format="{{.State.Status}}" agent-$INTERLOCK_WORK_ID'
+                            }
+                            description="Returns status: working | idle | needs_attention | ended."
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Message Hook */}
+                    <div className={styles.hookCard}>
+                      <button
+                        type="button"
+                        className={styles.hookHeader}
+                        onClick={() => toggleHook('message')}
+                      >
+                        <div className={styles.hookTitleGroup}>
+                          <span>Message & Human Input Hook</span>
+                          <span className={styles.hookTag}>
+                            {messageCommand || messageUrl
+                              ? 'Configured'
+                              : 'Optional'}
+                          </span>
+                        </div>
+                        {openHooks.message ? (
+                          <ChevronUp size={14} />
+                        ) : (
+                          <ChevronDown size={14} />
+                        )}
+                      </button>
+                      {openHooks.message && (
+                        <div className={styles.hookBody}>
+                          <TextInput
+                            label={
+                              transport === 'http'
+                                ? 'Message Endpoint URL'
+                                : 'Message Command'
+                            }
+                            className={styles.monoInput}
+                            value={
+                              transport === 'http' ? messageUrl : messageCommand
+                            }
+                            onChange={(e) =>
+                              transport === 'http'
+                                ? setMessageUrl(e.currentTarget.value)
+                                : setMessageCommand(e.currentTarget.value)
+                            }
+                            placeholder={
+                              transport === 'http'
+                                ? 'https://agent-gateway.internal/message'
+                                : 'curl -X POST https://agent-gateway/message -d "$INTERLOCK_INPUT"'
+                            }
+                            description="Delivers questions, answers, and nudges to the running session."
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Stop Hook */}
+                    <div className={styles.hookCard}>
+                      <button
+                        type="button"
+                        className={styles.hookHeader}
+                        onClick={() => toggleHook('stop')}
+                      >
+                        <div className={styles.hookTitleGroup}>
+                          <span>Stop & Cancellation Hook</span>
+                          <span className={styles.hookTag}>
+                            {stopCommand || stopUrl ? 'Configured' : 'Optional'}
+                          </span>
+                        </div>
+                        {openHooks.stop ? (
+                          <ChevronUp size={14} />
+                        ) : (
+                          <ChevronDown size={14} />
+                        )}
+                      </button>
+                      {openHooks.stop && (
+                        <div className={styles.hookBody}>
+                          <TextInput
+                            label={
+                              transport === 'http'
+                                ? 'Stop Endpoint URL'
+                                : 'Stop Command'
+                            }
+                            className={styles.monoInput}
+                            value={transport === 'http' ? stopUrl : stopCommand}
+                            onChange={(e) =>
+                              transport === 'http'
+                                ? setStopUrl(e.currentTarget.value)
+                                : setStopCommand(e.currentTarget.value)
+                            }
+                            placeholder={
+                              transport === 'http'
+                                ? 'https://agent-gateway.internal/stop'
+                                : 'docker stop -t 10 agent-$INTERLOCK_WORK_ID'
+                            }
+                            description="Called when execution is cancelled or stopped by the user."
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Archive Hook */}
+                    <div className={styles.hookCard}>
+                      <button
+                        type="button"
+                        className={styles.hookHeader}
+                        onClick={() => toggleHook('archive')}
+                      >
+                        <div className={styles.hookTitleGroup}>
+                          <span>Archive & Cleanup Hook</span>
+                          <span className={styles.hookTag}>
+                            {archiveCommand || archiveUrl
+                              ? 'Configured'
+                              : 'Optional'}
+                          </span>
+                        </div>
+                        {openHooks.archive ? (
+                          <ChevronUp size={14} />
+                        ) : (
+                          <ChevronDown size={14} />
+                        )}
+                      </button>
+                      {openHooks.archive && (
+                        <div className={styles.hookBody}>
+                          <TextInput
+                            label={
+                              transport === 'http'
+                                ? 'Archive Endpoint URL'
+                                : 'Archive Command'
+                            }
+                            className={styles.monoInput}
+                            value={
+                              transport === 'http' ? archiveUrl : archiveCommand
+                            }
+                            onChange={(e) =>
+                              transport === 'http'
+                                ? setArchiveUrl(e.currentTarget.value)
+                                : setArchiveCommand(e.currentTarget.value)
+                            }
+                            placeholder={
+                              transport === 'http'
+                                ? 'https://agent-gateway.internal/archive'
+                                : 'docker rm -f agent-$INTERLOCK_WORK_ID'
+                            }
+                            description="Called when the session's final assignment in the run completes."
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ))}
+                </div>
+              )}
+            </section>
+            <section className={styles.sectionCard}>
+              <div className={styles.sectionTitle}>
+                <Shield size={14} />
+                <span>Directory Containment & Security</span>
               </div>
-            )}
-          </div>
 
-          <div>
-            <span className={styles.fieldLabel}>
-              Session Name Template (sessionNameTemplate)
-            </span>
-            <TextInput
-              size="xs"
-              className={styles.monoInput}
-              placeholder="e.g. {{externalTask.id}} {{node.label}}: {{externalTask.title}}"
-              value={sessionNameTemplate}
-              onChange={(e) => setSessionNameTemplate(e.currentTarget.value)}
-            />
-            <p className={styles.fieldHelper}>
-              Evaluated from run context. Passed to custom launchers, direct
-              turns, and Pi.
-            </p>
-          </div>
+              <TextInput
+                label="Default Working Directory (cwd)"
+                className={styles.monoInput}
+                value={cwd}
+                onChange={(e) => setCwd(e.currentTarget.value)}
+                placeholder="/Users/dan/dev/interlock"
+                description="Default starting folder for subprocesses. Must be an absolute path if provided."
+              />
 
-          <div>
-            <span className={styles.fieldLabel}>
-              Resume Command Template (resumeCommandTemplate)
-            </span>
-            <TextInput
-              size="xs"
-              className={styles.monoInput}
-              placeholder="e.g. my-tool resume {{sessionId}}"
-              value={resumeCommandTemplate}
-              onChange={(e) => setResumeCommandTemplate(e.currentTarget.value)}
-            />
-            <p className={styles.fieldHelper}>
-              CLI command to resume or inspect an external session.
-            </p>
-          </div>
+              <div>
+                <div className={styles.keyValueHeader}>
+                  <span className={styles.fieldLabel}>
+                    Allowed Roots (allowedRoots)
+                  </span>
+                  <Button
+                    variant="subtle"
+                    size="xs"
+                    leftSection={<Plus size={12} />}
+                    onClick={handleAddRoot}
+                  >
+                    Add allowed root
+                  </Button>
+                </div>
+                <p className={styles.fieldHelper}>
+                  Constrains dynamic working directory binding. Resolving
+                  outside roots fails with cwd_blocked.
+                </p>
 
-          <div>
-            <span className={styles.fieldLabel}>
-              Deep Link URL Template (deepLinkTemplate)
-            </span>
-            <TextInput
-              size="xs"
-              className={styles.monoInput}
-              placeholder="e.g. https://app.example.com/sessions/{{sessionId}}"
-              value={deepLinkTemplate}
-              onChange={(e) => setDeepLinkTemplate(e.currentTarget.value)}
-            />
-            <p className={styles.fieldHelper}>
-              HTTP(S) deep link opened directly in the browser from Run
-              Inspector.
-            </p>
-          </div>
-        </section>
+                {allowedRoots.length > 0 && (
+                  <div className={styles.rootsList} style={{ marginTop: 8 }}>
+                    {allowedRoots.map((root, idx) => (
+                      <div key={idx} className={styles.rootRow}>
+                        <TextInput
+                          size="xs"
+                          className={styles.monoInput}
+                          style={{ flex: 1 }}
+                          placeholder="/Users/dan/dev"
+                          value={root}
+                          onChange={(e) =>
+                            handleRootChange(idx, e.currentTarget.value)
+                          }
+                        />
+                        <Button
+                          variant="subtle"
+                          color="red"
+                          size="xs"
+                          onClick={() => handleRemoveRoot(idx)}
+                          aria-label="Remove root"
+                        >
+                          <Trash2 size={13} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-        {/* Footer Actions */}
-        <div className={styles.footerActions}>
-          {error && <span className={styles.errorBanner}>{error}</span>}
-          <Button variant="default" onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          <Button variant="primary" type="submit" disabled={busy}>
-            {busy ? 'Saving…' : 'Save configuration'}
-          </Button>
-        </div>
-      </form>
+              <div>
+                <span className={styles.fieldLabel}>
+                  Session Name Template (sessionNameTemplate)
+                </span>
+                <TextInput
+                  size="xs"
+                  className={styles.monoInput}
+                  placeholder="e.g. {{externalTask.id}} {{node.label}}: {{externalTask.title}}"
+                  value={sessionNameTemplate}
+                  onChange={(e) =>
+                    setSessionNameTemplate(e.currentTarget.value)
+                  }
+                />
+                <p className={styles.fieldHelper}>
+                  Evaluated from run context. Passed to custom launchers, direct
+                  turns, and Pi.
+                </p>
+              </div>
+
+              <div>
+                <span className={styles.fieldLabel}>
+                  Resume Command Template (resumeCommandTemplate)
+                </span>
+                <TextInput
+                  size="xs"
+                  className={styles.monoInput}
+                  placeholder="e.g. my-tool resume {{sessionId}}"
+                  value={resumeCommandTemplate}
+                  onChange={(e) =>
+                    setResumeCommandTemplate(e.currentTarget.value)
+                  }
+                />
+                <p className={styles.fieldHelper}>
+                  CLI command to resume or inspect an external session.
+                </p>
+              </div>
+
+              <div>
+                <span className={styles.fieldLabel}>
+                  Deep Link URL Template (deepLinkTemplate)
+                </span>
+                <TextInput
+                  size="xs"
+                  className={styles.monoInput}
+                  placeholder="e.g. https://app.example.com/sessions/{{sessionId}}"
+                  value={deepLinkTemplate}
+                  onChange={(e) => setDeepLinkTemplate(e.currentTarget.value)}
+                />
+                <p className={styles.fieldHelper}>
+                  HTTP(S) deep link opened directly in the browser from Run
+                  Inspector.
+                </p>
+              </div>
+            </section>
+          </fieldset>
+          <ActionError message={error} />
+        </form>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="default" onClick={onClose} disabled={busy}>
+          Cancel
+        </Button>
+        <Button variant="filled" type="submit" form={formId} disabled={busy}>
+          Save configuration
+        </Button>
+      </ModalFooter>
     </Modal>
   );
 }

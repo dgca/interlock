@@ -1,86 +1,66 @@
-.dependencies ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+.search {
+  width: 240px;
+  max-width: 100%;
 }
-.columnHead,
-.row {
-  grid-template-columns: minmax(0, 1fr) 80px 110px 100px 16px;
+.listRow {
+  color: var(--text);
+}
+.identity {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.identity strong {
+  font-size: 14px;
+  font-weight: 550;
+}
+.identity small {
+  color: var(--muted);
+  font-size: 12px;
 }
 .rowKind {
   justify-self: start;
 }
-.ready {
+.ready,
+.updated {
   color: var(--text-secondary);
+  font-size: 12px;
 }
 .status {
   color: var(--mantine-color-yellow-4);
-}
-.skeletonIcon {
-  flex-shrink: 0;
+  font-size: 12px;
 }
 .empty {
-  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 64px 24px;
+  text-align: center;
+}
+.empty > svg {
+  color: var(--muted);
+}
+.empty h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 550;
 }
 .error {
   color: var(--mantine-color-red-4);
   overflow-wrap: anywhere;
 }
-.editor {
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
-  min-width: 0;
-  overflow: hidden;
-  container: variable-editor / inline-size;
+.usage {
+  margin-top: 32px;
 }
-.editor > .editorHeader {
-  height: auto;
-  min-height: 82px;
-  padding-block: 16px;
-  flex-wrap: wrap;
-}
-.editorTitle {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  flex: 1;
-}
-.editorTitle h1 {
-  margin: 0;
-  font-size: var(--mantine-font-size-sm);
-  font-weight: 550;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.editorStatus {
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.editorActions {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  gap: 8px;
-}
-.editorBody {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-.editorContent {
-  max-width: 1500px;
-  margin: 0 auto;
-  padding: 32px 46px 40px;
-  width: 100%;
+.usage > h2 {
+  margin: 0 0 18px;
+  font-size: 15px;
+  font-weight: 600;
 }
 .editorDisclosures {
-  margin-top: 22px;
-  border-top: 1px solid var(--border);
+  margin-top: 28px;
 }
 .fields {
   margin: 0;
@@ -117,9 +97,6 @@
   padding: 10px 0;
   overflow-wrap: anywhere;
 }
-.dependencies section li + li {
-  border-top: 1px solid var(--border);
-}
 .dependencies > ul > li {
   padding: 0;
 }
@@ -130,7 +107,7 @@
   white-space: normal;
 }
 .editorDisclosures > details + details {
-  border-top: 1px solid var(--border);
+  margin-top: 12px;
 }
 .editorDisclosures summary {
   min-height: 44px;
@@ -155,56 +132,23 @@
 .dangerZone .deleteAction:not(:disabled):hover {
   background: var(--surface-raised);
 }
-@media (max-width: 1050px) {
-  .editorContent {
-    padding: 24px;
+
+@media (max-width: 900px) {
+  .listRow > .identity {
+    grid-column: 1;
+    grid-row: 1;
   }
-}
-@container library-list (max-width: 740px) {
-  .columnHead,
-  .row {
-    grid-template-columns: minmax(0, 1fr) 75px 105px 16px;
-  }
-}
-@container variable-editor (max-width: 640px) {
-  .editor > .editorHeader {
-    padding: 12px;
-    gap: 8px;
-  }
-  .editorTitle {
-    flex-basis: calc(100% - 52px);
-  }
-  .backButton {
-    min-width: 44px;
-    min-height: 44px;
-  }
-  .editorActions {
-    margin-left: auto;
-  }
-  .editorActions > button {
-    min-height: 44px;
-  }
-  .editorContent {
-    padding: 16px 12px 28px;
-  }
-  .fields button {
-    min-height: 44px;
-  }
-}
-@media (max-width: 600px) {
-  .editor {
-    height: calc(100dvh - 60px);
-  }
-}
-@container library-list (max-width: 480px) {
-  .row {
-    grid-template-columns: 35px max-content minmax(0, 1fr) 16px;
-  }
-  .rowKind {
+  .listRow > .rowKind {
     grid-column: 2;
+    grid-row: 1;
   }
-  .row > .status,
-  .row > .ready {
-    grid-column: 3;
+  .listRow > .status,
+  .listRow > .ready {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .listRow > .updated {
+    grid-column: 2;
+    grid-row: 2;
   }
 }

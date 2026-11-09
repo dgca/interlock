@@ -1,0 +1,57 @@
+import { Stack } from '@mantine/core';
+import {
+  PageHeader,
+  PageTabsSkeleton,
+  workspacePage,
+} from '../../components/PageLayout/PageLayout';
+import {
+  ListTableSkeleton,
+  type ListTableColumn,
+} from '../../components/ListTable/ListTable';
+import { Placeholder } from '../../components/LoadingSkeleton/LoadingSkeleton';
+import styles from './Harnesses.module.css';
+
+export const harnessViews = [
+  { value: 'configurations', label: 'Configurations' },
+  { value: 'settings', label: 'Execution settings' },
+];
+export const harnessColumns: readonly ListTableColumn[] = [
+  { label: 'Configuration', width: 'minmax(0, 1fr)' },
+  { label: 'Installation', width: '140px', compactWidth: '110px' },
+  { label: 'Status', width: '130px', compactWidth: '115px' },
+  { label: '', width: '145px', compactWidth: '130px' },
+];
+export function HarnessRowsSkeleton() {
+  return (
+    <ListTableSkeleton
+      columns={harnessColumns}
+      label="Loading harnesses…"
+      rowClassName={styles.rowHeading}
+    >
+      <Stack gap={7}>
+        <Placeholder h={12} w="55%" />
+        <Placeholder h={9} w="80%" />
+      </Stack>
+      <Placeholder h={18} w={70} />
+      <Placeholder h={14} w={85} />
+      <span>
+        <Placeholder h={30} w={100} />
+      </span>
+    </ListTableSkeleton>
+  );
+}
+export function HarnessLibrarySkeleton() {
+  return (
+    <section className={workspacePage.page}>
+      <PageHeader title="Harnesses" />
+      <PageTabsSkeleton
+        items={harnessViews}
+        value="configurations"
+        showCounts={false}
+      />
+      <div className={workspacePage.content}>
+        <HarnessRowsSkeleton />
+      </div>
+    </section>
+  );
+}

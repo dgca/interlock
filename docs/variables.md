@@ -5,7 +5,7 @@
 1. Open **Variables** and select **New variable**.
 2. Enter a unique name, such as `service_api_token`.
 3. Select **Secret** for credentials or **Config** for ordinary configuration.
-4. Enter the value and select **Create variable**. Leave a Secret value empty to
+4. Enter the value and select **Create**. Leave a Secret value empty to
    provision it later with **Set value**.
 
 Names start with a letter or underscore and contain letters, digits, underscores,

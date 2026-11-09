@@ -11,17 +11,21 @@ Interlock uses the Mantine theme in `packages/ui/src/theme/theme.ts` and the sha
 
 ## Page layout
 
-Keep reusable page presentation in `packages/ui/src/components`. `PageLayout` owns page headers, tab bars, and `PageTabsSkeleton`. `ListTable` owns the shared list container, headings, link/button rows, responsive spacing, focus/hover states, and `ListTableSkeleton`. Features supply their columns, cell content, state labels, and navigation or action callbacks. Use these shared modules when extending Runs and Automations.
+Keep reusable page presentation in `packages/ui/src/components`. `PageLayout` owns page headers, tab bars, and `PageTabsSkeleton`. `ListTable` owns the shared list container, headings, link/button rows, responsive spacing, focus/hover states, and `ListTableSkeleton`. Features supply their columns, cell content, state labels, and navigation or action callbacks. Use these shared modules when extending Runs, Automations, Variables, and Harnesses. Static table rows can contain separate controls such as a switch and Configure button.
 
 Tabs switch sections within the current resource or list. Use sidebar navigation or an explicit link to open another workspace.
 
-Automations and the global Runs list use the shared `PageHeader` and tab-row styles. Automations uses `PageTabs` for URL-backed views; Runs uses `PageTabList` within Mantine Tabs for controlled in-page sections. The header contains the page title and actions. Add Back on creation and resource pages; omit it on a top-level list. Place underline navigation directly below the header on the same surface background, with search and filters aligned to the right. Keep both visible while the workspace scrolls.
+Automations, the global Runs list, Variables, and Harnesses use the shared `PageHeader`. Pages with tabs use the shared tab-row styles; Variables uses `PageToolbar` for its count and search. Automations uses `PageTabs` for URL-backed views; Runs uses `PageTabList` within Mantine Tabs for controlled in-page sections. The header contains the page title and actions. Add Back on creation and resource pages; omit it on a top-level list. Place underline navigation directly below the header on the same surface background, with search and filters aligned to the right. Keep both visible while the workspace scrolls.
 
-Place automation form fields inside one surface card with 24px padding and generous section spacing. The preview rail spans the available height below the header. Activity table bodies use the card background. Use spacing for the next-run and last-occurrence summary; avoid inset divider lines.
+Place creation and editing form fields inside a surface card with 24px padding and generous section spacing. The preview rail spans the available height below the header. Activity table bodies use the card background. Use spacing for the next-run and last-occurrence summary; avoid inset divider lines.
 
 Automations list filters and page offsets live in the URL and survive detail navigation. Creation defaults to disabled with an explicit enable checkbox and a **Create** action. Successful creation opens ordinary detail without a review gate. Preserve edits after rejected writes, disable repeat submissions while pending, and retain acknowledged outcomes if refresh fails. Revision conflicts offer reload while preserving local edits until discarded.
 
 Runs tables share the Automations row spacing, title-case headings, typography, status dots, and navigation chevrons. Run rows retain their stage, actor, attention reason, version, tags, comparison context, and exact start time. Tag filters open from the tab toolbar into a form card. Global history actions live in the page header; workflow-scoped history actions remain beside the run tabs.
+
+Harnesses opens on **Configurations**, with installation checks and **Add configuration** in the header. **Execution settings** groups concurrency, stall detection, and history retention into form cards. Tabs retain unsaved configuration and settings edits. Existing `#concurrency` links open Execution settings. Expanded configurations stay inside the table surface; new configurations use a form card. Custom harness setup uses the shared modal with a scrollable body, grouped fields, and a fixed action footer.
+
+Variable creation and editing use the shared header with Back, Cancel or Discard changes, and Create or Save changes. Forms use the shared card and content widths. Preserve write-only Secret behavior and metadata-only list reads. List loading and failed searches never show rows from another search; rejected reads offer retry.
 
 ## Items that need attention
 
