@@ -51,6 +51,9 @@
 .state[data-status='failed']::before {
   background: var(--mantine-color-red-4);
 }
+.state[data-status='completed']::before {
+  background: var(--mantine-color-green-4);
+}
 .state[data-status='cancelled']::before {
   background: var(--muted);
 }
