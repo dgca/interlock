@@ -5,7 +5,9 @@
 }
 .fields {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) 30px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) var(
+      --control-height
+    );
   gap: 10px;
   align-items: start;
 }
@@ -13,8 +15,6 @@
   min-width: 0;
 }
 .remove {
-  padding: 0;
-  width: 30px;
   margin-top: 27px;
 }
 .fallback {
@@ -37,7 +37,7 @@
 }
 @media (max-width: 760px) {
   .fields {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 30px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--control-height);
   }
   .value {
     grid-column: 1/3;
@@ -58,7 +58,7 @@
 }
 @media (max-width: 430px) {
   .fields {
-    grid-template-columns: minmax(0, 1fr) 30px;
+    grid-template-columns: minmax(0, 1fr) var(--control-height);
   }
   .fields > div:not(.value) {
     grid-column: 1;

@@ -2010,6 +2010,7 @@
       "mantineImports": [],
       "designSystemImports": [
         [
+          "ActionIcon",
           "Checkbox",
           "Input",
           "SegmentedControl",
@@ -2021,6 +2022,7 @@
         ]
       ],
       "jsxElements": [
+        "ActionIcon",
         "Button",
         "Checkbox",
         "DurationInput",
@@ -2166,6 +2168,7 @@
       "mantineImports": [],
       "designSystemImports": [
         [
+          "ActionIcon",
           "NativeSelect",
           "Stack",
           "TextInput",
@@ -2177,6 +2180,7 @@
         ]
       ],
       "jsxElements": [
+        "ActionIcon",
         "Button",
         "Group",
         "InputPathInput",
@@ -2295,19 +2299,17 @@
       "file": "packages/ui/src/features/workflows/NodeSettingsSections.tsx",
       "exports": ["NodeSection", "NodeSectionName", "NodeSettingsSections"],
       "mantineImports": [],
-      "designSystemImports": [],
+      "designSystemImports": [["Button"]],
       "jsxElements": [
+        "Button",
         "CurrentSection.Provider",
         "Icon",
-        "button",
         "div",
         "h2",
         "nav",
         "section"
       ],
-      "nativePatterns": {
-        "button": 1
-      }
+      "nativePatterns": {}
     },
     {
       "file": "packages/ui/src/features/workflows/OrthoEdge.tsx",
@@ -2455,9 +2457,17 @@
       "exports": ["SwitchEditor"],
       "mantineImports": [],
       "designSystemImports": [
-        ["NativeSelect", "TextInput", "Textarea", "Text", "Button"]
+        [
+          "ActionIcon",
+          "NativeSelect",
+          "TextInput",
+          "Textarea",
+          "Text",
+          "Button"
+        ]
       ],
       "jsxElements": [
+        "ActionIcon",
         "Button",
         "InputPathInput",
         "NativeSelect",
@@ -2580,12 +2590,14 @@
           "Modal",
           "ModalBody",
           "ModalFooter",
-          "CodeEditor"
+          "CodeEditor",
+          "PageHeader",
+          "PageTabList",
+          "SegmentedControl"
         ]
       ],
       "jsxElements": [
         "ActionIcon",
-        "ArrowLeft",
         "Background",
         "Button",
         "CanvasZoomBox",
@@ -2603,6 +2615,8 @@
         "ModalBody",
         "ModalFooter",
         "MoreHorizontal",
+        "PageHeader",
+        "PageTabList",
         "PauseBanner",
         "Play",
         "Plus",
@@ -2610,12 +2624,11 @@
         "ReactFlow",
         "Redo2",
         "Save",
+        "SegmentedControl",
         "Settings2",
         "SettingsDialog",
         "Tabs",
-        "Tabs.List",
         "Tabs.Panel",
-        "Tabs.Tab",
         "TidyControl",
         "Trash2",
         "Undo2",
@@ -2623,16 +2636,12 @@
         "WorkflowChildren",
         "WorkflowPauseButton",
         "b",
-        "button",
         "div",
-        "header",
         "p",
         "pre",
-        "span",
-        "strong"
+        "span"
       ],
       "nativePatterns": {
-        "button": 1,
         "pre": 1
       }
     },

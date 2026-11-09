@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   NativeSelect,
   Stack,
   TextInput,
@@ -262,15 +263,15 @@ export function InputBindingsEditor({
                         </Text>
                       )}
                     </div>
-                    <Button
+                    <ActionIcon
                       className={styles.remove}
-                      variant="ghost"
+                      variant="subtle"
                       aria-label={`Remove field ${index + 1}`}
                       title={`Remove field ${index + 1}`}
                       onClick={() => update(rows.filter((_, i) => i !== index))}
                     >
                       <Trash2 size={14} />
-                    </Button>
+                    </ActionIcon>
                   </div>
                   {(binding.source === 'node' ||
                     binding.source === 'execution') && (

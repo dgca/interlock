@@ -286,8 +286,7 @@ export function SettingsDialog({
           >
             <fieldset
               disabled={creatingChild}
-              style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
-              className={nodeDraft ? styles.nodeFields : undefined}
+              className={`${styles.fields}${nodeDraft ? ` ${styles.nodeFields}` : ''}`}
             >
               <ContractNavigation.Provider value={openContract}>
                 {creating && (
@@ -318,7 +317,7 @@ export function SettingsDialog({
                       <Input.Wrapper label="Workflow source" mb="md">
                         <SegmentedControl
                           mt={4}
-                          style={{ display: 'flex', width: 'fit-content' }}
+                          className={styles.workflowSourceChoice}
                           aria-label="Workflow source"
                           value={targetMode}
                           onChange={setTargetMode}

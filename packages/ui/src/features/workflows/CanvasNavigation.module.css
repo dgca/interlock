@@ -19,3 +19,40 @@
   border: 1px solid var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
+
+/* React Flow navigation is the editor's compact, flat control exception. */
+.controls:global(.react-flow__controls) {
+  border: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--border);
+  box-shadow: none;
+}
+.controls :global(.react-flow__controls-button) {
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  padding: 8px;
+  border: 0;
+  background: var(--surface-hover);
+  color: var(--button-text);
+  box-shadow: none;
+}
+.controls
+  :global(.react-flow__controls-button)
+  + :global(.react-flow__controls-button) {
+  margin-top: 1px;
+}
+.controls :global(.react-flow__controls-button) svg {
+  width: 16px;
+  height: 16px;
+  max-width: 16px;
+  max-height: 16px;
+}
+.controls :global(.react-flow__controls-button:hover) {
+  background: var(--surface-raised);
+}
+.controls :global(.react-flow__controls-button:focus-visible) {
+  outline: 2px solid var(--field-focus);
+  outline-offset: -2px;
+}

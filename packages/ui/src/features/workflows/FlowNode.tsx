@@ -356,9 +356,7 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
           <Icon size={16} />
         </span>
         <span>
-          {n.kind === 'agent'
-            ? 'AGENT ASSIGNMENT'
-            : nodeKindLabel(n.kind).toUpperCase()}
+          {n.kind === 'agent' ? 'Agent assignment' : nodeKindLabel(n.kind)}
         </span>
         {data.status && (
           <i title={data.status} className={styles[data.status]} />

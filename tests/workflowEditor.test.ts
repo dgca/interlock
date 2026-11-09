@@ -205,7 +205,16 @@ const button = (name: string) =>
   Array.from(document.querySelectorAll('button')).find(
     (b) => (b.getAttribute('aria-label') ?? b.textContent) === name,
   )!;
+const viewControl = (name: 'Visual' | 'Raw') =>
+  document.querySelector<HTMLInputElement>(
+    `input[type="radio"][value="${name.toLowerCase()}"]`,
+  )!;
 const click = async (name: string) => {
+  if (name === 'Visual' || name === 'Raw') {
+    expect(viewControl(name), name).toBeTruthy();
+    await act(async () => viewControl(name).click());
+    return;
+  }
   if (name === 'Workflow settings' || name === 'Delete workflow')
     await act(async () => button('Workflow actions').click());
   expect(button(name), name).toBeTruthy();
@@ -677,7 +686,7 @@ it('reports invalid Batch scope routes in Visual and Raw and blocks publication'
   const invalid = JSON.parse(rawEditor.props.value);
   invalid.edges[0].targetHandle = 'typo';
   await act(async () => rawEditor.props.onChange(JSON.stringify(invalid)));
-  expect(button('Visual').disabled).toBe(true);
+  expect(viewControl('Visual').disabled).toBe(true);
   expect(button('Save').disabled).toBe(true);
 });
 
@@ -842,7 +851,7 @@ it('saves raw edits as one history action and requires an explicit save before V
     rawEditor.props.onChange(JSON.stringify({ ...original, maxSteps: 62 })),
   );
   expect(button('Undo').disabled).toBe(true);
-  expect(button('Visual').disabled).toBe(true);
+  expect(viewControl('Visual').disabled).toBe(true);
   await click('Save');
   await click('Visual');
   await click('Undo');
@@ -867,7 +876,7 @@ it('records saving raw changes once, even after a failed save and retry', async 
   rpc.update.mockRejectedValueOnce(new Error('Offline'));
   await click('Save');
   expect(button('Undo').disabled).toBe(true);
-  expect(button('Visual').disabled).toBe(true);
+  expect(viewControl('Visual').disabled).toBe(true);
   await click('Save');
   await click('Visual');
   await click('Undo');
@@ -937,6 +946,10 @@ it('handles Ctrl/Command+Z and Shift+Z without capturing text editing or modal s
   expect(positions()).toEqual(original);
   await shortcut(target, true, true);
   expect(positions()).not.toEqual(original);
+  expect((await shortcut(viewControl('Visual'))).defaultPrevented).toBe(true);
+  expect(positions()).toEqual(original);
+  await shortcut(viewControl('Visual'), true, true);
+  expect(positions()).not.toEqual(original);
   const input = document.createElement('textarea');
   target.parentElement!.append(input);
   expect((await shortcut(input)).defaultPrevented).toBe(false);
@@ -952,7 +965,7 @@ it.each(['nested Batches', 'parallel routes'])(
   'tidies %s as one undoable action without rewriting graph semantics',
   async (fixture) => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      callback(0);
+      queueMicrotask(() => callback(0));
       return 1;
     });
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
@@ -1038,7 +1051,7 @@ it('discards invalid raw edits while retaining earlier unsaved visual changes', 
   await click('Raw');
   const baseline = rawEditor.props.value;
   await act(async () => rawEditor.props.onChange('{'));
-  expect(button('Visual').disabled).toBe(true);
+  expect(viewControl('Visual').disabled).toBe(true);
   expect(button('Save').disabled).toBe(true);
   await click('Discard');
   expect(rawEditor.props.value).toBe(baseline);

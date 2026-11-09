@@ -1,6 +1,6 @@
 # Workflow editor design reference
 
-These desktop proposals extend the approved Grid direction in [the Pen file](../interlock-design-directions.pen). They do not change the application.
+These desktop references guide the Grid implementation in [the Pen file](../interlock-design-directions.pen). They establish visual direction while the application retains its existing geometry, editing contracts, and execution behavior. Static specimens do not establish exhaustive interaction or responsive behavior.
 
 The `Interlock / Workflow editor` layer, `pJq1n`, groups these views side by side:
 

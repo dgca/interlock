@@ -7,6 +7,9 @@ import {
   ModalBody,
   ModalFooter,
   CodeEditor,
+  PageHeader,
+  PageTabList,
+  SegmentedControl,
 } from '../../design-system';
 
 import { WorkflowPauseButton, PauseBanner } from '../pauses/PauseControls';
@@ -28,7 +31,6 @@ import {
   type ReactFlowInstance,
 } from '@xyflow/react';
 import {
-  ArrowLeft,
   Play,
   Save,
   Plus,
@@ -337,7 +339,7 @@ export function WorkflowEditor({
         !(target instanceof HTMLElement) ||
         (target !== document.body && !editorRef.current?.contains(target)) ||
         target.closest(
-          'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+          'input:not([type="radio"]), textarea, select, [contenteditable]:not([contenteditable="false"])',
         ) ||
         editing ||
         deleting ||
@@ -524,209 +526,191 @@ export function WorkflowEditor({
       data-icon-only={iconOnlyHeader || undefined}
       inert={navigationPending}
     >
-      <header className={styles.header}>
-        <Button
-          variant="ghost"
-          onClick={onBack}
-          aria-label={owner ? `Back to ${owner.name}` : 'Back to workflows'}
-        >
-          <ArrowLeft />
-        </Button>
-        <div className={styles.title}>
-          {owner && (
-            <span>
-              <button
-                className={styles.ownerLink}
-                title={owner.name}
-                onClick={() => onOpenWorkflow?.(owner.id)}
-              >
-                {owner.name}
-              </button>
-            </span>
-          )}
-          <strong title={name}>{name}</strong>
-          <div
-            className={styles.draftStatus}
-            role="status"
-            data-dirty={dirty || undefined}
-          >
+      <PageHeader
+        title={name}
+        onBack={onBack}
+        backLabel={owner ? `Back to ${owner.name}` : 'Back to workflows'}
+        status={
+          <span className={styles.draftStatus} data-dirty={dirty || undefined}>
             {dirty ? 'Unsaved changes' : 'Draft saved'} ·{' '}
             {workflow.latestVersion
               ? `v${workflow.latestVersion} published`
               : 'Unpublished'}
-          </div>
-        </div>
-        <div className={styles.headerActions}>
-          <WorkflowPauseButton
-            workflowId={workflow.id}
-            compact={iconOnlyHeader}
-          />
-          {section === 'editor' && (
-            <>
-              {!compactHeader && (
-                <>
+          </span>
+        }
+        actions={
+          <div className={styles.headerActions}>
+            <WorkflowPauseButton
+              workflowId={workflow.id}
+              compact={iconOnlyHeader}
+            />
+            {section === 'editor' && (
+              <>
+                {!compactHeader && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      disabled={!canUndo}
+                      aria-label="Undo"
+                      onClick={() => travel('undo')}
+                      title={
+                        rawEdited
+                          ? 'Save or discard raw changes before undoing workflow edits'
+                          : 'Undo (Ctrl/Command+Z)'
+                      }
+                    >
+                      <Undo2 />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={!canRedo}
+                      aria-label="Redo"
+                      onClick={() => travel('redo')}
+                      title={
+                        rawEdited
+                          ? 'Save or discard raw changes before redoing workflow edits'
+                          : 'Redo (Ctrl/Command+Shift+Z)'
+                      }
+                    >
+                      <Redo2 />
+                    </Button>
+                  </>
+                )}
+                {view === 'visual' && (
                   <Button
-                    variant="ghost"
-                    disabled={!canUndo}
-                    aria-label="Undo"
-                    onClick={() => travel('undo')}
-                    title={
-                      rawEdited
-                        ? 'Save or discard raw changes before undoing workflow edits'
-                        : 'Undo (Ctrl/Command+Z)'
+                    className={styles.headerAction}
+                    aria-label={pending === 'save' ? 'Saving…' : 'Save draft'}
+                    title={pending === 'save' ? 'Saving…' : 'Save draft'}
+                    onClick={() => perform('save', save)}
+                    disabled={
+                      !dirty || rawInvalid || remoteChanged || Boolean(pending)
                     }
                   >
-                    <Undo2 />
+                    <Save />
+                    <span>
+                      {pending === 'save'
+                        ? 'Saving…'
+                        : compactHeader
+                          ? 'Save'
+                          : 'Save draft'}
+                    </span>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={!canRedo}
-                    aria-label="Redo"
-                    onClick={() => travel('redo')}
-                    title={
-                      rawEdited
-                        ? 'Save or discard raw changes before redoing workflow edits'
-                        : 'Redo (Ctrl/Command+Shift+Z)'
-                    }
-                  >
-                    <Redo2 />
-                  </Button>
-                </>
-              )}
-              {view === 'visual' && (
+                )}
                 <Button
                   className={styles.headerAction}
-                  aria-label={pending === 'save' ? 'Saving…' : 'Save draft'}
-                  title={pending === 'save' ? 'Saving…' : 'Save draft'}
-                  onClick={() => perform('save', save)}
+                  aria-label="Review & publish"
+                  title="Review & publish"
                   disabled={
-                    !dirty || rawInvalid || remoteChanged || Boolean(pending)
+                    rawInvalid ||
+                    Boolean(rawResult?.publishError) ||
+                    (view === 'visual' && Boolean(graphError)) ||
+                    remoteChanged ||
+                    Boolean(pending)
+                  }
+                  onClick={() =>
+                    setReview({
+                      draft: structuredClone(effectiveDraft),
+                      revision: workflow.draftRevision,
+                      version: workflow.latestVersion,
+                    })
                   }
                 >
-                  <Save />
-                  <span>
-                    {pending === 'save'
-                      ? 'Saving…'
-                      : compactHeader
-                        ? 'Save'
-                        : 'Save draft'}
-                  </span>
+                  <Upload />
+                  <span>{compactHeader ? 'Publish' : 'Review & publish'}</span>
                 </Button>
-              )}
-              <Button
-                className={styles.headerAction}
-                aria-label="Review & publish"
-                title="Review & publish"
-                disabled={
-                  rawInvalid ||
-                  Boolean(rawResult?.publishError) ||
-                  (view === 'visual' && Boolean(graphError)) ||
-                  remoteChanged ||
-                  Boolean(pending)
-                }
-                onClick={() =>
-                  setReview({
-                    draft: structuredClone(effectiveDraft),
-                    revision: workflow.draftRevision,
-                    version: workflow.latestVersion,
-                  })
-                }
-              >
-                <Upload />
-                <span>{compactHeader ? 'Publish' : 'Review & publish'}</span>
-              </Button>
-            </>
-          )}
-          <Button
-            className={styles.headerAction}
-            aria-label={`Run v${workflow.latestVersion || '—'}`}
-            title={`Run v${workflow.latestVersion || '—'}`}
-            variant="primary"
-            disabled={
-              !workflow.latestVersion ||
-              workflow.archived ||
-              Boolean(owner?.archived) ||
-              Boolean(pending)
-            }
-            onClick={() => onRun(workflow)}
-          >
-            <Play />
-            <span>Run v{workflow.latestVersion || '—'}</span>
-          </Button>
-          <Menu position="bottom-end" width={190}>
-            <Menu.Target>
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                aria-label="Workflow actions"
-                ref={workflowActions}
-                disabled={Boolean(pending)}
-              >
-                <MoreHorizontal size={19} />
-              </ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown>
-              {onReport && (
-                <Menu.Item
-                  leftSection={<ChartNoAxesColumn size={14} />}
-                  onClick={onReport}
+              </>
+            )}
+            <Button
+              className={styles.headerAction}
+              aria-label={`Run v${workflow.latestVersion || '—'}`}
+              title={`Run v${workflow.latestVersion || '—'}`}
+              variant="primary"
+              disabled={
+                !workflow.latestVersion ||
+                workflow.archived ||
+                Boolean(owner?.archived) ||
+                Boolean(pending)
+              }
+              onClick={() => onRun(workflow)}
+            >
+              <Play />
+              <span>Run v{workflow.latestVersion || '—'}</span>
+            </Button>
+            <Menu position="bottom-end" width={190}>
+              <Menu.Target>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  aria-label="Workflow actions"
+                  ref={workflowActions}
+                  disabled={Boolean(pending)}
                 >
-                  Performance & cost report
+                  <MoreHorizontal size={19} />
+                </ActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown>
+                {onReport && (
+                  <Menu.Item
+                    leftSection={<ChartNoAxesColumn size={14} />}
+                    onClick={onReport}
+                  >
+                    Performance & cost report
+                  </Menu.Item>
+                )}
+                {section === 'editor' && compactHeader && (
+                  <>
+                    <Menu.Item
+                      leftSection={<Undo2 size={14} />}
+                      disabled={!canUndo}
+                      title={
+                        rawEdited
+                          ? 'Save or discard raw changes before undoing workflow edits'
+                          : 'Undo (Ctrl/Command+Z)'
+                      }
+                      onClick={() => travel('undo')}
+                    >
+                      Undo
+                    </Menu.Item>
+                    <Menu.Item
+                      leftSection={<Redo2 size={14} />}
+                      disabled={!canRedo}
+                      title={
+                        rawEdited
+                          ? 'Save or discard raw changes before redoing workflow edits'
+                          : 'Redo (Ctrl/Command+Shift+Z)'
+                      }
+                      onClick={() => travel('redo')}
+                    >
+                      Redo
+                    </Menu.Item>
+                    <Menu.Divider />
+                  </>
+                )}
+                <Menu.Item
+                  leftSection={<Settings2 size={14} />}
+                  disabled={rawEdited}
+                  title={
+                    rawEdited
+                      ? 'Save or discard raw changes before editing settings'
+                      : undefined
+                  }
+                  onClick={() => setEditing({})}
+                >
+                  Workflow settings
                 </Menu.Item>
-              )}
-              {section === 'editor' && compactHeader && (
-                <>
-                  <Menu.Item
-                    leftSection={<Undo2 size={14} />}
-                    disabled={!canUndo}
-                    title={
-                      rawEdited
-                        ? 'Save or discard raw changes before undoing workflow edits'
-                        : 'Undo (Ctrl/Command+Z)'
-                    }
-                    onClick={() => travel('undo')}
-                  >
-                    Undo
-                  </Menu.Item>
-                  <Menu.Item
-                    leftSection={<Redo2 size={14} />}
-                    disabled={!canRedo}
-                    title={
-                      rawEdited
-                        ? 'Save or discard raw changes before redoing workflow edits'
-                        : 'Redo (Ctrl/Command+Shift+Z)'
-                    }
-                    onClick={() => travel('redo')}
-                  >
-                    Redo
-                  </Menu.Item>
-                  <Menu.Divider />
-                </>
-              )}
-              <Menu.Item
-                leftSection={<Settings2 size={14} />}
-                disabled={rawEdited}
-                title={
-                  rawEdited
-                    ? 'Save or discard raw changes before editing settings'
-                    : undefined
-                }
-                onClick={() => setEditing({})}
-              >
-                Workflow settings
-              </Menu.Item>
-              <Menu.Divider />
-              <Menu.Item
-                color="red"
-                leftSection={<Trash2 size={14} />}
-                onClick={() => setDeleting(true)}
-              >
-                Delete workflow
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        </div>
-      </header>
+                <Menu.Divider />
+                <Menu.Item
+                  color="red"
+                  leftSection={<Trash2 size={14} />}
+                  onClick={() => setDeleting(true)}
+                >
+                  Delete workflow
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          </div>
+        }
+      />
       <PauseBanner workflowId={workflow.id} />
       {owner && (
         <div className={styles.conflict}>
@@ -763,6 +747,7 @@ export function WorkflowEditor({
       )}
       <Tabs
         className={styles.sections}
+        data-canvas-section={section === 'editor' || undefined}
         keepMounted
         keepMountedMode="display-none"
         value={section}
@@ -776,13 +761,16 @@ export function WorkflowEditor({
           )
         }
       >
-        <Tabs.List className={styles.subnav} aria-label="Workflow sections">
-          <Tabs.Tab value="editor">Editor</Tabs.Tab>
-          <Tabs.Tab value="runs">Runs</Tabs.Tab>
-          {!workflow.ownerWorkflowId && (
-            <Tabs.Tab value="children">Child workflows</Tabs.Tab>
-          )}
-        </Tabs.List>
+        <PageTabList
+          label="Workflow sections"
+          items={[
+            { value: 'editor', label: 'Editor' },
+            { value: 'runs', label: 'Runs' },
+            ...(!workflow.ownerWorkflowId
+              ? [{ value: 'children', label: 'Child workflows' }]
+              : []),
+          ]}
+        />
         {remoteChanged && (dirty || editing) && !pending && (
           <div role="alert" className={styles.conflict}>
             <span>
@@ -802,33 +790,23 @@ export function WorkflowEditor({
             className={`${styles.canvasWrap} ${navigationStyles.viewport} ${boxZoom.active ? navigationStyles.boxZoomReady : ''}`}
           >
             <div className={styles.canvasToolbar}>
-              <div
-                className={styles.viewToggle}
-                role="group"
+              <SegmentedControl
                 aria-label="Workflow view"
-              >
-                <Button
-                  aria-pressed={view === 'visual'}
-                  variant={view === 'visual' ? 'primary' : 'ghost'}
-                  disabled={rawEdited || Boolean(pending)}
-                  title={
-                    rawEdited
-                      ? 'Save or discard raw changes before returning to Visual'
-                      : undefined
-                  }
-                  onClick={() => switchView('visual')}
-                >
-                  Visual
-                </Button>
-                <Button
-                  aria-pressed={view === 'raw'}
-                  variant={view === 'raw' ? 'primary' : 'ghost'}
-                  disabled={Boolean(pending)}
-                  onClick={() => switchView('raw')}
-                >
-                  Raw
-                </Button>
-              </div>
+                value={view}
+                disabled={Boolean(pending)}
+                title={
+                  rawEdited
+                    ? 'Save or discard raw changes before returning to Visual'
+                    : undefined
+                }
+                onChange={(next) =>
+                  switchView(next === 'raw' ? 'raw' : 'visual')
+                }
+                data={[
+                  { value: 'visual', label: 'Visual', disabled: rawEdited },
+                  { value: 'raw', label: 'Raw' },
+                ]}
+              />
               {view === 'visual' ? (
                 <>
                   <Button onClick={() => setEditing({ creating: true })}>
@@ -1046,6 +1024,7 @@ export function WorkflowEditor({
                   <Background color="var(--canvas-dot)" gap={22} size={1} />
                   <Controls
                     showInteractive={false}
+                    className={navigationStyles.controls}
                     fitViewOptions={editorFitView}
                   >
                     <TidyControl
@@ -1061,7 +1040,7 @@ export function WorkflowEditor({
                   <MiniMap
                     style={{ width: 125, height: 85 }}
                     nodeColor="var(--accent)"
-                    maskColor="#141418bb"
+                    maskColor="color-mix(in srgb, var(--canvas) 75%, transparent)"
                   />
                 </ReactFlow>
                 <CanvasZoomBox box={boxZoom.box} />
