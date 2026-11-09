@@ -27,6 +27,8 @@ import {
   MAX_SCRIPT_TIMEOUT_MS,
   nodeInputHint,
   isPollWait,
+  stallFields,
+  type StallPolicy,
   type WorkflowDefinition,
   type Workflow,
   type WorkflowNode,
@@ -46,6 +48,61 @@ import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
 import { ScriptCode } from './ScriptCode';
 import { PromptPicker } from '../prompts/PromptPicker';
 import styles from './NodeInspector.module.css';
+
+const stallPolicyKeys = [
+  ...Object.keys(stallFields),
+  'idleRecovery',
+] as (keyof StallPolicy)[];
+
+function NodeStallOverrides({
+  node,
+  onChange,
+}: {
+  node: WorkflowNode;
+  onChange: (patch: Partial<StallPolicy>) => void;
+}) {
+  const policy: StallPolicy = node;
+  const customized = stallPolicyKeys.some((key) => policy[key] !== undefined);
+  const [editing, setEditing] = useState(customized);
+  const overriding = editing || customized;
+  return (
+    <>
+      <Switch
+        mt="md"
+        label="Override stall detection"
+        aria-label="Override stall detection"
+        description="Use workflow and library defaults when off."
+        checked={overriding}
+        onChange={(event) => {
+          const checked = event.currentTarget.checked;
+          setEditing(checked);
+          if (!checked)
+            onChange(
+              Object.fromEntries(
+                stallPolicyKeys.map((key) => [key, undefined]),
+              ),
+            );
+        }}
+      />
+      {overriding && (
+        <StallPolicyEditor
+          value={node}
+          onChange={onChange}
+          showRecovery={node.kind === 'agent'}
+          showHeading={false}
+          thresholds={
+            node.kind === 'agent'
+              ? ['unclaimedStallMs', 'claimedIdleStallMs', 'runStallMs']
+              : node.kind === 'input'
+                ? ['humanWaitStallMs', 'runStallMs']
+                : ['runStallMs']
+          }
+        />
+      )}
+    </>
+  );
+}
+
 export function NodeInspector({
   node,
   workflows,
@@ -84,6 +141,8 @@ export function NodeInspector({
     node.kind === 'script' ||
     node.kind === 'fetch' ||
     isPollWait(node);
+  const executionSettings =
+    resourceStep || (node.kind === 'workflow' && node.mode !== 'detached');
   const workLabel = (
     {
       agent: 'Assignment',
@@ -117,9 +176,7 @@ export function NodeInspector({
       active={active}
       onChange={onSectionChange ?? setLocalSection}
       workLabel={workLabel}
-      execution={
-        resourceStep || (node.kind === 'workflow' && node.mode !== 'detached')
-      }
+      execution={executionSettings}
       boundary={node.kind === 'entry' || node.kind === 'exit'}
     >
       <div className="inspector-fields">
@@ -142,24 +199,6 @@ export function NodeInspector({
               })
             }
           />
-        </NodeSection>
-        <NodeSection name="work">
-          <details>
-            <summary>Stall detection</summary>
-            <StallPolicyEditor
-              value={node}
-              onChange={patch}
-              showRecovery={node.kind === 'agent'}
-              showHeading={false}
-              thresholds={
-                node.kind === 'agent'
-                  ? ['unclaimedStallMs', 'claimedIdleStallMs', 'runStallMs']
-                  : node.kind === 'input'
-                    ? ['humanWaitStallMs', 'runStallMs']
-                    : ['runStallMs']
-              }
-            />
-          </details>
         </NodeSection>
         {node.kind === 'fetch' && (
           <NodeSection name="work">
@@ -771,6 +810,13 @@ export function NodeInspector({
             )}
           </NodeSection>
         )}
+        <NodeSection name={executionSettings ? 'execution' : 'work'}>
+          <NodeStallOverrides
+            key={`${node.id}:${node.kind}`}
+            node={node}
+            onChange={patch}
+          />
+        </NodeSection>
         {(node.kind === 'entry' || node.kind === 'exit') &&
         definition &&
         onBoundaryChange ? (

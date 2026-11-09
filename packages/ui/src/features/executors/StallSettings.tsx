@@ -7,12 +7,13 @@ import {
 } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
+import { DurationInput } from '../workflows/DurationInput';
 
 const fields = [
-  ['unclaimedStallMs', 'Unclaimed stall'],
-  ['claimedIdleStallMs', 'Claimed idle stall'],
-  ['humanWaitStallMs', 'External input stall'],
-  ['runStallMs', 'Run transition stall'],
+  ['unclaimedStallMs', 'Unclaimed stall', 'Unclaimed threshold'],
+  ['claimedIdleStallMs', 'Claimed idle stall', 'Claimed idle threshold'],
+  ['humanWaitStallMs', 'External input stall', 'External input threshold'],
+  ['runStallMs', 'Run transition stall', 'Run transition threshold'],
 ] as const;
 export function StallPolicyEditor({
   value,
@@ -38,7 +39,7 @@ export function StallPolicyEditor({
       </p>
       {fields
         .filter(([key]) => !thresholds || thresholds.includes(key))
-        .map(([key, label]) => (
+        .map(([key, label, thresholdLabel]) => (
           <div key={key}>
             <NativeSelect
               label={label}
@@ -66,18 +67,13 @@ export function StallPolicyEditor({
               }
             />
             {typeof value[key] === 'number' && (
-              <TextInput
-                mt="xs"
-                label={`${label} milliseconds`}
-                type="number"
-                required
+              <DurationInput
+                label={thresholdLabel}
                 min={1}
                 max={MAX_ACTIVE_CLOCK_MS}
                 step={1}
                 value={value[key]}
-                onChange={(e) =>
-                  onChange({ [key]: Number(e.currentTarget.value) })
-                }
+                onChange={(duration) => onChange({ [key]: duration })}
               />
             )}
           </div>
@@ -167,6 +163,7 @@ export function StallSettings({
   const [policy, setPolicy] = useState<StallPolicy>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loadGeneration, setLoadGeneration] = useState(0);
   const dirty =
     !!saved && JSON.stringify(saved.policy) !== JSON.stringify(policy);
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
@@ -177,6 +174,7 @@ export function StallSettings({
       .then((s) => {
         setSaved(s);
         setPolicy(s.policy);
+        setLoadGeneration((generation) => generation + 1);
       })
       .catch((e) => setError(errorMessage(e)));
   };
@@ -208,6 +206,7 @@ export function StallSettings({
             style={{ border: 0, padding: 0, margin: 0 }}
           >
             <StallPolicyEditor
+              key={loadGeneration}
               value={policy}
               inherit={false}
               onChange={(patch) => setPolicy((p) => ({ ...p, ...patch }))}

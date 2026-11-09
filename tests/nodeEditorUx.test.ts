@@ -7,9 +7,11 @@ import {
   definitionSchema,
   nodeSchema,
   validateDefinition,
+  MAX_ACTIVE_CLOCK_MS,
   type WorkflowDefinition,
 } from '@interlock/core';
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
+import { DurationInput } from '../packages/ui/src/features/workflows/DurationInput';
 
 vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', {}, children),
@@ -688,6 +690,290 @@ const resourceBindings = [
   { source: 'literal', value: 'checkout:integration' },
   { source: 'runInput', path: 'browserResource' },
 ];
+
+it.each([
+  [{ kind: 'agent', prompt: 'Work' }, 'Task instructions', true],
+  [{ kind: 'script', command: 'cat' }, 'Bash command', true],
+  [{ kind: 'fetch', url: 'https://example.test' }, 'URL', true],
+  [{ kind: 'wait', timing: pollTiming }, 'Check every', true],
+  [{ kind: 'wait' }, 'Wait for', false],
+  [{ kind: 'input' }, 'Stage', false],
+] as const)(
+  'keeps %j stall overrides after primary work and reachable',
+  async (config, primaryLabel, execution) => {
+    await render(config);
+    const primary = field(primaryLabel);
+    expect(primary).toBeTruthy();
+    expect(primary.closest('[hidden]')).toBeNull();
+    const toggle = field('Override stall detection') as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    expect(field('Run transition stall')).toBeUndefined();
+    expect(
+      primary.compareDocumentPosition(toggle) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(!!toggle.closest('[hidden]')).toBe(execution);
+    if (execution) await click('Execution');
+    expect(toggle.closest('[hidden]')).toBeNull();
+    await act(async () => toggle.click());
+    expect(field('Run transition stall')).toBeTruthy();
+  },
+);
+
+it('saves and reopens unit-based node stall thresholds without changing milliseconds', async () => {
+  const { onApply } = await render({ kind: 'script', command: 'cat' });
+  await click('Execution');
+  await act(async () => field('Override stall detection').click());
+  await select('Run transition stall', 'threshold');
+  expect(field('Run transition threshold').value).toBe('5');
+  expect(field('Run transition threshold unit').value).toBe('60000');
+  await fill('Run transition threshold', '2.5');
+  await select('Run transition threshold unit', '3600000');
+  await click('Apply changes');
+  const saved = onApply.mock.calls[0][0].definition.nodes[0];
+  expect(saved.runStallMs).toBe(9_000_000);
+  await act(async () => root.render(null));
+  await render(saved);
+  await click('Execution');
+  expect((field('Override stall detection') as HTMLInputElement).checked).toBe(
+    true,
+  );
+  expect(field('Run transition threshold').value).toBe('150');
+  expect(field('Run transition threshold unit').value).toBe('60000');
+});
+
+it('enforces whole-millisecond stall bounds and preserves exact existing values', async () => {
+  const { onApply } = await render({
+    kind: 'script',
+    command: 'cat',
+    runStallMs: 1501,
+  });
+  await click('Execution');
+  const threshold = field('Run transition threshold') as HTMLInputElement;
+  expect(threshold.value).toBe('1501');
+  expect(field('Run transition threshold unit').value).toBe('1');
+  expect(threshold.min).toBe('1');
+  expect(threshold.max).toBe(String(MAX_ACTIVE_CLOCK_MS));
+  for (const invalid of ['0', '0.5', String(MAX_ACTIVE_CLOCK_MS + 1)]) {
+    await fill('Run transition threshold', invalid);
+    await click('Apply changes');
+    expect(onApply).not.toHaveBeenCalled();
+  }
+  await fill('Run transition threshold', '1501');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].runStallMs).toBe(1501);
+});
+
+it.each([
+  ['1000', '1.001', 1001],
+  ['1000', '1001e-3', 1001],
+  ['3600000', '0.00001', 36],
+  ['86400000', '0.56422875', 48_749_364],
+  ['86400000', '0.064341875', 5_559_138],
+])(
+  'saves fractional stall units %s × %s as exact milliseconds',
+  async (unit, amount, ms) => {
+    const { onApply } = await render({
+      kind: 'script',
+      command: 'cat',
+      runStallMs: 1501,
+    });
+    await click('Execution');
+    await select('Run transition threshold unit', String(unit));
+    await fill('Run transition threshold', String(amount));
+    await click('Apply changes');
+    expect(onApply.mock.calls[0][0].definition.nodes[0].runStallMs).toBe(ms);
+  },
+);
+
+it('rejects actual fractional milliseconds entered through larger units', async () => {
+  const { onApply } = await render({
+    kind: 'script',
+    command: 'cat',
+    runStallMs: 1501,
+  });
+  await click('Execution');
+  await select('Run transition threshold unit', '1000');
+  for (const invalid of ['0.0015', '1.001e-3', '1e-101']) {
+    await fill('Run transition threshold', invalid);
+    await click('Apply changes');
+    expect(onApply).not.toHaveBeenCalled();
+  }
+});
+
+it.each(['script', 'fetch'])(
+  'preserves exact fractional seconds in existing %s timeouts',
+  async (kind) => {
+    const { onApply } = await render({
+      kind,
+      command: 'cat',
+      url: 'https://example.test',
+      timeoutMs: 30_000,
+    });
+    await fill('Timeout', '1.001');
+    await click('Apply changes');
+    expect(onApply.mock.calls[0][0].definition.nodes[0].timeoutMs).toBe(1001);
+  },
+);
+
+it('accepts exact fractional-unit Wait durations without rounding actual fractions to zero', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: { kind: 'duration', ms: 1000 },
+  });
+  await fill('Wait for', '1.001');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timing.ms).toBe(1001);
+  onApply.mockClear();
+  for (const invalid of ['0.0005', '1e-101']) {
+    await fill('Wait for', invalid);
+    await click('Apply changes');
+    expect(onApply).not.toHaveBeenCalled();
+  }
+  await fill('Wait for', '0');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timing.ms).toBe(0);
+});
+
+it('rejects a fractional-day value even when floating-point multiplication rounds it to an integer', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: { kind: 'duration', ms: 1000 },
+  });
+  await select('Wait for unit', '86400000');
+  await fill('Wait for', '1.1574074074074074e-8');
+  expect((field('Wait for') as HTMLInputElement).validationMessage).toBe(
+    'Use a whole number of milliseconds.',
+  );
+  await click('Apply changes');
+  expect(onApply).not.toHaveBeenCalled();
+  await fill('Wait for', '0.000000625');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timing.ms).toBe(54);
+});
+
+it('keeps fractional-ms validation when changing units and clears it for an exact conversion', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: { kind: 'duration', ms: 1501 },
+  });
+  await fill('Wait for', '1.0005');
+  await select('Wait for unit', '1000');
+  expect((field('Wait for') as HTMLInputElement).validationMessage).toBe(
+    'Use a whole number of milliseconds.',
+  );
+  await click('Apply changes');
+  expect(onApply).not.toHaveBeenCalled();
+  await select('Wait for unit', '60000');
+  expect((field('Wait for') as HTMLInputElement).validationMessage).toBe('');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timing.ms).toBe(60_030);
+});
+
+it('clears obsolete fractional validity when a parent replaces the controlled duration', async () => {
+  const onChange = vi.fn();
+  const show = async (value: number) => {
+    await act(async () =>
+      root.render(
+        h(
+          MantineProvider,
+          {},
+          h(DurationInput, {
+            label: 'Duration',
+            value,
+            onChange,
+          }),
+        ),
+      ),
+    );
+  };
+  await show(1000);
+  await fill('Duration', '0.0005');
+  expect(onChange).toHaveBeenLastCalledWith(0.5);
+  await show(0.5);
+  const duration = field('Duration') as HTMLInputElement;
+  expect(duration.validationMessage).toBe(
+    'Use a whole number of milliseconds.',
+  );
+  await show(2000);
+  expect(duration.value).toBe('2');
+  expect(duration.validity.valid).toBe(true);
+  expect(duration.validationMessage).toBe('');
+});
+
+it('opens disabled and recovery overrides, preserves them, and returns to inheritance when switched off', async () => {
+  const policy = {
+    unclaimedStallMs: null,
+    claimedIdleStallMs: 60_000,
+    runStallMs: null,
+    idleRecovery: { maxRecoveries: 2, message: 'Continue carefully.' },
+  };
+  const { onApply } = await render({
+    kind: 'agent',
+    prompt: 'Work',
+    ...policy,
+  });
+  await click('Execution');
+  expect((field('Override stall detection') as HTMLInputElement).checked).toBe(
+    true,
+  );
+  expect(field('Unclaimed stall').value).toBe('disabled');
+  expect(field('Run transition stall').value).toBe('disabled');
+  expect(field('Claimed idle threshold').value).toBe('1');
+  expect(field('Idle nudge message').value).toBe(policy.idleRecovery.message);
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0]).toMatchObject(policy);
+  onApply.mockClear();
+  await act(async () => field('Override stall detection').click());
+  expect(field('Unclaimed stall')).toBeUndefined();
+  await click('Apply changes');
+  const saved = onApply.mock.calls[0][0].definition.nodes[0];
+  for (const key of Object.keys(policy)) expect(saved[key]).toBeUndefined();
+});
+
+it('edits shared workflow stall durations while preserving every threshold', async () => {
+  const definition = definitionSchema.parse({
+    nodes: [
+      { id: 'entry', kind: 'entry', label: 'Entry' },
+      { id: 'exit', kind: 'exit', label: 'Exit' },
+    ],
+    edges: [],
+    unclaimedStallMs: 300_000,
+    claimedIdleStallMs: 3_600_000,
+    humanWaitStallMs: null,
+    runStallMs: 1501,
+  });
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(SettingsDialog, {
+          name: 'Workflow',
+          description: '',
+          definition,
+          workflows: [],
+          onApply,
+          onClose: vi.fn(),
+        }),
+      ),
+    ),
+  );
+  expect(field('Unclaimed threshold').value).toBe('5');
+  expect(field('Claimed idle threshold unit').value).toBe('3600000');
+  expect(field('External input stall').value).toBe('disabled');
+  expect(field('Run transition threshold').value).toBe('1501');
+  await fill('Unclaimed threshold', '7');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition).toMatchObject({
+    unclaimedStallMs: 420_000,
+    claimedIdleStallMs: 3_600_000,
+    humanWaitStallMs: null,
+    runStallMs: 1501,
+  });
+});
+
 it.each(resourceNodes)(
   'edits, saves and reopens shared resource bindings on $kind steps',
   async (config) => {
