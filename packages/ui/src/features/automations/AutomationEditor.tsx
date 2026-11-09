@@ -340,11 +340,7 @@ export function AutomationEditor({
       setBusy(false);
     }
   };
-  const label = id
-    ? 'Save changes'
-    : enableOnCreate
-      ? 'Create and enable'
-      : 'Create automation';
+  const label = id ? 'Save changes' : 'Create';
   const zone =
     config.kind === 'schedule' && config.timing.type === 'cron'
       ? config.timing.timeZone

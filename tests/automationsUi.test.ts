@@ -225,11 +225,12 @@ it('saves exact input keys and typed values, defaults disabled, and opens ordina
   );
   expect(document.body.textContent).not.toContain('Review before enabling');
 });
-it('uses the enabled CTA and prevents duplicate submissions while a write is pending', async () => {
+it('keeps the Create label when enabling and prevents duplicate pending submissions', async () => {
   await render();
   await fill(field('Name'), 'Morning review');
+  expect(button('Create')).toBeTruthy();
   await act(async () => field('Enable when created').click());
-  expect(button('Create and enable')).toBeTruthy();
+  expect(button('Create')).toBeTruthy();
   let finish!: (value: any) => void;
   rpc.manage.mockImplementationOnce(
     () =>

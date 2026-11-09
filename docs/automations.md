@@ -10,7 +10,7 @@ Open **Automations** in the sidebar to see triggers across workflows. Search by 
 4. Choose the workflow to start.
 5. For schedules, enter workflow inputs using the selected workflow's contract.
 6. Leave **Enable when created** off to save disabled, or turn it on to create enabled.
-7. Choose **Create automation** or **Create and enable**.
+7. Choose **Create**.
 
 Creation opens the saved automation. There is no separate review step. Enablement requires a published, unarchived target workflow. Failed immediate enablement creates no automation and keeps your form values.
 

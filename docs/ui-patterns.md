@@ -17,7 +17,7 @@ Automations uses the shared `PageHeader` and `PageTabs` components. The header c
 
 Place automation form fields inside one surface card with 24px padding and generous section spacing. The preview rail spans the available height below the header. Activity table bodies use the card background. Use spacing for the next-run and last-occurrence summary; avoid inset divider lines.
 
-Automations list filters and page offsets live in the URL and survive detail navigation. Creation defaults to disabled with an explicit enable checkbox and matching submit label. Successful creation opens ordinary detail without a review gate. Preserve edits after rejected writes, disable repeat submissions while pending, and retain acknowledged outcomes if refresh fails. Revision conflicts offer reload while preserving local edits until discarded.
+Automations list filters and page offsets live in the URL and survive detail navigation. Creation defaults to disabled with an explicit enable checkbox and a **Create** action. Successful creation opens ordinary detail without a review gate. Preserve edits after rejected writes, disable repeat submissions while pending, and retain acknowledged outcomes if refresh fails. Revision conflicts offer reload while preserving local edits until discarded.
 
 ## Items that need attention
 
