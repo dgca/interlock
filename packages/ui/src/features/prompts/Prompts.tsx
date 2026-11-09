@@ -10,9 +10,7 @@ import {
   Textarea,
 } from '@mantine/core';
 import {
-  ArrowLeft,
   ArrowRight,
-  FileText,
   MoreHorizontal,
   Plus,
   Save,
@@ -29,9 +27,15 @@ import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
-import library from '../../components/PageLayout/LibraryList.module.css';
+import {
+  PageHeader,
+  PageToolbar,
+  workspacePage,
+} from '../../components/PageLayout/PageLayout';
+import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
+import { EmptyState } from '../../components/EmptyState/EmptyState';
+import { promptColumns } from './PromptSkeleton';
 import styles from './Prompts.module.css';
-import editorLayout from '../workflows/WorkflowEditor.module.css';
 
 const fields = ({
   name,
@@ -108,22 +112,25 @@ export function PromptLibrary({
     )
     .sort((a, b) => a.name.localeCompare(b.name));
   return (
-    <div className={layout.page}>
-      <header className={`${layout.header} ${layout.libraryHeader}`}>
-        <h1>Prompts</h1>
-        <MantineButton variant="filled" onClick={openCreate}>
-          <Plus />
-          New prompt
-        </MantineButton>
-      </header>
-      <div className={layout.libraryToolbar}>
-        <Text size="xs" c="dimmed">
-          {query ? `${visible.length} of ${prompts.length}` : prompts.length}{' '}
-          {prompts.length === 1 ? 'prompt' : 'prompts'}
-        </Text>
+    <section className={workspacePage.page}>
+      <PageHeader
+        title="Prompts"
+        actions={
+          <MantineButton variant="filled" onClick={openCreate}>
+            <Plus size={14} /> New prompt
+          </MantineButton>
+        }
+      />
+      <PageToolbar
+        summary={
+          <>
+            {query ? `${visible.length} of ${prompts.length}` : prompts.length}{' '}
+            {prompts.length === 1 ? 'prompt' : 'prompts'}
+          </>
+        }
+      >
         <TextInput
-          size="xs"
-          className={layout.librarySearch}
+          className={workspacePage.search}
           ref={searchInput}
           aria-label="Search prompts"
           placeholder="Search prompts"
@@ -131,68 +138,46 @@ export function PromptLibrary({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-      </div>
-      {visible.length ? (
-        <div className={library.listPanel}>
-          <div
-            className={`${library.columnHead} ${styles.columnHead}`}
-            aria-hidden="true"
-          >
-            <span>Name</span>
-            <span>Revision</span>
-            <span className={library.updated}>Updated</span>
-          </div>
-          <ul className={library.list}>
+      </PageToolbar>
+      <div className={workspacePage.content}>
+        {visible.length ? (
+          <ListTable columns={promptColumns}>
             {visible.map((p) => (
-              <li key={p.id}>
-                <Link
-                  to={paths.prompt(p.id)}
-                  className={`${library.row} ${styles.row}`}
-                >
-                  <div className={library.rowIdentity}>
-                    <span className={library.icon} aria-hidden="true">
-                      <FileText size={17} />
-                    </span>
-                    <div className={library.identity}>
-                      <strong>{p.name}</strong>
-                      {p.description && <span>{p.description}</span>}
-                    </div>
-                  </div>
-                  <span className={styles.revision}>Revision {p.revision}</span>
-                  <time className={library.updated} dateTime={p.updatedAt}>
-                    {new Date(p.updatedAt).toLocaleDateString()}
-                  </time>
-                  <ArrowRight
-                    className={library.rowArrow}
-                    size={16}
-                    aria-hidden="true"
-                  />
-                </Link>
-              </li>
+              <ListTableRow
+                key={p.id}
+                to={paths.prompt(p.id)}
+                className={styles.listRow}
+              >
+                <span className={styles.identity}>
+                  <strong>{p.name}</strong>
+                  {p.description && <small>{p.description}</small>}
+                </span>
+                <span className={styles.revision}>Revision {p.revision}</span>
+                <time className={styles.updated} dateTime={p.updatedAt}>
+                  {new Date(p.updatedAt).toLocaleDateString()}
+                </time>
+                <ArrowRight size={16} aria-hidden="true" />
+              </ListTableRow>
             ))}
-          </ul>
-        </div>
-      ) : (
-        <div className={library.empty}>
-          <span className={library.icon} aria-hidden="true">
-            {query ? <Search size={17} /> : <FileText size={17} />}
-          </span>
-          <h2>{query ? 'No matching prompts' : 'No prompts yet'}</h2>
-          <MantineButton
-            variant="default"
-            onClick={
-              query
-                ? () => {
-                    setQuery('');
-                    searchInput.current?.focus();
-                  }
-                : openCreate
-            }
-          >
-            {query ? 'Clear search' : 'Create a prompt'}
-          </MantineButton>
-        </div>
-      )}
+          </ListTable>
+        ) : (
+          <EmptyState title={query ? 'No matching prompts' : 'No prompts yet'}>
+            <MantineButton
+              variant="default"
+              onClick={
+                query
+                  ? () => {
+                      setQuery('');
+                      searchInput.current?.focus();
+                    }
+                  : openCreate
+              }
+            >
+              {query ? 'Clear search' : 'Create a prompt'}
+            </MantineButton>
+          </EmptyState>
+        )}
+      </div>
       {draft && (
         <Modal
           onClose={() => !busy && setDraft(undefined)}
@@ -245,7 +230,7 @@ export function PromptLibrary({
           </ModalFooter>
         </Modal>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -301,74 +286,73 @@ export function PromptEditor({
     };
   }, [prompt.id, tick]);
   return (
-    <section className={`${editorLayout.editor} ${styles.editor}`}>
-      <header className={`${editorLayout.header} ${styles.detailHeader}`}>
-        <Button
-          variant="ghost"
-          aria-label="Back to prompts"
-          disabled={busy}
-          onClick={() => void navigate(paths.prompts)}
-        >
-          <ArrowLeft />
-        </Button>
-        <h1 className={styles.detailTitle}>{baseline.name}</h1>
-        <span className={editorLayout.saved}>
-          {dirty ? 'Unsaved changes' : 'Saved'} · Revision {baseline.revision}
-        </span>
-        <div className="actions">
-          <Button
-            disabled={busy || !dirty}
-            onClick={() => {
-              const latest =
-                prompt.revision > baseline.revision ? prompt : baseline;
-              setSaveError('');
-              setBaseline(latest);
-              setDraft(fields(latest));
-            }}
-          >
-            Discard changes
-          </Button>
-          <Button
-            form={formId}
-            type="submit"
-            variant="primary"
-            disabled={
-              busy || !dirty || !draft.name.trim() || !draft.content.trim()
-            }
-          >
-            <Save />
-            {busy && !deleting ? 'Saving…' : 'Save'}
-          </Button>
-          <Menu position="bottom-end" width={180}>
-            <Menu.Target>
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                ref={actionsTrigger}
-                aria-label="Prompt actions"
-                disabled={busy}
-              >
-                <MoreHorizontal size={19} />
-              </ActionIcon>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Item
-                color="red"
-                leftSection={<Trash2 size={14} />}
-                disabled={dirty}
-                onClick={() => {
-                  setDeleteError('');
-                  setDeleting(true);
-                }}
-              >
-                Delete prompt
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        </div>
-      </header>
-      <div className={styles.editorBody}>
-        <div className={layout.formPage}>
+    <section className={workspacePage.page}>
+      <PageHeader
+        title={baseline.name}
+        onBack={() => void navigate(paths.prompts)}
+        backLabel="Back to prompts"
+        busy={busy}
+        status={
+          <>
+            {dirty ? 'Unsaved changes' : 'Saved'} · Revision {baseline.revision}
+          </>
+        }
+        actions={
+          <>
+            <Button
+              disabled={busy || !dirty}
+              onClick={() => {
+                const latest =
+                  prompt.revision > baseline.revision ? prompt : baseline;
+                setSaveError('');
+                setBaseline(latest);
+                setDraft(fields(latest));
+              }}
+            >
+              Discard changes
+            </Button>
+            <Button
+              form={formId}
+              type="submit"
+              variant="primary"
+              disabled={
+                busy || !dirty || !draft.name.trim() || !draft.content.trim()
+              }
+            >
+              <Save />
+              {busy && !deleting ? 'Saving…' : 'Save'}
+            </Button>
+            <Menu position="bottom-end" width={180}>
+              <Menu.Target>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  ref={actionsTrigger}
+                  aria-label="Prompt actions"
+                  disabled={busy}
+                >
+                  <MoreHorizontal size={19} />
+                </ActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Item
+                  color="red"
+                  leftSection={<Trash2 size={14} />}
+                  disabled={dirty}
+                  onClick={() => {
+                    setDeleteError('');
+                    setDeleting(true);
+                  }}
+                >
+                  Delete prompt
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          </>
+        }
+      />
+      <div className={workspacePage.content}>
+        <div className={workspacePage.formContent}>
           {dirty && prompt.revision > baseline.revision && (
             <Text role="alert" c="yellow" mb="md">
               This prompt changed elsewhere. Your edits are preserved. Discard
@@ -377,7 +361,7 @@ export function PromptEditor({
           )}
           <form
             id={formId}
-            className={layout.formCard}
+            className={workspacePage.card}
             onSubmit={(e) => {
               e.preventDefault();
               void (async () => {
@@ -405,7 +389,7 @@ export function PromptEditor({
               <PromptFields value={draft} onChange={setDraft} editing />
             </fieldset>
             <section
-              className={layout.formSection}
+              className={workspacePage.section}
               aria-labelledby={`${formId}-usage`}
             >
               <h2 id={`${formId}-usage`}>

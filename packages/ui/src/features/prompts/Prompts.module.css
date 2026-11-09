@@ -1,43 +1,28 @@
-.columnHead,
-.row {
-  grid-template-columns: minmax(0, 1fr) 100px 100px 16px;
+.listRow {
+  color: var(--text);
 }
-.revision {
+.identity {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.identity strong {
+  font-size: 14px;
+  font-weight: 550;
+}
+.identity small {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.revision,
+.updated {
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
-}
-@container library-list (max-width: 740px) {
-  .columnHead,
-  .row {
-    grid-template-columns: minmax(0, 1fr) 100px 16px;
-  }
-}
-@container library-list (max-width: 480px) {
-  .row {
-    grid-template-columns: 35px minmax(0, 1fr) 16px;
-  }
-  .revision {
-    grid-column: 2;
-  }
-}
-.detailTitle {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-size: var(--mantine-font-size-sm);
-  font-weight: 550;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.detailHeader > button,
-.detailHeader :global(.actions) {
-  flex-shrink: 0;
-}
-.editorBody {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
+  font-size: 12px;
 }
 .fields {
   padding: 0;
@@ -51,21 +36,9 @@
   border-radius: 9px;
   background: var(--surface);
 }
-@container workflow-editor (max-width: 640px) {
-  header.detailHeader {
-    height: auto;
-    min-height: 82px;
-    padding: 12px;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .detailHeader :global(.actions) {
-    width: 100%;
-    justify-content: flex-end;
-  }
-}
-@media (max-width: 600px) {
-  section.editor {
-    height: calc(100dvh - 60px);
+@media (max-width: 900px) {
+  .listRow > .updated,
+  .listRow > .rowArrow {
+    display: none;
   }
 }
