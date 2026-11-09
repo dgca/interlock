@@ -32,7 +32,7 @@ export function RunListSkeleton({ embedded = false }: { embedded?: boolean }) {
         }
       />
       <div className={workspacePage.content}>
-        {tab === 'active' ? <RunBoardSkeleton /> : <RunRowsSkeleton />}
+        <RunRowsSkeleton />
       </div>
     </section>
   );

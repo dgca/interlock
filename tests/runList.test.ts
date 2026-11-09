@@ -38,7 +38,13 @@ beforeEach(() => {
   );
 });
 
-it('keeps lazy and data loading shaped for the selected board or list presentation', async () => {
+async function showBoard(container: HTMLElement) {
+  await act(async () =>
+    container.querySelector<HTMLInputElement>('input[value="board"]')!.click(),
+  );
+}
+
+it('defaults lazy and data loading to List and switches to Board when selected', async () => {
   query.mockImplementation(() => new Promise(() => {}));
   const container = document.createElement('div');
   document.body.append(container);
@@ -61,13 +67,8 @@ it('keeps lazy and data loading shaped for the selected board or list presentati
       expect(container.querySelector('[role="status"]')?.textContent).toBe(
         'Loading runs…',
       );
-      if (path === '/runs') {
-        expect(container.textContent).toContain('Active runs');
-        expect(container.textContent).not.toContain('Started');
-      } else {
-        expect(container.textContent).toContain('Started');
-        expect(container.textContent).not.toContain('Active runs');
-      }
+      expect(container.textContent).toContain('Started');
+      expect(container.textContent).not.toContain('Active runs');
     }
     await act(async () =>
       root.render(
@@ -86,13 +87,22 @@ it('keeps lazy and data loading shaped for the selected board or list presentati
         ),
       ),
     );
-    expect(container.textContent).toContain('Active runs');
-    expect(container.textContent).not.toContain('Started');
-    await act(async () =>
-      container.querySelector<HTMLInputElement>('input[value="list"]')!.click(),
-    );
+    expect(
+      [
+        ...container.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
+      ].map((input) => input.value),
+    ).toEqual(['list', 'board']);
+    expect(
+      container.querySelector<HTMLInputElement>('input[value="list"]')?.checked,
+    ).toBe(true);
     expect(container.textContent).toContain('Started');
     expect(container.textContent).not.toContain('Active runs');
+    expect(query).not.toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 6 }),
+    );
+    await showBoard(container);
+    expect(container.textContent).toContain('Active runs');
+    expect(container.textContent).not.toContain('Started');
   } finally {
     await act(async () => root.unmount());
     container.remove();
@@ -147,6 +157,7 @@ it('scopes empty board messages to exact tag filters and clears them through the
     await act(async () =>
       root.render(h(DesignSystemProvider, { env: 'test' }, h(Harness))),
     );
+    await showBoard(container);
     expect(container.textContent).toContain('No active runs match these tags.');
     expect(container.textContent).toContain(
       'No matching runs need your attention.',
@@ -246,6 +257,11 @@ it('renders active and history pages and opens the selected run', async () => {
   try {
     await act(async () => root.render(h(Harness)));
     const panel = () => container.querySelector('[role="tabpanel"]')!;
+    expect(panel().textContent).toContain('running workflow');
+    expect(
+      [...panel().querySelectorAll('strong')].map((title) => title.textContent),
+    ).not.toContain('completed workflow');
+    await showBoard(container);
     expect(panel().textContent).toContain('running workflow');
     expect(panel().textContent).toContain('waiting workflow');
     expect(panel().textContent).toContain('Completed runs');
@@ -643,6 +659,7 @@ it('keeps the paged active runs and adds bounded recovery and completed previews
         ),
       ),
     );
+    await showBoard(container);
     expect(query).toHaveBeenCalledWith(
       expect.objectContaining({
         tab: 'attention',
@@ -745,6 +762,7 @@ it('does not let an old workflow preview replace the current board', async () =>
     );
   try {
     await act(async () => render('old'));
+    await showBoard(container);
     await act(async () => render('new'));
     expect(container.textContent).toContain('new completed');
     await act(async () => pending.forEach((resolve) => resolve()));
@@ -815,6 +833,7 @@ it('coalesces refreshes while a board preview is loading and accepts the in-flig
     );
   try {
     await act(async () => render(0));
+    await showBoard(container);
     await act(async () => render(1));
     await act(async () => render(2));
     expect(pending).toHaveLength(2);

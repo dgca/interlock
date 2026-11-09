@@ -85,7 +85,7 @@ export function RunList({
     changeTags(undefined);
   };
   const [filterOpen, setFilterOpen] = useState(false);
-  const [presentation, setPresentation] = useState('board');
+  const [presentation, setPresentation] = useState('list');
   const [previewReload, setPreviewReload] = useState(0);
   const [previewSnapshot, setPreviewSnapshot] = useState<{
     key: string;
@@ -252,8 +252,8 @@ export function RunList({
                   value={presentation}
                   onChange={setPresentation}
                   data={[
-                    { value: 'board', label: 'Board' },
                     { value: 'list', label: 'List' },
+                    { value: 'board', label: 'Board' },
                   ]}
                 />
               )}
