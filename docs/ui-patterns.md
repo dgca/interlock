@@ -73,7 +73,7 @@ Use the shared `Modal`, `ModalBody`, and `ModalFooter` from `components/Modal`. 
 
 Use static skeletons shaped like the content being loaded. Keep the loading announcement available to assistive technology and hide the decorative placeholders from it. Preserve the action label when a write is in progress.
 
-The Automations and Runs lists keep their shared headers and status tabs in place during route and initial data loading. Placeholder rows match the list columns. Background refreshes retain loaded rows; errors show retry feedback instead of an indefinite skeleton.
+The Automations and Runs lists keep their shared headers and status tabs in place during route and initial data loading. Placeholder rows match the list columns. Background refreshes retain loaded rows for the same query. Changing Automations filters or pages shows a loading state until that query succeeds; a failed read does not display another query's rows. Errors show retry feedback instead of an indefinite skeleton.
 
 ## Review before shipping
 

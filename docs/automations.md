@@ -16,7 +16,7 @@ Creation opens the saved automation. There is no separate review step. Enablemen
 
 Schedules offer intervals and five-field cron with an IANA timezone. Preview shows upcoming times. Choose whether overlapping runs skip the occurrence, queue one run, or overlap. New UI schedules skip missed occurrences, including while Interlock is closed. Existing missed-fire policies remain unchanged when edited. See [schedule behavior](schedules.md).
 
-Schedule inputs use exact contract property keys even when the form displays a friendly title. A field titled Repository with key `repository` saves `{ "repository": "dgca/interlock" }`. Numbers and booleans retain their JSON types. Complex fields use JSON entry. Existing schedule metadata bindings remain intact and their bound fields cannot be edited as literals.
+Schedule inputs use exact contract property keys even when the form displays a friendly title. A field titled Repository with key `repository` saves `{ "repository": "dgca/interlock" }`. Numbers and booleans retain their JSON types. Complex fields use JSON entry. Existing schedule metadata bindings remain intact. Top-level bound fields are read-only; nested bindings leave their containing JSON editable. Schedule metadata replaces only the bound paths at runtime, preserving literal sibling values.
 
 Interlock events watch one workflow, optionally its owned children, or any workflow. Choose completed, failed, cancelled, needs-attention, or stalled transitions. Terminal events can wait until source work has stopped. The target receives a compact event object rather than manually entered schedule inputs. See [event input](events.md#event-input-and-causal-chains) for fields and exclusions.
 

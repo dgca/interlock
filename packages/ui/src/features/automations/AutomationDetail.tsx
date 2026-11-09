@@ -155,6 +155,7 @@ export function AutomationDetail({ id }: { id: string }) {
               )}
               {trigger.enabled && !trigger.autoPaused ? (
                 <Button
+                  ref={disableTrigger}
                   variant="default"
                   disabled={busy || !!error}
                   onClick={() => {

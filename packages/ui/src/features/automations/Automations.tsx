@@ -149,11 +149,19 @@ function AutomationList() {
   const { workflows, tick } = useOutletContext<AppContext>();
   const [search, setSearch] = useSearchParams();
   const query = listQuery(search);
-  const [page, setPage] = useState<Listing>();
-  const [error, setError] = useState('');
+  const [snapshot, setSnapshot] = useState<{
+    queryKey: string;
+    page: Listing;
+  }>();
+  const [failure, setFailure] = useState<{
+    queryKey: string;
+    message: string;
+  }>();
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
   const queryKey = JSON.stringify(query);
+  const page = snapshot?.queryKey === queryKey ? snapshot.page : undefined;
+  const error = failure?.queryKey === queryKey ? failure.message : '';
   useEffect(() => {
     let current = true;
     setLoading(true);
@@ -174,11 +182,11 @@ function AutomationList() {
             );
             return;
           }
-          setPage(result);
-          setError('');
+          setSnapshot({ queryKey, page: result });
+          setFailure(undefined);
         },
         (e) => {
-          if (current) setError(errorMessage(e));
+          if (current) setFailure({ queryKey, message: errorMessage(e) });
         },
       )
       .finally(() => {
@@ -322,15 +330,15 @@ function AutomationList() {
                             : 'No activity yet'}
                       </span>
                       <small>
-                        {trigger.kind === 'schedule' &&
-                        trigger.enabled &&
-                        !trigger.autoPaused
-                          ? `Next: ${timestamp(trigger.nextFireAt, trigger.timing.type === 'cron' ? trigger.timing.timeZone : undefined)}`
-                          : trigger.enabled
-                            ? trigger.kind === 'webhook'
-                              ? 'Listening for webhooks'
-                              : 'Listening for events'
-                            : 'Disabled'}
+                        {!trigger.enabled
+                          ? 'Disabled'
+                          : trigger.autoPaused
+                            ? 'Automatically paused'
+                            : trigger.kind === 'schedule'
+                              ? `Next: ${timestamp(trigger.nextFireAt, trigger.timing.type === 'cron' ? trigger.timing.timeZone : undefined)}`
+                              : trigger.kind === 'webhook'
+                                ? 'Listening for webhooks'
+                                : 'Listening for events'}
                       </small>
                     </span>
                     <ChevronRight size={16} />

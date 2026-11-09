@@ -86,7 +86,7 @@ const inspection = (t = trigger()) => ({
   deliveries: { items: [], total: 0, nextOffset: null },
   endpoint: null,
 });
-let root: Root, container: HTMLDivElement;
+let root: Root, container: HTMLDivElement, tick: number;
 function Layout() {
   const location = useLocation();
   return h(
@@ -97,7 +97,7 @@ function Layout() {
       context: {
         loaded: true,
         workflows: [workflow],
-        tick: 0,
+        tick,
         onScheduleDirty: vi.fn(),
         onSchedulePending: vi.fn(),
       },
@@ -106,6 +106,7 @@ function Layout() {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  tick = 0;
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -506,4 +507,124 @@ it('keeps list context visible while loading without showing a false empty state
   );
   expect(document.body.textContent).toContain('No matching automations');
   expect(document.body.textContent).not.toContain('Loading automations…');
+});
+
+it("does not show another query's rows when a filter request fails and retries the selected query", async () => {
+  await render('/automations');
+  expect(document.body.textContent).toContain('Daily review');
+  let reject!: (reason: Error) => void;
+  rpc.list.mockImplementationOnce(
+    () =>
+      new Promise((_, fail) => {
+        reject = fail;
+      }),
+  );
+  const enabled = document.querySelector<HTMLAnchorElement>(
+    'nav[aria-label="Automation views"] a[href="/automations?status=enabled"]',
+  )!;
+  await act(async () => enabled.click());
+  expect(document.body.textContent).not.toContain('Daily review');
+  expect(document.body.textContent).toContain('Loading automations');
+  await act(async () => reject(new Error('Filter request failed')));
+  expect(document.body.textContent).toContain('Filter request failed');
+  expect(document.body.textContent).not.toContain('Daily review');
+  expect(document.body.textContent).not.toContain('No matching automations');
+  rpc.list.mockResolvedValueOnce({
+    items: [{ ...trigger(), enabled: true, name: 'Enabled review' }],
+    total: 1,
+    nextOffset: null,
+    counts: { all: 2, enabled: 1, disabled: 1, attention: 0 },
+  });
+  await act(async () => button('Retry loading').click());
+  expect(rpc.list).toHaveBeenLastCalledWith(
+    expect.objectContaining({ status: 'enabled' }),
+  );
+  expect(document.body.textContent).toContain('Enabled review');
+});
+
+it('retains rows on a failed refresh of the same query', async () => {
+  await render('/automations');
+  rpc.list.mockRejectedValueOnce(new Error('Refresh failed'));
+  tick++;
+  await render('/automations');
+  expect(document.body.textContent).toContain('Automations may be out of date');
+  expect(document.body.textContent).toContain('Refresh failed');
+  expect(document.body.textContent).toContain('Daily review');
+});
+
+it('edits and validates literal siblings of a nested schedule binding', async () => {
+  rpc.versions.mockResolvedValue([
+    {
+      workflowId: 'w',
+      version: 1,
+      definition: {
+        ...definition,
+        inputSchema: {
+          ...definition.inputSchema,
+          properties: {
+            ...definition.inputSchema.properties,
+            options: {
+              type: 'object',
+              properties: {
+                repository: { type: 'string' },
+                triggerId: { type: 'string' },
+              },
+              required: ['repository', 'triggerId'],
+              additionalProperties: false,
+            },
+          },
+        },
+      },
+    },
+  ]);
+  rpc.inspect.mockResolvedValue(
+    inspection({
+      ...trigger(),
+      bindings: { triggerId: 'options.triggerId' },
+      input: {
+        repository: 'dgca/interlock',
+        attempts: 2,
+        options: { repository: 'before' },
+      },
+    } as any),
+  );
+  await render('/automations/t/edit');
+  const options = document.querySelector<HTMLTextAreaElement>(
+    'textarea[aria-label=options]',
+  )!;
+  expect(options.readOnly).toBe(false);
+  await fill(options, '{"repository":7}');
+  await submit();
+  expect(rpc.manage).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain('Workflow inputs');
+  await fill(options, '{"repository":"after"}');
+  await submit();
+  expect(rpc.manage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action: 'update',
+      config: expect.objectContaining({
+        bindings: { triggerId: 'options.triggerId' },
+        input: expect.objectContaining({ options: { repository: 'after' } }),
+      }),
+    }),
+  );
+});
+
+it('shows an automatically paused schedule without claiming it listens for events', async () => {
+  rpc.list.mockResolvedValue({
+    items: [
+      {
+        ...trigger(),
+        enabled: true,
+        autoPaused: { at: workflow.createdAt, reason: 'Failures' },
+        consecutiveFailures: 3,
+      },
+    ],
+    total: 1,
+    nextOffset: null,
+    counts: { all: 1, enabled: 0, disabled: 0, attention: 1 },
+  });
+  await render('/automations');
+  expect(document.body.textContent).toContain('Automatically paused');
+  expect(document.body.textContent).not.toContain('Listening for events');
 });

@@ -22,6 +22,7 @@ import {
   assertContract,
   eventConfigSchema,
   scheduleConfigSchema,
+  scheduleInput,
   triggerConfig,
   type Json,
   type WorkflowVersion,
@@ -49,6 +50,27 @@ import {
   type AutomationConfig,
 } from './model';
 import classes from './Automations.module.css';
+
+function literalInputSchema(schema: Record<string, unknown>, paths: string[]) {
+  const result = structuredClone(schema);
+  for (const path of paths) {
+    let current = result;
+    const parts = path.split('.');
+    for (const [index, key] of parts.entries()) {
+      const properties = current.properties as
+        Record<string, unknown> | undefined;
+      if (!properties || !Object.hasOwn(properties, key)) break;
+      if (index === parts.length - 1) {
+        properties[key] = {};
+        break;
+      }
+      const child = properties[key];
+      if (!child || typeof child !== 'object' || Array.isArray(child)) break;
+      current = child as Record<string, unknown>;
+    }
+  }
+  return result;
+}
 
 function defaultInput(schema: Record<string, unknown>): Json {
   if (schema.default !== undefined) return schema.default as Json;
@@ -279,29 +301,23 @@ export function AutomationEditor({
     }
     try {
       if (parsed.data.kind === 'schedule' && schema) {
-        // Bound fields are supplied by the scheduler, not by the literal form.
-        const boundKeys = new Set(
-          Object.values(parsed.data.bindings).flatMap((path) =>
-            path ? [path.split('.')[0]] : [],
-          ),
+        // Populate only bound paths, preserving validation of literal siblings.
+        const paths = Object.values(parsed.data.bindings).filter(
+          (path): path is string => !!path,
         );
-        const literalSchema = boundKeys.size
-          ? {
-              ...schema,
-              required: (schema.required as string[] | undefined)?.filter(
-                (key) => !boundKeys.has(key),
-              ),
-              properties: Object.fromEntries(
-                Object.entries(
-                  (schema.properties ?? {}) as Record<string, unknown>,
-                ).map(([key, property]) => [
-                  key,
-                  boundKeys.has(key) ? {} : property,
-                ]),
-              ),
-            }
-          : schema;
-        assertContract(literalSchema, parsed.data.input, 'Workflow inputs');
+        const input = paths.length
+          ? scheduleInput(parsed.data, {
+              scheduledAt: null,
+              firedAt: null,
+              triggerId: null,
+              previousRunId: null,
+            })
+          : parsed.data.input;
+        assertContract(
+          literalInputSchema(schema, paths),
+          input,
+          'Workflow inputs',
+        );
       }
     } catch (e) {
       setError(errorMessage(e));
@@ -713,7 +729,7 @@ export function AutomationEditor({
                       onChange={(input) => patch({ input })}
                       onValidityChange={setInputValid}
                       disabledKeys={Object.values(config.bindings).flatMap(
-                        (path) => (path ? [path.split('.')[0]] : []),
+                        (path) => (path && !path.includes('.') ? [path] : []),
                       )}
                     />
                   ) : workflowId ? (
@@ -731,8 +747,9 @@ export function AutomationEditor({
                   {config.kind === 'schedule' &&
                     Object.values(config.bindings).some(Boolean) && (
                       <p className={classes.hint}>
-                        Inputs bound to schedule metadata are supplied at
-                        runtime. Existing bindings are preserved.
+                        Schedule metadata replaces only its bound input paths at
+                        runtime. Other input fields remain editable. Existing
+                        bindings are preserved.
                       </p>
                     )}
                 </section>
