@@ -148,11 +148,11 @@ Page headings use `heading` or `heading-large`. Section headings use `section`, 
 
 This direction covers desktop screens only. Responsive breakpoints and mobile layouts remain unresolved.
 
-The sidebar is 256px wide. Its brand container and workspace page headers share an 88px minimum height through `--page-header-height`, aligning their bottom dividers in standard desktop layouts. The logo remains 32px. Workspace padding is 28px, form padding is 24px, and typical gaps span 12px to 24px.
+The sidebar is 256px wide. Its brand container and the workspace page-header title row share an 88px minimum height through `--page-header-height`, aligning their bottom dividers in standard desktop layouts. The logo remains 32px. Workspace padding is 28px, form padding is 24px, and typical gaps span 12px to 24px.
 
 The v2 sidebar omits Recent workflows and a generic Settings destination. Recent workflows is outside the planned scope; dedicated settings navigation may be designed later. Apply this scope to both screen examples and the reusable sidebar. Existing feature-specific settings and editors remain part of the UI inventory.
 
-Section headers separate title and actions from attached tabs. Place action buttons, filter controls, and presentation controls in a padded row above the tabs. Standard page headers use the shared 88px minimum height with vertically centered titles and 40px actions. Headers can grow when content or actions wrap. Only the tabs meet the content boundary. Apply corrections to this shared pattern across every screen that uses it.
+Page headers combine the title and context on the left with search, filters, view controls, and actions on the right. The primary action comes last. Controls and actions share the 88px minimum title row when they fit. Otherwise the whole group moves into a full-width second row below the title divider, with related groups wrapping further as needed. Use the available container width and retain standard 40px controls. Attached tabs follow directly below the header. Scoped task actions, embedded-view toolbars, canvas tools, and individual form save buttons stay beside the area they affect. Apply shared-pattern corrections across all matching screens.
 
 Page subtitles are optional. Use them for meaningful status, scope, or behavior rather than repeating the title. Title-only and two-line headers share the same 88px minimum height. A vertical title/subtitle block has a 4px gap. Subtitles use `page-subtitle` typography and `label-text`; 40px actions remain vertically centered. Workflow editor views group draft and publication status beneath the name, replacing the separate Draft badge and publication label. Harnesses demonstrates explanatory copy beneath its heading.
 

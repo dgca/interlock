@@ -18,17 +18,34 @@ import classes from './RunList.module.css';
 export function RunListSkeleton({ embedded = false }: { embedded?: boolean }) {
   const [search] = useSearchParams();
   const tab = runTab(search.get('tab'));
+  const controls = (
+    <>
+      {tab === 'active' && <Placeholder h={40} w={140} />}
+      <Placeholder h={40} w={130} />
+    </>
+  );
+  const actions =
+    tab === 'history' ? (
+      <>
+        <Placeholder h={40} w={150} />
+        <Placeholder h={40} w={150} />
+      </>
+    ) : undefined;
   return (
     <section className={workspacePage.page} aria-busy="true">
-      {!embedded && <PageHeader title="Runs" />}
+      {!embedded && (
+        <PageHeader title="Runs" controls={controls} actions={actions} />
+      )}
       <PageTabsSkeleton
         items={runViews}
         value={tab}
         toolbar={
-          <>
-            {tab === 'active' && <Placeholder h={40} w={140} />}
-            <Placeholder h={40} w={130} />
-          </>
+          embedded ? (
+            <>
+              {controls}
+              {actions}
+            </>
+          ) : undefined
         }
       />
       <div className={workspacePage.content}>

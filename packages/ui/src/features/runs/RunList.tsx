@@ -218,6 +218,33 @@ export function RunList({
         </Button>
       </>
     ) : null;
+  const controls = (
+    <>
+      {tab === 'active' && (
+        <SegmentedControl
+          aria-label="Run presentation"
+          value={presentation}
+          onChange={setPresentation}
+          data={[
+            { value: 'list', label: 'List' },
+            { value: 'board', label: 'Board' },
+          ]}
+        />
+      )}
+      <Button
+        variant="secondary"
+        leftSection={<SlidersHorizontal size={14} />}
+        aria-expanded={filterOpen}
+        aria-controls={filterId}
+        onClick={() => setFilterOpen((open) => !open)}
+      >
+        Filter by tags
+        {Object.keys(selectedTags ?? {}).length
+          ? ` (${Object.keys(selectedTags!).length})`
+          : ''}
+      </Button>
+    </>
+  );
   const tabItems = runViews.map((view) => ({
     ...view,
     count: counts
@@ -229,7 +256,9 @@ export function RunList({
   }));
   return (
     <section className={workspacePage.page}>
-      {!workflowId && <PageHeader title="Runs" actions={historyActions} />}
+      {!workflowId && (
+        <PageHeader title="Runs" controls={controls} actions={historyActions} />
+      )}
       <Tabs
         unstyled
         className={classes.sections}
@@ -244,32 +273,12 @@ export function RunList({
           label="Run views"
           items={tabItems}
           toolbar={
-            <>
-              {workflowId && historyActions}
-              {tab === 'active' && (
-                <SegmentedControl
-                  aria-label="Run presentation"
-                  value={presentation}
-                  onChange={setPresentation}
-                  data={[
-                    { value: 'list', label: 'List' },
-                    { value: 'board', label: 'Board' },
-                  ]}
-                />
-              )}
-              <Button
-                variant="secondary"
-                leftSection={<SlidersHorizontal size={14} />}
-                aria-expanded={filterOpen}
-                aria-controls={filterId}
-                onClick={() => setFilterOpen((open) => !open)}
-              >
-                Filter by tags
-                {Object.keys(selectedTags ?? {}).length
-                  ? ` (${Object.keys(selectedTags!).length})`
-                  : ''}
-              </Button>
-            </>
+            workflowId ? (
+              <>
+                {controls}
+                {historyActions}
+              </>
+            ) : undefined
           }
         />
         <Tabs.Panel value={tab} className={workspacePage.content}>

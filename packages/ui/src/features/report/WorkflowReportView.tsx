@@ -12,7 +12,6 @@ import {
   Progress,
   Collapse,
   PageHeader,
-  PageToolbar,
   workspacePage,
 } from '../../design-system';
 
@@ -144,20 +143,8 @@ export function WorkflowReportView({
         }
         onBack={onBack}
         backLabel="Back to workflow"
-        actions={
-          <Button
-            variant="secondary"
-            leftSection={<RefreshCw size={14} />}
-            onClick={() => void fetchReport()}
-            disabled={loading}
-          >
-            Refresh
-          </Button>
-        }
-      />
-      <PageToolbar
-        summary={
-          <div className={styles.filters}>
+        controls={
+          <>
             {!initialWorkflowId && (
               <Select
                 placeholder="All workflows"
@@ -195,21 +182,30 @@ export function WorkflowReportView({
               className={styles.timeFilter}
               aria-label="Filter by time window"
             />
-          </div>
+            <Button
+              variant="secondary"
+              aria-expanded={tagsOpen}
+              aria-controls={tagsId}
+              onClick={() => setTagsOpen((open) => !open)}
+            >
+              Filter by tags
+              {Object.keys(tags ?? {}).length
+                ? ` (${Object.keys(tags!).length})`
+                : ''}
+            </Button>
+          </>
         }
-      >
-        <Button
-          variant="secondary"
-          aria-expanded={tagsOpen}
-          aria-controls={tagsId}
-          onClick={() => setTagsOpen((open) => !open)}
-        >
-          Filter by tags
-          {Object.keys(tags ?? {}).length
-            ? ` (${Object.keys(tags!).length})`
-            : ''}
-        </Button>
-      </PageToolbar>
+        actions={
+          <Button
+            variant="secondary"
+            leftSection={<RefreshCw size={14} />}
+            onClick={() => void fetchReport()}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
+        }
+      />
       <div className={workspacePage.content}>
         <Stack gap="lg">
           <Collapse expanded={tagsOpen} transitionDuration={0} id={tagsId}>

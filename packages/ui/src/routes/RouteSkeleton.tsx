@@ -22,11 +22,13 @@ export function RouteSkeleton({ subject }: { subject: LoadingSubject }) {
   return (
     <LoadingSkeleton label={`Loading ${subject}…`} className={editor.editor}>
       <header className={workspacePage.header}>
-        <Placeholder h={28} w={32} />
-        <Stack gap={6} w="min(45%, 240px)">
-          <Placeholder h={16} />
-          <Placeholder h={10} w="62%" />
-        </Stack>
+        <div className={workspacePage.headerHeading}>
+          <Placeholder h={28} w={32} />
+          <Stack gap={6} w="min(45%, 240px)">
+            <Placeholder h={16} />
+            <Placeholder h={10} w="62%" />
+          </Stack>
+        </div>
       </header>
       <Group className={editor.subnav} pb="sm">
         <Placeholder h={23} w={54} />

@@ -230,33 +230,36 @@ function AutomationList() {
     <section className={workspacePage.page}>
       <PageHeader
         title="Automations"
+        controls={
+          <>
+            <Select
+              className={classes.workflowFilter}
+              aria-label="Filter by workflow"
+              searchable
+              clearable
+              placeholder="All workflows"
+              value={query.workflowId ?? null}
+              data={workflows.map((w) => ({ value: w.id, label: w.name }))}
+              onChange={(value) => change('workflow', value || undefined)}
+            />
+            <TextInput
+              className={classes.toolbarSearch}
+              aria-label="Search automations"
+              placeholder="Search automations"
+              maxLength={200}
+              leftSection={<Search size={14} />}
+              value={query.search}
+              onChange={(event) => change('search', event.currentTarget.value)}
+            />
+          </>
+        }
         actions={
           <Button variant="primary" component={Link} to={newHref}>
             New automation
           </Button>
         }
       />
-      <PageTabs label="Automation views" items={items} value={query.status}>
-        <Select
-          className={classes.workflowFilter}
-          aria-label="Filter by workflow"
-          searchable
-          clearable
-          placeholder="All workflows"
-          value={query.workflowId ?? null}
-          data={workflows.map((w) => ({ value: w.id, label: w.name }))}
-          onChange={(value) => change('workflow', value || undefined)}
-        />
-        <TextInput
-          className={classes.toolbarSearch}
-          aria-label="Search automations"
-          placeholder="Search automations"
-          maxLength={200}
-          leftSection={<Search size={14} />}
-          value={query.search}
-          onChange={(event) => change('search', event.currentTarget.value)}
-        />
-      </PageTabs>
+      <PageTabs label="Automation views" items={items} value={query.status} />
       <div className={workspacePage.content} aria-busy={loading}>
         {error && (
           <Alert

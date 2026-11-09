@@ -576,7 +576,7 @@
         "packages/ui/src/design-system/PageLayout/PageLayout.tsx",
         "packages/ui/src/features/workflows/WorkflowEditor.tsx"
       ],
-      "variants": "Shared 88px minimum for title-only, subtitle/status, and sidebar brand; wrapping can grow headers",
+      "variants": "88px title row aligns with sidebar brand; controls before actions; overflow row follows container width",
       "board": "Compositions",
       "penStatus": "base-with-partial-state-coverage",
       "penComponents": [
@@ -625,7 +625,7 @@
         "packages/ui/src/components/PageLayout/PageLayout.tsx",
         "packages/ui/src/features/runs/RunList.tsx"
       ],
-      "variants": "Search, summary, filters, reset; actions padded above attached tabs",
+      "variants": "Scoped embedded search, filters, reset, and actions above local tabs; page-level controls use PageHeader",
       "board": "Compositions",
       "penStatus": "proposed-specimen",
       "penComponents": [

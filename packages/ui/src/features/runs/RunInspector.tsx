@@ -138,10 +138,12 @@ export function RunInspector({
     ) : (
       <LoadingSkeleton label="Loading run…" className={styles.page}>
         <header className={workspacePage.header} data-two-line>
-          <Placeholder h={28} w={32} />
-          <div>
-            <Placeholder h={16} w="min(42vw, 200px)" />
-            <Placeholder mt={8} h={10} w={60} />
+          <div className={workspacePage.headerHeading}>
+            <Placeholder h={28} w={32} />
+            <div>
+              <Placeholder h={16} w="min(42vw, 200px)" />
+              <Placeholder mt={8} h={10} w={60} />
+            </div>
           </div>
         </header>
         <div className={styles.liveSummary}>

@@ -84,25 +84,25 @@ export function Diagnostics() {
     <section className={workspacePage.page} aria-busy={loading}>
       <PageHeader
         title="Diagnostics"
+        controls={
+          <Switch
+            label="Live probe"
+            checked={liveProbe}
+            onChange={(e) => setLiveProbe(e.currentTarget.checked)}
+            disabled={loading}
+            size="xs"
+            aria-label="Include live harness model verification"
+          />
+        }
         actions={
-          <Group gap="sm">
-            <Switch
-              label="Live probe"
-              checked={liveProbe}
-              onChange={(e) => setLiveProbe(e.currentTarget.checked)}
-              disabled={loading}
-              size="xs"
-              aria-label="Include live harness model verification"
-            />
-            <Button
-              leftSection={<RefreshCw size={14} />}
-              variant="secondary"
-              onClick={() => void fetchDiagnostics(liveProbe)}
-              disabled={loading}
-            >
-              Run checks
-            </Button>
-          </Group>
+          <Button
+            leftSection={<RefreshCw size={14} />}
+            variant="secondary"
+            onClick={() => void fetchDiagnostics(liveProbe)}
+            disabled={loading}
+          >
+            Run checks
+          </Button>
         }
       />
       <div className={workspacePage.content}>

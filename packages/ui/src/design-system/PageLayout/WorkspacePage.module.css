@@ -7,19 +7,49 @@
   overflow: hidden;
 }
 .header {
+  --header-padding: var(--workspace-padding);
+  container-type: inline-size;
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
+  gap: 0 20px;
   min-height: var(--page-header-height);
   flex-shrink: 0;
-  padding: 16px var(--workspace-padding);
+  padding: 0 var(--header-padding);
   background: var(--structural);
-  border-bottom: 1px solid var(--border);
+}
+.header::after,
+.headerHeading::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  height: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+.header::after {
+  inset-inline: 0;
+}
+.headerHeading {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1 0 auto;
+  min-width: min(220px, 100%);
+  max-width: 100%;
+  min-height: var(--page-header-height);
+  padding-block: 16px;
+}
+.headerHeading::after {
+  /* Keep the title-row divider panel-wide when the tools wrap below it. */
+  inset-inline-start: calc(-1 * var(--header-padding));
+  width: calc(100cqw + 2 * var(--header-padding));
 }
 .title {
   flex: 1;
-  min-width: min(220px, 100%);
+  min-width: 0;
 }
 .title h1 {
   font-size: 28px;
@@ -39,12 +69,39 @@
   margin-top: 4px;
   overflow-wrap: anywhere;
 }
+.headerTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px 20px;
+  /* Move the whole tools group below the title before wrapping its contents. */
+  flex: 1 0 auto;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  padding-block: 12px;
+}
+.headerControls,
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
+}
+.headerControls > *,
+.actions > * {
+  max-width: 100%;
+}
+@container (max-width: 600px) {
+  .headerTools,
+  .headerControls,
+  .actions {
+    justify-content: flex-start;
+  }
 }
 .tabs {
   position: relative;
@@ -184,7 +241,9 @@
   outline-offset: -3px;
 }
 @media (max-width: 800px) {
-  .header,
+  .header {
+    --header-padding: 20px;
+  }
   .content,
   .toolbar {
     padding-inline: 20px;
@@ -195,17 +254,10 @@
 }
 @media (max-width: 600px) {
   .header {
-    padding: 16px;
-    flex-wrap: wrap;
-  }
-  .title {
-    flex: 1 0 calc(100% - 56px);
+    --header-padding: 16px;
   }
   .title h1 {
     font-size: 24px;
-  }
-  .actions {
-    justify-content: flex-start;
   }
   .content,
   .toolbar {

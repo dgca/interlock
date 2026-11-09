@@ -4,7 +4,6 @@ import {
   LoadingSkeleton,
   Placeholder,
   PageHeader,
-  PageToolbar,
   workspacePage,
 } from '../../design-system';
 
@@ -43,19 +42,22 @@ export function ReportPageSkeleton() {
     <section className={workspacePage.page} aria-busy="true">
       <PageHeader
         title="Performance & cost report"
-        actions={<Placeholder h={30} w={90} />}
-      />
-      <PageToolbar
-        summary={
-          <div className={styles.filters}>
-            <Placeholder h={30} w={200} />
-            <Placeholder h={30} w={245} />
-            <Placeholder h={30} w={140} />
-          </div>
+        controls={
+          <>
+            <div className={styles.workflowFilter}>
+              <Placeholder h={40} />
+            </div>
+            <div className={styles.durationFilter}>
+              <Placeholder h={40} />
+            </div>
+            <div className={styles.timeFilter}>
+              <Placeholder h={40} />
+            </div>
+            <Placeholder h={40} w={132} />
+          </>
         }
-      >
-        <Placeholder h={30} w={110} />
-      </PageToolbar>
+        actions={<Placeholder h={40} w={100} />}
+      />
       <div className={workspacePage.content}>
         <ReportLoadingContent />
       </div>

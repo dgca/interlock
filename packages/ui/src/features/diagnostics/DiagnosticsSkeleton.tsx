@@ -36,12 +36,8 @@ export function DiagnosticsPageSkeleton() {
     <section className={workspacePage.page} aria-busy="true">
       <PageHeader
         title="Diagnostics"
-        actions={
-          <Group gap="sm">
-            <Placeholder h={20} w={85} />
-            <Placeholder h={30} w={100} />
-          </Group>
-        }
+        controls={<Placeholder h={20} w={85} />}
+        actions={<Placeholder h={40} w={120} />}
       />
       <div className={workspacePage.content}>
         <DiagnosticsLoadingContent />

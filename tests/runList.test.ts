@@ -50,7 +50,13 @@ it('defaults lazy and data loading to List and switches to Board when selected',
   document.body.append(container);
   const root = createRoot(container);
   try {
-    for (const path of ['/runs', '/runs?tab=history']) {
+    for (const path of [
+      '/runs',
+      '/runs?tab=history',
+      '/workflows/workflow?view=runs',
+      '/workflows/workflow?view=runs&tab=history',
+    ]) {
+      const embedded = path.startsWith('/workflows/');
       await act(async () =>
         root.render(
           h(
@@ -59,7 +65,7 @@ it('defaults lazy and data loading to List and switches to Board when selected',
             h(
               MemoryRouter,
               { initialEntries: [path], key: path },
-              h(RunListSkeleton),
+              h(RunListSkeleton, { embedded }),
             ),
           ),
         ),
@@ -69,6 +75,10 @@ it('defaults lazy and data loading to List and switches to Board when selected',
       );
       expect(container.textContent).toContain('Started');
       expect(container.textContent).not.toContain('Active runs');
+      expect(container.querySelector('header') !== null).toBe(!embedded);
+      expect(
+        container.querySelector('[aria-current="page"]')?.textContent,
+      ).toContain(path.includes('tab=history') ? 'History' : 'Active');
     }
     await act(async () =>
       root.render(
@@ -95,6 +105,12 @@ it('defaults lazy and data loading to List and switches to Board when selected',
     expect(
       container.querySelector<HTMLInputElement>('input[value="list"]')?.checked,
     ).toBe(true);
+    expect(
+      container.querySelector('header [role="radiogroup"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('header')?.textContent).toContain(
+      'Filter by tags',
+    );
     expect(container.textContent).toContain('Started');
     expect(container.textContent).not.toContain('Active runs');
     expect(query).not.toHaveBeenCalledWith(

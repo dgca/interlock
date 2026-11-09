@@ -12,7 +12,6 @@ import {
   EmptyState,
   ActionError,
   PageHeader,
-  PageToolbar,
   workspacePage,
 } from '../../design-system';
 
@@ -118,30 +117,29 @@ export function PromptLibrary({
     <section className={workspacePage.page}>
       <PageHeader
         title="Prompts"
+        subtitle={
+          <>
+            {query ? `${visible.length} of ${prompts.length}` : prompts.length}{' '}
+            {prompts.length === 1 ? 'prompt' : 'prompts'}
+          </>
+        }
+        controls={
+          <TextInput
+            className={workspacePage.search}
+            ref={searchInput}
+            aria-label="Search prompts"
+            placeholder="Search prompts"
+            leftSection={<Search size={15} />}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        }
         actions={
           <Button variant="primary" onClick={openCreate}>
             <Plus size={14} /> New prompt
           </Button>
         }
       />
-      <PageToolbar
-        summary={
-          <>
-            {query ? `${visible.length} of ${prompts.length}` : prompts.length}{' '}
-            {prompts.length === 1 ? 'prompt' : 'prompts'}
-          </>
-        }
-      >
-        <TextInput
-          className={workspacePage.search}
-          ref={searchInput}
-          aria-label="Search prompts"
-          placeholder="Search prompts"
-          leftSection={<Search size={15} />}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </PageToolbar>
       <div className={workspacePage.content}>
         {visible.length ? (
           <ListTable columns={promptColumns}>
@@ -314,17 +312,6 @@ export function PromptEditor({
             >
               Discard changes
             </Button>
-            <Button
-              form={formId}
-              type="submit"
-              variant="primary"
-              disabled={
-                busy || !dirty || !draft.name.trim() || !draft.content.trim()
-              }
-            >
-              <Save />
-              {busy && !deleting ? 'Saving…' : 'Save'}
-            </Button>
             <Menu position="bottom-end" width={180}>
               <Menu.Target>
                 <ActionIcon
@@ -351,6 +338,17 @@ export function PromptEditor({
                 </Menu.Item>
               </Menu.Dropdown>
             </Menu>
+            <Button
+              form={formId}
+              type="submit"
+              variant="primary"
+              disabled={
+                busy || !dirty || !draft.name.trim() || !draft.content.trim()
+              }
+            >
+              <Save />
+              {busy && !deleting ? 'Saving…' : 'Save'}
+            </Button>
           </>
         }
       />

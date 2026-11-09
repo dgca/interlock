@@ -296,6 +296,15 @@ it('keeps interval and cron drafts when switching timing modes', async () => {
 });
 it('applies URL filters and preserves the list destination through detail navigation', async () => {
   await render('/automations?workflow=w&status=disabled&search=review');
+  expect(
+    container.querySelector('header input[aria-label="Filter by workflow"]'),
+  ).not.toBeNull();
+  expect(
+    container.querySelector('header input[aria-label="Search automations"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('header a')?.textContent).toBe(
+    'New automation',
+  );
   expect(rpc.list).toHaveBeenCalledWith({
     workflowId: 'w',
     status: 'disabled',

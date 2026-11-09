@@ -620,22 +620,6 @@ export function WorkflowEditor({
                 </Button>
               </>
             )}
-            <Button
-              className={styles.headerAction}
-              aria-label={`Run v${workflow.latestVersion || '—'}`}
-              title={`Run v${workflow.latestVersion || '—'}`}
-              variant="primary"
-              disabled={
-                !workflow.latestVersion ||
-                workflow.archived ||
-                Boolean(owner?.archived) ||
-                Boolean(pending)
-              }
-              onClick={() => onRun(workflow)}
-            >
-              <Play />
-              <span>Run v{workflow.latestVersion || '—'}</span>
-            </Button>
             <Menu position="bottom-end" width={190}>
               <Menu.Target>
                 <ActionIcon
@@ -708,6 +692,22 @@ export function WorkflowEditor({
                 </Menu.Item>
               </Menu.Dropdown>
             </Menu>
+            <Button
+              className={styles.headerAction}
+              aria-label={`Run v${workflow.latestVersion || '—'}`}
+              title={`Run v${workflow.latestVersion || '—'}`}
+              variant="primary"
+              disabled={
+                !workflow.latestVersion ||
+                workflow.archived ||
+                Boolean(owner?.archived) ||
+                Boolean(pending)
+              }
+              onClick={() => onRun(workflow)}
+            >
+              <Play />
+              <span>Run v{workflow.latestVersion || '—'}</span>
+            </Button>
           </div>
         }
       />
