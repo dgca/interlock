@@ -99,7 +99,7 @@ export function ExecutorSelect({
       >
         {inherit !== undefined && (
           <option value="__inherit">
-            Workflow default · {inherit || 'Connected agent'}
+            Workflow default · {inherit || 'No default harness'}
           </option>
         )}
         <option value="__manual">
@@ -118,8 +118,8 @@ export function ExecutorSelect({
       <p className="hint">
         {value
           ? 'Default harness for managed work. A model alias can select a different harness.'
-          : inherit !== undefined && value === undefined && inherit
-            ? 'Uses this workflow’s automatic executor unless overridden here.'
+          : inherit !== undefined && value === undefined
+            ? 'Uses the workflow’s harness and model defaults. A model alias can select a different harness.'
             : workflowSettings
               ? 'A model alias can select a harness. Otherwise, a connected agent picks up the assignment.'
               : 'An agent connected through MCP picks up the assignment.'}{' '}
