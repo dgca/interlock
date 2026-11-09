@@ -38,7 +38,6 @@ export async function startServer(options: {
   hooksPort?: number;
   connection: ConnectionConfig;
   allowedRoots?: string[];
-  desktopNotifications?: boolean;
 }) {
   if (
     options.hooksPort !== undefined &&
@@ -67,9 +66,6 @@ export async function startServer(options: {
       parseAllowedRoots(process.env.INTERLOCK_ALLOWED_ROOTS);
     engine = new Engine(store, options.workdir, {
       ...(allowedRoots ? { allowedRoots } : {}),
-      ...(options.desktopNotifications !== undefined
-        ? { desktopNotifications: options.desktopNotifications }
-        : {}),
     });
     engine.executors.start(nativeAdapters);
     engine.pump();

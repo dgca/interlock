@@ -2,4 +2,4 @@
 '@type_of/interlock': patch
 ---
 
-Add optional desktop notifications for runs entering Needs attention and outbound HMAC-signed POST webhooks on lifecycle events. Support cross-platform native notification dispatch, configurable webhook URLs with HMAC-SHA256 signing, custom headers, timeout handling, and failure auto-pause without running a notification workflow.
+Add outbound HMAC-signed POST webhooks on lifecycle events, with configurable URLs, custom headers, timeouts, and automatic pause after repeated failures.

@@ -1,11 +1,9 @@
 import { EventTriggers, type EventWebhookFetch } from './eventTriggers.js';
-import { DesktopNotifier } from './notifications.js';
 import { RunVersions } from './runVersions.js';
 import { modelReferences } from '@interlock/core';
 import { runDoctor } from './doctor.js';
 import { generateWorkflowReport } from './report.js';
 import type {
-  DesktopNotificationSender,
   DoctorOptions,
   DoctorReport,
   ReportFilter,
@@ -205,7 +203,6 @@ export class Engine {
   readonly pauses: PauseHolds;
   readonly holds: WorkHolds;
   readonly externalInputs: ExternalInputs;
-  readonly notifications: DesktopNotifier;
   private readonly resources: WorkResources;
   readonly contextGroups: ContextContinuityGroups;
   private readonly starts: RunStarts;
@@ -221,8 +218,6 @@ export class Engine {
       trialRoot?: string;
       allowedRoots?: string[];
       clock?: { now: () => number };
-      desktopNotifications?: boolean;
-      desktopNotifier?: DesktopNotificationSender;
       webhookFetch?: EventWebhookFetch;
       substituteWorkflow?: (
         node: Extract<WorkflowNode, { kind: 'workflow' }>,
@@ -236,10 +231,6 @@ export class Engine {
       ) => Promise<Json>;
     } = {},
   ) {
-    this.notifications = new DesktopNotifier({
-      enabled: options.desktopNotifications,
-      sender: options.desktopNotifier,
-    });
     this.stalls = new Stalls(store, (run, type, message) =>
       this.event(run, type, message),
     );
@@ -3205,21 +3196,6 @@ export class Engine {
           });
           const run = this.run(item.runId);
           this.event(run, 'needs_attention', 'Run needs attention');
-          if (this.notifications.isEnabled) {
-            const workflow = this.store.get<Workflow>(
-              'workflows',
-              run.workflowId,
-            );
-            this.notifications.notify({
-              runId: run.id,
-              workflowId: run.workflowId,
-              workflowName: workflow?.name,
-              title: 'Interlock: Needs attention',
-              message: `Run ${run.id.slice(0, 8)} (${workflow?.name ?? run.workflowId}) needs attention: ${item.reasons.join(', ')}`,
-              reasons: item.reasons,
-              occurredAt: new Date().toISOString(),
-            });
-          }
         }
       }
       for (const state of this.store.list<{ id: string }>(
