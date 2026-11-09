@@ -1,8 +1,8 @@
 import { Badge as MantineBadge } from '@mantine/core';
 
 const statusColors: Record<string, string> = {
-  completed: 'blue',
-  published: 'blue',
+  completed: 'green',
+  published: 'green',
   running: 'blue',
   claimed: 'blue',
   waiting: 'yellow',
