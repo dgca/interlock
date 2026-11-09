@@ -1,12 +1,15 @@
-import { Stack } from '@mantine/core';
-import { useSearchParams } from 'react-router';
-import { Placeholder } from '../../components/LoadingSkeleton/LoadingSkeleton';
-import { ListTableSkeleton } from '../../components/ListTable/ListTable';
 import {
+  Stack,
+  Placeholder,
   PageHeader,
   PageTabsSkeleton,
   workspacePage,
-} from '../../components/PageLayout/PageLayout';
+} from '../../design-system';
+
+import { useSearchParams } from 'react-router';
+
+import { ListTableSkeleton } from '../../components/ListTable/ListTable';
+
 import { automationColumns, listQuery, statusViews } from './model';
 import classes from './Automations.module.css';
 
@@ -18,14 +21,20 @@ export function AutomationListSkeleton() {
         title="Automations"
         actions={<Placeholder h={32} w={126} />}
       />
-      <PageTabsSkeleton items={statusViews} value={listQuery(search).status}>
-        <div className={classes.workflowFilter}>
-          <Placeholder h={36} />
-        </div>
-        <div className={classes.toolbarSearch}>
-          <Placeholder h={36} />
-        </div>
-      </PageTabsSkeleton>
+      <PageTabsSkeleton
+        items={statusViews}
+        value={listQuery(search).status}
+        toolbar={
+          <>
+            <div className={classes.workflowFilter}>
+              <Placeholder h={36} />
+            </div>
+            <div className={classes.toolbarSearch}>
+              <Placeholder h={36} />
+            </div>
+          </>
+        }
+      />
       <div className={workspacePage.content}>
         <AutomationRowsSkeleton />
       </div>

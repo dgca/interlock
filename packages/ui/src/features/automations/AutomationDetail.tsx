@@ -1,3 +1,17 @@
+import {
+  ActionIcon,
+  Alert,
+  Button,
+  Menu,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  LoadingSkeleton,
+  PageHeader,
+  workspacePage,
+  ActionError,
+} from '../../design-system';
+
 import { useEffect, useRef, useState } from 'react';
 import {
   Link,
@@ -5,18 +19,11 @@ import {
   useOutletContext,
   useSearchParams,
 } from 'react-router';
-import { ActionIcon, Alert, Button, Menu } from '@mantine/core';
+
 import { MoreHorizontal, Trash2 } from 'lucide-react';
 import type { AppContext } from '../../App';
-import {
-  PageHeader,
-  PageTabs,
-  workspacePage,
-} from '../../components/PageLayout/PageLayout';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import { ActionError } from '../../components/ActionError/ActionError';
-import { LoadingSkeleton } from '../../components/LoadingSkeleton/LoadingSkeleton';
+import { PageTabs } from '../../components/PageLayout/PageLayout';
+
 import { api, errorMessage } from '../../lib/api';
 import { paths, runOffset } from '../../routes/paths';
 import {
@@ -143,7 +150,7 @@ export function AutomationDetail({ id }: { id: string }) {
               <Button
                 component={Link}
                 to={itemHref(id, search, true)}
-                variant="default"
+                variant="secondary"
                 disabled={busy || !!error}
               >
                 Edit
@@ -151,7 +158,7 @@ export function AutomationDetail({ id }: { id: string }) {
               {trigger.enabled && !trigger.autoPaused ? (
                 <Button
                   ref={disableTrigger}
-                  variant="default"
+                  variant="secondary"
                   disabled={busy || !!error}
                   onClick={() => {
                     setActionError('');
@@ -162,6 +169,7 @@ export function AutomationDetail({ id }: { id: string }) {
                 </Button>
               ) : (
                 <Button
+                  variant="primary"
                   disabled={busy || !trigger.canEnable || !!error}
                   loading={busy && !confirmation}
                   onClick={() => void perform('enable')}
@@ -237,7 +245,7 @@ export function AutomationDetail({ id }: { id: string }) {
             }
           >
             {error}
-            <Button variant="subtle" onClick={() => setReload((n) => n + 1)}>
+            <Button variant="ghost" onClick={() => setReload((n) => n + 1)}>
               Reload automation
             </Button>
           </Alert>
@@ -407,7 +415,7 @@ export function AutomationDetail({ id }: { id: string }) {
                       {offset > 0 && (
                         <Button
                           component={Link}
-                          variant="default"
+                          variant="secondary"
                           to={detailHref('activity', Math.max(0, offset - 20))}
                         >
                           Previous
@@ -416,7 +424,7 @@ export function AutomationDetail({ id }: { id: string }) {
                       {history.nextOffset !== null && (
                         <Button
                           component={Link}
-                          variant="default"
+                          variant="secondary"
                           to={detailHref('activity', history.nextOffset)}
                         >
                           Next
@@ -464,13 +472,14 @@ export function AutomationDetail({ id }: { id: string }) {
           </ModalBody>
           <ModalFooter>
             <Button
-              variant="default"
+              variant="secondary"
               disabled={busy}
               onClick={() => setConfirmation(undefined)}
             >
               Cancel
             </Button>
             <Button
+              variant="primary"
               color={confirmation === 'delete' ? 'red' : undefined}
               loading={busy}
               onClick={() => void perform(confirmation)}

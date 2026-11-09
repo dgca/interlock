@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
@@ -90,7 +90,7 @@ beforeEach(() => {
 });
 it('prevents edits while reloading shared settings after a revision conflict', async () => {
   await act(async () =>
-    root.render(h(MantineProvider, {}, h(ExecutionSettings))),
+    root.render(h(DesignSystemProvider, {}, h(ExecutionSettings))),
   );
   const input = container.querySelector<HTMLInputElement>(
     '#concurrency input:not([type="hidden"])',
@@ -143,7 +143,7 @@ it('loads a workflow model picker on demand and lets it return to the harness de
       onModelChange: setModel,
     });
   }
-  await act(async () => root.render(h(MantineProvider, {}, h(Models))));
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(Models))));
   expect(rpc.models).not.toHaveBeenCalled();
   expect(container.textContent).toContain(
     'Up to 3 Agent assignments at once across all harnesses and workflows.',
@@ -214,7 +214,7 @@ function setLimitMode(value: string) {
 }
 it('saves Unlimited explicitly and accepts a larger numeric limit when returning to Limited', async () => {
   await act(async () =>
-    root.render(h(MantineProvider, {}, h(ExecutionSettings))),
+    root.render(h(DesignSystemProvider, {}, h(ExecutionSettings))),
   );
   await act(async () => setLimitMode('unlimited'));
   expect(
@@ -245,7 +245,7 @@ it('saves Unlimited explicitly and accepts a larger numeric limit when returning
 it('loads saved Unlimited and explains it in workflow settings', async () => {
   rpc.settings.mockResolvedValue({ revision: 2, concurrency: null });
   await act(async () =>
-    root.render(h(MantineProvider, {}, h(ExecutionSettings))),
+    root.render(h(DesignSystemProvider, {}, h(ExecutionSettings))),
   );
   expect(
     container.querySelector<HTMLSelectElement>(
@@ -258,7 +258,7 @@ it('loads saved Unlimited and explains it in workflow settings', async () => {
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(ExecutorSelect, {
           value: 'codex',
@@ -281,7 +281,7 @@ it('shows Pi installation guidance and allows adding a Pi configuration', async 
       detection: { status: 'missing', message: 'pi not found' },
     },
   ]);
-  await act(async () => root.render(h(MantineProvider, {}, h(Harnesses))));
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(Harnesses))));
   expect(
     container.querySelector<HTMLAnchorElement>('a[href="https://pi.dev/"]'),
   ).not.toBeNull();
@@ -316,7 +316,7 @@ it('shows Pi installation guidance and allows adding a Pi configuration', async 
 it('preserves open configuration edits across refresh and reloads only on explicit recovery', async () => {
   const original = harnessProfile();
   rpc.profiles.mockResolvedValue([original]);
-  await act(async () => root.render(h(MantineProvider, {}, h(Harnesses))));
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(Harnesses))));
   await act(async () => button('Configure').click());
   const input = container.querySelector<HTMLInputElement>(
     'input[maxlength="120"]',
@@ -343,7 +343,7 @@ it('preserves open configuration edits across refresh and reloads only on explic
 it('locks a pending save and preserves model, paths, capabilities and permissions', async () => {
   const original = harnessProfile();
   rpc.profiles.mockResolvedValue([original]);
-  await act(async () => root.render(h(MantineProvider, {}, h(Harnesses))));
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(Harnesses))));
   await act(async () => button('Configure').click());
   const input = container.querySelector<HTMLInputElement>(
     'input[maxlength="120"]',
@@ -399,7 +399,7 @@ it('locks a pending save and preserves model, paths, capabilities and permission
 });
 it('offers recovery instead of an endless loading skeleton after a failed harness lookup', async () => {
   rpc.profiles.mockRejectedValueOnce(new Error('Harness lookup failed'));
-  await act(async () => root.render(h(MantineProvider, {}, h(Harnesses))));
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(Harnesses))));
   expect(container.textContent).toContain('Harness lookup failed');
   expect(
     container.querySelector('[aria-label="Loading harnesses"]'),
@@ -418,7 +418,7 @@ function Controls() {
   });
 }
 it('shows the inherited mode and lets the workflow override or restore it', async () => {
-  await act(async () => root.render(h(MantineProvider, {}, h(Controls))));
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(Controls))));
   expect(container.textContent).toContain('Full access · inherited from Codex');
   const select = container.querySelectorAll('select')[1];
   expect([...select.options].map((o) => o.textContent)).toEqual([
@@ -442,7 +442,7 @@ it('shows effective workflow permissions for a node-specific executor without an
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(ExecutorSelect, {
           value: 'claude-code',
@@ -492,7 +492,7 @@ it('offers model-specific effort with node inheritance, native reset and incompa
       },
     });
   }
-  await act(async () => root.render(h(MantineProvider, {}, h(NodeModel))));
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(NodeModel))));
   expect(rpc.models).toHaveBeenCalled();
   expect(container.textContent).toContain(
     'native-model · inherited from workflow',
@@ -545,7 +545,7 @@ it('hides managed model controls for connected nodes and removes manual capabili
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(ExecutorSelect, {
           value: null,
@@ -561,7 +561,7 @@ it('hides managed model controls for connected nodes and removes manual capabili
   );
   expect(container.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
   rpc.profiles.mockResolvedValue([harnessProfile()]);
-  await act(async () => root.render(h(MantineProvider, {}, h(Harnesses))));
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(Harnesses))));
   await act(async () => button('Configure').click());
   expect(container.textContent).not.toContain('Available tools');
   expect(container.textContent).not.toContain('Available skills');
@@ -590,7 +590,7 @@ it('switches node model controls and advisory tiers without losing either settin
       onChange: setNode,
     });
   }
-  await act(async () => root.render(h(MantineProvider, {}, h(Editor))));
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(Editor))));
   const field = (label: string) =>
     [...container.querySelectorAll<HTMLSelectElement>('select')].find(
       (el) =>

@@ -1,11 +1,17 @@
+import {
+  Checkbox,
+  Textarea,
+  Button,
+  ActionError,
+  JsonEditor,
+} from '../../design-system';
+
 import { ManagedExecutionPanel } from '../executors/ManagedExecutionPanel';
-import { Checkbox, Textarea } from '@mantine/core';
+
 import { Link } from 'react-router';
 import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { Bot, Copy } from 'lucide-react';
-import { Button } from '../../components/Button/Button';
-import { ActionError } from '../../components/ActionError/ActionError';
-import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
+
 import { api, errorMessage } from '../../lib/api';
 import type { WorkRequest } from '@interlock/core';
 import { manualClaims } from './manualClaims';

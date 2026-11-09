@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { nodeSchema, type SavedPrompt } from '@interlock/core';
@@ -127,7 +127,7 @@ it('clears picker search after selection, preserves order, and exposes missing r
     });
   }
   await act(async () =>
-    root.render(h(MantineProvider, { env: 'test' }, h(Picker))),
+    root.render(h(DesignSystemProvider, { env: 'test' }, h(Picker))),
   );
   const search = container.querySelector<HTMLInputElement>(
     'input[role="combobox"]',
@@ -167,7 +167,7 @@ it('clears picker search after selection, preserves order, and exposes missing r
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         { env: 'test' },
         h(PromptPicker, { node, prompts: [], onChange: changed }),
       ),
@@ -179,7 +179,7 @@ async function render(value = prompt) {
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         { env: 'test' },
         h(
           MemoryRouter,

@@ -1,5 +1,7 @@
+import { Button, TextInput } from '../../design-system';
+
 import { useState } from 'react';
-import { Button, TextInput } from '@mantine/core';
+
 import { Plus, Trash2 } from 'lucide-react';
 import styles from './CustomProfileDialog.module.css';
 
@@ -82,8 +84,7 @@ export function KeyValueEditor({
       <div className={styles.keyValueHeader}>
         <span className={styles.fieldLabel}>{label}</span>
         <Button
-          variant="subtle"
-          size="xs"
+          variant="ghost"
           leftSection={<Plus size={12} />}
           onClick={handleAdd}
         >
@@ -96,14 +97,12 @@ export function KeyValueEditor({
           {entries.map(([key, val], idx) => (
             <div key={idx} className={styles.keyValueRow}>
               <TextInput
-                size="xs"
                 placeholder={keyPlaceholder}
                 value={key}
                 onChange={(e) => handleKeyChange(idx, e.currentTarget.value)}
                 className={styles.keyInput}
               />
               <TextInput
-                size="xs"
                 placeholder={valuePlaceholder}
                 value={val}
                 onChange={(e) => handleValueChange(idx, e.currentTarget.value)}
@@ -111,9 +110,8 @@ export function KeyValueEditor({
                 className={styles.valueInput}
               />
               <Button
-                variant="subtle"
+                variant="ghost"
                 color="red"
-                size="xs"
                 onClick={() => handleDelete(idx)}
                 aria-label="Remove item"
               >

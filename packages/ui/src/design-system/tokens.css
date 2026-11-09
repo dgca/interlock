@@ -1,0 +1,82 @@
+:root {
+  --font:
+    'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', SFMono-Regular, Consolas, monospace;
+  font-family: var(--font);
+  font-size: 16px;
+  color: var(--text);
+  background: var(--workspace);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+  --structural: #1a1a1a;
+  --workspace: #151515;
+  --inset: #121212;
+  --form: #212121;
+  --bg: var(--workspace);
+  --surface: var(--structural);
+  --surface-raised: var(--form);
+  --surface-hover: #292929;
+  --canvas: var(--inset);
+  --toolbar: var(--structural);
+  --border: #333333;
+  --input-border: #3a3a3a;
+  --border-strong: var(--input-border);
+  --text: #f1f1f1;
+  --field-text: #e6e6e6;
+  --button-text: #dedede;
+  --text-secondary: #b8b8b8;
+  --muted: #a6a6a6;
+  --text-dim: #929292;
+  --disabled-text: #929292;
+  --accent: #6c8aff;
+  --accent-hover: #88aeff;
+  --accent-text: #9cb1ff;
+  --accent-soft: #222b40;
+  --accent-border: #6c8aff;
+  --field-focus: #7b99ff;
+  --error-border: #e28f8f;
+  --error-copy: #f1a8a8;
+  --attention-text: #efb569;
+  --attention-bg: #332a1e;
+  --running-text: #88aeff;
+  --running-bg: #222b40;
+  --completed-text: #8bd3a9;
+  --completed-bg: #213126;
+  --pink: #de82cf;
+  --pink-soft: #352638;
+  --pink-border: #78536e;
+  --edge: #6c8aff;
+  --edge-exception: #6c8aff;
+  --focus-ring: #7b99ff;
+  --canvas-dot: #333333;
+  --control-height: 40px;
+  --radius-control: 6px;
+  --radius-card: 12px;
+  --workspace-padding: 28px;
+  --gradient-primary: linear-gradient(to bottom, #3f64f7, #3155eb);
+  --gradient-neutral: linear-gradient(to bottom, #303030, #252525);
+  --gradient-nav: linear-gradient(to bottom, #2f2f2f, #252525);
+  --gradient-segment: linear-gradient(to bottom, #393939, #2d2d2d);
+  --gradient-card: linear-gradient(to bottom, #262626, #1c1c1c);
+  --gradient-node: linear-gradient(to bottom, #292929, #202020);
+  --shadow-primary: 0 2px 5px #0006;
+  --shadow-neutral: 0 1px 3px #0006;
+  --shadow-nav: 0 2px 5px #0005;
+  --shadow-card: 0 4px 12px #0006;
+  --shadow-node: 0 4px 10px #0007;
+  scrollbar-color: #555555 var(--workspace);
+  scrollbar-width: thin;
+}
+::selection {
+  background: #3f64f7;
+  color: #ffffff;
+}
+:where(input, textarea) {
+  caret-color: var(--field-focus);
+}
+:where(button, a, summary, input, textarea, select):focus-visible {
+  outline: 2px solid var(--field-focus);
+  outline-offset: 2px;
+}

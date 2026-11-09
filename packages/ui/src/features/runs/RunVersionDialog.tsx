@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import {
   Checkbox,
   Divider,
@@ -7,12 +6,17 @@ import {
   Stack,
   Text,
   Textarea,
-} from '@mantine/core';
+  Modal,
+  ModalBody,
+  ModalFooter,
+  Button,
+  ActionError,
+} from '../../design-system';
+
+import { useEffect, useState } from 'react';
+
 import type { RunVersionPolicy } from '@interlock/core';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import { Button } from '../../components/Button/Button';
-import { ActionError } from '../../components/ActionError/ActionError';
+
 import { api, errorMessage } from '../../lib/api';
 
 type VersionState = Awaited<ReturnType<typeof api.runs.versionPolicy.query>>;

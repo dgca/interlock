@@ -1,11 +1,17 @@
-import { useState, useEffect, useId } from 'react';
 import {
   Button,
   TextInput,
   NumberInput,
   NativeSelect,
   SegmentedControl,
-} from '@mantine/core';
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ActionError,
+} from '../../design-system';
+
+import { useState, useEffect, useId } from 'react';
+
 import {
   ChevronDown,
   ChevronUp,
@@ -18,9 +24,7 @@ import {
   Layers,
 } from 'lucide-react';
 import type { ExecutorProfile, ExecutorProfileUpdate } from '@interlock/core';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import { ActionError } from '../../components/ActionError/ActionError';
+
 import { KeyValueEditor } from './KeyValueEditor';
 import styles from './CustomProfileDialog.module.css';
 
@@ -708,8 +712,7 @@ export function CustomProfileDialog({
                 <div className={styles.keyValueHeader}>
                   <span className={styles.fieldLabel}>Allowed roots</span>
                   <Button
-                    variant="subtle"
-                    size="xs"
+                    variant="ghost"
                     leftSection={<Plus size={12} />}
                     onClick={handleAddRoot}
                   >
@@ -726,7 +729,6 @@ export function CustomProfileDialog({
                     {allowedRoots.map((root, idx) => (
                       <div key={idx} className={styles.rootRow}>
                         <TextInput
-                          size="xs"
                           className={styles.monoInput}
                           style={{ flex: 1 }}
                           placeholder="/Users/dan/dev"
@@ -736,9 +738,8 @@ export function CustomProfileDialog({
                           }
                         />
                         <Button
-                          variant="subtle"
+                          variant="ghost"
                           color="red"
-                          size="xs"
                           onClick={() => handleRemoveRoot(idx)}
                           aria-label="Remove root"
                         >
@@ -753,7 +754,6 @@ export function CustomProfileDialog({
               <div>
                 <span className={styles.fieldLabel}>Session name template</span>
                 <TextInput
-                  size="xs"
                   className={styles.monoInput}
                   placeholder="e.g. {{externalTask.id}} {{node.label}}: {{externalTask.title}}"
                   value={sessionNameTemplate}
@@ -772,7 +772,6 @@ export function CustomProfileDialog({
                   Resume Command Template (resumeCommandTemplate)
                 </span>
                 <TextInput
-                  size="xs"
                   className={styles.monoInput}
                   placeholder="e.g. my-tool resume {{sessionId}}"
                   value={resumeCommandTemplate}
@@ -790,7 +789,6 @@ export function CustomProfileDialog({
                   Deep Link URL Template (deepLinkTemplate)
                 </span>
                 <TextInput
-                  size="xs"
                   className={styles.monoInput}
                   placeholder="e.g. https://app.example.com/sessions/{{sessionId}}"
                   value={deepLinkTemplate}
@@ -807,10 +805,10 @@ export function CustomProfileDialog({
         </form>
       </ModalBody>
       <ModalFooter>
-        <Button variant="default" onClick={onClose} disabled={busy}>
+        <Button variant="secondary" onClick={onClose} disabled={busy}>
           Cancel
         </Button>
-        <Button variant="filled" type="submit" form={formId} disabled={busy}>
+        <Button variant="primary" type="submit" form={formId} disabled={busy}>
           Save configuration
         </Button>
       </ModalFooter>

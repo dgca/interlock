@@ -1,5 +1,7 @@
+import { NativeSelect } from '../../design-system';
+
 import { useEffect, useState } from 'react';
-import { NativeSelect } from '@mantine/core';
+
 import { api, errorMessage } from '../../lib/api';
 import { paths } from '../../routes/paths';
 import type { ExecutorPermissionMode } from '@interlock/core';

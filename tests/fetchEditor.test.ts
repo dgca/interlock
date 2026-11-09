@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { nodeSchema, type FetchNode } from '@interlock/core';
 import { FetchEditor } from '../packages/ui/src/features/workflows/FetchEditor';
@@ -89,7 +89,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 async function render() {
-  await act(async () => root.render(h(MantineProvider, {}, h(Harness))));
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(Harness))));
 }
 async function input(label: string, value: string) {
   const el = Array.from(container.querySelectorAll('textarea,input')).find(

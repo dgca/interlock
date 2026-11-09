@@ -1,4 +1,5 @@
-import { ActionIcon, Group, Select, Stack, Text } from '@mantine/core';
+import { ActionIcon, Group, Select, Stack, Text } from '../../design-system';
+
 import { useState } from 'react';
 import { ArrowUp, ArrowDown, X } from 'lucide-react';
 import type { SavedPrompt, WorkflowNode } from '@interlock/core';

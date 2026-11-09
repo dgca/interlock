@@ -1,7 +1,11 @@
+import {
+  Input,
+  SegmentedControl,
+  Button,
+  CodeEditor,
+} from '../../design-system';
+
 import { useRef, useState } from 'react';
-import { Input, SegmentedControl } from '@mantine/core';
-import { Button } from '../../components/Button/Button';
-import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
 
 type Language = 'javascript' | 'bash';
 type Code = { language?: Language; command: string };

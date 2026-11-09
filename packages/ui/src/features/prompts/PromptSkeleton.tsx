@@ -1,18 +1,18 @@
-import { Stack } from '@mantine/core';
 import {
+  Stack,
+  FormPlaceholder,
+  LoadingSkeleton,
+  Placeholder,
   PageHeader,
   PageToolbar,
   workspacePage,
-} from '../../components/PageLayout/PageLayout';
+} from '../../design-system';
+
 import {
   ListTableSkeleton,
   type ListTableColumn,
 } from '../../components/ListTable/ListTable';
-import {
-  FormPlaceholder,
-  LoadingSkeleton,
-  Placeholder,
-} from '../../components/LoadingSkeleton/LoadingSkeleton';
+
 import styles from './Prompts.module.css';
 
 export const promptColumns: readonly ListTableColumn[] = [

@@ -1,10 +1,18 @@
+import {
+  Button,
+  Group,
+  Notification,
+  Text,
+  Modal,
+  ModalBody,
+  ModalFooter,
+} from './design-system';
+
 import { PauseProvider } from './features/pauses/PauseControls';
 import { useUiFeatures } from './lib/uiFeatures';
 import { useCallback, useEffect, useState } from 'react';
 import { Check, AlertCircle } from 'lucide-react';
-import { Button, Group, Notification, Text } from '@mantine/core';
-import { Modal } from './components/Modal/Modal';
-import { ModalBody, ModalFooter } from './components/Modal/ModalLayout';
+
 import { Outlet, useBlocker, useMatch, useNavigate } from 'react-router';
 import { paths } from './routes/paths';
 import { useActionFeedback } from './lib/useActionFeedback';
@@ -232,11 +240,7 @@ export function App() {
               <Text size="sm" role="status">
                 Could not refresh workspace data. Open views may be out of date.
               </Text>
-              <Button
-                variant="default"
-                size="xs"
-                onClick={() => void retryLoad()}
-              >
+              <Button variant="secondary" onClick={() => void retryLoad()}>
                 Retry connection
               </Button>
             </Group>
@@ -275,14 +279,13 @@ export function App() {
             </ModalBody>
             <ModalFooter>
               <Button
-                variant="default"
+                variant="secondary"
                 onClick={() => blocker.state === 'blocked' && blocker.reset()}
               >
                 Keep editing
               </Button>
               <Button
-                color="red"
-                variant="light"
+                variant="danger"
                 disabled={schedulePending}
                 onClick={() => {
                   if (blocker.state === 'blocked') {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { expect, it, vi } from 'vitest';
 import type { RunSummary } from '@interlock/core';
 import { RunList } from '../packages/ui/src/features/runs/RunList';
@@ -65,7 +65,7 @@ it('renders active and history pages and opens the selected run', async () => {
       'active',
     );
     return h(
-      MantineProvider,
+      DesignSystemProvider,
       {},
       h(RunList, {
         tick: 0,
@@ -157,7 +157,7 @@ it('requests the selected workflow and opens its invocation', async () => {
     await act(async () =>
       root.render(
         h(
-          MantineProvider,
+          DesignSystemProvider,
           { env: 'test' },
           h(RunList, {
             tick: 0,
@@ -232,7 +232,7 @@ it('29f3cb6-attention-row: preserves stage and actor with specific attention and
   const render = (tick = 0) =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         { env: 'test' },
         h(RunList, {
           tick,
@@ -324,7 +324,7 @@ it('applies all exact tag pairs before paging and clears the filter', async () =
   function Harness() {
     const [offset, setOffset] = useState(100);
     return h(
-      MantineProvider,
+      DesignSystemProvider,
       { env: 'test' },
       h(RunList, {
         tick: 0,

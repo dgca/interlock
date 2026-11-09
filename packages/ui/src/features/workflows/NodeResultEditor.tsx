@@ -1,5 +1,7 @@
+import { Stack, Switch, Text, Button } from '../../design-system';
+
 import { useRef } from 'react';
-import { Stack, Switch, Text } from '@mantine/core';
+
 import {
   contractAtPath,
   contractPaths,
@@ -10,7 +12,7 @@ import {
   type WorkflowDefinition,
 } from '@interlock/core';
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
-import { Button } from '../../components/Button/Button';
+
 import { InputBindingsEditor } from './InputBindingsEditor';
 import { ResultRulesEditor } from './ResultRulesEditor';
 import { SwitchEditor } from './SwitchEditor';

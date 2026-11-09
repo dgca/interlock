@@ -1,13 +1,15 @@
-import { Stack } from '@mantine/core';
 import {
+  Stack,
+  Placeholder,
   PageHeader,
   workspacePage,
-} from '../../components/PageLayout/PageLayout';
+} from '../../design-system';
+
 import {
   ListTableSkeleton,
   type ListTableColumn,
 } from '../../components/ListTable/ListTable';
-import { Placeholder } from '../../components/LoadingSkeleton/LoadingSkeleton';
+
 import styles from './Harnesses.module.css';
 
 export const harnessColumns: readonly ListTableColumn[] = [

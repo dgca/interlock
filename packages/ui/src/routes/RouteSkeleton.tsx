@@ -1,8 +1,5 @@
-import { Group, Stack } from '@mantine/core';
-import {
-  LoadingSkeleton,
-  Placeholder,
-} from '../components/LoadingSkeleton/LoadingSkeleton';
+import { Group, Stack, LoadingSkeleton, Placeholder } from '../design-system';
+
 import {
   PromptEditorSkeleton,
   PromptLibrarySkeleton,

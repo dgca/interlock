@@ -1,19 +1,20 @@
-import { Stack } from '@mantine/core';
-import { useNavigate } from 'react-router';
 import {
+  Stack,
+  FormPlaceholder,
+  LoadingSkeleton,
+  Placeholder,
   PageHeader,
   PageToolbar,
   workspacePage,
-} from '../../components/PageLayout/PageLayout';
+} from '../../design-system';
+
+import { useNavigate } from 'react-router';
+
 import {
   ListTableSkeleton,
   type ListTableColumn,
 } from '../../components/ListTable/ListTable';
-import {
-  FormPlaceholder,
-  LoadingSkeleton,
-  Placeholder,
-} from '../../components/LoadingSkeleton/LoadingSkeleton';
+
 import { paths } from '../../routes/paths';
 import styles from './Variables.module.css';
 

@@ -1,0 +1,226 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 76px;
+  flex-shrink: 0;
+  padding: 17px var(--workspace-padding);
+  background: var(--structural);
+  border-bottom: 1px solid var(--border);
+}
+.header[data-two-line] {
+  min-height: 88px;
+  padding-block: 16px;
+}
+.title {
+  flex: 1;
+  min-width: 0;
+}
+.title h1 {
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 600;
+  letter-spacing: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.status,
+.subtitle {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.tabs {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  min-width: 0;
+  min-height: 56px;
+  padding: 12px var(--workspace-padding) 0;
+  background: var(--structural);
+}
+.tabs::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  background: var(--border);
+}
+.tabLinks {
+  position: relative;
+  display: flex;
+  align-self: stretch;
+  gap: 6px;
+  overflow-x: auto;
+  min-width: 0;
+}
+.tab,
+.attachedList .tab {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  font-family: inherit;
+  line-height: 1.3;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 14px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.tab:hover {
+  color: var(--text);
+}
+.attachedList {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  min-width: 0;
+  isolation: isolate;
+}
+.attachedList::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  border: 0;
+  background: var(--border);
+  z-index: 0;
+}
+.tab[aria-current='page'],
+.tab[aria-selected='true'],
+.tab[data-active],
+.attachedList .tab[data-active] {
+  border-color: var(--input-border);
+  background: var(--tab-surface, var(--workspace));
+  color: var(--text);
+  font-weight: 600;
+}
+.count {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex-shrink: 0;
+  min-height: 64px;
+  padding: 12px var(--workspace-padding);
+  background: var(--structural);
+  border-bottom: 1px solid var(--border);
+}
+.filters {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--workspace-padding);
+  background: var(--workspace);
+}
+.toolbarSummary {
+  font-size: 13px;
+  color: var(--muted);
+}
+.formContent {
+  width: 100%;
+  max-width: 850px;
+  margin: 0 auto;
+}
+.card {
+  padding: 24px;
+  background: var(--form);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.section {
+  margin-top: 28px;
+}
+.section h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+.header button:focus-visible,
+.tab:focus-visible {
+  outline: 2px solid var(--field-focus);
+  outline-offset: -3px;
+}
+@media (max-width: 800px) {
+  .header,
+  .content,
+  .toolbar {
+    padding-inline: 20px;
+  }
+  .tabs {
+    padding-inline: 20px;
+  }
+}
+@media (max-width: 600px) {
+  .header {
+    padding: 16px;
+    flex-wrap: wrap;
+  }
+  .title {
+    flex: 1 0 calc(100% - 56px);
+  }
+  .title h1 {
+    font-size: 24px;
+  }
+  .actions {
+    justify-content: flex-start;
+  }
+  .content,
+  .toolbar {
+    padding: 16px;
+  }
+  .tabs {
+    padding-inline: 16px;
+  }
+  .card {
+    padding: 20px;
+  }
+}
+.search {
+  width: 240px;
+  max-width: 100%;
+}

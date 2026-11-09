@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   activeInputToken,
@@ -110,7 +110,7 @@ afterEach(async () => {
 });
 
 it('inserts a suggestion without replacing the URL and leaves the caret after the token', async () => {
-  await act(async () => root.render(h(MantineProvider, {}, h(Harness))));
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(Harness))));
   expect(latest).toBe('https://example.com/{{input.first}}/{{input.cus}}?x=1');
   const input = container.querySelector<HTMLInputElement>('input')!;
   const cursor = latest.indexOf('cus') + 3;

@@ -5,7 +5,8 @@ import {
   Stack,
   Text,
   TextInput,
-} from '@mantine/core';
+} from '../../design-system';
+
 import { Plus, X } from 'lucide-react';
 import { runTagsSchema } from '@interlock/core';
 import { useEffect, useId, useRef } from 'react';
@@ -109,8 +110,7 @@ export function TagFields({
         ))}
         <Group>
           <Button
-            variant="subtle"
-            size="xs"
+            variant="ghost"
             leftSection={<Plus size={14} />}
             disabled={rows.length >= 16}
             onClick={() => onChange([...rows, { key: '', value: '' }])}

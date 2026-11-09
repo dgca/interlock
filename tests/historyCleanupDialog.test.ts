@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { HistoryCleanupDialog } from '../packages/ui/src/features/runs/HistoryCleanupDialog';
 
@@ -66,7 +66,7 @@ beforeEach(async () => {
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         { env: 'test' },
         h(HistoryCleanupDialog, {
           workflows: [{ value: 'workflow', label: 'Research' }],

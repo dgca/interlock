@@ -7,17 +7,19 @@ Rejected writes retain edits. Node controls use explicit metadata pickers; impor
 preview requires deliberate local binding or provisioning. Mobile navigation keeps
 all eight workspace destinations and engine connection status visible. **Connect with MCP** is available when enabled.
 
-Interlock uses the Mantine theme in `packages/ui/src/theme/theme.ts` and the shared CSS variables in `packages/ui/src/styles.css`. Node settings provide the reference for section navigation, spacing, and form hierarchy. These patterns extend that visual system.
+Interlock imports visual controls from `packages/ui/src/design-system/index.ts`. That module owns the Mantine theme, shared CSS tokens, context-independent components, and curated Mantine re-exports. IBM Plex Sans supplies UI text and IBM Plex Mono supplies technical values and code. Fonts ship with the application. Let the design system own control appearance. Keep feature CSS for layout and domain-specific exceptions. Application compositions such as WorkflowCards and StatusBadge remain in `components`.
+
+Structural areas use solid fills. Form containers use a solid fill with soft elevation. Buttons, segmented controls, workflow and run cards, and graph nodes use the shared gradients and shadows. Standard buttons, single-line inputs, selects, search fields, and segmented tracks are 40px high. Attached tabs are 44px. Graph navigation controls deliberately use flat 32px buttons. Structural dividers are 1px `#333333` rules that reach the edges of their containing panels.
 
 ## Page layout
 
-Keep reusable page presentation in `packages/ui/src/components`. `PageLayout` owns page headers, tab bars, and `PageTabsSkeleton`. `ListTable` owns the shared list container, headings, link/button rows, responsive spacing, focus/hover states, and `ListTableSkeleton`. Features supply their columns, cell content, state labels, and navigation or action callbacks. Use these shared modules when extending Runs, Automations, Variables, AI Settings, and workflow libraries. Static table rows can contain separate controls such as a switch and Configure button.
+Keep generic page presentation in the design system. Its PageLayout module owns page headers, toolbar and controlled-tab building blocks, and `PageTabsSkeleton`. The application PageLayout module adapts tabs to URL navigation. `ListTable` owns the shared list container, headings, link/button rows, responsive spacing, focus/hover states, and `ListTableSkeleton`. Features supply their columns, cell content, state labels, and navigation or action callbacks. Use these shared modules when extending Runs, Automations, Variables, AI Settings, and workflow libraries. Static table rows can contain separate controls such as a switch and Configure button.
 
 Tabs switch sections within the current resource or list. Use sidebar navigation or an explicit link to open another workspace.
 
-Automations, the global Runs list, Variables, and AI Settings use the shared `PageHeader`. Pages with tabs use the shared tab-row styles; Variables uses `PageToolbar` for its count and search. Automations uses `PageTabs` for URL-backed views; Runs uses `PageTabList` within Mantine Tabs for controlled in-page sections. The header contains the page title and actions. Add Back on creation and resource pages; omit it on a top-level list. Place underline navigation directly below the header on the same surface background, with search and filters aligned to the right. Keep both visible while the workspace scrolls.
+Automations, the global Runs list, Variables, and AI Settings use the shared `PageHeader`. Pages with tabs use the shared tab-row styles; Variables uses `PageToolbar` for its count and search. Automations uses `PageTabs` for URL-backed views; Runs uses `PageTabList` within Mantine Tabs for controlled in-page sections. The header contains the page title and actions. An optional subtitle adds meaningful context without becoming a live status announcement. Add Back on creation and resource pages; omit it on a top-level list. Put search, filters, and presentation controls in a padded toolbar above the attached tabs. The selected tab has rounded top corners, square bottom corners, and the same solid fill as its content, covering the bottom boundary beneath it. Keep the boundary visible beside the selected tab. Headers and toolbars stay visible while the workspace content scrolls.
 
-Place creation and editing form fields inside a surface card with 24px padding and generous section spacing. The preview rail spans the available height below the header. Activity table bodies use the card background. Use spacing for the next-run and last-occurrence summary; avoid inset divider lines.
+Place creation and editing form fields inside a solid form card with 24px padding and generous section spacing. The preview rail spans the available height below the header. Activity table bodies use the shared list surface. Use spacing for the next-run and last-occurrence summary; avoid inset divider lines.
 
 Automations list filters and page offsets live in the URL and survive detail navigation. Creation defaults to disabled with an explicit enable checkbox and a **Create** action. Successful creation opens ordinary detail without a review gate. Preserve edits after rejected writes, disable repeat submissions while pending, and retain acknowledged outcomes if refresh fails. Revision conflicts offer reload while preserving local edits until discarded.
 
@@ -79,7 +81,7 @@ Workflow, automation, prompt, variable, and AI Settings edits use the workspace 
 
 ## Modal layout
 
-Use the shared `Modal`, `ModalBody`, and `ModalFooter` from `components/Modal`. Node settings are the reference for the title and close button, scrollable content, and separated action bar.
+Use the shared `Modal`, `ModalBody`, and `ModalFooter` from the design-system barrel. Node settings are the reference for the title and close button, scrollable content, and separated action bar.
 
 - Size the dialog for its content. Let confirmations and simple forms fit their contents. Give sectioned editors enough height to keep navigation and actions steady as users switch sections.
 - Use a single-column body by default. Use a flush body for a sidebar or other editor layout that manages its own scrollable content. Put section navigation above the content on phones.

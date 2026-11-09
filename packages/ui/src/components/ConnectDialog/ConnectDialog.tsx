@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import {
   Box,
   Checkbox,
@@ -6,12 +5,17 @@ import {
   SegmentedControl,
   Tabs,
   Text,
-} from '@mantine/core';
+  Modal,
+  ModalBody,
+  ModalFooter,
+  LoadingSkeleton,
+  Button,
+} from '../../design-system';
+
+import { useEffect, useState } from 'react';
+
 import { Copy } from 'lucide-react';
-import { Modal } from '../Modal/Modal';
-import { ModalBody, ModalFooter } from '../Modal/ModalLayout';
-import { LoadingSkeleton } from '../LoadingSkeleton/LoadingSkeleton';
-import { Button } from '../Button/Button';
+
 import { api, errorMessage } from '../../lib/api';
 
 type Connection = Awaited<ReturnType<typeof api.connection.query>>;
@@ -136,7 +140,6 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
           </Text>
           <SegmentedControl
             aria-label="MCP transport"
-            size="xs"
             value={stdio ? 'stdio' : 'http'}
             data={[
               { value: 'http', label: 'HTTP' },

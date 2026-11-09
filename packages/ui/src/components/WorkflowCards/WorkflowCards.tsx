@@ -1,10 +1,9 @@
+import { LoadingSkeleton, Placeholder } from '../../design-system';
+
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ChevronRight, GitBranch } from 'lucide-react';
-import {
-  LoadingSkeleton,
-  Placeholder,
-} from '../LoadingSkeleton/LoadingSkeleton';
+
 import classes from './WorkflowCards.module.css';
 
 type CardProps = {

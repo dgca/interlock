@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
 import {
   Badge,
   Checkbox,
   NativeSelect,
   Skeleton,
   Textarea,
-} from '@mantine/core';
+  Button,
+} from '../../design-system';
+
+import { useEffect, useRef, useState } from 'react';
+
 import {
   ArrowUpRight,
   Check,
@@ -20,7 +23,7 @@ import type {
   ExecutorRequest,
   WorkRequest,
 } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
+
 import { api, errorMessage } from '../../lib/api';
 import styles from './ManagedExecutionPanel.module.css';
 import { permissionLabels } from './permissions';

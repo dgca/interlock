@@ -1,5 +1,7 @@
+import { NativeSelect } from '../../design-system';
+
 import { useState } from 'react';
-import { NativeSelect } from '@mantine/core';
+
 import type { ExecutorModels, SavedModelAlias } from '@interlock/core';
 import { ModelPicker } from './ModelPicker';
 

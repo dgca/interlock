@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useRef, useState, useId } from 'react';
 import {
   Badge,
   Group,
@@ -12,7 +11,13 @@ import {
   Table,
   Progress,
   Collapse,
-} from '@mantine/core';
+  PageHeader,
+  PageToolbar,
+  workspacePage,
+} from '../../design-system';
+
+import { useCallback, useEffect, useRef, useState, useId } from 'react';
+
 import {
   Clock,
   Coins,
@@ -27,11 +32,7 @@ import type {
   ElapsedDistributionMetric,
 } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
-import {
-  PageHeader,
-  PageToolbar,
-  workspacePage,
-} from '../../components/PageLayout/PageLayout';
+
 import { ReportLoadingContent } from './ReportSkeleton';
 import styles from './WorkflowReportView.module.css';
 import { TagFields, tagRows, tagsFromRows, type TagRow } from '../runs/RunTags';
@@ -145,8 +146,7 @@ export function WorkflowReportView({
         backLabel="Back to workflow"
         actions={
           <Button
-            variant="default"
-            size="xs"
+            variant="secondary"
             leftSection={<RefreshCw size={14} />}
             onClick={() => void fetchReport()}
             disabled={loading}
@@ -166,7 +166,6 @@ export function WorkflowReportView({
                 value={selectedWorkflowId}
                 onChange={setSelectedWorkflowId}
                 data={workflowsList}
-                size="xs"
                 className={styles.workflowFilter}
                 aria-label="Filter by workflow"
               />
@@ -182,7 +181,6 @@ export function WorkflowReportView({
                 { value: 'activeMs', label: 'Active time (excludes pauses)' },
                 { value: 'pausedMs', label: 'Paused time' },
               ]}
-              size="xs"
               className={styles.durationFilter}
             />
             <Select
@@ -194,7 +192,6 @@ export function WorkflowReportView({
                 { value: '30d', label: 'Past 30 days' },
                 { value: 'all', label: 'All time' },
               ]}
-              size="xs"
               className={styles.timeFilter}
               aria-label="Filter by time window"
             />
@@ -202,8 +199,7 @@ export function WorkflowReportView({
         }
       >
         <Button
-          variant="default"
-          size="xs"
+          variant="secondary"
           aria-expanded={tagsOpen}
           aria-controls={tagsId}
           onClick={() => setTagsOpen((open) => !open)}
@@ -231,7 +227,7 @@ export function WorkflowReportView({
               />
               <Group mt="sm" gap="xs">
                 <Button
-                  size="xs"
+                  variant="primary"
                   onClick={() => {
                     try {
                       setTags(tagsFromRows(filterRows));
@@ -244,8 +240,7 @@ export function WorkflowReportView({
                   Apply filters
                 </Button>
                 <Button
-                  size="xs"
-                  variant="subtle"
+                  variant="ghost"
                   onClick={() => {
                     setFilterRows([]);
                     setFilterError('');

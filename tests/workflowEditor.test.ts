@@ -2,7 +2,7 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import {
   blankDefinition,
   definitionSchema,
@@ -150,10 +150,11 @@ vi.mock('../packages/ui/src/features/workflows/SettingsDialog', () => ({
       ),
     ),
 }));
-vi.mock('../packages/ui/src/components/Button/Button', () => ({
-  Button: ({ variant, ...props }: any) => h('button', props),
+vi.mock('../packages/ui/src/design-system/Button', () => ({
+  Button: ({ variant, leftSection, rightSection, ...props }: any) =>
+    h('button', props),
 }));
-vi.mock('../packages/ui/src/components/CodeEditor/CodeEditor', () => ({
+vi.mock('../packages/ui/src/design-system/CodeEditor/CodeEditor', () => ({
   CodeEditor: (props: any) => {
     rawEditor.props = props;
     return h('pre', { 'data-raw': true }, props.value);
@@ -180,7 +181,7 @@ const render = async () => {
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         { env: 'test' },
         h(WorkflowEditor, {
           workflow,

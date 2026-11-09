@@ -1,22 +1,32 @@
+import {
+  ActionIcon,
+  Badge,
+  Menu,
+  Tabs,
+  TextInput,
+  Button,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  EmptyState,
+  PageTabList,
+  workspacePage,
+} from '../../design-system';
+
 import { useId, useRef, useState } from 'react';
-import { ActionIcon, Badge, Menu, Tabs, TextInput } from '@mantine/core';
+
 import { MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
 import type { Workflow } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
+
 import type { Action } from '../../lib/useActionFeedback';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import styles from './WorkflowChildren.module.css';
-import {
-  PageTabList,
-  workspacePage,
-} from '../../components/PageLayout/PageLayout';
+
 import {
   WorkflowCard,
   WorkflowGrid,
 } from '../../components/WorkflowCards/WorkflowCards';
-import { EmptyState } from '../../components/EmptyState/EmptyState';
+
 import { workflowTabs } from './workflowListConfig';
 
 export function WorkflowChildren({
@@ -64,21 +74,31 @@ export function WorkflowChildren({
       value={archived ? 'archived' : 'active'}
       onChange={(value) => setArchived(value === 'archived')}
     >
-      <PageTabList label="Child workflow status" items={workflowTabs(scope)}>
-        <TextInput
-          ref={searchInput}
-          className={workspacePage.search}
-          aria-label="Search child workflows"
-          placeholder="Search child workflows"
-          leftSection={<Search size={14} />}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <Button variant="primary" disabled={!canCreate} onClick={openCreate}>
-          <Plus size={14} />
-          New child
-        </Button>
-      </PageTabList>
+      <PageTabList
+        label="Child workflow status"
+        items={workflowTabs(scope)}
+        toolbar={
+          <>
+            <TextInput
+              ref={searchInput}
+              className={workspacePage.search}
+              aria-label="Search child workflows"
+              placeholder="Search child workflows"
+              leftSection={<Search size={14} />}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <Button
+              variant="primary"
+              disabled={!canCreate}
+              onClick={openCreate}
+            >
+              <Plus size={14} />
+              New child
+            </Button>
+          </>
+        }
+      />
       <Tabs.Panel
         value={archived ? 'archived' : 'active'}
         className={workspacePage.content}

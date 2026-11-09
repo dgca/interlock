@@ -1,15 +1,25 @@
+import {
+  ActionIcon,
+  NativeSelect,
+  TextInput,
+  Textarea,
+  Button,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ActionError,
+  workspacePage,
+} from '../../design-system';
+
 import { useEffect, useId, useRef, useState } from 'react';
-import { ActionIcon, NativeSelect, TextInput, Textarea } from '@mantine/core';
+
 import { ArrowDown, ArrowUp, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import {
   modelAliasNameSchema,
   type ModelAliasCandidate,
   type SavedModelAlias,
 } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
-import { ActionError } from '../../components/ActionError/ActionError';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
+
 import {
   ListTable,
   ListTableRow,
@@ -18,7 +28,7 @@ import {
 import { api, errorMessage } from '../../lib/api';
 import { ModelSettings } from './ModelSettings';
 import { readModelAlias, readModelAliases } from './modelAliasApi';
-import { workspacePage } from '../../components/PageLayout/PageLayout';
+
 import styles from './ModelAliases.module.css';
 
 type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];

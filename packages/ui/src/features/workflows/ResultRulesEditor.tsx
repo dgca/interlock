@@ -1,6 +1,12 @@
-import { NativeSelect, Stack, Text, TextInput } from '@mantine/core';
+import {
+  NativeSelect,
+  Stack,
+  Text,
+  TextInput,
+  Button,
+} from '../../design-system';
+
 import type { ResultRule } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
 
 export function ResultRulesEditor({
   value = [],

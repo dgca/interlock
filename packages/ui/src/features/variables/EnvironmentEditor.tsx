@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from 'react';
 import {
   ActionIcon,
   Anchor,
@@ -7,10 +6,14 @@ import {
   Stack,
   Text,
   TextInput,
-} from '@mantine/core';
+  Button,
+} from '../../design-system';
+
+import { useEffect, useRef, useState } from 'react';
+
 import { Plus, RefreshCw, Trash2 } from 'lucide-react';
 import type { ScriptEnvironment } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
+
 import { paths } from '../../routes/paths';
 import { VariablePicker, type VariableSummary } from './VariablePicker';
 import styles from './EnvironmentEditor.module.css';

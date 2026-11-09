@@ -1,10 +1,21 @@
+import {
+  Anchor,
+  Checkbox,
+  Group,
+  Stack,
+  Text,
+  Textarea,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  Button,
+  ActionError,
+} from '../../design-system';
+
 import { useEffect, useRef, useState } from 'react';
-import { Anchor, Checkbox, Group, Stack, Text, Textarea } from '@mantine/core';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import { Button } from '../../components/Button/Button';
-import { Badge } from '../../components/Badge/Badge';
-import { ActionError } from '../../components/ActionError/ActionError';
+
+import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
+
 import { api, errorMessage } from '../../lib/api';
 import styles from './RunCancellationDialog.module.css';
 
@@ -144,7 +155,7 @@ export function RunCancellationDialog({
                           )}
                         </div>
                         <span className={styles.status}>
-                          <Badge status={run.status} />
+                          <StatusBadge status={run.status} />
                         </span>
                       </li>
                     ))}

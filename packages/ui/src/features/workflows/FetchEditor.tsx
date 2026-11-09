@@ -5,7 +5,10 @@ import {
   NativeSelect,
   TextInput,
   Textarea,
-} from '@mantine/core';
+  Button,
+  JsonEditor,
+} from '../../design-system';
+
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import {
@@ -17,8 +20,7 @@ import {
   type FetchBinding,
 } from '@interlock/core';
 import { DurationInput } from './DurationInput';
-import { Button } from '../../components/Button/Button';
-import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
+
 import { InputPathInput } from './InputPathInput';
 import { TypedValueEditor } from './TypedValueEditor';
 import { FetchUrlInput } from './FetchUrlInput';

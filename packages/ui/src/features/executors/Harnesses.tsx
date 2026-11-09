@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { useLocation } from 'react-router';
 import {
   Badge,
   NativeSelect,
   NumberInput,
   Switch,
   TextInput,
-} from '@mantine/core';
+  Button,
+  ActionError,
+  PageHeader,
+  workspacePage,
+} from '../../design-system';
+
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
+
 import {
   ChevronDown,
   ChevronUp,
@@ -16,14 +22,10 @@ import {
   Plus,
 } from 'lucide-react';
 import { executorProfileSchema, type ExecutorProfile } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
-import { ActionError } from '../../components/ActionError/ActionError';
+
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
-import {
-  PageHeader,
-  workspacePage,
-} from '../../components/PageLayout/PageLayout';
+
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import { HarnessRowsSkeleton, harnessColumns } from './HarnessListSkeleton';
 import styles from './Harnesses.module.css';

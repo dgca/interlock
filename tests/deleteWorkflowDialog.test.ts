@@ -8,11 +8,12 @@ vi.mock('../packages/ui/src/lib/api', () => ({
   api: { workflows: { delete: { mutate: remove } } },
   errorMessage: (error: Error) => error.message,
 }));
-vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
+vi.mock('../packages/ui/src/design-system/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', { role: 'dialog' }, children),
 }));
-vi.mock('../packages/ui/src/components/Button/Button', () => ({
-  Button: ({ variant, ...props }: any) => h('button', props),
+vi.mock('../packages/ui/src/design-system/Button', () => ({
+  Button: ({ variant, leftSection, rightSection, ...props }: any) =>
+    h('button', props),
 }));
 let container: HTMLDivElement, root: ReturnType<typeof createRoot>;
 const close = vi.fn(),

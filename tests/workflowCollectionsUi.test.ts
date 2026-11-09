@@ -2,7 +2,7 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { blankDefinition, type Workflow } from '@interlock/core';
 import { WorkflowLibrary } from '../packages/ui/src/features/workflows/WorkflowLibrary';
@@ -71,7 +71,7 @@ afterEach(async () => {
 });
 async function render(element: ReturnType<typeof h>) {
   await act(async () =>
-    root.render(h(MantineProvider, {}, h(MemoryRouter, {}, element))),
+    root.render(h(DesignSystemProvider, {}, h(MemoryRouter, {}, element))),
   );
 }
 function button(text: string) {

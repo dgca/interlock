@@ -1,4 +1,5 @@
-import { Combobox, TextInput, useCombobox } from '@mantine/core';
+import { Combobox, TextInput, useCombobox } from '../../design-system';
+
 import { useLayoutEffect, useRef, useState } from 'react';
 import { contractAtPath, contractPaths, type Contract } from '@interlock/core';
 

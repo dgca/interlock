@@ -1,11 +1,11 @@
+import { Button, Modal, ModalBody, ModalFooter } from '../../design-system';
+
 import { useRef, useState } from 'react';
-import { Button as MantineButton } from '@mantine/core';
+
 import { Link } from 'react-router';
 import { paths } from '../../routes/paths';
 import type { Workflow } from '@interlock/core';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import { Button } from '../../components/Button/Button';
+
 import { api } from '../../lib/api';
 import type { Action } from '../../lib/useActionFeedback';
 
@@ -83,13 +83,14 @@ export function DeleteWorkflowDialog({
           {hasChildren ? 'Close' : 'Cancel'}
         </Button>
         {hasChildren ? (
-          <MantineButton
+          <Button
+            variant="primary"
             component={Link}
             to={paths.workflow(workflow.id) + '?view=children'}
             onClick={onClose}
           >
             View child workflows
-          </MantineButton>
+          </Button>
         ) : (
           <Button
             variant="danger"

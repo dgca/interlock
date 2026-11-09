@@ -1,4 +1,5 @@
-import { Badge } from '@mantine/core';
+import { Badge } from '../../design-system';
+
 import {
   GitBranch,
   Activity,
@@ -40,9 +41,9 @@ export function Sidebar({
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}>
+        <img src="/interlock-logo.svg" width={32} height={32} alt="" />
         Interlock<span className={styles.version}>v{VERSION}</span>
       </div>
-      <div className={styles.group}>WORKSPACE</div>
       <nav aria-label="Main navigation">
         {(
           [

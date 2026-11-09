@@ -1,7 +1,8 @@
-import { Alert, Group } from '@mantine/core';
+import { Alert, Group, Button } from '../../design-system';
+
 import { useState } from 'react';
 import { Bot, Copy } from 'lucide-react';
-import { Button } from '../../components/Button/Button';
+
 import { errorMessage } from '../../lib/api';
 
 export function AgentHandoff({

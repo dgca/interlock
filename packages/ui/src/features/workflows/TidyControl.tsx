@@ -1,5 +1,7 @@
+import { Loader, Menu } from '../../design-system';
+
 import { useState } from 'react';
-import { Loader, Menu } from '@mantine/core';
+
 import { ControlButton } from '@xyflow/react';
 import { Check, Settings, WandSparkles } from 'lucide-react';
 

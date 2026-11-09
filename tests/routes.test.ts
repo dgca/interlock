@@ -2,7 +2,7 @@
 import { transferableAbortController } from 'node:util';
 import { act, createElement as h, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { routes } from '../packages/ui/src/routes';
@@ -191,7 +191,7 @@ async function mount(path?: string) {
   router = createBrowserRouter(routes);
   await act(async () =>
     root.render(
-      h(MantineProvider, { env: 'test' }, h(RouterProvider, { router })),
+      h(DesignSystemProvider, { env: 'test' }, h(RouterProvider, { router })),
     ),
   );
 }

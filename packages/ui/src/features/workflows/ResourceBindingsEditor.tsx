@@ -1,10 +1,11 @@
-import { Stack, TagsInput, Text } from '@mantine/core';
+import { Stack, TagsInput, Text, JsonEditor } from '../../design-system';
+
 import {
   resourceNamesSchema,
   resourceBindingsSchema,
   type ValueBinding,
 } from '@interlock/core';
-import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
+
 const bindings = resourceBindingsSchema;
 export function ResourceBindingsEditor({
   value,

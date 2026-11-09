@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   blankDefinition,
@@ -66,7 +66,7 @@ async function render(
   language = scriptLanguage;
   polling = scriptCheck;
   await act(async () =>
-    root.render(h(MantineProvider, {}, h(Harness, { key: ++key }))),
+    root.render(h(DesignSystemProvider, {}, h(Harness, { key: ++key }))),
   );
   await settle();
 }
@@ -342,7 +342,7 @@ it.each(['invalid alias', 'unselected search'] as const)(
     await act(async () =>
       root.render(
         h(
-          MantineProvider,
+          DesignSystemProvider,
           {},
           h(SettingsDialog, {
             node,

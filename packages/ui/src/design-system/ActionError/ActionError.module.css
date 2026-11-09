@@ -1,0 +1,5 @@
+.error {
+  color: var(--error-copy);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

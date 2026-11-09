@@ -2,7 +2,7 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { blankDefinition } from '@interlock/core';
@@ -41,7 +41,7 @@ async function render(tick = 0) {
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         { env: 'test' },
         h(PauseProvider, {
           tick,

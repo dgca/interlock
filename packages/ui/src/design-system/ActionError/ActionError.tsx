@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
+import classes from './ActionError.module.css';
 
 export function ActionError({
   message,
-  className = 'error-text',
+  className,
 }: {
   message: string;
   className?: string;
@@ -13,7 +14,12 @@ export function ActionError({
       ref.current?.focus();
   }, [message]);
   return message ? (
-    <p ref={ref} tabIndex={-1} role="alert" className={className}>
+    <p
+      ref={ref}
+      tabIndex={-1}
+      role="alert"
+      className={[classes.error, className].filter(Boolean).join(' ')}
+    >
       {message}
     </p>
   ) : null;

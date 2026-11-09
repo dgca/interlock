@@ -1,10 +1,17 @@
-import { formatDuration } from '../workflows/DurationInput';
-import { PauseBanner } from '../pauses/PauseControls';
 import {
   LoadingSkeleton,
   Placeholder,
-} from '../../components/LoadingSkeleton/LoadingSkeleton';
-import { CopyButton, Menu, ScrollArea } from '@mantine/core';
+  CopyButton,
+  Menu,
+  ScrollArea,
+  Button,
+  JsonEditor,
+  ActionError,
+} from '../../design-system';
+
+import { formatDuration } from '../workflows/DurationInput';
+import { PauseBanner } from '../pauses/PauseControls';
+
 import { nodeKindLabel, type RunStatus } from '@interlock/core';
 import type { Action } from '../../lib/useActionFeedback';
 import { useEffect, useRef, useState } from 'react';
@@ -18,15 +25,15 @@ import {
 } from 'lucide-react';
 
 import { api, download, errorMessage } from '../../lib/api';
-import { Button } from '../../components/Button/Button';
-import { Badge } from '../../components/Badge/Badge';
-import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
+
+import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
+
 import { RunGraph } from './RunGraph';
 import { runProgress } from './runProgress';
 import { detachedBoundary } from './runScope';
 import { AgentHandoff } from './AgentHandoff';
 import { WorkPanel } from './WorkPanel';
-import { ActionError } from '../../components/ActionError/ActionError';
+
 import { manualClaims } from './manualClaims';
 import styles from './RunInspector.module.css';
 import { ComparisonContext } from './ComparisonContext';
@@ -316,7 +323,7 @@ export function RunInspector({
           <span className={styles.version}>Version {run.version}</span>
           <ComparisonContext comparison={run.comparison} />
         </div>
-        <Badge
+        <StatusBadge
           status={
             run.status === 'queued'
               ? 'queued'
@@ -592,7 +599,7 @@ export function RunInspector({
                         Item {item.index + 1}
                         <small>{item.run.id.slice(0, 8)}</small>
                       </span>
-                      <Badge status={item.state} />
+                      <StatusBadge status={item.state} />
                     </button>
                   ))
                 ) : (
@@ -613,7 +620,7 @@ export function RunInspector({
                       Item {index + 1}
                       <small>{child.id.slice(0, 8)}</small>
                     </span>
-                    <Badge
+                    <StatusBadge
                       status={progress.runStates[child.id] ?? child.status}
                     />
                     <ArrowUpRight size={14} />
@@ -635,7 +642,7 @@ export function RunInspector({
                         {child.workflowName}
                         <small>{child.id.slice(0, 8)}</small>
                       </span>
-                      <Badge
+                      <StatusBadge
                         status={progress.runStates[child.id] ?? child.status}
                       />
                       <ArrowUpRight size={14} />
@@ -870,7 +877,7 @@ export function RunInspector({
                     {new Date(e.startedAt).toLocaleTimeString()}
                   </small>
                 </div>
-                <Badge
+                <StatusBadge
                   status={
                     e.status === 'waiting' &&
                     progress.nodes[e.nodeId]?.state === 'running'
@@ -898,7 +905,7 @@ export function RunInspector({
                         {child.id.slice(0, 8)}
                       </small>
                     </span>
-                    <Badge
+                    <StatusBadge
                       status={progress.runStates[child.id] ?? child.status}
                     />
                     <ArrowUpRight size={14} />

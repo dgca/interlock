@@ -1,11 +1,3 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
-import {
-  Link,
-  useNavigate,
-  useOutletContext,
-  useSearchParams,
-} from 'react-router';
 import {
   Alert,
   Button,
@@ -17,7 +9,22 @@ import {
   Select,
   Stack,
   TextInput,
-} from '@mantine/core';
+  FormPlaceholder,
+  PageHeader,
+  workspacePage,
+  JsonEditor,
+  ActionError,
+} from '../../design-system';
+
+import { useEffect, useId, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import {
+  Link,
+  useNavigate,
+  useOutletContext,
+  useSearchParams,
+} from 'react-router';
+
 import {
   assertContract,
   eventConfigSchema,
@@ -28,14 +35,9 @@ import {
   type WorkflowVersion,
 } from '@interlock/core';
 import type { AppContext } from '../../App';
-import {
-  PageHeader,
-  workspacePage,
-} from '../../components/PageLayout/PageLayout';
+
 import { SchemaInput } from '../../components/SchemaInput/SchemaInput';
-import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
-import { ActionError } from '../../components/ActionError/ActionError';
-import { FormPlaceholder } from '../../components/LoadingSkeleton/LoadingSkeleton';
+
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
 import { paths } from '../../routes/paths';
@@ -390,13 +392,14 @@ export function AutomationEditor({
         actions={
           <>
             <Button
-              variant="default"
+              variant="secondary"
               disabled={busy}
               onClick={() => void navigate(back)}
             >
               Cancel
             </Button>
             <Button
+              variant="primary"
               form={formId}
               type="submit"
               loading={busy}
@@ -414,7 +417,7 @@ export function AutomationEditor({
           ) : id && !baseline ? (
             <Alert color="red" title="Could not load automation">
               {error}
-              <Button variant="subtle" onClick={() => setReload((n) => n + 1)}>
+              <Button variant="ghost" onClick={() => setReload((n) => n + 1)}>
                 Retry loading
               </Button>
             </Alert>
@@ -645,7 +648,7 @@ export function AutomationEditor({
                       <Alert color="red">
                         {contractError}
                         <Button
-                          variant="subtle"
+                          variant="ghost"
                           onClick={() => setReload((n) => n + 1)}
                         >
                           Retry contract
@@ -763,7 +766,7 @@ export function AutomationEditor({
                 <ActionError message={error} />
                 {id && error && (
                   <Button
-                    variant="subtle"
+                    variant="ghost"
                     onClick={() => {
                       if (
                         !dirty ||

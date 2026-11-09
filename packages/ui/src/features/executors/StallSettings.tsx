@@ -1,17 +1,20 @@
-import { useEffect, useState } from 'react';
 import {
   NativeSelect,
   Switch,
   TextInput,
   Textarea,
   Stack,
-} from '@mantine/core';
+  Button,
+} from '../../design-system';
+
+import { useEffect, useState } from 'react';
+
 import {
   MAX_ACTIVE_CLOCK_MS,
   stallPolicySchema,
   type StallPolicy,
 } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
+
 import { api, errorMessage } from '../../lib/api';
 import { DurationInput } from '../workflows/DurationInput';
 import styles from './StallSettings.module.css';

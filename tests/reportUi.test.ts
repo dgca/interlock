@@ -3,7 +3,7 @@ import { transferableAbortController } from 'node:util';
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { createMemoryRouter, RouterProvider } from 'react-router';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { calculateDistribution, type WorkflowReport } from '@interlock/core';
 import { routes } from '../packages/ui/src/routes';
@@ -145,7 +145,7 @@ async function mount(path = '/report') {
   router = createMemoryRouter(routes, { initialEntries: [path] });
   await act(async () =>
     root.render(
-      h(MantineProvider, { env: 'test' }, h(RouterProvider, { router })),
+      h(DesignSystemProvider, { env: 'test' }, h(RouterProvider, { router })),
     ),
   );
 }

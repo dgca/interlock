@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useState } from 'react';
 import {
   Badge,
   Group,
@@ -7,7 +6,12 @@ import {
   Switch,
   Alert,
   Button,
-} from '@mantine/core';
+  PageHeader,
+  workspacePage,
+} from '../../design-system';
+
+import { useCallback, useEffect, useState } from 'react';
+
 import {
   CheckCircle2,
   AlertTriangle,
@@ -22,10 +26,7 @@ import type {
   DiagnosticCheck,
 } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
-import {
-  PageHeader,
-  workspacePage,
-} from '../../components/PageLayout/PageLayout';
+
 import { DiagnosticsLoadingContent } from './DiagnosticsSkeleton';
 import styles from './Diagnostics.module.css';
 
@@ -95,8 +96,7 @@ export function Diagnostics() {
             />
             <Button
               leftSection={<RefreshCw size={14} />}
-              variant="default"
-              size="xs"
+              variant="secondary"
               onClick={() => void fetchDiagnostics(liveProbe)}
               disabled={loading}
             >

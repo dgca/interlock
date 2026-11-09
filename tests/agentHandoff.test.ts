@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
@@ -41,7 +41,7 @@ vi.mock('../packages/ui/src/features/runs/WorkPanel', () => ({
 vi.mock('../packages/ui/src/features/runs/RunUsage', () => ({
   RunUsage: () => null,
 }));
-vi.mock('../packages/ui/src/components/JsonEditor/JsonEditor', () => ({
+vi.mock('../packages/ui/src/design-system/JsonEditor/JsonEditor', () => ({
   JsonEditor: ({ label, value }: any) =>
     h('pre', { 'data-json-label': label }, JSON.stringify(value)),
 }));
@@ -108,7 +108,7 @@ async function render(tick = 0, id = 'root-run') {
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(RunInspector, {
           id,
@@ -347,7 +347,7 @@ it('shows comparison context and navigates to the counterpart without changing n
 it('keeps the copy handoff while omitting disabled connection controls and guidance', async () => {
   await act(async () =>
     root.render(
-      h(MantineProvider, {}, h(AgentHandoff, { runId: 'embedded-run' })),
+      h(DesignSystemProvider, {}, h(AgentHandoff, { runId: 'embedded-run' })),
     ),
   );
   expect(container.textContent).not.toContain('Connect an agent');

@@ -1,4 +1,11 @@
-import { NativeSelect, TextInput, Textarea, Text } from '@mantine/core';
+import {
+  NativeSelect,
+  TextInput,
+  Textarea,
+  Text,
+  Button,
+} from '../../design-system';
+
 import { useState } from 'react';
 import { Trash2, Plus } from 'lucide-react';
 import {
@@ -9,7 +16,7 @@ import {
   type Contract,
   type WorkflowNode,
 } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
+
 import { TypedValueEditor, suggestedMatchValue } from './TypedValueEditor';
 import { InputPathInput } from './InputPathInput';
 import styles from './SwitchEditor.module.css';
