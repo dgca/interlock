@@ -16,8 +16,20 @@ type Action =
   | { type: 'change'; update: (current: EditorSnapshot) => EditorSnapshot }
   | { type: 'reset'; snapshot: EditorSnapshot }
   | { type: 'begin' | 'end' | 'undo' | 'redo' };
+// API validation can reorder object keys without changing the authored draft.
+export function serializeSnapshot(snapshot: EditorSnapshot): string {
+  return JSON.stringify(snapshot, (_key, value) =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.keys(value)
+            .sort()
+            .map((key) => [key, value[key]]),
+        )
+      : value,
+  );
+}
 const equal = (a: EditorSnapshot, b: EditorSnapshot) =>
-  JSON.stringify(a) === JSON.stringify(b);
+  serializeSnapshot(a) === serializeSnapshot(b);
 const append = (past: EditorSnapshot[], snapshot: EditorSnapshot) =>
   [...past, snapshot].slice(-50);
 

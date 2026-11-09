@@ -48,7 +48,7 @@ import { FlowNode, type CanvasNode } from './FlowNode';
 import { LoopEdge } from './LoopEdge';
 import { OrthoEdge } from './OrthoEdge';
 import { canvasGraph, withoutNodes } from './canvasGraph';
-import { useWorkflowHistory } from './useWorkflowHistory';
+import { serializeSnapshot, useWorkflowHistory } from './useWorkflowHistory';
 import { useBoxZoom } from './useBoxZoom';
 import { canvasNavigation, CanvasZoomBox } from './CanvasNavigation';
 import navigationStyles from './CanvasNavigation.module.css';
@@ -242,7 +242,7 @@ export function WorkflowEditor({
     setView(next);
   };
   const [saved, setSaved] = useState(
-    JSON.stringify({
+    serializeSnapshot({
       draft: workflow.draft,
       name: workflow.name,
       description: workflow.description,
@@ -251,8 +251,8 @@ export function WorkflowEditor({
   const dirty =
     rawEdited ||
     rawInvalid ||
-    JSON.stringify({ draft: effectiveDraft, name, description }) !== saved;
-  const remoteSnapshot = JSON.stringify({
+    serializeSnapshot({ draft: effectiveDraft, name, description }) !== saved;
+  const remoteSnapshot = serializeSnapshot({
     draft: workflow.draft,
     name: workflow.name,
     description: workflow.description,
@@ -408,7 +408,7 @@ export function WorkflowEditor({
       );
     }
     setSaved(
-      JSON.stringify({
+      serializeSnapshot({
         draft: w.draft,
         name: w.name,
         description: w.description,
@@ -448,7 +448,7 @@ export function WorkflowEditor({
         });
         setRevision(result.parent.draftRevision);
         setSaved(
-          JSON.stringify({
+          serializeSnapshot({
             draft: result.parent.draft,
             name: result.parent.name,
             description: result.parent.description,

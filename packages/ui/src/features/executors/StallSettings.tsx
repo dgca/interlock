@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { NativeSelect, TextInput, Textarea, Stack } from '@mantine/core';
+import {
+  NativeSelect,
+  Switch,
+  TextInput,
+  Textarea,
+  Stack,
+} from '@mantine/core';
 import {
   MAX_ACTIVE_CLOCK_MS,
   stallPolicySchema,
@@ -8,12 +14,39 @@ import {
 import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import { DurationInput } from '../workflows/DurationInput';
+import styles from './StallSettings.module.css';
+
+const defaultRecovery = {
+  maxRecoveries: 1,
+  message:
+    'Continue the stalled assignment and return its required result, or report the blocker.',
+};
 
 const fields = [
-  ['unclaimedStallMs', 'Unclaimed stall', 'Unclaimed threshold'],
-  ['claimedIdleStallMs', 'Claimed idle stall', 'Claimed idle threshold'],
-  ['humanWaitStallMs', 'External input stall', 'External input threshold'],
-  ['runStallMs', 'Run transition stall', 'Run transition threshold'],
+  [
+    'unclaimedStallMs',
+    'Unclaimed stall',
+    'Unclaimed threshold',
+    'An assignment is ready, but no agent has picked it up.',
+  ],
+  [
+    'claimedIdleStallMs',
+    'Claimed idle stall',
+    'Claimed idle threshold',
+    'An agent has picked up work but has stopped reporting activity.',
+  ],
+  [
+    'humanWaitStallMs',
+    'External input stall',
+    'External input threshold',
+    'An External input step is waiting for a value to be submitted or accepted.',
+  ],
+  [
+    'runStallMs',
+    'Run transition stall',
+    'Run transition threshold',
+    'The run has stopped advancing or reporting progress. Planned waits and active child workflows do not count.',
+  ],
 ] as const;
 export function StallPolicyEditor({
   value,
@@ -30,92 +63,137 @@ export function StallPolicyEditor({
   showHeading?: boolean;
   thresholds?: (typeof fields)[number][0][];
 }) {
+  const [recoveryEnabled, setRecoveryEnabled] = useState(
+    () => !!value.idleRecovery?.maxRecoveries,
+  );
   return (
-    <Stack gap="sm" my="md">
+    <Stack gap="sm" mb="md">
       {showHeading && <h3>Stall detection</h3>}
-      <p className="hint">
-        Active time excludes pauses and declared holds. A stall adds Needs
-        attention without failing the run.
+      <p className={styles.intro}>
+        Flag runs that wait too long for an agent, input, or progress. A stall
+        adds Needs attention without failing the run. Pauses and declared holds
+        do not count.
       </p>
       {fields
         .filter(([key]) => !thresholds || thresholds.includes(key))
-        .map(([key, label, thresholdLabel]) => (
+        .map(([key, label, thresholdLabel, description]) => (
           <div key={key}>
-            <NativeSelect
-              label={label}
-              value={
-                value[key] === undefined || (!inherit && value[key] === null)
-                  ? 'inherit'
-                  : value[key] === null
-                    ? 'disabled'
-                    : 'threshold'
-              }
-              data={[
-                { value: 'inherit', label: inherit ? 'Inherit' : 'Disabled' },
-                ...(inherit ? [{ value: 'disabled', label: 'Disabled' }] : []),
-                { value: 'threshold', label: 'Set threshold' },
-              ]}
-              onChange={(e) =>
-                onChange({
-                  [key]:
-                    e.currentTarget.value === 'inherit'
-                      ? undefined
-                      : e.currentTarget.value === 'disabled'
-                        ? null
-                        : 300000,
-                })
-              }
-            />
-            {typeof value[key] === 'number' && (
-              <DurationInput
-                label={thresholdLabel}
-                min={1}
-                max={MAX_ACTIVE_CLOCK_MS}
-                step={1}
-                value={value[key]}
-                onChange={(duration) => onChange({ [key]: duration })}
+            {inherit ? (
+              <NativeSelect
+                className={styles.selection}
+                label={label}
+                description={description}
+                value={
+                  value[key] === undefined || (!inherit && value[key] === null)
+                    ? 'inherit'
+                    : value[key] === null
+                      ? 'disabled'
+                      : 'threshold'
+                }
+                data={[
+                  { value: 'inherit', label: inherit ? 'Inherit' : 'Disabled' },
+                  ...(inherit
+                    ? [{ value: 'disabled', label: 'Disabled' }]
+                    : []),
+                  { value: 'threshold', label: 'Set threshold' },
+                ]}
+                onChange={(e) =>
+                  onChange({
+                    [key]:
+                      e.currentTarget.value === 'inherit'
+                        ? undefined
+                        : e.currentTarget.value === 'disabled'
+                          ? null
+                          : 300000,
+                  })
+                }
               />
+            ) : (
+              <Switch
+                label={label}
+                description={description}
+                checked={typeof value[key] === 'number'}
+                onChange={(event) =>
+                  onChange({
+                    [key]: event.currentTarget.checked ? 300000 : undefined,
+                  })
+                }
+              />
+            )}
+            {typeof value[key] === 'number' && (
+              <div className={styles.threshold}>
+                <DurationInput
+                  label={thresholdLabel}
+                  min={1}
+                  max={MAX_ACTIVE_CLOCK_MS}
+                  step={1}
+                  value={value[key]}
+                  onChange={(duration) => onChange({ [key]: duration })}
+                />
+              </div>
             )}
           </div>
         ))}
-      {showRecovery && (
-        <NativeSelect
-          label="Managed idle recovery"
-          value={
-            value.idleRecovery === undefined ||
-            (!inherit && value.idleRecovery === null)
-              ? 'inherit'
-              : value.idleRecovery === null
-                ? 'disabled'
-                : 'configured'
-          }
-          data={[
-            { value: 'inherit', label: inherit ? 'Inherit' : 'Disabled' },
-            ...(inherit ? [{ value: 'disabled', label: 'Disabled' }] : []),
-            { value: 'configured', label: 'Configure' },
-          ]}
-          onChange={(e) =>
-            onChange({
-              idleRecovery:
-                e.currentTarget.value === 'inherit'
-                  ? undefined
-                  : e.currentTarget.value === 'disabled'
-                    ? null
-                    : {
-                        maxRecoveries: 1,
-                        message:
-                          'Continue the stalled assignment and return its required result, or report the blocker.',
-                      },
-            })
-          }
-        />
-      )}
-      {showRecovery && value.idleRecovery && (
+      {showRecovery &&
+        (inherit ? (
+          <NativeSelect
+            className={styles.selection}
+            label="Managed idle recovery"
+            description="Send a reminder to an idle agent. Requires a custom launcher with recovery support."
+            value={
+              value.idleRecovery === undefined ||
+              (!inherit && value.idleRecovery === null)
+                ? 'inherit'
+                : value.idleRecovery === null
+                  ? 'disabled'
+                  : 'configured'
+            }
+            data={[
+              { value: 'inherit', label: inherit ? 'Inherit' : 'Disabled' },
+              ...(inherit ? [{ value: 'disabled', label: 'Disabled' }] : []),
+              { value: 'configured', label: 'Configure' },
+            ]}
+            onChange={(e) =>
+              onChange({
+                idleRecovery:
+                  e.currentTarget.value === 'inherit'
+                    ? undefined
+                    : e.currentTarget.value === 'disabled'
+                      ? null
+                      : { ...defaultRecovery },
+              })
+            }
+          />
+        ) : (
+          <Switch
+            label="Managed idle recovery"
+            description="Send a reminder to an idle agent. Requires a custom launcher with recovery support."
+            checked={recoveryEnabled}
+            onChange={(event) => {
+              const enabled = event.currentTarget.checked;
+              setRecoveryEnabled(enabled);
+              onChange({
+                idleRecovery: enabled
+                  ? value.idleRecovery
+                    ? {
+                        ...value.idleRecovery,
+                        maxRecoveries: Math.max(
+                          1,
+                          value.idleRecovery.maxRecoveries,
+                        ),
+                      }
+                    : { ...defaultRecovery }
+                  : undefined,
+              });
+            }}
+          />
+        ))}
+      {showRecovery && value.idleRecovery && (inherit || recoveryEnabled) && (
         <>
           <TextInput
             label="Maximum idle recoveries"
             type="number"
-            min={0}
+            min={inherit ? 0 : 1}
             max={10}
             step={1}
             required
@@ -155,8 +233,10 @@ export function StallPolicyEditor({
 }
 export function StallSettings({
   onDirty,
+  showHeading = true,
 }: {
   onDirty?: (dirty: boolean) => void;
+  showHeading?: boolean;
 }) {
   const [saved, setSaved] =
     useState<Awaited<ReturnType<typeof api.stalls.settings.query>>>();
@@ -209,17 +289,20 @@ export function StallSettings({
               key={loadGeneration}
               value={policy}
               inherit={false}
+              showHeading={showHeading}
               onChange={(patch) => setPolicy((p) => ({ ...p, ...patch }))}
             />
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={
-                !dirty || busy || !stallPolicySchema.safeParse(policy).success
-              }
-            >
-              {busy ? 'Saving…' : 'Save stall settings'}
-            </Button>
+            <div className={styles.actions}>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={
+                  !dirty || busy || !stallPolicySchema.safeParse(policy).success
+                }
+              >
+                {busy ? 'Saving…' : 'Save stall settings'}
+              </Button>
+            </div>
           </fieldset>
         </form>
       ) : !error ? (

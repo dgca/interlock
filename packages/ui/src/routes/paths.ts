@@ -38,7 +38,7 @@ export const paths = {
   report: '/report',
   workflowReport: (id: string) => `/workflows/${encodeURIComponent(id)}/report`,
   diagnostics: '/settings/diagnostics',
-  harnesses: '/settings/harnesses',
+  harnesses: '/settings/ai',
   prompts: '/prompts',
   variables: '/variables',
   variable: (id: string) => `/variables/${encodeURIComponent(id)}`,

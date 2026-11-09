@@ -99,10 +99,12 @@ export function ExecutorSelect({
       >
         {inherit !== undefined && (
           <option value="__inherit">
-            Workflow default · {inherit || 'Connected agent'}
+            Workflow default · {inherit || 'No default harness'}
           </option>
         )}
-        <option value="__manual">Connected agent</option>
+        <option value="__manual">
+          {workflowSettings ? 'No default harness' : 'Connected agent'}
+        </option>
         {profiles?.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
@@ -115,11 +117,13 @@ export function ExecutorSelect({
       </NativeSelect>
       <p className="hint">
         {value
-          ? 'Interlock starts this harness when the assignment is ready.'
-          : inherit !== undefined && value === undefined && inherit
-            ? 'Uses this workflow’s automatic executor unless overridden here.'
-            : 'An agent connected through MCP picks up the assignment.'}{' '}
-        <a href="/settings/harnesses" target="_blank" rel="noreferrer">
+          ? 'Default harness for managed work. A model alias can select a different harness.'
+          : inherit !== undefined && value === undefined
+            ? 'Uses the workflow’s harness and model defaults. A model alias can select a different harness.'
+            : workflowSettings
+              ? 'A model alias can select a harness. Otherwise, a connected agent picks up the assignment.'
+              : 'An agent connected through MCP picks up the assignment.'}{' '}
+        <a href="/settings/ai#harnesses" target="_blank" rel="noreferrer">
           Manage harnesses
         </a>
       </p>
@@ -129,11 +133,7 @@ export function ExecutorSelect({
             (concurrency === null
               ? 'No shared assignment limit. Interlock starts every ready assignment; workflow requirements and resource coordination still apply.'
               : `Up to ${concurrency} Agent assignments at once across all harnesses and workflows.`)}{' '}
-          <a
-            href="/settings/harnesses#concurrency"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href="/settings/ai#concurrency" target="_blank" rel="noreferrer">
             Manage shared limit
           </a>
         </p>
@@ -179,9 +179,10 @@ export function ExecutorSelect({
           Harness settings could not be loaded. {error}
         </p>
       )}
-      {(onModelChange || (selected && onNodeModelChange)) && (
+      {(onModelChange || (value !== null && onNodeModelChange)) && (
         <div style={{ marginTop: 20 }}>
           <ModelSettings
+            allowAliases
             modelHint={`${nodeModel && onNodeModelChange ? `${nodeModel} · node override.` : workflowModel ? `${workflowModel} · ${onNodeModelChange ? 'inherited from workflow' : 'workflow override'}.` : profile ? `${profile.model ?? 'CLI default'} · inherited from ${profile.name}.` : 'Each managed Agent uses its selected harness’s default model.'}${onModelChange ? ' Agent nodes can override the model and thinking effort. Connected agents keep their own settings.' : ''}`}
             label={onNodeModelChange ? 'Model' : 'Agent model'}
             defaultLabel={

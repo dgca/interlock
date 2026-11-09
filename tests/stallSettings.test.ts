@@ -43,13 +43,13 @@ const button = (name: string) =>
   [...container.querySelectorAll('button')].find(
     (button) => button.textContent === name,
   )!;
-const fill = (value: string) =>
+const fill = (value: string, control = input()) =>
   act(async () => {
     Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       'value',
-    )!.set!.call(input(), value);
-    input().dispatchEvent(new Event('input', { bubbles: true }));
+    )!.set!.call(control, value);
+    control.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
 it('Reload restores valid stall settings even when value and revision match an invalid rounded input', async () => {
@@ -87,4 +87,69 @@ it('Reload restores valid stall settings even when value and revision match an i
     policy: { unclaimedStallMs: 2 },
   });
   expect(container.textContent).not.toContain('Save unavailable');
+});
+
+it('uses library switches to configure and disable thresholds and idle recovery', async () => {
+  mocks.settings.mockResolvedValue({ revision: 2, policy: {} });
+  mocks.configure.mockImplementation(async (request) => ({
+    revision: request.expectedRevision + 1,
+    policy: request.policy,
+  }));
+  await act(async () =>
+    root.render(h(MantineProvider, { env: 'test' }, h(StallSettings))),
+  );
+  const toggle = async (name: string) => {
+    const label = [...container.querySelectorAll('label')].find((label) =>
+      label.textContent?.includes(name),
+    )!;
+    await act(async () => document.getElementById(label.htmlFor)!.click());
+  };
+  expect(container.querySelectorAll('[role="switch"]')).toHaveLength(5);
+  expect(container.querySelector('select')).toBeNull();
+  await toggle('Claimed idle stall');
+  await toggle('Managed idle recovery');
+  await fill('7');
+  await act(async () => button('Save stall settings').click());
+  expect(mocks.configure).toHaveBeenLastCalledWith({
+    expectedRevision: 2,
+    policy: {
+      claimedIdleStallMs: 420000,
+      idleRecovery: { maxRecoveries: 1, message: expect.any(String) },
+    },
+  });
+  await toggle('Managed idle recovery');
+  await toggle('Claimed idle stall');
+  expect(container.querySelector('input[type="number"]')).toBeNull();
+  await act(async () => button('Save stall settings').click());
+  expect(mocks.configure).toHaveBeenLastCalledWith({
+    expectedRevision: 3,
+    policy: { claimedIdleStallMs: undefined, idleRecovery: undefined },
+  });
+});
+
+it('keeps zero-attempt recovery off until enabled and requires a positive count', async () => {
+  mocks.settings.mockResolvedValue({
+    revision: 4,
+    policy: { idleRecovery: { maxRecoveries: 0, message: 'Existing nudge' } },
+  });
+  await act(async () =>
+    root.render(h(MantineProvider, { env: 'test' }, h(StallSettings))),
+  );
+  const label = [...container.querySelectorAll('label')].find((label) =>
+    label.textContent?.includes('Managed idle recovery'),
+  )!;
+  const recovery = document.getElementById(label.htmlFor) as HTMLInputElement;
+  expect(recovery.checked).toBe(false);
+  expect(input()).toBeNull();
+  expect(button('Save stall settings').disabled).toBe(true);
+  expect(mocks.configure).not.toHaveBeenCalled();
+  await act(async () => recovery.click());
+  expect(recovery.checked).toBe(true);
+  expect(input().value).toBe('1');
+  expect(container.querySelector('textarea')!.value).toBe('Existing nudge');
+  await fill('0');
+  expect(recovery.checked).toBe(true);
+  expect(input().validity.valid).toBe(false);
+  await act(async () => button('Save stall settings').click());
+  expect(mocks.configure).not.toHaveBeenCalled();
 });

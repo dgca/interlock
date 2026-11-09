@@ -39,7 +39,7 @@ export function App() {
   const automationMatch = useMatch('/automations/*');
   const promptMatch = useMatch('/prompts/*');
   const variableMatch = useMatch('/variables/*');
-  const harnessMatch = useMatch('/settings/harnesses');
+  const harnessMatch = useMatch(paths.harnesses);
   const diagnosticsMatch = useMatch('/settings/diagnostics');
   const libraryReportMatch = useMatch('/report');
   const workflowReportMatch = useMatch('/workflows/:workflowId/report');

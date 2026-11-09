@@ -6,6 +6,7 @@ import {
   Link,
   Navigate,
   useNavigate,
+  useLocation,
   useOutletContext,
   useParams,
   useSearchParams,
@@ -99,6 +100,16 @@ function RouteLoading({ label = 'Loading…' }: { label?: string }) {
     >
       <Loader size="md" />
     </Center>
+  );
+}
+
+function LegacyHarnessesRoute() {
+  const location = useLocation();
+  return (
+    <Navigate
+      replace
+      to={`${paths.harnesses}${location.search}${location.hash}`}
+    />
   );
 }
 
@@ -479,7 +490,8 @@ export const routes: RouteObject[] = [
       { path: 'variables', Component: VariablesRoute },
       { path: 'variables/:variableId', Component: VariableItemRoute },
       { path: 'report', Component: ReportRoute },
-      { path: 'settings/harnesses', Component: HarnessesRoute },
+      { path: 'settings/ai', Component: HarnessesRoute },
+      { path: 'settings/harnesses', Component: LegacyHarnessesRoute },
       { path: 'settings/diagnostics', Component: DiagnosticsRoute },
       {
         path: 'diagnostics',

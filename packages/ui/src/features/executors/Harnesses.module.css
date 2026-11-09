@@ -5,7 +5,7 @@
   margin: 0 auto;
 }
 .settingsHeading {
-  margin: 0 0 20px;
+  margin: 0 0 16px;
   font-size: 16px;
   font-weight: 600;
 }
@@ -26,7 +26,8 @@
   max-width: 72ch;
 }
 .sharedLabel {
-  font-size: 14px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 600;
 }
 .sharedCopy p {
@@ -263,5 +264,41 @@
   }
   .limitValueActions {
     gap: 8px;
+  }
+}
+
+.aiContent {
+  display: flex;
+  flex-direction: column;
+  gap: 44px;
+}
+.aiSection {
+  scroll-margin-top: 24px;
+  min-width: 0;
+}
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.sectionHeading h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+.sectionActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.aiContent .settings {
+  max-width: none;
+  margin: 0;
+}
+@media (max-width: 800px) {
+  .sectionHeading {
+    flex-wrap: wrap;
   }
 }

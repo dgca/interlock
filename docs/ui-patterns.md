@@ -11,11 +11,11 @@ Interlock uses the Mantine theme in `packages/ui/src/theme/theme.ts` and the sha
 
 ## Page layout
 
-Keep reusable page presentation in `packages/ui/src/components`. `PageLayout` owns page headers, tab bars, and `PageTabsSkeleton`. `ListTable` owns the shared list container, headings, link/button rows, responsive spacing, focus/hover states, and `ListTableSkeleton`. Features supply their columns, cell content, state labels, and navigation or action callbacks. Use these shared modules when extending Runs, Automations, Variables, Harnesses, and workflow libraries. Static table rows can contain separate controls such as a switch and Configure button.
+Keep reusable page presentation in `packages/ui/src/components`. `PageLayout` owns page headers, tab bars, and `PageTabsSkeleton`. `ListTable` owns the shared list container, headings, link/button rows, responsive spacing, focus/hover states, and `ListTableSkeleton`. Features supply their columns, cell content, state labels, and navigation or action callbacks. Use these shared modules when extending Runs, Automations, Variables, AI Settings, and workflow libraries. Static table rows can contain separate controls such as a switch and Configure button.
 
 Tabs switch sections within the current resource or list. Use sidebar navigation or an explicit link to open another workspace.
 
-Automations, the global Runs list, Variables, and Harnesses use the shared `PageHeader`. Pages with tabs use the shared tab-row styles; Variables uses `PageToolbar` for its count and search. Automations uses `PageTabs` for URL-backed views; Runs uses `PageTabList` within Mantine Tabs for controlled in-page sections. The header contains the page title and actions. Add Back on creation and resource pages; omit it on a top-level list. Place underline navigation directly below the header on the same surface background, with search and filters aligned to the right. Keep both visible while the workspace scrolls.
+Automations, the global Runs list, Variables, and AI Settings use the shared `PageHeader`. Pages with tabs use the shared tab-row styles; Variables uses `PageToolbar` for its count and search. Automations uses `PageTabs` for URL-backed views; Runs uses `PageTabList` within Mantine Tabs for controlled in-page sections. The header contains the page title and actions. Add Back on creation and resource pages; omit it on a top-level list. Place underline navigation directly below the header on the same surface background, with search and filters aligned to the right. Keep both visible while the workspace scrolls.
 
 Place creation and editing form fields inside a surface card with 24px padding and generous section spacing. The preview rail spans the available height below the header. Activity table bodies use the card background. Use spacing for the next-run and last-occurrence summary; avoid inset divider lines.
 
@@ -23,7 +23,20 @@ Automations list filters and page offsets live in the URL and survive detail nav
 
 Runs tables share the Automations row spacing, title-case headings, typography, status dots, and navigation chevrons. Run rows retain their stage, actor, attention reason, version, tags, comparison context, and exact start time. Tag filters open from the tab toolbar into a form card. Global history actions live in the page header; workflow-scoped history actions remain beside the run tabs.
 
-Harnesses opens on **Configurations**, with installation checks and **Add configuration** in the header. **Execution settings** groups concurrency, stall detection, and history retention into form cards. Tabs retain unsaved configuration and settings edits. Existing `#concurrency` links open Execution settings. Expanded configurations stay inside the table surface; new configurations use a form card. Custom harness setup uses the shared modal with a scrollable body, grouped fields, and a fixed action footer.
+AI Settings presents Harnesses, Model aliases, and Execution settings as sections
+on one scrollable page. Each section keeps its
+own actions. Expanded harness configurations stay inside the table surface;
+new configurations use form cards. The alias list, empty state, and
+editor share one form container, with a divider before an open editor. Alias editors retain
+unsaved changes through list refreshes, guard revision conflicts, and keep
+ordered candidates keyed across reordering. Execution settings retain concurrency,
+stall detection, and history retention cards with consistent subheadings and
+short guidance explaining their effects. Library stall switches reveal threshold
+fields when enabled; workflow and node editors retain inheritance choices.
+Form save actions align to the right. Existing `/settings/harnesses`
+links redirect to `/settings/ai`, preserving query strings and anchors such as
+`#concurrency`. Custom harness setup uses the shared modal with a scrollable body,
+grouped fields, and a fixed action footer.
 
 Variable creation and editing use the shared header with Back, Cancel or Discard changes, and Create or Save changes. Forms use the shared card and content widths. Preserve write-only Secret behavior and metadata-only list reads. List loading and failed searches never show rows from another search; rejected reads offer retry.
 
@@ -62,7 +75,7 @@ The recovery panel explains where to inspect the session and what confirmation d
 
 ## Saving and connection feedback
 
-Workflow, automation, prompt, variable, and Harnesses edits use the workspace leave guard. Inline form errors preserve input and stay beside the action. Dialogs restore focus on dismissal when the trigger remains available. Global notifications sit below dialogs. A failed workspace refresh marks cached data as possibly out of date and offers a retry.
+Workflow, automation, prompt, variable, and AI Settings edits use the workspace leave guard. Inline form errors preserve input and stay beside the action. Dialogs restore focus on dismissal when the trigger remains available. Global notifications sit below dialogs. A failed workspace refresh marks cached data as possibly out of date and offers a retry.
 
 ## Modal layout
 

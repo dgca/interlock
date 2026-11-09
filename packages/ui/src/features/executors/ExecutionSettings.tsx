@@ -95,9 +95,9 @@ export function ExecutionSettings({
             }}
           >
             <div className={styles.sharedCopy}>
-              <div id={`${inputId}-label`} className={styles.sharedLabel}>
+              <h3 id={`${inputId}-label`} className={styles.sharedLabel}>
                 Concurrent assignments
-              </div>
+              </h3>
               <p>
                 {mode === 'unlimited'
                   ? 'Start every ready assignment. Workflow requirements and resource coordination still apply.'
@@ -181,10 +181,11 @@ export function ExecutionSettings({
         )}
       </section>
       <div className={workspacePage.card}>
-        <StallSettings onDirty={setStallDirty} />
+        <h3 className={styles.settingsHeading}>Stall detection</h3>
+        <StallSettings showHeading={false} onDirty={setStallDirty} />
       </div>
       <section className={workspacePage.card}>
-        <h2 className={styles.settingsHeading}>History retention</h2>
+        <h3 className={styles.settingsHeading}>History retention</h3>
         <RetentionSettings showHeading={false} onDirty={setRetentionDirty} />
       </section>
     </>

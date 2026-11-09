@@ -2,6 +2,7 @@
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   executorProfileSchema,
@@ -12,15 +13,18 @@ import {
 import { ExecutorSelect } from '../packages/ui/src/features/executors/ExecutorSelect';
 import { NodeInspector } from '../packages/ui/src/features/workflows/NodeInspector';
 import { ExecutionSettings } from '../packages/ui/src/features/executors/ExecutionSettings';
-import { Harnesses } from '../packages/ui/src/features/executors/Harnesses';
+import { Harnesses as HarnessesPage } from '../packages/ui/src/features/executors/Harnesses';
+const Harnesses = () => h(MemoryRouter, {}, h(HarnessesPage));
 const rpc = vi.hoisted(() => ({
   profiles: vi.fn(),
   models: vi.fn(),
   settings: vi.fn(),
   manage: vi.fn(),
+  aliases: vi.fn(),
 }));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
+    modelAliases: { read: { query: rpc.aliases } },
     stalls: {
       settings: {
         query: async () => ({ id: 'library', revision: 0, policy: {} }),
@@ -59,6 +63,10 @@ beforeEach(() => {
     removeEventListener: vi.fn(),
   });
   Element.prototype.scrollIntoView = vi.fn();
+  rpc.aliases.mockImplementation(async (q) => {
+    if (q.action === 'inspect') throw new Error('Model alias does not exist.');
+    return { items: [], total: 0, offset: 0, limit: 10, truncated: false };
+  });
   rpc.models.mockReset();
   rpc.manage.mockReset();
   rpc.settings.mockResolvedValue({ revision: 0, concurrency: 3 });
@@ -85,7 +93,7 @@ it('prevents edits while reloading shared settings after a revision conflict', a
     root.render(h(MantineProvider, {}, h(ExecutionSettings))),
   );
   const input = container.querySelector<HTMLInputElement>(
-    'input:not([type="hidden"])',
+    '#concurrency input:not([type="hidden"])',
   )!;
   const fill = (value: string) => {
     Object.getOwnPropertyDescriptor(
@@ -209,7 +217,9 @@ it('saves Unlimited explicitly and accepts a larger numeric limit when returning
     root.render(h(MantineProvider, {}, h(ExecutionSettings))),
   );
   await act(async () => setLimitMode('unlimited'));
-  expect(container.querySelector('input:not([type="hidden"])')).toBeNull();
+  expect(
+    container.querySelector('#concurrency input:not([type="hidden"])'),
+  ).toBeNull();
   expect(container.textContent).toContain('Start every ready assignment');
   rpc.manage.mockResolvedValueOnce({ revision: 1, concurrency: null });
   await act(async () => button('Save limit').click());
@@ -220,7 +230,7 @@ it('saves Unlimited explicitly and accepts a larger numeric limit when returning
   });
   await act(async () => setLimitMode('limited'));
   const input = container.querySelector<HTMLInputElement>(
-    'input:not([type="hidden"])',
+    '#concurrency input:not([type="hidden"])',
   )!;
   expect(input.value).toBe('3');
   await act(async () => setInput(input, '25'));
@@ -242,7 +252,9 @@ it('loads saved Unlimited and explains it in workflow settings', async () => {
       'select[aria-label="Assignment limit mode"]',
     )!.value,
   ).toBe('unlimited');
-  expect(container.querySelector('input:not([type="hidden"])')).toBeNull();
+  expect(
+    container.querySelector('#concurrency input:not([type="hidden"])'),
+  ).toBeNull();
   await act(async () =>
     root.render(
       h(
@@ -310,8 +322,8 @@ it('preserves open configuration edits across refresh and reloads only on explic
     'input[maxlength="120"]',
   )!;
   await act(async () => setInput(input, 'Unsaved name'));
-  await act(async () => button('Execution settings').click());
-  await act(async () => button('Configurations').click());
+  expect(container.querySelector('#execution-settings')).not.toBeNull();
+  expect(container.querySelector('#harnesses')).not.toBeNull();
   expect(input.value).toBe('Unsaved name');
   const updated = { ...original, revision: 1, name: 'Updated elsewhere' };
   rpc.profiles.mockResolvedValue([updated]);

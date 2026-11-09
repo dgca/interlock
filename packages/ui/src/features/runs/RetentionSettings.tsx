@@ -124,6 +124,10 @@ export function RetentionSettings({
       }
     >
       {showHeading && <h3>History retention</h3>}
+      <p className={styles.intro}>
+        Automatically delete completed run history by age or count. Workflows
+        and published versions are kept.
+      </p>
       {settings ? (
         <form
           onSubmit={async (event) => {
@@ -209,21 +213,23 @@ export function RetentionSettings({
                     bounds.
                   </Text>
                 )}
-                <Text size="sm" c="dimmed">
-                  Either limit can expire a tree. Completed trees include failed
-                  and cancelled runs.
+                <Text size="xs" c="dimmed">
+                  A run tree includes its child and continuation runs. Either
+                  limit can delete a tree, including failed or cancelled runs.
                   {workflowId
                     ? ' This override has its own count.'
                     : ' The count is shared by workflows that inherit this policy.'}
                 </Text>
               </>
             )}
-            <Text size="sm" c="dimmed">
-              Saving takes effect without publication. Cleanup permanently
-              deletes entire run trees, including detached descendants and
-              rollover chains. Protected trees are skipped.
+            <Text size="xs" c="dimmed">
+              Cleanup permanently deletes run inputs, outputs, and usage. Active
+              runs and protected history are kept. Changes apply when saved.
             </Text>
-            <Group gap="sm">
+            <Group gap="sm" justify="flex-end">
+              <Text size="sm" role="status">
+                {saved ? 'Retention settings saved.' : ''}
+              </Text>
               <Button
                 type="submit"
                 variant="primary"
@@ -231,9 +237,6 @@ export function RetentionSettings({
               >
                 {busy ? 'Saving…' : 'Save retention settings'}
               </Button>
-              <Text size="sm" role="status">
-                {saved ? 'Retention settings saved.' : ''}
-              </Text>
             </Group>
           </fieldset>
         </form>

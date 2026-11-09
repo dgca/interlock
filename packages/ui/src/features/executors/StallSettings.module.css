@@ -1,0 +1,17 @@
+.intro {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.selection {
+  max-width: 360px;
+}
+.threshold {
+  margin-top: 12px;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}

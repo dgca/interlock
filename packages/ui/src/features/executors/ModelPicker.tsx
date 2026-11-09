@@ -2,6 +2,7 @@ import { LoadingSkeleton } from '../../components/LoadingSkeleton/LoadingSkeleto
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   ActionIcon,
+  Button,
   Combobox,
   Group,
   InputBase,
@@ -11,8 +12,9 @@ import {
   useCombobox,
 } from '@mantine/core';
 import { RefreshCw } from 'lucide-react';
-import type { ExecutorModels } from '@interlock/core';
+import type { ExecutorModels, SavedModelAlias } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
+import { readModelAliases, resolveModelAlias } from './modelAliasApi';
 
 /** Explicit selection keeps search text separate from the saved model ID. */
 export function ModelPicker({
@@ -25,6 +27,9 @@ export function ModelPicker({
   disabled = false,
   onCatalog,
   loadCapabilities = false,
+  allowAliases = false,
+  inheritedValue,
+  onAlias,
 }: {
   label: string;
   value?: string;
@@ -35,8 +40,43 @@ export function ModelPicker({
   disabled?: boolean;
   onCatalog?: (catalog: ExecutorModels | undefined) => void;
   loadCapabilities?: boolean;
+  allowAliases?: boolean;
+  inheritedValue?: string;
+  onAlias?: (alias: SavedModelAlias | null | undefined) => void;
 }) {
   const [search, setSearch] = useState('');
+  const [alias, setAlias] = useState<SavedModelAlias | null>();
+  const [aliases, setAliases] =
+    useState<Awaited<ReturnType<typeof readModelAliases>>>();
+  const [aliasError, setAliasError] = useState('');
+  const [referenceError, setReferenceError] = useState('');
+  const [aliasReload, setAliasReload] = useState(0);
+  const reference = value ?? inheritedValue;
+  useEffect(() => {
+    let current = true;
+    setAlias(undefined);
+    onAlias?.(undefined);
+    setReferenceError('');
+    if (!allowAliases || !reference) {
+      setAlias(null);
+      onAlias?.(null);
+      return;
+    }
+    void resolveModelAlias(reference).then(
+      (result) => {
+        if (current) {
+          setAlias(result);
+          onAlias?.(result);
+        }
+      },
+      (error) => {
+        if (current) setReferenceError(errorMessage(error));
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [allowAliases, reference, aliasReload, onAlias]);
   const id = useId();
   const [catalog, setCatalog] = useState<ExecutorModels>();
   const [loading, setLoading] = useState(false);
@@ -81,10 +121,18 @@ export function ModelPicker({
     }
   };
   useEffect(() => {
-    if (loadCapabilities && profileId && !catalog && !loading) void load();
-  }, [key, loadCapabilities]);
+    if (
+      loadCapabilities &&
+      profileId &&
+      !catalog &&
+      !loading &&
+      (!allowAliases || alias === null)
+    )
+      void load();
+  }, [key, loadCapabilities, allowAliases, alias]);
   const combobox = useCombobox({
     onDropdownOpen: () => {
+      if (allowAliases) setAliasReload((n) => n + 1);
       setSearch('');
       combobox.focusSearchInput();
       if (!catalog && !loading) void load();
@@ -94,6 +142,48 @@ export function ModelPicker({
       combobox.focusTarget();
     },
   });
+  useEffect(() => {
+    if (!allowAliases || !combobox.dropdownOpened) return;
+    let current = true;
+    setAliases(undefined);
+    setAliasError('');
+    // Literal model IDs can be longer than alias names and alias searches.
+    if (search.length > 120) {
+      setAliases({
+        items: [],
+        total: 0,
+        offset: 0,
+        limit: 25,
+        truncated: false,
+      });
+      return;
+    }
+    const timer = window.setTimeout(
+      () => {
+        void readModelAliases({ search, limit: 25 }).then(
+          (result) => {
+            if (current) setAliases(result);
+          },
+          (error) => {
+            if (current) setAliasError(errorMessage(error));
+          },
+        );
+      },
+      search ? 180 : 0,
+    );
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [allowAliases, combobox.dropdownOpened, search, aliasReload]);
+  const aliasChoices = [
+    ...(alias &&
+    !aliases?.items.some((item) => item.id === alias.id) &&
+    (!search || alias.name.toLowerCase().includes(search.toLowerCase()))
+      ? [alias]
+      : []),
+    ...(aliases?.items ?? []),
+  ];
   const models = catalog?.models ?? [];
   const selected = models.find((m) => m.id === value);
   const term = search.trim();
@@ -147,7 +237,9 @@ export function ModelPicker({
               },
             }}
           >
-            {selected?.name ?? value ?? defaultLabel}
+            {value && alias
+              ? `${alias.name} · model alias`
+              : (selected?.name ?? value ?? defaultLabel)}
           </InputBase>
         </Combobox.Target>
         <Combobox.Dropdown>
@@ -170,6 +262,7 @@ export function ModelPicker({
           >
             <Combobox.Option value="__default">{defaultLabel}</Combobox.Option>
             {value &&
+              !alias &&
               !models.some((m) => m.id === value) &&
               (!term || value.toLowerCase().includes(term.toLowerCase())) && (
                 <Combobox.Option value={`model:${value}`}>
@@ -179,24 +272,53 @@ export function ModelPicker({
                   </Text>
                 </Combobox.Option>
               )}
-            {matches.map((model) => (
-              <Combobox.Option key={model.id} value={`model:${model.id}`}>
-                <Text size="sm">{model.name}</Text>
-                {model.name !== model.id && (
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                    style={{ overflowWrap: 'anywhere' }}
-                  >
-                    {model.id}
-                  </Text>
-                )}
-              </Combobox.Option>
-            ))}
-            {term && !models.some((m) => m.id === term) && term !== value && (
-              <Combobox.Option value={`model:${term}`}>
-                Use custom model: {term}
-              </Combobox.Option>
+            {allowAliases && (
+              <Combobox.Group label="Model aliases">
+                {aliasChoices.map((item) => (
+                  <Combobox.Option key={item.id} value={`alias:${item.id}`}>
+                    <Text size="sm">{item.name}</Text>
+                    <Text size="xs" c="dimmed">
+                      {item.candidates[0]?.model ?? 'Not configured'} ·{' '}
+                      {item.candidates.length} choice
+                      {item.candidates.length === 1 ? '' : 's'}
+                    </Text>
+                  </Combobox.Option>
+                ))}
+              </Combobox.Group>
+            )}
+            <Combobox.Group label={allowAliases ? 'Harness models' : undefined}>
+              {matches.map((model) => (
+                <Combobox.Option key={model.id} value={`model:${model.id}`}>
+                  <Text size="sm">{model.name}</Text>
+                  {model.name !== model.id && (
+                    <Text
+                      size="xs"
+                      c="dimmed"
+                      style={{ overflowWrap: 'anywhere' }}
+                    >
+                      {model.id}
+                    </Text>
+                  )}
+                </Combobox.Option>
+              ))}
+            </Combobox.Group>
+            {term &&
+              !aliases?.items.some(
+                (item) => item.name.toLowerCase() === term.toLowerCase(),
+              ) &&
+              !models.some((m) => m.id === term) &&
+              term !== value && (
+                <Combobox.Option value={`model:${term}`}>
+                  Use custom model: {term}
+                </Combobox.Option>
+              )}
+            {allowAliases && !aliases && !aliasError && (
+              <Combobox.Empty>Loading model aliases…</Combobox.Empty>
+            )}
+            {aliases?.truncated && (
+              <Combobox.Empty>
+                Showing 25 aliases. Refine your search to find another.
+              </Combobox.Empty>
             )}
             {loading && (
               <Combobox.Empty>
@@ -211,6 +333,18 @@ export function ModelPicker({
           </Combobox.Options>
         </Combobox.Dropdown>
       </Combobox>
+      {allowAliases && (aliasError || referenceError) && (
+        <Text size="xs" c="red" role="alert">
+          Model aliases could not be loaded. {aliasError || referenceError}{' '}
+          <Button
+            size="compact-xs"
+            variant="subtle"
+            onClick={() => setAliasReload((n) => n + 1)}
+          >
+            Retry aliases
+          </Button>
+        </Text>
+      )}
       {(catalog?.status === 'unavailable' ||
         !profileId ||
         catalog?.truncated) && (
