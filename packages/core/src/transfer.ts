@@ -1,5 +1,4 @@
 import { eventConfigSchema } from './eventTriggers.js';
-import { webhookConfigSchema } from './webhooks.js';
 import { scheduleConfigSchema } from './workflowTriggers.js';
 import { z } from 'zod';
 import { definitionSchema } from './index.js';
@@ -30,59 +29,62 @@ export const workflowBundleSchema = z
     rootId: z.string().min(1),
     workflows: z
       .array(
-        z.object({
-          id: z.string().min(1),
-          name: z.string().trim().min(1).max(120),
-          description: z.string(),
-          ownerWorkflowId: z.string().nullable(),
-          schedules: z
-            .array(
-              z
-                .object({
-                  id: z.string().min(1),
-                  config: scheduleConfigSchema,
-                  enabled: z.boolean().default(false),
-                })
-                .strict(),
+        z.preprocess(
+          (value, ctx) => {
+            if (
+              value &&
+              typeof value === 'object' &&
+              Object.hasOwn(value, 'webhooks')
             )
-            .optional(),
-          webhooks: z
-            .array(
-              z
-                .object({
-                  id: z.string().min(1),
-                  config: webhookConfigSchema,
-                  enabled: z.boolean().default(false),
-                })
-                .strict(),
-            )
-            .max(4096)
-            .optional(),
-          eventTriggers: z
-            .array(
-              z
-                .object({
-                  id: z.string().min(1),
-                  config: eventConfigSchema,
-                  enabled: z.boolean().default(false),
-                })
-                .strict(),
-            )
-            .max(4096)
-            .optional(),
-          draft: definitionSchema,
-          draftRevision: z.number().int().positive(),
-          deletedVersions: z.array(deletedVersionSchema).optional(),
-          versions: z.array(
-            z.object({
-              version: z.number().int().positive(),
-              definition: definitionSchema,
-              pinnedPromptRevisions: z
-                .record(z.string(), z.number().int().positive())
-                .optional(),
-            }),
-          ),
-        }),
+              ctx.addIssue({
+                code: 'custom',
+                path: ['webhooks'],
+                message: 'Webhook configurations are no longer supported',
+              });
+            return value;
+          },
+          z.object({
+            id: z.string().min(1),
+            name: z.string().trim().min(1).max(120),
+            description: z.string(),
+            ownerWorkflowId: z.string().nullable(),
+            schedules: z
+              .array(
+                z
+                  .object({
+                    id: z.string().min(1),
+                    config: scheduleConfigSchema,
+                    enabled: z.boolean().default(false),
+                  })
+                  .strict(),
+              )
+              .optional(),
+            eventTriggers: z
+              .array(
+                z
+                  .object({
+                    id: z.string().min(1),
+                    config: eventConfigSchema,
+                    enabled: z.boolean().default(false),
+                  })
+                  .strict(),
+              )
+              .max(4096)
+              .optional(),
+            draft: definitionSchema,
+            draftRevision: z.number().int().positive(),
+            deletedVersions: z.array(deletedVersionSchema).optional(),
+            versions: z.array(
+              z.object({
+                version: z.number().int().positive(),
+                definition: definitionSchema,
+                pinnedPromptRevisions: z
+                  .record(z.string(), z.number().int().positive())
+                  .optional(),
+              }),
+            ),
+          }),
+        ),
       )
       .min(1),
   })
@@ -187,14 +189,6 @@ export const workflowBundleSchema = z
               'Event trigger source workflow must be included in the bundle',
           });
 
-    if (
-      bundle.formatVersion < 7 &&
-      bundle.workflows.some((w) => w.webhooks?.length)
-    )
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Webhooks require bundle formatVersion 7',
-      });
     if (bundle.formatVersion < 6 && bundle.modelAliases?.length)
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -213,44 +207,8 @@ export const workflowBundleSchema = z
         ...[w.draft, ...w.versions.map((v) => v.definition)].flatMap(
           variableReferences,
         ),
-        ...(w.webhooks ?? []).map((t) => t.config.authentication.secretId),
-        ...(w.eventTriggers ?? []).flatMap((t) =>
-          t.config.action?.type === 'webhook' && t.config.action.secretId
-            ? [t.config.action.secretId]
-            : [],
-        ),
       ]),
     );
-    for (const w of bundle.workflows) {
-      for (const hook of w.webhooks ?? [])
-        if (
-          !bundle.variables?.some(
-            (v) =>
-              v.id === hook.config.authentication.secretId &&
-              v.kind === 'secret',
-          )
-        )
-          ctx.addIssue({
-            code: 'custom',
-            message: 'Webhook authentication requires a Secret requirement',
-          });
-      for (const evt of w.eventTriggers ?? []) {
-        const secretId =
-          evt.config.action?.type === 'webhook'
-            ? evt.config.action.secretId
-            : undefined;
-        if (
-          secretId &&
-          !bundle.variables?.some(
-            (v) => v.id === secretId && v.kind === 'secret',
-          )
-        )
-          ctx.addIssue({
-            code: 'custom',
-            message: 'Webhook action requires a Secret requirement',
-          });
-      }
-    }
     const required = new Set((bundle.variables ?? []).map((v) => v.id));
     if (
       required.size !== (bundle.variables?.length ?? 0) ||

@@ -544,8 +544,7 @@ function VariableEditor({ id }: { id: string }) {
     !!(
       saved.dependencies.total ||
       saved.dependencies.activeRunCount ||
-      saved.dependencies.runningComparisonCount ||
-      saved.dependencies.triggers?.total
+      saved.dependencies.runningComparisonCount
     );
 
   const metadataFields = (
@@ -752,8 +751,7 @@ function VariableEditor({ id }: { id: string }) {
                     <h2 id={`${formId}-usage`}>
                       Used by{' '}
                       <span className={layout.referenceCount}>
-                        {saved.dependencies.total +
-                          (saved.dependencies.triggers?.total ?? 0)}
+                        {saved.dependencies.total}
                       </span>
                     </h2>
                     <div className={styles.dependencies}>
@@ -787,41 +785,6 @@ function VariableEditor({ id }: { id: string }) {
                             </li>
                           ))}
                         </ul>
-                      )}
-                      {!!saved.dependencies.triggers?.total && (
-                        <>
-                          <Text size="sm">
-                            {saved.dependencies.triggers.total} webhook triggers
-                          </Text>
-                          <ul className={layout.referenceList}>
-                            {saved.dependencies.triggers.items.map((t) => (
-                              <li key={t.triggerId}>
-                                <Link
-                                  className={layout.workflowReference}
-                                  to={paths.workflowSchedule(
-                                    t.workflowId,
-                                    t.triggerId,
-                                  )}
-                                >
-                                  {t.name}
-                                  <ArrowRight size={16} aria-hidden="true" />
-                                </Link>
-                              </li>
-                            ))}
-                          </ul>
-                          {saved.dependencies.triggers.nextOffset !== null && (
-                            <Button
-                              disabled={busy || dirty}
-                              onClick={() =>
-                                setOffset(
-                                  saved.dependencies.triggers.nextOffset!,
-                                )
-                              }
-                            >
-                              More triggers
-                            </Button>
-                          )}
-                        </>
                       )}
                       {(offset > 0 || saved.dependencies.truncated) && (
                         <Group>

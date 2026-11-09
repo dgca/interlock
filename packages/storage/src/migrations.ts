@@ -254,6 +254,27 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 15,
+    up(db) {
+      // These integrations existed only in unreleased development builds.
+      db.exec(`
+        DROP INDEX IF EXISTS webhook_deliveries_trigger;
+        DROP INDEX IF EXISTS webhook_receipts_trigger;
+        DROP INDEX IF EXISTS webhook_outcomes_trigger;
+        DELETE FROM documents WHERE collection = 'eventDeliveries'
+          AND json_extract(value, '$.triggerId') IN (
+            SELECT id FROM documents WHERE collection = 'workflowTriggers'
+              AND json_extract(value, '$.kind') = 'event'
+              AND json_extract(value, '$.action.type') = 'webhook'
+          );
+        DELETE FROM documents WHERE collection = 'workflowTriggers'
+          AND (json_extract(value, '$.kind') = 'webhook' OR
+            (json_extract(value, '$.kind') = 'event' AND json_extract(value, '$.action.type') = 'webhook'));
+        DELETE FROM documents WHERE collection IN ('webhookDeliveries', 'webhookReceipts', 'webhookOutcomes');
+      `);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

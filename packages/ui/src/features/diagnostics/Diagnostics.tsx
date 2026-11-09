@@ -41,7 +41,7 @@ const categoryDescriptions: Record<DiagnosticCategory, string> = {
   system: 'Database integrity, schema version, disk space, and history size',
   harnesses:
     'Local harness binaries, permissions, working directories, and models',
-  triggers: 'Schedule lag, consecutive trigger failures, and webhook outcomes',
+  triggers: 'Schedule lag, consecutive trigger failures, and automatic pauses',
   blockers:
     'Human pauses, uncertain resource holds, work stalls, and model blockers',
   workflows:

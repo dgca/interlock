@@ -201,14 +201,6 @@ function combineBundles(
           );
         if (!old) (previous.schedules ??= []).push(structuredClone(schedule));
       }
-      for (const webhook of entry.webhooks ?? []) {
-        const old = previous.webhooks?.find((item) => item.id === webhook.id);
-        if (old && !isDeepStrictEqual(old.config, webhook.config))
-          throw new InterlockError(
-            `Selected files conflict for webhook ${webhook.id}`,
-          );
-        if (!old) (previous.webhooks ??= []).push(structuredClone(webhook));
-      }
       for (const trigger of entry.eventTriggers ?? []) {
         const old = previous.eventTriggers?.find(
           (item) => item.id === trigger.id,
@@ -274,21 +266,19 @@ function combineBundles(
             ? 9
             : [...workflows.values()].some((w) => w.eventTriggers?.length)
               ? 8
-              : [...workflows.values()].some((w) => w.webhooks?.length)
-                ? 7
-                : modelAliases.size
-                  ? 6
-                  : [...workflows.values()].some((w) => w.schedules?.length)
-                    ? 5
-                    : variables.size
-                      ? 4
-                      : [...workflows.values()].some(
-                            (w) => w.deletedVersions?.length,
-                          )
-                        ? 3
-                        : prompts.size
-                          ? 2
-                          : 1,
+              : modelAliases.size
+                ? 6
+                : [...workflows.values()].some((w) => w.schedules?.length)
+                  ? 5
+                  : variables.size
+                    ? 4
+                    : [...workflows.values()].some(
+                          (w) => w.deletedVersions?.length,
+                        )
+                      ? 3
+                      : prompts.size
+                        ? 2
+                        : 1,
         rootId,
         ...(modelAliases.size
           ? { modelAliases: [...modelAliases.values()] }

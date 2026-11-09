@@ -66,7 +66,7 @@ The library count pool contains all completed trees whose root workflows inherit
 
 The existing engine pump runs an overdue sweep after startup and checks every hour. Saving a policy makes the next check due immediately. A sweep removes at most 100 eligible roots in one transaction; eligible backlog retries after one minute. Recent terminal trees have a one-minute observation window. Pending trigger outcomes and lifecycle sources stay protected until observed or dispatched. All manual cleanup protections apply, including uncertainty, comparison evidence, detached descendants and chains. Protected history can keep the stored total above the configured count.
 
-Failed sweeps roll back the entire deletion and record a bounded error, then retry after one hour. If the database cannot store that error, the running engine retains the error and retry deadline in memory. Restart uses the persisted deadline and rechecks current policies and protections. Cleanup never stops workers, reconciles ownership, or deletes durable start, webhook, or lifecycle-trigger receipts. Scheduled cleanup removes historical reports and usage for deleted runs, just as manual cleanup does.
+Failed sweeps roll back the entire deletion and record a bounded error, then retry after one hour. If the database cannot store that error, the running engine retains the error and retry deadline in memory. Restart uses the persisted deadline and rechecks current policies and protections. Cleanup never stops workers, reconciles ownership, or deletes durable start or lifecycle-trigger receipts. Scheduled cleanup removes historical reports and usage for deleted runs, just as manual cleanup does.
 
 ### Configure through CLI, MCP or API
 

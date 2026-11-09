@@ -84,9 +84,7 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Quality judgment**: A declared reviewer's assessment of a comparison sample against an explicit rubric, distinct from execution status and structural checks.
 
-**Workflow trigger**: A configured cause of workflow activity, managed separately from a workflow draft. A schedule trigger starts runs at periodic slots. A webhook trigger authenticates an inbound event and starts runs, submits external input, cancels runs, or holds input acceptance. An event trigger starts a handler from a run lifecycle transition, optionally after its entire source tree stops.
-
-**Webhook delivery**: One inbound event attempt. Accepted events have a signed delivery identity and event time. Inspection retains bounded outcome metadata; persistent receipts prevent repeated effects.
+**Workflow trigger**: A configured cause of workflow activity, managed separately from a workflow draft. A schedule trigger starts runs at periodic slots. An event trigger starts a handler from a run lifecycle transition, optionally after its entire source tree stops.
 
 **Schedule fire**: One recorded attempt or policy skip for a schedule slot. Its admission outcome is distinct from the resulting run's completion outcome.
 

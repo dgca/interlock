@@ -1,7 +1,6 @@
 import {
   triggerConfig,
   eventConfigSchema,
-  webhookConfigSchema,
   nextScheduleSlot,
   type WorkflowTrigger,
   compareWorkflow,
@@ -89,18 +88,6 @@ export function exportWorkflows(
               })),
           }
         : {}),
-      ...(store.workflowTriggers(id).some((t) => t.kind === 'webhook')
-        ? {
-            webhooks: store
-              .workflowTriggers(id)
-              .filter((t) => t.kind === 'webhook')
-              .map((t) => ({
-                id: t.id,
-                config: webhookConfigSchema.parse(triggerConfig(t)),
-                enabled: false,
-              })),
-          }
-        : {}),
       ...(store.workflowTriggers(id).some((t) => t.kind === 'event')
         ? {
             eventTriggers: store
@@ -166,12 +153,6 @@ export function exportWorkflows(
         ...[w.draft, ...w.versions.map((v) => v.definition)].flatMap(
           variableReferences,
         ),
-        ...(w.webhooks ?? []).map((t) => t.config.authentication.secretId),
-        ...(w.eventTriggers ?? []).flatMap((t) =>
-          t.config.action?.type === 'webhook' && t.config.action.secretId
-            ? [t.config.action.secretId]
-            : [],
-        ),
       ]),
     ),
   ]);
@@ -193,19 +174,17 @@ export function exportWorkflows(
         ? 9
         : records.some((w) => w.eventTriggers?.length)
           ? 8
-          : records.some((w) => w.webhooks?.length)
-            ? 7
-            : modelAliases.length
-              ? 6
-              : records.some((w) => w.schedules?.length)
-                ? 5
-                : variables.length
-                  ? 4
-                  : records.some((w) => w.deletedVersions?.length)
-                    ? 3
-                    : prompts.length
-                      ? 2
-                      : 1,
+          : modelAliases.length
+            ? 6
+            : records.some((w) => w.schedules?.length)
+              ? 5
+              : variables.length
+                ? 4
+                : records.some((w) => w.deletedVersions?.length)
+                  ? 3
+                  : prompts.length
+                    ? 2
+                    : 1,
     ...(prompts.length ? { prompts } : {}),
     ...(promptRevisions.size
       ? { promptRevisions: [...promptRevisions.values()] }
@@ -320,30 +299,28 @@ export function diffBundleImport(
   });
 
   const triggers = bundle.workflows.flatMap((entry) =>
-    [
-      ...(entry.schedules ?? []),
-      ...(entry.webhooks ?? []),
-      ...(entry.eventTriggers ?? []),
-    ].map((trigger) => {
-      const existing = store.get<WorkflowTrigger>(
-        'workflowTriggers',
-        trigger.id,
-      );
-      const kind = trigger.config.kind;
-      const status: 'added' | 'changed' | 'unchanged' | 'conflict' = !existing
-        ? 'added'
-        : existing.workflowId !== entry.id
-          ? 'conflict'
-          : isDeepStrictEqual(triggerConfig(existing), trigger.config)
-            ? 'unchanged'
-            : 'changed';
-      return {
-        id: trigger.id,
-        workflowId: entry.id,
-        kind,
-        status,
-      };
-    }),
+    [...(entry.schedules ?? []), ...(entry.eventTriggers ?? [])].map(
+      (trigger) => {
+        const existing = store.get<WorkflowTrigger>(
+          'workflowTriggers',
+          trigger.id,
+        );
+        const kind = trigger.config.kind;
+        const status: 'added' | 'changed' | 'unchanged' | 'conflict' = !existing
+          ? 'added'
+          : existing.workflowId !== entry.id
+            ? 'conflict'
+            : isDeepStrictEqual(triggerConfig(existing), trigger.config)
+              ? 'unchanged'
+              : 'changed';
+        return {
+          id: trigger.id,
+          workflowId: entry.id,
+          kind,
+          status,
+        };
+      },
+    ),
   );
 
   return {
@@ -623,7 +600,6 @@ export function importWorkflows(
     for (const entry of bundle.workflows)
       for (const schedule of [
         ...(entry.schedules ?? []),
-        ...(entry.webhooks ?? []),
         ...(entry.eventTriggers ?? []),
       ]) {
         if (scheduleIds.has(schedule.id))
@@ -662,20 +638,11 @@ export function importWorkflows(
                 anchorAt: now,
                 nextFireAt: nextScheduleSlot(schedule.config.timing, now),
               }
-            : schedule.config.kind === 'webhook'
-              ? {
-                  ignoredCount:
-                    existing?.kind === 'webhook' ? existing.ignoredCount : 0,
-                  rejectedCount:
-                    existing?.kind === 'webhook' ? existing.rejectedCount : 0,
-                  deliveryCount:
-                    existing?.kind === 'webhook' ? existing.deliveryCount : 0,
-                }
-              : {
-                  lastFireAt: undefined,
-                  previousRunId: undefined,
-                  lastCheckedAt: undefined,
-                }),
+            : {
+                lastFireAt: undefined,
+                previousRunId: undefined,
+                lastCheckedAt: undefined,
+              }),
           consecutiveFailures: 0,
           autoPaused: undefined,
           lastLagMs: undefined,

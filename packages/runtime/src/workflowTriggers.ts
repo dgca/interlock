@@ -19,7 +19,6 @@ import {
   type Json,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
-import type { Webhooks } from './webhooks.js';
 import type { EventTriggers } from './eventTriggers.js';
 
 const active = (run: Run) =>
@@ -29,7 +28,6 @@ export class WorkflowTriggers {
   constructor(
     private store: Store,
     private start: (trigger: ScheduleTrigger, input: Json, slot: string) => Run,
-    private webhooks: Webhooks,
     readonly events: EventTriggers,
   ) {}
   private get(id: string) {
@@ -37,10 +35,7 @@ export class WorkflowTriggers {
     if (!trigger) throw new InterlockError('Trigger not found');
     return trigger;
   }
-  private assertTarget(
-    trigger: Pick<WorkflowTrigger, 'workflowId'> &
-      Partial<Pick<WorkflowTrigger, 'kind'>> & { action?: { type: string } },
-  ) {
+  private assertTarget(trigger: Pick<WorkflowTrigger, 'workflowId'>) {
     const w = this.store.get<Workflow>('workflows', trigger.workflowId);
     if (!w) throw new InterlockError('Workflow not found');
     if (
@@ -51,8 +46,6 @@ export class WorkflowTriggers {
       throw new InterlockError(
         'Restore this workflow before enabling its trigger',
       );
-    if (trigger.kind === 'event' && trigger.action?.type === 'webhook')
-      return w;
     if (!w.latestVersion || !this.store.getVersion(w.id, w.latestVersion))
       throw new InterlockError(
         'Publish this workflow before enabling its trigger',
@@ -107,7 +100,7 @@ export class WorkflowTriggers {
     workflowId?: string,
     offset = 0,
     limit = 20,
-    kind?: 'schedule' | 'webhook' | 'event',
+    kind?: 'schedule' | 'event',
     filters: {
       search?: string;
       status?: 'all' | 'enabled' | 'disabled' | 'attention';
@@ -156,15 +149,7 @@ export class WorkflowTriggers {
               : ('workflow' as const),
           lastActivity: this.lastActivity(t),
         };
-        for (const key of [
-          'input',
-          'bindings',
-          'authentication',
-          'deliveryId',
-          'timestamp',
-          'filters',
-          'action',
-        ])
+        for (const key of ['input', 'bindings', 'action'])
           delete (compact as Record<string, unknown>)[key];
         return compact;
       }),
@@ -196,15 +181,6 @@ export class WorkflowTriggers {
           }
         : null;
     }
-    const delivery = this.store.webhookDeliveries(trigger.id, 0, 1).items[0];
-    return delivery
-      ? {
-          at: delivery.receivedAt,
-          outcome: delivery.outcome,
-          runId: delivery.runId,
-          runStatus: undefined,
-        }
-      : null;
   }
   inspect(id: string, offset = 0, limit = 20) {
     const q = scheduleReadSchema.parse({
@@ -230,21 +206,6 @@ export class WorkflowTriggers {
           nextOffset: null,
         },
       };
-    if (trigger.kind === 'webhook')
-      return {
-        trigger: {
-          ...this.summary(trigger),
-          lastActivity: this.lastActivity(trigger),
-        },
-        deliveries: this.store.webhookDeliveries(id, q.offset, q.limit),
-        endpoint: `/hooks/${trigger.id}`,
-        upcoming: [],
-        fires: {
-          items: [] as (ScheduleFire & { runAvailable: boolean })[],
-          total: 0,
-          nextOffset: null,
-        },
-      };
     const fires = this.store.scheduleFires(id, q.offset, q.limit);
     return {
       trigger: {
@@ -253,7 +214,7 @@ export class WorkflowTriggers {
       },
       upcoming: this.preview(trigger.timing).upcoming,
       deliveries: {
-        items: [] as import('@interlock/core').WebhookDelivery[],
+        items: [] as ReturnType<EventTriggers['inspect']>['items'],
         total: 0,
         nextOffset: null,
       },
@@ -320,7 +281,6 @@ export class WorkflowTriggers {
       if (q.action === 'create') {
         if (!this.store.get('workflows', q.workflowId))
           throw new InterlockError('Workflow not found');
-        if (q.config.kind === 'webhook') this.webhooks.validate(q.config);
         if (q.config.kind === 'event') this.events.validate(q.config);
         const trigger = {
           ...q.config,
@@ -335,15 +295,12 @@ export class WorkflowTriggers {
                 anchorAt: at,
                 nextFireAt: nextScheduleSlot(q.config.timing, at),
               }
-            : q.config.kind === 'webhook'
-              ? { ignoredCount: 0, rejectedCount: 0, deliveryCount: 0 }
-              : {}),
+            : {}),
           consecutiveFailures: 0,
         } as WorkflowTrigger;
         if (q.enabled) {
           this.assertTarget(trigger);
-          if (trigger.kind === 'webhook') this.webhooks.validate(trigger, true);
-          if (trigger.kind === 'event') this.events.validate(trigger, true);
+          if (trigger.kind === 'event') this.events.validate(trigger);
         }
         this.store.put('workflowTriggers', trigger);
         return { applied: true, trigger };
@@ -356,7 +313,6 @@ export class WorkflowTriggers {
       if (q.action === 'delete') {
         this.store.remove('workflowTriggers', trigger.id);
         this.store.deleteScheduleFires(trigger.id);
-        this.store.deleteWebhookHistory(trigger.id);
         this.store.deleteEventHistory(trigger.id);
         return { applied: true, trigger: null };
       }
@@ -365,8 +321,6 @@ export class WorkflowTriggers {
           throw new InterlockError(
             'Trigger kind cannot change; create a new trigger',
           );
-        if (q.config.kind === 'webhook')
-          this.webhooks.validate(q.config, trigger.enabled);
         if (q.config.kind === 'event') this.events.validate(q.config);
         const changed =
           trigger.kind === 'schedule' &&
@@ -381,8 +335,7 @@ export class WorkflowTriggers {
         }
       } else if (q.action === 'enable') {
         this.assertTarget(trigger);
-        if (trigger.kind === 'webhook') this.webhooks.validate(trigger, true);
-        if (trigger.kind === 'event') this.events.validate(trigger, true);
+        if (trigger.kind === 'event') this.events.validate(trigger);
         trigger.enabled = true;
         trigger.autoPaused = undefined;
         trigger.consecutiveFailures = 0;
@@ -423,7 +376,6 @@ export class WorkflowTriggers {
   }
   tick() {
     this.store.transaction(() => {
-      this.webhooks.tick();
       this.events.tick();
       const at = new Date().toISOString();
       const settledTriggers = new Set<string>();

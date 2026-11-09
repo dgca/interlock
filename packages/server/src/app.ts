@@ -1,4 +1,3 @@
-import { createHooksApp } from './hooks.js';
 import { Hono } from 'hono';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { createMcpServer } from '../../mcp/src/server.js';
@@ -42,7 +41,6 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
       return c.json({ error: 'Untrusted origin' }, 403);
     await next();
   });
-  app.route('/', createHooksApp(engine));
   app.all('/mcp', async (c) => {
     // There are no server-initiated messages or transport sessions to retain.
     if (c.req.method !== 'POST') {

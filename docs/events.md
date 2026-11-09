@@ -1,6 +1,6 @@
 # Lifecycle event triggers
 
-Event triggers start a workflow or send an outbound webhook when a run completes, fails, is cancelled, needs attention, or stalls. They share trigger management with [schedules](schedules.md) and [webhooks](webhooks.md).
+Event triggers start a workflow when a run completes, fails, is cancelled, needs attention, or stalls. They share trigger management with [schedules](schedules.md).
 
 ## Configuration
 
@@ -8,7 +8,7 @@ Open **Automations → New automation → Interlock event**. Choose the source w
 
 **Enable when created** defaults off. Creation opens the saved automation directly. CLI and MCP create requests also default to disabled; optional create-only `enabled:true` validates enablement and saves atomically. A failed enablement creates nothing. Imports always disable triggers.
 
-Outbound webhook actions remain supported through CLI and MCP. Existing webhook actions appear in Automations with activity, settings, enable/disable, and delete controls. The UI shows their saved configuration but does not offer an outbound webhook creation or editing form. Outbound actions do not require a published handler and never start a handler run.
+To send an HTTP notification, use an event-triggered workflow with a Fetch node. The handler can map the event into the destination service's request format.
 
 ```json
 {
@@ -31,17 +31,17 @@ Outbound webhook actions remain supported through CLI and MCP. Existing webhook 
 }
 ```
 
-Pass this request to `interlock triggers manage @event-trigger.json`, the shared API `triggers.manage`, or MCP `manage_workflow_triggers` inside its `request` field. The UI exposes workflow handlers; use CLI or MCP for outbound actions, tags, failure policies, depth limits, and new Exit filters. Editing a handler in the UI preserves existing advanced settings. Inspect the trigger and use its current `revision` as `expectedRevision` for update, enable, disable, or delete. Update replaces the entire configuration. A trigger's kind cannot change.
+Pass this request to `interlock triggers manage @event-trigger.json`, the shared API `triggers.manage`, or MCP `manage_workflow_triggers` inside its `request` field. The UI exposes workflow handlers; use CLI or MCP for tags, failure policies, depth limits, and new Exit filters. Editing a handler in the UI preserves existing advanced settings. Inspect the trigger and use its current `revision` as `expectedRevision` for update, enable, disable, or delete. Update replaces the entire configuration. A trigger's kind cannot change.
 
-| Field                           | Behavior                                                                                                                                                                                                                                                                    |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `events`                        | One or more of `completed`, `failed`, `cancelled`, `needs_attention`, or `stalled`.                                                                                                                                                                                         |
-| `scope`                         | `{ "type": "library" }` observes all workflows. `{ "type": "workflow", "workflowId": "…", "includeChildren": false }` observes one workflow. `includeChildren: true` also observes its currently owned child workflows.                                                     |
-| `action`                        | Optional action object: `{ "type": "workflow" }` (default) starts the target workflow; `{ "type": "webhook", "url": "…", "secretId": "…", "headers": {…}, "timeoutMs": 5000 }` dispatches an outbound HMAC-signed POST webhook directly without running a handler workflow. |
-| `exitNodeId`                    | Optional completed Exit node filter. Requires a workflow source scope and a completed-only selection. The ID must be an Exit in the source workflow's latest published version.                                                                                             |
-| `waitForQuiescence`             | Defaults to `false`. Valid only when all selected events are terminal, meaning `completed`, `failed`, or `cancelled`.                                                                                                                                                       |
-| `maxTriggerDepth`               | Integer from 1 through 20, default 2. Suppresses another trigger start when the source causal chain reaches this depth.                                                                                                                                                     |
-| `pauseAfterConsecutiveFailures` | Optional integer from 1 through 10,000. Failed starts and failed handler runs count toward automatic pause. A successful handler resets the count. `null` disables automatic pause.                                                                                         |
+| Field                           | Behavior                                                                                                                                                                                                                |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `events`                        | One or more of `completed`, `failed`, `cancelled`, `needs_attention`, or `stalled`.                                                                                                                                     |
+| `scope`                         | `{ "type": "library" }` observes all workflows. `{ "type": "workflow", "workflowId": "…", "includeChildren": false }` observes one workflow. `includeChildren: true` also observes its currently owned child workflows. |
+| `action`                        | Optional `{ "type": "workflow" }`; omission also starts the target workflow.                                                                                                                                            |
+| `exitNodeId`                    | Optional completed Exit node filter. Requires a workflow source scope and a completed-only selection. The ID must be an Exit in the source workflow's latest published version.                                         |
+| `waitForQuiescence`             | Defaults to `false`. Valid only when all selected events are terminal, meaning `completed`, `failed`, or `cancelled`.                                                                                                   |
+| `maxTriggerDepth`               | Integer from 1 through 20, default 2. Suppresses another trigger start when the source causal chain reaches this depth.                                                                                                 |
+| `pauseAfterConsecutiveFailures` | Optional integer from 1 through 10,000. Failed starts and failed handler runs count toward automatic pause. A successful handler resets the count. `null` disables automatic pause.                                     |
 
 Only future transitions observed while a trigger is enabled create deliveries. Enabling does not replay historical events. A `needs_attention` event means a run has entered the existing actionable attention state. Repeated reads do not create events. A `stalled` event follows the existing [stall detector](timers.md#stall-detection-and-active-attempt-deadlines), which preserves run status.
 
@@ -69,4 +69,4 @@ Use `interlock triggers read '{"action":"list","kind":"event"}'` for compact dis
 
 Each trigger retains at most 200 settled delivery rows plus pending work. Dedupe receipts survive visible-log trimming. Event payloads and causal metadata retained for dispatch are not included in ordinary delivery history.
 
-Portable format 8 includes event configuration and referenced source workflows. Every included trigger imports disabled, including forced imports. Operational history, dedupe receipts, causal chains, and local runtime state do not transfer. Import resets the included event triggers' local delivery history and pending state. Existing schedule and webhook history remains. Inspect imported source references and explicitly enable the trigger after publication.
+Portable format 8 includes event configuration and referenced source workflows. Every included trigger imports disabled, including forced imports. Operational history, dedupe receipts, causal chains, and local runtime state do not transfer. Import resets the included event triggers' local delivery history and pending state. Existing schedule history remains. Inspect imported source references and explicitly enable the trigger after publication.

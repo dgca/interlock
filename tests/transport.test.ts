@@ -1,4 +1,3 @@
-import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import {
   assertContract,
@@ -280,7 +279,37 @@ it.each(['stdio', 'http'])(
         (tool) => tool.name === 'manage_workflow_triggers',
       )!.description;
       expect(triggerManagement).toContain('event receipts survive');
-      expect(triggerManagement).toContain('webhook receipts are removed');
+      expect(JSON.stringify(scheduleTools)).not.toMatch(/webhook/i);
+      for (const request of [{ action: 'list', kind: 'webhook' }]) {
+        const rejected = await client.callTool({
+          name: 'read_workflow_triggers',
+          arguments: { request },
+        });
+        expect(rejected.isError).toBe(true);
+      }
+      for (const config of [
+        { kind: 'webhook', name: 'Removed integration' },
+        {
+          kind: 'event',
+          name: 'Removed outbound',
+          events: ['failed'],
+          scope: { type: 'library' },
+          action: { type: 'webhook', url: 'https://example.com/hook' },
+        },
+      ]) {
+        const rejected = await client.callTool({
+          name: 'manage_workflow_triggers',
+          arguments: {
+            request: { action: 'create', workflowId: w.id, config },
+          },
+        });
+        expect(rejected.isError).toBe(true);
+      }
+      expect(store.workflowTriggers(w.id)).toHaveLength(0);
+      expect(
+        (await fetch(`${url}/hooks/removed`, { method: 'POST', body: '{}' }))
+          .status,
+      ).toBe(404);
       const schedule = (
         await call('manage_workflow_triggers', {
           request: {
@@ -409,111 +438,6 @@ it.each(['stdio', 'http'])(
           expectedRevision: disabledSchedule.revision,
         },
       });
-
-      const hookSecret = await call('manage_variables', {
-        request: {
-          action: 'create',
-          name: `Webhook_${mode}`,
-          kind: 'secret',
-          value: 'transport-test-secret',
-        },
-      });
-      const hookConfig = {
-        kind: 'webhook',
-        name: 'Transport webhook',
-        authentication: {
-          secretId: hookSecret.id,
-          header: 'x-signature',
-          parts: [{ source: 'body' }],
-        },
-        deliveryId: { source: 'body', path: 'deliveryId' },
-        timestamp: { source: 'body', path: 'timestamp' },
-        action: { type: 'start', input: {}, bindings: {} },
-      };
-      const hook = (
-        await call('manage_workflow_triggers', {
-          request: { action: 'create', workflowId: w.id, config: hookConfig },
-        })
-      ).trigger;
-      const hookEnabled = (
-        await call('manage_workflow_triggers', {
-          request: {
-            action: 'enable',
-            id: hook.id,
-            expectedRevision: hook.revision,
-          },
-        })
-      ).trigger;
-      const unsignedConfig = await client.callTool({
-        name: 'manage_workflow_triggers',
-        arguments: {
-          request: {
-            action: 'create',
-            workflowId: w.id,
-            config: {
-              ...hookConfig,
-              deliveryId: { source: 'header', path: 'unsigned-id' },
-            },
-          },
-        },
-      });
-      expect(unsignedConfig.isError).toBe(true);
-      const hookBody = JSON.stringify({
-        deliveryId: `delivery-${mode}`,
-        timestamp: new Date().toISOString(),
-      });
-      const hookSignature = `sha256=${createHmac('sha256', 'transport-test-secret').update(hookBody).digest('hex')}`;
-      const hookResponse = await fetch(`${url}/hooks/${hook.id}`, {
-        method: 'POST',
-        body: hookBody,
-        headers: { 'x-signature': hookSignature },
-      });
-      expect(hookResponse.status).toBe(202);
-      expect(await hookResponse.json()).toMatchObject({ outcome: 'started' });
-      const hookInspection = await call('read_workflow_triggers', {
-        request: { action: 'inspect', id: hook.id, limit: 1 },
-      });
-      expect(hookInspection.deliveries).toMatchObject({
-        total: 1,
-        items: [expect.objectContaining({ outcome: 'started' })],
-      });
-      expect(JSON.stringify(hookInspection)).not.toContain(
-        'transport-test-secret',
-      );
-      expect(
-        (
-          await call('read_workflow_triggers', {
-            request: { action: 'list', workflowId: w.id, kind: 'webhook' },
-          })
-        ).total,
-      ).toBe(1);
-      const hookBundle = await call('export_workflow', { id: w.id });
-      expect(hookBundle.formatVersion).toBe(7);
-      expect(hookBundle.variables).toEqual([
-        expect.objectContaining({ id: hookSecret.id, kind: 'secret' }),
-      ]);
-      expect(
-        hookBundle.workflows.find((entry: any) => entry.id === w.id).webhooks[0]
-          .enabled,
-      ).toBe(false);
-      expect(
-        store
-          .list<{ id: string; triggerId: string }>('webhookReceipts')
-          .filter((receipt) => receipt.triggerId === hook.id),
-      ).toHaveLength(1);
-      await call('manage_workflow_triggers', {
-        request: {
-          action: 'delete',
-          id: hook.id,
-          expectedRevision: hookEnabled.revision,
-        },
-      });
-
-      expect(
-        store
-          .list<{ id: string; triggerId: string }>('webhookReceipts')
-          .filter((receipt) => receipt.triggerId === hook.id),
-      ).toHaveLength(0);
 
       const eventDefinition = blankDefinition();
       eventDefinition.nodes = eventDefinition.nodes.filter(

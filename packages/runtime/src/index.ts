@@ -1,4 +1,4 @@
-import { EventTriggers, type EventWebhookFetch } from './eventTriggers.js';
+import { EventTriggers } from './eventTriggers.js';
 import { RunVersions } from './runVersions.js';
 import { modelReferences } from '@interlock/core';
 import { runDoctor } from './doctor.js';
@@ -16,7 +16,6 @@ import {
   uncertainOperationCollection,
   type UncertainOperation,
 } from './quiescence.js';
-import { Webhooks, WebhookRejection } from './webhooks.js';
 import { Stalls } from './stalls.js';
 import { WorkflowTriggers } from './workflowTriggers.js';
 import { PauseHolds } from './pauseHolds.js';
@@ -183,7 +182,6 @@ class ResultProcessingError extends InterlockError {
 export class Engine {
   readonly stalls: Stalls;
   readonly triggers: WorkflowTriggers;
-  readonly webhooks: Webhooks;
   readonly history: RunHistory;
   readonly retention: HistoryRetention;
   readonly executors: ExecutorManager;
@@ -218,7 +216,6 @@ export class Engine {
       trialRoot?: string;
       allowedRoots?: string[];
       clock?: { now: () => number };
-      webhookFetch?: EventWebhookFetch;
       substituteWorkflow?: (
         node: Extract<WorkflowNode, { kind: 'workflow' }>,
         execution: NodeExecution,
@@ -354,83 +351,6 @@ export class Engine {
         this.event(this.run(id), 'work.resources', message);
     });
     this.starts = new RunStarts(store);
-    this.webhooks = new Webhooks(store, (trigger, request, effects) => {
-      if (trigger.action.type === 'start') {
-        const id = this.startRun(
-          trigger.workflowId,
-          request.input ?? {},
-          undefined,
-          undefined,
-          {
-            requestId: request.requestId,
-            externalTask: request.externalTask,
-            tags: trigger.tags,
-            onActiveExternalTask: trigger.action.onActiveExternalTask,
-          },
-          effects,
-        );
-        const run = this.run(id);
-        return {
-          outcome: run.status === 'queued' ? 'queued' : 'started',
-          runId: id,
-        };
-      }
-      const matching = store
-        .activeRuns()
-        .filter(
-          (run) =>
-            run.workflowId === trigger.workflowId &&
-            run.externalTask?.system === request.externalTask?.system &&
-            run.externalTask?.id === request.externalTask?.id,
-        );
-      if (trigger.action.type === 'input') {
-        const nodeId = trigger.action.nodeId;
-        const targets = matching.flatMap((run) => {
-          const execution = run.executions.at(-1);
-          return run.status === 'waiting' &&
-            execution?.kind === 'input' &&
-            execution.status === 'waiting' &&
-            execution.nodeId === nodeId
-            ? [{ run, execution }]
-            : [];
-        });
-        if (targets.length !== 1)
-          throw new WebhookRejection(409, 'input_target_not_unique');
-        const { run, execution } = targets[0];
-        if (Date.parse(request.eventAt) < Date.parse(execution.startedAt))
-          throw new WebhookRejection(409, 'event_predates_input');
-        this.externalInputs.mutate({
-          action: 'submit',
-          runId: run.id,
-          executionId: execution.id,
-          requestId: request.requestId,
-          expectedRevision: execution.externalInput?.revision ?? 0,
-          value: request.input ?? {},
-        });
-        return { outcome: 'submitted', runId: run.id };
-      }
-      if (!matching.length)
-        throw new WebhookRejection(409, 'active_task_not_found');
-      if (
-        trigger.action.type === 'hold' &&
-        matching.some((run) => run.status === 'queued')
-      )
-        throw new WebhookRejection(409, 'hold_requires_admitted_run');
-      for (const run of matching) {
-        if (trigger.action.type === 'cancel') this.cancelTree(run.id, effects);
-        else
-          this.externalInputs.mutate({
-            action: 'hold',
-            runId: run.id,
-            expectedRevision: run.externalInputHold?.revision ?? 0,
-          });
-      }
-      effects.push(() => this.pump());
-      return {
-        outcome: trigger.action.type === 'cancel' ? 'cancelled' : 'held',
-        affectedRuns: matching.length,
-      };
-    });
     this.triggers = new WorkflowTriggers(
       store,
       (trigger, input, slot) => {
@@ -466,7 +386,6 @@ export class Engine {
         }));
         return this.run(result.id);
       },
-      this.webhooks,
       new EventTriggers(
         store,
         (trigger, payload, eventId, chain) => {
@@ -496,7 +415,6 @@ export class Engine {
           return this.run(result.id);
         },
         (runId) => this.quiescence(runId),
-        options.webhookFetch ?? globalThis.fetch,
       ),
     );
     this.history = new RunHistory(
@@ -573,9 +491,6 @@ export class Engine {
           store
             .pendingScheduleFires()
             .some((fire) => fire.runId && ids.has(fire.runId)) ||
-          store
-            .pendingWebhookOutcomes()
-            .some((outcome) => ids.has(outcome.runId)) ||
           store
             .pendingEventDeliveries()
             .some((delivery) => delivery.runId && ids.has(delivery.runId))
@@ -1222,7 +1137,6 @@ export class Engine {
       for (const trigger of this.store.workflowTriggers(id)) {
         this.store.deleteScheduleFires(trigger.id);
         this.store.remove('workflowTriggers', trigger.id);
-        this.store.deleteWebhookHistory(trigger.id);
         this.store.deleteEventHistory(trigger.id);
       }
       this.retention.deleteWorkflow(id);
@@ -2907,16 +2821,12 @@ export class Engine {
       return true;
     }
   }
-  async drain(): Promise<void> {
-    await this.triggers.events.drain();
-  }
   stop() {
     if (this.stopped) return;
     void this.executors.stop();
     this.trials.stop();
     this.simulations.stop();
     this.continuation.stop();
-    this.triggers.events.stop();
     this.stopped = true;
     this.store.transaction(() => {
       for (const run of this.store.activeRuns()) {

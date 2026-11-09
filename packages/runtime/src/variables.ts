@@ -113,15 +113,7 @@ export class Variables {
           c.variableCaptures?.some((v) => v.variableId === id),
       )
       .map((c) => c.id);
-    const triggers = this.store
-      .workflowTriggers()
-      .filter((t) => t.kind === 'webhook' && ids.has(t.authentication.secretId))
-      .map((t) => ({
-        triggerId: t.id,
-        workflowId: t.workflowId,
-        name: t.name,
-      }));
-    return { workflows, runs, comparisons, triggers };
+    return { workflows, runs, comparisons };
   }
   read(input: VariableRead) {
     const parsed = variableReadSchema.safeParse(input);
@@ -191,14 +183,6 @@ export class Variables {
         truncated: q.offset + q.limit < deps.workflows.length,
         activeRunCount: deps.runs.length,
         runningComparisonCount: deps.comparisons.length,
-        triggers: {
-          items: deps.triggers.slice(q.offset, q.offset + q.limit),
-          total: deps.triggers.length,
-          nextOffset:
-            q.offset + q.limit < deps.triggers.length
-              ? q.offset + q.limit
-              : null,
-        },
       },
       bindings: {
         items: bindings.slice(q.offset, q.offset + q.limit),
@@ -290,11 +274,10 @@ export class Variables {
         if (
           deps.workflows.length ||
           deps.runs.length ||
-          deps.comparisons.length ||
-          deps.triggers.length
+          deps.comparisons.length
         )
           throw new InterlockError(
-            `Cannot delete variable: ${deps.workflows.length} dependent workflows, ${deps.runs.length} active runs, ${deps.comparisons.length} running comparisons, ${deps.triggers.length} webhook triggers. Inspect dependencies and remove retained references first.`,
+            `Cannot delete variable: ${deps.workflows.length} dependent workflows, ${deps.runs.length} active runs, ${deps.comparisons.length} running comparisons. Inspect dependencies and remove retained references first.`,
           );
         for (const e of this.store.list<{ id: string; variableId: string }>(
           'variableValues',

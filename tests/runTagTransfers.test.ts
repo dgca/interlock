@@ -32,31 +32,12 @@ function fixture() {
   const source = setup(),
     workflow = source.create('Tagged imports', '', blankDefinition());
   source.publish(workflow.id);
-  const variable = source.variables.mutate({
-    action: 'create',
-    name: 'tag_import_signing',
-    kind: 'secret',
-    value: 'temporary-test-key',
-  }) as { id: string };
   const configs: TriggerConfig[] = [
     {
       kind: 'schedule',
       name: 'Scheduled',
       timing: { type: 'interval', intervalMs: 30000 },
       tags: literalTags,
-    } as TriggerConfig,
-    {
-      kind: 'webhook',
-      name: 'Signed',
-      tags: literalTags,
-      authentication: {
-        secretId: variable.id,
-        header: 'x-signature',
-        parts: [{ source: 'body' }],
-      },
-      deliveryId: { source: 'body', path: 'id' },
-      timestamp: { source: 'body', path: 'at' },
-      action: { type: 'start' },
     } as TriggerConfig,
     {
       kind: 'event',
@@ -79,14 +60,10 @@ function fixture() {
   for (const entry of untagged.workflows)
     for (const trigger of [
       ...(entry.schedules ?? []),
-      ...(entry.webhooks ?? []),
       ...(entry.eventTriggers ?? []),
     ])
       delete trigger.config.tags;
-  const bindings: VariableImportBindings = {
-    [variable.id]: { action: 'provision' },
-  };
-  return { tagged, untagged, triggers, bindings };
+  return { tagged, untagged, triggers, bindings: {} as VariableImportBindings };
 }
 function retained(e: Engine, triggers: WorkflowTrigger[]) {
   return triggers.map((t) => e.triggers.inspect(t.id).trigger);
@@ -134,10 +111,7 @@ it('clears omitted tags on forced full replacement and keeps selected conflicts 
   const { tagged, untagged, triggers, bindings } = fixture(),
     target = setup();
   importWorkflows(target.store, tagged, { variableBindings: bindings });
-  const local = target.variables.get(tagged.variables![0].id);
-  const bound: VariableImportBindings = {
-    [local.id]: { action: 'bind', variableId: local.id },
-  };
+  const bound: VariableImportBindings = {};
   const before = state(target);
   expect(() =>
     importWorkflows(target.store, untagged, { variableBindings: bound }),

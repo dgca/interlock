@@ -2,7 +2,7 @@
 '@type_of/interlock': patch
 ---
 
-Manage schedules and Interlock event automations in a global Automations workspace, with interval and cron editors, workflow input fields, optional enablement on creation, and Activity and Settings views. Reuse consistent page headers, tabs, form cards, preview sidebars, and list loading skeletons; keep existing integration records accessible.
+Manage schedules and Interlock event automations in a global Automations workspace, with interval and cron editors, workflow input fields, optional enablement on creation, and Activity and Settings views. Reuse consistent page headers, tabs, form cards, preview sidebars, and list loading skeletons. HTTP notifications use event-handler workflows with Fetch nodes.
 
 Match the Runs workspace to the shared header, tabs, list styling, and loading skeletons. Keep tag filters in a form card and history controls in the page toolbar while preserving run navigation and attention details.
 

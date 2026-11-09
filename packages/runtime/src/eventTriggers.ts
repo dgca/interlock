@@ -1,4 +1,3 @@
-import { createHmac } from 'node:crypto';
 import {
   InterlockError,
   type EventConfig,
@@ -12,20 +11,11 @@ import {
 import type { Store } from '@interlock/storage';
 import { fingerprint } from './versionIdentity.js';
 import type { sourceQuiescence } from './quiescence.js';
-import { Variables } from './variables.js';
-
-export type EventWebhookFetch = (
-  url: string,
-  init: RequestInit,
-) => Promise<Response>;
 
 const active = (run: Run) =>
   ['queued', 'running', 'waiting'].includes(run.status);
 /** Persist recipients with the source transition; dispatch under the ordinary start transaction. */
 export class EventTriggers {
-  private activeDispatches = new Set<string>();
-  private pendingDispatches = new Set<Promise<void>>();
-
   constructor(
     private store: Store,
     private start: (
@@ -35,25 +25,8 @@ export class EventTriggers {
       chain: string[],
     ) => Run,
     private quiescence: (runId: string) => ReturnType<typeof sourceQuiescence>,
-    private fetchFn: EventWebhookFetch = globalThis.fetch,
   ) {}
-  validate(config: EventConfig, enabling = false) {
-    if (config.action?.type === 'webhook') {
-      if (config.action.secretId) {
-        const variables = new Variables(this.store);
-        const variable = variables.get(config.action.secretId);
-        if (variable.kind !== 'secret')
-          throw new InterlockError(
-            'Webhook action authentication requires a Secret variable',
-          );
-        if (enabling) {
-          const capture = variables.captureIds([config.action.secretId]);
-          variables
-            .resolve({ variableCaptures: capture }, [config.action.secretId])
-            .value(config.action.secretId);
-        }
-      }
-    }
+  validate(config: EventConfig) {
     if (config.scope.type === 'workflow') {
       const source = this.store.get<Workflow>(
         'workflows',
@@ -208,7 +181,6 @@ export class EventTriggers {
   }
   tick() {
     for (const delivery of this.store.pendingEventDeliveries()) {
-      if (this.activeDispatches.has(delivery.id)) continue;
       const trigger = this.store.get<EventTrigger>(
         'workflowTriggers',
         delivery.triggerId,
@@ -263,9 +235,6 @@ export class EventTriggers {
             ? 'trigger_already_in_chain'
             : 'max_trigger_depth';
           delivery.settled = true;
-        } else if (trigger.action?.type === 'webhook') {
-          this.dispatchWebhook(trigger, delivery);
-          continue;
         } else
           try {
             const target = this.store.get<Workflow>(
@@ -316,136 +285,6 @@ export class EventTriggers {
       this.store.put('eventDeliveries', delivery);
       this.store.trimEventDeliveries(trigger.id);
     }
-  }
-  private dispatchWebhook(trigger: EventTrigger, delivery: EventDelivery) {
-    if (!trigger.action || trigger.action.type !== 'webhook') return;
-    if (!delivery.payload) {
-      delivery.outcome = 'failed';
-      delivery.reason = 'Pending event payload unavailable';
-      delivery.error = delivery.reason;
-      delivery.settled = true;
-      delivery.payload = undefined;
-      delivery.triggerChain = undefined;
-      this.failure(trigger, delivery.reason);
-      this.store.put('workflowTriggers', trigger);
-      this.store.put('eventDeliveries', delivery);
-      this.store.trimEventDeliveries(trigger.id);
-      return;
-    }
-    const payload = delivery.payload;
-    const action = trigger.action;
-    const deliveryId = delivery.id;
-    const triggerId = trigger.id;
-    this.activeDispatches.add(deliveryId);
-
-    const task = (async () => {
-      try {
-        let secret: string | undefined;
-        if (action.secretId) {
-          const variables = new Variables(this.store);
-          const capture = variables.captureIds([action.secretId]);
-          secret = variables
-            .resolve({ variableCaptures: capture }, [action.secretId])
-            .value(action.secretId);
-        }
-        const body = JSON.stringify(payload);
-        const timestamp = payload.occurredAt ?? new Date().toISOString();
-        const headers: Record<string, string> = {
-          'content-type': 'application/json',
-          'x-interlock-event': payload.type,
-          'x-interlock-delivery': deliveryId,
-          'x-interlock-timestamp': timestamp,
-          ...(action.headers ?? {}),
-        };
-        if (secret) {
-          const hex = createHmac('sha256', secret).update(body).digest('hex');
-          headers['x-interlock-signature-256'] = hex;
-          headers['x-interlock-signature'] = `sha256=${hex}`;
-        }
-        const timeoutMs = action.timeoutMs ?? 5000;
-        const controller = new AbortController();
-        const timer = setTimeout(() => {
-          controller.abort(
-            new Error(`Webhook request timed out after ${timeoutMs}ms`),
-          );
-        }, timeoutMs);
-
-        let response: Response;
-        try {
-          response = await this.fetchFn(action.url, {
-            method: 'POST',
-            headers,
-            body,
-            signal: controller.signal,
-          });
-        } finally {
-          clearTimeout(timer);
-        }
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status} ${response.statusText}`);
-        }
-
-        this.store.transaction(() => {
-          const d = this.store.get<EventDelivery>(
-            'eventDeliveries',
-            deliveryId,
-          );
-          if (!d || d.settled) return;
-          d.outcome = 'delivered';
-          d.settled = true;
-          d.reason = undefined;
-          d.error = undefined;
-          d.payload = undefined;
-          d.triggerChain = undefined;
-          this.store.put('eventDeliveries', d);
-          const t = this.store.get<EventTrigger>('workflowTriggers', triggerId);
-          if (t && t.kind === 'event') {
-            t.consecutiveFailures = 0;
-            t.lastFireAt = new Date().toISOString();
-            this.store.put('workflowTriggers', t);
-          }
-          this.store.trimEventDeliveries(triggerId);
-        });
-      } catch (error) {
-        const errMsg = (
-          error instanceof Error ? error.message : String(error)
-        ).slice(0, 1000);
-        this.store.transaction(() => {
-          const d = this.store.get<EventDelivery>(
-            'eventDeliveries',
-            deliveryId,
-          );
-          if (!d || d.settled) return;
-          d.outcome = 'failed';
-          d.reason = errMsg;
-          d.error = errMsg;
-          d.settled = true;
-          d.payload = undefined;
-          d.triggerChain = undefined;
-          this.store.put('eventDeliveries', d);
-          const t = this.store.get<EventTrigger>('workflowTriggers', triggerId);
-          if (t && t.kind === 'event') {
-            this.failure(t, errMsg);
-            this.store.put('workflowTriggers', t);
-          }
-          this.store.trimEventDeliveries(triggerId);
-        });
-      } finally {
-        this.activeDispatches.delete(deliveryId);
-      }
-    })();
-
-    this.pendingDispatches.add(task);
-    task.finally(() => this.pendingDispatches.delete(task));
-  }
-  async drain(): Promise<void> {
-    while (this.pendingDispatches.size > 0) {
-      await Promise.all([...this.pendingDispatches]);
-    }
-  }
-  stop(): void {
-    // any cleanup
   }
   disable(triggerId: string) {
     for (const delivery of this.store.pendingEventDeliveries()) {

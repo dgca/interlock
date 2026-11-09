@@ -59,6 +59,16 @@ database before building the index. Run records and execution history stay in
 their original format. Index creation needs additional disk space and may take
 longer on larger histories.
 
+## Upgrading unreleased development databases
+
+Schema 15 removes inbound webhook triggers, outbound webhook event actions, and
+associated delivery records from development builds. These integrations were not
+part of `@type_of/interlock@0.2.13`. Existing runs, workflow definitions, variables,
+schedules, workflow-based event automations, and durable event receipts remain.
+Startup creates a pre-upgrade backup for existing file-backed databases. Bundle
+format numbers remain 1 through 10. Format 7 is reserved and no longer emitted;
+bundles containing removed webhook configuration reject on import.
+
 ## Restore a pre-upgrade backup
 
 Restoring replaces database state with the snapshot. Changes made after that snapshot are not included. Stop every server using the database before proceeding.
