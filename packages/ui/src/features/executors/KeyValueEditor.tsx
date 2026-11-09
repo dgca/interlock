@@ -126,15 +126,15 @@ export function KeyValueEditor({
         <div className={styles.tokenChips}>
           <span className={styles.tokenChipsLabel}>Template tokens:</span>
           {tokens.map((tok) => (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               key={tok}
               className={styles.tokenChip}
               onClick={() => insertToken(tok)}
               title={`Insert ${tok}`}
             >
               {tok}
-            </button>
+            </Button>
           ))}
         </div>
       )}

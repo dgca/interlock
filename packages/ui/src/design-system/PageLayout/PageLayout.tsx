@@ -1,5 +1,4 @@
-import { Tabs } from '@mantine/core';
-import { Button } from '../Button';
+import { ActionIcon, Tabs } from '@mantine/core';
 import { Placeholder } from '../LoadingSkeleton/LoadingSkeleton';
 import type { ReactNode } from 'react';
 
@@ -30,14 +29,14 @@ export function PageHeader({
       data-two-line={Boolean(subtitle || status) || undefined}
     >
       {onBack && (
-        <Button
-          variant="ghost"
+        <ActionIcon
+          variant="subtle"
           aria-label={backLabel}
           onClick={onBack}
           disabled={busy}
         >
-          <ArrowLeft />
-        </Button>
+          <ArrowLeft size={18} />
+        </ActionIcon>
       )}
       <div className={classes.title}>
         <h1 title={title}>{title}</h1>

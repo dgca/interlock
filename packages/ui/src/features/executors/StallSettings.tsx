@@ -250,6 +250,7 @@ export function StallSettings({
   const dirty =
     !!saved && JSON.stringify(saved.policy) !== JSON.stringify(policy);
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
+  useEffect(() => () => onDirty?.(false), [onDirty]);
   const load = () => {
     setError('');
     void api.stalls.settings

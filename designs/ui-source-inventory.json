@@ -362,11 +362,11 @@
         "PageToolbar",
         "workspacePage"
       ],
-      "mantineImports": [["Tabs"]],
+      "mantineImports": [["ActionIcon", "Tabs"]],
       "designSystemImports": [],
       "jsxElements": [
+        "ActionIcon",
         "ArrowLeft",
-        "Button",
         "PageTabStrip",
         "PageToolbar",
         "Placeholder",
@@ -657,6 +657,7 @@
       "designSystemImports": [
         [
           "Button",
+          "Badge",
           "TextInput",
           "NumberInput",
           "NativeSelect",
@@ -669,6 +670,7 @@
       ],
       "jsxElements": [
         "ActionError",
+        "Badge",
         "Button",
         "ChevronDown",
         "ChevronUp",
@@ -687,7 +689,6 @@
         "Terminal",
         "TextInput",
         "Trash2",
-        "button",
         "div",
         "fieldset",
         "form",
@@ -698,8 +699,7 @@
       ],
       "nativePatterns": {
         "form": 1,
-        "fieldset": 1,
-        "button": 4
+        "fieldset": 1
       }
     },
     {
@@ -758,12 +758,19 @@
       ],
       "mantineImports": [],
       "designSystemImports": [
-        ["Stack", "Placeholder", "PageHeader", "workspacePage"]
+        [
+          "Stack",
+          "Placeholder",
+          "PageHeader",
+          "PageTabsSkeleton",
+          "workspacePage"
+        ]
       ],
       "jsxElements": [
         "HarnessRowsSkeleton",
         "ListTableSkeleton",
         "PageHeader",
+        "PageTabsSkeleton",
         "Placeholder",
         "Stack",
         "div",
@@ -807,6 +814,7 @@
         "NewProfile",
         "NumberInput",
         "PageHeader",
+        "PageTabs",
         "Plus",
         "ProfileRow",
         "RefreshCw",
@@ -838,18 +846,8 @@
       "exports": ["KeyValueEditor", "KeyValueEditorProps"],
       "mantineImports": [],
       "designSystemImports": [["Button", "TextInput"]],
-      "jsxElements": [
-        "Button",
-        "Plus",
-        "TextInput",
-        "Trash2",
-        "button",
-        "div",
-        "span"
-      ],
-      "nativePatterns": {
-        "button": 1
-      }
+      "jsxElements": ["Button", "Plus", "TextInput", "Trash2", "div", "span"],
+      "nativePatterns": {}
     },
     {
       "file": "packages/ui/src/features/executors/ManagedExecutionPanel.tsx",
@@ -918,7 +916,8 @@
           "ModalBody",
           "ModalFooter",
           "ActionError",
-          "workspacePage"
+          "workspacePage",
+          "EmptyState"
         ]
       ],
       "jsxElements": [
@@ -928,6 +927,8 @@
         "ArrowDown",
         "ArrowUp",
         "Button",
+        "EmptyState",
+        "Fragment",
         "ListTable",
         "ListTableRow",
         "ListTableSkeleton",
@@ -946,7 +947,6 @@
         "form",
         "h2",
         "h3",
-        "h4",
         "legend",
         "p",
         "section",

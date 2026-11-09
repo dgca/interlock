@@ -59,6 +59,7 @@ export function ExecutionSettings({
     () => onDirty?.(dirty || stallDirty || retentionDirty),
     [dirty, stallDirty, retentionDirty, onDirty],
   );
+  useEffect(() => () => onDirty?.(false), [onDirty]);
   return (
     <>
       <section
@@ -183,11 +184,11 @@ export function ExecutionSettings({
           </div>
         )}
       </section>
-      <div className={workspacePage.card}>
+      <div id="stall-settings" className={workspacePage.card}>
         <h3 className={styles.settingsHeading}>Stall detection</h3>
         <StallSettings showHeading={false} onDirty={setStallDirty} />
       </div>
-      <section className={workspacePage.card}>
+      <section id="history-retention" className={workspacePage.card}>
         <h3 className={styles.settingsHeading}>History retention</h3>
         <RetentionSettings showHeading={false} onDirty={setRetentionDirty} />
       </section>

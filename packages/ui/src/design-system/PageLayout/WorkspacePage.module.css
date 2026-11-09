@@ -8,6 +8,7 @@
 }
 .header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 14px;
   min-height: 76px;
@@ -22,7 +23,7 @@
 }
 .title {
   flex: 1;
-  min-width: 0;
+  min-width: min(220px, 100%);
 }
 .title h1 {
   font-size: 28px;

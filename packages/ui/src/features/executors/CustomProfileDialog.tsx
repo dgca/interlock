@@ -1,5 +1,6 @@
 import {
   Button,
+  Badge,
   TextInput,
   NumberInput,
   NativeSelect,
@@ -326,19 +327,19 @@ export function CustomProfileDialog({
               </div>
 
               <div>
-                <label className={styles.fieldLabel}>Execution Mode</label>
+                <label className={styles.fieldLabel}>Execution mode</label>
                 <SegmentedControl
                   fullWidth
+                  aria-label="Execution mode"
                   value={mode}
                   onChange={(v) => setMode(v as 'direct' | 'launcher')}
                   data={[
-                    { label: 'Direct Turn Mode', value: 'direct' },
+                    { label: 'Direct turn', value: 'direct' },
                     {
-                      label: 'Delegated Claim-Ticket Mode (Launcher)',
+                      label: 'Delegated launcher',
                       value: 'launcher',
                     },
                   ]}
-                  style={{ marginTop: 4, marginBottom: 4 }}
                 />
                 <p className={styles.fieldHelper}>
                   {mode === 'direct'
@@ -348,16 +349,16 @@ export function CustomProfileDialog({
               </div>
 
               <div>
-                <label className={styles.fieldLabel}>Transport Protocol</label>
+                <label className={styles.fieldLabel}>Transport protocol</label>
                 <SegmentedControl
                   fullWidth
+                  aria-label="Transport protocol"
                   value={transport}
                   onChange={(v) => setTransport(v as 'subprocess' | 'http')}
                   data={[
-                    { label: 'Subprocess (CLI)', value: 'subprocess' },
-                    { label: 'HTTP Endpoint', value: 'http' },
+                    { label: 'Subprocess', value: 'subprocess' },
+                    { label: 'HTTP', value: 'http' },
                   ]}
-                  style={{ marginTop: 4 }}
                 />
               </div>
 
@@ -500,27 +501,32 @@ export function CustomProfileDialog({
 
                     {/* Status Hook */}
                     <div className={styles.hookCard}>
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
                         className={styles.hookHeader}
+                        aria-expanded={openHooks.status}
+                        aria-controls={`${formId}-status`}
                         onClick={() => toggleHook('status')}
                       >
                         <div className={styles.hookTitleGroup}>
                           <span>Status Polling Hook</span>
-                          <span className={styles.hookTag}>
+                          <Badge color="gray">
                             {statusCommand || statusUrl
                               ? 'Configured'
                               : 'Optional'}
-                          </span>
+                          </Badge>
                         </div>
                         {openHooks.status ? (
                           <ChevronUp size={14} />
                         ) : (
                           <ChevronDown size={14} />
                         )}
-                      </button>
+                      </Button>
                       {openHooks.status && (
-                        <div className={styles.hookBody}>
+                        <div
+                          id={`${formId}-status`}
+                          className={styles.hookBody}
+                        >
                           <TextInput
                             label={
                               transport === 'http'
@@ -549,27 +555,32 @@ export function CustomProfileDialog({
 
                     {/* Message Hook */}
                     <div className={styles.hookCard}>
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
                         className={styles.hookHeader}
+                        aria-expanded={openHooks.message}
+                        aria-controls={`${formId}-message`}
                         onClick={() => toggleHook('message')}
                       >
                         <div className={styles.hookTitleGroup}>
                           <span>Message & Human Input Hook</span>
-                          <span className={styles.hookTag}>
+                          <Badge color="gray">
                             {messageCommand || messageUrl
                               ? 'Configured'
                               : 'Optional'}
-                          </span>
+                          </Badge>
                         </div>
                         {openHooks.message ? (
                           <ChevronUp size={14} />
                         ) : (
                           <ChevronDown size={14} />
                         )}
-                      </button>
+                      </Button>
                       {openHooks.message && (
-                        <div className={styles.hookBody}>
+                        <div
+                          id={`${formId}-message`}
+                          className={styles.hookBody}
+                        >
                           <TextInput
                             label={
                               transport === 'http'
@@ -598,25 +609,27 @@ export function CustomProfileDialog({
 
                     {/* Stop Hook */}
                     <div className={styles.hookCard}>
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
                         className={styles.hookHeader}
+                        aria-expanded={openHooks.stop}
+                        aria-controls={`${formId}-stop`}
                         onClick={() => toggleHook('stop')}
                       >
                         <div className={styles.hookTitleGroup}>
                           <span>Stop & Cancellation Hook</span>
-                          <span className={styles.hookTag}>
+                          <Badge color="gray">
                             {stopCommand || stopUrl ? 'Configured' : 'Optional'}
-                          </span>
+                          </Badge>
                         </div>
                         {openHooks.stop ? (
                           <ChevronUp size={14} />
                         ) : (
                           <ChevronDown size={14} />
                         )}
-                      </button>
+                      </Button>
                       {openHooks.stop && (
-                        <div className={styles.hookBody}>
+                        <div id={`${formId}-stop`} className={styles.hookBody}>
                           <TextInput
                             label={
                               transport === 'http'
@@ -643,27 +656,32 @@ export function CustomProfileDialog({
 
                     {/* Archive Hook */}
                     <div className={styles.hookCard}>
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
                         className={styles.hookHeader}
+                        aria-expanded={openHooks.archive}
+                        aria-controls={`${formId}-archive`}
                         onClick={() => toggleHook('archive')}
                       >
                         <div className={styles.hookTitleGroup}>
                           <span>Archive & Cleanup Hook</span>
-                          <span className={styles.hookTag}>
+                          <Badge color="gray">
                             {archiveCommand || archiveUrl
                               ? 'Configured'
                               : 'Optional'}
-                          </span>
+                          </Badge>
                         </div>
                         {openHooks.archive ? (
                           <ChevronUp size={14} />
                         ) : (
                           <ChevronDown size={14} />
                         )}
-                      </button>
+                      </Button>
                       {openHooks.archive && (
-                        <div className={styles.hookBody}>
+                        <div
+                          id={`${formId}-archive`}
+                          className={styles.hookBody}
+                        >
                           <TextInput
                             label={
                               transport === 'http'
@@ -725,12 +743,11 @@ export function CustomProfileDialog({
                 </p>
 
                 {allowedRoots.length > 0 && (
-                  <div className={styles.rootsList} style={{ marginTop: 8 }}>
+                  <div className={styles.rootsList}>
                     {allowedRoots.map((root, idx) => (
                       <div key={idx} className={styles.rootRow}>
                         <TextInput
                           className={styles.monoInput}
-                          style={{ flex: 1 }}
                           placeholder="/Users/dan/dev"
                           value={root}
                           onChange={(e) =>

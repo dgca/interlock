@@ -400,7 +400,7 @@ React Router owns browser navigation through a shared application layout and chi
 | `/runs/:runId`                    | Run inspector, including child runs                    |
 | `/report`                         | Global workflow performance and cost report            |
 | `/workflows/:workflowId/report`   | Workflow-scoped performance and cost report            |
-| `/settings/ai`                    | Harness profiles and execution settings                |
+| `/settings/ai`                    | Harnesses, model aliases, and execution settings tabs  |
 | `/settings/diagnostics`           | System diagnostics and readiness check                 |
 
 Resource routes use stable, encoded IDs. Names and future folder or group membership do not determine a workflow's address. Folder and group pages can be added as sibling routes under the application layout without changing existing resource links. Query parameters represent view filters; hash fragments remain available for in-page anchors such as run output.

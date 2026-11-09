@@ -2,6 +2,7 @@ import {
   Stack,
   Placeholder,
   PageHeader,
+  PageTabsSkeleton,
   workspacePage,
 } from '../../design-system';
 
@@ -11,6 +12,8 @@ import {
 } from '../../components/ListTable/ListTable';
 
 import styles from './Harnesses.module.css';
+import { useLocation } from 'react-router';
+import { aiSettingsTab, aiSettingsTabs } from './aiSettingsNavigation';
 
 export const harnessColumns: readonly ListTableColumn[] = [
   { label: 'Configuration', width: 'minmax(0, 1fr)' },
@@ -38,9 +41,11 @@ export function HarnessRowsSkeleton() {
   );
 }
 export function HarnessLibrarySkeleton() {
+  const tab = aiSettingsTab(useLocation());
   return (
     <section className={workspacePage.page}>
       <PageHeader title="AI Settings" />
+      <PageTabsSkeleton items={aiSettingsTabs} value={tab} showCounts={false} />
       <div className={workspacePage.content}>
         <HarnessRowsSkeleton />
       </div>

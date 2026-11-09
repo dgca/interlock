@@ -38,6 +38,8 @@ import { ModelSettings } from './ModelSettings';
 import { ExecutionSettings } from './ExecutionSettings';
 import { CustomProfileDialog } from './CustomProfileDialog';
 import { ModelAliases } from './ModelAliases';
+import { PageTabs } from '../../components/PageLayout/PageLayout';
+import { aiSettingsTab, aiSettingsTabs } from './aiSettingsNavigation';
 
 const harnessNames: Record<string, string> = {
   'claude-code': 'Claude Code',
@@ -57,6 +59,12 @@ type DirtySetting = (id: string, dirty: boolean) => void;
 
 export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   const location = useLocation();
+  const activeTab = aiSettingsTab(location);
+  const tabItems = aiSettingsTabs.map((tab) => {
+    const search = new URLSearchParams(location.search);
+    search.set('tab', tab.value);
+    return { ...tab, to: `${location.pathname}?${search}` };
+  });
   const [dirtySettings, setDirtySettings] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -118,6 +126,9 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     void refresh();
   }, []);
   useEffect(() => {
+    if (activeTab !== 'harnesses') setAdding(false);
+  }, [activeTab]);
+  useEffect(() => {
     const frame = requestAnimationFrame(() => {
       const target = document.getElementById(location.hash.slice(1));
       target?.scrollIntoView({ block: 'start' });
@@ -127,6 +138,11 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   return (
     <section className={workspacePage.page}>
       <PageHeader title="AI Settings" />
+      <PageTabs
+        label="AI settings sections"
+        items={tabItems}
+        value={activeTab}
+      />
       <div className={`${workspacePage.content} ${styles.aiContent}`}>
         {error && (
           <div className={styles.errorRow}>
@@ -138,99 +154,105 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
             </Button>
           </div>
         )}
-        <section
-          id="harnesses"
-          className={styles.aiSection}
-          aria-labelledby="harnesses-title"
-        >
-          <div className={styles.sectionHeading}>
-            <h2 id="harnesses-title">Harnesses</h2>
-            <div className={styles.sectionActions}>
-              <>
-                <Button
-                  aria-label="Check installations"
-                  title="Check installations"
-                  disabled={checking}
-                  onClick={() => void refresh(true)}
-                >
-                  <RefreshCw size={14} />
-                  Check installations
-                </Button>
-                <Button
-                  ref={addButton}
-                  variant="primary"
-                  disabled={adding}
-                  onClick={() => {
-                    setAdding(true);
-                  }}
-                >
-                  <Plus size={14} />
-                  Add configuration
-                </Button>
-              </>
+        {activeTab === 'harnesses' && (
+          <section
+            id="harnesses"
+            className={styles.aiSection}
+            aria-labelledby="harnesses-title"
+          >
+            <div className={styles.sectionHeading}>
+              <h2 id="harnesses-title">Harnesses</h2>
+              <div className={styles.sectionActions}>
+                <>
+                  <Button
+                    aria-label="Check installations"
+                    title="Check installations"
+                    disabled={checking}
+                    onClick={() => void refresh(true)}
+                  >
+                    <RefreshCw size={14} />
+                    Check installations
+                  </Button>
+                  <Button
+                    ref={addButton}
+                    variant="primary"
+                    disabled={adding}
+                    onClick={() => {
+                      setAdding(true);
+                    }}
+                  >
+                    <Plus size={14} />
+                    Add configuration
+                  </Button>
+                </>
+              </div>
             </div>
-          </div>
-          {!profiles ? (
-            !error && <HarnessRowsSkeleton />
-          ) : (
-            <ListTable columns={harnessColumns}>
-              {profiles.map((p) => (
-                <ProfileRow
-                  key={p.id}
-                  profile={p}
-                  refresh={() => refresh()}
-                  onDirty={trackDirty}
-                  onConfigureCustom={(prof) => {
-                    customTrigger.current =
-                      document.activeElement as HTMLElement;
-                    setCustomModalProfile(prof);
-                    setCustomModalInitialName(prof.name);
-                    setCustomModalOpen(true);
-                  }}
-                />
-              ))}
-            </ListTable>
-          )}
-          <div className={styles.bottom}>
-            <p>
-              Installation checks make no model calls. Authentication is checked
-              when the harness runs.
-            </p>
-          </div>
-          {adding && (
-            <NewProfile
-              onDirty={newDirty}
-              onCancel={() => {
-                setAdding(false);
-                requestAnimationFrame(() => addButton.current?.focus());
-              }}
-              onOpenCustom={(initialName) => {
-                customTrigger.current = addButton.current;
-                setAdding(false);
-                setCustomModalProfile(null);
-                setCustomModalInitialName(initialName);
-                setCustomModalOpen(true);
-              }}
-              onSave={async () => {
-                setAdding(false);
-                await refresh();
-              }}
-            />
-          )}
-        </section>
-        <ModelAliases profiles={profiles} onDirty={aliasDirty} />
-        <section
-          id="execution-settings"
-          className={styles.aiSection}
-          aria-labelledby="execution-settings-title"
-        >
-          <div className={styles.sectionHeading}>
-            <h2 id="execution-settings-title">Execution settings</h2>
-          </div>
-          <div className={styles.settings}>
-            <ExecutionSettings onDirty={limitDirty} />
-          </div>
-        </section>
+            {!profiles ? (
+              !error && <HarnessRowsSkeleton />
+            ) : (
+              <ListTable columns={harnessColumns}>
+                {profiles.map((p) => (
+                  <ProfileRow
+                    key={p.id}
+                    profile={p}
+                    refresh={() => refresh()}
+                    onDirty={trackDirty}
+                    onConfigureCustom={(prof) => {
+                      customTrigger.current =
+                        document.activeElement as HTMLElement;
+                      setCustomModalProfile(prof);
+                      setCustomModalInitialName(prof.name);
+                      setCustomModalOpen(true);
+                    }}
+                  />
+                ))}
+              </ListTable>
+            )}
+            <div className={styles.bottom}>
+              <p>
+                Installation checks make no model calls. Authentication is
+                checked when the harness runs.
+              </p>
+            </div>
+            {adding && (
+              <NewProfile
+                onDirty={newDirty}
+                onCancel={() => {
+                  setAdding(false);
+                  requestAnimationFrame(() => addButton.current?.focus());
+                }}
+                onOpenCustom={(initialName) => {
+                  customTrigger.current = addButton.current;
+                  setAdding(false);
+                  setCustomModalProfile(null);
+                  setCustomModalInitialName(initialName);
+                  setCustomModalOpen(true);
+                }}
+                onSave={async () => {
+                  setAdding(false);
+                  await refresh();
+                }}
+              />
+            )}
+          </section>
+        )}
+        {activeTab === 'model-aliases' && (
+          <ModelAliases profiles={profiles} onDirty={aliasDirty} />
+        )}
+        {activeTab === 'execution' && (
+          <section
+            id="execution-settings"
+            className={styles.aiSection}
+            aria-labelledby="execution-settings-title"
+          >
+            <div className={styles.sectionHeading}>
+              <h2 id="execution-settings-title">Execution settings</h2>
+            </div>
+            <div className={styles.settings}>
+              <ExecutionSettings onDirty={limitDirty} />
+            </div>
+          </section>
+        )}
       </div>
       <CustomProfileDialog
         opened={customModalOpen}
