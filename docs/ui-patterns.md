@@ -5,9 +5,23 @@ metadata; Secret values have **Set value** and **Replace value**, never reveal.
 Entered Secret text is cleared on acknowledged writes before refreshing views.
 Rejected writes retain edits. Node controls use explicit metadata pickers; import
 preview requires deliberate local binding or provisioning. Mobile navigation keeps
-all five workspace destinations and engine connection status visible. **Connect with MCP** is available when enabled.
+all eight workspace destinations and engine connection status visible. **Connect with MCP** is available when enabled.
 
 Interlock uses the Mantine theme in `packages/ui/src/theme/theme.ts` and the shared CSS variables in `packages/ui/src/styles.css`. Node settings provide the reference for section navigation, spacing, and form hierarchy. These patterns extend that visual system.
+
+## Page layout
+
+Keep reusable page presentation in `packages/ui/src/components`. `PageLayout` owns page headers, tab bars, and `PageTabsSkeleton`. `ListTable` owns the shared list container, headings, link/button rows, responsive spacing, focus/hover states, and `ListTableSkeleton`. Features supply their columns, cell content, state labels, and navigation or action callbacks. Use these shared modules when extending Runs and Automations.
+
+Tabs switch sections within the current resource or list. Use sidebar navigation or an explicit link to open another workspace.
+
+Automations and the global Runs list use the shared `PageHeader` and tab-row styles. Automations uses `PageTabs` for URL-backed views; Runs uses `PageTabList` within Mantine Tabs for controlled in-page sections. The header contains the page title and actions. Add Back on creation and resource pages; omit it on a top-level list. Place underline navigation directly below the header on the same surface background, with search and filters aligned to the right. Keep both visible while the workspace scrolls.
+
+Place automation form fields inside one surface card with 24px padding and generous section spacing. The preview rail spans the available height below the header. Activity table bodies use the card background. Use spacing for the next-run and last-occurrence summary; avoid inset divider lines.
+
+Automations list filters and page offsets live in the URL and survive detail navigation. Creation defaults to disabled with an explicit enable checkbox and a **Create** action. Successful creation opens ordinary detail without a review gate. Preserve edits after rejected writes, disable repeat submissions while pending, and retain acknowledged outcomes if refresh fails. Revision conflicts offer reload while preserving local edits until discarded.
+
+Runs tables share the Automations row spacing, title-case headings, typography, status dots, and navigation chevrons. Run rows retain their stage, actor, attention reason, version, tags, comparison context, and exact start time. Tag filters open from the tab toolbar into a form card. Global history actions live in the page header; workflow-scoped history actions remain beside the run tabs.
 
 ## Items that need attention
 
@@ -42,7 +56,7 @@ The recovery panel explains where to inspect the session and what confirmation d
 
 ## Saving and connection feedback
 
-Workflow, prompt, variable, and Harnesses edits use the workspace leave guard. Inline form errors preserve input and stay beside the action. Dialogs restore focus on dismissal when the trigger remains available. Global notifications sit below dialogs. A failed workspace refresh marks cached data as possibly out of date and offers a retry.
+Workflow, automation, prompt, variable, and Harnesses edits use the workspace leave guard. Inline form errors preserve input and stay beside the action. Dialogs restore focus on dismissal when the trigger remains available. Global notifications sit below dialogs. A failed workspace refresh marks cached data as possibly out of date and offers a retry.
 
 ## Modal layout
 
@@ -58,6 +72,8 @@ Use the shared `Modal`, `ModalBody`, and `ModalFooter` from `components/Modal`. 
 ## Loading views
 
 Use static skeletons shaped like the content being loaded. Keep the loading announcement available to assistive technology and hide the decorative placeholders from it. Preserve the action label when a write is in progress.
+
+The Automations and Runs lists keep their shared headers and status tabs in place during route and initial data loading. Placeholder rows match the list columns. Background refreshes retain loaded rows for the same query. Changing Automations filters or pages shows a loading state until that query succeeds; a failed read does not display another query's rows. Errors show retry feedback instead of an indefinite skeleton.
 
 ## Review before shipping
 

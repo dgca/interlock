@@ -357,6 +357,7 @@ it('applies all exact tag pairs before paging and clears the filter', async () =
   try {
     await act(async () => root.render(h(Harness)));
     expect(container.textContent).toContain('repo.name=org/repo');
+    await click('Filter by tags');
     await click('Add tag');
     await input('Matching tags key 1', 'repo.name');
     await input('Matching tags value 1', 'org/repo');

@@ -1,7 +1,4 @@
-import {
-  PauseProvider,
-  LibraryPauseBar,
-} from './features/pauses/PauseControls';
+import { PauseProvider } from './features/pauses/PauseControls';
 import { useUiFeatures } from './lib/uiFeatures';
 import { useCallback, useEffect, useState } from 'react';
 import { Check, AlertCircle } from 'lucide-react';
@@ -39,6 +36,7 @@ export function App() {
   const navigate = useNavigate();
   const workflowMatch = useMatch('/workflows/:workflowId');
   const runMatch = useMatch('/runs/*');
+  const automationMatch = useMatch('/automations/*');
   const promptMatch = useMatch('/prompts/*');
   const variableMatch = useMatch('/variables/*');
   const harnessMatch = useMatch('/settings/harnesses');
@@ -46,19 +44,21 @@ export function App() {
   const libraryReportMatch = useMatch('/report');
   const workflowReportMatch = useMatch('/workflows/:workflowId/report');
   const reportMatch = libraryReportMatch || workflowReportMatch;
-  const page = diagnosticsMatch
-    ? 'diagnostics'
-    : reportMatch
-      ? 'report'
-      : harnessMatch
-        ? 'harnesses'
-        : variableMatch
-          ? 'variables'
-          : promptMatch
-            ? 'prompts'
-            : runMatch
-              ? 'runs'
-              : 'workflows';
+  const page = automationMatch
+    ? 'automations'
+    : diagnosticsMatch
+      ? 'diagnostics'
+      : reportMatch
+        ? 'report'
+        : harnessMatch
+          ? 'harnesses'
+          : variableMatch
+            ? 'variables'
+            : promptMatch
+              ? 'prompts'
+              : runMatch
+                ? 'runs'
+                : 'workflows';
   const [scheduleAttentionCount, setScheduleAttentionCount] = useState(0);
   const [editorDirty, setEditorDirty] = useState(false);
   const [scheduleDirty, setScheduleDirty] = useState(false);
@@ -227,7 +227,6 @@ export function App() {
           engineHost={engineHost}
         />
         <main className="main">
-          <LibraryPauseBar />
           {loaded && loadError && (
             <Group className="engine-warning" justify="space-between" gap="xs">
               <Text size="sm" role="status">

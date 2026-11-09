@@ -1,6 +1,6 @@
 # Pause library or workflow execution
 
-Use **Pause library** in the persistent header or **Pause workflow** beside the workflow actions. Supply an actor label and reason. Every action creates an independent persisted hold. Open **Review holds** to inspect scope, actor, reason, creation time, and exact ID. **Release hold** releases only that record. Execution can resume when no applicable records remain.
+Use **Pause workflow** beside the workflow actions. Library-wide holds are available through CLI, MCP, and the shared API; the UI has no global pause control. Supply an actor label and reason. Every action creates an independent persisted hold. Open **Review holds** to inspect scope, actor, reason, creation time, and exact ID. **Release hold** releases only that record. Execution can resume when no applicable records remain.
 
 Acknowledged creation closes and clears its form before status refresh. If refresh fails, **Retry refresh** reads the current holds without repeating the write. **Add another pause** deliberately starts a new blank form. A failed creation request preserves entered values.
 

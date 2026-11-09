@@ -378,26 +378,30 @@ The shared API exposes `runs.briefing`, `runs.wait`, and `runs.result`; MCP expo
 
 ## UI routes
 
-Workflow pages have Editor and Runs sections. `?view=runs` selects workflow runs; `&tab=history` selects past runs. Section changes keep the editor mounted, including raw text, history, and canvas state. Opening a run leaves the workflow and retains the unsaved-edit navigation guard. Run links carry the originating workflow and filter so Back to runs returns to that list, including after inspecting child runs. Workflow run lists include direct executions and invocations by other workflows, but exclude Batch item runs; those remain in their parent run inspector.
+Workflow pages have Editor and Runs sections. Automations is a separate workspace accessed through the sidebar. Legacy `?view=schedules` links redirect there or to their exact trigger detail. `?view=runs` selects workflow runs; `&tab=history` selects past runs. Section changes keep the editor mounted, including raw text, history, and canvas state. Opening a run leaves the workflow and retains the unsaved-edit navigation guard. Run links carry the originating workflow and filter so Back to runs returns to that list, including after inspecting child runs. Workflow run lists include direct executions and invocations by other workflows, but exclude Batch item runs; those remain in their parent run inspector.
 
 React Router owns browser navigation through a shared application layout and child routes in `packages/ui/src/routes`. The layout keeps the engine connection and live refresh active across route changes. URL builders live in `routes/paths.ts`.
 
-| Route                           | View                                                   |
-| ------------------------------- | ------------------------------------------------------ |
-| `/`                             | Redirects to `/workflows`, replacing the history entry |
-| `/workflows`                    | Workflow library                                       |
-| `/workflows/:workflowId`        | Workflow draft editor                                  |
-| `/prompts`                      | Saved prompt library                                   |
-| `/prompts/:promptId`            | Saved prompt editor                                    |
-| `/variables`                    | Variable metadata library                              |
-| `/variables/:variableId`        | Variable editor; `new` creates a variable              |
-| `/runs`                         | Active runs                                            |
-| `/runs?tab=history`             | Run history                                            |
-| `/runs/:runId`                  | Run inspector, including child runs                    |
-| `/report`                       | Global workflow performance and cost report            |
-| `/workflows/:workflowId/report` | Workflow-scoped performance and cost report            |
-| `/settings/harnesses`           | Harness profiles and execution settings                |
-| `/settings/diagnostics`         | System diagnostics and readiness check                 |
+| Route                             | View                                                   |
+| --------------------------------- | ------------------------------------------------------ |
+| `/`                               | Redirects to `/workflows`, replacing the history entry |
+| `/workflows`                      | Workflow library                                       |
+| `/workflows/:workflowId`          | Workflow draft editor                                  |
+| `/prompts`                        | Saved prompt library                                   |
+| `/prompts/:promptId`              | Saved prompt editor                                    |
+| `/variables`                      | Variable metadata library                              |
+| `/variables/:variableId`          | Variable editor; `new` creates a variable              |
+| `/automations`                    | Global automation list with URL filters                |
+| `/automations/new`                | Automation type chooser and creation form              |
+| `/automations/:automationId`      | Activity and saved settings                            |
+| `/automations/:automationId/edit` | Schedule or workflow-handler event editor              |
+| `/runs`                           | Active runs                                            |
+| `/runs?tab=history`               | Run history                                            |
+| `/runs/:runId`                    | Run inspector, including child runs                    |
+| `/report`                         | Global workflow performance and cost report            |
+| `/workflows/:workflowId/report`   | Workflow-scoped performance and cost report            |
+| `/settings/harnesses`             | Harness profiles and execution settings                |
+| `/settings/diagnostics`           | System diagnostics and readiness check                 |
 
 Resource routes use stable, encoded IDs. Names and future folder or group membership do not determine a workflow's address. Folder and group pages can be added as sibling routes under the application layout without changing existing resource links. Query parameters represent view filters; hash fragments remain available for in-page anchors such as run output.
 
@@ -406,6 +410,8 @@ Direct links wait for initial data instead of briefly displaying the library. Mi
 Vite and the built server serve the app for direct page requests. A future host must also serve `index.html` for UI routes while keeping API and asset handling separate. The route structure does not add hosting, authentication, multi-user access, folders, or groups; the local service restrictions still apply.
 
 ## UI components
+
+Automations and the global Runs list share the compact `PageHeader` title/action bar and adjoining surface-colored tab-row styles. `PageTabs` handles URL-backed views; `PageTabList` retains Mantine-controlled tab semantics for Runs. The shared `PageTabsSkeleton` and `components/ListTable` modules provide their loading states and list presentation. `ListTableRow` retains native link or button behavior; feature code supplies columns, cell content, and actions. Reusable presentation lives in `packages/ui/src/components` rather than copied feature markup or CSS. Workflow-scoped run lists reuse the same tabs and table without a duplicate page header. Creation and editing use a contained form card and full-height preview rail. The global library pause bar is removed; workflow pause controls and the underlying library-hold APIs remain.
 
 [UI interaction patterns](ui-patterns.md) documents dialog layout, loading states, run attention, approval, recovery, and browser review conventions.
 
@@ -599,7 +605,7 @@ The overall status evaluates to `ok` if all checks pass, `warn` if warnings exis
 
 ## Workflow triggers and delivery
 
-Core owns the shared schedule, webhook and lifecycle-event trigger contracts, including revision-protected mutation and bounded read operations. It also owns schedule timing, policy, and bindings. Storage persists operational `workflowTriggers` and bounded `scheduleFires` separately from workflow drafts and published definitions. Schema 10 indexes workflow-trigger ownership, trigger fire history and unresolved fires. Runtime `WorkflowTriggers` runs from the existing one-second engine pump, observes terminal outcomes once, evaluates named holds and overlap, and chooses at most one due slot per trigger per tick. See [schedule semantics](schedules.md).
+Core owns the shared schedule, webhook and lifecycle-event trigger contracts, including revision-protected mutation and bounded read operations. Create defaults to disabled; create-only `enabled:true` applies the existing enablement checks before storage in the same transaction. List filters workflow, kind, name search and status before paging, returning scoped status counts and payload-free latest activity for the selected rows. It also owns schedule timing, policy, and bindings. Storage persists operational `workflowTriggers` and bounded `scheduleFires` separately from workflow drafts and published definitions. Schema 10 indexes workflow-trigger ownership, trigger fire history and unresolved fires. Runtime `WorkflowTriggers` runs from the existing one-second engine pump, observes terminal outcomes once, evaluates named holds and overlap, and chooses at most one due slot per trigger per tick. See [schedule semantics](schedules.md).
 
 Fire selection, input/version capture, `RunStarts` receipt, initial run and next-slot update share the Store transaction. A slot key is `schedule:<triggerId>:<slotIso>`. This prevents duplicate schedule starts across restart/competing Store connections, without broadening the engine's single-server execution guarantee. Schedule provenance on a run includes its trigger, slot and prior-run gate. Internal queue admission waits for prior schedule runs to become terminal, independently of public success-only start dependencies. Workflow capacity and named pause gates still apply.
 

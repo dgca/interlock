@@ -1,6 +1,6 @@
 # Schedule workflows
 
-Open a workflow's **Triggers** tab, select **Add schedule**, and enter a name and timing. Create the schedule disabled, inspect it, then enable the exact schedule. Schedule changes apply independently of workflow draft save and publication. Fires target the latest retained published version. Unpublished or archived workflows cannot enable schedules.
+Open **Automations** in the sidebar, choose **New automation → Schedule**, and enter a name and timing. Select the workflow to start and fill in its input fields. **Enable when created** defaults off. Choose **Create** to save with the selected enabled state and open the saved automation directly. Schedule changes apply independently of workflow draft save and publication. Fires target the latest retained published version. Unpublished or archived workflows cannot enable schedules.
 
 Intervals accept whole milliseconds from 30000 through 31536000000. Creation and timing changes anchor interval slots. Cron requires exactly five fields, minute, hour, day of month, month, and weekday, plus an IANA time zone. The shared cron-parser calculation handles daylight saving transitions. Macros, seconds fields and hashed jitter are rejected. Restricted day-of-month and weekday fields use the parser's OR semantics. Preview shows three calculated times for current settings; inspection shows the persisted next slot.
 
@@ -8,13 +8,13 @@ Intervals accept whole milliseconds from 30000 through 31536000000. Creation and
 
 `overlapPolicy` defaults to `skip`, which suppresses a fire while any run from the trigger is queued, running or waiting. `queue` accepts at most one pending run, waiting for prior runs from the trigger to end regardless of success. Public `after` dependencies still require success and are a separate admission gate. `allow` accepts additional starts subject to workflow capacity and named holds. Disabling or deleting a schedule preserves existing active and queued runs.
 
-`missedFirePolicy` defaults to `skip`. A due slot more than five seconds late, or a slot deferred by a named pause, is missed. Skip advances to the next future slot. `run_once` attempts the latest overdue slot once, then advances to the future. There is no catch-up burst after sleep or downtime. Re-enabling skip advances overdue slots; re-enabling run_once can attempt work on the next engine tick. Changing timing resets the anchor and discards old due slots.
+The UI creates schedules with `missedFirePolicy: "skip"` and leaves existing policies unchanged on edit. CLI and MCP also support `run_once`. `missedFirePolicy` defaults to `skip`. A due slot more than five seconds late, or a slot deferred by a named pause, is missed. Skip advances to the next future slot. `run_once` attempts the latest overdue slot once, then advances to the future. There is no catch-up burst after sleep or downtime. Re-enabling skip advances overdue slots; re-enabling run_once can attempt work on the next engine tick. Changing timing resets the anchor and discards old due slots.
 
-Library and workflow named holds block fires and queued promotion. Re-enabling an automatically paused schedule clears only its automatic pause and resets its failure count. It never releases named holds. Release only the exact hold you own through the existing pause controls.
+Library and workflow named holds block fires and queued promotion. Re-enabling an automatically paused schedule clears only its automatic pause and resets its failure count. It never releases named holds. Release only the exact hold you own through workflow pause controls, CLI, or MCP.
 
 ## Bind run input
 
-`config.input` is literal JSON, limited to 64 KiB. Optional `config.bindings` maps `scheduledAt`, `firedAt`, `triggerId` and `previousRunId` to explicit dot-separated object paths. Bound values replace template values. Bindings require an object input and distinct, non-overlapping paths without prototype keys. `previousRunId` is null before the first accepted run, then identifies the previous accepted run from this trigger.
+`config.input` is literal JSON, limited to 64 KiB. The UI uses the latest published workflow input contract to render fields. Labels may use schema titles; saved JSON uses the exact property keys. Complex values use JSON entry. Existing metadata bindings remain unchanged on form edits. A binding to a top-level input makes that field read-only; nested bindings leave the containing JSON field editable so literal sibling values can be changed and validated. Optional `config.bindings` maps `scheduledAt`, `firedAt`, `triggerId` and `previousRunId` to explicit dot-separated object paths. Bound values replace template values. Bindings require an object input and distinct, non-overlapping paths without prototype keys. `previousRunId` is null before the first accepted run, then identifies the previous accepted run from this trigger.
 
 Each fire commits its captured input, published version, run receipt, outcome and next slot atomically. Its RunStarts request ID is `schedule:<triggerId>:<slotIso>`. Restart or competing fire attempts cannot start another run for the same slot. This start guarantee does not make multiple competing server processes supported for other engine execution.
 
@@ -32,7 +32,9 @@ Portable format 5 exports configuration with `enabled:false`, without operationa
 
 ## Use the CLI and MCP
 
-Read operations are `list`, `inspect`, `preview`, and `attention`. Writes are `create`, `update`, `enable`, `disable`, and `delete`. Writes other than create require the current `expectedRevision` from inspection. Update replaces the complete configuration. After a revision conflict, keep edits and inspect before reconciling.
+Read operations are `list`, `inspect`, `preview`, and `attention`. Writes are `create`, `update`, `enable`, `disable`, and `delete`. Create defaults to `enabled:false`. Optional create-only `enabled:true` performs enablement validation in the same transaction. If it fails, no trigger is created. Imports remain disabled regardless of this option. List accepts optional `workflowId`, `kind`, case-insensitive `search` over automation and workflow names, and `status` of `all`, `enabled`, `disabled`, or `attention`. Search is trimmed and capped at 200 characters. Filters apply before pagination. `counts` covers the workflow/kind/search scope before status filtering. Enabled excludes automatic pauses; attention includes enabled automatic pauses and excessive schedule lag. Compact rows include `actionType` and `lastActivity` with time, outcome, and optional run identity/status, without input or delivery payloads.
+
+Writes other than create require the current `expectedRevision` from inspection. Update replaces the complete configuration. After a revision conflict, keep edits and inspect before reconciling.
 
 ```sh
 interlock triggers read '{"action":"list","workflowId":"WORKFLOW_ID"}'

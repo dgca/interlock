@@ -1,8 +1,8 @@
 # Webhook trigger reference
 
-A webhook trigger accepts authenticated JSON at `POST /hooks/:triggerId`. Triggers belong to a workflow, separately from its draft and published versions. New triggers start disabled.
+A webhook trigger accepts authenticated JSON at `POST /hooks/:triggerId`. Triggers belong to a workflow, separately from its draft and published versions. CLI and MCP creation defaults to disabled. Optional create-only `enabled:true` validates enablement and creates atomically; failure creates nothing.
 
-The workflow's **Triggers** tab provides **Add webhook**, a JSON configuration editor, enable and disable controls, and paged delivery outcomes. CLI `interlock triggers` and MCP `read_workflow_triggers` and `manage_workflow_triggers` use the same shared API. `interlock schedules` remains an alias for trigger operations.
+Existing webhook triggers appear in **Automations** with paged activity, read-only settings, enable/disable, and delete controls. New webhook configuration and edits use CLI `interlock triggers` or MCP `read_workflow_triggers` and `manage_workflow_triggers`, through the shared server API. The UI creation flow offers schedules and Interlock events. `interlock schedules` remains an alias for trigger operations.
 
 ## Configuration
 
@@ -111,7 +111,7 @@ Optional failure auto-pause observes failed triggered runs and action failures. 
 
 ## Interfaces and listener boundary
 
-The shared API uses `triggers.read` and `triggers.manage`. Read actions are `list`, `inspect`, `preview`, and `attention`; preview is for schedule timing only. List accepts optional `workflowId` and `kind: "webhook"` or `"schedule"`. Management actions are `create`, `update`, `enable`, `disable`, and `delete`. Create requires `workflowId` and `config`; other changes require the current `id` and `expectedRevision`. Update replaces the full configuration. Revision conflicts preserve the saved configuration.
+The shared API uses `triggers.read` and `triggers.manage`. Read actions are `list`, `inspect`, `preview`, and `attention`; preview is for schedule timing only. List accepts optional `workflowId`, `kind`, `search`, and `status`, with scoped counts and compact latest activity. See [trigger read filters](schedules.md#use-the-cli-and-mcp). Management actions are `create`, `update`, `enable`, `disable`, and `delete`. Create requires `workflowId` and `config`; other changes require the current `id` and `expectedRevision`. Update replaces the full configuration. Revision conflicts preserve the saved configuration.
 
 The CLI accepts the same JSON requests, either inline or from a file:
 

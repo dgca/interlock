@@ -339,6 +339,46 @@ it.each(['stdio', 'http'])(
         })
       ).trigger;
       expect(enabledSchedule.enabled).toBe(true);
+      const atomicSchedule = (
+        await call('manage_workflow_triggers', {
+          request: {
+            action: 'create',
+            workflowId: w.id,
+            enabled: true,
+            config: {
+              name: 'Atomic transport schedule',
+              timing: { type: 'interval', intervalMs: 30000 },
+            },
+          },
+        })
+      ).trigger;
+      expect(atomicSchedule).toMatchObject({ enabled: true, revision: 1 });
+      const filteredSchedules = await call('read_workflow_triggers', {
+        request: {
+          action: 'list',
+          workflowId: w.id,
+          search: 'atomic transport',
+          status: 'enabled',
+          limit: 1,
+        },
+      });
+      expect(filteredSchedules).toMatchObject({
+        total: 1,
+        counts: { all: 1, enabled: 1, disabled: 0, attention: 0 },
+      });
+      expect(filteredSchedules.items[0]).toMatchObject({
+        id: atomicSchedule.id,
+        lastActivity: null,
+      });
+      expect(JSON.stringify(scheduleTools)).toContain('search');
+      expect(JSON.stringify(scheduleTools)).toContain('enabled');
+      await call('manage_workflow_triggers', {
+        request: {
+          action: 'delete',
+          id: atomicSchedule.id,
+          expectedRevision: 1,
+        },
+      });
       const scheduleBundle = await call('export_workflow', { id: w.id });
       expect(scheduleBundle.formatVersion).toBe(5);
       expect(

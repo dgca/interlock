@@ -4,11 +4,11 @@ Event triggers start a workflow or send an outbound webhook when a run completes
 
 ## Configuration
 
-In a workflow’s **Triggers** tab, choose **Add event trigger**, then select **Workflow handler** or **Outbound webhook** under **Action**. For an outbound webhook, enter its URL, optionally choose a saved Secret for HMAC signing, edit static headers as a JSON object of string values, and set a 500–60,000 ms timeout. Invalid header JSON blocks saving. Switching actions preserves the webhook fields while the editor stays open and keeps the trigger’s scope, transitions, tags, quiescence and failure settings. Saved webhook actions do not start a handler run.
+Open **Automations → New automation → Interlock event**. Choose the source workflow or **Any workflow**, select transitions, and choose the workflow to start. A workflow source can include its owned children. Terminal transitions can wait until source work has stopped. The handler receives the compact event object directly as its workflow input. It needs a compatible input contract and a retained published version before enabling.
 
-Inspection shows the action, destination origin, signing Secret reference, header names, and timeout. URL paths, credentials, query values and header values are omitted from this summary; editing reopens the full action configuration. Secret values are never loaded into the editor.
+**Enable when created** defaults off. Creation opens the saved automation directly. CLI and MCP create requests also default to disabled; optional create-only `enabled:true` validates enablement and saves atomically. A failed enablement creates nothing. Imports always disable triggers.
 
-For **Workflow handler** actions, create the trigger on the handler workflow. The handler receives the compact event object directly as its workflow input and needs a compatible input contract and a retained published version before enabling. Outbound webhook actions do not require a published handler. New triggers of either action type are disabled.
+Outbound webhook actions remain supported through CLI and MCP. Existing webhook actions appear in Automations with activity, settings, enable/disable, and delete controls. The UI shows their saved configuration but does not offer an outbound webhook creation or editing form. Outbound actions do not require a published handler and never start a handler run.
 
 ```json
 {
@@ -31,7 +31,7 @@ For **Workflow handler** actions, create the trigger on the handler workflow. Th
 }
 ```
 
-Pass this request to `interlock triggers manage @event-trigger.json`, the shared API `triggers.manage`, or MCP `manage_workflow_triggers` inside its `request` field. The workflow's **Triggers** tab exposes the same controls. Inspect the trigger and use its current `revision` as `expectedRevision` for update, enable, disable, or delete. Update replaces the entire configuration. A trigger's kind cannot change.
+Pass this request to `interlock triggers manage @event-trigger.json`, the shared API `triggers.manage`, or MCP `manage_workflow_triggers` inside its `request` field. The UI exposes workflow handlers; use CLI or MCP for outbound actions, tags, failure policies, depth limits, and new Exit filters. Editing a handler in the UI preserves existing advanced settings. Inspect the trigger and use its current `revision` as `expectedRevision` for update, enable, disable, or delete. Update replaces the entire configuration. A trigger's kind cannot change.
 
 | Field                           | Behavior                                                                                                                                                                                                                                                                    |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

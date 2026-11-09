@@ -1,18 +1,21 @@
-import { ScheduleAlerts } from '../schedules/Schedules';
+import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
+import { runColumns, runViews } from './runListConfig';
+import { AutomationAlerts } from '../automations/AutomationAlerts';
 import {
-  LoadingSkeleton,
-  Placeholder,
-} from '../../components/LoadingSkeleton/LoadingSkeleton';
+  PageHeader,
+  PageTabList,
+  workspacePage,
+} from '../../components/PageLayout/PageLayout';
+import { RunRowsSkeleton } from './RunListSkeleton';
+import classes from './RunList.module.css';
 import { attentionText, waitReasonText, type RunTab } from './runAttention';
 import { runProjectionText } from './runProjectionText';
-import { Button, Group, Tabs, Text } from '@mantine/core';
-import { useEffect, useRef, useState } from 'react';
+import { Alert, Button, Group, Tabs, Text } from '@mantine/core';
+import { useEffect, useId, useRef, useState } from 'react';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
 import { RetentionSettingsDialog } from './RetentionSettings';
 import type { Action } from '../../lib/useActionFeedback';
-import { ArrowUpRight, Activity } from 'lucide-react';
-import layout from '../../components/PageLayout/PageLayout.module.css';
-import { Badge } from '../../components/Badge/Badge';
+import { ChevronRight, SlidersHorizontal, Activity } from 'lucide-react';
 import { ComparisonContext } from './ComparisonContext';
 import { api, errorMessage } from '../../lib/api';
 import {
@@ -22,7 +25,6 @@ import {
   tagsFromRows,
   type TagRow,
 } from './RunTags';
-import tagStyles from './RunTags.module.css';
 
 type Page = Awaited<ReturnType<typeof api.runs.summaries.query>>;
 const pageSize = 100;
@@ -68,6 +70,8 @@ export function RunList({
       onOffsetChange(0);
     }
   };
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterId = useId();
   const [cleanup, setCleanup] = useState(false);
   const [retention, setRetention] = useState(false);
   const [snapshot, setSnapshot] = useState<{
@@ -126,16 +130,32 @@ export function RunList({
   const lastPage = scoped?.tab === tab ? scoped.page : undefined;
   const page = lastPage?.offset === offset ? lastPage : undefined;
   const counts = scoped?.page.counts;
+  const historyActions =
+    tab === 'history' && act ? (
+      <>
+        <Button variant="default" onClick={() => setRetention(true)}>
+          Retention settings
+        </Button>
+        <Button variant="light" onClick={() => setCleanup(true)}>
+          Clean up history
+        </Button>
+      </>
+    ) : null;
+  const tabItems = runViews.map((view) => ({
+    ...view,
+    count: counts
+      ? counts[view.value] +
+        (view.value === 'attention'
+          ? (scoped?.page.scheduleAttentionCount ?? 0)
+          : 0)
+      : undefined,
+  }));
   return (
-    <div className={layout.page}>
-      {!workflowId && (
-        <header className={layout.header}>
-          <div>
-            <h1>Runs</h1>
-          </div>
-        </header>
-      )}
+    <section className={workspacePage.page}>
+      {!workflowId && <PageHeader title="Runs" actions={historyActions} />}
       <Tabs
+        unstyled
+        className={classes.sections}
         value={tab}
         onChange={(value) =>
           onTabChange(
@@ -143,27 +163,29 @@ export function RunList({
           )
         }
       >
-        <Tabs.List className="run-tabs">
-          <Tabs.Tab value="active">
-            Active{counts && ` ${counts.active}`}
-          </Tabs.Tab>
-          <Tabs.Tab value="attention">
-            Needs attention
-            {counts &&
-              ` ${counts.attention + (scoped?.page.scheduleAttentionCount ?? 0)}`}
-          </Tabs.Tab>
-          <Tabs.Tab value="history">
-            History{counts && ` ${counts.history}`}
-          </Tabs.Tab>
-        </Tabs.List>
-        <Tabs.Panel value={tab} pt="md">
-          <details className={tagStyles.filter}>
-            <summary>
-              Filter by tags
-              {Object.keys(selectedTags ?? {}).length
-                ? ` (${Object.keys(selectedTags!).length})`
-                : ''}
-            </summary>
+        <PageTabList label="Run views" items={tabItems}>
+          {workflowId && historyActions}
+          <Button
+            variant="default"
+            leftSection={<SlidersHorizontal size={14} />}
+            aria-expanded={filterOpen}
+            aria-controls={filterId}
+            onClick={() => setFilterOpen((open) => !open)}
+          >
+            Filter by tags
+            {Object.keys(selectedTags ?? {}).length
+              ? ` (${Object.keys(selectedTags!).length})`
+              : ''}
+          </Button>
+        </PageTabList>
+        <Tabs.Panel value={tab} className={workspacePage.content}>
+          <div
+            id={filterId}
+            role="region"
+            aria-label="Run tag filters"
+            className={classes.filterPanel}
+            hidden={!filterOpen}
+          >
             <TagFields
               label="Matching tags"
               showLabel={false}
@@ -201,9 +223,9 @@ export function RunList({
                 Clear filters
               </Button>
             </Group>
-          </details>
+          </div>
           {tab === 'attention' && (
-            <ScheduleAlerts
+            <AutomationAlerts
               key={
                 workflowId === undefined ? 'library' : `workflow:${workflowId}`
               }
@@ -211,113 +233,101 @@ export function RunList({
               workflowId={workflowId}
             />
           )}
-          {tab === 'history' && act && (
-            <Group justify="flex-end" mb="md">
-              <Button variant="subtle" onClick={() => setRetention(true)}>
-                Retention settings
-              </Button>
-              <Button variant="light" onClick={() => setCleanup(true)}>
-                Clean up history
-              </Button>
-            </Group>
-          )}
           {error && (
-            <Group>
-              <Text role="alert">Could not load runs. {error}</Text>
+            <Alert
+              color="red"
+              mb="md"
+              title={page ? 'Runs may be out of date' : 'Could not load runs'}
+            >
+              {error}
               <Button variant="subtle" onClick={() => refresh.current?.()}>
                 Retry
               </Button>
-            </Group>
+            </Alert>
           )}
           {!page ? (
-            !error && (
-              <LoadingSkeleton label="Loading runs…" className="run-table">
-                {[1, 2, 3, 4].map((row) => (
-                  <div className="run-row" key={row}>
-                    <span>
-                      <Placeholder h={13} w="min(90%, 170px)" />
-                      <Placeholder mt={5} h={9} w={60} />
-                    </span>
-                    <span>
-                      <Placeholder h={18} w={64} />
-                    </span>
-                    <span>
-                      <Placeholder h={10} w="min(100%, 110px)" />
-                    </span>
-                    <span>
-                      <Placeholder h={10} w={24} />
-                    </span>
-                  </div>
-                ))}
-              </LoadingSkeleton>
-            )
+            !error && <RunRowsSkeleton />
           ) : page.items.length ? (
-            <div className="run-table">
-              <div className="run-row table-heading">
-                <span>Workflow</span>
-                <span>Status</span>
-                <span>Started</span>
-                <span>Steps</span>
-                <span />
-              </div>
-              {page.items.map((r) => (
-                <button
-                  className="run-row"
-                  key={r.id}
-                  onClick={() => {
-                    const entry = r.attention;
-                    if (entry)
-                      onOpen(entry.target.runId, entry.target.executionId);
-                    else onOpen(r.id);
-                  }}
-                >
-                  <span>
-                    <strong>{r.workflowName}</strong>
-                    <small>
-                      v{r.version} · {r.id.slice(0, 8)}
-                    </small>
-                    <ComparisonContext comparison={r.comparison} />
-                    <RunTags tags={r.tags} compact />
-                    {r.parentMode === 'detached' && (
+            <ListTable columns={runColumns}>
+              {page.items.map((r) => {
+                const started = new Date(r.createdAt);
+                return (
+                  <ListTableRow
+                    className={`run-row ${classes.row}`}
+                    key={r.id}
+                    onClick={() => {
+                      const entry = r.attention;
+                      if (entry)
+                        onOpen(entry.target.runId, entry.target.executionId);
+                      else onOpen(r.id);
+                    }}
+                  >
+                    <span className={classes.identity}>
+                      <strong>{r.workflowName}</strong>
                       <small>
-                        Started independently · from{' '}
-                        {r.parentWorkflowName ?? r.parentRunId?.slice(0, 8)}
+                        v{r.version} · {r.id.slice(0, 8)}
                       </small>
-                    )}
-                  </span>
-                  <span className="run-status">
-                    <Badge status={r.status} />
-                    {r.actor ? (
-                      <small className="run-wait-reason">
-                        {runProjectionText(
-                          r,
-                          r.waiting?.kind === 'human_request' && r.attention
-                            ? attentionText(r.attention)
-                            : undefined,
-                        )}
-                      </small>
-                    ) : r.waitReason && !r.attention ? (
-                      <small className="run-wait-reason">
-                        {waitReasonText[r.waitReason]}
-                      </small>
-                    ) : null}
-                    {r.attention &&
-                      (!r.actor || r.waiting?.kind !== 'human_request') && (
-                        <small className="run-attention">
-                          {attentionText(r.attention)}
+                      <ComparisonContext comparison={r.comparison} />
+                      <RunTags tags={r.tags} compact />
+                      {r.parentMode === 'detached' && (
+                        <small>
+                          Started independently · from{' '}
+                          {r.parentWorkflowName ?? r.parentRunId?.slice(0, 8)}
                         </small>
                       )}
-                  </span>
-                  <span>{new Date(r.createdAt).toLocaleString()}</span>
-                  <span>{r.executionCount}</span>
-                  <ArrowUpRight size={15} />
-                </button>
-              ))}
-            </div>
+                    </span>
+                    <span className={classes.status}>
+                      <span className={classes.state} data-status={r.status}>
+                        {r.status}
+                      </span>
+                      {r.actor ? (
+                        <small className={classes.reason}>
+                          {runProjectionText(
+                            r,
+                            r.waiting?.kind === 'human_request' && r.attention
+                              ? attentionText(r.attention)
+                              : undefined,
+                          )}
+                        </small>
+                      ) : r.waitReason && !r.attention ? (
+                        <small className={classes.reason}>
+                          {waitReasonText[r.waitReason]}
+                        </small>
+                      ) : null}
+                      {r.attention &&
+                        (!r.actor || r.waiting?.kind !== 'human_request') && (
+                          <small className={classes.attention}>
+                            {attentionText(r.attention)}
+                          </small>
+                        )}
+                    </span>
+                    <span className={classes.started}>
+                      <time dateTime={r.createdAt}>
+                        {started.toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </time>
+                      <small>
+                        {started.toLocaleTimeString(undefined, {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          timeZoneName: 'short',
+                        })}
+                      </small>
+                    </span>
+                    <span className={classes.steps}>{r.executionCount}</span>
+                    <ChevronRight size={16} />
+                  </ListTableRow>
+                );
+              })}
+            </ListTable>
           ) : offset > 0 ? (
             <Text role="status">No runs on this page.</Text>
           ) : tab === 'attention' && page.scheduleAttentionCount > 0 ? null : (
-            <div className="empty">
+            <div className={classes.empty}>
               <Activity size={28} />
               <h2>
                 {Object.keys(selectedTags ?? {}).length
@@ -403,6 +413,6 @@ export function RunList({
           onClose={() => setCleanup(false)}
         />
       )}
-    </div>
+    </section>
   );
 }
