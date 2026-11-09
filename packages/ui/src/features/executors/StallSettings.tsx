@@ -163,6 +163,7 @@ export function StallSettings({
   const [policy, setPolicy] = useState<StallPolicy>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loadGeneration, setLoadGeneration] = useState(0);
   const dirty =
     !!saved && JSON.stringify(saved.policy) !== JSON.stringify(policy);
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
@@ -173,6 +174,7 @@ export function StallSettings({
       .then((s) => {
         setSaved(s);
         setPolicy(s.policy);
+        setLoadGeneration((generation) => generation + 1);
       })
       .catch((e) => setError(errorMessage(e)));
   };
@@ -204,6 +206,7 @@ export function StallSettings({
             style={{ border: 0, padding: 0, margin: 0 }}
           >
             <StallPolicyEditor
+              key={loadGeneration}
               value={policy}
               inherit={false}
               onChange={(patch) => setPolicy((p) => ({ ...p, ...patch }))}
