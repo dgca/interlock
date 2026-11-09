@@ -46,12 +46,6 @@ export function itemHref(id: string, search: URLSearchParams, edit = false) {
     (next.size ? `?${next}` : '')
   );
 }
-export function editable(trigger: Automation) {
-  return (
-    trigger.kind === 'schedule' ||
-    (trigger.kind === 'event' && trigger.action?.type !== 'webhook')
-  );
-}
 export function automationStatus(
   trigger: Pick<Automation, 'enabled' | 'autoPaused'>,
 ) {

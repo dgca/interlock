@@ -70,9 +70,9 @@ const next = [
 it('initializes empty databases and reopens current databases without a backup', () => {
   const file = path();
   const db = open(file);
-  expect(migrate(db, file)).toEqual({ from: 0, to: 14 });
+  expect(migrate(db, file)).toEqual({ from: 0, to: 15 });
   expect(db.prepare('PRAGMA synchronous').get()).toEqual({ synchronous: 2 });
-  expect(migrate(db, file)).toEqual({ from: 14, to: 14 });
+  expect(migrate(db, file)).toEqual({ from: 15, to: 15 });
   expect(existsSync(`${file}.backups`)).toBe(false);
 });
 
@@ -95,7 +95,7 @@ it('indexes queued comparison roots during schema-8 upgrade without rewriting ru
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   expect(migrate(db, file)).toMatchObject({
     from: 8,
-    to: 14,
+    to: 15,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -274,7 +274,7 @@ it('opens the previous release without rewriting records and executes its publis
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 1,
-    to: 14,
+    to: 15,
     backup: expect.any(String),
   });
   expect(
@@ -323,7 +323,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 2,
-    to: 14,
+    to: 15,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -336,7 +336,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   expect(revision).toBeGreaterThan(0);
   const reopened = new Store(file);
   connections.push(reopened);
-  expect(reopened.migration).toEqual({ from: 14, to: 14 });
+  expect(reopened.migration).toEqual({ from: 15, to: 15 });
   expect(reopened.continuation(run.id).revision).toBe(revision);
   store.remove('runs', run.id);
   expect(
@@ -358,7 +358,7 @@ it('adds run summary indexes to schema-6 databases without rewriting records', (
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 6,
-    to: 14,
+    to: 15,
     backup: expect.any(String),
   });
   expect(store.get('runs', run.id)).toEqual(run);
@@ -449,7 +449,7 @@ it('indexes unresolved stalls during schema-10 upgrade without discarding resolv
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   expect(migrate(db, file)).toMatchObject({
     from: 10,
-    to: 14,
+    to: 15,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -493,7 +493,7 @@ it('adds lifecycle indexes and active background projection to schema-12 without
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   expect(migrate(db, file)).toMatchObject({
     from: 12,
-    to: 14,
+    to: 15,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(

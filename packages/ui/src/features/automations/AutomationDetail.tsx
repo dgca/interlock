@@ -15,15 +15,12 @@ import {
 } from '../../components/PageLayout/PageLayout';
 import { Modal } from '../../components/Modal/Modal';
 import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
 import { ActionError } from '../../components/ActionError/ActionError';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton/LoadingSkeleton';
-import { triggerConfig } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
 import { paths, runOffset } from '../../routes/paths';
 import {
   automationStatus,
-  editable,
   eventLabels,
   itemHref,
   outcomeLabel,
@@ -143,16 +140,14 @@ export function AutomationDetail({ id }: { id: string }) {
         actions={
           trigger && (
             <>
-              {editable(trigger) && (
-                <Button
-                  component={Link}
-                  to={itemHref(id, search, true)}
-                  variant="default"
-                  disabled={busy || !!error}
-                >
-                  Edit
-                </Button>
-              )}
+              <Button
+                component={Link}
+                to={itemHref(id, search, true)}
+                variant="default"
+                disabled={busy || !!error}
+              >
+                Edit
+              </Button>
               {trigger.enabled && !trigger.autoPaused ? (
                 <Button
                   ref={disableTrigger}
@@ -350,9 +345,7 @@ export function AutomationDetail({ id }: { id: string }) {
                                 {timestamp(
                                   'scheduledAt' in entry
                                     ? entry.scheduledAt
-                                    : 'receivedAt' in entry
-                                      ? entry.receivedAt
-                                      : entry.occurredAt,
+                                    : entry.occurredAt,
                                   trigger.kind === 'schedule' &&
                                     trigger.timing.type === 'cron'
                                     ? trigger.timing.timeZone
@@ -373,16 +366,12 @@ export function AutomationDetail({ id }: { id: string }) {
                                           ? 'Source work has not stopped.'
                                           : entry.outcome === 'pending_pause'
                                             ? 'Waiting for pause release.'
-                                            : entry.outcome === 'delivered'
-                                              ? 'Webhook delivered.'
-                                              : entry.outcome === 'failed'
-                                                ? 'The occurrence failed.'
-                                                : 'runStatus' in entry &&
-                                                    entry.runStatus
-                                                  ? `Run ${entry.runStatus}.`
-                                                  : 'code' in entry
-                                                    ? `HTTP ${entry.status} · ${entry.code}`
-                                                    : 'Run accepted.'}
+                                            : entry.outcome === 'failed'
+                                              ? 'The occurrence failed.'
+                                              : 'runStatus' in entry &&
+                                                  entry.runStatus
+                                                ? `Run ${entry.runStatus}.`
+                                                : 'Run accepted.'}
                                 {'sourceRunId' in entry && (
                                   <div>
                                     <Link to={paths.run(entry.sourceRunId)}>
@@ -505,12 +494,6 @@ function Settings({ data }: { data: Inspection }) {
   const trigger = data.trigger;
   return (
     <div className={`${workspacePage.card} ${classes.settings}`}>
-      {!editable(trigger) && (
-        <Alert mb="lg">
-          This existing integration remains available. Edit its configuration
-          through the CLI or MCP trigger tools.
-        </Alert>
-      )}
       <dl>
         <dt>Workflow</dt>
         <dd>
@@ -553,7 +536,7 @@ function Settings({ data }: { data: Inspection }) {
               </>
             )}
           </>
-        ) : trigger.kind === 'event' ? (
+        ) : (
           <>
             <dt>Watch runs from</dt>
             <dd>
@@ -571,33 +554,14 @@ function Settings({ data }: { data: Inspection }) {
             </dd>
             <dt>Wait for source work to stop</dt>
             <dd>{trigger.waitForQuiescence ? 'Yes' : 'No'}</dd>
-            {trigger.action?.type !== 'webhook' && (
-              <>
-                <dt>Workflow input</dt>
-                <dd>
-                  Compact source event, run identity, stage, and available error
-                  details.
-                </dd>
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            <dt>Endpoint</dt>
+            <dt>Workflow input</dt>
             <dd>
-              <code>POST {data.endpoint}</code>
+              Compact source event, run identity, stage, and available error
+              details.
             </dd>
           </>
         )}
       </dl>
-      {!editable(trigger) && (
-        <div className={workspacePage.section}>
-          <JsonEditor
-            label="Existing configuration"
-            value={triggerConfig(trigger)}
-          />
-        </div>
-      )}
     </div>
   );
 }

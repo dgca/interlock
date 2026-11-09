@@ -1,4 +1,3 @@
-import { createHmac } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Engine } from '@interlock/runtime';
@@ -11,7 +10,6 @@ import {
   runSummaryQuerySchema,
   scheduleConfigSchema,
   eventConfigSchema,
-  webhookConfigSchema,
   triggerConfig,
   type WorkflowDefinition,
   type TriggerConfig,
@@ -316,7 +314,7 @@ it('inherits tags into continue-as-new members', () => {
   expect(e.run(e.run(first.id).chain!.nextRunId!).tags).toEqual(tags);
 });
 
-it('captures tags on schedule, webhook and lifecycle starts, and preserves disabled transfer', () => {
+it('captures tags on schedule and lifecycle starts, and preserves disabled transfer', () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime('2026-11-07T12:00:00.000Z');
   const e = setup(),
@@ -335,39 +333,6 @@ it('captures tags on schedule, webhook and lifecycle starts, and preserves disab
   e.pump();
   const scheduleRun = e.triggers.inspect(schedule.id).fires.items[0].runId!;
   expect(e.run(scheduleRun).tags).toEqual(tags);
-  const secret = 'test-tag-secret';
-  const variable = e.variables.mutate({
-    action: 'create',
-    name: 'tag_signing',
-    kind: 'secret',
-    value: secret,
-  }) as { id: string };
-  const webhook = enable(
-    e,
-    w,
-    webhookConfigSchema.parse({
-      kind: 'webhook',
-      name: 'Tagged hook',
-      tags,
-      authentication: {
-        secretId: variable.id,
-        header: 'x-signature',
-        parts: [{ source: 'body' }],
-      },
-      deliveryId: { source: 'body', path: 'id' },
-      timestamp: { source: 'body', path: 'at' },
-      action: { type: 'start' },
-    }),
-  );
-  const body = Buffer.from(
-    JSON.stringify({ id: 'one', at: new Date().toISOString() }),
-  );
-  const delivery = e.webhooks.receive(webhook.id, body, {
-    'x-signature':
-      'sha256=' + createHmac('sha256', secret).update(body).digest('hex'),
-  });
-  expect(delivery).toMatchObject({ outcome: 'started' });
-  expect(e.run((delivery as { runId: string }).runId).tags).toEqual(tags);
   const handlerTags = { role: 'handler' };
   const handler = publish(e),
     event = enable(
@@ -387,23 +352,9 @@ it('captures tags on schedule, webhook and lifecycle starts, and preserves disab
   expect(handlerRun.input).toMatchObject({ tags });
   const bundle = exportWorkflows(e.store, w);
   const other = setup();
-  const local = other.variables.mutate({
-    action: 'create',
-    name: 'tag_signing',
-    kind: 'secret',
-    value: secret,
-  }) as { id: string };
-  importWorkflows(other.store, bundle, {
-    variableBindings: {
-      [variable.id]: { action: 'bind', variableId: local.id },
-    },
-  });
-  importWorkflows(other.store, exportWorkflows(e.store, handler), {
-    variableBindings: {
-      [variable.id]: { action: 'bind', variableId: local.id },
-    },
-  });
-  for (const t of [schedule, webhook, event]) {
+  importWorkflows(other.store, bundle);
+  importWorkflows(other.store, exportWorkflows(e.store, handler));
+  for (const t of [schedule, event]) {
     const imported = other.triggers.inspect(t.id).trigger;
     expect(imported.enabled).toBe(false);
     expect(imported.tags).toEqual(t.tags);

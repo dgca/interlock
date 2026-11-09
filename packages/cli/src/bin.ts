@@ -28,13 +28,12 @@ async function main() {
   if (argv[0] === '--help' || argv[0] === '-h' || argv[0] === 'help') {
     console.log(`Interlock ${VERSION}
 
-Usage: interlock [--port 4310] [--hooks-port PORT] [--workdir PATH] [--db PATH]
+Usage: interlock [--port 4310] [--workdir PATH] [--db PATH]
        interlock mcp
        interlock <command> [arguments]
 
 With no command, starts the local engine, UI, and HTTP MCP endpoint at /mcp.
 Default MCP URL: http://127.0.0.1:4310/mcp. Keep this terminal open.
-Optional --hooks-port exposes only POST /hooks/:triggerId on 0.0.0.0; UI/API/MCP stay loopback-only.
 Default database: ~/.interlock/interlock.db
 Pending database migrations run at startup, with a backup before schema upgrades.
 Default script working directory: current directory
@@ -48,7 +47,7 @@ Usage and budget commands: usage, report-usage, budget, set-budget
 Local harness configuration and execution: executors
 Workflow variables: variables <read|manage> <json|@file> [--value-stdin]
 Workflow triggers: triggers (schedules is an alias) <read|manage> <json|@file>
-Kinds: schedule, webhook, event. Event triggers match run transitions with optional quiescence.
+Kinds: schedule, event. Event triggers match run transitions with optional quiescence.
 Named pause holds: pause, pause-holds, resume
 Workflow performance and cost report: report [--workflow <id>] [--since <ISO datetime>] [--until <ISO datetime>] [--limit <n>] [--tag KEY=VALUE ...] [--json]
 Report dates must be valid ISO datetimes whose rounded UTC bounds stay within years 0000 through 9999.
@@ -150,7 +149,6 @@ Variable encryption keys are held separately from the database. Back up keys sep
     args: argv,
     options: {
       port: { type: 'string' },
-      'hooks-port': { type: 'string' },
       workdir: { type: 'string' },
       db: { type: 'string' },
     },
@@ -161,10 +159,6 @@ Variable encryption keys are held separately from the database. Back up keys sep
   const engineUrl = `http://127.0.0.1:${port}`;
   await startServer({
     port,
-    hooksPort:
-      values['hooks-port'] === undefined
-        ? undefined
-        : Number(values['hooks-port']),
     database: resolve(
       values.db ??
         process.env.INTERLOCK_DB ??

@@ -44,4 +44,4 @@ interlock triggers manage '{"action":"enable","id":"TRIGGER_ID","expectedRevisio
 interlock triggers read '{"action":"preview","timing":{"type":"cron","expression":"0 9 * * 1-5","timeZone":"America/Denver"}}'
 ```
 
-`interlock schedules` remains an alias. The same JSON requests work with MCP `read_workflow_triggers` and `manage_workflow_triggers` inside `request`. Shared API callers use `triggers.read` and `triggers.manage`; typed UI reads also expose `list`, `inspect`, `preview`, and `attention`. No tool runs a fire immediately outside its schedule. The same trigger API supports [authenticated webhooks](webhooks.md); use list `kind:"schedule"` to select schedule records.
+`interlock schedules` remains an alias. The same JSON requests work with MCP `read_workflow_triggers` and `manage_workflow_triggers` inside `request`. Shared API callers use `triggers.read` and `triggers.manage`; typed UI reads also expose `list`, `inspect`, `preview`, and `attention`. No tool runs a fire immediately outside its schedule. The same trigger API supports [lifecycle events](events.md); use list `kind:"schedule"` to select schedule records.

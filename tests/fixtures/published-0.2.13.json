@@ -1,0 +1,285 @@
+{
+  "source": {
+    "package": "@type_of/interlock",
+    "version": "0.2.13",
+    "schema": 7,
+    "method": "Published npm CLI in a temporary database; completed JavaScript and omitted-language Bash workflows."
+  },
+  "schema": [
+    {
+      "type": "table",
+      "sql": "CREATE TABLE migrations (version INTEGER PRIMARY KEY)"
+    },
+    {
+      "type": "table",
+      "sql": "CREATE TABLE documents (\n          collection TEXT NOT NULL, id TEXT NOT NULL, value TEXT NOT NULL,\n          PRIMARY KEY(collection, id)\n        )"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX runs_created ON documents(json_extract(value, '$.createdAt') DESC) WHERE collection = 'runs'"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX runs_workflow_created ON documents(json_extract(value, '$.workflowId'), json_extract(value, '$.createdAt') DESC) WHERE collection = 'runs'"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX runs_status_created ON documents(json_extract(value, '$.status'), json_extract(value, '$.createdAt') DESC) WHERE collection = 'runs'"
+    },
+    {
+      "type": "table",
+      "sql": "CREATE TABLE continuation_sequence (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL)"
+    },
+    {
+      "type": "table",
+      "sql": "CREATE TABLE run_revisions (run_id TEXT PRIMARY KEY, revision INTEGER NOT NULL)"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX runs_parent ON documents(json_extract(value, '$.parentRunId')) WHERE collection = 'runs'"
+    },
+    {
+      "type": "trigger",
+      "sql": "CREATE TRIGGER continuation_insert AFTER INSERT ON documents\n          WHEN NEW.collection IN ('runs', 'work') \n          BEGIN\n            UPDATE continuation_sequence SET revision = revision + 1 WHERE id = 1;\n            INSERT INTO run_revisions(run_id, revision)\n              VALUES (CASE WHEN NEW.collection = 'runs' THEN NEW.id ELSE json_extract(NEW.value, '$.runId') END,\n                      (SELECT revision FROM continuation_sequence WHERE id = 1))\n              ON CONFLICT(run_id) DO UPDATE SET revision = excluded.revision;\n            \n          END"
+    },
+    {
+      "type": "trigger",
+      "sql": "CREATE TRIGGER continuation_update AFTER UPDATE ON documents\n          WHEN NEW.collection IN ('runs', 'work') AND json_remove(OLD.value, '$.updatedAt') != json_remove(NEW.value, '$.updatedAt')\n          BEGIN\n            UPDATE continuation_sequence SET revision = revision + 1 WHERE id = 1;\n            INSERT INTO run_revisions(run_id, revision)\n              VALUES (CASE WHEN NEW.collection = 'runs' THEN NEW.id ELSE json_extract(NEW.value, '$.runId') END,\n                      (SELECT revision FROM continuation_sequence WHERE id = 1))\n              ON CONFLICT(run_id) DO UPDATE SET revision = excluded.revision;\n            \n          END"
+    },
+    {
+      "type": "trigger",
+      "sql": "CREATE TRIGGER continuation_delete AFTER DELETE ON documents\n          WHEN OLD.collection IN ('runs', 'work') \n          BEGIN\n            UPDATE continuation_sequence SET revision = revision + 1 WHERE id = 1;\n            INSERT INTO run_revisions(run_id, revision)\n              VALUES (CASE WHEN OLD.collection = 'runs' THEN OLD.id ELSE json_extract(OLD.value, '$.runId') END,\n                      (SELECT revision FROM continuation_sequence WHERE id = 1))\n              ON CONFLICT(run_id) DO UPDATE SET revision = excluded.revision;\n            DELETE FROM run_revisions WHERE OLD.collection = 'runs' AND run_id = OLD.id;\n          END"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX work_status ON documents(json_extract(value, '$.status')) WHERE collection = 'work'"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX work_run_status ON documents(json_extract(value, '$.runId'), json_extract(value, '$.status')) WHERE collection = 'work'"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX work_admission ON documents((json_extract(value, '$.status') = 'available' OR json_type(value, '$.resourceBlocked') IS NOT NULL)) WHERE collection = 'work'"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX runs_chain ON documents(json_extract(value, '$.chain.rootRunId')) WHERE collection = 'runs'"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX documents_run ON documents(collection, json_extract(value, '$.runId'))"
+    },
+    {
+      "type": "table",
+      "sql": "CREATE TABLE comparison_schedule (\n          comparison_id TEXT PRIMARY KEY, execution_pending INTEGER NOT NULL, trial_pending INTEGER NOT NULL\n        )"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX comparison_execution_pending ON comparison_schedule(execution_pending, comparison_id)"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX comparison_trial_pending ON comparison_schedule(trial_pending, comparison_id)"
+    },
+    {
+      "type": "table",
+      "sql": "CREATE TABLE active_comparison_runs (run_id TEXT PRIMARY KEY, comparison_id TEXT NOT NULL)"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX resource_state ON documents(json_extract(value, '$.state')) WHERE collection = 'workResources'"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX documents_work ON documents(collection, json_extract(value, '$.workId'))"
+    },
+    {
+      "type": "trigger",
+      "sql": "CREATE TRIGGER comparison_schedule_insert AFTER INSERT ON documents\n          WHEN NEW.collection = 'comparisons' BEGIN\n          INSERT INTO comparison_schedule VALUES (NEW.id, \n        (json_extract(NEW.value, '$.status') = 'running' OR\n          (json_extract(NEW.value, '$.status') = 'cancelled' AND EXISTS (\n            SELECT 1 FROM json_each(NEW.value, '$.samples') s WHERE json_extract(s.value, '$.observation') IS NULL))),\n        coalesce((json_type(NEW.value, '$.trialSetup') = 'object' AND\n          (json_extract(NEW.value, '$.status') = 'running' OR EXISTS (\n            SELECT 1 FROM json_each(NEW.value, '$.samples') s\n            WHERE json_extract(s.value, '$.trial.cleanup') IN ('pending', 'running')\n              OR json_extract(s.value, '$.trial.preparation') = 'preparing'))), 0)\n      )\n          ON CONFLICT(comparison_id) DO UPDATE SET execution_pending = excluded.execution_pending, trial_pending = excluded.trial_pending; END"
+    },
+    {
+      "type": "trigger",
+      "sql": "CREATE TRIGGER comparison_schedule_update AFTER UPDATE ON documents\n          WHEN NEW.collection = 'comparisons' BEGIN\n          INSERT INTO comparison_schedule VALUES (NEW.id, \n        (json_extract(NEW.value, '$.status') = 'running' OR\n          (json_extract(NEW.value, '$.status') = 'cancelled' AND EXISTS (\n            SELECT 1 FROM json_each(NEW.value, '$.samples') s WHERE json_extract(s.value, '$.observation') IS NULL))),\n        coalesce((json_type(NEW.value, '$.trialSetup') = 'object' AND\n          (json_extract(NEW.value, '$.status') = 'running' OR EXISTS (\n            SELECT 1 FROM json_each(NEW.value, '$.samples') s\n            WHERE json_extract(s.value, '$.trial.cleanup') IN ('pending', 'running')\n              OR json_extract(s.value, '$.trial.preparation') = 'preparing'))), 0)\n      )\n          ON CONFLICT(comparison_id) DO UPDATE SET execution_pending = excluded.execution_pending, trial_pending = excluded.trial_pending; END"
+    },
+    {
+      "type": "trigger",
+      "sql": "CREATE TRIGGER comparison_schedule_delete AFTER DELETE ON documents\n        WHEN OLD.collection = 'comparisons' BEGIN\n        DELETE FROM comparison_schedule WHERE comparison_id = OLD.id; END"
+    },
+    {
+      "type": "trigger",
+      "sql": "CREATE TRIGGER active_comparison_insert AFTER INSERT ON documents\n          WHEN NEW.collection = 'runs' BEGIN\n          DELETE FROM active_comparison_runs WHERE run_id = NEW.id;\n          INSERT INTO active_comparison_runs SELECT NEW.id, json_extract(NEW.value, '$.comparison.comparisonId')\n            WHERE json_extract(NEW.value, '$.status') IN ('running', 'waiting')\n        AND json_type(NEW.value, '$.comparison.comparisonId') = 'text'; END"
+    },
+    {
+      "type": "trigger",
+      "sql": "CREATE TRIGGER active_comparison_update AFTER UPDATE ON documents\n          WHEN NEW.collection = 'runs' BEGIN\n          DELETE FROM active_comparison_runs WHERE run_id = NEW.id;\n          INSERT INTO active_comparison_runs SELECT NEW.id, json_extract(NEW.value, '$.comparison.comparisonId')\n            WHERE json_extract(NEW.value, '$.status') IN ('running', 'waiting')\n        AND json_type(NEW.value, '$.comparison.comparisonId') = 'text'; END"
+    },
+    {
+      "type": "trigger",
+      "sql": "CREATE TRIGGER active_comparison_delete AFTER DELETE ON documents\n        WHEN OLD.collection = 'runs' BEGIN DELETE FROM active_comparison_runs WHERE run_id = OLD.id; END"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX work_attention ON documents(json_extract(value, '$.managedExecution.state')) WHERE collection = 'work'"
+    },
+    {
+      "type": "index",
+      "sql": "CREATE INDEX runs_summary_filters ON documents(\n          json_extract(value, '$.workflowId'),\n          json_extract(value, '$.createdAt') DESC,\n          json_extract(value, '$.status'),\n          json_extract(value, '$.parentRunId'),\n          json_extract(value, '$.parentMode'),\n          json_extract(value, '$.batchNodeId'),\n          id\n        ) WHERE collection = 'runs'"
+    }
+  ],
+  "tables": {
+    "migrations": [
+      {
+        "version": 1
+      },
+      {
+        "version": 2
+      },
+      {
+        "version": 3
+      },
+      {
+        "version": 4
+      },
+      {
+        "version": 5
+      },
+      {
+        "version": 6
+      },
+      {
+        "version": 7
+      }
+    ],
+    "documents": [
+      {
+        "collection": "workflows",
+        "id": "0f1e63fe-bce2-4227-88df-9ec8301efc55",
+        "value": "{\"id\":\"0f1e63fe-bce2-4227-88df-9ec8301efc55\",\"ownerWorkflowId\":null,\"name\":\"published-javascript\",\"description\":\"\",\"archived\":false,\"draft\":{\"inputSchema\":{},\"outputSchema\":{},\"nodes\":[{\"id\":\"entry\",\"label\":\"Entry\",\"position\":{\"x\":0,\"y\":0},\"inputSchema\":{},\"outputSchema\":{},\"kind\":\"entry\"},{\"id\":\"script\",\"label\":\"Script\",\"position\":{\"x\":0,\"y\":0},\"inputSchema\":{},\"outputSchema\":{},\"kind\":\"script\",\"language\":\"javascript\",\"command\":\"return { answer: 42 };\",\"timeoutMs\":30000},{\"id\":\"exit\",\"label\":\"Exit\",\"position\":{\"x\":0,\"y\":0},\"inputSchema\":{},\"outputSchema\":{},\"kind\":\"exit\"}],\"edges\":[{\"id\":\"a\",\"source\":\"entry\",\"target\":\"script\",\"port\":\"default\"},{\"id\":\"b\",\"source\":\"script\",\"target\":\"exit\",\"port\":\"default\"}],\"maxSteps\":100},\"draftRevision\":1,\"latestVersion\":1,\"createdAt\":\"2026-11-09T06:36:51.991Z\",\"updatedAt\":\"2026-11-09T06:36:52.006Z\"}"
+      },
+      {
+        "collection": "versions",
+        "id": "0f1e63fe-bce2-4227-88df-9ec8301efc55:1",
+        "value": "{\"workflowId\":\"0f1e63fe-bce2-4227-88df-9ec8301efc55\",\"version\":1,\"definition\":{\"inputSchema\":{},\"outputSchema\":{},\"nodes\":[{\"id\":\"entry\",\"label\":\"Entry\",\"position\":{\"x\":0,\"y\":0},\"inputSchema\":{},\"outputSchema\":{},\"kind\":\"entry\"},{\"id\":\"script\",\"label\":\"Script\",\"position\":{\"x\":0,\"y\":0},\"inputSchema\":{},\"outputSchema\":{},\"kind\":\"script\",\"language\":\"javascript\",\"command\":\"return { answer: 42 };\",\"timeoutMs\":30000},{\"id\":\"exit\",\"label\":\"Exit\",\"position\":{\"x\":0,\"y\":0},\"inputSchema\":{},\"outputSchema\":{},\"kind\":\"exit\"}],\"edges\":[{\"id\":\"a\",\"source\":\"entry\",\"target\":\"script\",\"port\":\"default\"},{\"id\":\"b\",\"source\":\"script\",\"target\":\"exit\",\"port\":\"default\"}],\"maxSteps\":100},\"createdAt\":\"2026-11-09T06:36:52.006Z\",\"id\":\"0f1e63fe-bce2-4227-88df-9ec8301efc55:1\"}"
+      },
+      {
+        "collection": "runs",
+        "id": "9c9a6189-9686-4b77-8ff6-0d228ae689b7",
+        "value": "{\"id\":\"9c9a6189-9686-4b77-8ff6-0d228ae689b7\",\"workflowId\":\"0f1e63fe-bce2-4227-88df-9ec8301efc55\",\"workflowName\":\"published-javascript\",\"version\":1,\"status\":\"completed\",\"input\":{},\"cursor\":\"exit\",\"value\":{\"answer\":42},\"executions\":[{\"id\":\"95ed0e56-c59d-419c-8dd0-fc691a7b845a\",\"nodeId\":\"entry\",\"kind\":\"entry\",\"label\":\"Entry\",\"input\":{},\"status\":\"completed\",\"startedAt\":\"2026-11-09T06:36:52.011Z\",\"childRunIds\":[],\"nextItem\":0,\"output\":{},\"port\":\"default\",\"completedAt\":\"2026-11-09T06:36:52.011Z\"},{\"id\":\"b8d896ef-6a60-4c75-9199-225fceb189b8\",\"nodeId\":\"script\",\"kind\":\"script\",\"label\":\"Script\",\"input\":{},\"status\":\"completed\",\"startedAt\":\"2026-11-09T06:36:52.012Z\",\"childRunIds\":[],\"nextItem\":0,\"output\":{\"answer\":42},\"port\":\"default\",\"completedAt\":\"2026-11-09T06:36:52.038Z\"},{\"id\":\"516daddf-9b4d-40df-b4fc-d71e4fabc669\",\"nodeId\":\"exit\",\"kind\":\"exit\",\"label\":\"Exit\",\"input\":{\"answer\":42},\"status\":\"completed\",\"startedAt\":\"2026-11-09T06:36:52.039Z\",\"childRunIds\":[],\"nextItem\":0,\"output\":{\"answer\":42},\"port\":\"default\",\"completedAt\":\"2026-11-09T06:36:52.039Z\"}],\"createdAt\":\"2026-11-09T06:36:52.010Z\",\"updatedAt\":\"2026-11-09T06:36:52.039Z\",\"promptSnapshots\":[],\"output\":{\"answer\":42}}"
+      },
+      {
+        "collection": "events",
+        "id": "2ded5264-d1a5-4210-87bb-b68bd64a1b26",
+        "value": "{\"id\":\"2ded5264-d1a5-4210-87bb-b68bd64a1b26\",\"runId\":\"9c9a6189-9686-4b77-8ff6-0d228ae689b7\",\"type\":\"run.started\",\"message\":\"Started published-javascript v1\",\"at\":\"2026-11-09T06:36:52.010Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "69ae2823-9b60-47df-a3d8-d7b65c4cd351",
+        "value": "{\"id\":\"69ae2823-9b60-47df-a3d8-d7b65c4cd351\",\"runId\":\"9c9a6189-9686-4b77-8ff6-0d228ae689b7\",\"type\":\"node.started\",\"message\":\"Entry\",\"at\":\"2026-11-09T06:36:52.011Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "321cb710-281f-42f3-920f-77f97e712e68",
+        "value": "{\"id\":\"321cb710-281f-42f3-920f-77f97e712e68\",\"runId\":\"9c9a6189-9686-4b77-8ff6-0d228ae689b7\",\"type\":\"node.completed\",\"message\":\"Entry\",\"at\":\"2026-11-09T06:36:52.012Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "8e50e219-34e6-4598-8acb-bbb399177600",
+        "value": "{\"id\":\"8e50e219-34e6-4598-8acb-bbb399177600\",\"runId\":\"9c9a6189-9686-4b77-8ff6-0d228ae689b7\",\"type\":\"node.started\",\"message\":\"Script\",\"at\":\"2026-11-09T06:36:52.012Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "cfd0f68b-ca9b-47da-8d99-f1cee8fbb738",
+        "value": "{\"id\":\"cfd0f68b-ca9b-47da-8d99-f1cee8fbb738\",\"runId\":\"9c9a6189-9686-4b77-8ff6-0d228ae689b7\",\"type\":\"node.completed\",\"message\":\"Script\",\"at\":\"2026-11-09T06:36:52.038Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "cc183da6-6480-4881-9e21-f1a52e9644b4",
+        "value": "{\"id\":\"cc183da6-6480-4881-9e21-f1a52e9644b4\",\"runId\":\"9c9a6189-9686-4b77-8ff6-0d228ae689b7\",\"type\":\"node.started\",\"message\":\"Exit\",\"at\":\"2026-11-09T06:36:52.039Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "85defd7c-e9e9-40b5-a6d8-eec4eab29c09",
+        "value": "{\"id\":\"85defd7c-e9e9-40b5-a6d8-eec4eab29c09\",\"runId\":\"9c9a6189-9686-4b77-8ff6-0d228ae689b7\",\"type\":\"run.completed\",\"message\":\"Workflow completed\",\"at\":\"2026-11-09T06:36:52.039Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "5039120c-1b60-4ac4-b8fa-db3a11e99865",
+        "value": "{\"id\":\"5039120c-1b60-4ac4-b8fa-db3a11e99865\",\"runId\":\"9c9a6189-9686-4b77-8ff6-0d228ae689b7\",\"type\":\"node.completed\",\"message\":\"Exit\",\"at\":\"2026-11-09T06:36:52.039Z\"}"
+      },
+      {
+        "collection": "workflows",
+        "id": "68e4ca33-3461-4b1a-ae67-e811fe8aa1fd",
+        "value": "{\"id\":\"68e4ca33-3461-4b1a-ae67-e811fe8aa1fd\",\"ownerWorkflowId\":null,\"name\":\"published-bash\",\"description\":\"\",\"archived\":false,\"draft\":{\"inputSchema\":{},\"outputSchema\":{},\"nodes\":[{\"id\":\"entry\",\"label\":\"Entry\",\"position\":{\"x\":0,\"y\":0},\"inputSchema\":{},\"outputSchema\":{},\"kind\":\"entry\"},{\"id\":\"script\",\"label\":\"Script\",\"position\":{\"x\":0,\"y\":0},\"inputSchema\":{},\"outputSchema\":{},\"kind\":\"script\",\"command\":\"printf '{\\\"answer\\\":42}'\",\"timeoutMs\":30000},{\"id\":\"exit\",\"label\":\"Exit\",\"position\":{\"x\":0,\"y\":0},\"inputSchema\":{},\"outputSchema\":{},\"kind\":\"exit\"}],\"edges\":[{\"id\":\"a\",\"source\":\"entry\",\"target\":\"script\",\"port\":\"default\"},{\"id\":\"b\",\"source\":\"script\",\"target\":\"exit\",\"port\":\"default\"}],\"maxSteps\":100},\"draftRevision\":1,\"latestVersion\":1,\"createdAt\":\"2026-11-09T06:36:52.073Z\",\"updatedAt\":\"2026-11-09T06:36:52.076Z\"}"
+      },
+      {
+        "collection": "versions",
+        "id": "68e4ca33-3461-4b1a-ae67-e811fe8aa1fd:1",
+        "value": "{\"workflowId\":\"68e4ca33-3461-4b1a-ae67-e811fe8aa1fd\",\"version\":1,\"definition\":{\"inputSchema\":{},\"outputSchema\":{},\"nodes\":[{\"id\":\"entry\",\"label\":\"Entry\",\"position\":{\"x\":0,\"y\":0},\"inputSchema\":{},\"outputSchema\":{},\"kind\":\"entry\"},{\"id\":\"script\",\"label\":\"Script\",\"position\":{\"x\":0,\"y\":0},\"inputSchema\":{},\"outputSchema\":{},\"kind\":\"script\",\"command\":\"printf '{\\\"answer\\\":42}'\",\"timeoutMs\":30000},{\"id\":\"exit\",\"label\":\"Exit\",\"position\":{\"x\":0,\"y\":0},\"inputSchema\":{},\"outputSchema\":{},\"kind\":\"exit\"}],\"edges\":[{\"id\":\"a\",\"source\":\"entry\",\"target\":\"script\",\"port\":\"default\"},{\"id\":\"b\",\"source\":\"script\",\"target\":\"exit\",\"port\":\"default\"}],\"maxSteps\":100},\"createdAt\":\"2026-11-09T06:36:52.076Z\",\"id\":\"68e4ca33-3461-4b1a-ae67-e811fe8aa1fd:1\"}"
+      },
+      {
+        "collection": "runs",
+        "id": "a63ebfe9-7526-4ce5-abd7-0aaaf025f730",
+        "value": "{\"id\":\"a63ebfe9-7526-4ce5-abd7-0aaaf025f730\",\"workflowId\":\"68e4ca33-3461-4b1a-ae67-e811fe8aa1fd\",\"workflowName\":\"published-bash\",\"version\":1,\"status\":\"completed\",\"input\":{},\"cursor\":\"exit\",\"value\":{\"answer\":42},\"executions\":[{\"id\":\"1eeed7d9-dab2-4220-8e49-ed260a41d7f5\",\"nodeId\":\"entry\",\"kind\":\"entry\",\"label\":\"Entry\",\"input\":{},\"status\":\"completed\",\"startedAt\":\"2026-11-09T06:36:52.080Z\",\"childRunIds\":[],\"nextItem\":0,\"output\":{},\"port\":\"default\",\"completedAt\":\"2026-11-09T06:36:52.080Z\"},{\"id\":\"36aa1462-3ea8-4c4e-b5b7-386150f0d44b\",\"nodeId\":\"script\",\"kind\":\"script\",\"label\":\"Script\",\"input\":{},\"status\":\"completed\",\"startedAt\":\"2026-11-09T06:36:52.081Z\",\"childRunIds\":[],\"nextItem\":0,\"output\":{\"answer\":42},\"port\":\"default\",\"completedAt\":\"2026-11-09T06:36:52.083Z\"},{\"id\":\"44e98f4b-38bc-4d55-897d-10d300d122c1\",\"nodeId\":\"exit\",\"kind\":\"exit\",\"label\":\"Exit\",\"input\":{\"answer\":42},\"status\":\"completed\",\"startedAt\":\"2026-11-09T06:36:52.084Z\",\"childRunIds\":[],\"nextItem\":0,\"output\":{\"answer\":42},\"port\":\"default\",\"completedAt\":\"2026-11-09T06:36:52.084Z\"}],\"createdAt\":\"2026-11-09T06:36:52.080Z\",\"updatedAt\":\"2026-11-09T06:36:52.084Z\",\"promptSnapshots\":[],\"output\":{\"answer\":42}}"
+      },
+      {
+        "collection": "events",
+        "id": "c2b66022-abdf-467b-bd33-9e072f43da2b",
+        "value": "{\"id\":\"c2b66022-abdf-467b-bd33-9e072f43da2b\",\"runId\":\"a63ebfe9-7526-4ce5-abd7-0aaaf025f730\",\"type\":\"run.started\",\"message\":\"Started published-bash v1\",\"at\":\"2026-11-09T06:36:52.080Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "28c61b8b-9f0c-46b7-ab0a-10c2f68ece28",
+        "value": "{\"id\":\"28c61b8b-9f0c-46b7-ab0a-10c2f68ece28\",\"runId\":\"a63ebfe9-7526-4ce5-abd7-0aaaf025f730\",\"type\":\"node.started\",\"message\":\"Entry\",\"at\":\"2026-11-09T06:36:52.080Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "18d7cb94-434e-4ee2-b58a-651eea07d010",
+        "value": "{\"id\":\"18d7cb94-434e-4ee2-b58a-651eea07d010\",\"runId\":\"a63ebfe9-7526-4ce5-abd7-0aaaf025f730\",\"type\":\"node.completed\",\"message\":\"Entry\",\"at\":\"2026-11-09T06:36:52.081Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "7c48ac8c-4de1-4ce9-ae23-14be42108c20",
+        "value": "{\"id\":\"7c48ac8c-4de1-4ce9-ae23-14be42108c20\",\"runId\":\"a63ebfe9-7526-4ce5-abd7-0aaaf025f730\",\"type\":\"node.started\",\"message\":\"Script\",\"at\":\"2026-11-09T06:36:52.081Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "b19ae49b-04a7-49c9-a91a-dc93980bf080",
+        "value": "{\"id\":\"b19ae49b-04a7-49c9-a91a-dc93980bf080\",\"runId\":\"a63ebfe9-7526-4ce5-abd7-0aaaf025f730\",\"type\":\"node.completed\",\"message\":\"Script\",\"at\":\"2026-11-09T06:36:52.084Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "a9f34ff5-ee39-4d69-a2c2-922a5027e287",
+        "value": "{\"id\":\"a9f34ff5-ee39-4d69-a2c2-922a5027e287\",\"runId\":\"a63ebfe9-7526-4ce5-abd7-0aaaf025f730\",\"type\":\"node.started\",\"message\":\"Exit\",\"at\":\"2026-11-09T06:36:52.084Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "16eeddf1-61c1-4c09-88c1-2e59935bb4f2",
+        "value": "{\"id\":\"16eeddf1-61c1-4c09-88c1-2e59935bb4f2\",\"runId\":\"a63ebfe9-7526-4ce5-abd7-0aaaf025f730\",\"type\":\"run.completed\",\"message\":\"Workflow completed\",\"at\":\"2026-11-09T06:36:52.084Z\"}"
+      },
+      {
+        "collection": "events",
+        "id": "48147512-7320-41b8-9a1d-a91a0d194ff7",
+        "value": "{\"id\":\"48147512-7320-41b8-9a1d-a91a0d194ff7\",\"runId\":\"a63ebfe9-7526-4ce5-abd7-0aaaf025f730\",\"type\":\"node.completed\",\"message\":\"Exit\",\"at\":\"2026-11-09T06:36:52.084Z\"}"
+      }
+    ],
+    "continuation_sequence": [
+      {
+        "id": 1,
+        "revision": 10
+      }
+    ],
+    "run_revisions": [
+      {
+        "run_id": "9c9a6189-9686-4b77-8ff6-0d228ae689b7",
+        "revision": 5
+      },
+      {
+        "run_id": "a63ebfe9-7526-4ce5-abd7-0aaaf025f730",
+        "revision": 10
+      }
+    ],
+    "comparison_schedule": [],
+    "active_comparison_runs": []
+  }
+}

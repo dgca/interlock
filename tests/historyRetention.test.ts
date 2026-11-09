@@ -299,7 +299,7 @@ it('reclaims file-backed pages for reuse, preserves durable trigger receipts and
   const current = e.run(run.id);
   current.input = { payload: 'x'.repeat(2_000_000) };
   e.store.put('runs', current);
-  for (const collection of ['eventTriggerReceipts', 'webhookReceipts'])
+  for (const collection of ['eventTriggerReceipts'])
     e.store.put(collection, {
       id: collection,
       runId: run.id,
@@ -311,7 +311,7 @@ it('reclaims file-backed pages for reuse, preserves durable trigger receipts and
   const status = e.retention.status();
   expect(status.storage.reusableBytes).toBeGreaterThan(before.reusableBytes);
   expect(status.storage.databaseBytes).toBeGreaterThan(0);
-  for (const collection of ['eventTriggerReceipts', 'webhookReceipts'])
+  for (const collection of ['eventTriggerReceipts'])
     expect(e.store.list(collection)).toHaveLength(1);
   expect(JSON.stringify(status)).not.toContain('PRIVATE_HISTORY');
   expect(status.lastSweep!.removedDocumentBytes).toBeGreaterThan(2_000_000);
@@ -401,7 +401,7 @@ it('keeps pending lifecycle source evidence through quiescence and preserves the
   expect(e.store.runs().filter((r) => r.workflowId === target)).toHaveLength(1);
 });
 
-it.each(['scheduleFires', 'webhookOutcomes', 'eventDeliveries'])(
+it.each(['scheduleFires', 'eventDeliveries'])(
   'preserves unobserved %s history until its outcome settles',
   (collection) => {
     const e = setup(),

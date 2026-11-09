@@ -201,7 +201,7 @@ describe('doctor health and readiness check', () => {
   });
 
   describe('trigger checks', () => {
-    it.each(['schedule', 'webhook', 'event'])(
+    it.each(['schedule', 'event'])(
       'ignores disabled %s trigger failure history',
       async (kind) => {
         const { engine, store } = createEnv();
@@ -220,7 +220,7 @@ describe('doctor health and readiness check', () => {
         expect((await engine.doctor()).status).toBe('ok');
       },
     );
-    it.each(['webhook', 'event'])(
+    it.each(['event'])(
       'detects failure and automatic pause for %s triggers',
       async (kind) => {
         const { engine, store } = createEnv();
@@ -308,22 +308,6 @@ describe('doctor health and readiness check', () => {
       expect(lagCheck).toBeDefined();
       expect(lagCheck!.status).toBe('warn');
       expect(lagCheck!.message).toContain('delayed by');
-    });
-
-    it('surfaces recent webhook rejections', async () => {
-      const { engine, store } = createEnv();
-      vi.spyOn(store, 'recentWebhookRejections').mockReturnValueOnce(3);
-
-      const report = await engine.doctor();
-      expect(report.status).toBe('warn');
-      const webhookCheck = report.checks.find(
-        (c) => c.name === 'Webhook rejections',
-      );
-      expect(webhookCheck).toBeDefined();
-      expect(webhookCheck!.status).toBe('warn');
-      expect(webhookCheck!.message).toContain(
-        '3 rejected webhook delivery attempt(s)',
-      );
     });
   });
 

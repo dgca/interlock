@@ -389,26 +389,6 @@ export async function runDoctor(
       }
     }
 
-    // Recent webhook rejections
-    try {
-      const oneHourAgo = new Date(Date.now() - 3600 * 1000).toISOString();
-      const rejections = engine.store.recentWebhookRejections(oneHourAgo);
-      if (rejections > 0) {
-        triggerIssues++;
-        checks.push({
-          category: 'triggers',
-          name: 'Webhook rejections',
-          status: 'warn',
-          message: `${rejections} rejected webhook delivery attempt(s) in the last hour`,
-          details: { rejectedCount: rejections, since: oneHourAgo },
-          remediation:
-            'Inspect webhook secret configuration and payload authentication.',
-        });
-      }
-    } catch {
-      // Ignore if query cannot be run
-    }
-
     if (triggerIssues === 0) {
       checks.push({
         category: 'triggers',

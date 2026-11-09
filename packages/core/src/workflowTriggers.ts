@@ -1,6 +1,5 @@
 import { runTagsSchema } from './runTags.js';
 import { z } from 'zod';
-import { webhookConfigSchema, type WebhookConfig } from './webhooks.js';
 import { eventConfigSchema, type EventConfig } from './eventTriggers.js';
 import { CronExpressionParser } from 'cron-parser';
 import { jsonSchema, type Json } from './index.js';
@@ -140,7 +139,6 @@ export const scheduleConfigSchema = z
 export type ScheduleConfig = z.infer<typeof scheduleConfigSchema>;
 export const triggerConfigSchema = z.union([
   scheduleConfigSchema,
-  z.lazy(() => webhookConfigSchema),
   eventConfigSchema,
 ]);
 export type TriggerConfig = z.infer<typeof triggerConfigSchema>;
@@ -158,34 +156,18 @@ export function triggerConfig(trigger: WorkflowTrigger): TriggerConfig {
           'missedFirePolicy',
           'pauseAfterConsecutiveFailures',
         ]
-      : trigger.kind === 'event'
-        ? [
-            'kind',
-            'name',
-            'tags',
-            'events',
-            'scope',
-            'action',
-            'exitNodeId',
-            'waitForQuiescence',
-            'maxTriggerDepth',
-            'pauseAfterConsecutiveFailures',
-          ]
-        : [
-            'kind',
-            'name',
-            'tags',
-            'authentication',
-            'deliveryId',
-            'timestamp',
-            'timestampFormat',
-            'timestampWindowMs',
-            'filters',
-            'action',
-            'maxBodyBytes',
-            'rateLimit',
-            'pauseAfterConsecutiveFailures',
-          ];
+      : [
+          'kind',
+          'name',
+          'tags',
+          'events',
+          'scope',
+          'action',
+          'exitNodeId',
+          'waitForQuiescence',
+          'maxTriggerDepth',
+          'pauseAfterConsecutiveFailures',
+        ];
   return triggerConfigSchema.parse(
     Object.fromEntries(
       fields.flatMap((key) => {
@@ -197,7 +179,7 @@ export function triggerConfig(trigger: WorkflowTrigger): TriggerConfig {
 }
 export const triggerListQuerySchema = z
   .object({
-    kind: z.enum(['schedule', 'webhook', 'event']).optional(),
+    kind: z.enum(['schedule', 'event']).optional(),
     workflowId: z.string().min(1).optional(),
     search: z.string().trim().max(200).optional(),
     status: z.enum(['all', 'enabled', 'disabled', 'attention']).default('all'),
@@ -287,14 +269,8 @@ export interface ScheduleTrigger extends ScheduleConfig, TriggerState {
   anchorAt: string;
   nextFireAt: string;
 }
-export interface WebhookTrigger extends WebhookConfig, TriggerState {
-  ignoredCount: number;
-  rejectedCount: number;
-  deliveryCount: number;
-  rateWindow?: { startedAt: string; requests: number };
-}
 export interface EventTrigger extends EventConfig, TriggerState {}
-export type WorkflowTrigger = ScheduleTrigger | WebhookTrigger | EventTrigger;
+export type WorkflowTrigger = ScheduleTrigger | EventTrigger;
 export interface ScheduleFire {
   id: string;
   triggerId: string;

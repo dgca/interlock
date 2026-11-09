@@ -40,7 +40,6 @@ import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
 import { paths } from '../../routes/paths';
 import {
-  editable,
   eventLabels,
   initialConfig,
   itemHref,
@@ -175,10 +174,7 @@ export function AutomationEditor({
       .then(
         ({ trigger }) => {
           if (!active) return;
-          if (!editable(trigger)) {
-            navigate(itemHref(id, search), { replace: true });
-            return;
-          }
+
           const next = triggerConfig(trigger) as AutomationConfig;
           setConfig(next);
           setWorkflowId(trigger.workflowId);

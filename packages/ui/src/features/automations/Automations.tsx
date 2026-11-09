@@ -286,9 +286,7 @@ function AutomationList() {
                 const condition =
                   trigger.kind === 'schedule'
                     ? timingLabel(trigger)
-                    : trigger.kind === 'webhook'
-                      ? 'Incoming webhook'
-                      : `${source} · ${trigger.events.map((event) => eventLabels[event].toLowerCase()).join(', ')}`;
+                    : `${source} · ${trigger.events.map((event) => eventLabels[event].toLowerCase()).join(', ')}`;
                 const latest = trigger.lastActivity;
                 return (
                   <ListTableRow
@@ -310,14 +308,7 @@ function AutomationList() {
                         {condition}
                       </span>
                     </span>
-                    <span>
-                      {trigger.workflowName}
-                      {trigger.actionType === 'webhook' && (
-                        <small className={classes.condition}>
-                          Sends a webhook
-                        </small>
-                      )}
-                    </span>
+                    <span>{trigger.workflowName}</span>
                     <span className={classes.state} data-state={state}>
                       {state}
                     </span>
@@ -336,9 +327,7 @@ function AutomationList() {
                             ? 'Automatically paused'
                             : trigger.kind === 'schedule'
                               ? `Next: ${timestamp(trigger.nextFireAt, trigger.timing.type === 'cron' ? trigger.timing.timeZone : undefined)}`
-                              : trigger.kind === 'webhook'
-                                ? 'Listening for webhooks'
-                                : 'Listening for events'}
+                              : 'Listening for events'}
                       </small>
                     </span>
                     <ChevronRight size={16} />
