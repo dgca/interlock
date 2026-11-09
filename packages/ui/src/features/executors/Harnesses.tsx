@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Link, useLocation } from 'react-router';
 import {
   Badge,
   NativeSelect,
@@ -53,6 +54,7 @@ type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
 type DirtySetting = (id: string, dirty: boolean) => void;
 
 export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
+  const location = useLocation();
   const [dirtySettings, setDirtySettings] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -114,24 +116,25 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     void refresh();
   }, []);
   useEffect(() => {
-    const followAnchor = () => {
-      const target = document.getElementById(window.location.hash.slice(1));
+    const frame = requestAnimationFrame(() => {
+      const target = document.getElementById(location.hash.slice(1));
       target?.scrollIntoView({ block: 'start' });
-    };
-    const frame = requestAnimationFrame(followAnchor);
-    window.addEventListener('hashchange', followAnchor);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener('hashchange', followAnchor);
-    };
-  }, []);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [location]);
   return (
     <section className={workspacePage.page}>
       <PageHeader title="AI Settings" />
       <nav className={styles.sectionNav} aria-label="AI settings sections">
-        <a href="#harnesses">Harnesses</a>
-        <a href="#model-aliases">Model aliases</a>
-        <a href="#execution-settings">Execution settings</a>
+        <Link to={{ search: location.search, hash: '#harnesses' }}>
+          Harnesses
+        </Link>
+        <Link to={{ search: location.search, hash: '#model-aliases' }}>
+          Model aliases
+        </Link>
+        <Link to={{ search: location.search, hash: '#execution-settings' }}>
+          Execution settings
+        </Link>
       </nav>
       <div className={`${workspacePage.content} ${styles.aiContent}`}>
         {error && (

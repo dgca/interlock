@@ -2,6 +2,7 @@
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   executorProfileSchema,
@@ -12,7 +13,8 @@ import {
 import { ExecutorSelect } from '../packages/ui/src/features/executors/ExecutorSelect';
 import { NodeInspector } from '../packages/ui/src/features/workflows/NodeInspector';
 import { ExecutionSettings } from '../packages/ui/src/features/executors/ExecutionSettings';
-import { Harnesses } from '../packages/ui/src/features/executors/Harnesses';
+import { Harnesses as HarnessesPage } from '../packages/ui/src/features/executors/Harnesses';
+const Harnesses = () => h(MemoryRouter, {}, h(HarnessesPage));
 const rpc = vi.hoisted(() => ({
   profiles: vi.fn(),
   models: vi.fn(),
