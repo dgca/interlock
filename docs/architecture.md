@@ -417,6 +417,8 @@ The main and owned-child workflow collections share `components/WorkflowCards` f
 
 [UI interaction patterns](ui-patterns.md) documents dialog layout, loading states, run attention, approval, recovery, and browser review conventions.
 
+Single-workflow initial data loading and lazy editor loading share the title-row and attached-tab presentation. The remaining canvas uses a centered spinner rather than graph-node skeletons.
+
 Interlock tabs on the same origin share a browser event stream. One tab holds
 the stream and broadcasts change notices and heartbeats to the others.
 Visible tabs refresh after run and work changes. They use a five-second

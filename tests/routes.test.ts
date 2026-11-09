@@ -341,6 +341,34 @@ it('keeps a deep link while data loads and shows missing resources without redir
   await mount('/workflows/missing');
   expect(container.textContent).toContain('Loading workflow…');
   expect(container.textContent).not.toContain('Open workflow');
+  const loading = container.querySelector('main section[aria-busy="true"]')!;
+  expect(loading).not.toBeNull();
+  const spinner = loading.querySelector('.mantine-Loader-root')!;
+  expect(spinner).not.toBeNull();
+  expect(
+    spinner.parentElement?.querySelector('.mantine-Skeleton-root'),
+  ).toBeNull();
+  expect(loading.querySelector('[aria-current="page"]')?.textContent).toBe(
+    'Editor',
+  );
+  expect(loading.textContent).toContain('Child workflows');
+  expect(loading.querySelectorAll('button, input, a')).toHaveLength(0);
+  expect(
+    [...container.querySelectorAll('[role="status"]')].filter(
+      (status) => status.textContent === 'Loading workflow…',
+    ),
+  ).toHaveLength(1);
+  for (const [view, label] of [
+    ['runs', 'Runs'],
+    ['children', 'Child workflows'],
+  ]) {
+    await act(async () => {
+      await router.navigate(`/workflows/missing?view=${view}`);
+    });
+    expect(loading.querySelector('[aria-current="page"]')?.textContent).toBe(
+      label,
+    );
+  }
   await act(async () => resolve([]));
   expect(container.textContent).toContain('Workflow not found');
   expect(window.location.pathname).toBe('/workflows/missing');
