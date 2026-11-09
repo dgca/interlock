@@ -23,7 +23,9 @@ Place creation and editing form fields inside a solid form card with 24px paddin
 
 Automations list filters and page offsets live in the URL and survive detail navigation. Creation defaults to disabled with an explicit enable checkbox and a **Create** action. Successful creation opens ordinary detail without a review gate. Preserve edits after rejected writes, disable repeat submissions while pending, and retain acknowledged outcomes if refresh fails. Revision conflicts offer reload while preserving local edits until discarded.
 
-Runs tables share the Automations row spacing, title-case headings, typography, status dots, and navigation chevrons. Run rows retain their stage, actor, attention reason, version, tags, comparison context, and exact start time. Tag filters open from the tab toolbar into a form card. Global history actions live in the page header; workflow-scoped history actions remain beside the run tabs.
+Active Runs offers a board and a dense List view. The board retains the current active page, with separate bounded Needs attention and Completed runs previews. Preview links open the full Needs attention or History section. Preview requests preserve workflow and tag scope. Completed runs are ordered by run creation time, so the column does not claim completion recency. Stage, actor, waiting reason, and execution count come from real summaries; a progress ratio is unavailable.
+
+Runs tables share the Automations row spacing, title-case headings, typography, status dots, and navigation chevrons. Run rows retain their stage, actor, attention reason, version, tags, comparison context, and exact start time. Tag filters open from the padded toolbar above the tabs into a form card. Global history actions live in the page header; workflow-scoped history actions remain above the run tabs.
 
 AI Settings presents Harnesses, Model aliases, and Execution settings as sections
 on one scrollable page. Each section keeps its

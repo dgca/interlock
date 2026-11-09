@@ -5,7 +5,7 @@
 
 .selection {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 36px;
+  grid-template-columns: minmax(0, 1fr) var(--control-height);
   gap: var(--mantine-spacing-xs);
   align-items: start;
 }
@@ -20,18 +20,14 @@
 
 .changeName {
   align-self: flex-start;
-  min-height: 36px;
+  min-height: var(--control-height);
   text-align: left;
 }
 
 .manage {
   display: inline-flex;
   align-items: center;
-  min-height: 36px;
-}
-
-.action {
-  min-height: 36px;
+  min-height: var(--control-height);
 }
 
 @media (max-width: 48em) {
@@ -45,7 +41,6 @@
     margin-top: 26px;
   }
 
-  .action,
   .changeName,
   .manage {
     min-height: 44px;

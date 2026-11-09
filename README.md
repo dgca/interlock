@@ -49,7 +49,7 @@ Use a coding agent with access to your Git checkout, files, and development comm
    a fresh session or isolated subagent for the final review.
    ```
 
-5. Open **Runs → Active** and select the execution to follow its steps. Completed, failed, and cancelled executions appear in **History**.
+5. Open **Runs → Active** and select the execution to follow its steps. Active offers a board with bounded attention and completed-run previews, plus a List view. Completed, failed, and cancelled executions appear in **History**.
 
 Replace the example request with the change you want. The workflow resolves the target repository and artifact directory, follows that repository's instructions, and asks when a consequential decision remains unresolved. Set `reviewPolicy` to `always` to approve each planning artifact, or `createPr` to `true` to request PR delivery. Your agent's tool approval settings still apply. See [Use the SDLC workflow](docs/sdlc-workflow.md) for inputs, executor requirements, and resuming work.
 

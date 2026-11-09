@@ -2,7 +2,7 @@
 import { act, createElement as h, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DesignSystemProvider } from '../packages/ui/src/design-system';
-import { expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { RunSummary } from '@interlock/core';
 import { RunList } from '../packages/ui/src/features/runs/RunList';
 
@@ -18,6 +18,18 @@ vi.mock('../packages/ui/src/lib/api', () => ({
   },
   errorMessage: (error: Error) => error.message,
 }));
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+});
+afterEach(() => vi.unstubAllGlobals());
 
 it('renders active and history pages and opens the selected run', async () => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -47,13 +59,19 @@ it('renders active and history pages and opens the selected run', async () => {
     parentWorkflowName: 'completed workflow',
     parentMode: 'detached',
   });
-  query.mockImplementation(async ({ tab }) => ({
+  query.mockImplementation(async ({ tab, status: selectedStatus }) => ({
     items:
       tab === 'active'
         ? runs.filter(
             (run) => run.status === 'running' || run.status === 'waiting',
           )
-        : runs.slice(2, 5),
+        : tab === 'attention'
+          ? []
+          : runs
+              .slice(2, 5)
+              .filter(
+                (run) => !selectedStatus || run.status === selectedStatus,
+              ),
     counts: { active: 3, attention: 0, history: 3 },
     offset: 0,
     nextOffset: null,
@@ -86,11 +104,9 @@ it('renders active and history pages and opens the selected run', async () => {
     const panel = () => container.querySelector('[role="tabpanel"]')!;
     expect(panel().textContent).toContain('running workflow');
     expect(panel().textContent).toContain('waiting workflow');
-    expect(
-      Array.from(panel().querySelectorAll('strong')).map(
-        (name) => name.textContent,
-      ),
-    ).not.toContain('completed workflow');
+    expect(panel().textContent).toContain('Completed runs');
+    expect(panel().textContent).toContain('completed workflow');
+    expect(panel().textContent).not.toContain('failed workflow');
     expect(panel().textContent).toContain('Independent investigation');
     expect(panel().textContent).toContain(
       'Started independently · from completed workflow',
@@ -98,6 +114,13 @@ it('renders active and history pages and opens the selected run', async () => {
     expect(container.querySelector('[role="tab"]')?.textContent).toBe(
       'Active 3',
     );
+    await act(async () =>
+      container.querySelector<HTMLInputElement>('input[value="list"]')!.click(),
+    );
+    expect(panel().textContent).toContain('running workflow');
+    expect(
+      [...panel().querySelectorAll('strong')].map((title) => title.textContent),
+    ).not.toContain('completed workflow');
     await act(async () =>
       [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
         .find((tab) => tab.textContent?.startsWith('History'))!
@@ -384,6 +407,278 @@ it('applies all exact tag pairs before paging and clears the filter', async () =
       expect.objectContaining({ tags: undefined, offset: 0 }),
     );
     expect(container.querySelectorAll('button.run-row')).toHaveLength(2);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
+it('keeps the paged active runs and adds bounded recovery and completed previews without duplicates', async () => {
+  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  });
+  const base = {
+    workflowId: 'selected',
+    workflowName: 'Review',
+    version: 2,
+    createdAt: '2026-11-09T12:00:00Z',
+    updatedAt: '2026-11-09T12:01:00Z',
+    executionCount: 3,
+  };
+  const attention = {
+    ...base,
+    id: 'approval',
+    status: 'waiting',
+    attention: {
+      runId: 'approval',
+      reasons: ['approval'],
+      target: { runId: 'approval-child', executionId: 'request' },
+    },
+  };
+  const recovery = {
+    ...base,
+    id: 'recovery',
+    workflowName: 'Recovery',
+    status: 'cancelled',
+    attention: {
+      runId: 'recovery',
+      reasons: ['recovery'],
+      target: { runId: 'recovery-child', executionId: 'stopped' },
+    },
+  };
+  const running = {
+    ...base,
+    id: 'running',
+    workflowName: 'Active review',
+    status: 'running',
+  };
+  const completed = {
+    ...base,
+    id: 'completed',
+    workflowName: 'Finished review',
+    status: 'completed',
+  };
+  const counts = { active: 300, attention: 2, history: 1 };
+  query.mockImplementation(async ({ tab, offset }) => ({
+    items:
+      tab === 'active'
+        ? [attention, running]
+        : tab === 'attention'
+          ? [attention, recovery]
+          : [completed],
+    counts,
+    offset,
+    nextOffset: tab === 'active' ? 200 : null,
+    total: tab === 'active' ? 300 : tab === 'attention' ? 2 : 1,
+  }));
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container),
+    open = vi.fn(),
+    changePage = vi.fn();
+  try {
+    await act(async () =>
+      root.render(
+        h(
+          DesignSystemProvider,
+          { env: 'test' },
+          h(RunList, {
+            tick: 0,
+            offset: 100,
+            onOffsetChange: changePage,
+            workflows: [],
+            workflowId: 'selected',
+            tags: { repository: 'org/repo' },
+            tab: 'active',
+            onTabChange: vi.fn(),
+            onOpen: open,
+          }),
+        ),
+      ),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tab: 'attention',
+        offset: 0,
+        limit: 6,
+        workflowId: 'selected',
+        tags: { repository: 'org/repo' },
+      }),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tab: 'history',
+        status: 'completed',
+        offset: 0,
+        limit: 6,
+        workflowId: 'selected',
+        tags: { repository: 'org/repo' },
+      }),
+    );
+    const cards = [
+      ...container.querySelectorAll<HTMLButtonElement>('button.run-row'),
+    ];
+    expect(cards).toHaveLength(4);
+    expect(
+      cards.filter((card) => card.textContent?.includes('approval')),
+    ).toHaveLength(1);
+    expect(container.textContent).toContain('Active review');
+    expect(container.textContent).toContain('Finished review');
+    await act(async () =>
+      cards
+        .find((card) => card.textContent?.includes('Review recovery'))!
+        .click(),
+    );
+    expect(open).toHaveBeenCalledWith('recovery-child', 'stopped');
+    await act(async () =>
+      [...container.querySelectorAll('button')]
+        .find((button) => button.textContent === 'Next')!
+        .click(),
+    );
+    expect(changePage).toHaveBeenCalledWith(200);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
+it('does not let an old workflow preview replace the current board', async () => {
+  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  });
+  const pending: (() => void)[] = [];
+  query.mockImplementation(({ workflowId, tab }) => {
+    const page = {
+      items:
+        tab === 'history'
+          ? [
+              {
+                id: workflowId,
+                workflowId,
+                workflowName: `${workflowId} completed`,
+                version: 1,
+                status: 'completed',
+                createdAt: '2026-11-09T12:00:00Z',
+                updatedAt: '2026-11-09T12:01:00Z',
+                executionCount: 1,
+              },
+            ]
+          : [],
+      counts: { active: 0, attention: 0, history: 1 },
+      offset: 0,
+      nextOffset: null,
+      total: tab === 'history' ? 1 : 0,
+    };
+    if (workflowId === 'old' && tab !== 'active')
+      return new Promise((resolve) => pending.push(() => resolve(page)));
+    return Promise.resolve(page);
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const render = (workflowId: string) =>
+    root.render(
+      h(
+        DesignSystemProvider,
+        { env: 'test' },
+        h(RunList, {
+          tick: 0,
+          offset: 0,
+          onOffsetChange: vi.fn(),
+          workflows: [],
+          workflowId,
+          tab: 'active',
+          onTabChange: vi.fn(),
+          onOpen: vi.fn(),
+        }),
+      ),
+    );
+  try {
+    await act(async () => render('old'));
+    await act(async () => render('new'));
+    expect(container.textContent).toContain('new completed');
+    await act(async () => pending.forEach((resolve) => resolve()));
+    expect(container.textContent).toContain('new completed');
+    expect(container.textContent).not.toContain('old completed');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
+it('coalesces refreshes while a board preview is loading and accepts the in-flight response', async () => {
+  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  });
+  const pending: (() => void)[] = [];
+  const empty = {
+    items: [],
+    counts: { active: 0, attention: 0, history: 1 },
+    offset: 0,
+    nextOffset: null,
+    total: 0,
+  };
+  query.mockImplementation(({ tab }) => {
+    if (tab === 'active') return Promise.resolve(empty);
+    const page =
+      tab === 'attention'
+        ? empty
+        : {
+            ...empty,
+            total: 1,
+            items: [
+              {
+                id: 'completed',
+                workflowId: 'w',
+                workflowName: 'Completed during refresh',
+                version: 1,
+                status: 'completed',
+                createdAt: '2026-11-09T12:00:00Z',
+                updatedAt: '2026-11-09T12:01:00Z',
+                executionCount: 1,
+              },
+            ],
+          };
+    return new Promise((resolve) => pending.push(() => resolve(page)));
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const render = (tick: number) =>
+    root.render(
+      h(
+        DesignSystemProvider,
+        { env: 'test' },
+        h(RunList, {
+          tick,
+          offset: 0,
+          onOffsetChange: vi.fn(),
+          workflows: [],
+          tab: 'active',
+          onTabChange: vi.fn(),
+          onOpen: vi.fn(),
+        }),
+      ),
+    );
+  try {
+    await act(async () => render(0));
+    await act(async () => render(1));
+    await act(async () => render(2));
+    expect(pending).toHaveLength(2);
+    await act(async () => pending.slice(0, 2).forEach((resolve) => resolve()));
+    expect(container.textContent).toContain('Completed during refresh');
+    expect(pending).toHaveLength(4);
+    await act(async () => pending.slice(2).forEach((resolve) => resolve()));
+    expect(pending).toHaveLength(4);
   } finally {
     await act(async () => root.unmount());
     container.remove();

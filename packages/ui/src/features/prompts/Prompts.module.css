@@ -1,18 +1,9 @@
-.listRow {
-  color: var(--text);
-}
 .identity {
   display: grid;
   gap: 7px;
   min-width: 0;
 }
-.identity strong {
-  font-size: 14px;
-  font-weight: 550;
-}
 .identity small {
-  color: var(--muted);
-  font-size: 12px;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -31,10 +22,8 @@
   min-width: 0;
 }
 .selection {
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface);
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
 }
 @media (max-width: 900px) {
   .listRow > .updated,

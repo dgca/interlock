@@ -131,7 +131,6 @@ export function WorkflowChildren({
                             : 'gray'
                       }
                       size="sm"
-                      tt="none"
                     >
                       {child.archived
                         ? 'Archived'

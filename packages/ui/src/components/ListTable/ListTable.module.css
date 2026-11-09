@@ -1,8 +1,8 @@
 .table {
   width: 100%;
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   overflow: hidden;
 }
 .row,
@@ -11,18 +11,18 @@
   grid-template-columns: var(--list-columns);
   gap: 20px;
   align-items: center;
-  padding: 22px 18px;
+  padding: 20px 18px;
   width: 100%;
   text-align: left;
 }
 .heading {
   padding-block: 14px;
-  background: var(--surface);
+  background: var(--surface-raised);
   color: var(--muted);
   font-size: 12px;
 }
 .row {
-  min-height: 92px;
+  min-height: 88px;
   border: 0;
   border-top: 1px solid var(--border);
   background: transparent;
@@ -35,6 +35,16 @@
 .row > * {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.row strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+.row small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 a.row,
 button.row {
