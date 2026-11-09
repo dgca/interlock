@@ -1,5 +1,5 @@
 import { Group, NativeSelect, TextInput } from '@mantine/core';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const units = [
   { label: 'Milliseconds', ms: 1 },
@@ -50,6 +50,12 @@ export function DurationInput({
   onChange: (ms: number) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
+  const publishedValue = useRef(value);
+  useEffect(() => {
+    if (!Object.is(value, publishedValue.current))
+      input.current?.setCustomValidity('');
+    publishedValue.current = value;
+  }, [value]);
   const [unit, setUnit] = useState(
     () =>
       [...units]
@@ -58,6 +64,7 @@ export function DurationInput({
   );
   const changeAmount = (amount: number, nextUnit: number) => {
     const result = toMilliseconds(amount, nextUnit);
+    publishedValue.current = result.ms;
     input.current?.setCustomValidity(
       result.wholeMilliseconds ? '' : 'Use a whole number of milliseconds.',
     );

@@ -11,6 +11,7 @@ import {
   type WorkflowDefinition,
 } from '@interlock/core';
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
+import { DurationInput } from '../packages/ui/src/features/workflows/DurationInput';
 
 vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', {}, children),
@@ -867,6 +868,37 @@ it('keeps fractional-ms validation when changing units and clears it for an exac
   expect((field('Wait for') as HTMLInputElement).validationMessage).toBe('');
   await click('Apply changes');
   expect(onApply.mock.calls[0][0].definition.nodes[0].timing.ms).toBe(60_030);
+});
+
+it('clears obsolete fractional validity when a parent replaces the controlled duration', async () => {
+  const onChange = vi.fn();
+  const show = async (value: number) => {
+    await act(async () =>
+      root.render(
+        h(
+          MantineProvider,
+          {},
+          h(DurationInput, {
+            label: 'Duration',
+            value,
+            onChange,
+          }),
+        ),
+      ),
+    );
+  };
+  await show(1000);
+  await fill('Duration', '0.0005');
+  expect(onChange).toHaveBeenLastCalledWith(0.5);
+  await show(0.5);
+  const duration = field('Duration') as HTMLInputElement;
+  expect(duration.validationMessage).toBe(
+    'Use a whole number of milliseconds.',
+  );
+  await show(2000);
+  expect(duration.value).toBe('2');
+  expect(duration.validity.valid).toBe(true);
+  expect(duration.validationMessage).toBe('');
 });
 
 it('opens disabled and recovery overrides, preserves them, and returns to inheritance when switched off', async () => {
