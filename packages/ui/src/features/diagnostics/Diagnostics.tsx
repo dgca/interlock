@@ -1,15 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Badge,
-  Card,
   Group,
   Stack,
   Text,
-  Title,
   Switch,
   Alert,
-  Loader,
-  Paper,
   Button,
 } from '@mantine/core';
 import {
@@ -26,7 +22,12 @@ import type {
   DiagnosticCheck,
 } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
-import layout from '../../components/PageLayout/PageLayout.module.css';
+import {
+  PageHeader,
+  workspacePage,
+} from '../../components/PageLayout/PageLayout';
+import { DiagnosticsLoadingContent } from './DiagnosticsSkeleton';
+import styles from './Diagnostics.module.css';
 
 const categoryLabels: Record<DiagnosticCategory, string> = {
   system: 'System & Storage',
@@ -79,169 +80,159 @@ export function Diagnostics() {
   ];
 
   return (
-    <div className={layout.page}>
-      <header className={layout.header}>
-        <div>
-          <Title order={1}>Diagnostics</Title>
-          <Text c="dimmed" size="sm">
-            Read-only health and readiness check across storage, harnesses,
-            triggers, blockers, and workflows
-          </Text>
-        </div>
-        <Group gap="sm">
-          <Switch
-            label="Live Probe"
-            checked={liveProbe}
-            onChange={(e) => setLiveProbe(e.currentTarget.checked)}
-            disabled={loading}
-            size="sm"
-            aria-label="Include live harness model verification"
-          />
-          <Button
-            leftSection={
-              <RefreshCw size={14} className={loading ? 'spin' : ''} />
-            }
-            variant="default"
-            size="xs"
-            onClick={() => void fetchDiagnostics(liveProbe)}
-            disabled={loading}
+    <section className={workspacePage.page} aria-busy={loading}>
+      <PageHeader
+        title="Diagnostics"
+        actions={
+          <Group gap="sm">
+            <Switch
+              label="Live probe"
+              checked={liveProbe}
+              onChange={(e) => setLiveProbe(e.currentTarget.checked)}
+              disabled={loading}
+              size="xs"
+              aria-label="Include live harness model verification"
+            />
+            <Button
+              leftSection={<RefreshCw size={14} />}
+              variant="default"
+              size="xs"
+              onClick={() => void fetchDiagnostics(liveProbe)}
+              disabled={loading}
+            >
+              Run checks
+            </Button>
+          </Group>
+        }
+      />
+      <div className={workspacePage.content}>
+        {error && (
+          <Alert
+            icon={<XCircle size={16} />}
+            title="Diagnostics failed"
+            color="red"
+            mb="lg"
           >
-            Run Checks
-          </Button>
-        </Group>
-      </header>
+            {error}
+          </Alert>
+        )}
 
-      {error && (
-        <Alert
-          icon={<XCircle size={16} />}
-          title="Diagnostics Failed"
-          color="red"
-          mb="lg"
-        >
-          {error}
-        </Alert>
-      )}
-
-      {loading && !report ? (
-        <Group
-          justify="center"
-          p="xl"
-          role="status"
-          aria-label="Running system diagnostics"
-        >
-          <Loader size="md" />
-          <Text size="sm">Running system diagnostics…</Text>
-        </Group>
-      ) : report ? (
-        <Stack gap="lg">
-          {/* Top Status Banner */}
-          <Paper p="md" radius="md" withBorder>
-            <Group justify="space-between" align="center">
-              <Group gap="md">
-                <Stethoscope size={24} />
-                <div>
-                  <Group gap="xs">
-                    <Text fw={600} size="lg">
-                      Readiness Status:
+        {loading && !report ? (
+          <DiagnosticsLoadingContent />
+        ) : report ? (
+          <Stack gap="lg">
+            {/* Top Status Banner */}
+            <section className={workspacePage.card}>
+              <Group justify="space-between" align="center">
+                <Group gap="md">
+                  <Stethoscope size={24} />
+                  <div>
+                    <Group gap="xs">
+                      <Text fw={600} size="lg">
+                        Readiness status
+                      </Text>
+                      <Badge
+                        size="lg"
+                        color={
+                          report.status === 'ok'
+                            ? 'green'
+                            : report.status === 'warn'
+                              ? 'yellow'
+                              : 'red'
+                        }
+                        variant="light"
+                      >
+                        {report.status.toUpperCase()}
+                      </Badge>
+                    </Group>
+                    <Text size="xs" c="dimmed">
+                      Last checked:{' '}
+                      {new Date(report.checkedAt).toLocaleString()}
                     </Text>
-                    <Badge
-                      size="lg"
-                      color={
-                        report.status === 'ok'
-                          ? 'green'
-                          : report.status === 'warn'
-                            ? 'yellow'
-                            : 'red'
-                      }
-                      variant="light"
-                    >
-                      {report.status.toUpperCase()}
+                  </div>
+                </Group>
+
+                <Group gap="sm">
+                  <Badge color="green" variant="outline">
+                    {report.summary.ok} Passed
+                  </Badge>
+                  {report.summary.warn > 0 && (
+                    <Badge color="yellow" variant="outline">
+                      {report.summary.warn} Warning
+                      {report.summary.warn > 1 ? 's' : ''}
                     </Badge>
-                  </Group>
-                  <Text size="xs" c="dimmed">
-                    Last checked: {new Date(report.checkedAt).toLocaleString()}
-                  </Text>
-                </div>
-              </Group>
-
-              <Group gap="sm">
-                <Badge color="green" variant="outline">
-                  {report.summary.ok} Passed
-                </Badge>
-                {report.summary.warn > 0 && (
-                  <Badge color="yellow" variant="outline">
-                    {report.summary.warn} Warning
-                    {report.summary.warn > 1 ? 's' : ''}
+                  )}
+                  {report.summary.fail > 0 && (
+                    <Badge color="red" variant="outline">
+                      {report.summary.fail} Failing
+                    </Badge>
+                  )}
+                  <Badge variant="default">
+                    {report.summary.total} Total checks
                   </Badge>
-                )}
-                {report.summary.fail > 0 && (
-                  <Badge color="red" variant="outline">
-                    {report.summary.fail} Failing
-                  </Badge>
-                )}
-                <Badge variant="default">
-                  {report.summary.total} Total Checks
-                </Badge>
+                </Group>
               </Group>
-            </Group>
-          </Paper>
+            </section>
 
-          {/* Grouped Category Cards */}
-          {categories.map((category) => {
-            const checks = report.checks.filter((c) => c.category === category);
-            if (checks.length === 0) return null;
+            {/* Grouped checks */}
+            {categories.map((category) => {
+              const checks = report.checks.filter(
+                (c) => c.category === category,
+              );
+              if (checks.length === 0) return null;
 
-            const categoryHasFail = checks.some((c) => c.status === 'fail');
-            const categoryHasWarn = checks.some((c) => c.status === 'warn');
-            const categoryStatus = categoryHasFail
-              ? 'fail'
-              : categoryHasWarn
-                ? 'warn'
-                : 'ok';
+              const categoryHasFail = checks.some((c) => c.status === 'fail');
+              const categoryHasWarn = checks.some((c) => c.status === 'warn');
+              const categoryStatus = categoryHasFail
+                ? 'fail'
+                : categoryHasWarn
+                  ? 'warn'
+                  : 'ok';
 
-            return (
-              <Card key={category} withBorder shadow="xs" radius="md" p="md">
-                <Card.Section withBorder inheritPadding py="xs">
-                  <Group justify="space-between" align="center">
-                    <div>
-                      <Text fw={600} size="md">
-                        {categoryLabels[category]}
-                      </Text>
-                      <Text size="xs" c="dimmed">
-                        {categoryDescriptions[category]}
-                      </Text>
-                    </div>
-                    <Badge
-                      size="sm"
-                      color={
-                        categoryStatus === 'ok'
-                          ? 'green'
+              return (
+                <section key={category} className={workspacePage.card}>
+                  <div className={styles.categoryHeader}>
+                    <Group justify="space-between" align="center">
+                      <div>
+                        <Text component="h2" fw={600} size="md" m={0}>
+                          {categoryLabels[category]}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {categoryDescriptions[category]}
+                        </Text>
+                      </div>
+                      <Badge
+                        size="sm"
+                        color={
+                          categoryStatus === 'ok'
+                            ? 'green'
+                            : categoryStatus === 'warn'
+                              ? 'yellow'
+                              : 'red'
+                        }
+                        variant="dot"
+                      >
+                        {categoryStatus === 'ok'
+                          ? 'Healthy'
                           : categoryStatus === 'warn'
-                            ? 'yellow'
-                            : 'red'
-                      }
-                      variant="dot"
-                    >
-                      {categoryStatus === 'ok'
-                        ? 'Healthy'
-                        : categoryStatus === 'warn'
-                          ? 'Warnings'
-                          : 'Attention Required'}
-                    </Badge>
-                  </Group>
-                </Card.Section>
+                            ? 'Warnings'
+                            : 'Attention required'}
+                      </Badge>
+                    </Group>
+                  </div>
 
-                <Stack gap="xs" mt="sm">
-                  {checks.map((check, idx) => (
-                    <CheckItem key={idx} check={check} />
-                  ))}
-                </Stack>
-              </Card>
-            );
-          })}
-        </Stack>
-      ) : null}
-    </div>
+                  <Stack gap="xs" mt="sm">
+                    {checks.map((check, idx) => (
+                      <CheckItem key={idx} check={check} />
+                    ))}
+                  </Stack>
+                </section>
+              );
+            })}
+          </Stack>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -260,15 +251,10 @@ function CheckItem({ check }: { check: DiagnosticCheck }) {
         : 'var(--mantine-color-red-6)';
 
   return (
-    <Paper
-      p="xs"
-      radius="sm"
-      withBorder
-      style={{ backgroundColor: 'rgba(255,255,255,0.02)' }}
-    >
+    <div className={styles.check}>
       <Group align="flex-start" wrap="nowrap" gap="sm">
-        <Icon size={18} color={color} style={{ flexShrink: 0, marginTop: 2 }} />
-        <div style={{ flex: 1 }}>
+        <Icon size={18} color={color} className={styles.checkIcon} />
+        <div className={styles.checkBody}>
           <Group justify="space-between" align="center">
             <Text size="sm" fw={500}>
               {check.name}
@@ -305,6 +291,6 @@ function CheckItem({ check }: { check: DiagnosticCheck }) {
           )}
         </div>
       </Group>
-    </Paper>
+    </div>
   );
 }

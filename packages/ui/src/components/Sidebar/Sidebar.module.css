@@ -7,6 +7,7 @@
   flex-direction: column;
   padding: 27px 15px 18px;
   height: 100vh;
+  overflow-y: auto;
 }
 .brand {
   display: flex;
@@ -65,6 +66,9 @@
 }
 .utilities {
   margin-top: auto;
+}
+.utilityNavigation {
+  margin-bottom: 8px;
 }
 .connect {
   background: none;
@@ -170,5 +174,19 @@
     position: absolute;
     top: 0;
     right: 4px;
+  }
+}
+
+@media (max-width: 600px) {
+  .sidebar .utilityNavigation {
+    display: block;
+    margin: 0;
+  }
+  .sidebar .utilityNavigation a {
+    flex-direction: row;
+    min-height: 36px;
+    gap: 5px;
+    padding: 4px;
+    font-size: 10px;
   }
 }

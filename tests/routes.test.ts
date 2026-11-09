@@ -9,12 +9,14 @@ import { routes } from '../packages/ui/src/routes';
 
 beforeAll(async () => {
   await import('../packages/ui/src/features/runs/RunList');
+  await import('../packages/ui/src/features/diagnostics/Diagnostics');
 });
 
 const queries = vi.hoisted(() => ({
   workflows: vi.fn(),
   summaries: vi.fn(),
   attention: vi.fn(),
+  doctor: vi.fn(),
 }));
 const streamListeners = new Map<string, () => void>();
 vi.mock('../packages/ui/src/lib/engineEvents', () => ({
@@ -31,6 +33,7 @@ vi.mock('../packages/ui/src/lib/engineEvents', () => ({
 }));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
+    system: { doctor: { query: queries.doctor } },
     triggers: {
       attention: {
         query: () => Promise.resolve({ items: [], total: 0, nextOffset: null }),
@@ -132,6 +135,20 @@ beforeEach(() => {
   );
   streamListeners.clear();
   queries.attention.mockResolvedValue([]);
+  queries.doctor.mockResolvedValue({
+    status: 'warn',
+    checkedAt: '2026-11-09T00:00:00Z',
+    summary: { total: 1, ok: 0, warn: 1, fail: 0 },
+    checks: [
+      {
+        category: 'system',
+        name: 'Storage check',
+        status: 'warn',
+        message: 'Low disk space',
+        remediation: 'Free disk space',
+      },
+    ],
+  });
   queries.workflows.mockResolvedValue([{ id: 'w1' }, { id: 'a b%?' }]);
   queries.summaries.mockImplementation(async ({ tab }) => {
     const [attention] = await queries.attention();
@@ -519,4 +536,52 @@ it('renders a slow summary and coalesces live updates into one follow-up request
   await act(async () => complete(page));
   expect(queries.summaries).toHaveBeenCalledTimes(2);
   expect(container.textContent).toContain('Completed workflow');
+});
+
+it('opens Diagnostics from utilities and keeps live verification opt-in', async () => {
+  await mount('/workflows');
+  expect(
+    container.querySelector(
+      'nav[aria-label="Main navigation"] a[aria-label="Diagnostics"]',
+    ),
+  ).toBeNull();
+  const link = container.querySelector<HTMLAnchorElement>(
+    'nav[aria-label="Utilities"] a[aria-label="Diagnostics"]',
+  )!;
+  expect(link).toBeTruthy();
+  await click('Diagnostics');
+  expect(window.location.pathname).toBe('/settings/diagnostics');
+  expect(link.getAttribute('aria-current')).toBe('page');
+  expect(queries.doctor).toHaveBeenLastCalledWith({ live: false });
+  expect(container.textContent).toContain('Low disk space');
+  expect(container.textContent).toContain('Free disk space');
+  const live = container.querySelector<HTMLInputElement>(
+    'input[aria-label="Include live harness model verification"]',
+  )!;
+  await act(async () => live.click());
+  expect(queries.doctor).toHaveBeenLastCalledWith({ live: true });
+  await click('Run checks');
+  expect(queries.doctor).toHaveBeenLastCalledWith({ live: true });
+});
+
+it('shows a static diagnostics loading state and allows retry after failure', async () => {
+  let reject!: (error: Error) => void;
+  queries.doctor.mockReturnValueOnce(
+    new Promise((_, fail) => {
+      reject = fail;
+    }),
+  );
+  await mount('/settings/diagnostics');
+  expect(container.textContent).toContain('Running diagnostics…');
+  const run = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+    (button) => button.textContent === 'Run checks',
+  )!;
+  expect(run.disabled).toBe(true);
+  await act(async () => reject(new Error('Diagnostics unavailable')));
+  expect(container.textContent).toContain('Diagnostics unavailable');
+  expect(run.disabled).toBe(false);
+  await click('Run checks');
+  expect(container.textContent).not.toContain('Diagnostics unavailable');
+  expect(container.textContent).toContain('Storage check');
+  expect(queries.doctor).toHaveBeenLastCalledWith({ live: false });
 });

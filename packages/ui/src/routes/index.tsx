@@ -26,6 +26,7 @@ import {
 import { HarnessLibrarySkeleton } from '../features/executors/HarnessListSkeleton';
 import { AutomationListSkeleton } from '../features/automations/AutomationListSkeleton';
 import { ReportPageSkeleton } from '../features/report/ReportSkeleton';
+import { DiagnosticsPageSkeleton } from '../features/diagnostics/DiagnosticsSkeleton';
 
 const Automations = lazy(() =>
   import('../features/automations/Automations').then((m) => ({
@@ -112,7 +113,7 @@ function HarnessesRoute() {
 
 function DiagnosticsRoute() {
   return (
-    <Suspense fallback={<RouteLoading label="Loading diagnostics…" />}>
+    <Suspense fallback={<DiagnosticsPageSkeleton />}>
       <Diagnostics />
     </Suspense>
   );
