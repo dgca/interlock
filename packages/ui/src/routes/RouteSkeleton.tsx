@@ -1,4 +1,10 @@
-import { Group, Stack, LoadingSkeleton, Placeholder } from '../design-system';
+import {
+  Group,
+  Stack,
+  LoadingSkeleton,
+  Placeholder,
+  workspacePage,
+} from '../design-system';
 
 import {
   PromptEditorSkeleton,
@@ -15,7 +21,7 @@ export function RouteSkeleton({ subject }: { subject: LoadingSubject }) {
   if (subject === 'prompt') return <PromptEditorSkeleton />;
   return (
     <LoadingSkeleton label={`Loading ${subject}…`} className={editor.editor}>
-      <header className={editor.header}>
+      <header className={workspacePage.header}>
         <Placeholder h={28} w={32} />
         <Stack gap={6} w="min(45%, 240px)">
           <Placeholder h={16} />

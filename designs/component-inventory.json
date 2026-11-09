@@ -571,12 +571,12 @@
       "id": "page-header",
       "group": "Compositions",
       "family": "Page header",
-      "implementation": "Existing shared; editor has local header",
+      "implementation": "Shared PageHeader and sidebar brand",
       "owners": [
-        "packages/ui/src/components/PageLayout/PageLayout.tsx",
+        "packages/ui/src/design-system/PageLayout/PageLayout.tsx",
         "packages/ui/src/features/workflows/WorkflowEditor.tsx"
       ],
-      "variants": "76px title-only, 88px subtitle/status; actions vertically centered",
+      "variants": "Shared 88px minimum for title-only, subtitle/status, and sidebar brand; wrapping can grow headers",
       "board": "Compositions",
       "penStatus": "base-with-partial-state-coverage",
       "penComponents": [

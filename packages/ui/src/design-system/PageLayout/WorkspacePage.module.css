@@ -11,15 +11,11 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 14px;
-  min-height: 76px;
+  min-height: var(--page-header-height);
   flex-shrink: 0;
-  padding: 17px var(--workspace-padding);
+  padding: 16px var(--workspace-padding);
   background: var(--structural);
   border-bottom: 1px solid var(--border);
-}
-.header[data-two-line] {
-  min-height: 88px;
-  padding-block: 16px;
 }
 .title {
   flex: 1;
