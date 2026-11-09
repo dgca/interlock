@@ -42,7 +42,7 @@ const categoryDescriptions: Record<DiagnosticCategory, string> = {
     'Local harness binaries, permissions, working directories, and models',
   triggers: 'Schedule lag, consecutive trigger failures, and webhook outcomes',
   blockers:
-    'H3 human pauses, uncertain resource holds, H12 work stalls, and needs_model',
+    'Human pauses, uncertain resource holds, work stalls, and model blockers',
   workflows:
     'Missing or disabled variables, model aliases, and unpublished draft diffs',
 };

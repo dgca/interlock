@@ -433,7 +433,7 @@ export async function runDoctor(
   try {
     let blockerIssues = 0;
 
-    // 4a. H3 pauses
+    // 4a. Human pauses
     const pauses = engine.store
       .list<PauseHold>('pauseHolds')
       .filter((hold) => !hold.releasedAt);
@@ -441,7 +441,7 @@ export async function runDoctor(
       blockerIssues++;
       checks.push({
         category: 'blockers',
-        name: 'Active pause holds (H3)',
+        name: 'Active pause holds',
         status: 'warn',
         message: `${pauses.length} active pause hold(s) preventing run execution`,
         details: {
@@ -482,13 +482,13 @@ export async function runDoctor(
       });
     }
 
-    // 4c. H12 Stalls
+    // 4c. Work stalls
     const stalls = engine.store.currentStalls();
     if (stalls.length > 0) {
       blockerIssues++;
       checks.push({
         category: 'blockers',
-        name: 'Unresolved stalled work (H12)',
+        name: 'Unresolved stalled work',
         status: 'fail',
         message: `${stalls.length} unresolved work stall(s) detected`,
         details: {
