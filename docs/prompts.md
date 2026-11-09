@@ -25,7 +25,7 @@ Each workflow run captures current content when it starts, or the selected publi
 
 ### Opt-in prompt pinning at publish
 
-Workflows can opt into prompt pinning by setting `pinPromptsAtPublish: true` in their workflow definition:
+In workflow settings, turn on **Pin saved prompts when publishing**, then apply the change and publish a new version. CLI, MCP, and Raw JSON authoring use `pinPromptsAtPublish: true` in the workflow definition:
 
 - When publishing a workflow version with `pinPromptsAtPublish: true`, Interlock captures the exact current `revision` of every referenced saved prompt into the immutable `WorkflowVersion.pinnedPromptRevisions`.
 - Runs of that published workflow version capture those exact pinned prompt revisions and content at run startup, instead of floating to newer saved prompt revisions.

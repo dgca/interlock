@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
 import {
   definitionSchema,
+  blankDefinition,
   nodeSchema,
   validateDefinition,
   MAX_ACTIVE_CLOCK_MS,
@@ -1110,4 +1111,53 @@ it('isolates invalid resource drafts when changing node type', async () => {
   await click('Execution');
   expect(field('Resource bindings').value).toBe('[]');
   expect(field('Resource bindings').validationMessage).toBe('');
+});
+
+it('applies prompt pinning through workflow settings and cancels unpublished edits', async () => {
+  const original = blankDefinition();
+  const onApply = vi.fn();
+  const onClose = vi.fn();
+  const show = async (definition: WorkflowDefinition) => {
+    await act(async () =>
+      root.render(
+        h(
+          MantineProvider,
+          {},
+          h(SettingsDialog, {
+            name: 'Workflow',
+            description: '',
+            definition,
+            workflows: [],
+            onApply,
+            onClose,
+          }),
+        ),
+      ),
+    );
+  };
+  const toggle = () =>
+    container.querySelector<HTMLInputElement>('input[role="switch"]')!;
+  await show(original);
+  expect(toggle().checked).toBe(false);
+  await act(async () => toggle().click());
+  await click('Apply changes');
+  const saved = onApply.mock.calls[0][0].definition;
+  expect(saved.pinPromptsAtPublish).toBe(true);
+  expect(original.pinPromptsAtPublish).toBeUndefined();
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await show(saved);
+  expect(toggle().checked).toBe(true);
+  await act(async () => toggle().click());
+  await click('Cancel');
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(onApply).toHaveBeenCalledOnce();
+  expect(saved.pinPromptsAtPublish).toBe(true);
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await show(saved);
+  expect(toggle().checked).toBe(true);
+  await act(async () => toggle().click());
+  await click('Apply changes');
+  expect(onApply.mock.calls[1][0].definition.pinPromptsAtPublish).toBe(false);
 });

@@ -49,7 +49,6 @@ import {
   buildRunExecutionProvenanceFile,
 } from './nodeData.js';
 export * from './nodeData.js';
-import { evaluateProviderDiversity } from './providerDiversity.js';
 import {
   assertContract,
   assertExternalInputContract,
@@ -2110,51 +2109,10 @@ export class Engine {
           const work = this.store
             .work('available', run.id)
             .find((w) => w.executionId === execution!.id);
-          if (
-            work &&
-            node.distinctProviderFrom?.length &&
-            work.providerDiversityBlocked
-          ) {
-            const reEval = evaluateProviderDiversity({
-              run,
-              node,
-              definition: this.definition(run),
-              engine: this,
-              profiles: this.executors.profiles(),
-              prefixOverrides: this.executors.settings().providerPrefixes,
-            });
-            if (reEval) {
-              if (reEval.status === 'selected') {
-                work.executorModel = reEval.candidate;
-                if (node.executor !== null && reEval.modelAliasSelection) {
-                  work.modelAliasSelection = reEval.modelAliasSelection;
-                } else {
-                  delete work.modelAliasSelection;
-                }
-                if (reEval.candidateProfileId) {
-                  work.executor = reEval.candidateProfileId;
-                }
-                if (reEval.candidateEffort !== undefined) {
-                  work.executorEffort = reEval.candidateEffort;
-                }
-                work.executorModelSource = 'node';
-                delete work.providerDiversityBlocked;
-                this.store.put('work', work);
-              } else if (reEval.status === 'blocked') {
-                work.providerDiversityBlocked = {
-                  reason: reEval.reason,
-                  excludedProviders: reEval.excludedProviders,
-                  details: reEval.details,
-                };
-                this.store.put('work', work);
-              }
-            }
-          }
           if (node.unclaimedTimeoutMs === undefined) return false;
           if (
             work?.budgetBlocked ||
             work?.resourceBlocked ||
-            work?.providerDiversityBlocked ||
             !work?.availableUntil ||
             Date.parse(work.availableUntil) > this.nowMs()
           )
@@ -2222,106 +2180,42 @@ export class Engine {
             cwdBlocked = undefined;
           }
         }
-        const diversityEval = node.distinctProviderFrom?.length
-          ? evaluateProviderDiversity({
-              run,
-              node,
-              definition: this.definition(run),
-              engine: this,
-              profiles: this.executors.profiles(),
-              prefixOverrides: this.executors.settings().providerPrefixes,
-            })
-          : null;
-        let resolvedAliasCandidate:
-          import('@interlock/core').ExpandedModelCandidate | undefined;
-        if (!diversityEval) {
-          const targetModelOrAlias =
-            node.model ?? this.definition(run).agentModel;
-          const candidatePool: string[] = [];
-          if (node.candidateModels?.length) {
-            candidatePool.push(...node.candidateModels);
-          } else if (targetModelOrAlias) {
-            candidatePool.push(targetModelOrAlias);
-          }
-
-          const expandedCandidates: import('@interlock/core').ExpandedModelCandidate[] =
-            [];
-          for (const item of candidatePool) {
-            expandedCandidates.push(
-              ...this.modelAliases.expandCandidates(
-                run.modelAliasCaptures,
-                item,
+        const targetModelOrAlias =
+          node.model ?? this.definition(run).agentModel;
+        const candidates = targetModelOrAlias
+          ? this.modelAliases.expandCandidates(
+              run.modelAliasCaptures,
+              targetModelOrAlias,
+            )
+          : [];
+        const profiles = this.executors.profiles();
+        const resolvedAliasCandidate =
+          candidates.find(
+            (candidate) =>
+              !candidate.profileId ||
+              profiles.some(
+                (profile) =>
+                  profile.id === candidate.profileId && profile.enabled,
               ),
-            );
-          }
-
-          if (expandedCandidates.length > 0) {
-            const profiles = this.executors.profiles();
-            for (const cand of expandedCandidates) {
-              if (cand.profileId) {
-                const prof = profiles.find((p) => p.id === cand.profileId);
-                if (prof && prof.enabled) {
-                  resolvedAliasCandidate = cand;
-                  break;
-                }
-              } else {
-                resolvedAliasCandidate = cand;
-                break;
-              }
-            }
-            if (!resolvedAliasCandidate) {
-              resolvedAliasCandidate = expandedCandidates[0];
-            }
-          }
-        }
-        const matchedCandidateProfile =
-          diversityEval?.status === 'selected'
-            ? this.executors
-                .profiles()
-                .find(
-                  (p) =>
-                    p.id ===
-                    (diversityEval.candidateProfileId ??
-                      diversityEval.candidate),
-                )
-            : undefined;
+          ) ?? candidates[0];
         const selectedModel =
-          diversityEval?.status === 'selected'
-            ? (matchedCandidateProfile?.model ?? diversityEval.candidate)
-            : resolvedAliasCandidate
-              ? resolvedAliasCandidate.model
-              : (node.model ?? this.definition(run).agentModel);
-        const selectedModelSource =
-          diversityEval?.status === 'selected'
-            ? ('node' as const)
-            : node.model
-              ? ('node' as const)
-              : ('workflow' as const);
+          resolvedAliasCandidate?.model ?? targetModelOrAlias;
+        const selectedModelSource = node.model
+          ? ('node' as const)
+          : ('workflow' as const);
         const effectiveExecutor =
           node.executor === null
             ? undefined
-            : diversityEval?.status === 'selected'
-              ? (matchedCandidateProfile?.id ??
-                diversityEval.candidateProfileId ??
-                node.executor ??
-                this.definition(run).executor)
-              : (resolvedAliasCandidate?.profileId ??
-                node.executor ??
-                this.definition(run).executor);
+            : (resolvedAliasCandidate?.profileId ??
+              node.executor ??
+              this.definition(run).executor);
         const effectiveEffort =
-          diversityEval?.status === 'selected' &&
-          diversityEval.candidateEffort !== undefined
-            ? diversityEval.candidateEffort
-            : resolvedAliasCandidate?.effort !== undefined
-              ? resolvedAliasCandidate.effort
-              : node.effort !== undefined
-                ? node.effort
-                : this.definition(run).agentEffort;
-
-        const modelAliasSelection =
-          diversityEval?.status === 'selected'
-            ? diversityEval.modelAliasSelection
-            : resolvedAliasCandidate?.modelAliasSelection;
+          resolvedAliasCandidate?.effort !== undefined
+            ? resolvedAliasCandidate.effort
+            : node.effort !== undefined
+              ? node.effort
+              : this.definition(run).agentEffort;
+        const modelAliasSelection = resolvedAliasCandidate?.modelAliasSelection;
         const work: WorkRequest = {
           ...(node.executor !== null && modelAliasSelection
             ? { modelAliasSelection }
@@ -2340,8 +2234,6 @@ export class Engine {
                       executorEffort: effectiveEffort,
                       executorEffortSource:
                         node.effort !== undefined ||
-                        (diversityEval?.status === 'selected' &&
-                          diversityEval.candidateEffort !== undefined) ||
                         resolvedAliasCandidate?.effort !== undefined
                           ? ('node' as const)
                           : ('workflow' as const),
@@ -2388,21 +2280,6 @@ export class Engine {
             : {}),
           outputSchema: node.outputSchema,
           ...(node.resultRules ? { resultRules: node.resultRules } : {}),
-          ...(node.distinctProviderFrom
-            ? { distinctProviderFrom: node.distinctProviderFrom }
-            : {}),
-          ...(node.candidateModels
-            ? { candidateModels: node.candidateModels }
-            : {}),
-          ...(diversityEval?.status === 'blocked'
-            ? {
-                providerDiversityBlocked: {
-                  reason: diversityEval.reason,
-                  excludedProviders: diversityEval.excludedProviders,
-                  details: diversityEval.details,
-                },
-              }
-            : {}),
           status: 'available',
           attempt: 0,
           maxAttempts: node.maxAttempts,
@@ -3785,42 +3662,6 @@ export class Engine {
         throw new InterlockError('Work is not available');
       if (work.cwdBlocked) {
         throw new InterlockError(work.cwdBlocked.reason);
-      }
-      if (work.providerDiversityBlocked) {
-        throw new InterlockError(
-          `Cannot claim work ${work.id}: ${work.providerDiversityBlocked.reason}`,
-        );
-      }
-      if (work.distinctProviderFrom && work.distinctProviderFrom.length > 0) {
-        const declaredProvider = resolveProvider({
-          model: worker.modelSelection?.model,
-          catalogProvider: worker.modelSelection?.provider,
-          prefixOverrides: this.executors.settings().providerPrefixes,
-        });
-        if (declaredProvider) {
-          const run = this.run(work.runId);
-          const node = this.definition(run).nodes.find(
-            (n) => n.id === work.nodeId,
-          ) as Extract<WorkflowNode, { kind: 'agent' }> | undefined;
-          if (node) {
-            const evalCheck = evaluateProviderDiversity({
-              run,
-              node,
-              definition: this.definition(run),
-              engine: this,
-              profiles: this.executors.profiles(),
-              prefixOverrides: this.executors.settings().providerPrefixes,
-            });
-            if (
-              evalCheck &&
-              evalCheck.excludedProviders.includes(declaredProvider)
-            ) {
-              throw new InterlockError(
-                `Cannot claim work: declared model provider "${declaredProvider}" is excluded by distinctProviderFrom`,
-              );
-            }
-          }
-        }
       }
       this.pauses.assert(this.run(work.runId));
       this.executors.assertClaim(work, worker);

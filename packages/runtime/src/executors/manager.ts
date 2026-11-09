@@ -921,7 +921,6 @@ export class ExecutorManager {
         if (
           !offered.executor ||
           offered.cwdBlocked ||
-          offered.providerDiversityBlocked ||
           this.jobs.has(offered.id) ||
           ['interrupted', 'needs_model'].includes(
             this.latest(offered.id)?.state ?? '',

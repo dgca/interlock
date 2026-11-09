@@ -275,6 +275,19 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 16,
+    up(db) {
+      db.exec(`
+        UPDATE documents SET value = json_remove(value, '$.distinctProviderFrom', '$.candidateModels', '$.providerDiversityBlocked')
+          WHERE collection = 'work' AND (
+            json_type(value, '$.distinctProviderFrom') IS NOT NULL OR
+            json_type(value, '$.candidateModels') IS NOT NULL OR
+            json_type(value, '$.providerDiversityBlocked') IS NOT NULL
+          );
+      `);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

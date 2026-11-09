@@ -92,7 +92,7 @@ import { resultRulesSchema, resultRuleProblems } from './resultRules.js';
 export * from './assignmentSize.js';
 export * from './contextContinuity.js';
 export * from './modelTiers.js';
-export * from './providerDiversity.js';
+export * from './providers.js';
 export * from './trialEnvironments.js';
 export * from './authoringLayout.js';
 import { modelTierSchema } from './modelTiers.js';
@@ -431,8 +431,6 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
         'Claim duration in seconds. An explicit claim override wins; omission uses this published node setting, then 300 seconds. Workers must renew before expiry. Expiry consumes the separate maxLeaseExpiries budget when configured, otherwise the combined maxAttempts budget.',
       ),
     unclaimedTimeoutMs: z.number().int().min(1).max(31_536_000_000).optional(),
-    distinctProviderFrom: z.array(z.string().min(1)).optional(),
-    candidateModels: z.array(z.string().min(1)).optional(),
     continueOnMissingResult: continueOnMissingResultSchema.optional(),
     transientRetry: transientRetrySchema.optional(),
   }),
@@ -544,7 +542,23 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     failurePolicy: z.enum(['all', 'collect']).default('all'),
   }),
 ]);
-export const nodeSchema = z.preprocess(checkVariableDelivery, nodeShapeSchema);
+export const nodeSchema = z.preprocess((value, ctx) => {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'kind' in value &&
+    value.kind === 'agent'
+  )
+    for (const field of ['distinctProviderFrom', 'candidateModels'])
+      if (Object.hasOwn(value, field))
+        ctx.addIssue({
+          code: 'custom',
+          path: [field],
+          message:
+            'Provider-diversity settings are no longer supported. Select a model or model alias instead.',
+        });
+  return checkVariableDelivery(value, ctx);
+}, nodeShapeSchema);
 export type WorkflowNode = z.infer<typeof nodeSchema>;
 export const definitionSchema = z.object({
   ...stallFields,
@@ -827,13 +841,10 @@ export interface WorkRequest {
   resultRules?: import('./resultRules.js').ResultRule[];
   modelSelection?: import('./modelTiers.js').ModelSelection;
   continuity?: import('./contextContinuity.js').ContextContinuity;
-  distinctProviderFrom?: string[];
-  candidateModels?: string[];
   sessionNameTemplate?: string;
   sessionName?: string;
   resumeCommand?: string;
   deepLink?: string;
-  providerDiversityBlocked?: import('./providerDiversity.js').ProviderDiversityBlock;
   pauseBlocked?: import('./pauseHolds.js').PauseBlock;
   budgetBlocked?: import('./budgets.js').BudgetBlock;
   id: string;
@@ -1062,22 +1073,6 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       throw new InterlockError(
         `${node.label}: fresh context cannot use a continuity group`,
       );
-  for (const node of d.nodes) {
-    if (node.kind === 'agent' && node.distinctProviderFrom) {
-      for (const upstreamId of node.distinctProviderFrom) {
-        if (upstreamId === node.id) {
-          throw new InterlockError(
-            `${node.label}: distinctProviderFrom cannot reference itself`,
-          );
-        }
-        if (!d.nodes.some((n) => n.id === upstreamId)) {
-          throw new InterlockError(
-            `${node.label}: distinctProviderFrom references unknown node "${upstreamId}"`,
-          );
-        }
-      }
-    }
-  }
   for (const node of d.nodes)
     if (
       node.kind === 'agent' &&

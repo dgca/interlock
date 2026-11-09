@@ -69,6 +69,13 @@ Startup creates a pre-upgrade backup for existing file-backed databases. Bundle
 format numbers remain 1 through 10. Format 7 is reserved and no longer emitted;
 bundles containing removed webhook configuration reject on import.
 
+Schema 16 clears obsolete provider-diversity constraints and blockers from
+assignment records created by development builds. This feature was not published
+in `0.2.13`. Workflow definitions, published versions, prompt pins, model-alias
+captures, and execution provenance remain unchanged. New authoring and imports
+reject the removed Agent fields `distinctProviderFrom` and `candidateModels`;
+remove them from development definitions before saving or importing again.
+
 ## Restore a pre-upgrade backup
 
 Restoring replaces database state with the snapshot. Changes made after that snapshot are not included. Stop every server using the database before proceeding.
