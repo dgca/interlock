@@ -120,8 +120,9 @@
   color: var(--muted);
 }
 .configuration {
+  --card-padding: 24px;
   margin: 0;
-  padding: 24px;
+  padding: var(--card-padding);
   background: var(--form);
   border-top: 1px solid var(--border);
 }
@@ -190,8 +191,8 @@
   justify-content: flex-end;
   gap: 10px;
   margin-top: 24px;
-  padding: 20px 24px 0;
-  margin-inline: -24px;
+  padding: 20px var(--card-padding) 0;
+  margin-inline: calc(-1 * var(--card-padding));
   border-top: 1px solid var(--border);
 }
 .bottom {
@@ -283,6 +284,7 @@
 }
 .sectionActions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
