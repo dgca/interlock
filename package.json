@@ -6,7 +6,7 @@
     "node": ">=24.13.0"
   },
   "scripts": {
-    "dev": "concurrently -k -n server,ui \"pnpm --filter @interlock/server dev\" \"pnpm --filter @interlock/ui dev\"",
+    "dev": "concurrently -k -n server,ui \"pnpm --filter @interlock/server dev\" \"tsx scripts/wait-for-engine.ts && pnpm --filter @interlock/ui dev\"",
     "build": "pnpm typecheck && pnpm --filter @interlock/ui build && node scripts/build-package.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

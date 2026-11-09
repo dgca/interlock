@@ -338,7 +338,7 @@ pnpm install
 pnpm dev
 ```
 
-The development UI runs on [port 5173](http://127.0.0.1:5173), with the engine on port 4310. Stop any installed Interlock server using port 4310 before starting development.
+The development UI runs on [port 5173](http://127.0.0.1:5173), with the engine on port 4310. `pnpm dev` waits for the engine's `/health` endpoint before starting Vite. If the engine does not become healthy within 30 seconds, development startup stops; check the server output for the cause. Stop any installed Interlock server using port 4310 before starting development.
 
 Development stores data in `.interlock/interlock.db` inside the checkout. Installed copies use a separate database unless you pass `--db` explicitly. Run `pnpm build` followed by `pnpm start` to serve the built UI on port 4310 with the development database.
 
