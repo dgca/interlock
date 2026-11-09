@@ -114,7 +114,7 @@ it.each([
     expect(started).toHaveBeenCalledWith('new-run');
   },
 );
-it.each(['node-model', 'workflow-model', 'diversity'] as const)(
+it.each(['node-model', 'workflow-model'] as const)(
   'omits uncertain connected guidance for %s selection unless explicitly opted out',
   async (selection) => {
     const definition = agentDefinition();
@@ -122,10 +122,6 @@ it.each(['node-model', 'workflow-model', 'diversity'] as const)(
     if (node.kind !== 'agent') throw new Error('Expected Agent');
     if (selection === 'node-model') node.model = 'alias:builder';
     if (selection === 'workflow-model') definition.agentModel = 'alias:builder';
-    if (selection === 'diversity') {
-      node.candidateModels = ['profile-candidate'];
-      node.distinctProviderFrom = ['previous'];
-    }
     await render(definition);
     expect(hasHint()).toBe(false);
     node.executor = null;

@@ -138,11 +138,6 @@ export function modelReferences(definition: WorkflowDefinition): string[] {
   for (const node of definition.nodes) {
     if (node.kind === 'agent') {
       if (node.model) refs.add(node.model);
-      if (node.candidateModels) {
-        for (const m of node.candidateModels) {
-          if (m) refs.add(m);
-        }
-      }
     }
   }
   return [...refs];

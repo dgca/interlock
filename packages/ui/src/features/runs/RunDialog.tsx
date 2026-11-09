@@ -74,7 +74,7 @@ export function RunDialog({
   }, [workflow.id]);
   const definition = versions.find((v) => v.version === version)?.definition;
   const schema = definition?.inputSchema;
-  // Model aliases and diversity candidates can select local profiles at runtime.
+  // Model aliases can select local profiles at runtime.
   // Only describe connected work when the published definition makes it certain.
   const hasConnectedAgents = definition?.nodes.some(
     (node) =>
@@ -82,9 +82,7 @@ export function RunDialog({
       (node.executor === null ||
         (!(node.executor ?? definition.executor) &&
           !node.model &&
-          !definition.agentModel &&
-          !node.candidateModels?.length &&
-          !node.distinctProviderFrom?.length)),
+          !definition.agentModel)),
   );
   let parsed: Json = null;
   try {

@@ -209,13 +209,12 @@ it('keeps valid native fallback candidates when an alias profile is unavailable'
   engine.modelAliases.mutate({
     action: 'create',
     name: 'builder',
-    candidates: [{ model: 'blocked-model', profileId: 'missing-profile' }],
+    candidates: [
+      { model: 'blocked-model', profileId: 'missing-profile' },
+      { model: 'native-fallback' },
+    ],
   });
   const definition = aliasWorkflow('builder');
-  definition.nodes.find((node) => node.kind === 'agent')!.candidateModels = [
-    'builder',
-    'native-fallback',
-  ];
   const run = engine.start(publish(engine, definition), {}).run;
   expect(engine.store.work('available', run.id)[0].executorModel).toBe(
     'native-fallback',
@@ -223,7 +222,7 @@ it('keeps valid native fallback candidates when an alias profile is unavailable'
 });
 
 it.each(['missing', 'disabled'])(
-  'skips %s alias profiles before selecting a diverse review model',
+  'skips %s alias profiles before selecting a review model',
   (state) => {
     const { engine } = setup();
     if (state === 'disabled')
@@ -265,7 +264,6 @@ it.each(['missing', 'disabled'])(
         kind: 'agent',
         label: 'Review',
         model: 'reviewer',
-        distinctProviderFrom: ['author'],
         prompt: 'Review',
       }),
     );
@@ -490,127 +488,6 @@ it('resolves alias candidate fallback honoring profile availability', () => {
   expect(work.executor).toBe('pi-enabled');
   expect(work.executorModel).toBe('gpt-4o');
   expect(work.executorEffort).toBe('medium');
-});
-
-it('expands model aliases in distinctProviderFrom and blocks with runProjection when exhausted', () => {
-  const { engine } = setup();
-
-  // Reviewer alias with candidates: first is anthropic, second is openai
-  engine.modelAliases.mutate({
-    action: 'create',
-    name: 'reviewer',
-    candidates: [{ model: 'claude-3-5-sonnet' }, { model: 'gpt-4o' }],
-  });
-
-  const definition = blankDefinition();
-  definition.nodes[1] = nodeSchema.parse({
-    id: 'author',
-    kind: 'agent',
-    label: 'Author',
-    prompt: 'Write code',
-    model: 'claude-3-5-sonnet',
-  });
-  definition.nodes.push(
-    nodeSchema.parse({
-      id: 'review',
-      kind: 'agent',
-      label: 'Review',
-      prompt: 'Review code',
-      model: 'reviewer',
-      distinctProviderFrom: ['author'],
-    }),
-  );
-  definition.edges = [
-    { id: 'e1', source: 'entry', port: 'default', target: 'author' },
-    { id: 'e2', source: 'author', port: 'default', target: 'review' },
-    { id: 'e3', source: 'review', port: 'default', target: 'exit' },
-  ];
-
-  const workflowId = publish(engine, definition);
-  const run = engine.start(workflowId, {}).run;
-
-  // Complete author on anthropic
-  const authorWork = engine.store.work('available', run.id)[0];
-  const claimedAuthor = engine.claim(
-    authorWork.id,
-    { workerId: 'w1', freshContext: false, tools: [], skills: [] },
-    300,
-  );
-  engine.submit(authorWork.id, claimedAuthor.token!, { ok: true });
-
-  // review step becomes available and selects gpt-4o (second candidate in alias) because author used anthropic
-  const reviewWork = engine.store
-    .work('available', run.id)
-    .find((w) => w.nodeId === 'review')!;
-  expect(reviewWork.executorModel).toBe('gpt-4o');
-  expect(reviewWork.modelAliasSelection).toMatchObject({
-    name: 'reviewer',
-    revision: 1,
-    candidateModel: 'gpt-4o',
-  });
-  expect(reviewWork.providerDiversityBlocked).toBeUndefined();
-
-  // Now test exhaustion: an alias where all candidates are anthropic
-  engine.modelAliases.mutate({
-    action: 'create',
-    name: 'strict-reviewer',
-    candidates: [
-      { model: 'claude-3-5-sonnet' },
-      { model: 'claude-3-7-sonnet' },
-    ],
-  });
-
-  const definition2 = blankDefinition();
-  definition2.nodes[1] = nodeSchema.parse({
-    id: 'author2',
-    kind: 'agent',
-    label: 'Author',
-    prompt: 'Write code',
-    model: 'claude-3-5-sonnet',
-  });
-  definition2.nodes.push(
-    nodeSchema.parse({
-      id: 'review2',
-      kind: 'agent',
-      label: 'Review',
-      prompt: 'Review code',
-      model: 'strict-reviewer',
-      distinctProviderFrom: ['author2'],
-    }),
-  );
-  definition2.edges = [
-    { id: 'e1', source: 'entry', port: 'default', target: 'author2' },
-    { id: 'e2', source: 'author2', port: 'default', target: 'review2' },
-    { id: 'e3', source: 'review2', port: 'default', target: 'exit' },
-  ];
-
-  const workflowId2 = publish(engine, definition2);
-  const run2 = engine.start(workflowId2, {}).run;
-
-  const authorWork2 = engine.store.work('available', run2.id)[0];
-  const claimedAuthor2 = engine.claim(
-    authorWork2.id,
-    { workerId: 'w1', freshContext: false, tools: [], skills: [] },
-    300,
-  );
-  engine.submit(authorWork2.id, claimedAuthor2.token!, { ok: true });
-
-  // review2 is blocked because all candidates belong to excluded provider anthropic
-  const reviewWork2 = engine.store
-    .work(undefined, run2.id)
-    .find((w) => w.nodeId === 'review2')!;
-  expect(reviewWork2.providerDiversityBlocked).toBeDefined();
-  expect(reviewWork2.providerDiversityBlocked?.reason).toBe(
-    'provider_diversity_exhausted',
-  );
-
-  // Verify runProjection projects human_request / person with provider_diversity_exhausted reason
-  const projection = engine.projectRun(run2.id);
-  expect(projection.waiting?.kind).toBe('human_request');
-  expect(projection.actor).toBe('person');
-  expect(projection.waiting?.detail.message).toBe(
-    'provider_diversity_exhausted',
-  );
 });
 
 it('exports workflow bundles with alias requirements without local overrides', () => {

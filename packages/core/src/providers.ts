@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 export const defaultProviderPrefixes: Record<string, string> = {
   claude: 'anthropic',
   gpt: 'openai',
@@ -14,23 +12,6 @@ export const defaultProviderPrefixes: Record<string, string> = {
   qwen: 'alibaba',
   llama: 'meta',
 };
-
-export const providerDiversityReasonSchema = z.enum([
-  'provider_diversity_unmet',
-  'provider_diversity_exhausted',
-]);
-export type ProviderDiversityReason = z.infer<
-  typeof providerDiversityReasonSchema
->;
-
-export const providerDiversityBlockSchema = z.object({
-  reason: providerDiversityReasonSchema,
-  excludedProviders: z.array(z.string()),
-  details: z.string().optional(),
-});
-export type ProviderDiversityBlock = z.infer<
-  typeof providerDiversityBlockSchema
->;
 
 export function normalizeProvider(provider: string): string {
   return provider.trim().toLowerCase();

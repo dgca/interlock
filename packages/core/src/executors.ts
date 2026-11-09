@@ -84,7 +84,10 @@ export const executorSettingsSchema = z
       ),
     providerPrefixes: z
       .record(z.string().trim().min(1), z.string().trim().min(1))
-      .optional(),
+      .optional()
+      .describe(
+        'Model-name prefix overrides for provider attribution in execution provenance.',
+      ),
   })
   .strict();
 export const executorSettingsUpdateSchema = z
@@ -99,7 +102,10 @@ export const executorSettingsUpdateSchema = z
       ),
     providerPrefixes: z
       .record(z.string().trim().min(1), z.string().trim().min(1))
-      .optional(),
+      .optional()
+      .describe(
+        'Model-name prefix overrides for provider attribution in execution provenance.',
+      ),
   })
   .strict();
 export const harnessNameSchema = z.enum([

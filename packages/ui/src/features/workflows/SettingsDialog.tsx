@@ -7,6 +7,7 @@ import {
   NativeSelect,
   Input,
   SegmentedControl,
+  Switch,
 } from '@mantine/core';
 import { useRef, useState } from 'react';
 import { Download, Plus, Trash2 } from 'lucide-react';
@@ -416,6 +417,17 @@ export function SettingsDialog({
                       }
                       onChange={(executor) =>
                         patchDefinition({ executor: executor ?? undefined })
+                      }
+                    />
+                    <Switch
+                      mb="md"
+                      label="Pin saved prompts when publishing"
+                      description="Published versions keep the saved prompt revisions selected at publication. Later prompt edits apply after you publish a new version."
+                      checked={settings.definition.pinPromptsAtPublish ?? false}
+                      onChange={(event) =>
+                        patchDefinition({
+                          pinPromptsAtPublish: event.currentTarget.checked,
+                        })
                       }
                     />
                     <StallPolicyEditor

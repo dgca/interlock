@@ -205,6 +205,28 @@ it.each(['stdio', 'http'])(
         draftRevision: engine.workflow(w.id).draftRevision,
       });
       const toolDiscovery = await client.listTools();
+      const discoveryText = JSON.stringify(toolDiscovery);
+      expect(discoveryText).toContain('pinPromptsAtPublish');
+      expect(discoveryText).not.toMatch(
+        /distinctProviderFrom|candidateModels|provider_diversity/,
+      );
+      for (const field of ['distinctProviderFrom', 'candidateModels']) {
+        const removedDefinition = blankDefinition() as any;
+        removedDefinition.nodes[1][field] = ['removed'];
+        const rejected = await client.callTool({
+          name: 'create_workflow',
+          arguments: {
+            name: 'Removed provider constraint',
+            definition: removedDefinition,
+          },
+        });
+        expect(rejected.isError).toBe(true);
+      }
+      expect(
+        engine.store
+          .workflows()
+          .some((workflow) => workflow.name === 'Removed provider constraint'),
+      ).toBe(false);
       expect(
         toolDiscovery.tools.find((tool) => tool.name === 'workflow_report')
           ?.description,

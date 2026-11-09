@@ -125,9 +125,7 @@ Optional node input bindings select incoming data or original persisted workflow
 
 When a node completes execution, the engine evaluates 1-based `visitCount` within the current run and Batch scope and collects verified executor attributes (`profileId`, `harness`, `sessionId`, `requestedModel`, `actualModel`, `provider`, `effort`, `attempt`, `visitCount`, `startedAt`, `endedAt`, `usage`). Provenance is assigned directly to `execution.provenance` by the engine and cannot be spoofed, overwritten, or modified by worker submission payloads. Downstream nodes bind provenance via `source: "execution"` or evaluate `execution.<nodeId>.<path>` in standalone Branch conditions. Foreground and background scripts receive prior node provenance via `INTERLOCK_EXECUTION_PROVENANCE_FILE`.
 
-### Provider diversity constraints (`distinctProviderFrom`)
-
-Agent nodes can declare `distinctProviderFrom: string[]` referencing upstream Agent node IDs and an ordered list of `candidateModels: string[]`. At assignment creation and claim time, the runtime evaluates candidate models against the actual model providers recorded by the referenced upstream nodes in verified execution provenance. Candidate providers are resolved via slash notation (`provider/model`), profile `provider` properties, configurable server `providerPrefixes`, or built-in prefix mappings (`claude*`, `gpt*`/`o*`, `gemini*`, `deepseek*`, `mistral*`, `qwen*`, `llama*`). The engine selects the first candidate whose provider differs from all referenced upstream providers. If an upstream provider is unexecuted or unknown, work remains unclaimed with blocker reason `provider_diversity_unmet`; if candidate models are exhausted or a pinned continuity group session collides, work remains unclaimed with `provider_diversity_exhausted`. Work never silently falls back to an excluded provider.
+Provider attribution uses reported provider identities when available, then model/profile metadata and known model-name prefixes. Optional executor settings `providerPrefixes` override prefix attribution. This metadata does not restrict which providers may execute a step.
 
 The editor derives optional input hints from draft edges and declared contracts. Explicit node input contracts take precedence. Bindings yield a projected object shape; pass-through nodes can carry an inferred shape forward. Conflicting incoming shapes and unknown source contracts yield no single hint. These hints drive editor suggestions only. They are not stored, do not affect publication, and do not change runtime contract checks unless the author explicitly copies a hint into a node input contract.
 
@@ -234,9 +232,9 @@ be re-exported as format-4 bundles.
 
 ## Model aliases
 
-Model aliases map logical roles (e.g. `builder`, `reviewer`, `evaluator`) to an ordered candidate list of `{ model, effort?, profileId? }`. Workflows and Agent nodes reference an alias anywhere a model ID is accepted (`agentModel`, `model`, `candidateModels`, and `distinctProviderFrom`).
+Model aliases map logical roles (e.g. `builder`, `reviewer`, `evaluator`) to an ordered candidate list of `{ model, effort?, profileId? }`. Workflows and Agent nodes reference an alias anywhere a model ID is accepted (`agentModel` and `model`).
 
-Runs pin resolved alias definitions at start time in `modelAliasCaptures` (alongside `variableCaptures`). Mid-run mutations or deletions of local aliases never mutate in-flight runs; continued runs and batch items inherit the pinned captures. When selecting an executor or matching provider diversity constraints, candidate fallback order is evaluated and the first available candidate is selected. Portable workflow bundles export alias requirements without local candidate overrides or private profile IDs (format version 6).
+Runs pin resolved alias definitions at start time in `modelAliasCaptures` (alongside `variableCaptures`). Mid-run mutations or deletions of local aliases never mutate in-flight runs; continued runs and batch items inherit the pinned captures. When selecting an executor, candidate fallback order is evaluated and the first available candidate is selected. Portable workflow bundles export alias requirements without local candidate overrides or private profile IDs (format version 6).
 
 ## Timers
 

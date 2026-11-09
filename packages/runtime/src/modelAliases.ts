@@ -239,11 +239,7 @@ export class ModelAliases {
       for (const node of definition.nodes) {
         if (node.kind !== 'agent' || node.executor === null) continue;
         const model = node.model ?? definition.agentModel;
-        const pool = node.candidateModels?.length
-          ? node.candidateModels
-          : model
-            ? [model]
-            : [];
+        const pool = model ? [model] : [];
         const aliases = pool.map((reference) =>
           this.resolveCandidates(captures, reference),
         );
