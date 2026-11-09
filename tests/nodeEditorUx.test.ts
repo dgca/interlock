@@ -7,6 +7,7 @@ import {
   definitionSchema,
   nodeSchema,
   validateDefinition,
+  MAX_ACTIVE_CLOCK_MS,
   type WorkflowDefinition,
 } from '@interlock/core';
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
@@ -688,6 +689,153 @@ const resourceBindings = [
   { source: 'literal', value: 'checkout:integration' },
   { source: 'runInput', path: 'browserResource' },
 ];
+
+it.each([
+  [{ kind: 'agent', prompt: 'Work' }, 'Task instructions', true],
+  [{ kind: 'script', command: 'cat' }, 'Bash command', true],
+  [{ kind: 'fetch', url: 'https://example.test' }, 'URL', true],
+  [{ kind: 'wait', timing: pollTiming }, 'Check every', true],
+  [{ kind: 'wait' }, 'Wait for', false],
+  [{ kind: 'input' }, 'Stage', false],
+] as const)(
+  'keeps %j stall overrides after primary work and reachable',
+  async (config, primaryLabel, execution) => {
+    await render(config);
+    const primary = field(primaryLabel);
+    expect(primary).toBeTruthy();
+    expect(primary.closest('[hidden]')).toBeNull();
+    const toggle = field('Override stall detection') as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    expect(field('Run transition stall')).toBeUndefined();
+    expect(
+      primary.compareDocumentPosition(toggle) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(!!toggle.closest('[hidden]')).toBe(execution);
+    if (execution) await click('Execution');
+    expect(toggle.closest('[hidden]')).toBeNull();
+    await act(async () => toggle.click());
+    expect(field('Run transition stall')).toBeTruthy();
+  },
+);
+
+it('saves and reopens unit-based node stall thresholds without changing milliseconds', async () => {
+  const { onApply } = await render({ kind: 'script', command: 'cat' });
+  await click('Execution');
+  await act(async () => field('Override stall detection').click());
+  await select('Run transition stall', 'threshold');
+  expect(field('Run transition threshold').value).toBe('5');
+  expect(field('Run transition threshold unit').value).toBe('60000');
+  await fill('Run transition threshold', '2.5');
+  await select('Run transition threshold unit', '3600000');
+  await click('Apply changes');
+  const saved = onApply.mock.calls[0][0].definition.nodes[0];
+  expect(saved.runStallMs).toBe(9_000_000);
+  await act(async () => root.render(null));
+  await render(saved);
+  await click('Execution');
+  expect((field('Override stall detection') as HTMLInputElement).checked).toBe(
+    true,
+  );
+  expect(field('Run transition threshold').value).toBe('150');
+  expect(field('Run transition threshold unit').value).toBe('60000');
+});
+
+it('enforces whole-millisecond stall bounds and preserves exact existing values', async () => {
+  const { onApply } = await render({
+    kind: 'script',
+    command: 'cat',
+    runStallMs: 1501,
+  });
+  await click('Execution');
+  const threshold = field('Run transition threshold') as HTMLInputElement;
+  expect(threshold.value).toBe('1501');
+  expect(field('Run transition threshold unit').value).toBe('1');
+  expect(threshold.min).toBe('1');
+  expect(threshold.max).toBe(String(MAX_ACTIVE_CLOCK_MS));
+  for (const invalid of ['0', '0.5', String(MAX_ACTIVE_CLOCK_MS + 1)]) {
+    await fill('Run transition threshold', invalid);
+    await click('Apply changes');
+    expect(onApply).not.toHaveBeenCalled();
+  }
+  await fill('Run transition threshold', '1501');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].runStallMs).toBe(1501);
+});
+
+it('opens disabled and recovery overrides, preserves them, and returns to inheritance when switched off', async () => {
+  const policy = {
+    unclaimedStallMs: null,
+    claimedIdleStallMs: 60_000,
+    runStallMs: null,
+    idleRecovery: { maxRecoveries: 2, message: 'Continue carefully.' },
+  };
+  const { onApply } = await render({
+    kind: 'agent',
+    prompt: 'Work',
+    ...policy,
+  });
+  await click('Execution');
+  expect((field('Override stall detection') as HTMLInputElement).checked).toBe(
+    true,
+  );
+  expect(field('Unclaimed stall').value).toBe('disabled');
+  expect(field('Run transition stall').value).toBe('disabled');
+  expect(field('Claimed idle threshold').value).toBe('1');
+  expect(field('Idle nudge message').value).toBe(policy.idleRecovery.message);
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0]).toMatchObject(policy);
+  onApply.mockClear();
+  await act(async () => field('Override stall detection').click());
+  expect(field('Unclaimed stall')).toBeUndefined();
+  await click('Apply changes');
+  const saved = onApply.mock.calls[0][0].definition.nodes[0];
+  for (const key of Object.keys(policy)) expect(saved[key]).toBeUndefined();
+});
+
+it('edits shared workflow stall durations while preserving every threshold', async () => {
+  const definition = definitionSchema.parse({
+    nodes: [
+      { id: 'entry', kind: 'entry', label: 'Entry' },
+      { id: 'exit', kind: 'exit', label: 'Exit' },
+    ],
+    edges: [],
+    unclaimedStallMs: 300_000,
+    claimedIdleStallMs: 3_600_000,
+    humanWaitStallMs: null,
+    runStallMs: 1501,
+  });
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(SettingsDialog, {
+          name: 'Workflow',
+          description: '',
+          definition,
+          workflows: [],
+          onApply,
+          onClose: vi.fn(),
+        }),
+      ),
+    ),
+  );
+  expect(field('Unclaimed threshold').value).toBe('5');
+  expect(field('Claimed idle threshold unit').value).toBe('3600000');
+  expect(field('External input stall').value).toBe('disabled');
+  expect(field('Run transition threshold').value).toBe('1501');
+  await fill('Unclaimed threshold', '7');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition).toMatchObject({
+    unclaimedStallMs: 420_000,
+    claimedIdleStallMs: 3_600_000,
+    humanWaitStallMs: null,
+    runStallMs: 1501,
+  });
+});
+
 it.each(resourceNodes)(
   'edits, saves and reopens shared resource bindings on $kind steps',
   async (config) => {
