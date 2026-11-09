@@ -8,6 +8,7 @@ import {
 import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import { DurationInput } from '../workflows/DurationInput';
+import styles from './StallSettings.module.css';
 
 const fields = [
   [
@@ -26,7 +27,7 @@ const fields = [
     'humanWaitStallMs',
     'External input stall',
     'External input threshold',
-    'An External input step is waiting for a person or integration to submit a value.',
+    'An External input step is waiting for a value to be submitted or accepted.',
   ],
   [
     'runStallMs',
@@ -53,7 +54,7 @@ export function StallPolicyEditor({
   return (
     <Stack gap="sm" mb="md">
       {showHeading && <h3>Stall detection</h3>}
-      <p className="hint">
+      <p className={styles.intro}>
         Flag runs that wait too long for an agent, input, or progress. A stall
         adds Needs attention without failing the run. Pauses and declared holds
         do not count.

@@ -213,7 +213,7 @@ export function RetentionSettings({
                     bounds.
                   </Text>
                 )}
-                <Text size="sm" c="dimmed">
+                <Text size="xs" c="dimmed">
                   A run tree includes its child and continuation runs. Either
                   limit can delete a tree, including failed or cancelled runs.
                   {workflowId
@@ -222,7 +222,7 @@ export function RetentionSettings({
                 </Text>
               </>
             )}
-            <Text size="sm" c="dimmed">
+            <Text size="xs" c="dimmed">
               Cleanup permanently deletes run inputs, outputs, and usage. Active
               runs and protected history are kept. Changes apply when saved.
             </Text>

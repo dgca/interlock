@@ -1,0 +1,7 @@
+.intro {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
