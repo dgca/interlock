@@ -1132,3 +1132,30 @@ it('does not reinterpret a captured native model as a newly created alias betwee
     return {};
   });
 });
+
+it('retains live alias resolution for queued samples in legacy comparisons without snapshots', () => {
+  const { engine, store } = setup();
+  engine.modelAliases.mutate({
+    action: 'create',
+    name: 'builder',
+    candidates: [{ model: 'concrete-model' }],
+  });
+  const definition = blankDefinition();
+  definition.agentModel = 'builder';
+  const workflowId = publish(engine, 'Legacy aliases', definition);
+  const c = launch(engine, { workflowId, concurrency: 1 });
+  const saved = store.get<import('@interlock/core').WorkflowComparison>(
+    'comparisons',
+    c.id,
+  )!;
+  delete saved.modelAliasCaptures;
+  store.put('comparisons', saved);
+  let samples = 0;
+  complete(engine, (work: any) => {
+    samples++;
+    expect(work.executorModel).toBe('concrete-model');
+    expect(work.modelAliasSelection).toMatchObject({ name: 'builder' });
+    return {};
+  });
+  expect(samples).toBe(2);
+});

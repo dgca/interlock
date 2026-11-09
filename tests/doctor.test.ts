@@ -419,6 +419,35 @@ describe('doctor health and readiness check', () => {
     },
   );
 
+  it.each(['connected', 'overridden'] as const)(
+    'ignores unavailable alias profiles for a %s Agent',
+    async (mode) => {
+      const { engine } = createEnv();
+      engine.modelAliases.mutate({
+        action: 'create',
+        name: 'builder',
+        candidates: [{ model: 'native', profileId: 'missing-profile' }],
+      });
+      const definition = blankDefinition();
+      definition.agentModel = 'builder';
+      const node = definition.nodes.find((node) => node.kind === 'agent')!;
+      if (mode === 'connected') node.executor = null;
+      else node.model = 'native-override';
+      const workflow = engine.create(
+        'Effective alias profiles',
+        '',
+        definition,
+      );
+      engine.publish(workflow.id);
+      expect(() => engine.start(workflow.id, {})).not.toThrow();
+      expect(
+        (await engine.doctor()).checks.some((c) =>
+          c.name.includes('Unavailable model alias profiles'),
+        ),
+      ).toBe(false);
+    },
+  );
+
   describe('blocker checks', () => {
     it('ignores released pauses and detects uncertain reservations without companion operation records', async () => {
       const { engine, store } = createEnv();

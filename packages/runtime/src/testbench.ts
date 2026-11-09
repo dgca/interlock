@@ -526,7 +526,8 @@ export class Testbench {
     return this.get(context.comparisonId).variableCaptures ?? [];
   }
   modelAliasesFor(context: ComparisonRunContext) {
-    return this.get(context.comparisonId).modelAliasCaptures ?? [];
+    // Legacy comparisons retain live alias resolution; an explicit empty snapshot pins native IDs.
+    return this.get(context.comparisonId).modelAliasCaptures;
   }
   context(c: WorkflowComparison, s: ComparisonSample): ComparisonRunContext {
     return {

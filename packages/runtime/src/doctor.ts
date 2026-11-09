@@ -677,6 +677,12 @@ export async function runDoctor(
               });
             } else if (
               alias &&
+              version.definition.nodes.some(
+                (node) =>
+                  node.kind === 'agent' &&
+                  node.executor !== null &&
+                  (node.model ?? version.definition.agentModel) === mRef,
+              ) &&
               !alias.candidates.some(
                 (candidate) =>
                   !candidate.profileId ||
