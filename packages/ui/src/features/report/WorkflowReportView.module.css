@@ -1,0 +1,27 @@
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+}
+.workflowFilter {
+  width: 200px;
+  max-width: 100%;
+}
+.durationFilter {
+  width: 245px;
+  max-width: 100%;
+}
+.timeFilter {
+  width: 140px;
+  max-width: 100%;
+}
+.tagFilter {
+  max-width: 600px;
+}
+.tokens {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}

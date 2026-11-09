@@ -25,6 +25,7 @@ import {
 } from '../features/variables/VariableListSkeleton';
 import { HarnessLibrarySkeleton } from '../features/executors/HarnessListSkeleton';
 import { AutomationListSkeleton } from '../features/automations/AutomationListSkeleton';
+import { ReportPageSkeleton } from '../features/report/ReportSkeleton';
 
 const Automations = lazy(() =>
   import('../features/automations/Automations').then((m) => ({
@@ -119,13 +120,17 @@ function DiagnosticsRoute() {
 
 function ReportRoute() {
   const { workflowId } = useParams<{ workflowId?: string }>();
+  const navigate = useNavigate();
   return (
-    <Suspense
-      fallback={<RouteLoading label="Loading performance and cost report…" />}
-    >
+    <Suspense fallback={<ReportPageSkeleton />}>
       <WorkflowReportView
         key={workflowId ?? 'library'}
         workflowId={workflowId}
+        onBack={
+          workflowId
+            ? () => void navigate(paths.workflow(workflowId))
+            : undefined
+        }
       />
     </Suspense>
   );
@@ -297,6 +302,7 @@ function WorkflowRoute() {
           )
         }
         onOpenWorkflow={(id) => void navigate(paths.workflow(id))}
+        onReport={() => void navigate(paths.workflowReport(workflow.id))}
         onDeleted={() => {
           flushSync(() => context.onDirty(false));
           void navigate(

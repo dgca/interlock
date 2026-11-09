@@ -1,19 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useId } from 'react';
 import {
   Badge,
-  Card,
   Group,
   Stack,
   Text,
   Title,
   Select,
   Alert,
-  Loader,
-  Paper,
   Button,
   SimpleGrid,
   Table,
   Progress,
+  Collapse,
 } from '@mantine/core';
 import {
   Clock,
@@ -29,9 +27,14 @@ import type {
   ElapsedDistributionMetric,
 } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
-import layout from '../../components/PageLayout/PageLayout.module.css';
+import {
+  PageHeader,
+  PageToolbar,
+  workspacePage,
+} from '../../components/PageLayout/PageLayout';
+import { ReportLoadingContent } from './ReportSkeleton';
+import styles from './WorkflowReportView.module.css';
 import { TagFields, tagRows, tagsFromRows, type TagRow } from '../runs/RunTags';
-import tagStyles from '../runs/RunTags.module.css';
 
 function formatMs(ms: number | null | undefined): string {
   if (ms === null || ms === undefined) return '—';
@@ -44,8 +47,10 @@ type TimePreset = '24h' | '7d' | '30d' | 'all';
 
 export function WorkflowReportView({
   workflowId: initialWorkflowId,
+  onBack,
 }: {
   workflowId?: string;
+  onBack?: () => void;
 }) {
   const [report, setReport] = useState<WorkflowReport | null>(null);
   const [timeBasis, setTimeBasis] = useState<'wall' | 'activeMs' | 'pausedMs'>(
@@ -63,6 +68,8 @@ export function WorkflowReportView({
   const [tags, setTags] = useState<Record<string, string>>();
   const [filterRows, setFilterRows] = useState<TagRow[]>(tagRows());
   const [filterError, setFilterError] = useState('');
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const tagsId = useId();
   const requestSequence = useRef(0);
   const [workflowsList, setWorkflowsList] = useState<
     { value: string; label: string }[]
@@ -124,577 +131,616 @@ export function WorkflowReportView({
   const outcomes = report?.terminalOutcomes;
 
   return (
-    <div className={layout.page}>
-      <header
-        className={layout.header}
-        style={{ flexDirection: 'column', alignItems: 'stretch' }}
-      >
-        <div>
-          <Title order={1}>Performance & Cost Report</Title>
-          <Text c="dimmed" size="sm">
-            Operational latencies, admission waits, model token spend, and
-            automation rates
-          </Text>
-        </div>
-        <Group gap="sm">
-          <Select
-            aria-label="Duration basis"
-            value={timeBasis}
-            onChange={(value) =>
-              setTimeBasis((value as typeof timeBasis) ?? 'wall')
-            }
-            data={[
-              { value: 'wall', label: 'Wall time' },
-              { value: 'activeMs', label: 'Active time (excludes pauses)' },
-              { value: 'pausedMs', label: 'Paused time' },
-            ]}
-            size="sm"
-            style={{ width: 270, maxWidth: '100%' }}
-          />
-          <Select
-            placeholder="All Workflows"
-            clearable
-            searchable
-            value={selectedWorkflowId}
-            onChange={(val) => setSelectedWorkflowId(val)}
-            data={workflowsList}
-            size="sm"
-            style={{ width: 220 }}
-            aria-label="Filter by workflow"
-          />
-          <Select
-            value={timePreset}
-            onChange={(val) => setTimePreset((val as TimePreset) || '7d')}
-            data={[
-              { value: '24h', label: 'Past 24 Hours' },
-              { value: '7d', label: 'Past 7 Days' },
-              { value: '30d', label: 'Past 30 Days' },
-              { value: 'all', label: 'All Time' },
-            ]}
-            size="sm"
-            style={{ width: 140 }}
-            aria-label="Filter by time window"
-          />
+    <section className={workspacePage.page} aria-busy={loading}>
+      <PageHeader
+        title="Performance & cost report"
+        status={
+          initialWorkflowId
+            ? workflowsList.find(
+                (workflow) => workflow.value === initialWorkflowId,
+              )?.label
+            : undefined
+        }
+        onBack={onBack}
+        backLabel="Back to workflow"
+        actions={
           <Button
             variant="default"
-            size="sm"
-            leftSection={
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            }
+            size="xs"
+            leftSection={<RefreshCw size={14} />}
             onClick={() => void fetchReport()}
             disabled={loading}
           >
             Refresh
           </Button>
-        </Group>
-      </header>
-
-      <details className={tagStyles.filter}>
-        <summary>
+        }
+      />
+      <PageToolbar
+        summary={
+          <div className={styles.filters}>
+            {!initialWorkflowId && (
+              <Select
+                placeholder="All workflows"
+                clearable
+                searchable
+                value={selectedWorkflowId}
+                onChange={setSelectedWorkflowId}
+                data={workflowsList}
+                size="xs"
+                className={styles.workflowFilter}
+                aria-label="Filter by workflow"
+              />
+            )}
+            <Select
+              aria-label="Duration basis"
+              value={timeBasis}
+              onChange={(value) =>
+                setTimeBasis((value as typeof timeBasis) ?? 'wall')
+              }
+              data={[
+                { value: 'wall', label: 'Wall time' },
+                { value: 'activeMs', label: 'Active time (excludes pauses)' },
+                { value: 'pausedMs', label: 'Paused time' },
+              ]}
+              size="xs"
+              className={styles.durationFilter}
+            />
+            <Select
+              value={timePreset}
+              onChange={(value) => setTimePreset((value as TimePreset) || '7d')}
+              data={[
+                { value: '24h', label: 'Past 24 hours' },
+                { value: '7d', label: 'Past 7 days' },
+                { value: '30d', label: 'Past 30 days' },
+                { value: 'all', label: 'All time' },
+              ]}
+              size="xs"
+              className={styles.timeFilter}
+              aria-label="Filter by time window"
+            />
+          </div>
+        }
+      >
+        <Button
+          variant="default"
+          size="xs"
+          aria-expanded={tagsOpen}
+          aria-controls={tagsId}
+          onClick={() => setTagsOpen((open) => !open)}
+        >
           Filter by tags
           {Object.keys(tags ?? {}).length
             ? ` (${Object.keys(tags!).length})`
             : ''}
-        </summary>
-        <TagFields
-          label="Matching tags"
-          showLabel={false}
-          description="Match every key and value exactly. Up to 16 pairs."
-          rows={filterRows}
-          onChange={(rows) => {
-            setFilterRows(rows);
-            setFilterError('');
-          }}
-          error={filterError}
-        />
-        <Group mt="sm" gap="xs">
-          <Button
-            size="xs"
-            onClick={() => {
-              try {
-                setTags(tagsFromRows(filterRows));
-                setFilterError('');
-              } catch (error) {
-                setFilterError(errorMessage(error));
-              }
-            }}
-          >
-            Apply filters
-          </Button>
-          <Button
-            size="xs"
-            variant="subtle"
-            onClick={() => {
-              setFilterRows([]);
-              setFilterError('');
-              setTags(undefined);
-            }}
-          >
-            Clear filters
-          </Button>
-        </Group>
-      </details>
-
-      {error && (
-        <Alert
-          icon={<AlertCircle size={16} />}
-          title="Failed to load report"
-          color="red"
-        >
-          {error}
-        </Alert>
-      )}
-
-      {loading && !report && (
-        <Paper p="xl" withBorder style={{ textAlign: 'center' }}>
-          <Stack align="center" gap="sm">
-            <Loader size="md" />
-            <Text size="sm" c="dimmed">
-              Aggregating workflow performance and cost metrics…
-            </Text>
-          </Stack>
-        </Paper>
-      )}
-
-      {report && (
+        </Button>
+      </PageToolbar>
+      <div className={workspacePage.content}>
         <Stack gap="lg">
-          {/* Top Stat Cards */}
-          <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 6 }} spacing="md">
-            <Card withBorder padding="md">
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
-                  Total Runs
-                </Text>
-                <Layers size={16} />
+          <Collapse expanded={tagsOpen} transitionDuration={0} id={tagsId}>
+            <div className={`${workspacePage.card} ${styles.tagFilter}`}>
+              <TagFields
+                label="Matching tags"
+                showLabel={false}
+                description="Match every key and value exactly. Up to 16 pairs."
+                rows={filterRows}
+                onChange={(rows) => {
+                  setFilterRows(rows);
+                  setFilterError('');
+                }}
+                error={filterError}
+              />
+              <Group mt="sm" gap="xs">
+                <Button
+                  size="xs"
+                  onClick={() => {
+                    try {
+                      setTags(tagsFromRows(filterRows));
+                      setFilterError('');
+                    } catch (error) {
+                      setFilterError(errorMessage(error));
+                    }
+                  }}
+                >
+                  Apply filters
+                </Button>
+                <Button
+                  size="xs"
+                  variant="subtle"
+                  onClick={() => {
+                    setFilterRows([]);
+                    setFilterError('');
+                    setTags(undefined);
+                  }}
+                >
+                  Clear filters
+                </Button>
               </Group>
-              <Text fz="xl" fw={700}>
-                {summary?.totalRuns ?? 0}
-              </Text>
-              <Text size="xs" c="dimmed">
-                {outcomes?.completedRuns ?? 0} completed ·{' '}
-                {outcomes?.failedRuns ?? 0} failed
-              </Text>
-            </Card>
+            </div>
+          </Collapse>
 
-            <Card withBorder padding="md">
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
-                  Run Duration
-                </Text>
-                <Clock size={16} />
-              </Group>
-              <Text fz="xl" fw={700}>
-                {formatMs(metric(summary?.durationMs)?.median)}
-              </Text>
-              <Text size="xs" c="dimmed">
-                p90: {formatMs(metric(summary?.durationMs)?.p90)}
-              </Text>
-            </Card>
+          {error && (
+            <Alert
+              icon={<AlertCircle size={16} />}
+              title="Failed to load report"
+              color="red"
+            >
+              {error}
+            </Alert>
+          )}
 
-            <Card withBorder padding="md">
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
-                  Admission Wait
-                </Text>
-                <Clock size={16} />
-              </Group>
-              <Text fz="xl" fw={700}>
-                {formatMs(metric(summary?.admissionQueueWaitMs)?.median)}
-              </Text>
-              <Text size="xs" c="dimmed">
-                p90: {formatMs(metric(summary?.admissionQueueWaitMs)?.p90)}
-              </Text>
-            </Card>
+          {loading && !report && <ReportLoadingContent />}
 
-            <Card withBorder padding="md">
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
-                  Human Wait
-                </Text>
-                <UserCheck size={16} />
-              </Group>
-              <Text fz="xl" fw={700}>
-                {formatMs(metric(summary?.humanWaitMs)?.median)}
-              </Text>
-              <Text size="xs" c="dimmed">
-                p90: {formatMs(metric(summary?.humanWaitMs)?.p90)}
-              </Text>
-            </Card>
-
-            <Card withBorder padding="md">
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
-                  Unattended Rate
-                </Text>
-                <CheckCircle2 size={16} color="green" />
-              </Group>
-              <Text fz="xl" fw={700}>
-                {outcomes?.unattendedCompletionRate ?? 0}%
-              </Text>
-              <Text size="xs" c="dimmed">
-                escalated: {outcomes?.humanEscalationRate ?? 0}%
-              </Text>
-            </Card>
-
-            <Card withBorder padding="md">
-              <Group justify="space-between" mb="xs">
-                <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
-                  Attributed Spend
-                </Text>
-                <Coins size={16} />
-              </Group>
-              <Text fz="xl" fw={700}>
-                {usage?.costs[0]?.formatted ?? '0 USD'}
-              </Text>
-              <Text size="xs" c="dimmed">
-                {usage?.coverage.measuredPercentage ?? 0}% measured
-              </Text>
-            </Card>
-          </SimpleGrid>
-
-          {/* Operational Reliability & Claim Latencies */}
-          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-            <Card withBorder padding="md">
-              <Title order={3} size="h4" mb="sm">
-                Claim Latency (Available → Claimed)
-              </Title>
-              <Stack gap="xs">
-                <Group justify="space-between">
-                  <Text size="sm">New Session Wait (Median / P90):</Text>
-                  <Text size="sm" fw={600}>
-                    {formatMs(metric(claims?.newSession)?.median)} /{' '}
-                    {formatMs(metric(claims?.newSession)?.p90)}
+          {report && (
+            <Stack gap="lg">
+              {/* Top Stat Cards */}
+              <SimpleGrid cols={{ base: 1, xs: 2, lg: 3 }} spacing="md">
+                <section className={workspacePage.card}>
+                  <Group justify="space-between" mb="xs">
+                    <Text size="sm" c="dimmed">
+                      Total Runs
+                    </Text>
+                    <Layers size={16} />
+                  </Group>
+                  <Text fz="xl" fw={700}>
+                    {summary?.totalRuns ?? 0}
                   </Text>
-                </Group>
-                <Group justify="space-between">
-                  <Text size="sm">Continuing Session Wait (Median / P90):</Text>
-                  <Text size="sm" fw={600}>
-                    {formatMs(metric(claims?.continuingSession)?.median)} /{' '}
-                    {formatMs(metric(claims?.continuingSession)?.p90)}
+                  <Text size="xs" c="dimmed">
+                    {outcomes?.completedRuns ?? 0} completed ·{' '}
+                    {outcomes?.failedRuns ?? 0} failed
                   </Text>
-                </Group>
-                <Group justify="space-between">
-                  <Text size="sm">Total Claim Attempts:</Text>
-                  <Text size="sm" fw={600}>
-                    {claims?.totalAttempts ?? 0}
+                </section>
+
+                <section className={workspacePage.card}>
+                  <Group justify="space-between" mb="xs">
+                    <Text size="sm" c="dimmed">
+                      Run Duration
+                    </Text>
+                    <Clock size={16} />
+                  </Group>
+                  <Text fz="xl" fw={700}>
+                    {formatMs(metric(summary?.durationMs)?.median)}
                   </Text>
-                </Group>
-              </Stack>
-            </Card>
+                  <Text size="xs" c="dimmed">
+                    p90: {formatMs(metric(summary?.durationMs)?.p90)}
+                  </Text>
+                </section>
 
-            <Card withBorder padding="md">
-              <Title order={3} size="h4" mb="sm">
-                Execution Reliability & Recoveries
-              </Title>
-              <Stack gap="xs">
-                <Group justify="space-between">
-                  <Text size="sm">Lease Expiries:</Text>
-                  <Badge
-                    color={claims?.leaseExpiries ? 'red' : 'gray'}
-                    variant="light"
-                  >
-                    {claims?.leaseExpiries ?? 0}
-                  </Badge>
-                </Group>
-                <Group justify="space-between">
-                  <Text size="sm">Node / Work Failures:</Text>
-                  <Badge
-                    color={claims?.failures ? 'orange' : 'gray'}
-                    variant="light"
-                  >
-                    {claims?.failures ?? 0}
-                  </Badge>
-                </Group>
-                <Group justify="space-between">
-                  <Text size="sm">Model Refusal / Transient Recoveries:</Text>
-                  <Badge color="blue" variant="light">
-                    {claims?.transientRecoveries ?? 0}
-                  </Badge>
-                </Group>
-                <Group justify="space-between">
-                  <Text size="sm">Inactivity Stalls:</Text>
-                  <Badge
-                    color={claims?.stalls ? 'yellow' : 'gray'}
-                    variant="light"
-                  >
-                    {claims?.stalls ?? 0}
-                  </Badge>
-                </Group>
-              </Stack>
-            </Card>
-          </SimpleGrid>
+                <section className={workspacePage.card}>
+                  <Group justify="space-between" mb="xs">
+                    <Text size="sm" c="dimmed">
+                      Admission Wait
+                    </Text>
+                    <Clock size={16} />
+                  </Group>
+                  <Text fz="xl" fw={700}>
+                    {formatMs(metric(summary?.admissionQueueWaitMs)?.median)}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    p90: {formatMs(metric(summary?.admissionQueueWaitMs)?.p90)}
+                  </Text>
+                </section>
 
-          {/* Stages & Terminal Outcomes */}
-          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-            <Card withBorder padding="md">
-              <Title order={3} size="h4" mb="sm">
-                Stage Durations
-              </Title>
-              {report.stages.length === 0 ? (
-                <Text size="sm" c="dimmed">
-                  No stage transitions recorded in this window.
-                </Text>
-              ) : (
-                <Table striped highlightOnHover>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Stage</Table.Th>
-                      <Table.Th>Runs</Table.Th>
-                      <Table.Th>Median</Table.Th>
-                      <Table.Th>P90</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {report.stages.map((st) => (
-                      <Table.Tr key={st.stage}>
-                        <Table.Td fw={500}>{st.stage}</Table.Td>
-                        <Table.Td>{st.runCount}</Table.Td>
-                        <Table.Td>
-                          {formatMs(metric(st.durationMs)?.median)}
-                        </Table.Td>
-                        <Table.Td>
-                          {formatMs(metric(st.durationMs)?.p90)}
-                        </Table.Td>
-                      </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
-              )}
-            </Card>
+                <section className={workspacePage.card}>
+                  <Group justify="space-between" mb="xs">
+                    <Text size="sm" c="dimmed">
+                      Human Wait
+                    </Text>
+                    <UserCheck size={16} />
+                  </Group>
+                  <Text fz="xl" fw={700}>
+                    {formatMs(metric(summary?.humanWaitMs)?.median)}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    p90: {formatMs(metric(summary?.humanWaitMs)?.p90)}
+                  </Text>
+                </section>
 
-            <Card withBorder padding="md">
-              <Title order={3} size="h4" mb="sm">
-                Terminal Outcomes by Exit Node
-              </Title>
-              {report.terminalOutcomes.exitNodes.length === 0 ? (
-                <Text size="sm" c="dimmed">
-                  No completed runs recorded in this window.
-                </Text>
-              ) : (
-                <Stack gap="xs">
-                  {report.terminalOutcomes.exitNodes.map((exit) => (
-                    <div key={exit.nodeId}>
-                      <Group justify="space-between" mb={4}>
-                        <Text size="sm" fw={500}>
-                          {exit.label} ({exit.nodeId})
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {exit.count} runs ({exit.percentage}%)
-                        </Text>
-                      </Group>
-                      <Progress
-                        value={exit.percentage}
-                        color={
-                          exit.label.toLowerCase().includes('escalat') ||
-                          exit.label.toLowerCase().includes('human')
-                            ? 'orange'
-                            : 'teal'
-                        }
-                        size="sm"
-                      />
-                    </div>
-                  ))}
-                </Stack>
-              )}
-            </Card>
-          </SimpleGrid>
+                <section className={workspacePage.card}>
+                  <Group justify="space-between" mb="xs">
+                    <Text size="sm" c="dimmed">
+                      Unattended Rate
+                    </Text>
+                    <CheckCircle2 size={16} />
+                  </Group>
+                  <Text fz="xl" fw={700}>
+                    {outcomes?.unattendedCompletionRate ?? 0}%
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    escalated: {outcomes?.humanEscalationRate ?? 0}%
+                  </Text>
+                </section>
 
-          {/* Model Spend and Token Attribution */}
-          <Card withBorder padding="md">
-            <Group justify="space-between" mb="sm">
-              <Title order={3} size="h4">
-                Model Usage & Spend Attribution
-              </Title>
-              <Text size="xs" c="dimmed">
-                Coverage: {usage?.coverage.measuredPercentage}% measured ·{' '}
-                {usage?.coverage.unknownPercentage}% unknown
-              </Text>
-            </Group>
+                <section
+                  className={workspacePage.card}
+                  aria-label="Attributed spend"
+                >
+                  <Group justify="space-between" mb="xs">
+                    <Text size="sm" c="dimmed">
+                      Attributed Spend
+                    </Text>
+                    <Coins size={16} />
+                  </Group>
+                  <Text fz="xl" fw={700}>
+                    {!usage?.coverage.measuredPercentage || !usage.costs.length
+                      ? 'Unmeasured'
+                      : usage.costs.map((cost) => cost.formatted).join(' · ')}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {usage?.coverage.measuredPercentage ?? 0}% of attempts
+                    measured
+                  </Text>
+                </section>
+              </SimpleGrid>
 
-            <SimpleGrid cols={{ base: 2, sm: 4 }} mb="md">
-              <Paper withBorder p="xs">
-                <Text size="xs" c="dimmed">
-                  Input Tokens
-                </Text>
-                <Text fw={600}>
-                  {usage?.tokens.inputTokens.toLocaleString()}
-                </Text>
-              </Paper>
-              <Paper withBorder p="xs">
-                <Text size="xs" c="dimmed">
-                  Output Tokens
-                </Text>
-                <Text fw={600}>
-                  {usage?.tokens.outputTokens.toLocaleString()}
-                </Text>
-              </Paper>
-              <Paper withBorder p="xs">
-                <Text size="xs" c="dimmed">
-                  Cached Input Tokens
-                </Text>
-                <Text fw={600}>
-                  {usage?.tokens.cachedInputTokens.toLocaleString()}
-                </Text>
-              </Paper>
-              <Paper withBorder p="xs">
-                <Text size="xs" c="dimmed">
-                  Reasoning Output Tokens
-                </Text>
-                <Text fw={600}>
-                  {usage?.tokens.reasoningOutputTokens.toLocaleString()}
-                </Text>
-              </Paper>
-            </SimpleGrid>
+              {/* Operational Reliability & Claim Latencies */}
+              <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+                <section className={workspacePage.card}>
+                  <Title order={2} size="h4" mb="sm">
+                    Claim Latency (Available → Claimed)
+                  </Title>
+                  <Stack gap="xs">
+                    <Group justify="space-between">
+                      <Text size="sm">New Session Wait (Median / P90):</Text>
+                      <Text size="sm" fw={600}>
+                        {formatMs(metric(claims?.newSession)?.median)} /{' '}
+                        {formatMs(metric(claims?.newSession)?.p90)}
+                      </Text>
+                    </Group>
+                    <Group justify="space-between">
+                      <Text size="sm">
+                        Continuing Session Wait (Median / P90):
+                      </Text>
+                      <Text size="sm" fw={600}>
+                        {formatMs(metric(claims?.continuingSession)?.median)} /{' '}
+                        {formatMs(metric(claims?.continuingSession)?.p90)}
+                      </Text>
+                    </Group>
+                    <Group justify="space-between">
+                      <Text size="sm">Total Claim Attempts:</Text>
+                      <Text size="sm" fw={600}>
+                        {claims?.totalAttempts ?? 0}
+                      </Text>
+                    </Group>
+                  </Stack>
+                </section>
 
-            {usage && usage.byProvider.length > 0 && (
-              <Table striped highlightOnHover>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Provider</Table.Th>
-                    <Table.Th>Calls</Table.Th>
-                    <Table.Th>Input Tokens</Table.Th>
-                    <Table.Th>Output Tokens</Table.Th>
-                    <Table.Th>Attributed Cost</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {usage.byProvider.map((p) => {
-                    const costFormatted = p.costMicros
-                      ? `${(p.costMicros / 1_000_000).toFixed(4)} ${p.currency ?? ''}`
-                      : '—';
-                    return (
-                      <Table.Tr key={p.provider}>
-                        <Table.Td fw={500}>{p.provider}</Table.Td>
-                        <Table.Td>{p.count}</Table.Td>
-                        <Table.Td>{p.inputTokens.toLocaleString()}</Table.Td>
-                        <Table.Td>{p.outputTokens.toLocaleString()}</Table.Td>
-                        <Table.Td>{costFormatted}</Table.Td>
-                      </Table.Tr>
-                    );
-                  })}
-                </Table.Tbody>
-              </Table>
-            )}
-            {usage?.byAlias && usage.byAlias.length > 0 && (
-              <>
-                <Title order={4} size="h5" mt="lg" mb="sm">
-                  Captured model aliases
-                </Title>
-                <Text size="xs" c="dimmed" mb="sm">
-                  Alias revisions describe assignment requests. Reported models
-                  describe supplied usage. Unknown includes legacy and native
-                  assignments; run overhead has no assigned alias.
-                </Text>
-                <Table.ScrollContainer minWidth={900}>
-                  <Table striped highlightOnHover>
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th>Alias / revision</Table.Th>
-                        <Table.Th>Requested candidate</Table.Th>
-                        <Table.Th>Reported provider / model</Table.Th>
-                        <Table.Th>Scope</Table.Th>
-                        <Table.Th>Input tokens</Table.Th>
-                        <Table.Th>Output tokens</Table.Th>
-                        <Table.Th>Cost</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {usage.byAlias.map((group) => (
-                        <Table.Tr
-                          key={JSON.stringify([
-                            group.alias,
-                            group.scope,
-                            group.provider,
-                            group.model,
-                            group.currency,
-                          ])}
-                        >
-                          <Table.Td>
-                            {group.alias
-                              ? `${group.alias.name} @${group.alias.revision}`
-                              : 'Unknown'}
-                          </Table.Td>
-                          <Table.Td>
-                            {group.alias
-                              ? `${group.alias.candidateModel} (#${group.alias.candidateIndex + 1})`
-                              : '—'}
-                            {group.alias &&
-                              (group.alias.candidateProfileId ||
-                                group.alias.candidateEffort !== undefined) && (
-                                <Text size="xs" c="dimmed">
-                                  {group.alias.candidateProfileId ??
-                                    'Inherited profile'}{' '}
-                                  ·{' '}
-                                  {group.alias.candidateEffort === null
-                                    ? 'Native effort'
-                                    : (group.alias.candidateEffort ??
-                                      'Inherited effort')}
-                                </Text>
-                              )}
-                          </Table.Td>
-                          <Table.Td>
-                            {group.provider} / {group.model}
-                          </Table.Td>
-                          <Table.Td>
-                            {group.scope === 'run' ? 'Run overhead' : 'Attempt'}
-                          </Table.Td>
-                          <Table.Td>
-                            {group.inputTokens.toLocaleString()}
-                          </Table.Td>
-                          <Table.Td>
-                            {group.outputTokens.toLocaleString()}
-                          </Table.Td>
-                          <Table.Td>
-                            {group.costMicros !== null
-                              ? `${(group.costMicros / 1_000_000).toFixed(4)} ${group.currency ?? ''}`
-                              : '—'}
-                          </Table.Td>
-                        </Table.Tr>
+                <section className={workspacePage.card}>
+                  <Title order={2} size="h4" mb="sm">
+                    Execution Reliability & Recoveries
+                  </Title>
+                  <Stack gap="xs">
+                    <Group justify="space-between">
+                      <Text size="sm">Lease Expiries:</Text>
+                      <Badge
+                        color={claims?.leaseExpiries ? 'red' : 'gray'}
+                        variant="light"
+                      >
+                        {claims?.leaseExpiries ?? 0}
+                      </Badge>
+                    </Group>
+                    <Group justify="space-between">
+                      <Text size="sm">Node / Work Failures:</Text>
+                      <Badge
+                        color={claims?.failures ? 'orange' : 'gray'}
+                        variant="light"
+                      >
+                        {claims?.failures ?? 0}
+                      </Badge>
+                    </Group>
+                    <Group justify="space-between">
+                      <Text size="sm">
+                        Model Refusal / Transient Recoveries:
+                      </Text>
+                      <Badge color="blue" variant="light">
+                        {claims?.transientRecoveries ?? 0}
+                      </Badge>
+                    </Group>
+                    <Group justify="space-between">
+                      <Text size="sm">Inactivity Stalls:</Text>
+                      <Badge
+                        color={claims?.stalls ? 'yellow' : 'gray'}
+                        variant="light"
+                      >
+                        {claims?.stalls ?? 0}
+                      </Badge>
+                    </Group>
+                  </Stack>
+                </section>
+              </SimpleGrid>
+
+              {/* Stages & Terminal Outcomes */}
+              <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+                <section className={workspacePage.card}>
+                  <Title order={2} size="h4" mb="sm">
+                    Stage Durations
+                  </Title>
+                  {report.stages.length === 0 ? (
+                    <Text size="sm" c="dimmed">
+                      No stage transitions recorded in this window.
+                    </Text>
+                  ) : (
+                    <Table.ScrollContainer minWidth={520}>
+                      <Table striped highlightOnHover>
+                        <Table.Thead>
+                          <Table.Tr>
+                            <Table.Th>Stage</Table.Th>
+                            <Table.Th>Runs</Table.Th>
+                            <Table.Th>Median</Table.Th>
+                            <Table.Th>P90</Table.Th>
+                          </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>
+                          {report.stages.map((st) => (
+                            <Table.Tr key={st.stage}>
+                              <Table.Td fw={500}>{st.stage}</Table.Td>
+                              <Table.Td>{st.runCount}</Table.Td>
+                              <Table.Td>
+                                {formatMs(metric(st.durationMs)?.median)}
+                              </Table.Td>
+                              <Table.Td>
+                                {formatMs(metric(st.durationMs)?.p90)}
+                              </Table.Td>
+                            </Table.Tr>
+                          ))}
+                        </Table.Tbody>
+                      </Table>
+                    </Table.ScrollContainer>
+                  )}
+                </section>
+
+                <section className={workspacePage.card}>
+                  <Title order={2} size="h4" mb="sm">
+                    Terminal Outcomes by Exit Node
+                  </Title>
+                  {report.terminalOutcomes.exitNodes.length === 0 ? (
+                    <Text size="sm" c="dimmed">
+                      No completed runs recorded in this window.
+                    </Text>
+                  ) : (
+                    <Stack gap="xs">
+                      {report.terminalOutcomes.exitNodes.map((exit) => (
+                        <div key={exit.nodeId}>
+                          <Group justify="space-between" mb={4}>
+                            <Text size="sm" fw={500}>
+                              {exit.label} ({exit.nodeId})
+                            </Text>
+                            <Text size="xs" c="dimmed">
+                              {exit.count} runs ({exit.percentage}%)
+                            </Text>
+                          </Group>
+                          <Progress
+                            value={exit.percentage}
+                            color={
+                              exit.label.toLowerCase().includes('escalat') ||
+                              exit.label.toLowerCase().includes('human')
+                                ? 'orange'
+                                : 'teal'
+                            }
+                            size="sm"
+                          />
+                        </div>
                       ))}
-                    </Table.Tbody>
-                  </Table>
-                </Table.ScrollContainer>
-              </>
-            )}
-          </Card>
+                    </Stack>
+                  )}
+                </section>
+              </SimpleGrid>
 
-          {/* Node Durations */}
-          {report.nodes.length > 0 && (
-            <Card withBorder padding="md">
-              <Title order={3} size="h4" mb="sm">
-                Node Durations (Median & P90)
-              </Title>
-              <Table striped highlightOnHover>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Node</Table.Th>
-                    <Table.Th>Kind</Table.Th>
-                    <Table.Th>Stage</Table.Th>
-                    <Table.Th>Executions</Table.Th>
-                    <Table.Th>Median</Table.Th>
-                    <Table.Th>P90</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {report.nodes.slice(0, 15).map((n) => (
-                    <Table.Tr key={n.nodeId}>
-                      <Table.Td fw={500}>{n.label || n.nodeId}</Table.Td>
-                      <Table.Td>{n.kind}</Table.Td>
-                      <Table.Td>{n.stage ?? '—'}</Table.Td>
-                      <Table.Td>{n.executionCount}</Table.Td>
-                      <Table.Td>
-                        {formatMs(metric(n.durationMs)?.median)}
-                      </Table.Td>
-                      <Table.Td>{formatMs(metric(n.durationMs)?.p90)}</Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </Card>
+              {/* Model Spend and Token Attribution */}
+              <section className={workspacePage.card}>
+                <Group justify="space-between" mb="sm">
+                  <Title order={2} size="h4">
+                    Model Usage & Spend Attribution
+                  </Title>
+                  <Text size="xs" c="dimmed">
+                    Coverage: {usage?.coverage.measuredPercentage}% measured ·{' '}
+                    {usage?.coverage.unknownPercentage}% unknown
+                  </Text>
+                </Group>
+
+                <SimpleGrid
+                  cols={{ base: 2, sm: 4 }}
+                  mb="md"
+                  className={styles.tokens}
+                >
+                  <div>
+                    <Text size="xs" c="dimmed">
+                      Input Tokens
+                    </Text>
+                    <Text fw={600}>
+                      {usage?.tokens.inputTokens.toLocaleString()}
+                    </Text>
+                  </div>
+                  <div>
+                    <Text size="xs" c="dimmed">
+                      Output Tokens
+                    </Text>
+                    <Text fw={600}>
+                      {usage?.tokens.outputTokens.toLocaleString()}
+                    </Text>
+                  </div>
+                  <div>
+                    <Text size="xs" c="dimmed">
+                      Cached Input Tokens
+                    </Text>
+                    <Text fw={600}>
+                      {usage?.tokens.cachedInputTokens.toLocaleString()}
+                    </Text>
+                  </div>
+                  <div>
+                    <Text size="xs" c="dimmed">
+                      Reasoning Output Tokens
+                    </Text>
+                    <Text fw={600}>
+                      {usage?.tokens.reasoningOutputTokens.toLocaleString()}
+                    </Text>
+                  </div>
+                </SimpleGrid>
+
+                {usage && usage.byProvider.length > 0 && (
+                  <Table.ScrollContainer minWidth={520}>
+                    <Table striped highlightOnHover>
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>Provider</Table.Th>
+                          <Table.Th>Calls</Table.Th>
+                          <Table.Th>Input Tokens</Table.Th>
+                          <Table.Th>Output Tokens</Table.Th>
+                          <Table.Th>Attributed Cost</Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {usage.byProvider.map((p) => {
+                          const costFormatted = p.costMicros
+                            ? `${(p.costMicros / 1_000_000).toFixed(4)} ${p.currency ?? ''}`
+                            : '—';
+                          return (
+                            <Table.Tr key={p.provider}>
+                              <Table.Td fw={500}>{p.provider}</Table.Td>
+                              <Table.Td>{p.count}</Table.Td>
+                              <Table.Td>
+                                {p.inputTokens.toLocaleString()}
+                              </Table.Td>
+                              <Table.Td>
+                                {p.outputTokens.toLocaleString()}
+                              </Table.Td>
+                              <Table.Td>{costFormatted}</Table.Td>
+                            </Table.Tr>
+                          );
+                        })}
+                      </Table.Tbody>
+                    </Table>
+                  </Table.ScrollContainer>
+                )}
+                {usage?.byAlias && usage.byAlias.length > 0 && (
+                  <>
+                    <Title order={3} size="h5" mt="lg" mb="sm">
+                      Captured model aliases
+                    </Title>
+                    <Text size="xs" c="dimmed" mb="sm">
+                      Alias revisions describe assignment requests. Reported
+                      models describe supplied usage. Unknown includes legacy
+                      and native assignments; run overhead has no assigned
+                      alias.
+                    </Text>
+                    <Table.ScrollContainer minWidth={900}>
+                      <Table striped highlightOnHover>
+                        <Table.Thead>
+                          <Table.Tr>
+                            <Table.Th>Alias / revision</Table.Th>
+                            <Table.Th>Requested candidate</Table.Th>
+                            <Table.Th>Reported provider / model</Table.Th>
+                            <Table.Th>Scope</Table.Th>
+                            <Table.Th>Input tokens</Table.Th>
+                            <Table.Th>Output tokens</Table.Th>
+                            <Table.Th>Cost</Table.Th>
+                          </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>
+                          {usage.byAlias.map((group) => (
+                            <Table.Tr
+                              key={JSON.stringify([
+                                group.alias,
+                                group.scope,
+                                group.provider,
+                                group.model,
+                                group.currency,
+                              ])}
+                            >
+                              <Table.Td>
+                                {group.alias
+                                  ? `${group.alias.name} @${group.alias.revision}`
+                                  : 'Unknown'}
+                              </Table.Td>
+                              <Table.Td>
+                                {group.alias
+                                  ? `${group.alias.candidateModel} (#${group.alias.candidateIndex + 1})`
+                                  : '—'}
+                                {group.alias &&
+                                  (group.alias.candidateProfileId ||
+                                    group.alias.candidateEffort !==
+                                      undefined) && (
+                                    <Text size="xs" c="dimmed">
+                                      {group.alias.candidateProfileId ??
+                                        'Inherited profile'}{' '}
+                                      ·{' '}
+                                      {group.alias.candidateEffort === null
+                                        ? 'Native effort'
+                                        : (group.alias.candidateEffort ??
+                                          'Inherited effort')}
+                                    </Text>
+                                  )}
+                              </Table.Td>
+                              <Table.Td>
+                                {group.provider} / {group.model}
+                              </Table.Td>
+                              <Table.Td>
+                                {group.scope === 'run'
+                                  ? 'Run overhead'
+                                  : 'Attempt'}
+                              </Table.Td>
+                              <Table.Td>
+                                {group.inputTokens.toLocaleString()}
+                              </Table.Td>
+                              <Table.Td>
+                                {group.outputTokens.toLocaleString()}
+                              </Table.Td>
+                              <Table.Td>
+                                {group.costMicros !== null
+                                  ? `${(group.costMicros / 1_000_000).toFixed(4)} ${group.currency ?? ''}`
+                                  : '—'}
+                              </Table.Td>
+                            </Table.Tr>
+                          ))}
+                        </Table.Tbody>
+                      </Table>
+                    </Table.ScrollContainer>
+                  </>
+                )}
+              </section>
+
+              {/* Node Durations */}
+              {report.nodes.length > 0 && (
+                <section className={workspacePage.card}>
+                  <Title order={2} size="h4" mb="sm">
+                    Node Durations (Median & P90)
+                  </Title>
+                  <Table.ScrollContainer minWidth={520}>
+                    <Table striped highlightOnHover>
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>Node</Table.Th>
+                          <Table.Th>Kind</Table.Th>
+                          <Table.Th>Stage</Table.Th>
+                          <Table.Th>Executions</Table.Th>
+                          <Table.Th>Median</Table.Th>
+                          <Table.Th>P90</Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {report.nodes.slice(0, 15).map((n) => (
+                          <Table.Tr key={n.nodeId}>
+                            <Table.Td fw={500}>{n.label || n.nodeId}</Table.Td>
+                            <Table.Td>{n.kind}</Table.Td>
+                            <Table.Td>{n.stage ?? '—'}</Table.Td>
+                            <Table.Td>{n.executionCount}</Table.Td>
+                            <Table.Td>
+                              {formatMs(metric(n.durationMs)?.median)}
+                            </Table.Td>
+                            <Table.Td>
+                              {formatMs(metric(n.durationMs)?.p90)}
+                            </Table.Td>
+                          </Table.Tr>
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  </Table.ScrollContainer>
+                </section>
+              )}
+            </Stack>
           )}
         </Stack>
-      )}
-    </div>
+      </div>
+    </section>
   );
 }
 

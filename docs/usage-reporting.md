@@ -203,6 +203,8 @@ MCP `workflow_report` and shared `report.summary` accept the same filter:
 }
 ```
 
+Open a workflow report from **Workflow actions → Performance & cost report** in its editor. **Back to workflow** returns to that workflow. The workflow-scoped report keeps its workflow fixed; use the global **Report** page to compare workflow scopes.
+
 The Reports UI provides **Filter by tags** with **Apply filters** and **Clear filters** actions. Storage applies indexed tag matching before the sample limit. Every report metric and usage breakdown covers only the selected sample. Tags select runs; they do not create a tag grouping or automatically expand the sample to include descendants.
 
 ### Metrics and limits
@@ -211,6 +213,7 @@ The Reports UI provides **Filter by tags** with **Apply filters** and **Clear fi
 - Node durations include executions with both start and completion timestamps. Stage durations sum those node durations per stage within each run, using each execution’s recorded workflow version. A node group spanning different stages has no single stage label. Median and p90 interpolate between sorted observations at `(count - 1) * percentile`, rounded to two decimals. For example, observations of 1 and 10 produce p90 of 9.1.
 - Claim wait measures availability to claim, split by new versus continuing sessions. Reliability includes attempts, lease expiries, failures, managed recovery events, and inactivity stalls.
 - Usage totals sum supplied token and cost figures. Selected observer attempt snapshots take precedence over executor snapshots. Groups cover run, node, reported provider/model, provider, and captured model alias. Run-level observer streams contribute to totals and run, model, and provider groups, but not node groups or attempt coverage.
+- The UI shows **Unmeasured** for headline spend when attempt coverage is zero or no currency totals were supplied. An explicitly reported zero cost remains zero when coverage is nonzero. Partial coverage stays visible beside reported totals.
 - Measured coverage is the percentage of retained attempts with at least one selected model snapshot. It does not establish that each token or cost field is known or final. Missing numeric fields contribute zero to these report sums. Use `get_run_usage` or `interlock usage RUN_ID` for per-metric completeness, finality, overflow handling, and attempt details.
 - Top-level costs stay separated by currency. Each run, node, model, or provider breakdown has one cost amount and currency field. Use top-level currency totals when the selected data contains multiple currencies. Node and Exit group identities use node IDs across the sample, so reused IDs in different workflows can share a group.
 - Exit counts describe completed runs and percentages of completed runs. Unattended completion requires completion, zero recorded human wait, and an Exit label without `escalat`, `human`, or `manual`, compared case-insensitively. Human escalation includes any run with recorded human wait or a matching Exit label. Both rates use the entire selected sample as their denominator.
