@@ -63,6 +63,9 @@ export function StallPolicyEditor({
   showHeading?: boolean;
   thresholds?: (typeof fields)[number][0][];
 }) {
+  const [recoveryEnabled, setRecoveryEnabled] = useState(
+    () => !!value.idleRecovery?.maxRecoveries,
+  );
   return (
     <Stack gap="sm" mb="md">
       {showHeading && <h3>Stall detection</h3>}
@@ -165,22 +168,32 @@ export function StallPolicyEditor({
           <Switch
             label="Managed idle recovery"
             description="Send a reminder to an idle agent. Requires a custom launcher with recovery support."
-            checked={!!value.idleRecovery}
-            onChange={(event) =>
+            checked={recoveryEnabled}
+            onChange={(event) => {
+              const enabled = event.currentTarget.checked;
+              setRecoveryEnabled(enabled);
               onChange({
-                idleRecovery: event.currentTarget.checked
-                  ? { ...defaultRecovery }
+                idleRecovery: enabled
+                  ? value.idleRecovery
+                    ? {
+                        ...value.idleRecovery,
+                        maxRecoveries: Math.max(
+                          1,
+                          value.idleRecovery.maxRecoveries,
+                        ),
+                      }
+                    : { ...defaultRecovery }
                   : undefined,
-              })
-            }
+              });
+            }}
           />
         ))}
-      {showRecovery && value.idleRecovery && (
+      {showRecovery && value.idleRecovery && (inherit || recoveryEnabled) && (
         <>
           <TextInput
             label="Maximum idle recoveries"
             type="number"
-            min={0}
+            min={inherit ? 0 : 1}
             max={10}
             step={1}
             required
