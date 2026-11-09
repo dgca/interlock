@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router';
+import { useLocation } from 'react-router';
 import {
   Badge,
   NativeSelect,
@@ -125,17 +125,6 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   return (
     <section className={workspacePage.page}>
       <PageHeader title="AI Settings" />
-      <nav className={styles.sectionNav} aria-label="AI settings sections">
-        <Link to={{ search: location.search, hash: '#harnesses' }}>
-          Harnesses
-        </Link>
-        <Link to={{ search: location.search, hash: '#model-aliases' }}>
-          Model aliases
-        </Link>
-        <Link to={{ search: location.search, hash: '#execution-settings' }}>
-          Execution settings
-        </Link>
-      </nav>
       <div className={`${workspacePage.content} ${styles.aiContent}`}>
         {error && (
           <div className={styles.errorRow}>

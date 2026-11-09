@@ -12,9 +12,11 @@ export type ListTableColumn = {
 export function ListTable({
   columns,
   children,
+  className,
 }: {
   columns: readonly ListTableColumn[];
   children: ReactNode;
+  className?: string;
 }) {
   const style = {
     '--list-columns': columns.map((column) => column.width).join(' '),
@@ -23,7 +25,10 @@ export function ListTable({
       .join(' '),
   } as CSSProperties;
   return (
-    <div className={classes.table} style={style}>
+    <div
+      className={[classes.table, className].filter(Boolean).join(' ')}
+      style={style}
+    >
       <div className={classes.heading}>
         {columns.map((column, index) => (
           <span key={index}>{column.label}</span>
@@ -70,16 +75,18 @@ export function ListTableSkeleton({
   children,
   rowClassName,
   footer,
+  className,
 }: {
   columns: readonly ListTableColumn[];
   label: string;
   children: ReactNode;
   rowClassName?: string;
   footer?: ReactNode;
+  className?: string;
 }) {
   return (
     <LoadingSkeleton label={label}>
-      <ListTable columns={columns}>
+      <ListTable columns={columns} className={className}>
         {[1, 2, 3].map((row) => (
           <ListTableRow key={row} placeholder className={rowClassName}>
             {children}

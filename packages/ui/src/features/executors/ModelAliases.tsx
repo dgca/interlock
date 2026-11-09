@@ -140,131 +140,137 @@ export function ModelAliases({
           </Button>
         </div>
       </div>
-      <p className={styles.intro}>
-        Name a model choice once, then select it across workflows. Each run
-        captures the alias configuration it starts with.
-      </p>
-      <TextInput
-        className={styles.search}
-        aria-label="Search model aliases"
-        placeholder="Search aliases"
-        maxLength={120}
-        value={search}
-        onChange={(event) => {
-          setSearch(event.currentTarget.value);
-          setOffset(0);
-        }}
-      />
-      {notice && (
-        <p role="status" className={styles.notice}>
-          {notice}
+      <div className={`${workspacePage.card} ${styles.body}`}>
+        <p className={styles.intro}>
+          Name a model choice once, then select it across workflows. Each run
+          captures the alias configuration it starts with.
         </p>
-      )}
-      <ActionError message={loadError} />
-      {error ? (
-        <div className={styles.error}>
-          <ActionError message={error} />
-          <Button onClick={() => setReload((n) => n + 1)}>
-            Retry loading aliases
-          </Button>
-        </div>
-      ) : !page ? (
-        <ListTableSkeleton columns={columns} label="Loading model aliases…">
-          <span>—</span>
-          <span>—</span>
-          <span>—</span>
-          <span />
-        </ListTableSkeleton>
-      ) : page.items.length ? (
-        <>
-          <ListTable columns={columns}>
-            {page.items.map((alias) => {
-              const first = alias.candidates[0];
-              const profile = profiles?.find(
-                (profile) => profile.id === first?.profileId,
-              );
-              return (
-                <ListTableRow key={alias.id} className={styles.aliasRow}>
-                  <span className={styles.identity}>
-                    <strong>{alias.name}</strong>
-                    {alias.description && <span>{alias.description}</span>}
-                  </span>
-                  <span className={styles.identity}>
-                    <span>{first?.model ?? 'No model configured'}</span>
-                    <span>
-                      {first?.profileId
-                        ? (profile?.name ?? 'Missing harness')
-                        : 'Workflow harness'}
-                      {profile?.enabled === false ? ' · disabled' : ''}
-                      {first?.effort ? ` · ${first.effort} effort` : ''}
-                    </span>
-                  </span>
-                  <span>
-                    {Math.max(0, alias.candidates.length - 1)}
-                    <span className={styles.compactLabel}>
-                      {' '}
-                      alternative{alias.candidates.length === 2 ? '' : 's'}
-                    </span>
-                  </span>
-                  <span className={styles.rowActions}>
-                    <Button
-                      variant="ghost"
-                      disabled={opening || editing !== undefined}
-                      onClick={() => void open(alias.id)}
-                      aria-label={`Edit alias ${alias.name}`}
-                    >
-                      Edit
-                    </Button>
-                  </span>
-                </ListTableRow>
-              );
-            })}
-          </ListTable>
-          <div className={styles.pagination}>
-            <span>
-              {page.total} alias{page.total === 1 ? '' : 'es'}
-            </span>
-            <Button
-              disabled={offset === 0}
-              onClick={() => setOffset((n) => Math.max(0, n - 10))}
-            >
-              Previous
-            </Button>
-            <Button
-              disabled={!page.truncated}
-              onClick={() => setOffset((n) => n + 10)}
-            >
-              Next
+        <TextInput
+          className={styles.search}
+          aria-label="Search model aliases"
+          placeholder="Search aliases"
+          maxLength={120}
+          value={search}
+          onChange={(event) => {
+            setSearch(event.currentTarget.value);
+            setOffset(0);
+          }}
+        />
+        {notice && (
+          <p role="status" className={styles.notice}>
+            {notice}
+          </p>
+        )}
+        <ActionError message={loadError} />
+        {error ? (
+          <div className={styles.error}>
+            <ActionError message={error} />
+            <Button onClick={() => setReload((n) => n + 1)}>
+              Retry loading aliases
             </Button>
           </div>
-        </>
-      ) : (
-        <p className={styles.empty}>
-          {search
-            ? 'No aliases match this search.'
-            : 'No model aliases yet. Create one for a role such as builder or reviewer.'}
-        </p>
-      )}
-      {editing !== undefined && (
-        <div ref={editor}>
-          <AliasEditor
-            key={editing?.id ?? 'new'}
-            alias={editing}
-            profiles={profiles}
-            onDirty={onDirty}
-            onCancel={close}
-            onReload={(alias) => setEditing(alias)}
-            onSaved={(name, deleted) => {
-              changed();
-              setNotice(
-                deleted
-                  ? `Alias ${name} deleted. Existing runs keep their captured configuration.`
-                  : `Alias ${name} saved.`,
-              );
-            }}
-          />
-        </div>
-      )}
+        ) : !page ? (
+          <ListTableSkeleton
+            columns={columns}
+            className={styles.aliasTable}
+            label="Loading model aliases…"
+          >
+            <span>—</span>
+            <span>—</span>
+            <span>—</span>
+            <span />
+          </ListTableSkeleton>
+        ) : page.items.length ? (
+          <>
+            <ListTable columns={columns} className={styles.aliasTable}>
+              {page.items.map((alias) => {
+                const first = alias.candidates[0];
+                const profile = profiles?.find(
+                  (profile) => profile.id === first?.profileId,
+                );
+                return (
+                  <ListTableRow key={alias.id} className={styles.aliasRow}>
+                    <span className={styles.identity}>
+                      <strong>{alias.name}</strong>
+                      {alias.description && <span>{alias.description}</span>}
+                    </span>
+                    <span className={styles.identity}>
+                      <span>{first?.model ?? 'No model configured'}</span>
+                      <span>
+                        {first?.profileId
+                          ? (profile?.name ?? 'Missing harness')
+                          : 'Workflow harness'}
+                        {profile?.enabled === false ? ' · disabled' : ''}
+                        {first?.effort ? ` · ${first.effort} effort` : ''}
+                      </span>
+                    </span>
+                    <span>
+                      {Math.max(0, alias.candidates.length - 1)}
+                      <span className={styles.compactLabel}>
+                        {' '}
+                        alternative{alias.candidates.length === 2 ? '' : 's'}
+                      </span>
+                    </span>
+                    <span className={styles.rowActions}>
+                      <Button
+                        variant="ghost"
+                        disabled={opening || editing !== undefined}
+                        onClick={() => void open(alias.id)}
+                        aria-label={`Edit alias ${alias.name}`}
+                      >
+                        Edit
+                      </Button>
+                    </span>
+                  </ListTableRow>
+                );
+              })}
+            </ListTable>
+            <div className={styles.pagination}>
+              <span>
+                {page.total} alias{page.total === 1 ? '' : 'es'}
+              </span>
+              <Button
+                disabled={offset === 0}
+                onClick={() => setOffset((n) => Math.max(0, n - 10))}
+              >
+                Previous
+              </Button>
+              <Button
+                disabled={!page.truncated}
+                onClick={() => setOffset((n) => n + 10)}
+              >
+                Next
+              </Button>
+            </div>
+          </>
+        ) : (
+          <p className={styles.empty}>
+            {search
+              ? 'No aliases match this search.'
+              : 'No model aliases yet. Create one for a role such as builder or reviewer.'}
+          </p>
+        )}
+        {editing !== undefined && (
+          <div ref={editor}>
+            <AliasEditor
+              key={editing?.id ?? 'new'}
+              alias={editing}
+              profiles={profiles}
+              onDirty={onDirty}
+              onCancel={close}
+              onReload={(alias) => setEditing(alias)}
+              onSaved={(name, deleted) => {
+                changed();
+                setNotice(
+                  deleted
+                    ? `Alias ${name} deleted. Existing runs keep their captured configuration.`
+                    : `Alias ${name} saved.`,
+                );
+              }}
+            />
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -357,7 +363,7 @@ function AliasEditor({
   };
   return (
     <form
-      className={`${workspacePage.card} ${styles.editor}`}
+      className={styles.editor}
       aria-label={alias ? `Edit alias ${alias.name}` : 'New model alias'}
       onSubmit={(event) => {
         event.preventDefault();

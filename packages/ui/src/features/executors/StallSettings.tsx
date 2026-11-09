@@ -10,10 +10,30 @@ import { api, errorMessage } from '../../lib/api';
 import { DurationInput } from '../workflows/DurationInput';
 
 const fields = [
-  ['unclaimedStallMs', 'Unclaimed stall', 'Unclaimed threshold'],
-  ['claimedIdleStallMs', 'Claimed idle stall', 'Claimed idle threshold'],
-  ['humanWaitStallMs', 'External input stall', 'External input threshold'],
-  ['runStallMs', 'Run transition stall', 'Run transition threshold'],
+  [
+    'unclaimedStallMs',
+    'Unclaimed stall',
+    'Unclaimed threshold',
+    'An assignment is ready, but no agent has picked it up.',
+  ],
+  [
+    'claimedIdleStallMs',
+    'Claimed idle stall',
+    'Claimed idle threshold',
+    'An agent has picked up work but has stopped reporting activity.',
+  ],
+  [
+    'humanWaitStallMs',
+    'External input stall',
+    'External input threshold',
+    'An External input step is waiting for a person or integration to submit a value.',
+  ],
+  [
+    'runStallMs',
+    'Run transition stall',
+    'Run transition threshold',
+    'The run has stopped advancing or reporting progress. Planned waits and active child workflows do not count.',
+  ],
 ] as const;
 export function StallPolicyEditor({
   value,
@@ -31,18 +51,20 @@ export function StallPolicyEditor({
   thresholds?: (typeof fields)[number][0][];
 }) {
   return (
-    <Stack gap="sm" my="md">
+    <Stack gap="sm" mb="md">
       {showHeading && <h3>Stall detection</h3>}
       <p className="hint">
-        Active time excludes pauses and declared holds. A stall adds Needs
-        attention without failing the run.
+        Flag runs that wait too long for an agent, input, or progress. A stall
+        adds Needs attention without failing the run. Pauses and declared holds
+        do not count.
       </p>
       {fields
         .filter(([key]) => !thresholds || thresholds.includes(key))
-        .map(([key, label, thresholdLabel]) => (
+        .map(([key, label, thresholdLabel, description]) => (
           <div key={key}>
             <NativeSelect
               label={label}
+              description={description}
               value={
                 value[key] === undefined || (!inherit && value[key] === null)
                   ? 'inherit'
@@ -81,6 +103,7 @@ export function StallPolicyEditor({
       {showRecovery && (
         <NativeSelect
           label="Managed idle recovery"
+          description="Send a reminder to an idle agent. Requires a custom launcher with recovery support."
           value={
             value.idleRecovery === undefined ||
             (!inherit && value.idleRecovery === null)
@@ -155,8 +178,10 @@ export function StallPolicyEditor({
 }
 export function StallSettings({
   onDirty,
+  showHeading = true,
 }: {
   onDirty?: (dirty: boolean) => void;
+  showHeading?: boolean;
 }) {
   const [saved, setSaved] =
     useState<Awaited<ReturnType<typeof api.stalls.settings.query>>>();
@@ -209,6 +234,7 @@ export function StallSettings({
               key={loadGeneration}
               value={policy}
               inherit={false}
+              showHeading={showHeading}
               onChange={(patch) => setPolicy((p) => ({ ...p, ...patch }))}
             />
             <Button

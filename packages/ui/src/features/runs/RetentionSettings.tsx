@@ -124,6 +124,10 @@ export function RetentionSettings({
       }
     >
       {showHeading && <h3>History retention</h3>}
+      <p className={styles.intro}>
+        Automatically delete completed run history by age or count. Workflows
+        and published versions are kept.
+      </p>
       {settings ? (
         <form
           onSubmit={async (event) => {
@@ -210,8 +214,8 @@ export function RetentionSettings({
                   </Text>
                 )}
                 <Text size="sm" c="dimmed">
-                  Either limit can expire a tree. Completed trees include failed
-                  and cancelled runs.
+                  A run tree includes its child and continuation runs. Either
+                  limit can delete a tree, including failed or cancelled runs.
                   {workflowId
                     ? ' This override has its own count.'
                     : ' The count is shared by workflows that inherit this policy.'}
@@ -219,9 +223,8 @@ export function RetentionSettings({
               </>
             )}
             <Text size="sm" c="dimmed">
-              Saving takes effect without publication. Cleanup permanently
-              deletes entire run trees, including detached descendants and
-              rollover chains. Protected trees are skipped.
+              Cleanup permanently deletes run inputs, outputs, and usage. Active
+              runs and protected history are kept. Changes apply when saved.
             </Text>
             <Group gap="sm">
               <Button

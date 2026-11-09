@@ -5,7 +5,7 @@
   margin: 0 auto;
 }
 .settingsHeading {
-  margin: 0 0 20px;
+  margin: 0 0 16px;
   font-size: 16px;
   font-weight: 600;
 }
@@ -26,7 +26,8 @@
   max-width: 72ch;
 }
 .sharedLabel {
-  font-size: 14px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 600;
 }
 .sharedCopy p {
@@ -266,30 +267,6 @@
   }
 }
 
-.sectionNav {
-  display: flex;
-  gap: 24px;
-  padding: 14px 40px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  flex-shrink: 0;
-  overflow-x: auto;
-}
-.sectionNav a {
-  color: var(--text-secondary);
-  font-size: 13px;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.sectionNav a:hover {
-  color: var(--text);
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-.sectionNav a:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
-}
 .aiContent {
   display: flex;
   flex-direction: column;
@@ -321,9 +298,6 @@
   margin: 0;
 }
 @media (max-width: 800px) {
-  .sectionNav {
-    padding: 14px 24px;
-  }
   .sectionHeading {
     flex-wrap: wrap;
   }

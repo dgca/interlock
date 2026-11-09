@@ -24,12 +24,14 @@ Automations list filters and page offsets live in the URL and survive detail nav
 Runs tables share the Automations row spacing, title-case headings, typography, status dots, and navigation chevrons. Run rows retain their stage, actor, attention reason, version, tags, comparison context, and exact start time. Tag filters open from the tab toolbar into a form card. Global history actions live in the page header; workflow-scoped history actions remain beside the run tabs.
 
 AI Settings presents Harnesses, Model aliases, and Execution settings as sections
-on one scrollable page with jump links below the header. Each section keeps its
+on one scrollable page. Each section keeps its
 own actions. Expanded harness configurations stay inside the table surface;
-new configurations and alias editors use form cards. Alias editors retain
+new configurations use form cards. The alias search, list, empty state, and
+editor share one form container, with a divider before an open editor. Alias editors retain
 unsaved changes through list refreshes, guard revision conflicts, and keep
 ordered candidates keyed across reordering. Execution settings retain concurrency,
-stall detection, and history retention cards. Existing `/settings/harnesses`
+stall detection, and history retention cards with consistent subheadings and
+short guidance explaining their effects. Existing `/settings/harnesses`
 links redirect to `/settings/ai`, preserving query strings and anchors such as
 `#concurrency`. Custom harness setup uses the shared modal with a scrollable body,
 grouped fields, and a fixed action footer.
