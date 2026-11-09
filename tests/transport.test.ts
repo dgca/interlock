@@ -4,6 +4,7 @@ import {
   assertContract,
   validateContractSchema,
   jsonSchema,
+  workflowReportSchema,
   type Json,
 } from '@interlock/core';
 import { batchDefinition } from './fixtures/batch';
@@ -103,7 +104,7 @@ it.each(['stdio', 'http'])(
         const pausedReadiness = await call('doctor', {});
         expect(pausedReadiness.checks).toContainEqual(
           expect.objectContaining({
-            name: 'Active pause holds (H3)',
+            name: 'Active pause holds',
             status: 'warn',
           }),
         );
@@ -111,8 +112,7 @@ it.each(['stdio', 'http'])(
         const resumedReadiness = await call('doctor', {});
         expect(
           resumedReadiness.checks.some(
-            (check: { name: string }) =>
-              check.name === 'Active pause holds (H3)',
+            (check: { name: string }) => check.name === 'Active pause holds',
           ),
         ).toBe(false);
       } finally {
@@ -210,18 +210,18 @@ it.each(['stdio', 'http'])(
         toolDiscovery.tools.find((tool) => tool.name === 'workflow_report')
           ?.description,
       ).toContain('usage.byAlias');
-      expect(
-        (await call('workflow_report', { workflowId: w.id })).usage.byAlias,
-      ).toEqual([]);
+      const report = await call('workflow_report', { workflowId: w.id });
+      expect(workflowReportSchema.parse(report).claims).toMatchObject({
+        transientRecoveries: 0,
+        stalls: 0,
+      });
+      expect(report.usage.byAlias).toEqual([]);
 
       expect(
         toolDiscovery.tools.find((tool) => tool.name === 'workflow_report')
           ?.description,
       ).toContain('pausedMs/activeMs');
-      expect(
-        (await call('workflow_report', { workflowId: w.id })).summary
-          .durationMs,
-      ).toMatchObject({
+      expect(report.summary.durationMs).toMatchObject({
         count: 0,
         pausedMs: { count: 0 },
         activeMs: { count: 0 },

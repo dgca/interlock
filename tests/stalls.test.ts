@@ -371,7 +371,7 @@ it('records live managed needs_human exclusion and resumes idle timing after the
 });
 
 it.each(['continuation', 'transient'])(
-  'does not reset maxExecutionMs during H7 %s turns',
+  'does not reset maxExecutionMs during recovery %s turns',
   async (kind) => {
     const e = setup();
     let turns = 0;

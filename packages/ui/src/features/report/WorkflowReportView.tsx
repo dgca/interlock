@@ -294,7 +294,7 @@ export function WorkflowReportView({
             <Card withBorder padding="md">
               <Group justify="space-between" mb="xs">
                 <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
-                  Admission Wait (H8)
+                  Admission Wait
                 </Text>
                 <Clock size={16} />
               </Group>
@@ -406,31 +406,29 @@ export function WorkflowReportView({
                   </Badge>
                 </Group>
                 <Group justify="space-between">
-                  <Text size="sm">
-                    H7 Model Refusal / Transient Recoveries:
-                  </Text>
+                  <Text size="sm">Model Refusal / Transient Recoveries:</Text>
                   <Badge color="blue" variant="light">
-                    {claims?.h7Recoveries ?? 0}
+                    {claims?.transientRecoveries ?? 0}
                   </Badge>
                 </Group>
                 <Group justify="space-between">
-                  <Text size="sm">H12 Inactivity Stalls:</Text>
+                  <Text size="sm">Inactivity Stalls:</Text>
                   <Badge
-                    color={claims?.h12Stalls ? 'yellow' : 'gray'}
+                    color={claims?.stalls ? 'yellow' : 'gray'}
                     variant="light"
                   >
-                    {claims?.h12Stalls ?? 0}
+                    {claims?.stalls ?? 0}
                   </Badge>
                 </Group>
               </Stack>
             </Card>
           </SimpleGrid>
 
-          {/* Stages (H4) & Terminal Outcomes */}
+          {/* Stages & Terminal Outcomes */}
           <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
             <Card withBorder padding="md">
               <Title order={3} size="h4" mb="sm">
-                Stage Durations (H4)
+                Stage Durations
               </Title>
               {report.stages.length === 0 ? (
                 <Text size="sm" c="dimmed">

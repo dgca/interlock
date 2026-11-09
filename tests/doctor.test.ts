@@ -365,7 +365,7 @@ describe('doctor health and readiness check', () => {
         }),
       );
     });
-    it('detects active H3 pause holds', async () => {
+    it('detects active pause holds', async () => {
       const { engine, store } = createEnv();
       store.put('pauseHolds', {
         id: 'hold-1',
@@ -402,7 +402,7 @@ describe('doctor health and readiness check', () => {
       expect(resCheck!.status).toBe('warn');
     });
 
-    it('detects unresolved work stalls (H12)', async () => {
+    it('detects unresolved work stalls', async () => {
       const { engine, store } = createEnv();
       vi.spyOn(store, 'currentStalls').mockReturnValueOnce([
         {

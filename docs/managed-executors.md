@@ -179,7 +179,7 @@ Managed execution supports automated recovery policies configured across three p
   - When continuation turns are exhausted without a valid result, the attempt fails cleanly with a descriptive error.
 - **Transient retry (`transientRetry`)**:
   - `maxRetries` (0–10, default 0): Maximum retry attempts for transient errors within a rolling window before escalating.
-  - `windowMs` (ms, default 300,000 / 5 min): Rolling time window for transient retry counting. Active pause holds (H3 pause state) are excluded from elapsed time calculations.
+  - `windowMs` (ms, default 300,000 / 5 min): Rolling time window for transient retry counting. Active pause holds are excluded from elapsed time calculations.
   - `initialBackoffMs` (ms, default 1,000): Base exponential backoff delay (`initialBackoffMs * 2^retryCount`). Delays freeze while a run is paused.
   - When transient retries exceed `maxRetries` within the rolling window, the work escalates to a **Needs attention** hold (category `other`) with checkpointed diagnostics, pausing execution for operator review rather than failing the attempt or looping indefinitely.
 - **Error classification**:

@@ -53,8 +53,8 @@ function report(totalRuns = 4): WorkflowReport {
       totalAttempts: 0,
       leaseExpiries: 0,
       failures: 0,
-      h7Recoveries: 0,
-      h12Stalls: 0,
+      transientRecoveries: 0,
+      stalls: 0,
     },
     usage: {
       tokens: {

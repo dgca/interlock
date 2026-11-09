@@ -208,8 +208,8 @@ it('filters all report queries and attribution before sampling, with exact all-p
     totalAttempts: 1,
     failures: 1,
     leaseExpiries: 1,
-    h7Recoveries: 1,
-    h12Stalls: 1,
+    transientRecoveries: 1,
+    stalls: 1,
     continuingSession: { count: 1 },
   });
   expect(report.usage.tokens.inputTokens).toBe(6);

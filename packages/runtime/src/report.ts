@@ -94,8 +94,8 @@ export function generateWorkflowReport(
         totalAttempts: 0,
         leaseExpiries: 0,
         failures: 0,
-        h7Recoveries: 0,
-        h12Stalls: 0,
+        transientRecoveries: 0,
+        stalls: 0,
       },
       usage: {
         tokens: {
@@ -185,7 +185,7 @@ export function generateWorkflowReport(
     return elapsedExcludingPausesMs(start, end, holds);
   }
 
-  // 1. Run durations, Admission Queue wait (H8), and Human wait
+  // 1. Run durations, Admission queue wait, and Human wait
   const runDurations: Elapsed[] = [];
   const admissionQueueWaits: Elapsed[] = [];
   const humanWaits: Elapsed[] = [];
@@ -232,7 +232,7 @@ export function generateWorkflowReport(
       runDurations.push(elapsed(run, createdAtMs, reportNowMs));
     }
 
-    // Admission queue wait (H8)
+    // Admission queue wait
     if (run.admission?.queuedAt) {
       const queuedAtMs = Date.parse(run.admission.queuedAt);
       if (run.admission.admittedAt) {
@@ -282,7 +282,7 @@ export function generateWorkflowReport(
     runHumanWaitMap.set(run.id, humanWait.wallMs);
   }
 
-  // 2. Stage durations (H4) and Node durations
+  // 2. Stage durations and Node durations
   const stageDurationsMap = new Map<string, Elapsed[]>();
   const stageRunCountMap = new Map<string, Set<string>>();
 
@@ -418,7 +418,7 @@ export function generateWorkflowReport(
     }
   }
 
-  // Count lease expiries, failures, H7 recoveries, and H12 stalls
+  // Count lease expiries, failures, transient recoveries, and stalls
   const leaseExpiries =
     eventsList.filter((e) => e.type === 'work.lease_expired').length ||
     workList.reduce((sum, w) => sum + (w.leaseExpiryCount ?? 0), 0) ||
@@ -429,7 +429,7 @@ export function generateWorkflowReport(
     workList.reduce((sum, w) => sum + (w.failureCount ?? 0), 0) ||
     attemptsList.filter((a) => a.outcome === 'failed').length;
 
-  let h7Recoveries = 0;
+  let transientRecoveries = 0;
   for (const m of managedAttemptsList) {
     if (m.recoveryEvents) {
       for (const r of m.recoveryEvents) {
@@ -439,13 +439,13 @@ export function generateWorkflowReport(
           r.action === 'nudge' ||
           r.action === 'relaunch'
         ) {
-          h7Recoveries++;
+          transientRecoveries++;
         }
       }
     }
   }
 
-  const h12Stalls = stallsList.length;
+  const stalls = stallsList.length;
 
   // 4. Usage and Attributed Cost
   let totalInputTokens = 0;
@@ -907,8 +907,8 @@ export function generateWorkflowReport(
       totalAttempts,
       leaseExpiries,
       failures,
-      h7Recoveries,
-      h12Stalls,
+      transientRecoveries,
+      stalls,
     },
     usage: {
       tokens: {

@@ -98,8 +98,8 @@ export const claimWaitReportSchema = z
     totalAttempts: z.number().int().min(0),
     leaseExpiries: z.number().int().min(0),
     failures: z.number().int().min(0),
-    h7Recoveries: z.number().int().min(0),
-    h12Stalls: z.number().int().min(0),
+    transientRecoveries: z.number().int().min(0),
+    stalls: z.number().int().min(0),
   })
   .strict();
 

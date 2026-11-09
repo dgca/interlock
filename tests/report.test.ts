@@ -80,7 +80,7 @@ describe('Workflow performance and cost report (interlock report)', () => {
   });
 
   describe('metrics aggregation and calculations', () => {
-    it('calculates run durations, admission queue wait (H8), and human wait', () => {
+    it('calculates run durations, admission queue wait, and human wait', () => {
       const { store, engine } = createEnv();
 
       // Create workflow definition with stages and exit nodes
@@ -253,7 +253,7 @@ describe('Workflow performance and cost report (interlock report)', () => {
       expect(report.summary.durationMs.count).toBe(2);
       expect(report.summary.durationMs.min).toBeGreaterThanOrEqual(5000);
 
-      // Admission queue wait (H8): run1 = 0, run2 = 5000ms
+      // Admission queue wait: run1 = 0, run2 = 5000ms
       expect(report.summary.admissionQueueWaitMs.count).toBe(2);
       expect(report.summary.admissionQueueWaitMs.min).toBe(0);
       expect(report.summary.admissionQueueWaitMs.max).toBe(5000);
@@ -264,7 +264,7 @@ describe('Workflow performance and cost report (interlock report)', () => {
       expect(report.summary.humanWaitMs.min).toBe(0);
       expect(report.summary.humanWaitMs.max).toBe(3000);
 
-      // Stage durations (H4)
+      // Stage durations
       const planStage = report.stages.find((s) => s.stage === 'planning');
       expect(planStage).toBeDefined();
       expect(planStage?.runCount).toBe(2);
@@ -402,7 +402,7 @@ describe('Workflow performance and cost report (interlock report)', () => {
       };
       store.put('contextEvents', ctxEvent);
 
-      // Add a managed execution with H7 recovery event
+      // Add a managed execution with transient recovery event
       store.put('managedExecutions', {
         id: 'work-1:1',
         workId: 'work-1',
@@ -418,7 +418,7 @@ describe('Workflow performance and cost report (interlock report)', () => {
         ],
       });
 
-      // Add an H12 stall
+      // Add a work stall
       const stall: StallRecord = {
         id: 'stall-1',
         runId,
@@ -446,11 +446,11 @@ describe('Workflow performance and cost report (interlock report)', () => {
       // Total attempts
       expect(report.claims.totalAttempts).toBe(2);
 
-      // H7 recoveries
-      expect(report.claims.h7Recoveries).toBe(1);
+      // Transient recoveries
+      expect(report.claims.transientRecoveries).toBe(1);
 
-      // H12 stalls
-      expect(report.claims.h12Stalls).toBe(1);
+      // Stalls
+      expect(report.claims.stalls).toBe(1);
     });
 
     it('aggregates model tokens and cost attribution with measured vs unknown coverage', () => {
@@ -609,6 +609,9 @@ describe('Workflow performance and cost report (interlock report)', () => {
       expect(formatted).toContain('Total Runs:');
       expect(formatted).toContain('SUMMARY');
       expect(formatted).toContain('CLAIMS');
+      expect(formatted).toContain('Transient Recoveries:');
+      expect(formatted).toContain('Stalls:');
+      expect(formatted).not.toMatch(/\bH(?:3|4|7|8|12)\b|\bM2\b/);
       expect(formatted).toContain('USAGE & ATTRIBUTED COST');
       expect(formatted).toContain('TERMINAL OUTCOMES');
 

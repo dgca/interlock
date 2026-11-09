@@ -766,13 +766,13 @@ export function formatWorkflowReport(report: WorkflowReport): string {
     'SUMMARY',
     `  Total Runs:                     ${report.summary.totalRuns}`,
     `  Run Duration:                   ${formatElapsedDist(report.summary.durationMs)}`,
-    `  Admission Queue Wait (H8):      ${formatElapsedDist(report.summary.admissionQueueWaitMs)}`,
+    `  Admission Queue Wait:           ${formatElapsedDist(report.summary.admissionQueueWaitMs)}`,
     `  Human Wait Time:                ${formatElapsedDist(report.summary.humanWaitMs)}`,
     '',
   ];
 
   if (report.stages.length > 0) {
-    lines.push('STAGES (H4)');
+    lines.push('STAGES');
     lines.push(
       '  ' +
         'Stage'.padEnd(24) +
@@ -842,11 +842,9 @@ export function formatWorkflowReport(report: WorkflowReport): string {
   );
   lines.push(`  Failures:                           ${report.claims.failures}`);
   lines.push(
-    `  H7 Recoveries:                      ${report.claims.h7Recoveries}`,
+    `  Transient Recoveries:               ${report.claims.transientRecoveries}`,
   );
-  lines.push(
-    `  H12 Stalls:                         ${report.claims.h12Stalls}`,
-  );
+  lines.push(`  Stalls:                             ${report.claims.stalls}`);
   lines.push('');
 
   lines.push('USAGE & ATTRIBUTED COST');
