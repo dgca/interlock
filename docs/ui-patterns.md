@@ -13,11 +13,13 @@ Interlock uses the Mantine theme in `packages/ui/src/theme/theme.ts` and the sha
 
 Tabs switch sections within the current resource or list. Use sidebar navigation or an explicit link to open another workspace.
 
-Automations uses the shared `PageHeader` and `PageTabs` components. The header contains the page title and actions. Add Back on creation and resource pages; omit it on a top-level list. Place underline navigation directly below the header on the same surface background, with search and filters aligned to the right. Keep both visible while the workspace scrolls.
+Automations and the global Runs list use the shared `PageHeader` and tab-row styles. Automations uses `PageTabs` for URL-backed views; Runs uses `PageTabList` within Mantine Tabs for controlled in-page sections. The header contains the page title and actions. Add Back on creation and resource pages; omit it on a top-level list. Place underline navigation directly below the header on the same surface background, with search and filters aligned to the right. Keep both visible while the workspace scrolls.
 
 Place automation form fields inside one surface card with 24px padding and generous section spacing. The preview rail spans the available height below the header. Activity table bodies use the card background. Use spacing for the next-run and last-occurrence summary; avoid inset divider lines.
 
 Automations list filters and page offsets live in the URL and survive detail navigation. Creation defaults to disabled with an explicit enable checkbox and a **Create** action. Successful creation opens ordinary detail without a review gate. Preserve edits after rejected writes, disable repeat submissions while pending, and retain acknowledged outcomes if refresh fails. Revision conflicts offer reload while preserving local edits until discarded.
+
+Runs tables share the Automations row spacing, title-case headings, typography, status dots, and navigation chevrons. Run rows retain their stage, actor, attention reason, version, tags, comparison context, and exact start time. Tag filters open from the tab toolbar into a form card. Global history actions live in the page header; workflow-scoped history actions remain beside the run tabs.
 
 ## Items that need attention
 
@@ -69,7 +71,7 @@ Use the shared `Modal`, `ModalBody`, and `ModalFooter` from `components/Modal`. 
 
 Use static skeletons shaped like the content being loaded. Keep the loading announcement available to assistive technology and hide the decorative placeholders from it. Preserve the action label when a write is in progress.
 
-The Automations list keeps its shared header and status tabs in place during route and initial data loading. Placeholder rows match the list columns. Background refreshes retain loaded rows; errors show retry feedback instead of an indefinite skeleton.
+The Automations and Runs lists keep their shared headers and status tabs in place during route and initial data loading. Placeholder rows match the list columns. Background refreshes retain loaded rows; errors show retry feedback instead of an indefinite skeleton.
 
 ## Review before shipping
 

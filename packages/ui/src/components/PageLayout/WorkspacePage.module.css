@@ -63,7 +63,14 @@
   gap: 7px;
   min-height: 60px;
   padding: 0 14px;
+  border: 0;
   border-bottom: 2px solid transparent;
+  background: transparent;
+  font-family: inherit;
+  letter-spacing: normal;
+  line-height: inherit;
+  font-weight: 400;
+  cursor: pointer;
   text-decoration: none;
   font-size: 14px;
   color: var(--text-secondary);
@@ -72,7 +79,8 @@
 .tab:hover {
   background: var(--surface-hover);
 }
-.tab[aria-current='page'] {
+.tab[aria-current='page'],
+.tab[aria-selected='true'] {
   border-bottom-color: var(--accent);
   color: var(--accent);
   font-weight: 600;
@@ -117,9 +125,6 @@
   .tabs {
     flex-wrap: wrap;
     gap: 0;
-  }
-  .tabLinks {
-    width: 100%;
   }
   .filters {
     padding: 8px 0;

@@ -17,6 +17,7 @@ import { flushSync } from 'react-dom';
 import { lazy, Suspense, useState } from 'react';
 import { Button, Center, Loader } from '@mantine/core';
 import { RouteSkeleton, type LoadingSubject } from './RouteSkeleton';
+import { RunListSkeleton } from '../features/runs/RunListSkeleton';
 import { AutomationListSkeleton } from '../features/automations/AutomationListSkeleton';
 
 const Automations = lazy(() =>
@@ -303,7 +304,7 @@ function WorkflowRoute() {
           });
         }}
         runsView={
-          <Suspense fallback={<RouteLoading label="Loading runs…" />}>
+          <Suspense fallback={<RunListSkeleton embedded />}>
             <RunList
               {...page}
               tick={context.tick}
@@ -335,7 +336,7 @@ function RunsRoute() {
   const navigate = useNavigate();
   const { page } = useRunPage();
   return (
-    <Suspense fallback={<RouteLoading label="Loading runs…" />}>
+    <Suspense fallback={<RunListSkeleton />}>
       <RunList
         {...page}
         tick={tick}

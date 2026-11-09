@@ -196,55 +196,6 @@ summary {
 .content-page > .muted {
   margin-bottom: 35px;
 }
-.run-table {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-}
-.run-row {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1.4fr 0.4fr 20px;
-  gap: 14px;
-  align-items: center;
-  background: var(--surface);
-  width: 100%;
-  padding: 18px 20px;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-  color: var(--muted);
-  font-size: 11px;
-}
-button.run-row {
-  cursor: pointer;
-}
-button.run-row:hover {
-  background: var(--surface-hover);
-}
-.run-row:last-child {
-  border: 0;
-}
-.run-row > span:nth-child(2) {
-  justify-self: start;
-}
-.run-row strong {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text);
-}
-.run-row small {
-  display: block;
-  font: 9px var(--mono);
-  margin-top: 6px;
-  color: var(--muted);
-}
-.run-row.table-heading {
-  background: var(--surface-raised);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  cursor: default;
-}
 .empty {
   display: flex;
   flex-direction: column;
@@ -334,11 +285,6 @@ button.run-row:hover {
   color: var(--text-dim) !important;
 }
 
-.run-row .comparison-context {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
 @media (max-width: 600px) {
   .app {
     flex-direction: column;
@@ -348,50 +294,5 @@ button.run-row:hover {
   .main {
     height: auto;
     min-height: 0;
-  }
-}
-
-.run-status {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-.run-status .run-wait-reason,
-.run-status .run-attention {
-  font-size: 11px;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.run-status .run-wait-reason {
-  color: var(--muted);
-}
-.run-status .run-attention {
-  color: var(--mantine-color-yellow-3);
-}
-
-.run-tabs {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-}
-.run-tabs [role='tab'] {
-  flex-shrink: 0;
-}
-@media (max-width: 600px) {
-  .run-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    padding: 16px;
-    gap: 12px;
-  }
-  .run-row > span {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .run-row > svg,
-  .run-row.table-heading > span:nth-child(n + 3) {
-    display: none;
-  }
-  button.run-row > span:nth-child(4)::after {
-    content: ' steps';
   }
 }

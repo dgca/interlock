@@ -1081,7 +1081,10 @@ export function WorkflowEditor({
             />
           </Tabs.Panel>
         )}
-        <Tabs.Panel value="runs" className={styles.runsView}>
+        <Tabs.Panel
+          value="runs"
+          className={`${styles.runsView} ${styles.runListView}`}
+        >
           {runsView}
         </Tabs.Panel>
       </Tabs>
