@@ -226,7 +226,10 @@ export function RetentionSettings({
               Cleanup permanently deletes run inputs, outputs, and usage. Active
               runs and protected history are kept. Changes apply when saved.
             </Text>
-            <Group gap="sm">
+            <Group gap="sm" justify="flex-end">
+              <Text size="sm" role="status">
+                {saved ? 'Retention settings saved.' : ''}
+              </Text>
               <Button
                 type="submit"
                 variant="primary"
@@ -234,9 +237,6 @@ export function RetentionSettings({
               >
                 {busy ? 'Saving…' : 'Save retention settings'}
               </Button>
-              <Text size="sm" role="status">
-                {saved ? 'Retention settings saved.' : ''}
-              </Text>
             </Group>
           </fieldset>
         </form>

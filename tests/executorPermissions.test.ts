@@ -93,7 +93,7 @@ it('prevents edits while reloading shared settings after a revision conflict', a
     root.render(h(MantineProvider, {}, h(ExecutionSettings))),
   );
   const input = container.querySelector<HTMLInputElement>(
-    'input:not([type="hidden"])',
+    '#concurrency input:not([type="hidden"])',
   )!;
   const fill = (value: string) => {
     Object.getOwnPropertyDescriptor(
@@ -217,7 +217,9 @@ it('saves Unlimited explicitly and accepts a larger numeric limit when returning
     root.render(h(MantineProvider, {}, h(ExecutionSettings))),
   );
   await act(async () => setLimitMode('unlimited'));
-  expect(container.querySelector('input:not([type="hidden"])')).toBeNull();
+  expect(
+    container.querySelector('#concurrency input:not([type="hidden"])'),
+  ).toBeNull();
   expect(container.textContent).toContain('Start every ready assignment');
   rpc.manage.mockResolvedValueOnce({ revision: 1, concurrency: null });
   await act(async () => button('Save limit').click());
@@ -228,7 +230,7 @@ it('saves Unlimited explicitly and accepts a larger numeric limit when returning
   });
   await act(async () => setLimitMode('limited'));
   const input = container.querySelector<HTMLInputElement>(
-    'input:not([type="hidden"])',
+    '#concurrency input:not([type="hidden"])',
   )!;
   expect(input.value).toBe('3');
   await act(async () => setInput(input, '25'));
@@ -250,7 +252,9 @@ it('loads saved Unlimited and explains it in workflow settings', async () => {
       'select[aria-label="Assignment limit mode"]',
     )!.value,
   ).toBe('unlimited');
-  expect(container.querySelector('input:not([type="hidden"])')).toBeNull();
+  expect(
+    container.querySelector('#concurrency input:not([type="hidden"])'),
+  ).toBeNull();
   await act(async () =>
     root.render(
       h(

@@ -271,7 +271,6 @@ it('pages bounded results and recovers from a list failure', async () => {
   await click(button('Next'));
   expect(rpc.read).toHaveBeenLastCalledWith({
     action: 'list',
-    search: '',
     offset: 10,
     limit: 10,
   });

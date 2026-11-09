@@ -38,7 +38,6 @@ export function ModelAliases({
 }) {
   const [page, setPage] =
     useState<Awaited<ReturnType<typeof readModelAliases>>>();
-  const [search, setSearch] = useState('');
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
@@ -53,29 +52,23 @@ export function ModelAliases({
     let current = true;
     setPage(undefined);
     setError('');
-    const timer = window.setTimeout(
-      () => {
-        void readModelAliases({ search, offset, limit: 10 }).then(
-          (next) => {
-            if (!current) return;
-            if (offset > 0 && offset >= next.total) {
-              setOffset(0);
-              return;
-            }
-            setPage(next);
-          },
-          (error) => {
-            if (current) setError(errorMessage(error));
-          },
-        );
+    void readModelAliases({ offset, limit: 10 }).then(
+      (next) => {
+        if (!current) return;
+        if (offset > 0 && offset >= next.total) {
+          setOffset(0);
+          return;
+        }
+        setPage(next);
       },
-      search ? 180 : 0,
+      (error) => {
+        if (current) setError(errorMessage(error));
+      },
     );
     return () => {
       current = false;
-      window.clearTimeout(timer);
     };
-  }, [search, offset, reload]);
+  }, [offset, reload]);
   useEffect(() => {
     if (editing !== undefined)
       editor.current?.scrollIntoView({ block: 'nearest' });
@@ -145,17 +138,6 @@ export function ModelAliases({
           Name a model choice once, then select it across workflows. Each run
           captures the alias configuration it starts with.
         </p>
-        <TextInput
-          className={styles.search}
-          aria-label="Search model aliases"
-          placeholder="Search aliases"
-          maxLength={120}
-          value={search}
-          onChange={(event) => {
-            setSearch(event.currentTarget.value);
-            setOffset(0);
-          }}
-        />
         {notice && (
           <p role="status" className={styles.notice}>
             {notice}
@@ -243,13 +225,12 @@ export function ModelAliases({
               </Button>
             </div>
           </>
-        ) : (
+        ) : editing === undefined ? (
           <p className={styles.empty}>
-            {search
-              ? 'No aliases match this search.'
-              : 'No model aliases yet. Create one for a role such as builder or reviewer.'}
+            No model aliases yet. Create one for a role such as builder or
+            reviewer.
           </p>
-        )}
+        ) : null}
         {editing !== undefined && (
           <div ref={editor}>
             <AliasEditor
@@ -396,7 +377,7 @@ function AliasEditor({
       }}
     >
       <h3>{alias ? `Edit ${alias.name}` : 'New alias'}</h3>
-      <div className={styles.fields}>
+      <div className={styles.metadata}>
         <TextInput
           ref={nameInput}
           label="Alias name"

@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { NativeSelect, TextInput, Textarea, Stack } from '@mantine/core';
+import {
+  NativeSelect,
+  Switch,
+  TextInput,
+  Textarea,
+  Stack,
+} from '@mantine/core';
 import {
   MAX_ACTIVE_CLOCK_MS,
   stallPolicySchema,
@@ -9,6 +15,12 @@ import { Button } from '../../components/Button/Button';
 import { api, errorMessage } from '../../lib/api';
 import { DurationInput } from '../workflows/DurationInput';
 import styles from './StallSettings.module.css';
+
+const defaultRecovery = {
+  maxRecoveries: 1,
+  message:
+    'Continue the stalled assignment and return its required result, or report the blocker.',
+};
 
 const fields = [
   [
@@ -63,77 +75,106 @@ export function StallPolicyEditor({
         .filter(([key]) => !thresholds || thresholds.includes(key))
         .map(([key, label, thresholdLabel, description]) => (
           <div key={key}>
-            <NativeSelect
-              label={label}
-              description={description}
-              value={
-                value[key] === undefined || (!inherit && value[key] === null)
-                  ? 'inherit'
-                  : value[key] === null
-                    ? 'disabled'
-                    : 'threshold'
-              }
-              data={[
-                { value: 'inherit', label: inherit ? 'Inherit' : 'Disabled' },
-                ...(inherit ? [{ value: 'disabled', label: 'Disabled' }] : []),
-                { value: 'threshold', label: 'Set threshold' },
-              ]}
-              onChange={(e) =>
-                onChange({
-                  [key]:
-                    e.currentTarget.value === 'inherit'
-                      ? undefined
-                      : e.currentTarget.value === 'disabled'
-                        ? null
-                        : 300000,
-                })
-              }
-            />
-            {typeof value[key] === 'number' && (
-              <DurationInput
-                label={thresholdLabel}
-                min={1}
-                max={MAX_ACTIVE_CLOCK_MS}
-                step={1}
-                value={value[key]}
-                onChange={(duration) => onChange({ [key]: duration })}
+            {inherit ? (
+              <NativeSelect
+                className={styles.selection}
+                label={label}
+                description={description}
+                value={
+                  value[key] === undefined || (!inherit && value[key] === null)
+                    ? 'inherit'
+                    : value[key] === null
+                      ? 'disabled'
+                      : 'threshold'
+                }
+                data={[
+                  { value: 'inherit', label: inherit ? 'Inherit' : 'Disabled' },
+                  ...(inherit
+                    ? [{ value: 'disabled', label: 'Disabled' }]
+                    : []),
+                  { value: 'threshold', label: 'Set threshold' },
+                ]}
+                onChange={(e) =>
+                  onChange({
+                    [key]:
+                      e.currentTarget.value === 'inherit'
+                        ? undefined
+                        : e.currentTarget.value === 'disabled'
+                          ? null
+                          : 300000,
+                  })
+                }
               />
+            ) : (
+              <Switch
+                label={label}
+                description={description}
+                checked={typeof value[key] === 'number'}
+                onChange={(event) =>
+                  onChange({
+                    [key]: event.currentTarget.checked ? 300000 : undefined,
+                  })
+                }
+              />
+            )}
+            {typeof value[key] === 'number' && (
+              <div className={styles.threshold}>
+                <DurationInput
+                  label={thresholdLabel}
+                  min={1}
+                  max={MAX_ACTIVE_CLOCK_MS}
+                  step={1}
+                  value={value[key]}
+                  onChange={(duration) => onChange({ [key]: duration })}
+                />
+              </div>
             )}
           </div>
         ))}
-      {showRecovery && (
-        <NativeSelect
-          label="Managed idle recovery"
-          description="Send a reminder to an idle agent. Requires a custom launcher with recovery support."
-          value={
-            value.idleRecovery === undefined ||
-            (!inherit && value.idleRecovery === null)
-              ? 'inherit'
-              : value.idleRecovery === null
-                ? 'disabled'
-                : 'configured'
-          }
-          data={[
-            { value: 'inherit', label: inherit ? 'Inherit' : 'Disabled' },
-            ...(inherit ? [{ value: 'disabled', label: 'Disabled' }] : []),
-            { value: 'configured', label: 'Configure' },
-          ]}
-          onChange={(e) =>
-            onChange({
-              idleRecovery:
-                e.currentTarget.value === 'inherit'
-                  ? undefined
-                  : e.currentTarget.value === 'disabled'
-                    ? null
-                    : {
-                        maxRecoveries: 1,
-                        message:
-                          'Continue the stalled assignment and return its required result, or report the blocker.',
-                      },
-            })
-          }
-        />
-      )}
+      {showRecovery &&
+        (inherit ? (
+          <NativeSelect
+            className={styles.selection}
+            label="Managed idle recovery"
+            description="Send a reminder to an idle agent. Requires a custom launcher with recovery support."
+            value={
+              value.idleRecovery === undefined ||
+              (!inherit && value.idleRecovery === null)
+                ? 'inherit'
+                : value.idleRecovery === null
+                  ? 'disabled'
+                  : 'configured'
+            }
+            data={[
+              { value: 'inherit', label: inherit ? 'Inherit' : 'Disabled' },
+              ...(inherit ? [{ value: 'disabled', label: 'Disabled' }] : []),
+              { value: 'configured', label: 'Configure' },
+            ]}
+            onChange={(e) =>
+              onChange({
+                idleRecovery:
+                  e.currentTarget.value === 'inherit'
+                    ? undefined
+                    : e.currentTarget.value === 'disabled'
+                      ? null
+                      : { ...defaultRecovery },
+              })
+            }
+          />
+        ) : (
+          <Switch
+            label="Managed idle recovery"
+            description="Send a reminder to an idle agent. Requires a custom launcher with recovery support."
+            checked={!!value.idleRecovery}
+            onChange={(event) =>
+              onChange({
+                idleRecovery: event.currentTarget.checked
+                  ? { ...defaultRecovery }
+                  : undefined,
+              })
+            }
+          />
+        ))}
       {showRecovery && value.idleRecovery && (
         <>
           <TextInput
@@ -238,15 +279,17 @@ export function StallSettings({
               showHeading={showHeading}
               onChange={(patch) => setPolicy((p) => ({ ...p, ...patch }))}
             />
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={
-                !dirty || busy || !stallPolicySchema.safeParse(policy).success
-              }
-            >
-              {busy ? 'Saving…' : 'Save stall settings'}
-            </Button>
+            <div className={styles.actions}>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={
+                  !dirty || busy || !stallPolicySchema.safeParse(policy).success
+                }
+              >
+                {busy ? 'Saving…' : 'Save stall settings'}
+              </Button>
+            </div>
           </fieldset>
         </form>
       ) : !error ? (

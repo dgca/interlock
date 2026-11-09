@@ -26,12 +26,14 @@ Runs tables share the Automations row spacing, title-case headings, typography, 
 AI Settings presents Harnesses, Model aliases, and Execution settings as sections
 on one scrollable page. Each section keeps its
 own actions. Expanded harness configurations stay inside the table surface;
-new configurations use form cards. The alias search, list, empty state, and
+new configurations use form cards. The alias list, empty state, and
 editor share one form container, with a divider before an open editor. Alias editors retain
 unsaved changes through list refreshes, guard revision conflicts, and keep
 ordered candidates keyed across reordering. Execution settings retain concurrency,
 stall detection, and history retention cards with consistent subheadings and
-short guidance explaining their effects. Existing `/settings/harnesses`
+short guidance explaining their effects. Library stall switches reveal threshold
+fields when enabled; workflow and node editors retain inheritance choices.
+Form save actions align to the right. Existing `/settings/harnesses`
 links redirect to `/settings/ai`, preserving query strings and anchors such as
 `#concurrency`. Custom harness setup uses the shared modal with a scrollable body,
 grouped fields, and a fixed action footer.
