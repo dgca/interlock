@@ -18,6 +18,11 @@ import { lazy, Suspense, useState } from 'react';
 import { Button, Center, Loader } from '@mantine/core';
 import { RouteSkeleton, type LoadingSubject } from './RouteSkeleton';
 import { RunListSkeleton } from '../features/runs/RunListSkeleton';
+import {
+  VariableEditorSkeleton,
+  VariableLibrarySkeleton,
+} from '../features/variables/VariableListSkeleton';
+import { HarnessLibrarySkeleton } from '../features/executors/HarnessListSkeleton';
 import { AutomationListSkeleton } from '../features/automations/AutomationListSkeleton';
 
 const Automations = lazy(() =>
@@ -97,7 +102,7 @@ function RouteLoading({ label = 'Loading…' }: { label?: string }) {
 function HarnessesRoute() {
   const { onDirty } = useOutletContext<AppContext>();
   return (
-    <Suspense fallback={<RouteLoading label="Loading harnesses…" />}>
+    <Suspense fallback={<HarnessLibrarySkeleton />}>
       <Harnesses onDirty={onDirty} />
     </Suspense>
   );
@@ -171,15 +176,18 @@ function LibraryRoute() {
 
 function VariablesRoute() {
   return (
-    <Suspense fallback={<RouteLoading label="Loading variables…" />}>
+    <Suspense fallback={<VariableLibrarySkeleton />}>
       <VariableLibrary />
     </Suspense>
   );
 }
 
 function VariableItemRoute() {
+  const { variableId } = useParams();
   return (
-    <Suspense fallback={<RouteLoading label="Loading variable…" />}>
+    <Suspense
+      fallback={<VariableEditorSkeleton creating={variableId === 'new'} />}
+    >
       <VariableRoute />
     </Suspense>
   );

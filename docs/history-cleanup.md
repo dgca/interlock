@@ -56,7 +56,7 @@ Neither manual cleanup nor automatic retention runs compaction.
 
 ## Enable automatic retention
 
-Library retention is disabled by default. Open **Harnesses → History retention**, choose **Enabled**, enter an age or count limit, and save. Workflow **Runs → History → Retention settings** offers **Inherit library policy**, **Disabled**, or **Override library policy**. Saving an enabled policy authorizes permanent scheduled deletion. Settings apply immediately without publishing a workflow. These local settings stay outside portable exports and imports.
+Library retention is disabled by default. Open **Harnesses → Execution settings → History retention**, choose **Enabled**, enter an age or count limit, and save. Workflow **Runs → History → Retention settings** offers **Inherit library policy**, **Disabled**, or **Override library policy**. Saving an enabled policy authorizes permanent scheduled deletion. Settings apply immediately without publishing a workflow. These local settings stay outside portable exports and imports.
 
 A workflow override replaces the entire library policy. Disabling an override protects that workflow from library retention. Returning to inheritance removes the override. Scope follows the root workflow, including all invoked children regardless of their own settings. Archived workflows retain their policy and remain eligible for cleanup.
 

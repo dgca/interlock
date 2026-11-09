@@ -1,17 +1,18 @@
 .dialogContent {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 28px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
 }
 
 .sectionCard {
-  background: var(--mantine-color-dark-7, #1a1b1e);
-  border: 1px solid var(--mantine-color-dark-4, #2c2e33);
-  border-radius: 8px;
-  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
+  min-width: 0;
 }
 
 .sectionTitle {
@@ -196,19 +197,4 @@
   display: flex;
   gap: 8px;
   align-items: center;
-}
-
-.footerActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 16px;
-  align-items: center;
-}
-
-.errorBanner {
-  flex: 1;
-  color: var(--mantine-color-red-4, #ff6b6b);
-  font-size: 12px;
-  margin-right: 12px;
 }

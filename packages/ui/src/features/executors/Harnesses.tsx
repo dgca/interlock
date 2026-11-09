@@ -3,7 +3,7 @@ import {
   Badge,
   NativeSelect,
   NumberInput,
-  Skeleton,
+  Tabs,
   Switch,
   TextInput,
 } from '@mantine/core';
@@ -20,7 +20,17 @@ import { Button } from '../../components/Button/Button';
 import { ActionError } from '../../components/ActionError/ActionError';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
-import layout from '../../components/PageLayout/PageLayout.module.css';
+import {
+  PageHeader,
+  PageTabList,
+  workspacePage,
+} from '../../components/PageLayout/PageLayout';
+import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
+import {
+  HarnessRowsSkeleton,
+  harnessColumns,
+  harnessViews,
+} from './HarnessListSkeleton';
 import styles from './Harnesses.module.css';
 import {
   permissionOptions,
@@ -48,6 +58,16 @@ type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
 type DirtySetting = (id: string, dirty: boolean) => void;
 
 export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
+  const [view, setView] = useState(() =>
+    window.location.hash === '#concurrency' ? 'settings' : 'configurations',
+  );
+  useEffect(() => {
+    const followAnchor = () => {
+      if (window.location.hash === '#concurrency') setView('settings');
+    };
+    window.addEventListener('hashchange', followAnchor);
+    return () => window.removeEventListener('hashchange', followAnchor);
+  }, []);
   const [dirtySettings, setDirtySettings] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -82,6 +102,8 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   const [customModalProfile, setCustomModalProfile] =
     useState<ExecutorProfile | null>(null);
   const [customModalInitialName, setCustomModalInitialName] = useState('');
+  const addButton = useRef<HTMLButtonElement>(null);
+  const customTrigger = useRef<HTMLElement | null>(null);
 
   const refresh = async (check = false) => {
     const current = ++request.current;
@@ -103,93 +125,119 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     void refresh();
   }, []);
   return (
-    <div className={`${layout.page} ${styles.page}`}>
-      <header className={layout.header}>
-        <div>
-          <h1>Harnesses</h1>
-          <p>Choose which local agents Interlock can launch.</p>
-        </div>
-        <Button
-          aria-label="Check installations"
-          title="Check installations"
-          disabled={checking}
-          onClick={() => void refresh(true)}
-        >
-          <RefreshCw size={14} />
-          {checking ? 'Checking…' : 'Check installations'}
-        </Button>
-      </header>
-      <ExecutionSettings onDirty={limitDirty} />
-      {error && (
-        <div className={styles.errorRow}>
-          <p role="alert" className={styles.error}>
-            {error}
-          </p>
-          <Button variant="ghost" onClick={() => void refresh()}>
-            Retry loading harnesses
-          </Button>
-        </div>
-      )}
-      {!profiles ? (
-        !error && (
-          <div aria-label="Loading harnesses">
-            <Skeleton height={105} mb="md" />
-            <Skeleton height={105} />
+    <Tabs
+      unstyled
+      value={view}
+      onChange={(v) => setView(v ?? 'configurations')}
+      keepMounted
+      className={workspacePage.page}
+    >
+      <PageHeader
+        title="Harnesses"
+        actions={
+          <>
+            <Button
+              aria-label="Check installations"
+              title="Check installations"
+              disabled={checking}
+              onClick={() => void refresh(true)}
+            >
+              <RefreshCw size={14} />
+              Check installations
+            </Button>
+            <Button
+              ref={addButton}
+              variant="primary"
+              disabled={adding}
+              onClick={() => {
+                setView('configurations');
+                setAdding(true);
+              }}
+            >
+              <Plus size={14} />
+              Add configuration
+            </Button>
+          </>
+        }
+      />
+      <PageTabList label="Harness views" items={harnessViews} />
+      <div className={workspacePage.content}>
+        {error && (
+          <div className={styles.errorRow}>
+            <p role="alert" className={styles.error}>
+              {error}
+            </p>
+            <Button variant="ghost" onClick={() => void refresh()}>
+              Retry loading harnesses
+            </Button>
           </div>
-        )
-      ) : (
-        <div className={styles.list}>
-          {profiles.map((p) => (
-            <ProfileRow
-              key={p.id}
-              profile={p}
-              refresh={() => refresh()}
-              onDirty={trackDirty}
-              onConfigureCustom={(prof) => {
-                setCustomModalProfile(prof);
-                setCustomModalInitialName(prof.name);
+        )}
+        <Tabs.Panel value="configurations">
+          {!profiles ? (
+            !error && <HarnessRowsSkeleton />
+          ) : (
+            <ListTable columns={harnessColumns}>
+              {profiles.map((p) => (
+                <ProfileRow
+                  key={p.id}
+                  profile={p}
+                  refresh={() => refresh()}
+                  onDirty={trackDirty}
+                  onConfigureCustom={(prof) => {
+                    customTrigger.current =
+                      document.activeElement as HTMLElement;
+                    setCustomModalProfile(prof);
+                    setCustomModalInitialName(prof.name);
+                    setCustomModalOpen(true);
+                  }}
+                />
+              ))}
+            </ListTable>
+          )}
+          <div className={styles.bottom}>
+            <p>
+              Installation checks make no model calls. Authentication is checked
+              when the harness runs.
+            </p>
+          </div>
+          {adding && (
+            <NewProfile
+              onDirty={newDirty}
+              onCancel={() => {
+                setAdding(false);
+                requestAnimationFrame(() => addButton.current?.focus());
+              }}
+              onOpenCustom={(initialName) => {
+                customTrigger.current = addButton.current;
+                setAdding(false);
+                setCustomModalProfile(null);
+                setCustomModalInitialName(initialName);
                 setCustomModalOpen(true);
               }}
+              onSave={async () => {
+                setAdding(false);
+                await refresh();
+              }}
             />
-          ))}
-        </div>
-      )}
-      <div className={styles.bottom}>
-        <p>
-          Installation checks make no model calls. Authentication is checked
-          when the harness runs.
-        </p>
-        <Button
-          variant="ghost"
-          disabled={adding}
-          onClick={() => setAdding(true)}
-        >
-          <Plus size={14} />
-          Add configuration
-        </Button>
+          )}
+        </Tabs.Panel>
+        <Tabs.Panel value="settings">
+          <div className={styles.settings}>
+            <ExecutionSettings onDirty={limitDirty} />
+          </div>
+        </Tabs.Panel>
       </div>
-      {adding && (
-        <NewProfile
-          onDirty={newDirty}
-          onCancel={() => setAdding(false)}
-          onOpenCustom={(initialName) => {
-            setAdding(false);
-            setCustomModalProfile(null);
-            setCustomModalInitialName(initialName);
-            setCustomModalOpen(true);
-          }}
-          onSave={async () => {
-            setAdding(false);
-            await refresh();
-          }}
-        />
-      )}
       <CustomProfileDialog
         opened={customModalOpen}
         onClose={() => setCustomModalOpen(false)}
         profile={customModalProfile}
         initialName={customModalInitialName}
         isNew={!customModalProfile}
+        returnFocusTo={() =>
+          customTrigger.current?.isConnected
+            ? customTrigger.current
+            : addButton.current
+        }
         onSave={async (data) => {
           await api.executors.manage.mutate({
             action: 'save',
@@ -198,7 +246,7 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
           await refresh();
         }}
       />
-    </div>
+    </Tabs>
   );
 }
 function configuration(profile: Profile): ExecutorProfile {
@@ -278,93 +326,102 @@ function ProfileRow({
   };
   const detected = profile.detection.status === 'detected';
   return (
-    <section ref={row} className={styles.row} aria-label={profile.name}>
-      <div className={styles.rowHeading}>
-        {profile.harness === 'custom' ? (
-          <Cpu size={21} className={styles.customIcon} />
-        ) : (
-          <Terminal size={21} className={styles.icon} />
-        )}
-        <div className={styles.identity}>
-          <h2>{profile.name}</h2>
+    <section ref={row} aria-label={profile.name}>
+      <ListTableRow className={styles.rowHeading}>
+        <div className={styles.profileIdentity}>
           {profile.harness === 'custom' ? (
-            <p
-              title={
-                profile.mode === 'launcher'
-                  ? `Delegated Launcher (${profile.transport})`
-                  : `Direct Turn (${profile.transport})`
-              }
-            >
-              {profile.mode === 'launcher'
-                ? `${profile.transport === 'http' ? 'HTTP POST ' + (profile.launchUrl ?? '') : 'Subprocess CLI · Launch: ' + (profile.launchCommand || 'custom')}${profile.timeoutSeconds ? ` · Timeout: ${profile.timeoutSeconds}s` : ''} · ${permissionLabels[profile.permissions] ?? profile.permissions} permissions`
-                : `${profile.transport === 'http' ? 'HTTP Service · ' + (profile.turnUrl ?? '') : 'Subprocess CLI · Turn: ' + (profile.turnCommand || profile.command || 'custom')}${profile.timeoutSeconds ? ` · Timeout: ${profile.timeoutSeconds}s` : ''} · ${permissionLabels[profile.permissions] ?? profile.permissions} permissions`}
-            </p>
-          ) : !open ? (
-            <p
-              title={`${profile.model ?? 'CLI default'}${profile.effort ? ` · ${profile.effort} effort` : ''} · ${permissionLabels[profile.permissions]} permissions`}
-            >
-              {profile.name !== harnessNames[profile.harness] &&
-                `${harnessNames[profile.harness]} · `}
-              {profile.model ?? 'CLI default'}
-              {profile.effort ? ` · ${profile.effort} effort` : ''} ·{' '}
-              {permissionLabels[profile.permissions]} permissions
-            </p>
-          ) : profile.name !== harnessNames[profile.harness] ? (
-            <p>{harnessNames[profile.harness]}</p>
-          ) : null}
-        </div>
-        {profile.harness === 'custom' && (
-          <Badge variant="light" color="violet" tt="none">
-            custom: {profile.mode ?? 'direct'}
-          </Badge>
-        )}
-        <Badge variant="light" color={detected ? 'blue' : 'gray'} tt="none">
-          {detected
-            ? profile.harness === 'custom'
-              ? 'Configured'
-              : 'Detected'
-            : profile.detection.status === 'missing'
-              ? 'Not installed'
-              : 'Unavailable'}
-        </Badge>
-        <Switch
-          checked={profile.enabled}
-          disabled={busy || open || (!profile.enabled && !detected)}
-          aria-label={`Enable ${profile.name}`}
-          label={profile.enabled ? 'Enabled' : 'Disabled'}
-          onChange={(e) =>
-            void save({
-              ...configuration(profile),
-              enabled: e.currentTarget.checked,
-            })
-          }
-        />
-        <Button
-          variant="ghost"
-          aria-expanded={open}
-          aria-controls={editorId}
-          disabled={busy}
-          onClick={() => {
-            if (profile.harness === 'custom') {
-              onConfigureCustom(configuration(profile));
-            } else {
-              if (open) cancel();
-              else {
-                setDraft(configuration(profile));
-                setError('');
-                setOpen(true);
-              }
-            }
-          }}
-        >
-          {open ? (
-            <ChevronUp size={14} />
-          ) : profile.harness === 'custom' ? null : (
-            <ChevronDown size={14} />
+            <Cpu size={21} className={styles.customIcon} />
+          ) : (
+            <Terminal size={21} className={styles.icon} />
           )}
-          {open ? 'Cancel editing' : 'Configure'}
-        </Button>
-      </div>
+          <div className={styles.identity}>
+            <h2>{profile.name}</h2>
+            {profile.harness === 'custom' ? (
+              <p
+                title={
+                  profile.mode === 'launcher'
+                    ? `Delegated Launcher (${profile.transport})`
+                    : `Direct Turn (${profile.transport})`
+                }
+              >
+                {profile.mode === 'launcher'
+                  ? `${profile.transport === 'http' ? 'HTTP POST ' + (profile.launchUrl ?? '') : 'Subprocess CLI · Launch: ' + (profile.launchCommand || 'custom')}${profile.timeoutSeconds ? ` · Timeout: ${profile.timeoutSeconds}s` : ''} · ${permissionLabels[profile.permissions] ?? profile.permissions} permissions`
+                  : `${profile.transport === 'http' ? 'HTTP Service · ' + (profile.turnUrl ?? '') : 'Subprocess CLI · Turn: ' + (profile.turnCommand || profile.command || 'custom')}${profile.timeoutSeconds ? ` · Timeout: ${profile.timeoutSeconds}s` : ''} · ${permissionLabels[profile.permissions] ?? profile.permissions} permissions`}
+              </p>
+            ) : !open ? (
+              <p
+                title={`${profile.model ?? 'CLI default'}${profile.effort ? ` · ${profile.effort} effort` : ''} · ${permissionLabels[profile.permissions]} permissions`}
+              >
+                {profile.name !== harnessNames[profile.harness] &&
+                  `${harnessNames[profile.harness]} · `}
+                {profile.model ?? 'CLI default'}
+                {profile.effort ? ` · ${profile.effort} effort` : ''} ·{' '}
+                {permissionLabels[profile.permissions]} permissions
+              </p>
+            ) : profile.name !== harnessNames[profile.harness] ? (
+              <p>{harnessNames[profile.harness]}</p>
+            ) : null}
+          </div>
+        </div>
+        <span className={styles.installation}>
+          {profile.harness === 'custom' && (
+            <Badge variant="light" color="violet" tt="none">
+              custom: {profile.mode ?? 'direct'}
+            </Badge>
+          )}
+          <Badge variant="light" color={detected ? 'blue' : 'gray'} tt="none">
+            {detected
+              ? profile.harness === 'custom'
+                ? 'Configured'
+                : 'Detected'
+              : profile.detection.status === 'missing'
+                ? 'Not installed'
+                : 'Unavailable'}
+          </Badge>
+        </span>
+        <span className={styles.enabledControl}>
+          <Switch
+            checked={profile.enabled}
+            disabled={busy || open || (!profile.enabled && !detected)}
+            aria-label={`Enable ${profile.name}`}
+            label={profile.enabled ? 'Enabled' : 'Disabled'}
+            onChange={(e) =>
+              void save({
+                ...configuration(profile),
+                enabled: e.currentTarget.checked,
+              })
+            }
+          />
+        </span>
+        <span className={styles.configureControl}>
+          <Button
+            variant="ghost"
+            aria-expanded={profile.harness === 'custom' ? undefined : open}
+            aria-controls={profile.harness === 'custom' ? undefined : editorId}
+            aria-haspopup={profile.harness === 'custom' ? 'dialog' : undefined}
+            disabled={busy}
+            onClick={() => {
+              if (profile.harness === 'custom') {
+                onConfigureCustom(configuration(profile));
+              } else {
+                if (open) cancel();
+                else {
+                  setDraft(configuration(profile));
+                  setError('');
+                  setOpen(true);
+                }
+              }
+            }}
+          >
+            {open ? (
+              <ChevronUp size={14} />
+            ) : profile.harness === 'custom' ? null : (
+              <ChevronDown size={14} />
+            )}
+            {open ? 'Cancel editing' : 'Configure'}
+          </Button>
+        </span>
+      </ListTableRow>
       {!detected && (
         <p className={styles.guidance}>
           {profile.detection.message}{' '}
@@ -551,7 +608,7 @@ function NewProfile({
   return (
     <form
       aria-label="Add harness configuration"
-      className={styles.newProfile}
+      className={`${workspacePage.card} ${styles.newProfile}`}
       onSubmit={async (e) => {
         e.preventDefault();
         if (harness === 'custom') {

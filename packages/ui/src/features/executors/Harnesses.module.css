@@ -1,11 +1,19 @@
-.page {
-  max-width: 1180px;
+.settings {
+  display: grid;
+  gap: 24px;
+  max-width: 1000px;
+  margin: 0 auto;
 }
-.list {
-  border-top: 1px solid var(--border);
+.settingsHeading {
+  margin: 0 0 20px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.settings h3 {
+  margin-top: 0;
 }
 .sharedSettings {
-  padding: 4px 0 28px;
+  min-width: 0;
 }
 .sharedForm {
   display: grid;
@@ -62,19 +70,23 @@
   font-size: 12px;
   line-height: 1.6;
 }
-.row {
-  border-bottom: 1px solid var(--border);
-  padding: 24px 0;
-}
 .rowHeading {
-  display: flex;
-  gap: 18px;
-  align-items: center;
+  color: var(--text);
 }
-.rowHeading > :global(.mantine-Switch-root),
-.rowHeading > button,
-.rowHeading > :global(.mantine-Badge-root) {
-  flex-shrink: 0;
+.profileIdentity {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
+}
+.installation {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.configureControl {
+  justify-self: end;
 }
 .identity {
   margin-right: auto;
@@ -103,20 +115,19 @@
   color: var(--mantine-color-violet-4, #b197fc);
   flex-shrink: 0;
 }
-.customBadge {
-  background: var(--mantine-color-violet-9, #2b1d38);
-  color: var(--mantine-color-violet-3, #d0bfff);
-  border: 1px solid var(--mantine-color-violet-7, #7048e8);
-}
+
 .guidance {
-  margin: 16px 0 0 39px;
+  margin: 0;
+  padding: 0 24px 20px;
   font-size: 13px;
   line-height: 1.6;
   color: var(--muted);
 }
 .configuration {
-  margin: 26px 0 0 39px;
-  padding: 2px 0 0;
+  margin: 0;
+  padding: 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
 }
 .fields {
   display: grid;
@@ -126,7 +137,6 @@
 .advanced {
   margin-top: 28px;
   padding-top: 20px;
-  border-top: 1px solid var(--border);
 }
 .advanced summary {
   cursor: pointer;
@@ -185,7 +195,6 @@
   gap: 10px;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid var(--border);
 }
 .bottom {
   display: flex;
@@ -198,9 +207,7 @@
   margin: 0;
 }
 .newProfile {
-  margin-top: 28px;
-  padding-top: 24px;
-  border-top: 1px solid var(--border);
+  margin-top: 24px;
 }
 .newProfile h2 {
   margin-bottom: 20px;
@@ -210,43 +217,36 @@
   font-size: 13px;
   overflow-wrap: anywhere;
 }
-@media (max-width: 850px) {
+@media (max-width: 1150px) {
   .sharedForm {
     grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
+    gap: 18px;
   }
-  .page > header {
-    flex-wrap: wrap;
+}
+@media (max-width: 900px) {
+  .rowHeading > .profileIdentity {
+    grid-column: 1 / -1;
   }
-  .rowHeading {
-    flex-wrap: wrap;
-    gap: 12px;
+  .installation {
+    grid-column: 1;
+    grid-row: 2;
   }
-  .identity {
-    flex: 1 0 calc(100% - 40px);
+  .enabledControl {
+    grid-column: 2;
+    grid-row: 2;
   }
-  .rowHeading > button {
-    margin-left: auto;
-  }
-  .guidance,
-  .configuration {
-    margin-left: 0;
+  .configureControl {
+    grid-column: 1 / -1;
+    justify-self: end;
   }
   .fields {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .bottom {
-    flex-direction: column;
-    gap: 14px;
   }
 }
 @media (max-width: 480px) {
   .sharedError,
   .errorRow {
     flex-wrap: wrap;
-  }
-  .page {
-    padding: 0 12px 24px;
   }
   .formActions {
     flex-wrap: wrap;

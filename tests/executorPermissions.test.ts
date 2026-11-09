@@ -310,6 +310,9 @@ it('preserves open configuration edits across refresh and reloads only on explic
     'input[maxlength="120"]',
   )!;
   await act(async () => setInput(input, 'Unsaved name'));
+  await act(async () => button('Execution settings').click());
+  await act(async () => button('Configurations').click());
+  expect(input.value).toBe('Unsaved name');
   const updated = { ...original, revision: 1, name: 'Updated elsewhere' };
   rpc.profiles.mockResolvedValue([updated]);
   rpc.manage.mockImplementation(async (q) => {

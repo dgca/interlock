@@ -6,26 +6,17 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
 import { flushSync } from 'react-dom';
 import {
+  Alert,
   Badge,
   Button as MantineButton,
   Group,
   SegmentedControl,
-  Skeleton,
   Stack,
   Text,
   TextInput,
   Textarea,
-  VisuallyHidden,
 } from '@mantine/core';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Braces,
-  KeyRound,
-  Plus,
-  Save,
-  Search,
-} from 'lucide-react';
+import { ArrowRight, ChevronRight, KeyRound, Plus, Search } from 'lucide-react';
 import type { AppContext } from '../../App';
 import {
   variableRequirementSchema,
@@ -39,8 +30,14 @@ import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
 import { ActionError } from '../../components/ActionError/ActionError';
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
-import library from '../../components/PageLayout/LibraryList.module.css';
-import editorLayout from '../workflows/WorkflowEditor.module.css';
+import {
+  PageHeader,
+  PageToolbar,
+  workspacePage,
+} from '../../components/PageLayout/PageLayout';
+import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
+import { Placeholder } from '../../components/LoadingSkeleton/LoadingSkeleton';
+import { VariableRowsSkeleton, variableColumns } from './VariableListSkeleton';
 import styles from './Variables.module.css';
 import { VariablePicker } from './VariablePicker';
 
@@ -54,60 +51,18 @@ const statusName = {
   locked: 'Store locked',
 } as const;
 
-function VariableListSkeleton() {
-  return (
-    <>
-      <VisuallyHidden role="status">Loading variables…</VisuallyHidden>
-      <ul className={library.list} aria-hidden="true">
-        {[1, 2, 3].map((row) => (
-          <li key={row} className={`${library.row} ${styles.row}`}>
-            <div className={library.rowIdentity}>
-              <Skeleton
-                className={styles.skeletonIcon}
-                width={35}
-                height={35}
-                radius={8}
-                animate={false}
-              />
-              <Stack gap={5} w="100%" maw={row === 2 ? 150 : 190}>
-                <Skeleton width="65%" height={12} animate={false} />
-                <Skeleton height={8} animate={false} />
-              </Stack>
-            </div>
-            <Skeleton
-              className={styles.rowKind}
-              width={44}
-              height={12}
-              animate={false}
-            />
-            <Skeleton
-              className={styles.status}
-              width={52}
-              height={10}
-              animate={false}
-            />
-            <Skeleton
-              className={library.updated}
-              width={60}
-              height={10}
-              animate={false}
-            />
-          </li>
-        ))}
-      </ul>
-    </>
-  );
-}
-
 export function VariableLibrary() {
   const { tick } = useOutletContext<AppContext>();
-  const [data, setData] = useState<Listing & { search: string }>();
+  const [snapshot, setSnapshot] = useState<{ key: string; data: Listing }>();
   const [search, setSearch] = useState('');
   const [offset, setOffset] = useState(0);
-  const [error, setError] = useState('');
+  const [failure, setFailure] = useState<{ key: string; message: string }>();
+  const [reload, setReload] = useState(0);
   const searchInput = useRef<HTMLInputElement>(null);
-  const loading =
-    !error && (!data || (!data.items.length && data.search !== search));
+  const key = JSON.stringify({ search, offset });
+  const data = snapshot?.key === key ? snapshot.data : undefined;
+  const error = failure?.key === key ? failure.message : '';
+  const loading = !data && !error;
   const updateSearch = (value: string) => {
     setSearch(value);
     setOffset(0);
@@ -119,182 +74,171 @@ export function VariableLibrary() {
         .query({ action: 'list', search, offset })
         .then((r) => {
           if (active && 'items' in r) {
-            setData({ ...r, search });
-            setError('');
+            if (offset > 0 && offset >= r.total) {
+              setOffset(Math.max(0, Math.floor((r.total - 1) / 25) * 25));
+              return;
+            }
+            setSnapshot({ key, data: r });
+            setFailure(undefined);
           }
         })
         .catch((e) => {
-          if (active) setError(errorMessage(e));
+          if (active) setFailure({ key, message: errorMessage(e) });
         });
     }, 150);
     return () => {
       active = false;
       clearTimeout(timer);
     };
-  }, [tick, search, offset]);
+  }, [tick, search, offset, reload]);
   return (
-    <div className={layout.page}>
-      <header className={`${layout.header} ${layout.libraryHeader}`}>
-        <h1>Variables</h1>
-        <MantineButton
-          component={Link}
-          variant="filled"
-          to={paths.variable('new')}
-        >
-          <Plus />
-          New variable
-        </MantineButton>
-      </header>
-      <div className={layout.libraryToolbar}>
-        {loading ? (
-          <Skeleton width={65} height={10} animate={false} aria-hidden="true" />
-        ) : (
-          data && (
-            <Text size="xs" c="dimmed">
-              {data.total} {data.total === 1 ? 'variable' : 'variables'}
-            </Text>
-          )
-        )}
+    <section className={workspacePage.page}>
+      <PageHeader
+        title="Variables"
+        actions={
+          <MantineButton
+            component={Link}
+            variant="filled"
+            to={paths.variable('new')}
+          >
+            <Plus size={14} /> New variable
+          </MantineButton>
+        }
+      />
+      <PageToolbar
+        summary={
+          data ? (
+            `${data.total} ${data.total === 1 ? 'variable' : 'variables'}`
+          ) : loading ? (
+            <Placeholder w={65} h={10} />
+          ) : undefined
+        }
+      >
         <TextInput
           ref={searchInput}
-          className={layout.librarySearch}
-          size="xs"
+          className={styles.search}
           aria-label="Search variables"
           placeholder="Search variables"
-          leftSection={<Search size={15} />}
+          leftSection={<Search size={14} />}
           value={search}
           onChange={(e) => updateSearch(e.target.value)}
         />
-      </div>
-      {error && (
-        <p role="alert" className={styles.error}>
-          {error}
-        </p>
-      )}
-      {!loading && data?.search === search && !data.items.length && (
-        <div className={`${library.empty} ${styles.empty}`}>
-          <span className={library.icon} aria-hidden="true">
-            {search ? <Search size={17} /> : <KeyRound size={17} />}
-          </span>
-          <h2>{search ? 'No matching variables' : 'No variables yet'}</h2>
-          {search ? (
+      </PageToolbar>
+      <div className={workspacePage.content}>
+        {error && (
+          <Alert
+            color="red"
+            mb="md"
+            title={
+              data ? 'Variables may be out of date' : 'Could not load variables'
+            }
+          >
+            {error}
             <MantineButton
-              variant="default"
-              onClick={() => {
-                updateSearch('');
-                searchInput.current?.focus();
-              }}
+              variant="subtle"
+              onClick={() => setReload((n) => n + 1)}
             >
-              Clear search
+              Retry loading
             </MantineButton>
-          ) : (
-            <>
-              <Text size="sm" c="dimmed">
-                Reuse settings and credentials across workflows.
-              </Text>
-              <MantineButton
-                component={Link}
-                variant="default"
-                to={paths.variable('new')}
+          </Alert>
+        )}
+        {loading ? (
+          <VariableRowsSkeleton />
+        ) : data?.items.length ? (
+          <ListTable columns={variableColumns}>
+            {data.items.map((v) => (
+              <ListTableRow
+                key={v.id}
+                to={paths.variable(v.id)}
+                className={styles.listRow}
               >
-                Create a variable
-              </MantineButton>
-            </>
-          )}
-        </div>
-      )}
-      {(loading || !!data?.items.length) && (
-        <>
-          <div className={library.listPanel}>
-            <div
-              className={`${library.columnHead} ${styles.columnHead}`}
-              aria-hidden="true"
-            >
-              <span>Name</span>
-              <span>Kind</span>
-              <span>Status</span>
-              <span className={library.updated}>Updated</span>
+                <span className={styles.identity}>
+                  <strong>{v.name}</strong>
+                  {v.description && <small>{v.description}</small>}
+                </span>
+                <Badge
+                  className={styles.rowKind}
+                  variant="light"
+                  color="gray"
+                  size="sm"
+                  tt="none"
+                  fw={500}
+                >
+                  {v.kind === 'secret' ? 'Secret' : 'Config'}
+                </Badge>
+                <span
+                  className={
+                    v.availability === 'ready' ? styles.ready : styles.status
+                  }
+                >
+                  {statusName[v.availability]}
+                </span>
+                <time className={styles.updated} dateTime={v.updatedAt}>
+                  {new Date(v.updatedAt).toLocaleDateString()}
+                </time>
+                <ChevronRight size={16} aria-hidden="true" />
+              </ListTableRow>
+            ))}
+          </ListTable>
+        ) : (
+          data && (
+            <div className={styles.empty}>
+              {search ? (
+                <Search size={22} aria-hidden="true" />
+              ) : (
+                <KeyRound size={22} aria-hidden="true" />
+              )}
+              <h2>{search ? 'No matching variables' : 'No variables yet'}</h2>
+              {search ? (
+                <MantineButton
+                  variant="default"
+                  onClick={() => {
+                    updateSearch('');
+                    searchInput.current?.focus();
+                  }}
+                >
+                  Clear search
+                </MantineButton>
+              ) : (
+                <>
+                  <Text size="sm" c="dimmed">
+                    Reuse settings and credentials across workflows.
+                  </Text>
+                  <MantineButton
+                    component={Link}
+                    variant="default"
+                    to={paths.variable('new')}
+                  >
+                    Create a variable
+                  </MantineButton>
+                </>
+              )}
             </div>
-            {loading ? (
-              <VariableListSkeleton />
-            ) : (
-              <ul className={library.list}>
-                {data?.items.map((v) => (
-                  <li key={v.id}>
-                    <Link
-                      to={paths.variable(v.id)}
-                      className={`${library.row} ${styles.row}`}
-                    >
-                      <div className={library.rowIdentity}>
-                        <span className={library.icon} aria-hidden="true">
-                          {v.kind === 'secret' ? (
-                            <KeyRound size={17} />
-                          ) : (
-                            <Braces size={17} />
-                          )}
-                        </span>
-                        <div className={library.identity}>
-                          <strong>{v.name}</strong>
-                          {v.description && <span>{v.description}</span>}
-                        </div>
-                      </div>
-                      <Badge
-                        className={styles.rowKind}
-                        variant="light"
-                        color="gray"
-                        size="sm"
-                        tt="none"
-                        fw={500}
-                      >
-                        {v.kind === 'secret' ? 'Secret' : 'Config'}
-                      </Badge>
-                      <span
-                        className={
-                          v.availability === 'ready'
-                            ? styles.ready
-                            : styles.status
-                        }
-                      >
-                        {statusName[v.availability]}
-                      </span>
-                      <time className={library.updated} dateTime={v.updatedAt}>
-                        {new Date(v.updatedAt).toLocaleDateString()}
-                      </time>
-                      <ArrowRight
-                        className={library.rowArrow}
-                        size={16}
-                        aria-hidden="true"
-                      />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          {data && !loading && (offset > 0 || data.truncated) && (
-            <Group justify="space-between" mt="lg">
-              <Button
-                disabled={!offset}
-                onClick={() => setOffset(Math.max(0, offset - 25))}
-              >
-                Previous
-              </Button>
-              <Text size="xs" c="dimmed">
-                {data.total
-                  ? `${offset + 1}–${Math.min(offset + data.items.length, data.total)} of ${data.total}`
-                  : '0 variables'}
-              </Text>
-              <Button
-                disabled={!data.truncated}
-                onClick={() => setOffset(offset + 25)}
-              >
-                Next
-              </Button>
-            </Group>
-          )}
-        </>
-      )}
-    </div>
+          )
+        )}
+        {data && (offset > 0 || data.truncated) && (
+          <Group justify="space-between" mt="lg">
+            <Button
+              disabled={!offset}
+              onClick={() => setOffset(Math.max(0, offset - 25))}
+            >
+              Previous
+            </Button>
+            <Text size="xs" c="dimmed">
+              {data.total
+                ? `${offset + 1}–${Math.min(offset + data.items.length, data.total)} of ${data.total}`
+                : '0 variables'}
+            </Text>
+            <Button
+              disabled={!data.truncated}
+              onClick={() => setOffset(offset + 25)}
+            >
+              Next
+            </Button>
+          </Group>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -540,57 +484,52 @@ function VariableEditor({ id }: { id: string }) {
     }
   };
   const header = (
-    <header className={`${editorLayout.header} ${styles.editorHeader}`}>
-      <Button
-        variant="ghost"
-        className={styles.backButton}
-        aria-label="Back to variables"
-        disabled={busy}
-        onClick={() => void navigate(paths.variables)}
-      >
-        <ArrowLeft />
-      </Button>
-      <div className={styles.editorTitle}>
-        <h1 title={saved?.name}>
-          {creating ? 'New variable' : (saved?.name ?? 'Variable')}
-        </h1>
-      </div>
-      {saved && (
-        <span className={styles.editorStatus} role="status">
-          {dirty ? 'Unsaved changes' : 'Saved'}
-        </span>
-      )}
-      {(creating || saved) && (
-        <div className={styles.editorActions}>
-          <Button disabled={busy || (!creating && !dirty)} onClick={discard}>
-            {creating ? 'Cancel' : 'Discard changes'}
-          </Button>
-          <Button
-            variant="primary"
-            disabled={busy || !dirty || !name.trim()}
-            type="submit"
-            form={formId}
-          >
-            <Save size={14} />
-            {busy ? 'Saving…' : creating ? 'Create variable' : 'Save changes'}
-          </Button>
-        </div>
-      )}
-    </header>
+    <PageHeader
+      title={creating ? 'New variable' : (saved?.name ?? 'Variable')}
+      status={saved ? (dirty ? 'Unsaved changes' : 'Saved') : undefined}
+      onBack={() => void navigate(paths.variables)}
+      backLabel="Back to variables"
+      busy={busy}
+      actions={
+        (creating || saved) && (
+          <>
+            <Button disabled={busy || (!creating && !dirty)} onClick={discard}>
+              {creating ? 'Cancel' : 'Discard changes'}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={busy || !dirty || !name.trim()}
+              type="submit"
+              form={formId}
+            >
+              {creating ? 'Create' : 'Save changes'}
+            </Button>
+          </>
+        )
+      }
+    />
   );
   if (!creating && !saved)
     return (
-      <section className={styles.editor}>
+      <section className={workspacePage.page}>
         {header}
-        <div className={styles.editorBody}>
-          <div className={styles.editorContent}>
+        <div className={workspacePage.content}>
+          <div className={workspacePage.formContent}>
             {error ? (
-              <p role="alert">{error}</p>
+              <Alert color="red" title="Could not load variable">
+                {error}
+                <MantineButton
+                  variant="subtle"
+                  onClick={() => setRefresh((n) => n + 1)}
+                >
+                  Retry loading
+                </MantineButton>
+              </Alert>
             ) : (
-              <div className={layout.formPage}>
+              <div>
                 <LoadingSkeleton
                   label="Loading variable…"
-                  className={layout.formCard}
+                  className={workspacePage.card}
                 >
                   <FormPlaceholder />
                 </LoadingSkeleton>
@@ -678,17 +617,17 @@ function VariableEditor({ id }: { id: string }) {
   );
 
   return (
-    <section className={styles.editor}>
+    <section className={workspacePage.page}>
       {header}
-      <div className={styles.editorBody}>
-        <div className={layout.formPage}>
+      <div className={workspacePage.content}>
+        <div className={workspacePage.formContent}>
           {!confirmation && !rebind && (
             <ActionError message={error} className={styles.error} />
           )}
           <form
             id={formId}
             aria-label="Variable settings"
-            className={layout.formCard}
+            className={workspacePage.card}
             onSubmit={(e) => {
               e.preventDefault();
               void save();
@@ -807,7 +746,7 @@ function VariableEditor({ id }: { id: string }) {
                     )}
                   </Stack>
                   <section
-                    className={layout.formSection}
+                    className={styles.usage}
                     aria-labelledby={`${formId}-usage`}
                   >
                     <h2 id={`${formId}-usage`}>
