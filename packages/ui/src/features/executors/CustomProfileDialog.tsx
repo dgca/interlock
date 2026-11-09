@@ -696,7 +696,7 @@ export function CustomProfileDialog({
               </div>
 
               <TextInput
-                label="Default Working Directory (cwd)"
+                label="Default working directory"
                 className={styles.monoInput}
                 value={cwd}
                 onChange={(e) => setCwd(e.currentTarget.value)}
@@ -706,9 +706,7 @@ export function CustomProfileDialog({
 
               <div>
                 <div className={styles.keyValueHeader}>
-                  <span className={styles.fieldLabel}>
-                    Allowed Roots (allowedRoots)
-                  </span>
+                  <span className={styles.fieldLabel}>Allowed roots</span>
                   <Button
                     variant="subtle"
                     size="xs"
@@ -719,8 +717,8 @@ export function CustomProfileDialog({
                   </Button>
                 </div>
                 <p className={styles.fieldHelper}>
-                  Constrains dynamic working directory binding. Resolving
-                  outside roots fails with cwd_blocked.
+                  When allowed roots are set, working directories outside them
+                  are blocked.
                 </p>
 
                 {allowedRoots.length > 0 && (
@@ -753,9 +751,7 @@ export function CustomProfileDialog({
               </div>
 
               <div>
-                <span className={styles.fieldLabel}>
-                  Session Name Template (sessionNameTemplate)
-                </span>
+                <span className={styles.fieldLabel}>Session name template</span>
                 <TextInput
                   size="xs"
                   className={styles.monoInput}
