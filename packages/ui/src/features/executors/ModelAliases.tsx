@@ -184,7 +184,7 @@ export function ModelAliases({
                 (profile) => profile.id === first?.profileId,
               );
               return (
-                <ListTableRow key={alias.id}>
+                <ListTableRow key={alias.id} className={styles.aliasRow}>
                   <span className={styles.identity}>
                     <strong>{alias.name}</strong>
                     {alias.description && <span>{alias.description}</span>}
@@ -199,15 +199,23 @@ export function ModelAliases({
                       {first?.effort ? ` · ${first.effort} effort` : ''}
                     </span>
                   </span>
-                  <span>{Math.max(0, alias.candidates.length - 1)}</span>
-                  <Button
-                    variant="ghost"
-                    disabled={opening || editing !== undefined}
-                    onClick={() => void open(alias.id)}
-                    aria-label={`Edit alias ${alias.name}`}
-                  >
-                    Edit
-                  </Button>
+                  <span>
+                    {Math.max(0, alias.candidates.length - 1)}
+                    <span className={styles.compactLabel}>
+                      {' '}
+                      alternative{alias.candidates.length === 2 ? '' : 's'}
+                    </span>
+                  </span>
+                  <span className={styles.rowActions}>
+                    <Button
+                      variant="ghost"
+                      disabled={opening || editing !== undefined}
+                      onClick={() => void open(alias.id)}
+                      aria-label={`Edit alias ${alias.name}`}
+                    >
+                      Edit
+                    </Button>
+                  </span>
                 </ListTableRow>
               );
             })}

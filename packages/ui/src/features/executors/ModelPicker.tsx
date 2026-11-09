@@ -147,6 +147,17 @@ export function ModelPicker({
     let current = true;
     setAliases(undefined);
     setAliasError('');
+    // Literal model IDs can be longer than alias names and alias searches.
+    if (search.length > 120) {
+      setAliases({
+        items: [],
+        total: 0,
+        offset: 0,
+        limit: 25,
+        truncated: false,
+      });
+      return;
+    }
     const timer = window.setTimeout(
       () => {
         void readModelAliases({ search, limit: 25 }).then(

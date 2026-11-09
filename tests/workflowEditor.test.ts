@@ -131,6 +131,18 @@ vi.mock('../packages/ui/src/features/workflows/SettingsDialog', () => ({
             onApply({
               name,
               description,
+              definition: { ...definition, agentModel: 'saved-alias-id' },
+            }),
+        },
+        'Apply model alias',
+      ),
+      h(
+        'button',
+        {
+          onClick: () =>
+            onApply({
+              name,
+              description,
               definition: { ...definition, maxSteps: 60 },
             }),
         },
@@ -787,6 +799,33 @@ it('keeps history through saving and publishing without undoing the saved revisi
   );
   await click('Redo');
   expect(positions()).not.toEqual(original);
+});
+
+it('marks an alias selection saved after API key normalization without losing undo history', async () => {
+  rpc.update.mockImplementation(async (input) => ({
+    ...workflow,
+    ...input,
+    draft: definitionSchema.parse(input.draft),
+    draftRevision: workflow.draftRevision + 1,
+  }));
+  await render();
+  await click('Workflow settings');
+  await click('Apply model alias');
+  await click('Save draft');
+  expect(rpc.update).toHaveBeenCalledWith(
+    expect.objectContaining({
+      draft: expect.objectContaining({ agentModel: 'saved-alias-id' }),
+    }),
+  );
+  expect(button('Save draft').disabled).toBe(true);
+  expect(onDirty).toHaveBeenLastCalledWith(false);
+  const event = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(false);
+  await click('Undo');
+  expect(button('Save draft').disabled).toBe(false);
+  await click('Redo');
+  expect(button('Save draft').disabled).toBe(true);
 });
 
 it('saves raw edits as one history action and requires an explicit save before Visual', async () => {

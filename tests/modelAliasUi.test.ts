@@ -342,3 +342,40 @@ it('preserves explicit effort overrides on an alias without claiming they are un
   expect((labelled('Thinking effort') as HTMLSelectElement).value).toBe('high');
   expect(rpc.models).not.toHaveBeenCalled();
 });
+
+it('selects a long literal model ID without sending it as an alias search', async () => {
+  const changed = vi.fn();
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        {},
+        h(ModelSettings, {
+          allowAliases: true,
+          label: 'Model',
+          defaultLabel: 'Use default',
+          effortDefaultLabel: 'Use default',
+          onModelChange: changed,
+          onEffortChange: vi.fn(),
+        }),
+      ),
+    ),
+  );
+  await click(labelled('Model'));
+  rpc.read.mockClear();
+  const literal = `provider/${'m'.repeat(129)}`;
+  const search = document.querySelector<HTMLInputElement>(
+    'input[aria-label="Find or enter a model ID"]',
+  )!;
+  await fill(search, literal);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 220));
+  });
+  expect(rpc.read).not.toHaveBeenCalled();
+  const option = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((option) => option.textContent === `Use custom model: ${literal}`)!;
+  await click(option);
+  expect(changed).toHaveBeenCalledWith(literal);
+  expect(container.textContent).not.toContain('could not be loaded');
+});
