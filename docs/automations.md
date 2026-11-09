@@ -26,7 +26,7 @@ Interlock events watch one workflow, optionally its owned children, or any workf
 
 Enable or disable from the detail header. Disabling stops future starts and preserves active and queued runs. An automatically paused automation offers **Resume automation**, which clears its automatic pause and failure count. Named library or workflow pause holds remain in force. Delete removes the automation and its visible activity history while preserving existing runs and durable start/event receipts.
 
-Workflow pages have an **Automations** shortcut to their filtered list. Old workflow trigger links redirect to the global list or the exact saved automation.
+Use **Automations** in the sidebar and filter by workflow when needed. Old workflow trigger links redirect to the global list or the exact saved automation.
 
 ## Advanced integrations
 

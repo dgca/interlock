@@ -75,7 +75,6 @@ export function WorkflowEditor({
   section = 'editor',
   onSectionChange,
   runsView,
-  schedulesView,
   onOpenWorkflow,
 }: {
   workflow: Workflow;
@@ -87,11 +86,8 @@ export function WorkflowEditor({
   act: Action;
   onDirty: (dirty: boolean) => void;
   onDeleted?: () => void;
-  schedulesView?: ReactNode;
-  section?: 'editor' | 'runs' | 'children' | 'schedules';
-  onSectionChange?: (
-    section: 'editor' | 'runs' | 'children' | 'schedules',
-  ) => void;
+  section?: 'editor' | 'runs' | 'children';
+  onSectionChange?: (section: 'editor' | 'runs' | 'children') => void;
   onOpenWorkflow?: (id: string) => void;
   runsView?: ReactNode;
 }) {
@@ -754,20 +750,17 @@ export function WorkflowEditor({
         value={section}
         onChange={(value) =>
           onSectionChange?.(
-            value === 'schedules'
-              ? 'schedules'
-              : value === 'runs'
-                ? 'runs'
-                : value === 'children'
-                  ? 'children'
-                  : 'editor',
+            value === 'runs'
+              ? 'runs'
+              : value === 'children'
+                ? 'children'
+                : 'editor',
           )
         }
       >
         <Tabs.List className={styles.subnav} aria-label="Workflow sections">
           <Tabs.Tab value="editor">Editor</Tabs.Tab>
           <Tabs.Tab value="runs">Runs</Tabs.Tab>
-          <Tabs.Tab value="schedules">Automations</Tabs.Tab>
           {!workflow.ownerWorkflowId && (
             <Tabs.Tab value="children">Child workflows</Tabs.Tab>
           )}
@@ -1088,9 +1081,6 @@ export function WorkflowEditor({
             />
           </Tabs.Panel>
         )}
-        <Tabs.Panel value="schedules" className={styles.runsView}>
-          {schedulesView}
-        </Tabs.Panel>
         <Tabs.Panel value="runs" className={styles.runsView}>
           {runsView}
         </Tabs.Panel>

@@ -295,10 +295,6 @@ function WorkflowRoute() {
               : 'editor'
         }
         onSectionChange={(section) => {
-          if (section === 'schedules') {
-            void navigate(paths.workflowSchedule(workflow.id));
-            return;
-          }
           setSearch((previous) => {
             const next = new URLSearchParams(previous);
             if (section !== 'editor') next.set('view', section);

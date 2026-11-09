@@ -11,6 +11,8 @@ Interlock uses the Mantine theme in `packages/ui/src/theme/theme.ts` and the sha
 
 ## Page layout
 
+Tabs switch sections within the current resource or list. Use sidebar navigation or an explicit link to open another workspace.
+
 Automations uses the shared `PageHeader` and `PageTabs` components. The header contains the page title and actions. Add Back on creation and resource pages; omit it on a top-level list. Place underline navigation directly below the header on the same surface background, with search and filters aligned to the right. Keep both visible while the workspace scrolls.
 
 Place automation form fields inside one surface card with 24px padding and generous section spacing. The preview rail spans the available height below the header. Activity table bodies use the card background. Use spacing for the next-run and last-occurrence summary; avoid inset divider lines.

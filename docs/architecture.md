@@ -378,7 +378,7 @@ The shared API exposes `runs.briefing`, `runs.wait`, and `runs.result`; MCP expo
 
 ## UI routes
 
-Workflow pages have Editor and Runs sections, plus an Automations shortcut to the workflow-filtered global list. Legacy `?view=schedules` links redirect there or to their exact trigger detail. `?view=runs` selects workflow runs; `&tab=history` selects past runs. Section changes keep the editor mounted, including raw text, history, and canvas state. Opening a run leaves the workflow and retains the unsaved-edit navigation guard. Run links carry the originating workflow and filter so Back to runs returns to that list, including after inspecting child runs. Workflow run lists include direct executions and invocations by other workflows, but exclude Batch item runs; those remain in their parent run inspector.
+Workflow pages have Editor and Runs sections. Automations is a separate workspace accessed through the sidebar. Legacy `?view=schedules` links redirect there or to their exact trigger detail. `?view=runs` selects workflow runs; `&tab=history` selects past runs. Section changes keep the editor mounted, including raw text, history, and canvas state. Opening a run leaves the workflow and retains the unsaved-edit navigation guard. Run links carry the originating workflow and filter so Back to runs returns to that list, including after inspecting child runs. Workflow run lists include direct executions and invocations by other workflows, but exclude Batch item runs; those remain in their parent run inspector.
 
 React Router owns browser navigation through a shared application layout and child routes in `packages/ui/src/routes`. The layout keeps the engine connection and live refresh active across route changes. URL builders live in `routes/paths.ts`.
 
