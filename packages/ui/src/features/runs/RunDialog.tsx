@@ -20,18 +20,19 @@ import { TagFields, tagsFromRows, type TagRow } from './RunTags';
 function sample(schema: Record<string, any>): Json {
   if (schema.default !== undefined) return schema.default;
   if (schema.enum?.length) return schema.enum[0];
+  if (Array.isArray(schema.examples) && schema.examples.length)
+    return schema.examples[0];
   if (schema.type === 'object')
     return Object.fromEntries(
       Object.entries(schema.properties ?? {}).map(([key, value]) => [
         key,
-        key === 'candidates'
-          ? [{ name: 'pikachu' }, { name: 'gengar' }, { name: 'togepi' }]
-          : sample(value as Record<string, any>),
+        sample(value as Record<string, any>),
       ]),
     );
   if (schema.type === 'array') return [];
   if (schema.type === 'number' || schema.type === 'integer') return 0;
   if (schema.type === 'boolean') return false;
+  if (schema.type === 'null') return null;
   return schema.type === 'string' ? '' : {};
 }
 export function RunDialog({
@@ -71,8 +72,20 @@ export function RunDialog({
       })
       .catch((e) => setError(errorMessage(e)));
   }, [workflow.id]);
-  const schema = versions.find((v) => v.version === version)?.definition
-    .inputSchema;
+  const definition = versions.find((v) => v.version === version)?.definition;
+  const schema = definition?.inputSchema;
+  // Model aliases and diversity candidates can select local profiles at runtime.
+  // Only describe connected work when the published definition makes it certain.
+  const hasConnectedAgents = definition?.nodes.some(
+    (node) =>
+      node.kind === 'agent' &&
+      (node.executor === null ||
+        (!(node.executor ?? definition.executor) &&
+          !node.model &&
+          !definition.agentModel &&
+          !node.candidateModels?.length &&
+          !node.distinctProviderFrom?.length)),
+  );
   let parsed: Json = null;
   try {
     parsed = JSON.parse(input);
@@ -88,12 +101,13 @@ export function RunDialog({
       <ModalBody>
         {versions.length > 0 ? (
           <>
-            <p className="hint">
-              Script and Fetch steps run automatically. Agent steps wait for a
-              connected agent to pick up their assignments. Starting a run does
-              not launch an agent; ask your agent to continue the run when it is
-              waiting.
-            </p>
+            {hasConnectedAgents && (
+              <p className="hint">
+                Connected Agent steps wait for an agent to claim their
+                assignments. Ask your agent to continue the run when it is
+                waiting.
+              </p>
+            )}
 
             <NativeSelect
               mb="md"

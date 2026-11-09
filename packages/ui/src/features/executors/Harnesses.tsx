@@ -651,7 +651,7 @@ function NewProfile({
             { value: 'claude-code', label: 'Claude Code' },
             { value: 'codex', label: 'Codex' },
             { value: 'pi', label: 'Pi' },
-            { value: 'custom', label: 'Custom Harness (harness: "custom")' },
+            { value: 'custom', label: 'Custom harness' },
           ]}
         />
       </div>
