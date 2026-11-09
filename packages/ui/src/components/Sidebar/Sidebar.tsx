@@ -83,12 +83,6 @@ export function Sidebar({
               Icon: Settings2,
               to: paths.harnesses,
             },
-            {
-              id: 'diagnostics',
-              label: 'Diagnostics',
-              Icon: Stethoscope,
-              to: paths.diagnostics,
-            },
           ] as const
         ).map(({ id, label, Icon, to }) => (
           <Link
@@ -119,6 +113,17 @@ export function Sidebar({
         ))}
       </nav>
       <div className={styles.utilities}>
+        <nav aria-label="Utilities" className={styles.utilityNavigation}>
+          <Link
+            to={paths.diagnostics}
+            className={page === 'diagnostics' ? styles.active : ''}
+            aria-current={page === 'diagnostics' ? 'page' : undefined}
+            aria-label="Diagnostics"
+          >
+            <Stethoscope size={16} />
+            <span className={styles.navLabel}>Diagnostics</span>
+          </Link>
+        </nav>
         {onConnect && (
           <button className={styles.connect} onClick={onConnect}>
             Connect with MCP <ArrowUpRight size={12} />
