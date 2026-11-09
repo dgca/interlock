@@ -458,3 +458,20 @@ it('keeps scoped reports attached to their workflow and provides a return action
   expect(router.state.location.pathname).toBe('/workflows/w1');
   expect(container.textContent).toContain('Open workflow report');
 });
+
+it('labels mixed provider costs without presenting an invalid currency total', async () => {
+  const mixed = report();
+  mixed.usage.byProvider = [
+    {
+      provider: 'provider',
+      inputTokens: 10,
+      outputTokens: 20,
+      count: 2,
+      costMicros: null,
+      currency: 'mixed',
+    },
+  ];
+  query.mockResolvedValue(mixed);
+  await mount();
+  expect(container.textContent).toContain('Mixed currencies');
+});

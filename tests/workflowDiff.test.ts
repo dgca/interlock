@@ -140,3 +140,31 @@ it('shows managed executor and permission changes before publication', () => {
     )?.details[0],
   ).toMatchObject({ before: 'full-access', after: undefined });
 });
+
+it.each([
+  ['cwd', '/workspace'],
+  ['continueOnMissingResult', { maxTurns: 2 }],
+  [
+    'transientRetry',
+    { maxRetries: 2, windowMs: 300000, initialBackoffMs: 1000 },
+  ],
+  ['sessionNameTemplate', '{{runId}}'],
+] as const)(
+  'includes %s changes and removals in publication review',
+  (key, value) => {
+    const before = blankDefinition(),
+      after = { ...before, [key]: value };
+    expect(compareWorkflow(after, before).workflow).toEqual([
+      expect.objectContaining({
+        id: key,
+        details: [expect.objectContaining({ before: undefined, after: value })],
+      }),
+    ]);
+    expect(compareWorkflow(before, after).workflow).toEqual([
+      expect.objectContaining({
+        id: key,
+        details: [expect.objectContaining({ before: value, after: undefined })],
+      }),
+    ]);
+  },
+);

@@ -84,7 +84,6 @@ const inspection = (t = trigger()) => ({
   upcoming: [],
   fires: { items: [], total: 0, nextOffset: null },
   deliveries: { items: [], total: 0, nextOffset: null },
-  endpoint: null,
 });
 let root: Root, container: HTMLDivElement, tick: number;
 function Layout() {

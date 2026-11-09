@@ -365,7 +365,11 @@ export async function runDoctor(
 
       if (trigger.kind === 'schedule') {
         // Schedule lag
-        if (trigger.enabled && !trigger.autoPaused) {
+        if (
+          trigger.enabled &&
+          !trigger.autoPaused &&
+          !engine.store.pauseHolds(trigger.workflowId).length
+        ) {
           const lagMs = Date.now() - Date.parse(trigger.nextFireAt);
           if (lagMs > 60000) {
             triggerIssues++;
@@ -573,6 +577,21 @@ export async function runDoctor(
                   },
                   remediation: `Provide a value for variable "${variable.name}" in Variables library.`,
                 });
+              } else if (engine.variables.status(variable) === 'locked') {
+                workflowIssues++;
+                checks.push({
+                  category: 'workflows',
+                  name: `Locked variable in workflow: ${workflow.name}`,
+                  status: 'fail',
+                  message: `Published workflow "${workflow.name}" references locked variable "${variable.name}"`,
+                  details: {
+                    workflowId: workflow.id,
+                    version: workflow.latestVersion,
+                    variableId: variable.id,
+                  },
+                  remediation:
+                    'Restore the original readable variable encryption key, or replace the variable value with an available key.',
+                });
               }
             } catch (err) {
               workflowIssues++;
@@ -655,6 +674,37 @@ export async function runDoctor(
                   aliasName: alias.name,
                 },
                 remediation: `Add candidate models to alias "${alias.name}".`,
+              });
+            } else if (
+              alias &&
+              version.definition.nodes.some(
+                (node) =>
+                  node.kind === 'agent' &&
+                  node.executor !== null &&
+                  (node.model ?? version.definition.agentModel) === mRef,
+              ) &&
+              !alias.candidates.some(
+                (candidate) =>
+                  !candidate.profileId ||
+                  engine.store.get<{ enabled: boolean }>(
+                    'executorProfiles',
+                    candidate.profileId,
+                  )?.enabled,
+              )
+            ) {
+              workflowIssues++;
+              checks.push({
+                category: 'workflows',
+                name: `Unavailable model alias profiles in workflow: ${workflow.name}`,
+                status: 'fail',
+                message: `Published workflow "${workflow.name}" references model alias "${alias.name}" with no enabled candidate executor profile`,
+                details: {
+                  workflowId: workflow.id,
+                  version: workflow.latestVersion,
+                  aliasId: alias.id,
+                  aliasName: alias.name,
+                },
+                remediation: `Enable or configure a candidate executor profile for alias "${alias.name}".`,
               });
             }
           }

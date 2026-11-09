@@ -992,3 +992,31 @@ it('sets and clears published admission settings through revision-protected auth
     ]).definition,
   ).toBeUndefined();
 });
+
+it.each([
+  { cwd: '/workspace' },
+  { cwd: { source: 'input', path: 'directory' } },
+  { pinPromptsAtPublish: true },
+  { pinPromptsAtPublish: false },
+])('sets, preserves and unsets workflow settings %j', (settings) => {
+  const before = blankDefinition();
+  const result = applyWorkflowEdits(before, [
+    { op: 'update_settings', set: settings },
+  ]);
+  expect(result.definition).toMatchObject(settings);
+  const set = result.definition!;
+  expect(draftChanges(before, set).settings).toEqual(Object.keys(settings));
+  const preserved = applyWorkflowEdits(set, [
+    { op: 'update_settings', set: { maxSteps: 123 } },
+  ]);
+  expect(preserved.definition).toMatchObject(settings);
+  const cleared = applyWorkflowEdits(set, [
+    { op: 'update_settings', unset: Object.keys(settings) },
+  ]);
+  expect(cleared.definition).toBeDefined();
+  for (const key of Object.keys(settings))
+    expect(cleared.definition).not.toHaveProperty(key);
+  expect(draftChanges(set, cleared.definition!).settings).toEqual(
+    Object.keys(settings),
+  );
+});

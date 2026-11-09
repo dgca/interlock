@@ -73,7 +73,7 @@ function PromptFields({
         label="Instructions"
         description={
           editing
-            ? 'Markdown instructions for future runs, including published workflows. Active runs keep their captured instructions.'
+            ? 'Markdown instructions for future runs. Publish-pinned workflows keep their pinned revisions; active runs keep their captured instructions.'
             : "Markdown instructions added before the Agent node's task instructions."
         }
         required

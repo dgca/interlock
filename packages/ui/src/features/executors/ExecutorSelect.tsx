@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NativeSelect } from '@mantine/core';
 import { api, errorMessage } from '../../lib/api';
+import { paths } from '../../routes/paths';
 import type { ExecutorPermissionMode } from '@interlock/core';
 import { ModelSettings } from './ModelSettings';
 import {
@@ -123,7 +124,11 @@ export function ExecutorSelect({
             : workflowSettings
               ? 'A model alias can select a harness. Otherwise, a connected agent picks up the assignment.'
               : 'An agent connected through MCP picks up the assignment.'}{' '}
-        <a href="/settings/ai#harnesses" target="_blank" rel="noreferrer">
+        <a
+          href={`${paths.harnesses}#harnesses`}
+          target="_blank"
+          rel="noreferrer"
+        >
           Manage harnesses
         </a>
       </p>
@@ -133,7 +138,11 @@ export function ExecutorSelect({
             (concurrency === null
               ? 'No shared assignment limit. Interlock starts every ready assignment; workflow requirements and resource coordination still apply.'
               : `Up to ${concurrency} Agent assignments at once across all harnesses and workflows.`)}{' '}
-          <a href="/settings/ai#concurrency" target="_blank" rel="noreferrer">
+          <a
+            href={`${paths.harnesses}#concurrency`}
+            target="_blank"
+            rel="noreferrer"
+          >
             Manage shared limit
           </a>
         </p>

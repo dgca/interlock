@@ -1798,6 +1798,7 @@ it.each(['stdio', 'http'])(
       expect(editSchema.properties!.edits).toMatchObject({
         type: 'array',
         maxItems: 100,
+        description: expect.stringContaining('cwd, pinPromptsAtPublish'),
       });
       expect(
         tools.find((t) => t.name === 'edit_workflow')!.description,

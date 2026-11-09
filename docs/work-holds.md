@@ -33,7 +33,7 @@ Blocked runs expose `waiting.kind:"pause"`, person actor, stable `since`, exact 
 
 Unclaimed Agent timeout clocks suspend while paused, including overlap with other admission blockers. Wait and polling deadlines retain wall-clock meaning. An overdue wait advances after the pause clears. Existing claim leases still require renewal, and in-flight native operation timeouts continue to bound the running operation. Pause does not stop a process.
 
-Runtime `PauseHolds.elapsed` and core `elapsedExcludingPausesMs` subtract the union of applicable persisted intervals, clipped to the queried period. Attempt usage groups expose `wallMs`, `pausedMs`, and `activeMs`, or null for legacy unknown claim times. Active time excludes declared pauses; it is not a measurement of model activity. Future retry windows, stall thresholds, and total Agent execution deadlines must use this calculation. Those features are not implemented here.
+Runtime `PauseHolds.elapsed` and core `elapsedExcludingPausesMs` subtract the union of applicable persisted intervals, clipped to the queried period. Attempt usage groups expose `wallMs`, `pausedMs`, and `activeMs`, or null for legacy unknown claim times. Active time excludes declared pauses; it is not a measurement of model activity.
 
 Recurring schedules evaluate these holds before firing and queued promotion. Deferred slots follow their missed-fire policy after all applicable holds clear. Re-enabling a schedule does not release a named hold. See [workflow schedules](schedules.md).
 

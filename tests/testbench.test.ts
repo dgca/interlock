@@ -1036,3 +1036,126 @@ it('opens the published 0.1.18 database unchanged and preserves old claims and J
   expect(report(engine, c.id).total).toBe(2);
   expect(store.list('versions')).toEqual(previousRelease.documents.versions);
 });
+
+it('freezes aliases for queued and nested comparison samples while ordinary runs use live aliases', () => {
+  const { engine, store } = setup();
+  const alias = engine.modelAliases.mutate({
+    action: 'create',
+    name: 'builder',
+    candidates: [{ model: 'original' }],
+  }) as import('@interlock/core').SavedModelAlias;
+  const childDefinition = blankDefinition();
+  childDefinition.agentModel = alias.name;
+  const child = publish(engine, 'Child', childDefinition);
+  const root = publish(
+    engine,
+    'Batch root',
+    batchDefinition(nodeSchema.parse({ ...workflowCall(child).nodes[1] })),
+  );
+  const c = launch(engine, {
+    workflowId: root,
+    concurrency: 1,
+    cases: [{ id: 'a', name: 'Batch input', input: [1, 2] }],
+  });
+  engine.modelAliases.mutate({
+    action: 'update',
+    id: alias.id,
+    expectedRevision: 1,
+    candidates: [{ model: 'changed' }],
+  });
+  engine.stop();
+  const restarted = new Engine(store, process.cwd());
+  engines.push(restarted);
+  const models: string[] = [];
+  complete(restarted, (work: any) => {
+    models.push(work.modelAliasSelection.candidateModel);
+    return {};
+  });
+  expect(models).toHaveLength(4);
+  expect(new Set(models)).toEqual(new Set(['original']));
+  expect(
+    store.get<any>('comparisons', c.id).modelAliasCaptures[0],
+  ).toMatchObject({ revision: 1 });
+  expect(
+    restarted.available(restarted.start(child, null).run.id)[0]
+      .modelAliasSelection,
+  ).toMatchObject({ candidateModel: 'changed', revision: 2 });
+});
+
+it('rejects comparison previews after alias edits and reports missing alias profiles before dispatch', () => {
+  const { engine } = setup();
+  const alias = engine.modelAliases.mutate({
+    action: 'create',
+    name: 'builder',
+    candidates: [{ model: 'original' }],
+  }) as import('@interlock/core').SavedModelAlias;
+  const definition = blankDefinition();
+  definition.agentModel = alias.name;
+  const workflowId = publish(engine, 'Alias snapshot', definition);
+  const p = plan(engine, { workflowId });
+  engine.modelAliases.mutate({
+    action: 'update',
+    id: alias.id,
+    expectedRevision: 1,
+    candidates: [{ model: 'changed' }],
+  });
+  expect(() => engine.testbench.start(p.request)).toThrow('preview changed');
+  const fresh = engine.testbench.preview(p.selection);
+  expect(fresh.configurations!.baseline.id).not.toBe(
+    p.preview.configurations!.baseline.id,
+  );
+  engine.modelAliases.mutate({
+    action: 'update',
+    id: alias.id,
+    expectedRevision: 2,
+    candidates: [{ model: 'changed', profileId: 'missing' }],
+  });
+  const blocked = engine.testbench.preview(p.selection);
+  expect(blocked.canStart).toBe(false);
+  expect(blocked.blockers.join(' ')).toContain('no enabled executor profile');
+});
+
+it('does not reinterpret a captured native model as a newly created alias between samples', () => {
+  const { engine } = setup();
+  const definition = blankDefinition();
+  definition.agentModel = 'literal-model';
+  const workflowId = publish(engine, 'Native snapshot', definition);
+  launch(engine, { workflowId, concurrency: 1 });
+  engine.modelAliases.mutate({
+    action: 'create',
+    name: 'literal-model',
+    candidates: [{ model: 'different' }],
+  });
+  complete(engine, (work: any) => {
+    expect(work.modelAliasSelection).toBeUndefined();
+    expect(work.executorModel).toBe('literal-model');
+    return {};
+  });
+});
+
+it('retains live alias resolution for queued samples in legacy comparisons without snapshots', () => {
+  const { engine, store } = setup();
+  engine.modelAliases.mutate({
+    action: 'create',
+    name: 'builder',
+    candidates: [{ model: 'concrete-model' }],
+  });
+  const definition = blankDefinition();
+  definition.agentModel = 'builder';
+  const workflowId = publish(engine, 'Legacy aliases', definition);
+  const c = launch(engine, { workflowId, concurrency: 1 });
+  const saved = store.get<import('@interlock/core').WorkflowComparison>(
+    'comparisons',
+    c.id,
+  )!;
+  delete saved.modelAliasCaptures;
+  store.put('comparisons', saved);
+  let samples = 0;
+  complete(engine, (work: any) => {
+    samples++;
+    expect(work.executorModel).toBe('concrete-model');
+    expect(work.modelAliasSelection).toMatchObject({ name: 'builder' });
+    return {};
+  });
+  expect(samples).toBe(2);
+});

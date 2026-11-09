@@ -171,7 +171,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'workflow_report',
-    'Workflow/library performance and cost for newest matching runs: durations, waits, reliability, measured spend/coverage and exits. Optional tags require every exact case-sensitive pair via the tag index before sampling. Limit default500/max5000; since/until are inclusive createdAt instants, normalized to UTC, with no date default. All metrics cover only the selected sample. usage.byAlias groups retained assignment alias/revision/candidate with reported model/provider; null alias is unknown, including run overhead. Duration distributions retain wall-time values and add pausedMs/activeMs distributions; active time excludes the union of applicable library/workflow pauses.',
+    'Workflow/library performance and cost for newest matching runs: durations, waits, reliability, measured spend/coverage and exits. Optional tags require every exact case-sensitive pair via the tag index before sampling. Limit default500/max5000; since/until are inclusive createdAt instants, normalized to UTC, with no date default. All metrics cover only the selected sample. Mixed-currency scalar cost groups return costMicros:null and currency:"mixed"; totals and alias groups keep currencies separate. usage.byAlias groups retained assignment alias/revision/candidate with reported model/provider; null alias is unknown, including run overhead. Duration distributions retain wall-time values and add pausedMs/activeMs distributions; active time excludes the union of applicable library/workflow pauses.',
     reportFilterSchema,
     (filter) => client.report.summary(filter),
   );
@@ -208,13 +208,13 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'preview_workflow_comparison',
-    'Read-only plan for two published versions of a suite workflow on identical saved inputs. Defaults: repetitions 1, concurrency 2. Returns cases, hashes, dependency pins, configuration identities, blocker details, and confirmation. Real runs use configured executors and may perform Script/Fetch actions. Optional sampleBudget sets per-sample Agent budget. Optional trialSetup:{kind:"local_git",repository,commit} runs each sample in an isolated checkout. Use start_workflow_comparison with confirmation and unique requestId.',
+    'Read-only plan for two published versions of a suite workflow on identical saved inputs. Defaults: repetitions 1, concurrency 2. Returns cases, hashes, dependency pins, configuration identities including model aliases, blocker details, and confirmation. Real runs use configured executors and may perform Script/Fetch actions. Optional sampleBudget sets per-sample Agent budget. Optional trialSetup:{kind:"local_git",repository,commit} runs each sample in an isolated checkout. Use start_workflow_comparison with confirmation and unique requestId.',
     comparisonPreviewSchema,
     (input) => client.testbench.preview(input),
   );
   tool(
     'start_workflow_comparison',
-    'Start a previewed paired live comparison. Rechecks confirmation and suite revision transactionally. Max 4 active comparisons and 10 active execution trees. Concurrency counts root plus active descendants. Captured sampleBudget policies install on each root. Returns compact progress with configurationIds. Use list_work/claim_work/submit_result to execute Agent work, and read_workflow_comparisons action:report to inspect results.',
+    'Start a previewed paired live comparison. Rechecks confirmation, suite revision and model aliases transactionally; aliases stay captured across samples and descendants. Max 4 active comparisons and 10 active execution trees. Concurrency counts root plus active descendants. Captured sampleBudget policies install on each root. Returns compact progress with configurationIds. Use list_work/claim_work/submit_result to execute Agent work, and read_workflow_comparisons action:report to inspect results.',
     comparisonStartSchema,
     (input) => client.testbench.start(input),
   );

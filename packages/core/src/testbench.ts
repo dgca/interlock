@@ -389,6 +389,7 @@ export interface WorkflowComparison {
   pins: ComparisonPin[];
   prompts: PromptSnapshot[];
   variableCaptures?: import('./variables.js').VariableCapture[];
+  modelAliasCaptures?: import('./modelAliases.js').ModelAliasCapture[];
   /** Absent on legacy comparisons, whose prompt pool is shared by both sides. */
   configurations?: Record<'baseline' | 'candidate', ComparisonConfiguration>;
   samples: ComparisonSample[];

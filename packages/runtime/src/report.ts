@@ -249,17 +249,16 @@ export function generateWorkflowReport(
       admissionQueueWaits.push(zeroElapsed());
     }
 
+    const active = ['running', 'waiting', 'queued'].includes(run.status);
+    const waitEndMs = active ? reportNowMs : Date.parse(run.updatedAt);
+
     // Human wait
     const humanWait = zeroElapsed();
     // (a) External input node executions
     for (const exec of run.executions) {
       if (exec.kind === 'input' && exec.startedAt) {
         const start = Date.parse(exec.startedAt);
-        const end = exec.completedAt
-          ? Date.parse(exec.completedAt)
-          : run.updatedAt
-            ? Date.parse(run.updatedAt)
-            : reportNowMs;
+        const end = exec.completedAt ? Date.parse(exec.completedAt) : waitEndMs;
         addElapsed(humanWait, elapsed(run, start, end));
       }
     }
@@ -269,11 +268,7 @@ export function generateWorkflowReport(
       for (const hold of holdsList) {
         if (runWorkIds.has(hold.workId) && hold.heldAt) {
           const start = Date.parse(hold.heldAt);
-          const end = hold.endedAt
-            ? Date.parse(hold.endedAt)
-            : run.updatedAt
-              ? Date.parse(run.updatedAt)
-              : reportNowMs;
+          const end = hold.endedAt ? Date.parse(hold.endedAt) : waitEndMs;
           addElapsed(humanWait, elapsed(run, start, end));
         }
       }
@@ -517,6 +512,20 @@ export function generateWorkflowReport(
     }
   >();
 
+  function addCost(
+    group: { costMicros: number | null; currency?: string },
+    cost: NonNullable<ModelUsage['cost']>,
+  ) {
+    if (group.currency === 'mixed') return;
+    if (group.currency !== undefined && group.currency !== cost.currency) {
+      group.costMicros = null;
+      group.currency = 'mixed';
+      return;
+    }
+    group.costMicros = (group.costMicros ?? 0) + cost.amountMicros;
+    group.currency = cost.currency;
+  }
+
   const aliasUsageMap = new Map<string, UsageByAlias>();
   function addAliasUsage(
     alias: ModelAliasSelection | undefined,
@@ -603,11 +612,9 @@ export function generateWorkflowReport(
         costByCurrency.set(cur, (costByCurrency.get(cur) ?? 0) + amt);
 
         if (runEntry) {
-          runEntry.costMicros = (runEntry.costMicros ?? 0) + amt;
-          runEntry.currency = cur;
+          addCost(runEntry, m.cost);
         }
-        nodeEntry.costMicros = (nodeEntry.costMicros ?? 0) + amt;
-        nodeEntry.currency = cur;
+        addCost(nodeEntry, m.cost);
       }
 
       // Group by Model
@@ -628,9 +635,7 @@ export function generateWorkflowReport(
       modelEntry.outputTokens += outTok;
       modelEntry.count++;
       if (m.cost) {
-        modelEntry.costMicros =
-          (modelEntry.costMicros ?? 0) + m.cost.amountMicros;
-        modelEntry.currency = m.cost.currency;
+        addCost(modelEntry, m.cost);
       }
 
       // Group by Provider
@@ -649,9 +654,7 @@ export function generateWorkflowReport(
       providerEntry.outputTokens += outTok;
       providerEntry.count++;
       if (m.cost) {
-        providerEntry.costMicros =
-          (providerEntry.costMicros ?? 0) + m.cost.amountMicros;
-        providerEntry.currency = m.cost.currency;
+        addCost(providerEntry, m.cost);
       }
     }
   }
@@ -685,8 +688,7 @@ export function generateWorkflowReport(
         costByCurrency.set(cur, (costByCurrency.get(cur) ?? 0) + amt);
 
         if (runEntry) {
-          runEntry.costMicros = (runEntry.costMicros ?? 0) + amt;
-          runEntry.currency = cur;
+          addCost(runEntry, m.cost);
         }
       }
 
@@ -707,9 +709,7 @@ export function generateWorkflowReport(
       modelEntry.outputTokens += outTok;
       modelEntry.count++;
       if (m.cost) {
-        modelEntry.costMicros =
-          (modelEntry.costMicros ?? 0) + m.cost.amountMicros;
-        modelEntry.currency = m.cost.currency;
+        addCost(modelEntry, m.cost);
       }
 
       let providerEntry = providerUsageMap.get(m.provider);
@@ -727,9 +727,7 @@ export function generateWorkflowReport(
       providerEntry.outputTokens += outTok;
       providerEntry.count++;
       if (m.cost) {
-        providerEntry.costMicros =
-          (providerEntry.costMicros ?? 0) + m.cost.amountMicros;
-        providerEntry.currency = m.cost.currency;
+        addCost(providerEntry, m.cost);
       }
     }
   }

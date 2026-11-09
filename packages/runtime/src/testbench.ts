@@ -32,6 +32,8 @@ import {
 import type { Store } from '@interlock/storage';
 import { fingerprint } from './versionIdentity.js';
 import { Variables } from './variables.js';
+import { ModelAliases } from './modelAliases.js';
+import { modelReferences, type ModelAliasCapture } from '@interlock/core';
 import { variableReferences, type VariableCapture } from '@interlock/core';
 import {
   captureConfigurations,
@@ -353,7 +355,45 @@ export class Testbench {
     } catch (error) {
       blockers.push(textError(error));
     }
-    return { ...captured, suite, blockers, variableCaptures };
+    const aliases = new ModelAliases(this.store);
+    const aliasPool = new Map<string, ModelAliasCapture>();
+    for (const pin of captured.pins) {
+      try {
+        const definition = this.store.getVersion(
+          pin.workflowId,
+          pin.version,
+        )!.definition;
+        for (const alias of aliases.capture(definition))
+          aliasPool.set(alias.reference ?? alias.aliasId, alias);
+      } catch (error) {
+        blockers.push(textError(error));
+      }
+    }
+    const modelAliasCaptures = [...aliasPool.values()];
+    if (modelAliasCaptures.length)
+      for (const side of ['baseline', 'candidate'] as const) {
+        const config = captured.configurations[side];
+        const references = new Set(
+          config.pins.flatMap((pin) =>
+            modelReferences(
+              this.store.getVersion(pin.workflowId, pin.version)!.definition,
+            ),
+          ),
+        );
+        config.id = fingerprint({
+          id: config.id,
+          modelAliases: modelAliasCaptures.filter((alias) =>
+            references.has(alias.reference ?? alias.aliasId),
+          ),
+        });
+      }
+    return {
+      ...captured,
+      suite,
+      blockers,
+      variableCaptures,
+      modelAliasCaptures,
+    };
   }
 
   preview(input: Input<typeof comparisonPreviewSchema>) {
@@ -462,6 +502,7 @@ export class Testbench {
         ...(captured.variableCaptures.length
           ? { variableCaptures: captured.variableCaptures }
           : {}),
+        modelAliasCaptures: captured.modelAliasCaptures,
         configurations: captured.configurations,
         ...(q.trialSetup ? { trialSetup: q.trialSetup } : {}),
         ...(q.sampleBudget ? { sampleBudget: q.sampleBudget } : {}),
@@ -483,6 +524,10 @@ export class Testbench {
   }
   variablesFor(context: ComparisonRunContext) {
     return this.get(context.comparisonId).variableCaptures ?? [];
+  }
+  modelAliasesFor(context: ComparisonRunContext) {
+    // Legacy comparisons retain live alias resolution; an explicit empty snapshot pins native IDs.
+    return this.get(context.comparisonId).modelAliasCaptures;
   }
   context(c: WorkflowComparison, s: ComparisonSample): ComparisonRunContext {
     return {

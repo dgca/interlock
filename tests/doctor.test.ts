@@ -311,6 +311,143 @@ describe('doctor health and readiness check', () => {
     });
   });
 
+  it.each(['library', 'workflow'] as const)(
+    'suppresses schedule lag under a %s pause and restores it on resume',
+    async (scope) => {
+      const { engine, store } = createEnv();
+      const wf = engine.create('Paused schedule');
+      engine.publish(wf.id);
+      store.put('workflowTriggers', {
+        id: 'paused-schedule',
+        workflowId: wf.id,
+        kind: 'schedule',
+        name: 'Paused',
+        enabled: true,
+        timing: { kind: 'interval', seconds: 3600 },
+        nextFireAt: new Date(Date.now() - 120000).toISOString(),
+      });
+      const pause = engine.pauses.create({
+        target: scope === 'workflow' ? { scope, workflowId: wf.id } : { scope },
+        actor: 'test',
+        reason: 'Maintenance',
+      });
+      expect(
+        (await engine.doctor()).checks.some((c) =>
+          c.name.includes('Schedule lag'),
+        ),
+      ).toBe(false);
+      expect(engine.triggers.attention().items).toHaveLength(0);
+      engine.pauses.resume(pause.id);
+      expect(
+        (await engine.doctor()).checks.some((c) =>
+          c.name.includes('Schedule lag'),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('reports a locked referenced secret without exposing its value', async () => {
+    const { dir } = createEnv();
+    const keyFile = join(dir, 'key');
+    const store = new Store(join(dir, 'locked.db'), { secretKeyFile: keyFile });
+    const engine = new Engine(store, dir);
+    stores.push(store);
+    engines.push(engine);
+    const variable = engine.variables.mutate({
+      action: 'create',
+      name: 'CREDENTIAL',
+      kind: 'secret',
+      value: 'private-value',
+    }) as { id: string };
+    const definition = blankDefinition();
+    definition.nodes[1] = nodeSchema.parse({
+      id: 'agent',
+      kind: 'script',
+      label: 'Script',
+      command: 'return input;',
+      environment: [{ name: 'CREDENTIAL', variableId: variable.id }],
+    });
+    const wf = engine.create('Secret dependency', '', definition);
+    engine.publish(wf.id);
+    rmSync(keyFile);
+    const report = await engine.doctor();
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({
+        name: expect.stringContaining('Locked variable'),
+        status: 'fail',
+      }),
+    );
+    expect(JSON.stringify(report)).not.toContain('private-value');
+  });
+
+  it.each(['missing', 'disabled', 'enabled', 'unbound'] as const)(
+    'checks alias candidate profile availability: %s',
+    async (profile) => {
+      const { engine } = createEnv();
+      if (profile === 'disabled' || profile === 'enabled')
+        engine.executors.saveProfile({
+          id: 'candidate',
+          name: 'Candidate',
+          harness: 'custom',
+          command: '/bin/echo',
+          enabled: profile === 'enabled',
+          expectedRevision: 0,
+        });
+      engine.modelAliases.mutate({
+        action: 'create',
+        name: 'builder',
+        candidates: [
+          {
+            model: 'native',
+            ...(profile === 'unbound' ? {} : { profileId: 'candidate' }),
+          },
+        ],
+      });
+      const definition = blankDefinition();
+      definition.agentModel = 'builder';
+      const wf = engine.create('Alias profiles', '', definition);
+      engine.publish(wf.id);
+      const check = (await engine.doctor()).checks.find((c) =>
+        c.name.includes('Unavailable model alias profiles'),
+      );
+      if (profile === 'missing' || profile === 'disabled')
+        expect(check).toMatchObject({
+          status: 'fail',
+          details: { workflowId: wf.id },
+        });
+      else expect(check).toBeUndefined();
+    },
+  );
+
+  it.each(['connected', 'overridden'] as const)(
+    'ignores unavailable alias profiles for a %s Agent',
+    async (mode) => {
+      const { engine } = createEnv();
+      engine.modelAliases.mutate({
+        action: 'create',
+        name: 'builder',
+        candidates: [{ model: 'native', profileId: 'missing-profile' }],
+      });
+      const definition = blankDefinition();
+      definition.agentModel = 'builder';
+      const node = definition.nodes.find((node) => node.kind === 'agent')!;
+      if (mode === 'connected') node.executor = null;
+      else node.model = 'native-override';
+      const workflow = engine.create(
+        'Effective alias profiles',
+        '',
+        definition,
+      );
+      engine.publish(workflow.id);
+      expect(() => engine.start(workflow.id, {})).not.toThrow();
+      expect(
+        (await engine.doctor()).checks.some((c) =>
+          c.name.includes('Unavailable model alias profiles'),
+        ),
+      ).toBe(false);
+    },
+  );
+
   describe('blocker checks', () => {
     it('ignores released pauses and detects uncertain reservations without companion operation records', async () => {
       const { engine, store } = createEnv();
