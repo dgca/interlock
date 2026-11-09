@@ -200,6 +200,13 @@ it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])(
     const target = engine();
     importWorkflows(target.store, bundle as any);
     expect(target.workflow(w.id).draft).toEqual(w.draft);
+    // The published reader strips unrelated annotations instead of rejecting them.
+    const annotated = structuredClone(bundle) as any;
+    annotated.workflows[0].source = 'annotated export';
+    expect(
+      workflowBundleSchema.parse(annotated).workflows[0],
+    ).not.toHaveProperty('source');
+    importWorkflows(target.store, annotated);
     const inbound = structuredClone(bundle) as any;
     inbound.workflows[0].webhooks = [
       { id: 'old', config: { kind: 'webhook' } },

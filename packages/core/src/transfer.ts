@@ -29,8 +29,21 @@ export const workflowBundleSchema = z
     rootId: z.string().min(1),
     workflows: z
       .array(
-        z
-          .object({
+        z.preprocess(
+          (value, ctx) => {
+            if (
+              value &&
+              typeof value === 'object' &&
+              Object.hasOwn(value, 'webhooks')
+            )
+              ctx.addIssue({
+                code: 'custom',
+                path: ['webhooks'],
+                message: 'Webhook configurations are no longer supported',
+              });
+            return value;
+          },
+          z.object({
             id: z.string().min(1),
             name: z.string().trim().min(1).max(120),
             description: z.string(),
@@ -70,8 +83,8 @@ export const workflowBundleSchema = z
                   .optional(),
               }),
             ),
-          })
-          .strict(),
+          }),
+        ),
       )
       .min(1),
   })
