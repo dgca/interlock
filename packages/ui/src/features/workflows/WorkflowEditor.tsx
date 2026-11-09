@@ -27,6 +27,7 @@ import {
   Redo2,
   MoreHorizontal,
   Trash2,
+  ChartNoAxesColumn,
 } from 'lucide-react';
 import {
   validateDefinition,
@@ -76,6 +77,7 @@ export function WorkflowEditor({
   onSectionChange,
   runsView,
   onOpenWorkflow,
+  onReport,
 }: {
   workflow: Workflow;
   workflows: Workflow[];
@@ -89,6 +91,7 @@ export function WorkflowEditor({
   section?: 'editor' | 'runs' | 'children';
   onSectionChange?: (section: 'editor' | 'runs' | 'children') => void;
   onOpenWorkflow?: (id: string) => void;
+  onReport?: () => void;
   runsView?: ReactNode;
 }) {
   const owner = workflows.find((w) => w.id === workflow.ownerWorkflowId);
@@ -655,6 +658,14 @@ export function WorkflowEditor({
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
+              {onReport && (
+                <Menu.Item
+                  leftSection={<ChartNoAxesColumn size={14} />}
+                  onClick={onReport}
+                >
+                  Performance & cost report
+                </Menu.Item>
+              )}
               {section === 'editor' && compactHeader && (
                 <>
                   <Menu.Item

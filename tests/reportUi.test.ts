@@ -26,6 +26,10 @@ vi.mock('../packages/ui/src/lib/api', () => ({
   },
   errorMessage: (error: Error) => error.message,
 }));
+vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
+  WorkflowEditor: ({ onReport }: { onReport: () => void }) =>
+    h('button', { onClick: onReport }, 'Open workflow report'),
+}));
 vi.mock('../packages/ui/src/features/runs/RunList', () => ({
   RunList: () => h('div', null, 'Runs route'),
 }));
@@ -71,11 +75,11 @@ function report(totalRuns = 4): WorkflowReport {
         },
       ],
       coverage: {
-        measuredPercentage: 0,
+        measuredPercentage: 100,
         unknownPercentage: 0,
-        measuredAttempts: 0,
+        measuredAttempts: totalRuns,
         unknownAttempts: 0,
-        totalAttempts: 0,
+        totalAttempts: totalRuns,
       },
       byRun: [],
       byNode: [],
@@ -169,7 +173,7 @@ async function input(label: string, value: string) {
   });
 }
 async function openTags() {
-  await act(async () => container.querySelector('summary')!.click());
+  await click('Filter by tags');
 }
 const runCount = () =>
   [...container.querySelectorAll('p')].find(
@@ -183,7 +187,7 @@ it('navigates the actual App from Runs to global and workflow Reports without ch
     expect(container.textContent).toContain('Runs route');
     await click('Report');
     expect(router.state.location.pathname).toBe('/report');
-    expect(container.textContent).toContain('Performance & Cost Report');
+    expect(container.textContent).toContain('Performance & cost report');
     expect(query).toHaveBeenLastCalledWith(
       expect.objectContaining({ workflowId: undefined, limit: 1000 }),
     );
@@ -193,7 +197,7 @@ it('navigates the actual App from Runs to global and workflow Reports without ch
     await act(async () => {
       await router.navigate('/workflows/w1/report');
     });
-    expect(container.textContent).toContain('Performance & Cost Report');
+    expect(container.textContent).toContain('Performance & cost report');
     expect(query).toHaveBeenLastCalledWith(
       expect.objectContaining({ workflowId: 'w1' }),
     );
@@ -230,7 +234,9 @@ it('applies every literal tag only on Apply and clears back to the unfiltered re
     }),
   );
   expect(runCount()).toContain('1');
-  expect(container.querySelector('summary')!.textContent).toContain('(2)');
+  expect(
+    container.querySelector('button[aria-controls]')!.textContent,
+  ).toContain('(2)');
   await click('Clear filters');
   expect(query.mock.lastCall![0]).not.toHaveProperty('tags');
   expect(runCount()).toContain('4');
@@ -311,11 +317,13 @@ it('hides earlier totals and spend while Apply loads or fails, then retries the 
   const pending = pendingReport();
   query.mockReturnValueOnce(pending.promise);
   await click('Apply filters');
-  expect(container.querySelector('summary')!.textContent).toContain('(1)');
+  expect(
+    container.querySelector('button[aria-controls]')!.textContent,
+  ).toContain('(1)');
   expect(query).toHaveBeenLastCalledWith(
     expect.objectContaining({ tags: { repo: 'private/repo' } }),
   );
-  expect(container.textContent).toContain('Aggregating workflow performance');
+  expect(container.textContent).toContain('Loading report');
   expectNoMetrics();
   await act(async () =>
     pending.reject(new Error('Filtered report unavailable')),
@@ -340,7 +348,9 @@ it('hides filtered totals and spend when Clear fails, then retries the unfiltere
   query.mockReturnValueOnce(pending.promise);
   await click('Clear filters');
   expect(query.mock.lastCall![0]).not.toHaveProperty('tags');
-  expect(container.querySelector('summary')!.textContent).not.toContain('(1)');
+  expect(
+    container.querySelector('button[aria-controls]')!.textContent,
+  ).not.toContain('(1)');
   expectNoMetrics();
   await act(async () =>
     pending.reject(new Error('Unfiltered report unavailable')),
@@ -382,4 +392,69 @@ it('ignores an obsolete request error after a newer tagged result succeeds', asy
   expect(container.textContent).not.toContain('Obsolete failure');
   expect(runCount()).toContain('1');
   expect(container.textContent).toContain('1.0000 USD');
+});
+
+function spend() {
+  return container.querySelector('[aria-label="Attributed spend"]')!
+    .textContent;
+}
+it.each([false, true])(
+  'shows unmeasured spend with a zero total present: %s',
+  async (hasTotal) => {
+    const data = report();
+    data.usage.costs = hasTotal
+      ? [{ currency: 'USD', amountMicros: 0, formatted: '0 USD' }]
+      : [];
+    Object.assign(data.usage.coverage, {
+      measuredPercentage: 0,
+      unknownPercentage: 100,
+      measuredAttempts: 0,
+      unknownAttempts: 4,
+    });
+    query.mockResolvedValue(data);
+    await mount();
+    expect(spend()).toContain('Unmeasured');
+    expect(spend()).not.toContain('0 USD');
+    expect(spend()).toContain('0% of attempts measured');
+  },
+);
+it('shows an explicitly measured zero cost and retains partial coverage', async () => {
+  const data = report();
+  data.usage.costs = [
+    { currency: 'USD', amountMicros: 0, formatted: '0.0000 USD' },
+  ];
+  Object.assign(data.usage.coverage, {
+    measuredPercentage: 50,
+    unknownPercentage: 50,
+    measuredAttempts: 2,
+    unknownAttempts: 2,
+  });
+  query.mockResolvedValue(data);
+  await mount();
+  expect(spend()).toContain('0.0000 USD');
+  expect(spend()).not.toContain('Unmeasured');
+  expect(spend()).toContain('50% of attempts measured');
+});
+it('does not invent a currency total when measured usage omitted cost', async () => {
+  const data = report();
+  data.usage.costs = [];
+  query.mockResolvedValue(data);
+  await mount();
+  expect(spend()).toContain('Unmeasured');
+  expect(spend()).not.toContain('USD');
+});
+it('keeps scoped reports attached to their workflow and provides a return action', async () => {
+  await mount('/workflows/w1');
+  await click('Open workflow report');
+  expect(router.state.location.pathname).toBe('/workflows/w1/report');
+  expect(
+    container.querySelector('input[aria-label="Filter by workflow"]'),
+  ).toBeNull();
+  expect(container.textContent).toContain('Tagged work');
+  expect(query).toHaveBeenLastCalledWith(
+    expect.objectContaining({ workflowId: 'w1' }),
+  );
+  await click('Back to workflow');
+  expect(router.state.location.pathname).toBe('/workflows/w1');
+  expect(container.textContent).toContain('Open workflow report');
 });
