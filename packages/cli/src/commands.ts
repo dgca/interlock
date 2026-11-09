@@ -861,9 +861,12 @@ export function formatWorkflowReport(report: WorkflowReport): string {
   if (report.usage.byProvider.length > 0) {
     lines.push('  By Provider:');
     for (const p of report.usage.byProvider) {
-      const pCost = p.costMicros
-        ? (p.costMicros / 1_000_000).toFixed(4) + ' ' + (p.currency ?? '')
-        : 'none';
+      const pCost =
+        p.currency === 'mixed'
+          ? 'Mixed currencies'
+          : p.costMicros
+            ? (p.costMicros / 1_000_000).toFixed(4) + ' ' + (p.currency ?? '')
+            : 'none';
       lines.push(
         `    ${p.provider.padEnd(20)} count=${String(p.count).padEnd(6)} input=${p.inputTokens.toLocaleString().padEnd(12)} output=${p.outputTokens.toLocaleString().padEnd(12)} cost=${pCost}`,
       );
@@ -873,9 +876,12 @@ export function formatWorkflowReport(report: WorkflowReport): string {
   if (report.usage.byModel.length > 0) {
     lines.push('  By Model:');
     for (const m of report.usage.byModel.slice(0, 10)) {
-      const mCost = m.costMicros
-        ? (m.costMicros / 1_000_000).toFixed(4) + ' ' + (m.currency ?? '')
-        : 'none';
+      const mCost =
+        m.currency === 'mixed'
+          ? 'Mixed currencies'
+          : m.costMicros
+            ? (m.costMicros / 1_000_000).toFixed(4) + ' ' + (m.currency ?? '')
+            : 'none';
       lines.push(
         `    ${(m.provider + '/' + m.model).padEnd(30)} count=${String(m.count).padEnd(6)} input=${m.inputTokens.toLocaleString().padEnd(12)} output=${m.outputTokens.toLocaleString().padEnd(12)} cost=${mCost}`,
       );

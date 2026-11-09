@@ -143,10 +143,7 @@ export class WorkflowTriggers {
       items: rows.slice(q.offset, q.offset + q.limit).map((t) => {
         const compact = {
           ...t,
-          actionType:
-            t.kind === 'event'
-              ? (t.action?.type ?? 'workflow')
-              : ('workflow' as const),
+          actionType: 'workflow' as const,
           lastActivity: this.lastActivity(t),
         };
         for (const key of ['input', 'bindings', 'action'])
@@ -198,7 +195,6 @@ export class WorkflowTriggers {
           lastActivity: this.lastActivity(trigger),
         },
         deliveries: this.events.inspect(id, q.offset, q.limit),
-        endpoint: null,
         upcoming: [],
         fires: {
           items: [] as (ScheduleFire & { runAvailable: boolean })[],
@@ -218,7 +214,6 @@ export class WorkflowTriggers {
         total: 0,
         nextOffset: null,
       },
-      endpoint: null,
       fires: {
         ...fires,
         items: fires.items.map((f) => ({

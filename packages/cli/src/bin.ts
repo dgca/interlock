@@ -41,13 +41,14 @@ Default script working directory: current directory
 mcp       Stdio MCP bridge to the running engine. Set INTERLOCK_URL to override
           http://127.0.0.1:4310. Stdout is reserved for the MCP protocol.
 
-Workflow commands: workflows, workflow, starters, import-starter, import, update, edit, export, publish, archive, restore, delete, start
-Run commands: runs, run, run-history, work, claim, submit, fail, renew, assignment-size, external-input, work-hold, work-resources, script, cancel-tree, cancel, retry
+Workflow commands: workflows, workflow, starters, import-starter, import, update, edit, export, publish, archive, restore, delete, start, simulation, test-suite
+Run commands: runs, run, run-history, run-version, context-group, handoff-context, work, claim, preflight, submit, fail, renew, assignment-size, external-input, work-hold, work-resources, script, cancel-tree, cancel, retry
 Usage and budget commands: usage, report-usage, budget, set-budget
 Local harness configuration and execution: executors
 Workflow variables: variables <read|manage> <json|@file> [--value-stdin]
 Workflow triggers: triggers (schedules is an alias) <read|manage> <json|@file>
 Kinds: schedule, event. Event triggers match run transitions with optional quiescence.
+Stall monitoring: stalls
 Named pause holds: pause, pause-holds, resume
 Workflow performance and cost report: report [--workflow <id>] [--since <ISO datetime>] [--until <ISO datetime>] [--limit <n>] [--tag KEY=VALUE ...] [--json]
 Report dates must be valid ISO datetimes whose rounded UTC bounds stay within years 0000 through 9999.
@@ -71,6 +72,13 @@ Variable encryption keys are held separately from the database. Back up keys sep
   if (argv[0] && !argv[0].startsWith('-')) {
     const known = [
       'commands',
+      'stalls',
+      'simulation',
+      'test-suite',
+      'run-version',
+      'context-group',
+      'handoff-context',
+      'preflight',
       'executors',
       'variables',
       'schedules',

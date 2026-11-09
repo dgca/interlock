@@ -1414,7 +1414,12 @@ export class Engine {
                   definition,
                   this.run(parentRunId).modelAliasCaptures ?? [],
                 )
-              : this.modelAliases.capture(definition);
+              : comparison
+                ? this.modelAliases.capture(
+                    definition,
+                    this.testbench.modelAliasesFor(comparison),
+                  )
+                : this.modelAliases.capture(definition);
         return { modelAliasCaptures: captures };
       })(),
     };

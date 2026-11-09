@@ -225,3 +225,36 @@ describe('pause-adjusted report durations', () => {
     vi.restoreAllMocks();
   });
 });
+
+it.each([
+  'running',
+  'waiting',
+  'queued',
+  'cancelled',
+  'failed',
+  'completed',
+] as const)(
+  'bounds unfinished input waits and work holds for a %s run',
+  (status) => {
+    const run = setup();
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse(at(20)));
+    run.status = status;
+    run.updatedAt = at(0);
+    run.executions[0].completedAt = undefined;
+    const terminal = ['cancelled', 'failed', 'completed'].includes(status);
+    if (terminal) run.updatedAt = at(10);
+    store.put('runs', run);
+    store.put('workHolds', {
+      id: 'human',
+      runId: run.id,
+      workId: 'work',
+      heldAt: at(0),
+    });
+    hold('pause', 2, 8);
+    expect(engine.report({}).summary.humanWaitMs).toMatchObject({
+      median: terminal ? 20000 : 40000,
+      pausedMs: { median: 12000 },
+      activeMs: { median: terminal ? 8000 : 28000 },
+    });
+  },
+);

@@ -590,9 +590,12 @@ export function WorkflowReportView({
                       </Table.Thead>
                       <Table.Tbody>
                         {usage.byProvider.map((p) => {
-                          const costFormatted = p.costMicros
-                            ? `${(p.costMicros / 1_000_000).toFixed(4)} ${p.currency ?? ''}`
-                            : '—';
+                          const costFormatted =
+                            p.currency === 'mixed'
+                              ? 'Mixed currencies'
+                              : p.costMicros
+                                ? `${(p.costMicros / 1_000_000).toFixed(4)} ${p.currency ?? ''}`
+                                : '—';
                           return (
                             <Table.Tr key={p.provider}>
                               <Table.Td fw={500}>{p.provider}</Table.Td>

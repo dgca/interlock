@@ -25,7 +25,7 @@ export function PromptPicker({
     <Stack gap="sm" mb="md">
       <Select
         label="Saved prompts"
-        description="Prompts are added in this order before the task instructions. New runs use the latest saved revisions."
+        description="Prompts are added in this order before the task instructions. New runs use the latest saved revisions unless the workflow pins prompts at publish."
         placeholder="Add a prompt"
         searchable
         searchValue={search}

@@ -270,3 +270,34 @@ describe('captured alias report attribution', () => {
     ]);
   });
 });
+
+it('never combines currencies in scalar groups, including observer overhead', () => {
+  setup();
+  attempt('usd', builder, 10, 'USD');
+  attempt('eur', builder, 20, 'EUR');
+  attempt('usd-again', builder, 30, 'USD');
+  store.put('runUsage', {
+    id: 'overhead',
+    runId: 'run',
+    source: 'observer',
+    reportedAt: time,
+    snapshot: { models: [model(5, 'EUR')], sequence: 1, final: true },
+  });
+  const report = engine.report({});
+  workflowReportSchema.parse(report);
+  expect(report.usage.tokens.inputTokens).toBe(65);
+  expect(formatWorkflowReport(report)).toContain('cost=Mixed currencies');
+  for (const groups of [
+    report.usage.byRun,
+    report.usage.byNode,
+    report.usage.byModel,
+    report.usage.byProvider,
+  ]) {
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ costMicros: null, currency: 'mixed' });
+  }
+  expect(report.usage.costs.map((c) => [c.currency, c.amountMicros])).toEqual([
+    ['EUR', 25],
+    ['USD', 40],
+  ]);
+});

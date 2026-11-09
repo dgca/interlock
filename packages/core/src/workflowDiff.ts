@@ -157,6 +157,10 @@ export function compareWorkflow(
     ['agentPermissions', 'Agent permissions'],
     ['agentModel', 'Agent model'],
     ['agentEffort', 'Agent thinking effort'],
+    ['cwd', 'Working directory'],
+    ['continueOnMissingResult', 'Missing result continuation'],
+    ['transientRetry', 'Transient retry'],
+    ['sessionNameTemplate', 'Session name template'],
     ['pinPromptsAtPublish', 'Pin prompts at publish'],
   ] as const) {
     const before = published?.[key];
