@@ -763,6 +763,75 @@ it('enforces whole-millisecond stall bounds and preserves exact existing values'
   expect(onApply.mock.calls[0][0].definition.nodes[0].runStallMs).toBe(1501);
 });
 
+it.each([
+  ['1000', '1.001', 1001],
+  ['1000', '1001e-3', 1001],
+  ['3600000', '0.00001', 36],
+])(
+  'saves fractional stall units %s × %s as exact milliseconds',
+  async (unit, amount, ms) => {
+    const { onApply } = await render({
+      kind: 'script',
+      command: 'cat',
+      runStallMs: 1501,
+    });
+    await click('Execution');
+    await select('Run transition threshold unit', String(unit));
+    await fill('Run transition threshold', String(amount));
+    await click('Apply changes');
+    expect(onApply.mock.calls[0][0].definition.nodes[0].runStallMs).toBe(ms);
+  },
+);
+
+it('rejects actual fractional milliseconds entered through larger units', async () => {
+  const { onApply } = await render({
+    kind: 'script',
+    command: 'cat',
+    runStallMs: 1501,
+  });
+  await click('Execution');
+  await select('Run transition threshold unit', '1000');
+  for (const invalid of ['0.0015', '1.001e-3', '1e-101']) {
+    await fill('Run transition threshold', invalid);
+    await click('Apply changes');
+    expect(onApply).not.toHaveBeenCalled();
+  }
+});
+
+it.each(['script', 'fetch'])(
+  'preserves exact fractional seconds in existing %s timeouts',
+  async (kind) => {
+    const { onApply } = await render({
+      kind,
+      command: 'cat',
+      url: 'https://example.test',
+      timeoutMs: 30_000,
+    });
+    await fill('Timeout', '1.001');
+    await click('Apply changes');
+    expect(onApply.mock.calls[0][0].definition.nodes[0].timeoutMs).toBe(1001);
+  },
+);
+
+it('accepts exact fractional-unit Wait durations without rounding actual fractions to zero', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: { kind: 'duration', ms: 1000 },
+  });
+  await fill('Wait for', '1.001');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timing.ms).toBe(1001);
+  onApply.mockClear();
+  for (const invalid of ['0.0005', '1e-101']) {
+    await fill('Wait for', invalid);
+    await click('Apply changes');
+    expect(onApply).not.toHaveBeenCalled();
+  }
+  await fill('Wait for', '0');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timing.ms).toBe(0);
+});
+
 it('opens disabled and recovery overrides, preserves them, and returns to inheritance when switched off', async () => {
   const policy = {
     unclaimedStallMs: null,

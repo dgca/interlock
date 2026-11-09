@@ -16,6 +16,19 @@ export function formatDuration(ms: number) {
   return `${amount} ${amount === 1 ? unit.label.toLowerCase().slice(0, -1) : unit.label.toLowerCase()}`;
 }
 
+function toMilliseconds(amount: number, unit: number) {
+  const [decimal, exponent = '0'] = String(amount).split('e');
+  const precision = Math.max(
+    0,
+    (decimal.split('.')[1]?.length ?? 0) - Number(exponent),
+  );
+  const ms = amount * unit;
+  // An integer unit cannot add decimal places. Remove multiplication noise
+  // beyond the amount's precision without rounding actual fractional ms.
+  // toFixed supports at most 100 places; retain smaller fractions unchanged.
+  return precision > 100 ? ms : Number(ms.toFixed(precision));
+}
+
 export function DurationInput({
   label,
   value,
@@ -46,10 +59,10 @@ export function DurationInput({
         min={min / unit}
         max={max / unit}
         // Fractional steps such as 1/60 lose precision in native validation.
-        // The node schema validates whole seconds when larger units are used.
+        // Schemas enforce each field's precision and bounds.
         step={step !== undefined && step % unit === 0 ? step / unit : 'any'}
         value={value / unit}
-        onChange={(e) => onChange(Number(e.target.value) * unit)}
+        onChange={(e) => onChange(toMilliseconds(Number(e.target.value), unit))}
       />
       <NativeSelect
         label="Unit"
