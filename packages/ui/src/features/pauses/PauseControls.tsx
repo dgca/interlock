@@ -7,31 +7,25 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import {
-  Button,
-  Group,
-  Stack,
-  Text,
-  TextInput,
-  Textarea,
-  Select,
-  Alert,
-  ActionIcon,
-} from '@mantine/core';
-import { Pause } from 'lucide-react';
-import type { PauseHold } from '@interlock/core';
+import { ActionIcon, Button, Stack, Text } from '@mantine/core';
+import { Pause, Play, RefreshCw } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
 import styles from './PauseControls.module.css';
 
-type Target = { workflowId?: string; name?: string; add?: boolean };
-const Context = createContext({
-  enabled: false,
-  revision: 0,
-  open: (_target: Target) => {},
-  changed: () => {},
-});
+type Holds = Awaited<ReturnType<typeof api.pauses.list.query>>;
+type PauseStatus = {
+  data?: Holds;
+  busy?: boolean;
+  error?: string;
+  actionError?: string;
+};
+const Context = createContext<{
+  tick: number;
+  statuses: Record<string, PauseStatus>;
+  refresh: (workflowId: string) => void;
+  setPaused: (workflowId: string, paused: boolean) => Promise<void>;
+} | null>(null);
+
 export function PauseProvider({
   children,
   tick = 0,
@@ -39,497 +33,220 @@ export function PauseProvider({
   children: ReactNode;
   tick?: number;
 }) {
-  const [target, setTarget] = useState<Target>();
-  const [revision, setRevision] = useState(0);
-  const changed = useCallback(() => setRevision((n) => n + 1), []);
+  const [statuses, setStatuses] = useState<Record<string, PauseStatus>>({});
+  const requests = useRef(new Map<string, Promise<Holds>>());
+  const pending = useRef(new Set<string>());
+  const update = useCallback(
+    (workflowId: string, patch: Partial<PauseStatus>) => {
+      setStatuses((old) => ({
+        ...old,
+        [workflowId]: { ...old[workflowId], ...patch },
+      }));
+    },
+    [],
+  );
+  const load = useCallback(
+    (workflowId: string): Promise<Holds> => {
+      const existing = requests.current.get(workflowId);
+      if (existing) return existing;
+      const request = (async () => {
+        const items: Holds['items'] = [];
+        let offset: number | null = 0;
+        do {
+          const page = await api.pauses.list.query({
+            workflowId,
+            offset,
+            limit: 100,
+          });
+          items.push(...page.items);
+          offset = page.nextOffset ?? null;
+        } while (offset !== null);
+        return { items, total: items.length, nextOffset: null };
+      })()
+        .then(
+          (data) => {
+            update(workflowId, { data, error: '' });
+            return data;
+          },
+          (error) => {
+            update(workflowId, { error: errorMessage(error) });
+            throw error;
+          },
+        )
+        .finally(() => requests.current.delete(workflowId));
+      requests.current.set(workflowId, request);
+      return request;
+    },
+    [update],
+  );
+  const refresh = useCallback(
+    (workflowId: string) => {
+      if (!pending.current.has(workflowId))
+        void load(workflowId).catch(() => {});
+    },
+    [load],
+  );
+  const setPaused = useCallback(
+    async (workflowId: string, paused: boolean) => {
+      if (pending.current.has(workflowId)) return;
+      pending.current.add(workflowId);
+      update(workflowId, { busy: true, actionError: '' });
+      try {
+        // Finish older reads, then inspect current holds before changing them.
+        await requests.current.get(workflowId)?.catch(() => {});
+        let current: Holds;
+        try {
+          current = await load(workflowId);
+        } catch {
+          return;
+        }
+        const local = current.items.filter((hold) => hold.scope === 'workflow');
+        try {
+          if (!paused && local.length) {
+            for (const hold of local) {
+              await api.pauses.resume.mutate({ id: hold.id });
+              current = {
+                items: current.items.filter((item) => item.id !== hold.id),
+                total: current.total - 1,
+                nextOffset: null,
+              };
+              update(workflowId, { data: current });
+            }
+          } else if (paused && !current.total) {
+            const hold = await api.pauses.pause.mutate({
+              target: { scope: 'workflow', workflowId },
+              actor: 'Interlock UI',
+              reason: 'Paused from the workflow editor',
+            });
+            update(workflowId, {
+              data: { items: [hold], total: 1, nextOffset: null },
+            });
+          }
+        } catch (error) {
+          update(workflowId, { actionError: errorMessage(error) });
+        }
+        // Keep acknowledged writes when this read fails; retry only the read.
+        await load(workflowId).catch(() => {});
+      } finally {
+        pending.current.delete(workflowId);
+        update(workflowId, { busy: false });
+      }
+    },
+    [load, update],
+  );
   return (
-    <Context.Provider
-      value={{
-        enabled: true,
-        revision: revision + tick,
-        open: setTarget,
-        changed,
-      }}
-    >
+    <Context.Provider value={{ tick, statuses, refresh, setPaused }}>
       {children}
-      {target && (
-        <PauseDialog target={target} onClose={() => setTarget(undefined)} />
-      )}
     </Context.Provider>
   );
 }
-function useHolds(workflowId?: string, limit = 1, scope?: 'workflow') {
-  const { revision, enabled } = useContext(Context);
-  const [data, setData] =
-    useState<Awaited<ReturnType<typeof api.pauses.list.query>>>();
-  const [error, setError] = useState('');
+
+function useHolds(workflowId: string) {
+  const context = useContext(Context);
+  const refresh = context?.refresh;
+  const tick = context?.tick;
   useEffect(() => {
-    if (!enabled) return;
-    let active = true;
-    const refresh = () => {
-      void api.pauses.list.query({ workflowId, limit, scope }).then(
-        (d) => {
-          if (active) {
-            setData(d);
-            setError('');
-          }
-        },
-        (e) => {
-          if (active) setError(errorMessage(e));
-        },
-      );
-    };
-    refresh();
-    const timer = setInterval(refresh, 5000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [workflowId, limit, scope, revision, enabled]);
-  return { data, error };
+    refresh?.(workflowId);
+  }, [workflowId, tick, refresh]);
+  return { context, status: context?.statuses[workflowId] };
 }
-export function LibraryPauseBar() {
-  const { open, changed } = useContext(Context);
-  const { data, error } = useHolds();
-  return (
-    <div className={styles.bar} data-paused={!!data?.total || undefined}>
-      <div className={styles.summary} role="status">
-        <Text size="sm" fw={500}>
-          {data?.total
-            ? `Library paused · ${data.total} hold${data.total === 1 ? '' : 's'}`
-            : 'Library execution'}
-        </Text>
-        {data?.total ? (
-          <Text size="xs" className={styles.preview}>
-            {data.items[0]?.reason}
-          </Text>
-        ) : null}
-        {error && (
-          <Text size="xs" c="yellow">
-            Pause status may be out of date
-          </Text>
-        )}
-      </div>
-      <Button
-        size="xs"
-        variant="default"
-        leftSection={<Pause size={14} />}
-        disabled={!data && !error}
-        onClick={() => (!data ? changed() : open({ add: !data?.total }))}
-      >
-        {data?.total
-          ? 'Review holds'
-          : data
-            ? 'Pause library'
-            : error
-              ? 'Retry pause status'
-              : 'Loading pause status…'}
-      </Button>
-    </div>
-  );
-}
+
 export function WorkflowPauseButton({
   workflowId,
-  name,
   compact = false,
 }: {
   workflowId: string;
-  name: string;
   compact?: boolean;
 }) {
-  const { open } = useContext(Context);
-  const { data, error } = useHolds(workflowId);
-  const label = data?.total ? `Pauses · ${data.total}` : 'Pause workflow';
+  const { context, status } = useHolds(workflowId);
+  const local = status?.data?.items.some((hold) => hold.scope === 'workflow');
+  const libraryOnly = !!status?.data?.total && !local;
+  const label = status?.error
+    ? 'Retry pause status'
+    : local
+      ? 'Resume workflow'
+      : libraryOnly
+        ? 'Paused by library'
+        : 'Pause workflow';
+  const Icon = status?.error ? RefreshCw : local ? Play : Pause;
+  const props = {
+    variant: 'default',
+    disabled:
+      !context ||
+      status?.busy ||
+      (!status?.data && !status?.error) ||
+      (libraryOnly && !status?.error),
+    title: libraryOnly
+      ? 'Release library pauses through the CLI or MCP'
+      : undefined,
+    loading: status?.busy,
+    onClick: () => {
+      if (status?.error) context?.refresh(workflowId);
+      else void context?.setPaused(workflowId, !local);
+    },
+  };
   return compact ? (
-    <ActionIcon
-      variant="default"
-      aria-label={label}
-      title={error ? 'Pause status may be out of date' : label}
-      disabled={!data}
-      onClick={() => open({ workflowId, name, add: !data?.total })}
-    >
-      <Pause size={16} />
+    <ActionIcon {...props} aria-label={label} title={props.title ?? label}>
+      <Icon size={16} />
     </ActionIcon>
   ) : (
-    <Button
-      variant="default"
-      size="xs"
-      leftSection={<Pause size={14} />}
-      disabled={!data}
-      title={error ? 'Pause status may be out of date' : undefined}
-      onClick={() => open({ workflowId, name, add: !data?.total })}
-    >
+    <Button {...props} size="xs" leftSection={<Icon size={14} />}>
       {label}
     </Button>
   );
 }
+
 export function PauseBanner({
   workflowId,
-  name,
   run = false,
 }: {
   workflowId: string;
-  name?: string;
   run?: boolean;
 }) {
-  const { open } = useContext(Context);
-  const { data, error } = useHolds(
-    workflowId,
-    20,
-    run ? undefined : 'workflow',
-  );
-  const local = data?.items.filter((h) => h.scope === 'workflow') ?? [];
-  if (!data?.total || (!run && !local.length && !error)) return null;
+  const { context, status } = useHolds(workflowId);
+  if (!status?.data?.total && !status?.error && !status?.actionError)
+    return null;
+  const library = status.data?.items.some((hold) => hold.scope === 'library');
+  const reasons = [...new Set(status.data?.items.map((hold) => hold.reason))]
+    .filter((reason) => reason !== 'Paused from the workflow editor')
+    .slice(0, 3)
+    .join('; ');
   return (
     <div className={styles.banner} role="status">
-      <Text size="sm">
-        {run
-          ? `${data.total} applicable pause hold${data.total === 1 ? '' : 's'}`
-          : `Workflow paused · ${data.total} hold${data.total === 1 ? '' : 's'}`}{' '}
-        · {(run ? data.items : local).map((h) => h.reason).join('; ')}
-        {error ? ' · Status may be out of date' : ''}
-      </Text>
-      <Button
-        variant="subtle"
-        size="xs"
-        onClick={() => open({ workflowId, name })}
-      >
-        Review pause holds
-      </Button>
-    </div>
-  );
-}
-function PauseDialog({
-  target,
-  onClose,
-}: {
-  target: Target;
-  onClose: () => void;
-}) {
-  const { changed, revision } = useContext(Context);
-  const [items, setItems] = useState<PauseHold[]>([]),
-    [total, setTotal] = useState(0),
-    [next, setNext] = useState<number | null>(null),
-    [loaded, setLoaded] = useState(false);
-  const [adding, setAdding] = useState(!!target.add),
-    [scope, setScope] = useState(target.workflowId ? 'workflow' : 'library'),
-    [actor, setActor] = useState(''),
-    [reason, setReason] = useState('');
-  const [selected, setSelected] = useState<string>(),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(''),
-    [stale, setStale] = useState(''),
-    [acknowledgement, setAcknowledgement] = useState('');
-  const keep = useRef<HTMLButtonElement>(null),
-    body = useRef<HTMLDivElement>(null),
-    add = useRef<HTMLButtonElement>(null),
-    retryRefresh = useRef<HTMLButtonElement>(null),
-    focusAfterMutation = useRef(false);
-  const load = useCallback(
-    async (offset = 0) => {
-      const d = await api.pauses.list.query({
-        workflowId: target.workflowId,
-        offset,
-        limit: 20,
-      });
-      setItems((old) => (offset ? [...old, ...d.items] : d.items));
-      setTotal(d.total);
-      setNext(d.nextOffset);
-      setLoaded(true);
-      setStale('');
-      return d;
-    },
-    [target.workflowId],
-  );
-  useEffect(() => {
-    let active = true;
-    void api.pauses.list
-      .query({ workflowId: target.workflowId, limit: 20 })
-      .then(
-        (d) => {
-          if (active) {
-            setItems(d.items);
-            setTotal(d.total);
-            setNext(d.nextOffset);
-            setLoaded(true);
-            setStale('');
-          }
-        },
-        (e) => {
-          if (active) setStale(errorMessage(e));
-        },
-      );
-    return () => {
-      active = false;
-    };
-  }, [target.workflowId, revision]);
-  useEffect(() => {
-    if (selected) keep.current?.focus();
-  }, [selected]);
-  useEffect(() => {
-    if (busy || !focusAfterMutation.current) return;
-    focusAfterMutation.current = false;
-    requestAnimationFrame(() => {
-      const nextButton =
-        body.current?.querySelector<HTMLButtonElement>('[data-release]');
-      (stale ? retryRefresh.current : (nextButton ?? add.current))?.focus();
-    });
-  }, [busy, stale]);
-  const perform = async (action: () => Promise<unknown>, release = false) => {
-    setBusy(true);
-    setError('');
-    setAcknowledgement('');
-    try {
-      await action();
-    } catch (e) {
-      setError(errorMessage(e));
-      void load().catch(() =>
-        setStale('Could not refresh holds. Retry before releasing.'),
-      );
-      setBusy(false);
-      return;
-    }
-    // Acknowledged writes stay completed even when their follow-up read fails.
-    if (release) setSelected(undefined);
-    else {
-      setActor('');
-      setReason('');
-      setAdding(false);
-    }
-    setAcknowledgement(release ? 'Hold released.' : 'Pause added.');
-    changed();
-    focusAfterMutation.current = true;
-    try {
-      await load();
-    } catch (e) {
-      setStale(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const refresh = async () => {
-    setBusy(true);
-    focusAfterMutation.current = true;
-    try {
-      await load();
-    } catch (e) {
-      setStale(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Modal title="Pause holds" onClose={onClose} size={700} busy={busy}>
-      <ModalBody>
-        <div ref={body}>
-          <Stack gap="lg">
-            <Text size="sm" role="status" aria-live="polite">
-              {loaded
-                ? `${total} applicable hold${total === 1 ? '' : 's'}`
-                : 'Loading holds…'}
-            </Text>
-            {acknowledgement && (
-              <Text size="sm" role="status">
-                {acknowledgement}
-              </Text>
-            )}
-            {stale && (
-              <Alert color="yellow" title="Pause status may be out of date">
-                {stale}
-                <Button
-                  size="xs"
-                  variant="subtle"
-                  ref={retryRefresh}
-                  disabled={busy}
-                  onClick={() => void refresh()}
-                >
-                  Retry refresh
-                </Button>
-              </Alert>
-            )}
-            {items.map((h) => (
-              <section key={h.id} className={styles.hold}>
-                <Group justify="space-between" align="start">
-                  <div>
-                    <Text fw={600} size="sm">
-                      {h.scope === 'library'
-                        ? 'Entire library'
-                        : (target.name ?? 'Workflow')}
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      {h.actor} · {new Date(h.createdAt).toLocaleString()}
-                    </Text>
-                  </div>
-                  {selected !== h.id && (
-                    <Button
-                      data-release
-                      size="xs"
-                      variant="default"
-                      disabled={busy || !!stale}
-                      onClick={() => {
-                        setSelected(h.id);
-                        setError('');
-                      }}
-                    >
-                      Release…
-                    </Button>
-                  )}
-                </Group>
-                <Text size="sm" className={styles.reason}>
-                  {h.reason}
-                </Text>
-                <Text size="xs" c="dimmed" className={styles.id}>
-                  {h.id}
-                </Text>
-                {selected === h.id && (
-                  <div className={styles.confirm}>
-                    <Text size="sm">
-                      {total > 1
-                        ? `${total - 1} other applicable hold${total === 2 ? ' remains' : 's remain'}. Execution stays paused.`
-                        : 'No other applicable holds remain. Execution can resume.'}
-                    </Text>
-                    <Group mt="sm">
-                      <Button
-                        ref={keep}
-                        size="xs"
-                        variant="default"
-                        disabled={busy}
-                        onClick={() => setSelected(undefined)}
-                      >
-                        Keep hold
-                      </Button>
-                      <Button
-                        size="xs"
-                        color="yellow"
-                        loading={busy}
-                        disabled={!!stale}
-                        onClick={() =>
-                          void perform(
-                            () => api.pauses.resume.mutate({ id: h.id }),
-                            true,
-                          )
-                        }
-                      >
-                        Release hold
-                      </Button>
-                    </Group>
-                  </div>
-                )}
-              </section>
-            ))}
-            {next !== null && (
-              <Button
-                variant="default"
-                disabled={busy}
-                onClick={() =>
-                  void load(next).catch((e) => setStale(errorMessage(e)))
-                }
-              >
-                Load more holds
-              </Button>
-            )}
-            {!adding && (
-              <Button
-                ref={add}
-                variant="default"
-                disabled={busy || !!stale}
-                onClick={() => {
-                  setAcknowledgement('');
-                  setAdding(true);
-                }}
-              >
-                Add another pause
-              </Button>
-            )}
-            {adding && (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void perform(() =>
-                    api.pauses.pause.mutate({
-                      target:
-                        scope === 'workflow' && target.workflowId
-                          ? { scope: 'workflow', workflowId: target.workflowId }
-                          : { scope: 'library' },
-                      actor,
-                      reason,
-                    }),
-                  );
-                }}
-              >
-                <Stack gap="sm">
-                  {target.workflowId ? (
-                    <Select
-                      label="Scope"
-                      value={scope}
-                      allowDeselect={false}
-                      onChange={(v) => setScope(v ?? 'workflow')}
-                      data={[
-                        {
-                          value: 'workflow',
-                          label: `Workflow: ${target.name ?? target.workflowId}`,
-                        },
-                        { value: 'library', label: 'Entire library' },
-                      ]}
-                    />
-                  ) : (
-                    <Text size="sm">Entire library</Text>
-                  )}
-                  <TextInput
-                    label="Actor"
-                    required
-                    maxLength={200}
-                    value={actor}
-                    onChange={(e) => setActor(e.currentTarget.value)}
-                    disabled={busy}
-                  />
-                  <Textarea
-                    label="Reason"
-                    required
-                    maxLength={1000}
-                    autosize
-                    minRows={2}
-                    value={reason}
-                    onChange={(e) => setReason(e.currentTarget.value)}
-                    disabled={busy}
-                  />
-                  <Group>
-                    <Button
-                      type="submit"
-                      color="yellow"
-                      loading={busy}
-                      disabled={
-                        !actor.trim() || !reason.trim() || !loaded || !!stale
-                      }
-                    >
-                      {scope === 'workflow'
-                        ? 'Pause workflow'
-                        : 'Pause library'}
-                    </Button>
-                    <Button
-                      variant="subtle"
-                      disabled={busy}
-                      onClick={() => setAdding(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </Group>
-                </Stack>
-              </form>
-            )}
-            {error && (
-              <Alert color="red" role="alert">
-                {error}
-              </Alert>
-            )}
-          </Stack>
-        </div>
-      </ModalBody>
-      <ModalFooter>
-        <Button variant="default" disabled={busy} onClick={onClose}>
-          Done
+      <Stack gap={4} className={styles.summary}>
+        {!!status.data?.total && (
+          <Text size="sm">Workflow paused{reasons ? ` · ${reasons}` : ''}</Text>
+        )}
+        {library && (
+          <Text size="xs">
+            A library pause applies. Inspect it with{' '}
+            <code>interlock pause-holds</code> and release its exact ID through
+            the CLI or MCP.
+          </Text>
+        )}
+        {status.error && (
+          <Text size="sm" role="alert">
+            Pause status may be out of date: {status.error}
+          </Text>
+        )}
+        {status.actionError && (
+          <Text size="sm" role="alert">
+            {status.actionError}
+          </Text>
+        )}
+      </Stack>
+      {status.error ? (
+        <Button
+          variant="subtle"
+          size="xs"
+          disabled={status.busy}
+          onClick={() => context?.refresh(workflowId)}
+        >
+          Retry pause status
         </Button>
-      </ModalFooter>
-    </Modal>
+      ) : run ? (
+        <WorkflowPauseButton workflowId={workflowId} />
+      ) : null}
+    </div>
   );
 }

@@ -548,7 +548,6 @@ export function WorkflowEditor({
         <div className={styles.headerActions}>
           <WorkflowPauseButton
             workflowId={workflow.id}
-            name={workflow.name}
             compact={iconOnlyHeader}
           />
           {section === 'editor' && (
@@ -709,7 +708,7 @@ export function WorkflowEditor({
           </Menu>
         </div>
       </header>
-      <PauseBanner workflowId={workflow.id} name={workflow.name} />
+      <PauseBanner workflowId={workflow.id} />
       {owner && (
         <div className={styles.conflict}>
           <span>

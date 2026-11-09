@@ -1,8 +1,8 @@
 # Pause library or workflow execution
 
-Use **Pause workflow** beside the workflow actions. Library-wide holds are available through CLI, MCP, and the shared API; the UI has no global pause control. Supply an actor label and reason. Every action creates an independent persisted hold. Open **Review holds** to inspect scope, actor, reason, creation time, and exact ID. **Release hold** releases only that record. Execution can resume when no applicable records remain.
+Use **Pause workflow** beside the workflow actions to pause that workflow immediately. **Resume workflow** releases its current workflow-scoped holds, including multiple records created through older controls or external callers. Library holds remain active and must be released through the CLI, MCP, or shared API. The UI reports when a library pause still blocks execution and never creates library-wide pauses.
 
-Acknowledged creation closes and clears its form before status refresh. If refresh fails, **Retry refresh** reads the current holds without repeating the write. **Add another pause** deliberately starts a new blank form. A failed creation request preserves entered values.
+The toggle supplies an actor label and reason automatically. It reads current status before writing, prevents duplicate clicks, and refreshes through the shared workspace event updates. There is no separate pause polling loop. If status refresh fails, **Retry pause status** reads the holds without repeating the write. Acknowledged changes remain visible until a successful refresh replaces them.
 
 A library hold applies to every workflow. A workflow hold applies to runs with that workflow ID, including Batch items. It does not propagate to an invoked workflow with a different ID. Already dispatched child work keeps its own scope. Actor labels describe the caller; they do not authenticate identity or restrict who can release a hold.
 

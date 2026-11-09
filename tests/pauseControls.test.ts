@@ -5,9 +5,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
+import { blankDefinition } from '@interlock/core';
 import {
   PauseProvider,
-  LibraryPauseBar,
+  PauseBanner,
+  WorkflowPauseButton,
 } from '../packages/ui/src/features/pauses/PauseControls';
 const rpc = vi.hoisted(() => ({
   list: vi.fn(),
@@ -24,162 +26,226 @@ vi.mock('../packages/ui/src/lib/api', () => ({
   },
   errorMessage: (e: Error) => e.message,
 }));
-let root: Root, container: HTMLDivElement, e: Engine, readFails: boolean;
+let root: Root, container: HTMLDivElement, engine: Engine, workflowId: string;
+let readFails: boolean;
 const button = (name: string) =>
-  [
-    ...(
-      document.querySelector('[role=dialog]') ?? document
-    ).querySelectorAll<HTMLButtonElement>('button'),
-  ].find((b) => b.textContent === name)!;
-const text = () => document.body.textContent!;
+  [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+    (element) => element.textContent === name,
+  )!;
+const text = () => container.textContent!;
 async function click(name: string) {
   expect(button(name), name).toBeDefined();
   await act(async () => button(name).click());
 }
-async function enter(label: string, value: string) {
-  const input = [
-    ...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-      'input,textarea',
+async function render(tick = 0) {
+  await act(async () =>
+    root.render(
+      h(
+        MantineProvider,
+        { env: 'test' },
+        h(PauseProvider, {
+          tick,
+          children: [
+            h(WorkflowPauseButton, { key: 'button', workflowId }),
+            h(PauseBanner, { key: 'banner', workflowId }),
+          ],
+        }),
+      ),
     ),
-  ].find((el) =>
-    document
-      .querySelector(`label[for="${el.id}"]`)
-      ?.textContent?.startsWith(label),
-  )!;
-  expect(input, label).toBeDefined();
-  await act(async () => {
-    const proto =
-      input instanceof HTMLTextAreaElement
-        ? HTMLTextAreaElement.prototype
-        : HTMLInputElement.prototype;
-    Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(input, value);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+  );
+}
+function hold(scope: 'workflow' | 'library' = 'workflow') {
+  return engine.pauses.create({
+    target: scope === 'workflow' ? { scope, workflowId } : { scope },
+    actor: 'operator',
+    reason: scope === 'workflow' ? 'Workflow maintenance' : 'Deployment',
   });
 }
-beforeEach(async () => {
+beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   });
-  Object.defineProperty(document, 'fonts', {
-    configurable: true,
-    value: { addEventListener: vi.fn(), removeEventListener: vi.fn() },
-  });
-  e = new Engine(new Store(':memory:'), process.cwd());
+  engine = new Engine(new Store(':memory:'), process.cwd());
+  workflowId = engine.create('Pause test', '', blankDefinition()).id;
   readFails = false;
-  rpc.list.mockReset().mockImplementation(async (q) => {
+  rpc.list.mockReset().mockImplementation(async (query) => {
     if (readFails) throw Error('Status read unavailable');
-    return e.pauses.list(q);
+    return engine.pauses.list(query);
   });
-  rpc.pause.mockReset().mockImplementation(async (q) => e.pauses.create(q));
-  rpc.resume.mockReset().mockImplementation(async (q) => e.pauses.resume(q.id));
+  rpc.pause
+    .mockReset()
+    .mockImplementation(async (query) => engine.pauses.create(query));
+  rpc.resume
+    .mockReset()
+    .mockImplementation(async (query) => engine.pauses.resume(query.id));
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
-  await act(async () =>
-    root.render(
-      h(
-        MantineProvider,
-        {},
-        h(PauseProvider, { children: h(LibraryPauseBar) }),
-      ),
-    ),
-  );
 });
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
-  e.stop();
-  e.store.close();
+  engine.stop();
+  engine.store.close();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
-it('3a0f58d-add-ack-refresh-retry: completes an acknowledged create before read failure and refreshes without another write', async () => {
+it('pauses and resumes the workflow directly without a modal or library mutation', async () => {
+  await render();
+  expect(rpc.list).toHaveBeenCalledTimes(1);
+  await click('Pause workflow');
+  expect(document.querySelector('[role=dialog]')).toBeNull();
+  expect(engine.pauses.list({ workflowId }).total).toBe(1);
+  expect(rpc.pause).toHaveBeenCalledWith({
+    target: { scope: 'workflow', workflowId },
+    actor: 'Interlock UI',
+    reason: 'Paused from the workflow editor',
+  });
+  expect(text()).toContain('Workflow paused');
+  await click('Resume workflow');
+  expect(engine.pauses.list({ workflowId }).total).toBe(0);
+  expect(button('Pause workflow')).toBeDefined();
+});
+it('ignores duplicate clicks while a mutation is pending', async () => {
   let deliver!: () => void;
   const delivery = new Promise<void>((resolve) => (deliver = resolve));
-  rpc.pause.mockImplementationOnce(async (q) => {
+  rpc.pause.mockImplementationOnce(async (query) => {
     await delivery;
-    const hold = e.pauses.create(q);
-    readFails = true;
-    return hold;
+    return engine.pauses.create(query);
   });
-  await click('Pause library');
-  await enter('Actor', 'operator');
-  await enter('Reason', 'Acknowledged pause');
-  await click('Pause library');
-  expect(button('Done').disabled).toBe(true);
-  expect(
-    document.querySelector<HTMLButtonElement>('[aria-label="Close dialog"]')!
-      .disabled,
-  ).toBe(true);
+  await render();
+  await act(async () => {
+    button('Pause workflow').click();
+    button('Pause workflow').click();
+  });
+  expect(rpc.pause).toHaveBeenCalledOnce();
+  expect(button('Pause workflow').disabled).toBe(true);
   await act(async () => deliver());
-  expect(text()).toContain('Pause added.');
-  expect(text()).toContain('Status read unavailable');
-  expect(document.querySelector('form')).toBeNull();
-  expect(button('Add another pause').disabled).toBe(true);
-  expect(e.pauses.list().total).toBe(1);
-  expect(rpc.pause).toHaveBeenCalledOnce();
-  await vi.waitFor(() =>
-    expect(document.activeElement).toBe(button('Retry refresh')),
-  );
-  readFails = false;
-  await click('Retry refresh');
-  expect(text()).toContain('1 applicable hold');
-  expect(document.querySelector('form')).toBeNull();
-  expect(rpc.pause).toHaveBeenCalledOnce();
-  await vi.waitFor(() =>
-    expect(document.activeElement).toBe(button('Release…')),
-  );
-  await click('Add another pause');
-  expect(
-    [...document.querySelectorAll('form input, form textarea')]
-      .filter((el) => document.querySelector(`label[for="${el.id}"]`))
-      .every((el) => (el as HTMLInputElement).value === ''),
-  ).toBe(true);
-  await enter('Actor', 'operator');
-  await enter('Reason', 'Explicit second pause');
-  await click('Pause library');
-  expect(e.pauses.list().total).toBe(2);
-  expect(rpc.pause).toHaveBeenCalledTimes(2);
+  expect(engine.pauses.list({ workflowId }).total).toBe(1);
 });
-it('retains entered values for a failed write and creates exactly one hold when the write is retried', async () => {
-  rpc.pause.mockRejectedValueOnce(Error('Write unavailable'));
-  await click('Pause library');
-  await enter('Actor', 'operator');
-  await enter('Reason', 'Keep my input');
-  await click('Pause library');
-  expect(text()).toContain('Write unavailable');
-  expect(text()).not.toContain('Pause added.');
-  expect(
-    (document.querySelector('textarea') as HTMLTextAreaElement).value,
-  ).toBe('Keep my input');
-  expect(e.pauses.list().total).toBe(0);
-  await click('Pause library');
-  expect(e.pauses.list().total).toBe(1);
-  expect(document.querySelector('form')).toBeNull();
+it('does not add or release a hold when a stale Pause click finds an existing pause', async () => {
+  await render();
+  const existing = hold();
+  await click('Pause workflow');
+  expect(rpc.pause).not.toHaveBeenCalled();
+  expect(rpc.resume).not.toHaveBeenCalled();
+  expect(engine.pauses.list({ workflowId }).items[0].id).toBe(existing.id);
+  expect(button('Resume workflow')).toBeDefined();
 });
-it('keeps an acknowledged release completed when its read fails', async () => {
-  e.pauses.create({
-    target: { scope: 'library' },
-    actor: 'operator',
-    reason: 'Release me',
-  });
-  // Open through the existing clear-state trigger; the dialog loads current server state.
-  await click('Pause library');
-  await click('Cancel');
-  await click('Release…');
-  rpc.resume.mockImplementationOnce(async (q) => {
-    const result = e.pauses.resume(q.id);
+it('does not recreate a pause when a stale Resume click finds it already released', async () => {
+  const existing = hold();
+  await render();
+  engine.pauses.resume(existing.id);
+  await click('Resume workflow');
+  expect(rpc.pause).not.toHaveBeenCalled();
+  expect(rpc.resume).not.toHaveBeenCalled();
+  expect(button('Pause workflow')).toBeDefined();
+});
+it('preserves an acknowledged pause through failed refresh and retries only the read', async () => {
+  rpc.pause.mockImplementationOnce(async (query) => {
+    const result = engine.pauses.create(query);
     readFails = true;
     return result;
   });
-  await click('Release hold');
-  expect(text()).toContain('Hold released.');
-  expect(button('Release hold')).toBeUndefined();
-  expect(e.pauses.list().total).toBe(0);
+  await render();
+  await click('Pause workflow');
+  expect(text()).toContain('Workflow paused');
+  expect(text()).toContain('Status read unavailable');
+  expect(engine.pauses.list({ workflowId }).total).toBe(1);
   readFails = false;
-  await click('Retry refresh');
-  expect(text()).toContain('0 applicable holds');
+  await click('Retry pause status');
+  expect(button('Resume workflow')).toBeDefined();
+  expect(rpc.pause).toHaveBeenCalledOnce();
+});
+it('blocks mutations until a failed initial status read is retried', async () => {
+  readFails = true;
+  await render();
+  expect(button('Pause workflow')).toBeUndefined();
+  await click('Retry pause status');
+  expect(rpc.pause).not.toHaveBeenCalled();
+  readFails = false;
+  await click('Retry pause status');
+  expect(button('Pause workflow')).toBeDefined();
+});
+it('does not mutate when the preflight status read fails', async () => {
+  await render();
+  readFails = true;
+  await click('Pause workflow');
+  expect(rpc.pause).not.toHaveBeenCalled();
+  expect(rpc.resume).not.toHaveBeenCalled();
+  expect(text()).toContain('Status read unavailable');
+});
+it('keeps an acknowledged resume completed through failed refresh', async () => {
+  hold();
+  rpc.resume.mockImplementationOnce(async (query) => {
+    const result = engine.pauses.resume(query.id);
+    readFails = true;
+    return result;
+  });
+  await render();
+  await click('Resume workflow');
+  expect(text()).not.toContain('Workflow paused');
+  expect(text()).toContain('Status read unavailable');
+  readFails = false;
+  await click('Retry pause status');
+  expect(button('Pause workflow')).toBeDefined();
   expect(rpc.resume).toHaveBeenCalledOnce();
+  expect(rpc.pause).not.toHaveBeenCalled();
+});
+it('refreshes after uncertain creation and does not create a duplicate on retry', async () => {
+  rpc.pause.mockImplementationOnce(async (query) => {
+    engine.pauses.create(query);
+    throw Error('Connection lost after write');
+  });
+  await render();
+  await click('Pause workflow');
+  expect(text()).toContain('Connection lost after write');
+  expect(button('Resume workflow')).toBeDefined();
+  expect(engine.pauses.list({ workflowId }).total).toBe(1);
+  expect(rpc.pause).toHaveBeenCalledOnce();
+});
+it('resumes legacy workflow holds across all pages while preserving library holds', async () => {
+  const library = hold('library');
+  for (let i = 0; i < 101; i++) hold();
+  await render();
+  expect(rpc.list).toHaveBeenCalledWith(
+    expect.objectContaining({ offset: 100 }),
+  );
+  await click('Resume workflow');
+  expect(rpc.resume).toHaveBeenCalledTimes(101);
+  expect(
+    engine.pauses.list({ workflowId }).items.map((item) => item.id),
+  ).toEqual([library.id]);
+  expect(button('Paused by library').disabled).toBe(true);
+  expect(text()).toContain('release its exact ID through the CLI or MCP');
+});
+it('retains paused status after a partial resume fails and retries only remaining holds', async () => {
+  hold();
+  hold();
+  rpc.resume.mockImplementationOnce(async (query) =>
+    engine.pauses.resume(query.id),
+  );
+  rpc.resume.mockRejectedValueOnce(Error('Release unavailable'));
+  await render();
+  await click('Resume workflow');
+  expect(text()).toContain('Release unavailable');
+  expect(engine.pauses.list({ workflowId }).total).toBe(1);
+  expect(button('Resume workflow')).toBeDefined();
+  await click('Resume workflow');
+  expect(engine.pauses.list({ workflowId }).total).toBe(0);
+  expect(rpc.resume).toHaveBeenCalledTimes(3);
+});
+it('does not poll inactive pauses and refreshes from the shared workspace tick', async () => {
+  await render();
+  rpc.list.mockClear();
+  vi.useFakeTimers();
+  await act(async () => vi.advanceTimersByTimeAsync(20_000));
+  expect(rpc.list).not.toHaveBeenCalled();
+  hold();
+  await render(1);
+  expect(rpc.list).toHaveBeenCalledOnce();
+  expect(button('Resume workflow')).toBeDefined();
 });
