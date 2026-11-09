@@ -1,20 +1,6 @@
-import { useId, useState } from 'react';
-import {
-  ActionIcon,
-  Badge,
-  Menu,
-  SegmentedControl,
-  TextInput,
-} from '@mantine/core';
-import {
-  ArrowUpRight,
-  GitBranch,
-  MoreHorizontal,
-  Plus,
-  Search,
-  Trash2,
-  Workflow as WorkflowIcon,
-} from 'lucide-react';
+import { useId, useRef, useState } from 'react';
+import { ActionIcon, Badge, Menu, Tabs, TextInput } from '@mantine/core';
+import { MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
 import type { Workflow } from '@interlock/core';
 import { Button } from '../../components/Button/Button';
 import { Modal } from '../../components/Modal/Modal';
@@ -22,6 +8,16 @@ import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
 import type { Action } from '../../lib/useActionFeedback';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import styles from './WorkflowChildren.module.css';
+import {
+  PageTabList,
+  workspacePage,
+} from '../../components/PageLayout/PageLayout';
+import {
+  WorkflowCard,
+  WorkflowGrid,
+} from '../../components/WorkflowCards/WorkflowCards';
+import { EmptyState } from '../../components/EmptyState/EmptyState';
+import { workflowTabs } from './workflowListConfig';
 
 export function WorkflowChildren({
   workflow,
@@ -39,6 +35,7 @@ export function WorkflowChildren({
   disabled: boolean;
 }) {
   const createFormId = useId();
+  const searchInput = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [archived, setArchived] = useState(false);
   const [query, setQuery] = useState('');
@@ -47,14 +44,11 @@ export function WorkflowChildren({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const owned = workflows.filter((w) => w.ownerWorkflowId === workflow.id);
-  const children = owned
-    .filter(
-      (w) =>
-        w.archived === archived &&
-        `${w.name} ${w.description}`
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-    )
+  const scope = owned.filter((w) =>
+    `${w.name} ${w.description}`.toLowerCase().includes(query.toLowerCase()),
+  );
+  const children = scope
+    .filter((w) => w.archived === archived)
     .sort((a, b) => a.name.localeCompare(b.name));
   const canCreate = !disabled && !workflow.archived;
   const openCreate = () => {
@@ -63,58 +57,50 @@ export function WorkflowChildren({
     setCreating(true);
   };
   return (
-    <section className={styles.page} aria-label="Child workflows">
-      <header className={styles.header}>
-        <h1>Child workflows</h1>
-        <Button variant="primary" disabled={!canCreate} onClick={openCreate}>
-          <Plus size={16} />
-          New child
-        </Button>
-      </header>
-      <div className={styles.toolbar}>
-        <SegmentedControl
-          aria-label="Child workflow status"
-          value={archived ? 'archived' : 'active'}
-          onChange={(value) => setArchived(value === 'archived')}
-          data={[
-            {
-              value: 'active',
-              label: `Active · ${owned.filter((w) => !w.archived).length}`,
-            },
-            {
-              value: 'archived',
-              label: `Archived · ${owned.filter((w) => w.archived).length}`,
-            },
-          ]}
-        />
+    <Tabs
+      unstyled
+      className={workspacePage.page}
+      aria-label="Child workflows"
+      value={archived ? 'archived' : 'active'}
+      onChange={(value) => setArchived(value === 'archived')}
+    >
+      <PageTabList label="Child workflow status" items={workflowTabs(scope)}>
         <TextInput
-          className={styles.search}
+          ref={searchInput}
+          className={workspacePage.search}
           aria-label="Search child workflows"
-          placeholder="Find a child workflow…"
-          leftSection={<Search size={15} />}
+          placeholder="Search child workflows"
+          leftSection={<Search size={14} />}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-      </div>
-      {children.length ? (
-        <div className={styles.grid}>
-          {children.map((child) => {
-            const uses = workflow.draft.nodes.filter(
-              (n) => n.kind === 'workflow' && n.workflowId === child.id,
-            );
-            const steps = child.draft.nodes.filter(
-              (n) => n.kind !== 'entry' && n.kind !== 'exit',
-            ).length;
-            return (
-              <article
-                className={`${styles.card} ${disabled ? styles.cardDisabled : ''}`}
-                key={child.id}
-              >
-                <div className={styles.cardTop}>
-                  <span className={styles.icon}>
-                    <WorkflowIcon size={21} strokeWidth={1.6} />
-                  </span>
-                  <div className={styles.cardActions}>
+        <Button variant="primary" disabled={!canCreate} onClick={openCreate}>
+          <Plus size={14} />
+          New child
+        </Button>
+      </PageTabList>
+      <Tabs.Panel
+        value={archived ? 'archived' : 'active'}
+        className={workspacePage.content}
+      >
+        {children.length ? (
+          <WorkflowGrid>
+            {children.map((child) => {
+              const uses = workflow.draft.nodes.filter(
+                (node) =>
+                  node.kind === 'workflow' && node.workflowId === child.id,
+              ).length;
+              const steps = child.draft.nodes.filter(
+                (node) => node.kind !== 'entry' && node.kind !== 'exit',
+              ).length;
+              return (
+                <WorkflowCard
+                  key={child.id}
+                  name={child.name}
+                  description={child.description}
+                  disabled={disabled}
+                  onOpen={() => onOpen(child.id)}
+                  status={
                     <Badge
                       variant="light"
                       color={
@@ -125,6 +111,7 @@ export function WorkflowChildren({
                             : 'gray'
                       }
                       size="sm"
+                      tt="none"
                     >
                       {child.archived
                         ? 'Archived'
@@ -132,10 +119,12 @@ export function WorkflowChildren({
                           ? `v${child.latestVersion} published`
                           : 'Draft'}
                     </Badge>
+                  }
+                  metadata={`${steps} ${steps === 1 ? 'step' : 'steps'} · ${uses ? `Used in ${uses} ${uses === 1 ? 'step' : 'steps'}` : 'Not used in draft'}`}
+                  actions={
                     <Menu position="bottom-end" width={160}>
                       <Menu.Target>
                         <ActionIcon
-                          className={styles.cardMenu}
                           variant="subtle"
                           color="gray"
                           aria-label={`Actions for ${child.name}`}
@@ -154,90 +143,44 @@ export function WorkflowChildren({
                         </Menu.Item>
                       </Menu.Dropdown>
                     </Menu>
-                  </div>
-                </div>
-                <h2>
-                  <button
-                    type="button"
-                    className={styles.cardLink}
-                    disabled={disabled}
-                    onClick={() => onOpen(child.id)}
-                    aria-label={`Open ${child.name}`}
-                  >
-                    {child.name}
-                  </button>
-                </h2>
-                <p className={styles.description}>
-                  {child.description ||
-                    'A focused piece of work, with its own steps and versions.'}
-                </p>
-                <div className={styles.cardFooter}>
-                  <span>
-                    {steps} {steps === 1 ? 'step' : 'steps'}
-                    <span className={styles.dot}>·</span>
-                    {uses.length
-                      ? `Used in ${uses.length} ${uses.length === 1 ? 'step' : 'steps'}`
-                      : 'Not used in draft'}
-                  </span>
-                  <ArrowUpRight size={17} aria-hidden="true" />
-                </div>
-              </article>
-            );
-          })}
-          {!archived && !query && (
-            <button
-              type="button"
-              className={styles.newCard}
-              disabled={!canCreate}
-              onClick={openCreate}
-            >
-              <span className={styles.newIcon}>
-                <Plus size={21} />
-              </span>
-              <strong>Create a child workflow</strong>
-              <span>Build a helper for {workflow.name}</span>
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className={styles.empty}>
-          <span className={styles.emptyIcon}>
-            <GitBranch size={28} strokeWidth={1.5} />
-          </span>
-          <h2>
-            {query
-              ? 'No matching child workflows'
-              : archived
-                ? 'No archived children'
-                : 'Create your first child workflow'}
-          </h2>
-          <p>
-            {query
-              ? 'Try another name or clear your search.'
-              : archived
-                ? 'Archived children will appear here.'
-                : 'Give a focused task its own steps and versions. It stays here with its parent, ready to use when you need it.'}
-          </p>
-          {query ? (
-            <Button onClick={() => setQuery('')}>Clear search</Button>
-          ) : (
-            !archived && (
+                  }
+                />
+              );
+            })}
+          </WorkflowGrid>
+        ) : (
+          <EmptyState
+            title={
+              query
+                ? 'No matching child workflows'
+                : archived
+                  ? 'No archived children'
+                  : 'No child workflows yet'
+            }
+            description={
+              !query && !archived
+                ? 'Children stay with this parent and out of the main workflow library.'
+                : undefined
+            }
+          >
+            {query && (
               <Button
-                variant="primary"
-                disabled={!canCreate}
-                onClick={openCreate}
+                onClick={() => {
+                  setQuery('');
+                  searchInput.current?.focus();
+                }}
               >
-                <Plus size={16} />
-                Create your first child
+                Clear search
               </Button>
-            )
-          )}
-        </div>
-      )}
-      <p className={styles.caption}>
-        <GitBranch size={13} />
-        Children stay with this parent and out of the main workflow library.
-      </p>
+            )}
+          </EmptyState>
+        )}
+        {children.length > 0 && (
+          <p className={styles.caption}>
+            Children stay with this parent and out of the main workflow library.
+          </p>
+        )}
+      </Tabs.Panel>
       {creating && (
         <Modal
           title="New child workflow"
@@ -264,10 +207,6 @@ export function WorkflowChildren({
                 }
               }}
             >
-              <p className={styles.dialogIntro}>
-                Create a helper that belongs to <strong>{workflow.name}</strong>
-                .
-              </p>
               <TextInput
                 label="Child workflow name"
                 placeholder="e.g. Gather evidence"
@@ -316,6 +255,6 @@ export function WorkflowChildren({
           onDeleted={() => setDeleting(undefined)}
         />
       )}
-    </section>
+    </Tabs>
   );
 }

@@ -1,15 +1,12 @@
 import { useUiFeatures } from '../../lib/uiFeatures';
 import type { Action } from '../../lib/useActionFeedback';
 import { ActionIcon, Menu, Tabs, TextInput } from '@mantine/core';
-import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { useRef, useState } from 'react';
 import {
-  ArrowRight,
   BookOpen,
   Plus,
   Search,
   Upload,
-  GitBranch,
   Copy,
   Archive,
   Trash2,
@@ -23,8 +20,17 @@ import { api, download } from '../../lib/api';
 import { ImportWorkflowDialog } from './ImportWorkflowDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { paths } from '../../routes/paths';
-import layout from '../../components/PageLayout/PageLayout.module.css';
-import styles from './WorkflowLibrary.module.css';
+import {
+  PageHeader,
+  PageTabList,
+  workspacePage,
+} from '../../components/PageLayout/PageLayout';
+import {
+  WorkflowCard,
+  WorkflowGrid,
+} from '../../components/WorkflowCards/WorkflowCards';
+import { EmptyState } from '../../components/EmptyState/EmptyState';
+import { workflowTabs } from './workflowListConfig';
 export function WorkflowLibrary({
   workflows,
   onOpen,
@@ -38,10 +44,7 @@ export function WorkflowLibrary({
   const [query, setQuery] = useState(''),
     [archived, setArchived] = useState(false);
   const [importing, setImporting] = useState(false);
-  const importTrigger = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!importing) importTrigger.current?.focus();
-  }, [importing]);
+  const searchInput = useRef<HTMLInputElement>(null);
   const [deleting, setDeleting] = useState<Workflow>();
   const [importedIds, setImportedIds] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
@@ -62,223 +65,192 @@ export function WorkflowLibrary({
       setCreating(false);
     }
   };
-  const visible = workflows.filter(
-    (w) =>
-      !w.ownerWorkflowId &&
-      w.archived === archived &&
-      `${w.name} ${w.description}`.toLowerCase().includes(query.toLowerCase()),
+  const library = workflows.filter((w) => !w.ownerWorkflowId);
+  const scope = library.filter((w) =>
+    `${w.name} ${w.description}`.toLowerCase().includes(query.toLowerCase()),
   );
+  const visible = scope.filter((w) => w.archived === archived);
   return (
-    <div className={layout.page}>
-      <header className={`${layout.header} ${layout.libraryHeader}`}>
-        <div>
-          <h1>Workflows</h1>
-          <p>Create, organize, and run your workflows.</p>
-        </div>
-        <div className="actions">
-          <Button
-            onClick={(event) => {
-              importTrigger.current = event.currentTarget;
-              setImporting(true);
-            }}
-          >
-            <Upload />
-            Import
-          </Button>
-          <Button
-            variant="primary"
-            disabled={creating}
-            aria-busy={creating}
-            onClick={() => void create()}
-          >
-            <Plus />
-            {creating ? 'Creating…' : 'New workflow'}
-          </Button>
-        </div>
-      </header>
-      <Tabs
-        value={archived ? 'archived' : 'active'}
-        onChange={(value) => setArchived(value === 'archived')}
-      >
-        <div className={layout.libraryToolbar}>
-          <Tabs.List>
-            <Tabs.Tab value="active">
-              Active{' '}
-              {
-                workflows.filter((w) => !w.ownerWorkflowId && !w.archived)
-                  .length
-              }
-            </Tabs.Tab>
-            <Tabs.Tab value="archived">Archived</Tabs.Tab>
-          </Tabs.List>
-          <TextInput
-            className={layout.librarySearch}
-            size="xs"
-            aria-label="Search workflows"
-            placeholder="Search workflows..."
-            leftSection={<Search size={15} />}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <Tabs.Panel value={archived ? 'archived' : 'active'}>
-          <div className={styles.grid}>
-            {visible.map((w) => (
-              <article
-                key={w.id}
-                className={`${styles.card} ${importedIds.includes(w.id) ? styles.imported : ''}`}
-              >
-                <div className={styles.cardTop}>
-                  <span className={styles.cardIcon}>
-                    <GitBranch size={19} />
-                  </span>
-                  <Menu position="bottom-end" width={160}>
-                    <Menu.Target>
-                      <ActionIcon
-                        className={styles.cardMenu}
-                        variant="subtle"
-                        color="gray"
-                        aria-label={`Actions for ${w.name}`}
-                      >
-                        <MoreHorizontal size={19} />
-                      </ActionIcon>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                      <Menu.Item
-                        leftSection={<Copy size={14} />}
-                        disabled={workflows.some(
-                          (child) => child.ownerWorkflowId === w.id,
-                        )}
-                        onClick={() =>
-                          void act(async () => {
-                            const copy = await api.workflows.clone.mutate({
-                              id: w.id,
-                            });
-                            onOpen(copy.id);
-                          }, 'Workflow cloned.')
-                        }
-                      >
-                        Clone
-                      </Menu.Item>
-                      <Menu.Item
-                        leftSection={<Download size={14} />}
-                        onClick={() =>
-                          void act(
-                            async () =>
-                              download(
-                                `${w.name}.json`,
-                                await api.workflows.export.query({ id: w.id }),
-                              ),
-                            'Workflow exported.',
-                          )
-                        }
-                      >
-                        Export
-                      </Menu.Item>
-                      <Menu.Item
-                        leftSection={<Archive size={14} />}
-                        onClick={() =>
-                          void act(
-                            () =>
-                              api.workflows.update.mutate({
-                                id: w.id,
-                                archived: !w.archived,
-                              }),
-                            w.archived
-                              ? 'Workflow restored.'
-                              : 'Workflow archived.',
-                          )
-                        }
-                      >
-                        {w.archived ? 'Restore' : 'Archive'}
-                      </Menu.Item>
-                      <Menu.Divider />
-                      <Menu.Item
-                        color="red"
-                        leftSection={<Trash2 size={14} />}
-                        onClick={() => setDeleting(w)}
-                      >
-                        Delete
-                      </Menu.Item>
-                    </Menu.Dropdown>
-                  </Menu>
-                </div>
-                <div className={styles.cardBody}>
-                  <h2>
-                    <Link className={styles.cardLink} to={paths.workflow(w.id)}>
-                      {w.name}
-                    </Link>
-                  </h2>
-                  <p>
-                    {w.description || 'A new procedure, ready to take shape.'}
-                  </p>
-                </div>
-                <div className={styles.cardFooter}>
-                  <span>
-                    {w.draft.nodes.length} nodes <b>·</b>{' '}
-                    {workflows.some(
-                      (child) => child.ownerWorkflowId === w.id,
-                    ) && (
-                      <>
-                        {
-                          workflows.filter(
-                            (child) => child.ownerWorkflowId === w.id,
-                          ).length
-                        }{' '}
-                        {workflows.filter(
-                          (child) => child.ownerWorkflowId === w.id,
-                        ).length === 1
-                          ? 'child'
-                          : 'children'}{' '}
-                        <b>·</b>{' '}
-                      </>
-                    )}
-                    {w.latestVersion ? `v${w.latestVersion}` : 'Unpublished'}
-                  </span>
-                  <Badge status={w.latestVersion ? 'published' : 'draft'} />
-                  <span className={styles.cardArrow} aria-hidden="true">
-                    <ArrowRight size={15} />
-                  </span>
-                </div>
-              </article>
-            ))}
-            <button
-              className={styles.newCard}
-              onClick={() => {
-                if (!workflows.some((w) => !w.ownerWorkflowId)) {
-                  setImporting(true);
-                  return;
-                }
-                void act(async () => {
-                  const w = await api.workflows.create.mutate({
-                    name: 'Untitled workflow',
-                  });
-                  onOpen(w.id);
-                }, 'Workflow created.');
-              }}
+    <Tabs
+      unstyled
+      value={archived ? 'archived' : 'active'}
+      onChange={(value) => setArchived(value === 'archived')}
+      className={workspacePage.page}
+    >
+      <PageHeader
+        title="Workflows"
+        actions={
+          <>
+            <Button onClick={() => setImporting(true)}>
+              <Upload size={14} />
+              Import
+            </Button>
+            <Button
+              variant="primary"
+              disabled={creating}
+              aria-busy={creating}
+              onClick={() => void create()}
             >
-              <span>
-                {!workflows.some((w) => !w.ownerWorkflowId) ? (
-                  <BookOpen size={23} />
-                ) : (
-                  <Plus size={23} />
-                )}
-              </span>
-              {!workflows.some((w) => !w.ownerWorkflowId) ? (
-                <>
+              <Plus size={14} />
+              New workflow
+            </Button>
+          </>
+        }
+      />
+      <PageTabList label="Workflow status" items={workflowTabs(scope)}>
+        <TextInput
+          ref={searchInput}
+          className={workspacePage.search}
+          aria-label="Search workflows"
+          placeholder="Search workflows"
+          leftSection={<Search size={14} />}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </PageTabList>
+      <Tabs.Panel
+        value={archived ? 'archived' : 'active'}
+        className={workspacePage.content}
+      >
+        {visible.length ? (
+          <WorkflowGrid>
+            {visible.map((w) => {
+              const childCount = workflows.filter(
+                (child) => child.ownerWorkflowId === w.id,
+              ).length;
+              return (
+                <WorkflowCard
+                  key={w.id}
+                  name={w.name}
+                  description={w.description}
+                  to={paths.workflow(w.id)}
+                  highlighted={importedIds.includes(w.id)}
+                  status={
+                    <Badge status={w.latestVersion ? 'published' : 'draft'} />
+                  }
+                  metadata={[
+                    `${w.draft.nodes.length} nodes`,
+                    childCount
+                      ? `${childCount} ${childCount === 1 ? 'child' : 'children'}`
+                      : '',
+                    w.latestVersion ? `v${w.latestVersion}` : 'Unpublished',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  actions={
+                    <Menu position="bottom-end" width={160}>
+                      <Menu.Target>
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          aria-label={`Actions for ${w.name}`}
+                        >
+                          <MoreHorizontal size={19} />
+                        </ActionIcon>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item
+                          leftSection={<Copy size={14} />}
+                          disabled={workflows.some(
+                            (child) => child.ownerWorkflowId === w.id,
+                          )}
+                          onClick={() =>
+                            void act(async () => {
+                              const copy = await api.workflows.clone.mutate({
+                                id: w.id,
+                              });
+                              onOpen(copy.id);
+                            }, 'Workflow cloned.')
+                          }
+                        >
+                          Clone
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<Download size={14} />}
+                          onClick={() =>
+                            void act(
+                              async () =>
+                                download(
+                                  `${w.name}.json`,
+                                  await api.workflows.export.query({
+                                    id: w.id,
+                                  }),
+                                ),
+                              'Workflow exported.',
+                            )
+                          }
+                        >
+                          Export
+                        </Menu.Item>
+                        <Menu.Item
+                          leftSection={<Archive size={14} />}
+                          onClick={() =>
+                            void act(
+                              () =>
+                                api.workflows.update.mutate({
+                                  id: w.id,
+                                  archived: !w.archived,
+                                }),
+                              w.archived
+                                ? 'Workflow restored.'
+                                : 'Workflow archived.',
+                            )
+                          }
+                        >
+                          {w.archived ? 'Restore' : 'Archive'}
+                        </Menu.Item>
+                        <Menu.Divider />
+                        <Menu.Item
+                          color="red"
+                          leftSection={<Trash2 size={14} />}
+                          onClick={() => setDeleting(w)}
+                        >
+                          Delete
+                        </Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
+                  }
+                />
+              );
+            })}
+          </WorkflowGrid>
+        ) : (
+          <EmptyState
+            title={
+              query
+                ? 'No matching workflows'
+                : archived
+                  ? 'No archived workflows'
+                  : library.length
+                    ? 'No active workflows'
+                    : 'No workflows yet'
+            }
+          >
+            {query ? (
+              <Button
+                onClick={() => {
+                  setQuery('');
+                  searchInput.current?.focus();
+                }}
+              >
+                Clear search
+              </Button>
+            ) : (
+              !archived &&
+              (!library.length ? (
+                <Button onClick={() => setImporting(true)}>
+                  <BookOpen size={16} />
                   Browse starter workflows
-                  <small>Choose a procedure to add to your library</small>
-                </>
+                </Button>
               ) : (
-                <>
-                  Create a workflow
-                  <small>Start with an input and an idea</small>
-                </>
-              )}
-            </button>
-          </div>
-        </Tabs.Panel>
-      </Tabs>
+                <Button onClick={() => setArchived(true)}>
+                  View archived workflows
+                </Button>
+              ))
+            )}
+          </EmptyState>
+        )}
+      </Tabs.Panel>
       {importing && (
         <ImportWorkflowDialog
           act={act}
@@ -305,11 +277,6 @@ export function WorkflowLibrary({
           onDeleted={() => setDeleting(undefined)}
         />
       )}
-      <div className={styles.caption}>
-        Workflows run on your local engine.
-        {features.connectAgent &&
-          ' Connect a harness to pick up agent assignments.'}
-      </div>
-    </div>
+    </Tabs>
   );
 }

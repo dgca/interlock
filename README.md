@@ -144,7 +144,7 @@ Use [fixture simulation](docs/workflow-simulation.md) to test supported flat gra
 
 ### Create a child workflow
 
-Use child workflows for helpers that belong to one parent. The main library shows library workflows only. Open a parent's **Child workflows** tab to find its helpers, including children not connected to a node.
+Use child workflows for helpers that belong to one parent. The main library shows library workflows only. Open a parent's **Child workflows** tab to find its helpers, including children not connected to a node. Both collections offer **Active** and **Archived** tabs and search by name or description. Their counts follow the search within that collection. Use **New workflow** in the library or **New child** in the parent's toolbar; an empty library also offers **Browse starter workflows**.
 
 In **Add node**, choose **Workflow**, select **Create child workflow**, and enter a name. **Save and create child** saves the parent draft and its new node together, then opens the child editor. Save or discard Raw edits before creating a child. The Child workflows tab also creates children without adding a node.
 
