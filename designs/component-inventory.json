@@ -1,0 +1,1396 @@
+{
+  "scope": "Current working-tree UI source; v2 target is not implemented",
+  "sourceManifest": "ui-source-inventory.json",
+  "families": [
+    {
+      "id": "button",
+      "group": "Primitives",
+      "family": "Button",
+      "implementation": "Existing shared + Mantine",
+      "owners": ["packages/ui/src/components/Button/Button.tsx"],
+      "variants": "Primary, neutral, ghost, danger; icon, busy, disabled, focus",
+      "board": "Actions",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "buttonPrimary",
+          "id": "b8S3J",
+          "name": "Button / Primary"
+        },
+        {
+          "key": "buttonNeutral",
+          "id": "q82D5",
+          "name": "Button / Neutral"
+        },
+        {
+          "key": "buttonGhost",
+          "id": "CStim",
+          "name": "Button / Ghost"
+        },
+        {
+          "key": "buttonDanger",
+          "id": "B20C5g",
+          "name": "Button / Danger"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "icon-button",
+      "group": "Primitives",
+      "family": "Icon button",
+      "implementation": "Mantine + feature buttons",
+      "owners": [
+        "packages/ui/src/features/runs/RunTags.tsx",
+        "packages/ui/src/features/workflows/TidyControl.tsx"
+      ],
+      "variants": "Standard 40px; editor stack 32px; accessible label",
+      "board": "Actions",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "buttonIcon",
+          "id": "RxBru",
+          "name": "Button / Icon"
+        },
+        {
+          "key": "canvasControls",
+          "id": "Pinxq",
+          "name": "Canvas / Flat controls"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "link",
+      "group": "Primitives",
+      "family": "Text and external link",
+      "implementation": "Router/native + Mantine",
+      "owners": [
+        "packages/ui/src/components/ListTable/ListTable.tsx",
+        "packages/ui/src/features/variables/EnvironmentEditor.tsx"
+      ],
+      "variants": "Navigation, external, inline, disabled action is not a link",
+      "board": "Actions",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "link",
+          "id": "X96Xo5",
+          "name": "Link / Inline"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "text-field",
+      "group": "Primitives",
+      "family": "Text field",
+      "implementation": "Mantine directly",
+      "owners": ["packages/ui/src/features/automations/AutomationEditor.tsx"],
+      "variants": "Default, empty, focus, error, disabled, read-only; 40px",
+      "board": "Fields",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "input",
+          "id": "ZJw4M",
+          "name": "Input / Base control"
+        },
+        {
+          "key": "field",
+          "id": "tPttK",
+          "name": "Field / Labeled"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "search-field",
+      "group": "Primitives",
+      "family": "Search field",
+      "implementation": "Mantine composition",
+      "owners": [
+        "packages/ui/src/features/prompts/Prompts.tsx",
+        "packages/ui/src/features/runs/RunList.tsx"
+      ],
+      "variants": "Leading search icon, clear, no results",
+      "board": "Fields",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "input",
+          "id": "ZJw4M",
+          "name": "Input / Base control"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "textarea",
+      "group": "Primitives",
+      "family": "Textarea",
+      "implementation": "Mantine directly",
+      "owners": [
+        "packages/ui/src/components/JsonEditor/JsonEditor.tsx",
+        "packages/ui/src/features/workflows/NodeInspector.tsx"
+      ],
+      "variants": "Resizable multiline, instructions, validation, read-only",
+      "board": "Fields",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "textarea",
+          "id": "bZQ82",
+          "name": "Input / Textarea"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "number-field",
+      "group": "Primitives",
+      "family": "Number field",
+      "implementation": "Mantine or native numeric input",
+      "owners": [
+        "packages/ui/src/components/SchemaInput/SchemaInput.tsx",
+        "packages/ui/src/features/workflows/DurationInput.tsx"
+      ],
+      "variants": "Bounds, integer/decimal, stepper, units",
+      "board": "Fields",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "input",
+          "id": "ZJw4M",
+          "name": "Input / Base control"
+        },
+        {
+          "key": "duration",
+          "id": "s4gNuz",
+          "name": "Field / Duration"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "select",
+      "group": "Primitives",
+      "family": "Select and native select",
+      "implementation": "Mantine directly",
+      "owners": [
+        "packages/ui/src/features/executors/ExecutorSelect.tsx",
+        "packages/ui/src/components/SchemaInput/SchemaInput.tsx"
+      ],
+      "variants": "Closed/open, grouped options, clearable, inherited/default, unavailable",
+      "board": "Fields",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "input",
+          "id": "ZJw4M",
+          "name": "Input / Base control"
+        },
+        {
+          "key": "picker",
+          "id": "eTRNj",
+          "name": "Picker / Open dropdown"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "combobox",
+      "group": "Primitives",
+      "family": "Searchable picker and autocomplete",
+      "implementation": "Mantine + existing feature composition",
+      "owners": [
+        "packages/ui/src/features/executors/ModelPicker.tsx",
+        "packages/ui/src/features/workflows/FetchUrlInput.tsx",
+        "packages/ui/src/features/workflows/SuggestionInput.tsx"
+      ],
+      "variants": "Search distinct from saved value; loading, empty, unavailable, refresh",
+      "board": "Fields",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "picker",
+          "id": "eTRNj",
+          "name": "Picker / Open dropdown"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "multi-select",
+      "group": "Primitives",
+      "family": "Multi-select and tags input",
+      "implementation": "Mantine directly",
+      "owners": [
+        "packages/ui/src/features/automations/AutomationEditor.tsx",
+        "packages/ui/src/features/workflows/ResourceBindingsEditor.tsx"
+      ],
+      "variants": "Selected tokens, remove, free entry versus fixed options",
+      "board": "Selection",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "multi",
+          "id": "gLwnc",
+          "name": "Input / Multiple values"
+        },
+        {
+          "key": "token",
+          "id": "bFoBB",
+          "name": "Token / Removable"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "segmented",
+      "group": "Primitives",
+      "family": "Segmented control",
+      "implementation": "Mantine directly",
+      "owners": [
+        "packages/ui/src/components/SchemaInput/SchemaInput.tsx",
+        "packages/ui/src/features/automations/AutomationEditor.tsx"
+      ],
+      "variants": "Two/multiple options, text/icon, 40px outer / 32px inner",
+      "board": "Selection",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "segmented",
+          "id": "CS3Nz",
+          "name": "Segmented / Text"
+        },
+        {
+          "key": "segmentedIcon",
+          "id": "ZeWvB",
+          "name": "Segmented / Icon"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "checkbox",
+      "group": "Primitives",
+      "family": "Checkbox",
+      "implementation": "Mantine directly",
+      "owners": [
+        "packages/ui/src/features/runs/HistoryCleanupDialog.tsx",
+        "packages/ui/src/components/ContractEditor/FieldEditor.tsx"
+      ],
+      "variants": "Unchecked, checked, mixed, disabled, validation",
+      "board": "Selection",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "checkbox",
+          "id": "NbHoS",
+          "name": "Control / Checkbox"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "radio",
+      "group": "Primitives",
+      "family": "Radio and choice row",
+      "implementation": "Mantine directly",
+      "owners": [
+        "packages/ui/src/features/workflows/WorkflowModeEditor.tsx",
+        "packages/ui/src/features/workflows/ImportWorkflowDialog.tsx"
+      ],
+      "variants": "Exclusive choice, selected, unselected, disabled, explanation",
+      "board": "Selection",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "radio",
+          "id": "Rjen4",
+          "name": "Control / Radio"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "switch",
+      "group": "Primitives",
+      "family": "Switch",
+      "implementation": "Mantine directly",
+      "owners": [
+        "packages/ui/src/features/executors/Harnesses.tsx",
+        "packages/ui/src/features/workflows/NodeInspector.tsx"
+      ],
+      "variants": "Off/on, disabled, inherited override toggles",
+      "board": "Selection",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "switch",
+          "id": "gK5O5",
+          "name": "Control / Switch"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "badge",
+      "group": "Primitives",
+      "family": "Status badge and count",
+      "implementation": "Existing shared + Mantine",
+      "owners": [
+        "packages/ui/src/components/Badge/Badge.tsx",
+        "packages/ui/src/components/PageLayout/PageLayout.tsx"
+      ],
+      "variants": "Semantic state text, counts, neutral version; avoid color-only status",
+      "board": "Feedback",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "badge",
+          "id": "WgvjZ",
+          "name": "Badge / Status"
+        },
+        {
+          "key": "count",
+          "id": "BNhsD",
+          "name": "Badge / Count"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "menu",
+      "group": "Primitives",
+      "family": "Menu and menu item",
+      "implementation": "Mantine directly",
+      "owners": [
+        "packages/ui/src/features/workflows/WorkflowLibrary.tsx",
+        "packages/ui/src/features/workflows/TidyControl.tsx"
+      ],
+      "variants": "Normal, selected, danger, disabled, divider, group label",
+      "board": "Navigation",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "menu",
+          "id": "Ji6NS",
+          "name": "Menu / Dropdown"
+        },
+        {
+          "key": "menuItem",
+          "id": "yCeLo",
+          "name": "Menu / Item"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "divider",
+      "group": "Primitives",
+      "family": "Divider",
+      "implementation": "Native/CSS + Mantine",
+      "owners": [
+        "packages/ui/src/components/PageLayout/PageLayout.tsx",
+        "packages/ui/src/features/runs/RunVersionDialog.tsx"
+      ],
+      "variants": "Full edge-to-edge; tab bridge is intentional",
+      "board": "Foundations",
+      "penStatus": "extracted",
+      "penComponents": [
+        {
+          "key": "divider",
+          "id": "mc49Z",
+          "name": "Divider / Horizontal"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "loader",
+      "group": "Primitives",
+      "family": "Loading indicator",
+      "implementation": "Mantine directly",
+      "owners": [
+        "packages/ui/src/features/executors/ModelPicker.tsx",
+        "packages/ui/src/features/workflows/TidyControl.tsx"
+      ],
+      "variants": "Inline, button busy, accessible status",
+      "board": "Feedback",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "loader",
+          "id": "mmrNW",
+          "name": "Loader / Inline"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "skeleton",
+      "group": "Primitives",
+      "family": "Static skeleton",
+      "implementation": "Existing shared + Mantine",
+      "owners": [
+        "packages/ui/src/components/LoadingSkeleton/LoadingSkeleton.tsx"
+      ],
+      "variants": "Text, form, card, list row; no false live data",
+      "board": "Feedback",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "skeleton",
+          "id": "v4wbG",
+          "name": "Skeleton / List row"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "progress",
+      "group": "Primitives",
+      "family": "Progress and data bar",
+      "implementation": "Mantine + feature presentation",
+      "owners": [
+        "packages/ui/src/features/report/WorkflowReportView.tsx",
+        "packages/ui/src/features/runs/runProgress.ts"
+      ],
+      "variants": "Fraction/count label; indeterminate separate from completion",
+      "board": "Feedback",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "progress",
+          "id": "mZ9Xu",
+          "name": "Progress / Determinate"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "notification",
+      "group": "Primitives",
+      "family": "Notification and copy feedback",
+      "implementation": "Mantine + application state",
+      "owners": [
+        "packages/ui/src/App.tsx",
+        "packages/ui/src/lib/useActionFeedback.ts"
+      ],
+      "variants": "Success/error, dismissal, copy confirmation",
+      "board": "Feedback",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "notification",
+          "id": "Wv4uQ",
+          "name": "Notification / Result"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "file-input",
+      "group": "Primitives",
+      "family": "File import and drop area",
+      "implementation": "Native input + feature composition",
+      "owners": ["packages/ui/src/features/workflows/ImportWorkflowDialog.tsx"],
+      "variants": "Browse/drop, selected file, parse error, source review",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "local-datetime",
+      "group": "Primitives",
+      "family": "Local date/time input",
+      "implementation": "Mantine TextInput with native type",
+      "owners": ["packages/ui/src/features/runs/HistoryCleanupDialog.tsx"],
+      "variants": "Native datetime-local; no custom calendar currently",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "code-text",
+      "group": "Primitives",
+      "family": "Inline code and read-only code block",
+      "implementation": "Native + Mantine Code",
+      "owners": [
+        "packages/ui/src/features/runs/RunInspector.tsx",
+        "packages/ui/src/features/variables/EnvironmentEditor.tsx"
+      ],
+      "variants": "Monospace for actual code, IDs, paths; copy and wrapping",
+      "board": "Feedback",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "code",
+          "id": "C9lXsm",
+          "name": "Code / Read-only block"
+        }
+      ],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "hover-title",
+      "group": "Primitives",
+      "family": "Hover label and truncated text",
+      "implementation": "Native title attributes today",
+      "owners": [
+        "packages/ui/src/components/WorkflowCards/WorkflowCards.tsx",
+        "packages/ui/src/features/workflows/WorkflowEditor.tsx"
+      ],
+      "variants": "Full title for truncated labels; custom tooltip not implemented",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "layout",
+      "group": "Primitives",
+      "family": "Layout and scrolling foundations",
+      "implementation": "CSS + Mantine layout helpers",
+      "owners": [
+        "packages/ui/src/components/PageLayout/WorkspacePage.module.css",
+        "packages/ui/src/features/runs/RunInspector.tsx"
+      ],
+      "variants": "Spacing, grid, scroll container, sticky chrome, focus visibility",
+      "board": "Foundations",
+      "penStatus": "foundation-guidance",
+      "penComponents": [],
+      "inventoryBoard": "qDeLu"
+    },
+    {
+      "id": "page-header",
+      "group": "Compositions",
+      "family": "Page header",
+      "implementation": "Existing shared; editor has local header",
+      "owners": [
+        "packages/ui/src/components/PageLayout/PageLayout.tsx",
+        "packages/ui/src/features/workflows/WorkflowEditor.tsx"
+      ],
+      "variants": "76px title-only, 88px subtitle/status; actions vertically centered",
+      "board": "Compositions",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "header",
+          "id": "lwSph",
+          "name": "Page / Header"
+        },
+        {
+          "key": "headerTabs",
+          "id": "UAlMe",
+          "name": "Page / Header with tabs"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "page-tabs",
+      "group": "Compositions",
+      "family": "Attached page tabs",
+      "implementation": "Existing shared + Mantine/router semantics",
+      "owners": ["packages/ui/src/components/PageLayout/PageLayout.tsx"],
+      "variants": "Solid selected fill owns surface, optional counts; horizontal 44px",
+      "board": "Navigation",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "tab",
+          "id": "uqBLX",
+          "name": "Tab / Attached item"
+        },
+        {
+          "key": "tabs",
+          "id": "m8jB2",
+          "name": "Tabs / Attached strip"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "toolbar",
+      "group": "Compositions",
+      "family": "Page toolbar and filter row",
+      "implementation": "Existing shared + feature layouts",
+      "owners": [
+        "packages/ui/src/components/PageLayout/PageLayout.tsx",
+        "packages/ui/src/features/runs/RunList.tsx"
+      ],
+      "variants": "Search, summary, filters, reset; actions padded above attached tabs",
+      "board": "Compositions",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "toolbar",
+          "id": "p90dF",
+          "name": "Page / Toolbar"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "form-field",
+      "group": "Compositions",
+      "family": "Labeled field and validation",
+      "implementation": "Mantine wrapper conventions",
+      "owners": [
+        "packages/ui/src/components/SchemaInput/SchemaInput.tsx",
+        "packages/ui/src/features/executors/Harnesses.tsx"
+      ],
+      "variants": "Label, optional/required, help, control, error; read-only distinct",
+      "board": "Fields",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "field",
+          "id": "tPttK",
+          "name": "Field / Labeled"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "form-section",
+      "group": "Compositions",
+      "family": "Form section and solid container",
+      "implementation": "Repeated feature composition",
+      "owners": [
+        "packages/ui/src/features/automations/AutomationEditor.tsx",
+        "packages/ui/src/features/executors/Harnesses.tsx"
+      ],
+      "variants": "Solid form surface, heading/grouping, optional fieldset, action row",
+      "board": "Compositions",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "form",
+          "id": "rsNhE",
+          "name": "Form / Solid container"
+        },
+        {
+          "key": "formActions",
+          "id": "s0dHn",
+          "name": "Form / Action row"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "disclosure",
+      "group": "Compositions",
+      "family": "Disclosure and advanced settings",
+      "implementation": "Native details; Mantine Collapse in report",
+      "owners": [
+        "packages/ui/src/components/ContractEditor/FieldEditor.tsx",
+        "packages/ui/src/features/report/WorkflowReportView.tsx"
+      ],
+      "variants": "Collapsed/expanded, summaries, nested detail, preserve focus",
+      "board": "Compositions",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "disclosure",
+          "id": "jXu5H",
+          "name": "Disclosure / Row"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "modal",
+      "group": "Compositions",
+      "family": "Modal shell and footer",
+      "implementation": "Existing shared over Mantine",
+      "owners": [
+        "packages/ui/src/components/Modal/Modal.tsx",
+        "packages/ui/src/components/Modal/ModalLayout.tsx"
+      ],
+      "variants": "Fixed chrome/scroll body; cancel/apply; busy dismissal restrictions",
+      "board": "Compositions",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "modal",
+          "id": "iIwT1",
+          "name": "Modal / Form shell"
+        },
+        {
+          "key": "nodeModal",
+          "id": "cVPwf",
+          "name": "Modal / Node settings"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "modal-navigation",
+      "group": "Compositions",
+      "family": "Modal section navigation and nested page",
+      "implementation": "Existing feature + shared modal",
+      "owners": [
+        "packages/ui/src/features/workflows/NodeSettingsSections.tsx",
+        "packages/ui/src/features/workflows/SettingsDialog.tsx"
+      ],
+      "variants": "Vertical sections; nested contract page with Back and return focus",
+      "board": "Compositions",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "nodeModal",
+          "id": "cVPwf",
+          "name": "Modal / Node settings"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "confirmation",
+      "group": "Compositions",
+      "family": "Confirmation and consequential action",
+      "implementation": "Existing feature compositions",
+      "owners": [
+        "packages/ui/src/features/runs/RunCancellationDialog.tsx",
+        "packages/ui/src/features/workflows/DeleteWorkflowDialog.tsx"
+      ],
+      "variants": "Specific consequence, optional checkbox/reason; not every Delete needs confirmation",
+      "board": "Compositions",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "confirmation",
+          "id": "kz47f",
+          "name": "Confirmation / Delete workflow"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "empty-state",
+      "group": "Compositions",
+      "family": "Empty and no-results state",
+      "implementation": "Existing shared + feature markup",
+      "owners": [
+        "packages/ui/src/components/EmptyState/EmptyState.tsx",
+        "packages/ui/src/features/workflows/WorkflowLibrary.tsx"
+      ],
+      "variants": "Initial versus filtered empty; useful recovery action",
+      "board": "Feedback",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "empty",
+          "id": "KNQID",
+          "name": "State / Empty results"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "list-table",
+      "group": "Compositions",
+      "family": "List table and row",
+      "implementation": "Existing shared + Mantine tables in reports",
+      "owners": ["packages/ui/src/components/ListTable/ListTable.tsx"],
+      "variants": "Link, action, static row, selection, loading, overflow",
+      "board": "Compositions",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "listRow",
+          "id": "M2QrR",
+          "name": "List / Row"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "pagination",
+      "group": "Compositions",
+      "family": "Bounded list navigation",
+      "implementation": "Repeated feature composition",
+      "owners": [
+        "packages/ui/src/features/runs/RunList.tsx",
+        "packages/ui/src/features/runs/RunUsage.tsx"
+      ],
+      "variants": "Count/range, previous/next, disabled boundaries; no invented page grid",
+      "board": "Compositions",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "pagination",
+          "id": "PPB8w",
+          "name": "List / Pagination"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "sidebar",
+      "group": "Compositions",
+      "family": "Main sidebar and navigation item",
+      "implementation": "Existing shared",
+      "owners": ["packages/ui/src/components/Sidebar/Sidebar.tsx"],
+      "variants": "Selected/default item, resources/utilities, version/connectivity. V2 excludes Recent workflows and a generic Settings destination.",
+      "board": "Navigation",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "sidebar",
+          "id": "eDebj",
+          "name": "Navigation / Main sidebar"
+        },
+        {
+          "key": "navItem",
+          "id": "V8USgx",
+          "name": "Navigation / Item"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "banners",
+      "group": "Compositions",
+      "family": "Inline alert, pause and connection banner",
+      "implementation": "Mantine + shared/feature composition",
+      "owners": [
+        "packages/ui/src/features/pauses/PauseControls.tsx",
+        "packages/ui/src/features/automations/AutomationAlerts.tsx",
+        "packages/ui/src/App.tsx"
+      ],
+      "variants": "Info, attention, error; scoped recovery action and busy state",
+      "board": "Feedback",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "alert",
+          "id": "fNVg6",
+          "name": "Alert / Inline"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "key-value",
+      "group": "Compositions",
+      "family": "Editable key/value rows",
+      "implementation": "Several existing domain compositions",
+      "owners": [
+        "packages/ui/src/features/executors/KeyValueEditor.tsx",
+        "packages/ui/src/features/runs/RunTags.tsx",
+        "packages/ui/src/features/variables/EnvironmentEditor.tsx"
+      ],
+      "variants": "Add/remove, uniqueness, secrets, tokens; preserve domain validation",
+      "board": "Compositions",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "keyValue",
+          "id": "SH6lR",
+          "name": "Editor / Key-value row"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "ordered-reference",
+      "group": "Compositions",
+      "family": "Ordered reference list",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/prompts/PromptPicker.tsx",
+        "packages/ui/src/features/executors/ModelAliases.tsx"
+      ],
+      "variants": "Add searchable reference, up/down/remove, item details",
+      "board": "Compositions",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "orderedRow",
+          "id": "pl6TW",
+          "name": "Editor / Ordered reference row"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "duration",
+      "group": "Compositions",
+      "family": "Duration with unit",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/workflows/DurationInput.tsx",
+        "packages/ui/src/features/automations/AutomationEditor.tsx"
+      ],
+      "variants": "Amount + unit share baseline and height; whole-ms validation",
+      "board": "Fields",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "duration",
+          "id": "s4gNuz",
+          "name": "Field / Duration"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "schema-form",
+      "group": "Specialist editors",
+      "family": "Schema-driven input form",
+      "implementation": "Existing shared",
+      "owners": ["packages/ui/src/components/SchemaInput/SchemaInput.tsx"],
+      "variants": "Typed fields, required/disabled metadata, JSON fallback",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "contract-editor",
+      "group": "Specialist editors",
+      "family": "Contract/schema editor",
+      "implementation": "Existing shared",
+      "owners": [
+        "packages/ui/src/components/ContractEditor/ContractEditor.tsx",
+        "packages/ui/src/components/ContractEditor/FieldEditor.tsx"
+      ],
+      "variants": "Guided/raw, nested objects/arrays, choices/bounds, key rename",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "json-editor",
+      "group": "Specialist editors",
+      "family": "JSON editor",
+      "implementation": "Existing shared",
+      "owners": ["packages/ui/src/components/JsonEditor/JsonEditor.tsx"],
+      "variants": "Editable/read-only, invalid text retained, validation, monospace",
+      "board": "Fields",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "textarea",
+          "id": "bZQ82",
+          "name": "Input / Textarea"
+        }
+      ],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "code-editor",
+      "group": "Specialist editors",
+      "family": "Script/code editor",
+      "implementation": "Existing shared + Prism/simple editor",
+      "owners": [
+        "packages/ui/src/components/CodeEditor/CodeEditor.tsx",
+        "packages/ui/src/features/workflows/ScriptCode.tsx"
+      ],
+      "variants": "Line gutter, JavaScript/Bash/JSON, language choice, full-height raw",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "input-bindings",
+      "group": "Specialist editors",
+      "family": "Input/result bindings and paths",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/workflows/InputBindingsEditor.tsx",
+        "packages/ui/src/features/workflows/InputPathInput.tsx"
+      ],
+      "variants": "Source selector, mapped fields, fallback, node/execution references",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "yGlKF"
+    },
+    {
+      "id": "typed-value",
+      "group": "Specialist editors",
+      "family": "Typed value editor",
+      "implementation": "Existing feature composition",
+      "owners": ["packages/ui/src/features/workflows/TypedValueEditor.tsx"],
+      "variants": "Text/number/boolean/null/JSON, schema hints, suggestions",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "branches",
+      "group": "Specialist editors",
+      "family": "Switch/branch/result rules",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/workflows/SwitchEditor.tsx",
+        "packages/ui/src/features/workflows/ResultRulesEditor.tsx"
+      ],
+      "variants": "Named ordered routes, default/fallback, conditions, validation",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "http-editor",
+      "group": "Specialist editors",
+      "family": "HTTP fetch configuration",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/workflows/FetchEditor.tsx",
+        "packages/ui/src/features/workflows/FetchUrlInput.tsx"
+      ],
+      "variants": "Method/URL, input tokens, headers/query/body, variable binding, errors",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "environment",
+      "group": "Specialist editors",
+      "family": "Environment and resource binding",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/variables/EnvironmentEditor.tsx",
+        "packages/ui/src/features/workflows/ResourceBindingsEditor.tsx"
+      ],
+      "variants": "Config/Secret, template tokens, reserved names, JSON resources",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "model-picker",
+      "group": "Specialist editors",
+      "family": "Executor/model picker and inheritance",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/executors/ModelPicker.tsx",
+        "packages/ui/src/features/executors/ExecutorSelect.tsx",
+        "packages/ui/src/features/executors/ModelSettings.tsx"
+      ],
+      "variants": "Alias versus literal model, refresh, unavailable catalog, inherited effective value",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "workflow-card",
+      "group": "Product patterns",
+      "family": "Workflow card and grid",
+      "implementation": "Existing shared",
+      "owners": ["packages/ui/src/components/WorkflowCards/WorkflowCards.tsx"],
+      "variants": "Name/description, metadata/status, separate actions, disabled/highlighted",
+      "board": "Product",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "workflowCard",
+          "id": "u5hBMG",
+          "name": "Card / Workflow"
+        }
+      ],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "run-card",
+      "group": "Product patterns",
+      "family": "Run board card",
+      "implementation": "V2 design candidate; current global list uses rows",
+      "owners": [
+        "packages/ui/src/features/runs/RunList.tsx",
+        "packages/ui/src/features/runs/RunListSkeleton.tsx"
+      ],
+      "variants": "Attention/running/completed, progress, metadata, action; new composition candidate",
+      "board": "Product",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "runCard",
+          "id": "kVQCh",
+          "name": "Card / Run attention"
+        }
+      ],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "graph-node",
+      "group": "Product patterns",
+      "family": "Workflow graph node and ports",
+      "implementation": "Existing feature custom React Flow",
+      "owners": [
+        "packages/ui/src/features/workflows/FlowNode.tsx",
+        "packages/ui/src/features/workflows/canvasGraph.ts"
+      ],
+      "variants": "Side-only handles, named outputs, selected/connected/dimmed, floating edit; Batch variant",
+      "board": "Product",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "node",
+          "id": "s0ruw",
+          "name": "Graph / Agent node"
+        },
+        {
+          "key": "nodeSelected",
+          "id": "mmyEK",
+          "name": "Graph / Selected agent node"
+        },
+        {
+          "key": "routingNode",
+          "id": "cX3SD",
+          "name": "Graph / Routing node"
+        }
+      ],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "graph-tools",
+      "group": "Product patterns",
+      "family": "Canvas toolbar, controls and minimap",
+      "implementation": "Existing feature custom + React Flow",
+      "owners": [
+        "packages/ui/src/features/workflows/TidyControl.tsx",
+        "packages/ui/src/features/workflows/CanvasNavigation.tsx",
+        "packages/ui/src/features/runs/RunGraph.tsx"
+      ],
+      "variants": "Visual/Raw separate from 32px flat canvas tools; Tidy mode, fit, read-only run graph",
+      "board": "Product",
+      "penStatus": "base-with-partial-state-coverage",
+      "penComponents": [
+        {
+          "key": "canvasControls",
+          "id": "Pinxq",
+          "name": "Canvas / Flat controls"
+        },
+        {
+          "key": "canvasToolbar",
+          "id": "B5e2K",
+          "name": "Canvas / Authoring toolbar"
+        },
+        {
+          "key": "minimap",
+          "id": "suftm",
+          "name": "Canvas / Minimap"
+        }
+      ],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "run-inspector",
+      "group": "Product patterns",
+      "family": "Run inspector and child-run hierarchy",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/runs/RunInspector.tsx",
+        "packages/ui/src/features/runs/ComparisonContext.tsx"
+      ],
+      "variants": "Selected execution, owned/detached child scope, comparison, missing graph",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "timeline",
+      "group": "Product patterns",
+      "family": "Execution timeline and event detail",
+      "implementation": "Existing feature composition",
+      "owners": ["packages/ui/src/features/runs/RunInspector.tsx"],
+      "variants": "Selected/failed/waiting step, timestamp, expandable event data",
+      "board": "Product",
+      "penStatus": "proposed-specimen",
+      "penComponents": [
+        {
+          "key": "timeline",
+          "id": "USe7N",
+          "name": "Run / Timeline item"
+        }
+      ],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "usage-report",
+      "group": "Product patterns",
+      "family": "Usage/cost report and aggregation",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/runs/RunUsage.tsx",
+        "packages/ui/src/features/report/WorkflowReportView.tsx"
+      ],
+      "variants": "Metrics, real labels, grouping/filter, child scope, progress/table, unavailable data",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "attention",
+      "group": "Product patterns",
+      "family": "Run attention and agent handoff",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/runs/AgentHandoff.tsx",
+        "packages/ui/src/features/runs/WorkPanel.tsx"
+      ],
+      "variants": "Permission request, question answers, waiting for agent, copy instructions, submit",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "recovery",
+      "group": "Product patterns",
+      "family": "Managed execution and recovery",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/executors/ManagedExecutionPanel.tsx",
+        "packages/ui/src/features/runs/WorkPanel.tsx"
+      ],
+      "variants": "Model replacement, confirm stopped, resource release, live requests, uncertain results",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "publish-review",
+      "group": "Product patterns",
+      "family": "Publish change review",
+      "implementation": "Existing feature composition",
+      "owners": ["packages/ui/src/features/workflows/PublishReviewDialog.tsx"],
+      "variants": "Grouped added/changed/removed, before/after, stale/loading/failure/unchanged",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "import-flow",
+      "group": "Product patterns",
+      "family": "Import and dependency review",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/workflows/ImportWorkflowDialog.tsx",
+        "packages/ui/src/features/variables/VariableImportBindings.tsx"
+      ],
+      "variants": "Starter/GitHub/file/JSON, selection, review, conflicts, portable bindings",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "connection-flow",
+      "group": "Product patterns",
+      "family": "Connect agent and copy setup",
+      "implementation": "Existing shared composition",
+      "owners": ["packages/ui/src/components/ConnectDialog/ConnectDialog.tsx"],
+      "variants": "Transport/harness options, configuration preview, copy, unavailable state",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "history-cleanup",
+      "group": "Product patterns",
+      "family": "Retention and bulk history cleanup",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/runs/RetentionSettings.tsx",
+        "packages/ui/src/features/runs/HistoryCleanupDialog.tsx"
+      ],
+      "variants": "Preview selection, irreversible confirmation, scope, pagination, partial failure",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "settings-policies",
+      "group": "Product patterns",
+      "family": "Execution, stall and recovery policy forms",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/executors/ExecutionSettings.tsx",
+        "packages/ui/src/features/executors/StallSettings.tsx"
+      ],
+      "variants": "Inherit/override/off, duration, concurrency, retention, disabled inherited values",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "library-editors",
+      "group": "Product patterns",
+      "family": "Prompt/variable/model-alias editors",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/prompts/Prompts.tsx",
+        "packages/ui/src/features/variables/Variables.tsx",
+        "packages/ui/src/features/executors/ModelAliases.tsx"
+      ],
+      "variants": "Used-by references, secret replacement, save conflict/reload, ordered model candidates",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "diagnostics",
+      "group": "Product patterns",
+      "family": "Diagnostic check and connection state",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/diagnostics/Diagnostics.tsx",
+        "packages/ui/src/App.tsx"
+      ],
+      "variants": "Pass/fail/unknown, stale results, live probe, scoped details and retry",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "automation-choice",
+      "group": "Product patterns",
+      "family": "Automation type chooser and preview rail",
+      "implementation": "Existing feature composition",
+      "owners": [
+        "packages/ui/src/features/automations/Automations.tsx",
+        "packages/ui/src/features/automations/AutomationEditor.tsx"
+      ],
+      "variants": "Schedule versus event, exclusive choice card, full-height preview rail, enable state",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": [],
+      "inventoryBoard": "UvuPr"
+    }
+  ],
+  "penRoot": "r93lT",
+  "penFile": "../interlock-design-directions.pen",
+  "sourceAudit": {
+    "tsxFiles": 93,
+    "stylesheetFiles": 43
+  },
+  "coverageNote": "Required states are an inventory of needs, not a claim that every listed state or entire feature flow has been designed. Screen-derived defaults remain the baseline; new specimens require review."
+}

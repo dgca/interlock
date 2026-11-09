@@ -1,0 +1,2328 @@
+{
+  "scope": "Working-tree source inventory; not a runtime or accessibility audit",
+  "tsxFileCount": 93,
+  "tsxFiles": [
+    {
+      "file": "packages/ui/src/App.tsx",
+      "exports": ["App"],
+      "mantineImports": [["Button", "Group", "Notification", "Text"]],
+      "jsxElements": [
+        "AlertCircle",
+        "Button",
+        "Check",
+        "ConnectDialog",
+        "Group",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "Notification",
+        "Outlet",
+        "PauseProvider",
+        "RunDialog",
+        "Sidebar",
+        "Text",
+        "div",
+        "main"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/components/ActionError/ActionError.tsx",
+      "exports": ["ActionError"],
+      "mantineImports": [],
+      "jsxElements": ["p"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/components/Badge/Badge.tsx",
+      "exports": ["Badge"],
+      "mantineImports": [["MantineBadge"]],
+      "jsxElements": ["MantineBadge"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/components/Button/Button.tsx",
+      "exports": ["Button"],
+      "mantineImports": [["MantineButton"]],
+      "jsxElements": ["MantineButton"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/components/CodeEditor/CodeEditor.tsx",
+      "exports": ["CodeEditor"],
+      "mantineImports": [],
+      "jsxElements": ["Editor", "div", "label", "span"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/components/ConnectDialog/ConnectDialog.tsx",
+      "exports": ["ConnectDialog"],
+      "mantineImports": [
+        ["Box", "Checkbox", "Group", "SegmentedControl", "Tabs", "Text"]
+      ],
+      "jsxElements": [
+        "Box",
+        "Button",
+        "Checkbox",
+        "Copy",
+        "Group",
+        "LoadingSkeleton",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "SegmentedControl",
+        "Tabs",
+        "Tabs.List",
+        "Tabs.Tab",
+        "Text",
+        "a",
+        "code",
+        "details",
+        "p",
+        "pre",
+        "summary"
+      ],
+      "nativePatterns": {
+        "code": 4,
+        "pre": 2,
+        "details": 1,
+        "summary": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/components/ContractEditor/ContractEditor.tsx",
+      "exports": ["ContractEditor", "ContractForm"],
+      "mantineImports": [["Tabs", "Textarea"]],
+      "jsxElements": [
+        "Braces",
+        "Button",
+        "ContractForm",
+        "FieldEditor",
+        "List",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "Tabs",
+        "Tabs.List",
+        "Tabs.Panel",
+        "Tabs.Tab",
+        "Textarea",
+        "WandSparkles",
+        "aside",
+        "div",
+        "h3",
+        "li",
+        "p",
+        "pre",
+        "section",
+        "small",
+        "span",
+        "strong",
+        "ul"
+      ],
+      "nativePatterns": {
+        "pre": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/components/ContractEditor/FieldEditor.tsx",
+      "exports": ["FieldEditor"],
+      "mantineImports": [["Checkbox", "NativeSelect", "Textarea", "TextInput"]],
+      "jsxElements": [
+        "Bounds",
+        "Button",
+        "Checkbox",
+        "Choices",
+        "DataKey",
+        "FieldEditor",
+        "NativeSelect",
+        "ObjectFields",
+        "Plus",
+        "TextInput",
+        "Textarea",
+        "Trash2",
+        "code",
+        "details",
+        "div",
+        "h4",
+        "option",
+        "p",
+        "span",
+        "strong",
+        "summary"
+      ],
+      "nativePatterns": {
+        "details": 2,
+        "summary": 2,
+        "code": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/components/EmptyState/EmptyState.tsx",
+      "exports": ["EmptyState"],
+      "mantineImports": [],
+      "jsxElements": ["div", "h2", "p"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/components/JsonEditor/JsonEditor.tsx",
+      "exports": ["JsonEditor"],
+      "mantineImports": [["Textarea"]],
+      "jsxElements": ["Textarea"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/components/ListTable/ListTable.tsx",
+      "exports": ["ListTable", "ListTableRow", "ListTableSkeleton"],
+      "mantineImports": [],
+      "jsxElements": [
+        "Link",
+        "ListTable",
+        "ListTableRow",
+        "LoadingSkeleton",
+        "button",
+        "div",
+        "span"
+      ],
+      "nativePatterns": {
+        "button": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/components/LoadingSkeleton/LoadingSkeleton.tsx",
+      "exports": ["Placeholder", "LoadingSkeleton", "FormPlaceholder"],
+      "mantineImports": [["Skeleton", "Stack", "VisuallyHidden"]],
+      "jsxElements": [
+        "Placeholder",
+        "Skeleton",
+        "Stack",
+        "VisuallyHidden",
+        "div"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/components/Modal/Modal.tsx",
+      "exports": ["Modal"],
+      "mantineImports": [["MantineModal"]],
+      "jsxElements": ["ArrowLeft", "MantineModal"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/components/Modal/ModalLayout.tsx",
+      "exports": ["ModalBody", "ModalFooter"],
+      "mantineImports": [],
+      "jsxElements": ["div", "footer"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/components/PageLayout/PageLayout.tsx",
+      "exports": [
+        "PageHeader",
+        "PageToolbar",
+        "PageTabs",
+        "PageTabList",
+        "PageTabsSkeleton"
+      ],
+      "mantineImports": [["Tabs"]],
+      "jsxElements": [
+        "ArrowLeft",
+        "Button",
+        "Link",
+        "Placeholder",
+        "TabBar",
+        "Tabs.List",
+        "Tabs.Tab",
+        "div",
+        "h1",
+        "header",
+        "nav",
+        "span"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/components/SchemaInput/SchemaInput.tsx",
+      "exports": ["SchemaInput"],
+      "mantineImports": [
+        ["TextInput", "Input", "NumberInput", "Select", "SegmentedControl"]
+      ],
+      "jsxElements": [
+        "Input.Wrapper",
+        "JsonEditor",
+        "NumberInput",
+        "SegmentedControl",
+        "Select",
+        "TextInput"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/components/Sidebar/Sidebar.tsx",
+      "exports": ["Sidebar"],
+      "mantineImports": [["Badge"]],
+      "jsxElements": [
+        "ArrowUpRight",
+        "Badge",
+        "Icon",
+        "Link",
+        "Stethoscope",
+        "aside",
+        "button",
+        "div",
+        "footer",
+        "i",
+        "nav",
+        "small",
+        "span"
+      ],
+      "nativePatterns": {
+        "button": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/components/WorkflowCards/WorkflowCards.tsx",
+      "exports": ["WorkflowCard", "WorkflowGrid", "WorkflowCardsSkeleton"],
+      "mantineImports": [],
+      "jsxElements": [
+        "ChevronRight",
+        "GitBranch",
+        "Link",
+        "LoadingSkeleton",
+        "Placeholder",
+        "WorkflowGrid",
+        "article",
+        "button",
+        "div",
+        "h2",
+        "p",
+        "span"
+      ],
+      "nativePatterns": {
+        "button": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/automations/AutomationAlerts.tsx",
+      "exports": ["AutomationAlerts"],
+      "mantineImports": [["Alert", "Button", "Group", "Text"]],
+      "jsxElements": ["Alert", "Button", "Group", "Link", "Text", "section"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/automations/AutomationDetail.tsx",
+      "exports": ["AutomationDetail"],
+      "mantineImports": [["ActionIcon", "Alert", "Button", "Menu"]],
+      "jsxElements": [
+        "ActionError",
+        "ActionIcon",
+        "Alert",
+        "Button",
+        "Link",
+        "LoadingSkeleton",
+        "Menu",
+        "Menu.Dropdown",
+        "Menu.Item",
+        "Menu.Target",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "MoreHorizontal",
+        "PageHeader",
+        "PageTabs",
+        "Settings",
+        "Trash2",
+        "dd",
+        "div",
+        "dl",
+        "dt",
+        "h2",
+        "p",
+        "pre",
+        "section",
+        "span",
+        "table",
+        "tbody",
+        "td",
+        "th",
+        "thead",
+        "tr"
+      ],
+      "nativePatterns": {
+        "table": 1,
+        "pre": 2
+      }
+    },
+    {
+      "file": "packages/ui/src/features/automations/AutomationEditor.tsx",
+      "exports": ["AutomationEditor"],
+      "mantineImports": [
+        [
+          "Alert",
+          "Button",
+          "Checkbox",
+          "MultiSelect",
+          "NativeSelect",
+          "NumberInput",
+          "SegmentedControl",
+          "Select",
+          "Stack",
+          "TextInput"
+        ]
+      ],
+      "jsxElements": [
+        "ActionError",
+        "Alert",
+        "Button",
+        "Checkbox",
+        "FormPlaceholder",
+        "IntervalInput",
+        "JsonEditor",
+        "Link",
+        "MultiSelect",
+        "NativeSelect",
+        "NumberInput",
+        "PageHeader",
+        "SchemaInput",
+        "SegmentedControl",
+        "Select",
+        "TextInput",
+        "aside",
+        "details",
+        "div",
+        "fieldset",
+        "form",
+        "h2",
+        "li",
+        "p",
+        "section",
+        "summary",
+        "ul"
+      ],
+      "nativePatterns": {
+        "form": 1,
+        "fieldset": 1,
+        "details": 1,
+        "summary": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/automations/AutomationListSkeleton.tsx",
+      "exports": ["AutomationListSkeleton", "AutomationRowsSkeleton"],
+      "mantineImports": [["Stack"]],
+      "jsxElements": [
+        "AutomationRowsSkeleton",
+        "ListTableSkeleton",
+        "PageHeader",
+        "PageTabsSkeleton",
+        "Placeholder",
+        "Stack",
+        "div",
+        "section"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/automations/Automations.tsx",
+      "exports": ["Automations"],
+      "mantineImports": [["Alert", "Button", "Loader", "Select", "TextInput"]],
+      "jsxElements": [
+        "Alert",
+        "ArrowRight",
+        "AutomationDetail",
+        "AutomationEditor",
+        "AutomationList",
+        "AutomationListSkeleton",
+        "AutomationRowsSkeleton",
+        "AutomationType",
+        "Button",
+        "CalendarClock",
+        "ChevronRight",
+        "Link",
+        "ListTable",
+        "ListTableRow",
+        "Loader",
+        "PageHeader",
+        "PageTabs",
+        "Search",
+        "Select",
+        "TextInput",
+        "Timer",
+        "WorkflowIcon",
+        "Zap",
+        "div",
+        "h2",
+        "p",
+        "section",
+        "small",
+        "span",
+        "strong"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/diagnostics/Diagnostics.tsx",
+      "exports": ["Diagnostics"],
+      "mantineImports": [
+        ["Badge", "Group", "Stack", "Text", "Switch", "Alert", "Button"]
+      ],
+      "jsxElements": [
+        "Alert",
+        "Badge",
+        "Button",
+        "CheckItem",
+        "DiagnosticsLoadingContent",
+        "Group",
+        "Icon",
+        "Info",
+        "PageHeader",
+        "RefreshCw",
+        "Stack",
+        "Stethoscope",
+        "Switch",
+        "Text",
+        "XCircle",
+        "div",
+        "section"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/diagnostics/DiagnosticsSkeleton.tsx",
+      "exports": ["DiagnosticsLoadingContent", "DiagnosticsPageSkeleton"],
+      "mantineImports": [["Group", "Stack"]],
+      "jsxElements": [
+        "DiagnosticsLoadingContent",
+        "Group",
+        "LoadingSkeleton",
+        "PageHeader",
+        "Placeholder",
+        "Stack",
+        "div",
+        "section"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/executors/CustomProfileDialog.tsx",
+      "exports": ["CustomProfileDialog"],
+      "mantineImports": [
+        [
+          "Button",
+          "TextInput",
+          "NumberInput",
+          "NativeSelect",
+          "SegmentedControl"
+        ]
+      ],
+      "jsxElements": [
+        "ActionError",
+        "Button",
+        "ChevronDown",
+        "ChevronUp",
+        "Globe",
+        "Info",
+        "KeyValueEditor",
+        "Layers",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "NativeSelect",
+        "NumberInput",
+        "Plus",
+        "SegmentedControl",
+        "Shield",
+        "Terminal",
+        "TextInput",
+        "Trash2",
+        "button",
+        "div",
+        "fieldset",
+        "form",
+        "label",
+        "p",
+        "section",
+        "span"
+      ],
+      "nativePatterns": {
+        "form": 1,
+        "fieldset": 1,
+        "button": 4
+      }
+    },
+    {
+      "file": "packages/ui/src/features/executors/ExecutionSettings.tsx",
+      "exports": ["ExecutionSettings"],
+      "mantineImports": [
+        ["NativeSelect", "NumberInput", "Skeleton", "VisuallyHidden"]
+      ],
+      "jsxElements": [
+        "Button",
+        "NativeSelect",
+        "NumberInput",
+        "RetentionSettings",
+        "Skeleton",
+        "StallSettings",
+        "VisuallyHidden",
+        "div",
+        "form",
+        "h3",
+        "p",
+        "section"
+      ],
+      "nativePatterns": {
+        "form": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/executors/ExecutorSelect.tsx",
+      "exports": ["ExecutorSelect"],
+      "mantineImports": [["NativeSelect"]],
+      "jsxElements": [
+        "ModelSettings",
+        "NativeSelect",
+        "a",
+        "div",
+        "option",
+        "p"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/executors/HarnessListSkeleton.tsx",
+      "exports": ["HarnessRowsSkeleton", "HarnessLibrarySkeleton"],
+      "mantineImports": [["Stack"]],
+      "jsxElements": [
+        "HarnessRowsSkeleton",
+        "ListTableSkeleton",
+        "PageHeader",
+        "Placeholder",
+        "Stack",
+        "div",
+        "section",
+        "span"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/executors/Harnesses.tsx",
+      "exports": ["Harnesses"],
+      "mantineImports": [
+        ["Badge", "NativeSelect", "NumberInput", "Switch", "TextInput"]
+      ],
+      "jsxElements": [
+        "ActionError",
+        "Badge",
+        "Button",
+        "ChevronDown",
+        "ChevronUp",
+        "Cpu",
+        "CustomProfileDialog",
+        "ExecutionSettings",
+        "HarnessRowsSkeleton",
+        "ListTable",
+        "ListTableRow",
+        "ModelAliases",
+        "ModelSettings",
+        "NativeSelect",
+        "NewProfile",
+        "NumberInput",
+        "PageHeader",
+        "Plus",
+        "ProfileRow",
+        "RefreshCw",
+        "Switch",
+        "Terminal",
+        "TextInput",
+        "a",
+        "details",
+        "div",
+        "fieldset",
+        "form",
+        "h2",
+        "legend",
+        "p",
+        "section",
+        "span",
+        "summary"
+      ],
+      "nativePatterns": {
+        "form": 2,
+        "fieldset": 1,
+        "details": 1,
+        "summary": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/executors/KeyValueEditor.tsx",
+      "exports": ["KeyValueEditor"],
+      "mantineImports": [["Button", "TextInput"]],
+      "jsxElements": [
+        "Button",
+        "Plus",
+        "TextInput",
+        "Trash2",
+        "button",
+        "div",
+        "span"
+      ],
+      "nativePatterns": {
+        "button": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/executors/ManagedExecutionPanel.tsx",
+      "exports": ["ManagedExecutionPanel"],
+      "mantineImports": [
+        ["Badge", "Checkbox", "NativeSelect", "Skeleton", "Textarea"]
+      ],
+      "jsxElements": [
+        "ArrowUpRight",
+        "Badge",
+        "Button",
+        "Check",
+        "Checkbox",
+        "Copy",
+        "Execution",
+        "MessageSquare",
+        "ModelPicker",
+        "NativeSelect",
+        "Request",
+        "RotateCcw",
+        "ShieldCheck",
+        "Skeleton",
+        "Square",
+        "Textarea",
+        "a",
+        "dd",
+        "details",
+        "div",
+        "dl",
+        "dt",
+        "fieldset",
+        "form",
+        "h3",
+        "h4",
+        "li",
+        "ol",
+        "p",
+        "pre",
+        "section",
+        "span",
+        "strong",
+        "summary",
+        "time"
+      ],
+      "nativePatterns": {
+        "details": 2,
+        "summary": 2,
+        "pre": 1,
+        "form": 1,
+        "fieldset": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/executors/ModelAliases.tsx",
+      "exports": ["ModelAliases"],
+      "mantineImports": [
+        ["ActionIcon", "NativeSelect", "TextInput", "Textarea"]
+      ],
+      "jsxElements": [
+        "ActionError",
+        "ActionIcon",
+        "AliasEditor",
+        "ArrowDown",
+        "ArrowUp",
+        "Button",
+        "ListTable",
+        "ListTableRow",
+        "ListTableSkeleton",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "ModelSettings",
+        "NativeSelect",
+        "Plus",
+        "RefreshCw",
+        "TextInput",
+        "Textarea",
+        "Trash2",
+        "div",
+        "fieldset",
+        "form",
+        "h2",
+        "h3",
+        "h4",
+        "legend",
+        "p",
+        "section",
+        "span",
+        "strong"
+      ],
+      "nativePatterns": {
+        "form": 1,
+        "fieldset": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/executors/ModelPicker.tsx",
+      "exports": ["ModelPicker"],
+      "mantineImports": [
+        [
+          "ActionIcon",
+          "Button",
+          "Combobox",
+          "Group",
+          "InputBase",
+          "Input",
+          "Loader",
+          "Text",
+          "useCombobox"
+        ]
+      ],
+      "jsxElements": [
+        "ActionIcon",
+        "Button",
+        "Combobox",
+        "Combobox.Chevron",
+        "Combobox.Dropdown",
+        "Combobox.Empty",
+        "Combobox.Group",
+        "Combobox.Option",
+        "Combobox.Options",
+        "Combobox.Search",
+        "Combobox.Target",
+        "Group",
+        "Input.Label",
+        "InputBase",
+        "Loader",
+        "LoadingSkeleton",
+        "RefreshCw",
+        "Text",
+        "div"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/executors/ModelSettings.tsx",
+      "exports": ["ModelSettings"],
+      "mantineImports": [["NativeSelect"]],
+      "jsxElements": ["ModelPicker", "NativeSelect", "div", "p"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/executors/StallSettings.tsx",
+      "exports": ["StallPolicyEditor", "StallSettings"],
+      "mantineImports": [["NativeSelect", "TextInput", "Textarea", "Stack"]],
+      "jsxElements": [
+        "Button",
+        "DurationInput",
+        "NativeSelect",
+        "Stack",
+        "StallPolicyEditor",
+        "TextInput",
+        "Textarea",
+        "div",
+        "fieldset",
+        "form",
+        "h3",
+        "p",
+        "section"
+      ],
+      "nativePatterns": {
+        "form": 1,
+        "fieldset": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/pauses/PauseControls.tsx",
+      "exports": ["PauseProvider", "WorkflowPauseButton", "PauseBanner"],
+      "mantineImports": [["ActionIcon", "Button", "Stack", "Text"]],
+      "jsxElements": [
+        "ActionIcon",
+        "Button",
+        "Context.Provider",
+        "Icon",
+        "Stack",
+        "Text",
+        "WorkflowPauseButton",
+        "code",
+        "div"
+      ],
+      "nativePatterns": {
+        "code": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/prompts/PromptPicker.tsx",
+      "exports": ["PromptPicker"],
+      "mantineImports": [["ActionIcon", "Group", "Select", "Stack", "Text"]],
+      "jsxElements": [
+        "ActionIcon",
+        "ArrowDown",
+        "ArrowUp",
+        "Group",
+        "Select",
+        "Stack",
+        "Text",
+        "X",
+        "details",
+        "div",
+        "p",
+        "summary"
+      ],
+      "nativePatterns": {
+        "details": 1,
+        "summary": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/prompts/PromptSkeleton.tsx",
+      "exports": ["PromptLibrarySkeleton", "PromptEditorSkeleton"],
+      "mantineImports": [["Stack"]],
+      "jsxElements": [
+        "FormPlaceholder",
+        "ListTableSkeleton",
+        "LoadingSkeleton",
+        "PageHeader",
+        "PageToolbar",
+        "Placeholder",
+        "Stack",
+        "div",
+        "section"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/prompts/Prompts.tsx",
+      "exports": ["PromptLibrary", "PromptEditor"],
+      "mantineImports": [
+        [
+          "ActionIcon",
+          "MantineButton",
+          "Menu",
+          "Stack",
+          "Text",
+          "TextInput",
+          "Textarea"
+        ]
+      ],
+      "jsxElements": [
+        "ActionError",
+        "ActionIcon",
+        "ArrowRight",
+        "Button",
+        "EmptyState",
+        "Link",
+        "ListTable",
+        "ListTableRow",
+        "MantineButton",
+        "Menu",
+        "Menu.Dropdown",
+        "Menu.Item",
+        "Menu.Target",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "MoreHorizontal",
+        "PageHeader",
+        "PageToolbar",
+        "Plus",
+        "PromptFields",
+        "Save",
+        "Search",
+        "Stack",
+        "Text",
+        "TextInput",
+        "Textarea",
+        "Trash2",
+        "div",
+        "fieldset",
+        "form",
+        "h2",
+        "li",
+        "p",
+        "section",
+        "small",
+        "span",
+        "strong",
+        "time",
+        "ul"
+      ],
+      "nativePatterns": {
+        "form": 2,
+        "fieldset": 2
+      }
+    },
+    {
+      "file": "packages/ui/src/features/report/ReportSkeleton.tsx",
+      "exports": ["ReportLoadingContent", "ReportPageSkeleton"],
+      "mantineImports": [["SimpleGrid", "Stack"]],
+      "jsxElements": [
+        "LoadingSkeleton",
+        "PageHeader",
+        "PageToolbar",
+        "Placeholder",
+        "ReportLoadingContent",
+        "SimpleGrid",
+        "Stack",
+        "div",
+        "section"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/report/WorkflowReportView.tsx",
+      "exports": ["WorkflowReportView"],
+      "mantineImports": [
+        [
+          "Badge",
+          "Group",
+          "Stack",
+          "Text",
+          "Title",
+          "Select",
+          "Alert",
+          "Button",
+          "SimpleGrid",
+          "Table",
+          "Progress",
+          "Collapse"
+        ]
+      ],
+      "jsxElements": [
+        "Alert",
+        "AlertCircle",
+        "Badge",
+        "Button",
+        "CheckCircle2",
+        "Clock",
+        "Coins",
+        "Collapse",
+        "Group",
+        "Layers",
+        "PageHeader",
+        "PageToolbar",
+        "Progress",
+        "RefreshCw",
+        "ReportLoadingContent",
+        "Select",
+        "SimpleGrid",
+        "Stack",
+        "Table",
+        "Table.ScrollContainer",
+        "Table.Tbody",
+        "Table.Td",
+        "Table.Th",
+        "Table.Thead",
+        "Table.Tr",
+        "TagFields",
+        "Text",
+        "Title",
+        "UserCheck",
+        "div",
+        "section"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/runs/AgentHandoff.tsx",
+      "exports": ["AgentHandoff"],
+      "mantineImports": [["Alert", "Group"]],
+      "jsxElements": ["Alert", "Bot", "Button", "Copy", "Group", "p"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/runs/ComparisonContext.tsx",
+      "exports": ["ComparisonContext"],
+      "mantineImports": [],
+      "jsxElements": ["small"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/runs/HistoryCleanupDialog.tsx",
+      "exports": ["HistoryCleanupDialog"],
+      "mantineImports": [
+        [
+          "Alert",
+          "Button",
+          "Checkbox",
+          "Group",
+          "Select",
+          "SimpleGrid",
+          "Stack",
+          "Table",
+          "Text",
+          "TextInput"
+        ]
+      ],
+      "jsxElements": [
+        "Alert",
+        "Button",
+        "Checkbox",
+        "Group",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "Select",
+        "SimpleGrid",
+        "Stack",
+        "Table",
+        "Table.Tbody",
+        "Table.Td",
+        "Table.Th",
+        "Table.Thead",
+        "Table.Tr",
+        "Text",
+        "TextInput",
+        "span"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/runs/RetentionSettings.tsx",
+      "exports": ["RetentionSettings", "RetentionSettingsDialog"],
+      "mantineImports": [
+        [
+          "Alert",
+          "Group",
+          "NativeSelect",
+          "NumberInput",
+          "SimpleGrid",
+          "Skeleton",
+          "Stack",
+          "Text"
+        ]
+      ],
+      "jsxElements": [
+        "Alert",
+        "Button",
+        "Group",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "NativeSelect",
+        "NumberInput",
+        "RetentionSettings",
+        "SimpleGrid",
+        "Skeleton",
+        "Stack",
+        "Text",
+        "fieldset",
+        "form",
+        "h3",
+        "p",
+        "section"
+      ],
+      "nativePatterns": {
+        "form": 1,
+        "fieldset": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/runs/RunCancellationDialog.tsx",
+      "exports": ["RunCancellationDialog"],
+      "mantineImports": [
+        ["Anchor", "Checkbox", "Group", "Stack", "Text", "Textarea"]
+      ],
+      "jsxElements": [
+        "ActionError",
+        "Anchor",
+        "Badge",
+        "Button",
+        "Checkbox",
+        "Group",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "Stack",
+        "Text",
+        "Textarea",
+        "div",
+        "li",
+        "section",
+        "span",
+        "ul"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/runs/RunDialog.tsx",
+      "exports": ["RunDialog"],
+      "mantineImports": [["NativeSelect", "Textarea"]],
+      "jsxElements": [
+        "Button",
+        "FormPlaceholder",
+        "LoadingSkeleton",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "NativeSelect",
+        "Play",
+        "SchemaInput",
+        "TagFields",
+        "Textarea",
+        "details",
+        "div",
+        "option",
+        "p",
+        "pre",
+        "summary"
+      ],
+      "nativePatterns": {
+        "details": 2,
+        "summary": 2,
+        "pre": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/runs/RunGraph.tsx",
+      "exports": ["RunGraph"],
+      "mantineImports": [],
+      "jsxElements": [
+        "Background",
+        "CanvasZoomBox",
+        "Controls",
+        "ReactFlow",
+        "RestoreHandleBounds",
+        "div"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/runs/RunInspector.tsx",
+      "exports": ["RunInspector"],
+      "mantineImports": [["CopyButton", "Menu", "ScrollArea"]],
+      "jsxElements": [
+        "ActionError",
+        "AgentHandoff",
+        "ArrowLeft",
+        "ArrowUpRight",
+        "Badge",
+        "Button",
+        "ComparisonContext",
+        "CopyButton",
+        "Download",
+        "JsonEditor",
+        "LoadingSkeleton",
+        "Menu",
+        "Menu.Dropdown",
+        "Menu.Item",
+        "Menu.Target",
+        "PauseBanner",
+        "Placeholder",
+        "RotateCcw",
+        "RunCancellationDialog",
+        "RunGraph",
+        "RunTags",
+        "RunUsage",
+        "RunVersionDialog",
+        "ScrollArea.Autosize",
+        "Square",
+        "WorkPanel",
+        "a",
+        "aside",
+        "button",
+        "code",
+        "details",
+        "div",
+        "h2",
+        "h3",
+        "header",
+        "p",
+        "pre",
+        "section",
+        "small",
+        "span",
+        "strong",
+        "summary",
+        "time"
+      ],
+      "nativePatterns": {
+        "details": 9,
+        "summary": 9,
+        "button": 5,
+        "pre": 4,
+        "code": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/runs/RunList.tsx",
+      "exports": ["RunList"],
+      "mantineImports": [["Alert", "Button", "Group", "Tabs", "Text"]],
+      "jsxElements": [
+        "Activity",
+        "Alert",
+        "AutomationAlerts",
+        "Button",
+        "ChevronRight",
+        "ComparisonContext",
+        "Group",
+        "HistoryCleanupDialog",
+        "ListTable",
+        "ListTableRow",
+        "PageHeader",
+        "PageTabList",
+        "RetentionSettingsDialog",
+        "RunRowsSkeleton",
+        "RunTags",
+        "SlidersHorizontal",
+        "Tabs",
+        "Tabs.Panel",
+        "TagFields",
+        "Text",
+        "div",
+        "h2",
+        "p",
+        "section",
+        "small",
+        "span",
+        "strong",
+        "time"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/runs/RunListSkeleton.tsx",
+      "exports": ["RunListSkeleton", "RunRowsSkeleton"],
+      "mantineImports": [["Stack"]],
+      "jsxElements": [
+        "ListTableSkeleton",
+        "PageHeader",
+        "PageTabsSkeleton",
+        "Placeholder",
+        "RunRowsSkeleton",
+        "Stack",
+        "div",
+        "section",
+        "span"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/runs/RunTags.tsx",
+      "exports": ["tagsFromRows", "TagFields", "RunTags"],
+      "mantineImports": [
+        ["ActionIcon", "Button", "Group", "Stack", "Text", "TextInput"]
+      ],
+      "jsxElements": [
+        "ActionIcon",
+        "Button",
+        "Group",
+        "Plus",
+        "Stack",
+        "Text",
+        "TextInput",
+        "X",
+        "fieldset",
+        "legend",
+        "span"
+      ],
+      "nativePatterns": {
+        "fieldset": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/runs/RunUsage.tsx",
+      "exports": ["usageMetricText", "RunUsage"],
+      "mantineImports": [
+        ["Checkbox", "Group", "NativeSelect", "Stack", "Text"]
+      ],
+      "jsxElements": [
+        "Button",
+        "Checkbox",
+        "Group",
+        "LoadingSkeleton",
+        "NativeSelect",
+        "Stack",
+        "Text",
+        "details",
+        "div",
+        "section",
+        "summary",
+        "table",
+        "tbody",
+        "td",
+        "th",
+        "thead",
+        "tr"
+      ],
+      "nativePatterns": {
+        "details": 1,
+        "summary": 1,
+        "table": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/runs/RunVersionDialog.tsx",
+      "exports": ["RunVersionDialog"],
+      "mantineImports": [
+        [
+          "Checkbox",
+          "Divider",
+          "Group",
+          "NativeSelect",
+          "Stack",
+          "Text",
+          "Textarea"
+        ]
+      ],
+      "jsxElements": [
+        "ActionError",
+        "Button",
+        "Checkbox",
+        "Divider",
+        "Group",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "NativeSelect",
+        "Stack",
+        "Text",
+        "Textarea",
+        "div",
+        "li",
+        "option",
+        "ul"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/runs/WorkPanel.tsx",
+      "exports": ["WorkPanel"],
+      "mantineImports": [["Checkbox", "Textarea"]],
+      "jsxElements": [
+        "ActionError",
+        "Bot",
+        "Button",
+        "Checkbox",
+        "Copy",
+        "JsonEditor",
+        "Link",
+        "ManagedExecutionPanel",
+        "Textarea",
+        "code",
+        "details",
+        "div",
+        "h3",
+        "li",
+        "p",
+        "section",
+        "strong",
+        "summary",
+        "ul"
+      ],
+      "nativePatterns": {
+        "code": 2,
+        "details": 2,
+        "summary": 2
+      }
+    },
+    {
+      "file": "packages/ui/src/features/variables/EnvironmentEditor.tsx",
+      "exports": ["EnvironmentEditor"],
+      "mantineImports": [
+        ["ActionIcon", "Anchor", "Code", "Group", "Stack", "Text", "TextInput"]
+      ],
+      "jsxElements": [
+        "ActionIcon",
+        "Anchor",
+        "Button",
+        "Code",
+        "EnvironmentRow",
+        "Group",
+        "Plus",
+        "RefreshCw",
+        "Stack",
+        "Text",
+        "TextInput",
+        "Trash2",
+        "VariablePicker",
+        "br",
+        "details",
+        "div",
+        "summary"
+      ],
+      "nativePatterns": {
+        "details": 1,
+        "summary": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/variables/VariableImportBindings.tsx",
+      "exports": ["VariableImportBindingsEditor"],
+      "mantineImports": [["NativeSelect", "Stack", "Text", "TextInput"]],
+      "jsxElements": [
+        "NativeSelect",
+        "Stack",
+        "Text",
+        "TextInput",
+        "VariablePicker",
+        "div",
+        "fieldset",
+        "option"
+      ],
+      "nativePatterns": {
+        "fieldset": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/variables/VariableListSkeleton.tsx",
+      "exports": [
+        "VariableRowsSkeleton",
+        "VariableLibrarySkeleton",
+        "VariableEditorSkeleton"
+      ],
+      "mantineImports": [["Stack"]],
+      "jsxElements": [
+        "FormPlaceholder",
+        "ListTableSkeleton",
+        "LoadingSkeleton",
+        "PageHeader",
+        "PageToolbar",
+        "Placeholder",
+        "Stack",
+        "VariableRowsSkeleton",
+        "div",
+        "section",
+        "span"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/variables/VariablePicker.tsx",
+      "exports": ["VariablePicker"],
+      "mantineImports": [["Select", "Stack", "Text"]],
+      "jsxElements": ["LoadingSkeleton", "Select", "Stack", "Text", "a", "div"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/variables/Variables.tsx",
+      "exports": ["VariableLibrary", "VariableRoute"],
+      "mantineImports": [
+        [
+          "Alert",
+          "Badge",
+          "MantineButton",
+          "Group",
+          "SegmentedControl",
+          "Stack",
+          "Text",
+          "TextInput",
+          "Textarea"
+        ]
+      ],
+      "jsxElements": [
+        "ActionError",
+        "Alert",
+        "ArrowRight",
+        "Badge",
+        "Button",
+        "ChevronRight",
+        "FormPlaceholder",
+        "Group",
+        "KeyRound",
+        "Link",
+        "ListTable",
+        "ListTableRow",
+        "LoadingSkeleton",
+        "MantineButton",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "PageHeader",
+        "PageToolbar",
+        "Placeholder",
+        "Plus",
+        "Search",
+        "SegmentedControl",
+        "Stack",
+        "Text",
+        "TextInput",
+        "Textarea",
+        "VariableEditor",
+        "VariablePicker",
+        "VariableRowsSkeleton",
+        "code",
+        "details",
+        "div",
+        "fieldset",
+        "form",
+        "h2",
+        "h3",
+        "li",
+        "section",
+        "small",
+        "span",
+        "strong",
+        "summary",
+        "time",
+        "ul"
+      ],
+      "nativePatterns": {
+        "form": 1,
+        "fieldset": 1,
+        "code": 3,
+        "details": 2,
+        "summary": 2
+      }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/BranchEditor.tsx",
+      "exports": ["BranchEditor"],
+      "mantineImports": [],
+      "jsxElements": ["SwitchEditor"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/CanvasNavigation.tsx",
+      "exports": ["canvasNavigation", "CanvasZoomBox"],
+      "mantineImports": [],
+      "jsxElements": ["div"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/DeleteWorkflowDialog.tsx",
+      "exports": ["DeleteWorkflowDialog"],
+      "mantineImports": [["MantineButton"]],
+      "jsxElements": [
+        "Button",
+        "MantineButton",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "p",
+        "strong"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/DurationInput.tsx",
+      "exports": ["formatDuration", "DurationInput"],
+      "mantineImports": [["Group", "NativeSelect", "TextInput"]],
+      "jsxElements": ["Group", "NativeSelect", "TextInput"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/FetchEditor.tsx",
+      "exports": ["FetchEditor"],
+      "mantineImports": [
+        [
+          "Checkbox",
+          "Input",
+          "SegmentedControl",
+          "NativeSelect",
+          "TextInput",
+          "Textarea"
+        ]
+      ],
+      "jsxElements": [
+        "Button",
+        "Checkbox",
+        "DurationInput",
+        "FetchUrlInput",
+        "Fields",
+        "Input.Wrapper",
+        "InputPathInput",
+        "JsonEditor",
+        "NativeSelect",
+        "Plus",
+        "SegmentedControl",
+        "TextInput",
+        "Textarea",
+        "Trash2",
+        "TypedValueEditor",
+        "VariablePicker",
+        "details",
+        "div",
+        "h3",
+        "option",
+        "p",
+        "section",
+        "summary"
+      ],
+      "nativePatterns": {
+        "details": 1,
+        "summary": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/FetchUrlInput.tsx",
+      "exports": [
+        "activeInputToken",
+        "urlInputPaths",
+        "completeInputToken",
+        "FetchUrlInput"
+      ],
+      "mantineImports": [["Combobox", "TextInput", "useCombobox"]],
+      "jsxElements": [
+        "Combobox",
+        "Combobox.Dropdown",
+        "Combobox.Empty",
+        "Combobox.Group",
+        "Combobox.Option",
+        "Combobox.Options",
+        "Combobox.Target",
+        "TextInput"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/FlowNode.tsx",
+      "exports": ["FlowNode"],
+      "mantineImports": [],
+      "jsxElements": [
+        "ActivePorts.Provider",
+        "FlowNodeBody",
+        "Handle",
+        "Icon",
+        "Layers",
+        "Pencil",
+        "Port",
+        "StatusIcon",
+        "button",
+        "div",
+        "i",
+        "small",
+        "span",
+        "strong"
+      ],
+      "nativePatterns": {
+        "button": 6
+      }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/ImportWorkflowDialog.tsx",
+      "exports": ["ImportWorkflowDialog"],
+      "mantineImports": [
+        ["Checkbox", "Radio", "Stack", "Textarea", "TextInput"]
+      ],
+      "jsxElements": [
+        "Button",
+        "Checkbox",
+        "Details",
+        "FileJson",
+        "LoadingSkeleton",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "Placeholder",
+        "Radio",
+        "Radio.Group",
+        "Stack",
+        "TextInput",
+        "Textarea",
+        "Upload",
+        "VariableImportBindingsEditor",
+        "article",
+        "aside",
+        "button",
+        "code",
+        "details",
+        "div",
+        "form",
+        "h2",
+        "h3",
+        "input",
+        "nav",
+        "p",
+        "s.icon",
+        "section",
+        "span",
+        "strong",
+        "summary"
+      ],
+      "nativePatterns": {
+        "details": 2,
+        "summary": 2,
+        "code": 3,
+        "button": 1,
+        "form": 1,
+        "input": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/InputBindingsEditor.tsx",
+      "exports": ["InputBindingsEditor"],
+      "mantineImports": [
+        ["NativeSelect", "Stack", "TextInput", "Switch", "Text", "Group"]
+      ],
+      "jsxElements": [
+        "Button",
+        "Group",
+        "InputPathInput",
+        "JsonEditor",
+        "NativeSelect",
+        "Stack",
+        "Switch",
+        "Text",
+        "TextInput",
+        "Trash2",
+        "TypedValueEditor",
+        "div",
+        "option"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/InputPathInput.tsx",
+      "exports": ["InputPathInput"],
+      "mantineImports": [["Autocomplete"]],
+      "jsxElements": ["SuggestionInput"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/LoopEdge.tsx",
+      "exports": ["LoopEdge"],
+      "mantineImports": [],
+      "jsxElements": ["BaseEdge"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/NodeInspector.tsx",
+      "exports": ["NodeInspector"],
+      "mantineImports": [
+        [
+          "TextInput",
+          "TagsInput",
+          "Switch",
+          "Textarea",
+          "NativeSelect",
+          "Input",
+          "SegmentedControl",
+          "Radio",
+          "Stack",
+          "NumberInput"
+        ]
+      ],
+      "jsxElements": [
+        "BranchEditor",
+        "Button",
+        "ContractEditor",
+        "DurationInput",
+        "EnvironmentEditor",
+        "ExecutorSelect",
+        "FetchEditor",
+        "Input.Wrapper",
+        "InputBindingsEditor",
+        "InputPathInput",
+        "NativeSelect",
+        "NodeResultEditor",
+        "NodeSection",
+        "NodeSettingsSections",
+        "NodeStallOverrides",
+        "NumberInput",
+        "PollEditor",
+        "PromptPicker",
+        "Radio",
+        "Radio.Group",
+        "ResourceBindingsEditor",
+        "ScriptCode",
+        "SegmentedControl",
+        "Stack",
+        "StallPolicyEditor",
+        "Switch",
+        "TagsInput",
+        "TextInput",
+        "Textarea",
+        "TypedValueEditor",
+        "WorkflowModeEditor",
+        "div",
+        "optgroup",
+        "option",
+        "p"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/NodeResultEditor.tsx",
+      "exports": ["NodeResultEditor"],
+      "mantineImports": [["Stack", "Switch", "Text"]],
+      "jsxElements": [
+        "Button",
+        "ContractEditor",
+        "InputBindingsEditor",
+        "ResultRulesEditor",
+        "Stack",
+        "Switch",
+        "SwitchEditor",
+        "Text",
+        "details",
+        "div",
+        "h3",
+        "summary"
+      ],
+      "nativePatterns": {
+        "details": 1,
+        "summary": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/NodeSettingsSections.tsx",
+      "exports": ["NodeSection", "NodeSettingsSections"],
+      "mantineImports": [],
+      "jsxElements": [
+        "CurrentSection.Provider",
+        "Icon",
+        "button",
+        "div",
+        "h2",
+        "nav",
+        "section"
+      ],
+      "nativePatterns": {
+        "button": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/OrthoEdge.tsx",
+      "exports": ["OrthoEdge"],
+      "mantineImports": [],
+      "jsxElements": ["BaseEdge"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/PublishReviewDialog.tsx",
+      "exports": ["PublishReviewDialog"],
+      "mantineImports": [],
+      "jsxElements": [
+        "Button",
+        "ChangeGroup",
+        "Detail",
+        "LoadingSkeleton",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "details",
+        "div",
+        "h3",
+        "p",
+        "pre",
+        "section",
+        "small",
+        "span",
+        "summary"
+      ],
+      "nativePatterns": {
+        "pre": 2,
+        "details": 1,
+        "summary": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/ResourceBindingsEditor.tsx",
+      "exports": ["ResourceBindingsEditor"],
+      "mantineImports": [["Stack", "TagsInput", "Text"]],
+      "jsxElements": [
+        "JsonEditor",
+        "Stack",
+        "TagsInput",
+        "Text",
+        "details",
+        "p",
+        "summary"
+      ],
+      "nativePatterns": {
+        "details": 1,
+        "summary": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/ResultRulesEditor.tsx",
+      "exports": ["ResultRulesEditor"],
+      "mantineImports": [["NativeSelect", "Stack", "Text", "TextInput"]],
+      "jsxElements": ["Button", "NativeSelect", "Stack", "Text", "TextInput"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/ScriptCode.tsx",
+      "exports": ["ScriptCode"],
+      "mantineImports": [["Input", "SegmentedControl"]],
+      "jsxElements": [
+        "Button",
+        "CodeEditor",
+        "Input.Wrapper",
+        "SegmentedControl",
+        "div",
+        "p"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/SettingsDialog.tsx",
+      "exports": ["SettingsDialog"],
+      "mantineImports": [
+        [
+          "MantineButton",
+          "TextInput",
+          "Textarea",
+          "NativeSelect",
+          "Input",
+          "SegmentedControl",
+          "Switch"
+        ]
+      ],
+      "jsxElements": [
+        "Button",
+        "ContractEditor",
+        "ContractForm",
+        "ContractNavigation.Provider",
+        "Download",
+        "ExecutorSelect",
+        "Input.Wrapper",
+        "MantineButton",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "NativeSelect",
+        "NodeInspector",
+        "Plus",
+        "SegmentedControl",
+        "StallPolicyEditor",
+        "Switch",
+        "TextInput",
+        "Textarea",
+        "Trash2",
+        "div",
+        "fieldset",
+        "option",
+        "p",
+        "span"
+      ],
+      "nativePatterns": {
+        "fieldset": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/SuggestionInput.tsx",
+      "exports": ["SuggestionInput"],
+      "mantineImports": [["Autocomplete"]],
+      "jsxElements": ["Autocomplete"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/SwitchEditor.tsx",
+      "exports": ["SwitchEditor"],
+      "mantineImports": [["NativeSelect", "TextInput", "Textarea", "Text"]],
+      "jsxElements": [
+        "Button",
+        "InputPathInput",
+        "NativeSelect",
+        "Plus",
+        "Text",
+        "TextInput",
+        "Textarea",
+        "Trash2",
+        "TypedValueEditor",
+        "details",
+        "div",
+        "p",
+        "section",
+        "summary"
+      ],
+      "nativePatterns": {
+        "details": 1,
+        "summary": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/TidyControl.tsx",
+      "exports": ["TidyControl"],
+      "mantineImports": [["Loader", "Menu"]],
+      "jsxElements": [
+        "Check",
+        "ControlButton",
+        "Loader",
+        "Menu",
+        "Menu.Dropdown",
+        "Menu.Item",
+        "Menu.Label",
+        "Menu.Target",
+        "Settings",
+        "WandSparkles"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/TypedValueEditor.tsx",
+      "exports": ["suggestedMatchValue", "TypedValueEditor"],
+      "mantineImports": [["Input", "SegmentedControl", "Select", "TextInput"]],
+      "jsxElements": [
+        "Input.Wrapper",
+        "JsonEditor",
+        "NumberValue",
+        "SegmentedControl",
+        "Select",
+        "SuggestionInput",
+        "TextInput",
+        "div",
+        "small"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/WorkflowChildren.tsx",
+      "exports": ["WorkflowChildren"],
+      "mantineImports": [["ActionIcon", "Badge", "Menu", "Tabs", "TextInput"]],
+      "jsxElements": [
+        "ActionIcon",
+        "Badge",
+        "Button",
+        "DeleteWorkflowDialog",
+        "EmptyState",
+        "Menu",
+        "Menu.Dropdown",
+        "Menu.Item",
+        "Menu.Target",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "MoreHorizontal",
+        "PageTabList",
+        "Plus",
+        "Search",
+        "Tabs",
+        "Tabs.Panel",
+        "TextInput",
+        "Trash2",
+        "WorkflowCard",
+        "WorkflowGrid",
+        "form",
+        "p"
+      ],
+      "nativePatterns": {
+        "form": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/WorkflowEditor.tsx",
+      "exports": ["WorkflowEditor"],
+      "mantineImports": [["ActionIcon", "Menu", "Tabs"]],
+      "jsxElements": [
+        "ActionIcon",
+        "ArrowLeft",
+        "Background",
+        "Button",
+        "CanvasZoomBox",
+        "ChartNoAxesColumn",
+        "CodeEditor",
+        "Controls",
+        "DeleteWorkflowDialog",
+        "Menu",
+        "Menu.Divider",
+        "Menu.Dropdown",
+        "Menu.Item",
+        "Menu.Target",
+        "MiniMap",
+        "Modal",
+        "ModalBody",
+        "ModalFooter",
+        "MoreHorizontal",
+        "PauseBanner",
+        "Play",
+        "Plus",
+        "PublishReviewDialog",
+        "ReactFlow",
+        "Redo2",
+        "Save",
+        "Settings2",
+        "SettingsDialog",
+        "Tabs",
+        "Tabs.List",
+        "Tabs.Panel",
+        "Tabs.Tab",
+        "TidyControl",
+        "Trash2",
+        "Undo2",
+        "Upload",
+        "WorkflowChildren",
+        "WorkflowPauseButton",
+        "b",
+        "button",
+        "div",
+        "header",
+        "p",
+        "pre",
+        "span",
+        "strong"
+      ],
+      "nativePatterns": {
+        "button": 1,
+        "pre": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/WorkflowLibrary.tsx",
+      "exports": ["WorkflowLibrary"],
+      "mantineImports": [["ActionIcon", "Menu", "Tabs", "TextInput"]],
+      "jsxElements": [
+        "ActionIcon",
+        "Archive",
+        "Badge",
+        "BookOpen",
+        "Button",
+        "Copy",
+        "DeleteWorkflowDialog",
+        "Download",
+        "EmptyState",
+        "ImportWorkflowDialog",
+        "Menu",
+        "Menu.Divider",
+        "Menu.Dropdown",
+        "Menu.Item",
+        "Menu.Target",
+        "MoreHorizontal",
+        "PageHeader",
+        "PageTabList",
+        "Plus",
+        "Search",
+        "Tabs",
+        "Tabs.Panel",
+        "TextInput",
+        "Trash2",
+        "Upload",
+        "WorkflowCard",
+        "WorkflowGrid"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/WorkflowLibrarySkeleton.tsx",
+      "exports": ["WorkflowLibrarySkeleton"],
+      "mantineImports": [],
+      "jsxElements": [
+        "PageHeader",
+        "PageTabsSkeleton",
+        "Placeholder",
+        "WorkflowCardsSkeleton",
+        "div",
+        "section"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/workflows/WorkflowModeEditor.tsx",
+      "exports": ["WorkflowModeEditor"],
+      "mantineImports": [["Radio", "Stack"]],
+      "jsxElements": ["Radio", "Radio.Group", "Stack", "p"],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/main.tsx",
+      "exports": [],
+      "mantineImports": [["MantineProvider"]],
+      "jsxElements": [
+        "MantineProvider",
+        "RouterProvider",
+        "StrictMode",
+        "UiFeaturesContext.Provider"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/routes/RouteSkeleton.tsx",
+      "exports": ["RouteSkeleton"],
+      "mantineImports": [["Group", "Stack"]],
+      "jsxElements": [
+        "Group",
+        "LoadingSkeleton",
+        "Placeholder",
+        "PromptEditorSkeleton",
+        "PromptLibrarySkeleton",
+        "Stack",
+        "WorkflowLibrarySkeleton",
+        "div",
+        "header"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/routes/index.tsx",
+      "exports": [],
+      "mantineImports": [["Button", "Center", "Loader"]],
+      "jsxElements": [
+        "AutomationListSkeleton",
+        "Automations",
+        "Button",
+        "Center",
+        "Diagnostics",
+        "DiagnosticsPageSkeleton",
+        "HarnessLibrarySkeleton",
+        "Harnesses",
+        "Link",
+        "Loader",
+        "Loading",
+        "Navigate",
+        "NotFound",
+        "PageHeader",
+        "PromptEditor",
+        "PromptLibrary",
+        "ReportPageSkeleton",
+        "RouteLoading",
+        "RouteSkeleton",
+        "RunInspector",
+        "RunList",
+        "RunListSkeleton",
+        "Suspense",
+        "VariableEditorSkeleton",
+        "VariableLibrary",
+        "VariableLibrarySkeleton",
+        "VariableRoute",
+        "WorkflowEditor",
+        "WorkflowLibrary",
+        "WorkflowReportView",
+        "div",
+        "h1",
+        "p",
+        "section"
+      ],
+      "nativePatterns": {}
+    }
+  ],
+  "styleFiles": [
+    "packages/ui/src/components/CodeEditor/CodeEditor.module.css",
+    "packages/ui/src/components/ContractEditor/ContractEditor.module.css",
+    "packages/ui/src/components/EmptyState/EmptyState.module.css",
+    "packages/ui/src/components/ListTable/ListTable.module.css",
+    "packages/ui/src/components/Modal/Modal.module.css",
+    "packages/ui/src/components/PageLayout/PageLayout.module.css",
+    "packages/ui/src/components/PageLayout/WorkspacePage.module.css",
+    "packages/ui/src/components/Sidebar/Sidebar.module.css",
+    "packages/ui/src/components/WorkflowCards/WorkflowCards.module.css",
+    "packages/ui/src/features/automations/Automations.module.css",
+    "packages/ui/src/features/diagnostics/Diagnostics.module.css",
+    "packages/ui/src/features/executors/CustomProfileDialog.module.css",
+    "packages/ui/src/features/executors/Harnesses.module.css",
+    "packages/ui/src/features/executors/ManagedExecutionPanel.module.css",
+    "packages/ui/src/features/executors/ModelAliases.module.css",
+    "packages/ui/src/features/executors/StallSettings.module.css",
+    "packages/ui/src/features/pauses/PauseControls.module.css",
+    "packages/ui/src/features/prompts/Prompts.module.css",
+    "packages/ui/src/features/report/WorkflowReportView.module.css",
+    "packages/ui/src/features/runs/HistoryCleanupDialog.module.css",
+    "packages/ui/src/features/runs/RetentionSettings.module.css",
+    "packages/ui/src/features/runs/RunCancellationDialog.module.css",
+    "packages/ui/src/features/runs/RunInspector.module.css",
+    "packages/ui/src/features/runs/RunList.module.css",
+    "packages/ui/src/features/runs/RunTags.module.css",
+    "packages/ui/src/features/runs/RunUsage.module.css",
+    "packages/ui/src/features/variables/EnvironmentEditor.module.css",
+    "packages/ui/src/features/variables/VariablePicker.module.css",
+    "packages/ui/src/features/variables/Variables.module.css",
+    "packages/ui/src/features/workflows/CanvasNavigation.module.css",
+    "packages/ui/src/features/workflows/FetchEditor.module.css",
+    "packages/ui/src/features/workflows/ImportWorkflowDialog.module.css",
+    "packages/ui/src/features/workflows/InputBindingsEditor.module.css",
+    "packages/ui/src/features/workflows/NodeInspector.module.css",
+    "packages/ui/src/features/workflows/NodeResultEditor.module.css",
+    "packages/ui/src/features/workflows/NodeSettingsSections.module.css",
+    "packages/ui/src/features/workflows/PublishReviewDialog.module.css",
+    "packages/ui/src/features/workflows/SettingsDialog.module.css",
+    "packages/ui/src/features/workflows/SwitchEditor.module.css",
+    "packages/ui/src/features/workflows/WorkflowChildren.module.css",
+    "packages/ui/src/features/workflows/WorkflowEditor.module.css",
+    "packages/ui/src/styles.css",
+    "packages/ui/src/theme/theme.module.css"
+  ],
+  "theme": "packages/ui/src/theme/theme.ts"
+}

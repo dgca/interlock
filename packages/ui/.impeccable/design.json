@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-09T06:19:58.759575Z",
+  "title": "Design System: Interlock Grid",
+  "extensions": {
+    "brand": {
+      "logoAsset": "../../designs/interlock-logo.svg",
+      "releasedLogoAsset": "public/favicon.svg",
+      "sidebarSize": "32px",
+      "penComponent": "lAnPK",
+      "rollbackComponent": "Z6dp7B",
+      "comparisonFrame": "BTwWH",
+      "status": "Approved target logo: gray-to-dark-gray gradient tile, electric blue and orchid, and alternating overpasses and underpasses. Released favicon unchanged."
+    },
+    "provenance": {
+      "status": "approved-target",
+      "scope": "desktop-only",
+      "implementation": "Not a record of current shipped CSS.",
+      "source": "../../interlock-design-directions.pen",
+      "frames": {
+        "guide": "yqQ5c",
+        "runs": "YsC4K",
+        "editor": "pJq1n",
+        "schedule": "DBUrn",
+        "harness": "a5Faf",
+        "designSystem": "r93lT"
+      }
+    },
+    "gradients": [
+      {
+        "name": "primary",
+        "direction": "to bottom",
+        "stops": [
+          "{colors.primary-top}",
+          "{colors.primary-bottom}"
+        ]
+      },
+      {
+        "name": "neutral",
+        "direction": "to bottom",
+        "stops": [
+          "{colors.neutral-top}",
+          "{colors.neutral-bottom}"
+        ]
+      },
+      {
+        "name": "selected-nav",
+        "direction": "to bottom",
+        "stops": [
+          "{colors.nav-top}",
+          "{colors.neutral-bottom}"
+        ]
+      },
+      {
+        "name": "selected-segment",
+        "direction": "to bottom",
+        "stops": [
+          "{colors.segment-top}",
+          "{colors.segment-bottom}"
+        ]
+      },
+      {
+        "name": "card",
+        "direction": "to bottom",
+        "stops": [
+          "{colors.card-top}",
+          "{colors.card-bottom}"
+        ]
+      },
+      {
+        "name": "node",
+        "direction": "to bottom",
+        "stops": [
+          "{colors.node-top}",
+          "{colors.node-bottom}"
+        ]
+      }
+    ],
+    "shadows": [
+      {
+        "name": "primary",
+        "value": "0 2px 5px #00000066",
+        "purpose": "Primary buttons."
+      },
+      {
+        "name": "neutral",
+        "value": "0 1px 3px #00000066",
+        "purpose": "Neutral buttons; approved variants may omit the shadow while retaining the gradient."
+      },
+      {
+        "name": "selected-nav",
+        "value": "0 2px 5px #00000055",
+        "purpose": "Selected navigation items."
+      },
+      {
+        "name": "card",
+        "value": "0 4px 12px #00000066",
+        "purpose": "Workflow cards, run cards, and solid form containers."
+      },
+      {
+        "name": "node",
+        "value": "0 4px 10px #00000070",
+        "purpose": "Graph nodes."
+      }
+    ],
+    "outlines": [
+      {
+        "name": "field-focus",
+        "width": "2px",
+        "color": "{colors.field-focus}"
+      },
+      {
+        "name": "node-selection",
+        "width": "2px",
+        "color": "{colors.node-selection}"
+      }
+    ],
+    "rules": {
+      "dividers": "Solid, pixel-aligned 1px layers in divider (#333333), edge to edge across container padding. Command-bar separators use the same color. Pen uses filled rectangles instead of frame-edge strokes. Control borders retain input-border; focus and selection outlines retain 2px width.",
+      "brandSeparator": "Align with global bar bottom at 68px.",
+      "containers": "Structural containers are solid. Solid form containers keep the card shadow.",
+      "neutralButtons": "Retain gradient; approved variants may omit shadow.",
+      "text": "Representative roles; approved mockups retain component-specific shade variations.",
+      "states": "Read-only and disabled remain distinct.",
+      "unspecified": "No new hover, motion, or responsive breakpoint rules approved.",
+      "tabs": "Horizontal section tabs are solid and attached to their content surface, with 8px top corners, square bottom corners, a 1px top and side input-border, 44px height, 20px horizontal padding, and 6px gaps. Selected fill matches the owned surface. No gradient, shadow, enclosing track, or selection underline. Segmented controls keep their separate gradient treatment. Vertical modal navigation is unchanged. Draw the strip boundary behind tab items instead of as a foreground bottom stroke on the strip frame.",
+      "sectionHeaders": "Place titles and actions in a padded row above attached tabs. Standard 76px rows center 40px action buttons with 18px above and below. Taller headers can retain more space. Filter and presentation controls belong in the padded action row. Only tabs meet the content boundary. Apply shared-pattern corrections across all matching screens.",
+      "controlHeights": "Standard buttons, single-line fields, selects, search inputs, and segmented controls share a 40px outer height. Segmented tracks use 4px padding and 32px-high segments. Align neighboring controls by outer bounds. Attached tabs stay 44px; the editor vertical control stack stays 32px. Navigation rows and multiline fields retain purpose-specific sizing.",
+      "pageSubtitles": "Optional meaningful status, scope, or behavior beneath the heading. Two-line headers are 88px high; title/subtitle gap is 4px; subtitles use 13px IBM Plex Sans, weight 400, line-height 1.4, and label-text. Keep 40px actions vertically centered, with 24px top and bottom spacing. Heading-only headers retain the compact variant. Workflow draft and publication status appear together beneath the title, without duplicate badges or tab-row labels.",
+      "sidebarNavigation": "Omit Recent workflows and a generic Settings destination from v2 sidebars, screen examples, and reusable sidebar masters. Dedicated settings navigation is deferred; existing feature-specific settings and editors remain in scope."
+    },
+    "componentLibrary": {
+      "guide": "../../designs/design-system.md",
+      "index": "../../designs/pen-component-index.json",
+      "inventory": "../../designs/component-inventory.md",
+      "sourceManifest": "../../designs/ui-source-inventory.json",
+      "masterCount": 57,
+      "familyCount": 70,
+      "status": "Screen-derived baseline plus explicitly proposed states and patterns; specialist coverage gaps remain in the inventory.",
+      "sizing": "Explicit numeric Pen master dimensions preserve the shared control scale; size variables document it."
+    }
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary action, approved default appearance.",
+      "html": "<button class=\"ds-primary\">Save changes</button>",
+      "css": ".ds-primary{font-family:'IBM Plex Sans',sans-serif;height:40px;padding:0 16px;font-weight:600;border:0;border-radius:6px;background:linear-gradient(to bottom,#3F64F7,#3155EB);color:#FFFFFF;font-size:14px;box-shadow:0 2px 5px #00000066;}"
+    },
+    {
+      "name": "Neutral button",
+      "kind": "button",
+      "refersTo": "button-neutral",
+      "description": "Neutral action; some approved variants omit the shadow.",
+      "html": "<button class=\"ds-neutral\">Cancel</button>",
+      "css": ".ds-neutral{font-family:'IBM Plex Sans',sans-serif;height:40px;padding:0 16px;font-weight:600;border:0;border-radius:6px;background:linear-gradient(to bottom,#303030,#252525);color:#DEDEDE;font-size:14px;box-shadow:0 1px 3px #00000066;}"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Inset field with approved focus, error, and disabled treatments.",
+      "html": "<input class=\"ds-field\" aria-label=\"Workflow name\" value=\"Release review\">",
+      "css": ".ds-field{font-family:'IBM Plex Sans',sans-serif;height:40px;border-radius:6px;padding:0 12px;box-sizing:border-box;background:#121212;border:1px solid #3A3A3A;color:#E6E6E6;font-size:14px;}.ds-field:focus-visible{outline:2px solid #7B99FF;}.ds-field[aria-invalid=\"true\"]{border-color:#E28F8F;}.ds-error{color:#F1A8A8;}.ds-field:disabled{color:#929292;}"
+    },
+    {
+      "name": "Selected navigation",
+      "kind": "nav",
+      "description": "Selected item within the solid sidebar.",
+      "html": "<nav aria-label=\"Application\"><a class=\"ds-selected-nav\" href=\"#runs\" aria-current=\"page\">Runs</a></nav>",
+      "css": ".ds-selected-nav{font-family:'IBM Plex Sans',sans-serif;display:flex;align-items:center;height:42px;padding:0 10px;border-radius:6px;background:linear-gradient(to bottom,#2F2F2F,#252525);color:#F1F1F1;font-size:16px;font-weight:500;text-decoration:none;box-shadow:0 2px 5px #00000055;}"
+    },
+    {
+      "name": "Form container",
+      "kind": "card",
+      "refersTo": "form-card",
+      "description": "Solid form container with preserved soft shadow.",
+      "html": "<section class=\"ds-form\">Schedule</section>",
+      "css": ".ds-form{font-family:'IBM Plex Sans',sans-serif;background:#212121;color:#F1F1F1;border-radius:12px;padding:24px;box-shadow:0 4px 12px #00000066;}"
+    },
+    {
+      "name": "Run card",
+      "kind": "card",
+      "refersTo": "run-card",
+      "description": "Example run title, not a live run.",
+      "html": "<article class=\"ds-run-card\">Release review</article>",
+      "css": ".ds-run-card{font-family:'IBM Plex Sans',sans-serif;background:linear-gradient(to bottom,#262626,#1C1C1C);color:#F1F1F1;font-size:19px;font-weight:500;border-radius:12px;padding:18px;box-shadow:0 4px 12px #00000066;}"
+    },
+    {
+      "name": "Selected graph node",
+      "kind": "custom",
+      "refersTo": "graph-node",
+      "description": "Graph-node treatment with approved selected outline.",
+      "html": "<div class=\"ds-node\">Review changes</div>",
+      "css": ".ds-node{font-family:'IBM Plex Sans',sans-serif;background:linear-gradient(to bottom,#292929,#202020);color:#E6E6E6;font-size:14px;border-radius:9px;padding:16px;box-shadow:0 4px 10px #00000070;outline:2px solid #6C8AFF;}"
+    },
+    {
+      "name": "Run status badges",
+      "kind": "chip",
+      "description": "Flat status fills and text preserve semantic distinctions.",
+      "html": "<span class=\"ds-badge ds-attention\">Permission requested</span> <span class=\"ds-badge ds-attention\">Recovery needed</span> <span class=\"ds-badge ds-running\">Running</span> <span class=\"ds-badge ds-completed\">Completed</span>",
+      "css": ".ds-badge{font-family:'IBM Plex Sans',sans-serif;font-size:12px;display:inline-flex;align-items:center;height:26px;padding:0 9px;border-radius:5px;}.ds-attention{color:#EFB569;background:#332A1E;}.ds-running{color:#88AEFF;background:#222B40;}.ds-completed{color:#8BD3A9;background:#213126;}"
+    }
+  ],
+  "narrative": {
+    "overview": "Grid uses solid structural containers, recessed fields, and modest elevation for controls, workflow cards, and graph nodes. Compact typography leaves space for execution data and direct authoring.",
+    "dos": [
+      "Do use solid fills for structural containers and preserve the form-container shadow.",
+      "Do extend dividers to the edges of their containing panel, across content padding.",
+      "Do preserve status text, Mantine semantics, and shared form and contract editors."
+    ],
+    "donts": [
+      "Don't apply card gradients or button elevation to every container, badge, or icon tile.",
+      "Don't infer new capabilities, live metrics, responsive rules, or motion from the static mockups."
+    ]
+  }
+}
