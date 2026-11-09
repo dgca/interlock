@@ -81,6 +81,8 @@ Use static skeletons shaped like the content being loaded. Keep the loading anno
 
 The Automations and Runs lists keep their shared headers and status tabs in place during route and initial data loading. Placeholder rows match the list columns. Background refreshes retain loaded rows for the same query. Changing Automations filters or pages shows a loading state until that query succeeds; a failed read does not display another query's rows. Errors show retry feedback instead of an indefinite skeleton.
 
+Workflow pause controls use a direct **Pause workflow** and **Resume workflow** toggle, with shared pending state and a fresh status check before writing. Each acknowledged change stays visible while status refresh is pending or unavailable. **Retry pause status** repeats only the read. Library holds remain visible blockers with CLI/MCP recovery guidance.
+
 ## Review before shipping
 
 For a changed interaction, inspect the rendered path at desktop, intermediate, and phone widths. Check keyboard navigation, visible focus, long content, and meaningful status announcements. Exercise loading, pending submission, success, rejection, failure, and recovery where they apply. Use temporary workflow data and simulated adapters for repeatable UI checks. Keep native harness validation separate and identify which harnesses were actually exercised.
@@ -92,5 +94,3 @@ Keep tests focused on consequences: request identity, retained answers, explicit
 - [n8n human review](https://docs.n8n.io/advanced-ai/human-in-the-loop-tools/) provides the tool and proposed parameters for a human decision.
 - [Visibility of system status](https://www.nngroup.com/articles/visibility-system-status/) explains feedback during actions and state changes.
 - [Progressive disclosure](https://www.nngroup.com/articles/progressive-disclosure/) explains prioritizing frequent decisions while retaining access to advanced details.
-
-Pause creation and release record acknowledged success before refreshing hold lists. A failed follow-up read keeps the completed outcome, closes the creation form, and offers read-only **Retry refresh**. Only actual mutation failures retain entered form values for retry. **Add another pause** starts a new blank form after status recovery.

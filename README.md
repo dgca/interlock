@@ -422,7 +422,7 @@ Agent executors can [check candidate results before submission](docs/result-pref
 
 Agent result checks can require output paths or compare them with captured assignment input before acceptance. See [result checks](docs/result-preflight.md#check-results-against-assignment-input).
 
-Use **Pause workflow** to add independent [pause holds](docs/work-holds.md). Library holds remain available through CLI `interlock pause`, `pause-holds`, and `resume HOLD_ID`, MCP `manage_pause`, and the shared API use the same persistent gate. Release only your exact hold ID; all applicable holds must clear before execution resumes. In-flight work can finish and pending input revisions remain accepted.
+Use **Pause workflow** and **Resume workflow** to toggle a workflow's [pause state](docs/work-holds.md). Resume releases its current workflow-scoped holds. Library holds remain available through CLI `interlock pause`, `pause-holds`, and `resume HOLD_ID`, MCP `manage_pause`, and the shared API. These operations create independent records and release one exact ID; all applicable holds must clear before execution resumes. In-flight work can finish and pending input revisions remain accepted.
 
 Agent assignments can [hold for external blockers](docs/work-holds.md) and resume with a fresh claim, without consuming failure or expiry allowances. Run inspection separates wall time from declared hold intervals.
 

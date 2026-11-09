@@ -89,7 +89,7 @@ export function WorkPanel({
         <p className="hint">
           {work.status === 'available'
             ? work.pauseBlocked
-              ? 'Execution paused. Review the applicable pause holds above before claiming.'
+              ? 'Execution paused. Resolve the pause shown above before claiming.'
               : work.budgetBlocked
                 ? 'Budget blocked. Adjust the governing run budget through MCP or the CLI to resume claims.'
                 : work.resourceBlocked

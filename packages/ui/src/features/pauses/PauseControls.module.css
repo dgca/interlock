@@ -1,63 +1,24 @@
-.bar,
 .banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 10px 21px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-}
-.bar {
-  min-height: 54px;
-  background: var(--surface);
-}
-.bar[data-paused],
-.banner {
   background: var(--mantine-color-yellow-light);
 }
 .summary {
-  min-width: 0;
-}
-.preview {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 65ch;
-}
-.banner {
-  flex-wrap: wrap;
-}
-.banner p {
-  overflow-wrap: anywhere;
   flex: 1;
-  min-width: 180px;
-}
-.hold {
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 20px;
-}
-.reason {
-  margin-top: 10px;
-  white-space: pre-wrap;
+  min-width: min(180px, 100%);
   overflow-wrap: anywhere;
 }
-.id {
-  overflow-wrap: anywhere;
-  margin-top: 8px;
-}
-.confirm {
-  margin-top: 14px;
+.banner > button {
+  flex-shrink: 0;
 }
 @media (max-width: 600px) {
-  .bar,
   .banner {
     padding-inline: 12px;
-  }
-  .preview {
-    display: none;
-  }
-  .bar > button {
-    flex-shrink: 0;
   }
 }
