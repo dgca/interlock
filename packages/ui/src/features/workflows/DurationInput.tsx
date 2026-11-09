@@ -1,5 +1,5 @@
 import { Group, NativeSelect, TextInput } from '@mantine/core';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 const units = [
   { label: 'Milliseconds', ms: 1 },
@@ -18,15 +18,20 @@ export function formatDuration(ms: number) {
 
 function toMilliseconds(amount: number, unit: number) {
   const [decimal, exponent = '0'] = String(amount).split('e');
-  const precision = Math.max(
-    0,
-    (decimal.split('.')[1]?.length ?? 0) - Number(exponent),
-  );
   const ms = amount * unit;
-  // An integer unit cannot add decimal places. Remove multiplication noise
-  // beyond the amount's precision without rounding actual fractional ms.
-  // toFixed supports at most 100 places; retain smaller fractions unchanged.
-  return precision > 100 ? ms : Number(ms.toFixed(precision));
+  if (!Number.isFinite(ms)) return { ms, wholeMilliseconds: false };
+  const scale = (decimal.split('.')[1]?.length ?? 0) - Number(exponent);
+  const coefficient = BigInt(decimal.replace('.', '')) * BigInt(unit);
+  const numerator =
+    scale < 0 ? coefficient * 10n ** BigInt(-scale) : coefficient;
+  const denominator = scale > 0 ? 10n ** BigInt(scale) : 1n;
+  const wholeMilliseconds = numerator % denominator === 0n;
+  // Normalize only exact integers. Floating-point multiplication can produce
+  // either noise around an integer or an integer from a genuine fraction.
+  return {
+    ms: wholeMilliseconds ? Number(numerator / denominator) : ms,
+    wholeMilliseconds,
+  };
 }
 
 export function DurationInput({
@@ -44,15 +49,24 @@ export function DurationInput({
   step?: number;
   onChange: (ms: number) => void;
 }) {
+  const input = useRef<HTMLInputElement>(null);
   const [unit, setUnit] = useState(
     () =>
       [...units]
         .reverse()
         .find((unit) => value >= unit.ms && value % unit.ms === 0)?.ms ?? 1000,
   );
+  const changeAmount = (amount: number, nextUnit: number) => {
+    const result = toMilliseconds(amount, nextUnit);
+    input.current?.setCustomValidity(
+      result.wholeMilliseconds ? '' : 'Use a whole number of milliseconds.',
+    );
+    onChange(result.ms);
+  };
   return (
     <Group align="flex-end" grow mb="md" maw={360} gap="sm" wrap="nowrap">
       <TextInput
+        ref={input}
         label={label}
         type="number"
         required
@@ -62,7 +76,7 @@ export function DurationInput({
         // Schemas enforce each field's precision and bounds.
         step={step !== undefined && step % unit === 0 ? step / unit : 'any'}
         value={value / unit}
-        onChange={(e) => onChange(toMilliseconds(Number(e.target.value), unit))}
+        onChange={(event) => changeAmount(Number(event.target.value), unit)}
       />
       <NativeSelect
         label="Unit"
@@ -70,7 +84,7 @@ export function DurationInput({
         value={unit}
         onChange={(e) => {
           const next = Number(e.target.value);
-          onChange(Math.round((value / unit) * next));
+          changeAmount(value / unit, next);
           setUnit(next);
         }}
         data={units

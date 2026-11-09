@@ -767,6 +767,8 @@ it.each([
   ['1000', '1.001', 1001],
   ['1000', '1001e-3', 1001],
   ['3600000', '0.00001', 36],
+  ['86400000', '0.56422875', 48_749_364],
+  ['86400000', '0.064341875', 5_559_138],
 ])(
   'saves fractional stall units %s × %s as exact milliseconds',
   async (unit, amount, ms) => {
@@ -830,6 +832,41 @@ it('accepts exact fractional-unit Wait durations without rounding actual fractio
   await fill('Wait for', '0');
   await click('Apply changes');
   expect(onApply.mock.calls[0][0].definition.nodes[0].timing.ms).toBe(0);
+});
+
+it('rejects a fractional-day value even when floating-point multiplication rounds it to an integer', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: { kind: 'duration', ms: 1000 },
+  });
+  await select('Wait for unit', '86400000');
+  await fill('Wait for', '1.1574074074074074e-8');
+  expect((field('Wait for') as HTMLInputElement).validationMessage).toBe(
+    'Use a whole number of milliseconds.',
+  );
+  await click('Apply changes');
+  expect(onApply).not.toHaveBeenCalled();
+  await fill('Wait for', '0.000000625');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timing.ms).toBe(54);
+});
+
+it('keeps fractional-ms validation when changing units and clears it for an exact conversion', async () => {
+  const { onApply } = await render({
+    kind: 'wait',
+    timing: { kind: 'duration', ms: 1501 },
+  });
+  await fill('Wait for', '1.0005');
+  await select('Wait for unit', '1000');
+  expect((field('Wait for') as HTMLInputElement).validationMessage).toBe(
+    'Use a whole number of milliseconds.',
+  );
+  await click('Apply changes');
+  expect(onApply).not.toHaveBeenCalled();
+  await select('Wait for unit', '60000');
+  expect((field('Wait for') as HTMLInputElement).validationMessage).toBe('');
+  await click('Apply changes');
+  expect(onApply.mock.calls[0][0].definition.nodes[0].timing.ms).toBe(60_030);
 });
 
 it('opens disabled and recovery overrides, preserves them, and returns to inheritance when switched off', async () => {
