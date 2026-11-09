@@ -1066,7 +1066,10 @@ export function WorkflowEditor({
           </div>
         </Tabs.Panel>
         {!workflow.ownerWorkflowId && (
-          <Tabs.Panel value="children" className={styles.runsView}>
+          <Tabs.Panel
+            value="children"
+            className={`${styles.runsView} ${styles.childListView}`}
+          >
             <WorkflowChildren
               workflow={{ ...workflow, draft }}
               workflows={workflows}

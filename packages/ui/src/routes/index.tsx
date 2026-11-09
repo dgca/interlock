@@ -17,6 +17,7 @@ import { flushSync } from 'react-dom';
 import { lazy, Suspense, useState } from 'react';
 import { Button, Center, Loader } from '@mantine/core';
 import { RouteSkeleton, type LoadingSubject } from './RouteSkeleton';
+import { PageHeader, workspacePage } from '../components/PageLayout/PageLayout';
 import { RunListSkeleton } from '../features/runs/RunListSkeleton';
 import {
   VariableEditorSkeleton,
@@ -197,8 +198,8 @@ function Loading({ subject }: { subject: LoadingSubject }) {
   const { loadError, retryLoad } = useOutletContext<AppContext>();
   const [retrying, setRetrying] = useState(false);
   if (!loadError) return <RouteSkeleton subject={subject} />;
-  return (
-    <div className="content-page">
+  const failure = (
+    <>
       <p role="alert">
         Could not load {subject}. {loadError}
       </p>
@@ -213,7 +214,15 @@ function Loading({ subject }: { subject: LoadingSubject }) {
       >
         {retrying ? 'Retrying…' : 'Retry'}
       </Button>
-    </div>
+    </>
+  );
+  return subject === 'workflows' ? (
+    <section className={workspacePage.page}>
+      <PageHeader title="Workflows" />
+      <div className={workspacePage.content}>{failure}</div>
+    </section>
+  ) : (
+    <div className="content-page">{failure}</div>
   );
 }
 

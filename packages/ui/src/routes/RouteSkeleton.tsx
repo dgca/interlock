@@ -7,12 +7,13 @@ import {
 import layout from '../components/PageLayout/PageLayout.module.css';
 import library from '../components/PageLayout/LibraryList.module.css';
 import editor from '../features/workflows/WorkflowEditor.module.css';
-import workflows from '../features/workflows/WorkflowLibrary.module.css';
+import { WorkflowLibrarySkeleton } from '../features/workflows/WorkflowLibrarySkeleton';
 
 export type LoadingSubject = 'workflows' | 'workflow' | 'prompts' | 'prompt';
 
 export function RouteSkeleton({ subject }: { subject: LoadingSubject }) {
-  const listing = subject === 'workflows' || subject === 'prompts';
+  if (subject === 'workflows') return <WorkflowLibrarySkeleton />;
+  const listing = subject === 'prompts';
   return (
     <LoadingSkeleton
       label={`Loading ${subject}…`}
@@ -21,46 +22,28 @@ export function RouteSkeleton({ subject }: { subject: LoadingSubject }) {
       {listing ? (
         <>
           <header className={`${layout.header} ${layout.libraryHeader}`}>
-            <h1>{subject === 'workflows' ? 'Workflows' : 'Prompts'}</h1>
+            <h1>Prompts</h1>
             <Placeholder h={32} w={114} />
           </header>
           <div className={layout.libraryToolbar}>
             <Placeholder h={12} w={86} />
             <Placeholder h={26} w="min(42%, 175px)" />
           </div>
-          {subject === 'workflows' ? (
-            <div className={workflows.grid}>
+          <div className={library.listPanel}>
+            <ul className={library.list}>
               {[1, 2, 3].map((row) => (
-                <div key={row} className={workflows.card}>
-                  <Stack p="lg" gap="md">
-                    <Placeholder h={34} w={34} />
-                    <Placeholder h={14} w="62%" />
-                    <Placeholder h={10} w="84%" />
-                  </Stack>
-                  <div className={workflows.cardFooter}>
-                    <Placeholder h={10} w={78} />
-                    <Placeholder h={18} w={60} />
+                <li key={row} className={library.row}>
+                  <div className={library.rowIdentity}>
+                    <Placeholder h={35} w={35} />
+                    <Stack gap={6} w="min(60%, 240px)">
+                      <Placeholder h={13} w="75%" />
+                      <Placeholder h={9} />
+                    </Stack>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
-          ) : (
-            <div className={library.listPanel}>
-              <ul className={library.list}>
-                {[1, 2, 3].map((row) => (
-                  <li key={row} className={library.row}>
-                    <div className={library.rowIdentity}>
-                      <Placeholder h={35} w={35} />
-                      <Stack gap={6} w="min(60%, 240px)">
-                        <Placeholder h={13} w="75%" />
-                        <Placeholder h={9} />
-                      </Stack>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            </ul>
+          </div>
         </>
       ) : (
         <>

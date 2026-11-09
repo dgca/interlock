@@ -11,7 +11,7 @@ Interlock uses the Mantine theme in `packages/ui/src/theme/theme.ts` and the sha
 
 ## Page layout
 
-Keep reusable page presentation in `packages/ui/src/components`. `PageLayout` owns page headers, tab bars, and `PageTabsSkeleton`. `ListTable` owns the shared list container, headings, link/button rows, responsive spacing, focus/hover states, and `ListTableSkeleton`. Features supply their columns, cell content, state labels, and navigation or action callbacks. Use these shared modules when extending Runs, Automations, Variables, and Harnesses. Static table rows can contain separate controls such as a switch and Configure button.
+Keep reusable page presentation in `packages/ui/src/components`. `PageLayout` owns page headers, tab bars, and `PageTabsSkeleton`. `ListTable` owns the shared list container, headings, link/button rows, responsive spacing, focus/hover states, and `ListTableSkeleton`. Features supply their columns, cell content, state labels, and navigation or action callbacks. Use these shared modules when extending Runs, Automations, Variables, Harnesses, and workflow libraries. Static table rows can contain separate controls such as a switch and Configure button.
 
 Tabs switch sections within the current resource or list. Use sidebar navigation or an explicit link to open another workspace.
 
@@ -26,6 +26,8 @@ Runs tables share the Automations row spacing, title-case headings, typography, 
 Harnesses opens on **Configurations**, with installation checks and **Add configuration** in the header. **Execution settings** groups concurrency, stall detection, and history retention into form cards. Tabs retain unsaved configuration and settings edits. Existing `#concurrency` links open Execution settings. Expanded configurations stay inside the table surface; new configurations use a form card. Custom harness setup uses the shared modal with a scrollable body, grouped fields, and a fixed action footer.
 
 Variable creation and editing use the shared header with Back, Cancel or Discard changes, and Create or Save changes. Forms use the shared card and content widths. Preserve write-only Secret behavior and metadata-only list reads. List loading and failed searches never show rows from another search; rejected reads offer retry.
+
+The Workflows library uses the shared header and Active/Archived tab toolbar. Child workflows uses the same toolbar within its parent workflow, without a repeated page heading. Search filters names and descriptions; tab counts reflect that search within the library or selected owner. Child workflows stay out of the main library. Both collections reuse `components/WorkflowCards` and `EmptyState`, with native links for library workflows and guarded buttons for child navigation. Card menus remain separate from the card's navigation target. Card footer rules reach the edges of the card. Creation lives in the toolbar; the empty library also offers starter discovery. Keep loading, no matches, no active items, and no archived items distinct.
 
 ## Items that need attention
 
