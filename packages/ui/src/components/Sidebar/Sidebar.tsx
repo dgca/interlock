@@ -79,7 +79,7 @@ export function Sidebar({
             },
             {
               id: 'harnesses',
-              label: 'Harnesses',
+              label: 'AI Settings',
               Icon: Settings2,
               to: paths.harnesses,
             },

@@ -3,7 +3,6 @@ import {
   Badge,
   NativeSelect,
   NumberInput,
-  Tabs,
   Switch,
   TextInput,
 } from '@mantine/core';
@@ -22,15 +21,10 @@ import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
 import {
   PageHeader,
-  PageTabList,
   workspacePage,
 } from '../../components/PageLayout/PageLayout';
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
-import {
-  HarnessRowsSkeleton,
-  harnessColumns,
-  harnessViews,
-} from './HarnessListSkeleton';
+import { HarnessRowsSkeleton, harnessColumns } from './HarnessListSkeleton';
 import styles from './Harnesses.module.css';
 import {
   permissionOptions,
@@ -40,6 +34,7 @@ import {
 import { ModelSettings } from './ModelSettings';
 import { ExecutionSettings } from './ExecutionSettings';
 import { CustomProfileDialog } from './CustomProfileDialog';
+import { ModelAliases } from './ModelAliases';
 
 const harnessNames: Record<string, string> = {
   'claude-code': 'Claude Code',
@@ -58,16 +53,6 @@ type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
 type DirtySetting = (id: string, dirty: boolean) => void;
 
 export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
-  const [view, setView] = useState(() =>
-    window.location.hash === '#concurrency' ? 'settings' : 'configurations',
-  );
-  useEffect(() => {
-    const followAnchor = () => {
-      if (window.location.hash === '#concurrency') setView('settings');
-    };
-    window.addEventListener('hashchange', followAnchor);
-    return () => window.removeEventListener('hashchange', followAnchor);
-  }, []);
   const [dirtySettings, setDirtySettings] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -84,6 +69,10 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   useBeforeUnloadWarning(dirty);
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
   useEffect(() => () => onDirty?.(false), [onDirty]);
+  const aliasDirty = useCallback(
+    (dirty: boolean) => trackDirty('aliases', dirty),
+    [trackDirty],
+  );
   const limitDirty = useCallback(
     (dirty: boolean) => trackDirty('limit', dirty),
     [trackDirty],
@@ -124,44 +113,27 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   useEffect(() => {
     void refresh();
   }, []);
+  useEffect(() => {
+    const followAnchor = () => {
+      const target = document.getElementById(window.location.hash.slice(1));
+      target?.scrollIntoView({ block: 'start' });
+    };
+    const frame = requestAnimationFrame(followAnchor);
+    window.addEventListener('hashchange', followAnchor);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('hashchange', followAnchor);
+    };
+  }, []);
   return (
-    <Tabs
-      unstyled
-      value={view}
-      onChange={(v) => setView(v ?? 'configurations')}
-      keepMounted
-      className={workspacePage.page}
-    >
-      <PageHeader
-        title="Harnesses"
-        actions={
-          <>
-            <Button
-              aria-label="Check installations"
-              title="Check installations"
-              disabled={checking}
-              onClick={() => void refresh(true)}
-            >
-              <RefreshCw size={14} />
-              Check installations
-            </Button>
-            <Button
-              ref={addButton}
-              variant="primary"
-              disabled={adding}
-              onClick={() => {
-                setView('configurations');
-                setAdding(true);
-              }}
-            >
-              <Plus size={14} />
-              Add configuration
-            </Button>
-          </>
-        }
-      />
-      <PageTabList label="Harness views" items={harnessViews} />
-      <div className={workspacePage.content}>
+    <section className={workspacePage.page}>
+      <PageHeader title="AI Settings" />
+      <nav className={styles.sectionNav} aria-label="AI settings sections">
+        <a href="#harnesses">Harnesses</a>
+        <a href="#model-aliases">Model aliases</a>
+        <a href="#execution-settings">Execution settings</a>
+      </nav>
+      <div className={`${workspacePage.content} ${styles.aiContent}`}>
         {error && (
           <div className={styles.errorRow}>
             <p role="alert" className={styles.error}>
@@ -172,7 +144,38 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
             </Button>
           </div>
         )}
-        <Tabs.Panel value="configurations">
+        <section
+          id="harnesses"
+          className={styles.aiSection}
+          aria-labelledby="harnesses-title"
+        >
+          <div className={styles.sectionHeading}>
+            <h2 id="harnesses-title">Harnesses</h2>
+            <div className={styles.sectionActions}>
+              <>
+                <Button
+                  aria-label="Check installations"
+                  title="Check installations"
+                  disabled={checking}
+                  onClick={() => void refresh(true)}
+                >
+                  <RefreshCw size={14} />
+                  Check installations
+                </Button>
+                <Button
+                  ref={addButton}
+                  variant="primary"
+                  disabled={adding}
+                  onClick={() => {
+                    setAdding(true);
+                  }}
+                >
+                  <Plus size={14} />
+                  Add configuration
+                </Button>
+              </>
+            </div>
+          </div>
           {!profiles ? (
             !error && <HarnessRowsSkeleton />
           ) : (
@@ -220,12 +223,20 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
               }}
             />
           )}
-        </Tabs.Panel>
-        <Tabs.Panel value="settings">
+        </section>
+        <ModelAliases profiles={profiles} onDirty={aliasDirty} />
+        <section
+          id="execution-settings"
+          className={styles.aiSection}
+          aria-labelledby="execution-settings-title"
+        >
+          <div className={styles.sectionHeading}>
+            <h2 id="execution-settings-title">Execution settings</h2>
+          </div>
           <div className={styles.settings}>
             <ExecutionSettings onDirty={limitDirty} />
           </div>
-        </Tabs.Panel>
+        </section>
       </div>
       <CustomProfileDialog
         opened={customModalOpen}
@@ -246,7 +257,7 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
           await refresh();
         }}
       />
-    </Tabs>
+    </section>
   );
 }
 function configuration(profile: Profile): ExecutorProfile {

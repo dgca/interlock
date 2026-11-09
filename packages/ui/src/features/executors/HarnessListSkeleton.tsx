@@ -1,7 +1,6 @@
 import { Stack } from '@mantine/core';
 import {
   PageHeader,
-  PageTabsSkeleton,
   workspacePage,
 } from '../../components/PageLayout/PageLayout';
 import {
@@ -11,10 +10,6 @@ import {
 import { Placeholder } from '../../components/LoadingSkeleton/LoadingSkeleton';
 import styles from './Harnesses.module.css';
 
-export const harnessViews = [
-  { value: 'configurations', label: 'Configurations' },
-  { value: 'settings', label: 'Execution settings' },
-];
 export const harnessColumns: readonly ListTableColumn[] = [
   { label: 'Configuration', width: 'minmax(0, 1fr)' },
   { label: 'Installation', width: '140px', compactWidth: '110px' },
@@ -43,12 +38,7 @@ export function HarnessRowsSkeleton() {
 export function HarnessLibrarySkeleton() {
   return (
     <section className={workspacePage.page}>
-      <PageHeader title="Harnesses" />
-      <PageTabsSkeleton
-        items={harnessViews}
-        value="configurations"
-        showCounts={false}
-      />
+      <PageHeader title="AI Settings" />
       <div className={workspacePage.content}>
         <HarnessRowsSkeleton />
       </div>

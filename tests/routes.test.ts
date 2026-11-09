@@ -60,6 +60,9 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowLibrary', () => ({
   WorkflowLibrary: ({ onOpen }: any) =>
     h('button', { onClick: () => onOpen('w1') }, 'Open workflow'),
 }));
+vi.mock('../packages/ui/src/features/executors/Harnesses', () => ({
+  Harnesses: () => h('section', {}, 'AI settings content'),
+}));
 vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
   WorkflowEditor: ({
     workflow,
@@ -199,6 +202,14 @@ async function click(label: string) {
   expect(button, label).toBeTruthy();
   await act(async () => button.click());
 }
+
+it('redirects legacy Harnesses links to AI Settings with their query and anchor', async () => {
+  await mount('/settings/harnesses?source=workflow#concurrency');
+  expect(window.location.pathname).toBe('/settings/ai');
+  expect(window.location.search).toBe('?source=workflow');
+  expect(window.location.hash).toBe('#concurrency');
+  expect(container.textContent).toContain('AI settings content');
+});
 async function traverse(direction: 'back' | 'forward') {
   await act(async () => {
     const popped = new Promise<void>((resolve) =>

@@ -18,9 +18,11 @@ const rpc = vi.hoisted(() => ({
   models: vi.fn(),
   settings: vi.fn(),
   manage: vi.fn(),
+  aliases: vi.fn(),
 }));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
+    modelAliases: { read: { query: rpc.aliases } },
     stalls: {
       settings: {
         query: async () => ({ id: 'library', revision: 0, policy: {} }),
@@ -59,6 +61,10 @@ beforeEach(() => {
     removeEventListener: vi.fn(),
   });
   Element.prototype.scrollIntoView = vi.fn();
+  rpc.aliases.mockImplementation(async (q) => {
+    if (q.action === 'inspect') throw new Error('Model alias does not exist.');
+    return { items: [], total: 0, offset: 0, limit: 10, truncated: false };
+  });
   rpc.models.mockReset();
   rpc.manage.mockReset();
   rpc.settings.mockResolvedValue({ revision: 0, concurrency: 3 });
@@ -310,8 +316,8 @@ it('preserves open configuration edits across refresh and reloads only on explic
     'input[maxlength="120"]',
   )!;
   await act(async () => setInput(input, 'Unsaved name'));
-  await act(async () => button('Execution settings').click());
-  await act(async () => button('Configurations').click());
+  expect(container.querySelector('#execution-settings')).not.toBeNull();
+  expect(container.querySelector('#harnesses')).not.toBeNull();
   expect(input.value).toBe('Unsaved name');
   const updated = { ...original, revision: 1, name: 'Updated elsewhere' };
   rpc.profiles.mockResolvedValue([updated]);
