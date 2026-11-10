@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Interlock • Repeatable workflows for AI agents</title>
+    <title>Interlock · Repeatable workflows for AI agents</title>
     <meta
       name="description"
-      content="Build workflows that run scripts, hand off assignments to AI agents, and record each step on your computer."
+      content="Define the steps. Interlock runs the code, gives agents the work that needs judgment, and checks the results. Build and run workflows in the editor or through MCP."
     />
     <link rel="canonical" href="https://dgca.github.io/interlock/" />
     <meta
@@ -15,7 +15,7 @@
     />
     <meta
       property="og:description"
-      content="Build workflows that run scripts, hand off assignments to AI agents, and record each step on your computer."
+      content="Define the steps. Interlock runs the code, gives agents the work that needs judgment, and checks the results. Build and run workflows in the editor or through MCP."
     />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Interlock" />
@@ -29,7 +29,7 @@
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Interlock, a workflow editor for your AI agent, with a diagram connecting input, script, agent assignment, and result."
+      content="Interlock, repeatable workflows for AI agents, with a diagram connecting input, script, agent assignment, and result."
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta
@@ -38,7 +38,7 @@
     />
     <meta
       name="twitter:description"
-      content="Build workflows that run scripts, hand off assignments to AI agents, and record each step on your computer."
+      content="Define the steps. Interlock runs the code, gives agents the work that needs judgment, and checks the results. Build and run workflows in the editor or through MCP."
     />
     <meta
       name="twitter:image"
@@ -46,79 +46,142 @@
     />
     <meta
       name="twitter:image:alt"
-      content="Interlock, a workflow editor for your AI agent, with a diagram connecting input, script, agent assignment, and result."
+      content="Interlock, repeatable workflows for AI agents, with a diagram connecting input, script, agent assignment, and result."
     />
+    <link rel="icon" href="interlock-logo.svg" type="image/svg+xml" />
     <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231e1e24'/%3E%3Cg fill='none' stroke='%2382b4ff' stroke-width='2'%3E%3Crect x='6' y='6' width='13' height='13' rx='2'/%3E%3Crect stroke='%23f0a1d3' x='13' y='13' width='13' height='13' rx='2'/%3E%3C/g%3E%3C/svg%3E"
-    />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;550;600;650;700&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      href="fonts/ibm-plex-sans-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
     />
     <style>
-      :root {
-        color-scheme: dark;
-        --page: #101115;
-        --intro-bg: #141923;
-        --panel: #17191f;
-        --line: #30333d;
-        --ink: #eef0f5;
-        --muted: #aeb5c3;
-        --blue: #a8c7f5;
-        --focus: #a8c7f5;
-        --sans: Inter, system-ui, sans-serif;
-        --mono: ui-monospace, Menlo, Consolas, monospace;
-        --section-gap: clamp(56px, 6.6vw, 88px);
+      @font-face {
+        font-family: 'IBM Plex Sans';
+        font-style: normal;
+        font-weight: 400 600;
+        font-display: swap;
+        src: url('fonts/ibm-plex-sans-latin.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'IBM Plex Mono';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url('fonts/ibm-plex-mono-latin.woff2') format('woff2');
       }
 
+      :root {
+        color-scheme: dark;
+        --structural: #1a1a1a;
+        --workspace: #151515;
+        --inset: #121212;
+        --form: #212121;
+        --divider: #333;
+        --heading: #f1f1f1;
+        --body: #b8b8b8;
+        --helper: #a6a6a6;
+        --blue: #6c8aff;
+        --link: #b4caff;
+        --orchid: #d484f6;
+        --mint: #9dd9c4;
+        --sans: 'IBM Plex Sans', sans-serif;
+        --mono: 'IBM Plex Mono', monospace;
+        --node-fill: linear-gradient(#292929, #202020);
+        --node-shadow: 0 4px 12px #0006;
+        --neutral-fill: linear-gradient(#303030, #252525);
+        --nav-height: 80px;
+      }
       * {
         box-sizing: border-box;
       }
       html {
         scroll-padding-top: 24px;
-        scrollbar-color: #4b5060 var(--page);
-      }
-      @media (prefers-reduced-motion: no-preference) {
-        html:has(#install:target) {
-          scroll-behavior: smooth;
-        }
+        scrollbar-color: #555 var(--workspace);
       }
       body {
         margin: 0;
-        background: var(--page);
-        color: var(--ink);
-        font: 400 16px/1.6 var(--sans);
+        background: var(--workspace);
+        color: var(--body);
+        font: 400 18px/1.5 var(--sans);
         -webkit-font-smoothing: antialiased;
       }
       ::selection {
-        background: #304467;
-        color: var(--ink);
-      }
-      :focus-visible {
-        outline: 2px solid var(--focus);
-        outline-offset: 3px;
-      }
-      [hidden] {
-        display: none;
+        background: #344d89;
+        color: #fff;
       }
       a {
-        color: var(--blue);
+        color: inherit;
         text-underline-offset: 0.2em;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+      button,
+      a {
+        -webkit-tap-highlight-color: transparent;
+      }
+      a:hover {
+        color: var(--heading);
+      }
+      :focus-visible {
+        outline: 2px solid #7b99ff;
+        outline-offset: 4px;
+      }
+      [hidden] {
+        display: none !important;
       }
       img {
         display: block;
         max-width: 100%;
         height: auto;
       }
-      code,
-      pre {
-        font-family: var(--mono);
+      svg.icon {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+      }
+      h1,
+      h2,
+      h3,
+      p,
+      figure {
+        margin: 0;
+      }
+      h1,
+      h2,
+      h3 {
+        color: var(--heading);
+      }
+      h1,
+      h2 {
+        font-weight: 600;
+        letter-spacing: -0.025em;
+      }
+      .keep-together {
+        white-space: nowrap;
+      }
+      h1 {
+        font-size: clamp(52px, 5vw, 72px);
+        line-height: 1.04;
+        max-width: 1240px;
+      }
+      h2 {
+        font-size: 40px;
+        line-height: 1.2;
+      }
+      h3 {
+        font-weight: 500;
+        font-size: 21px;
+        line-height: 1.3;
+      }
+      p {
+        max-width: 1000px;
       }
       .shell {
-        width: min(1200px, calc(100% - 64px));
+        width: min(1312px, calc(100% - 128px));
         margin-inline: auto;
       }
       .visually-hidden,
@@ -132,2361 +195,2233 @@
       }
       .skip:focus {
         position: fixed;
-        z-index: 2;
+        z-index: 10;
         top: 12px;
         left: 12px;
-        padding: 8px 12px;
-        background: var(--page);
+        background: var(--form);
+        padding: 12px 16px;
       }
-
+      .hero,
+      .closing {
+        background: var(--structural);
+      }
       .site-header {
-        background: var(--intro-bg);
+        position: absolute;
+        inset: 0 0 auto;
+        z-index: 2;
       }
       .site-nav {
-        min-height: 68px;
+        min-height: var(--nav-height);
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 16px;
+        gap: 24px;
       }
-      .site-nav a {
-        text-decoration: none;
-      }
-      .site-nav .mark {
+      .brand {
+        min-height: 44px;
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        color: var(--ink);
-        font-weight: 650;
-        letter-spacing: -0.02em;
+        gap: 12px;
+        color: var(--heading);
+        font-size: 23px;
+        font-weight: 600;
+        text-decoration: none;
       }
-      .site-nav .mark svg {
-        width: 25px;
-        height: 25px;
+      .brand img {
+        filter: drop-shadow(0 2px 4px #0005);
       }
       .nav-links {
         display: flex;
         align-items: center;
-        gap: clamp(12px, 3vw, 28px);
-        font-size: 14px;
+        gap: 36px;
+        color: #d0d0d4;
       }
-      .nav-links a {
-        padding-block: 8px;
-        color: var(--muted);
-      }
-      .nav-links .github-link {
+      .nav-links > a {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
+        min-height: 44px;
+        text-decoration: none;
+        font-size: 15px;
+        font-weight: 500;
       }
-      .nav-links a:hover,
-      .site-footer a:hover {
-        color: var(--ink);
-        text-decoration: underline;
-      }
-      .nav-links .install-link {
-        color: var(--blue);
-        font-weight: 600;
-      }
-
-      .intro {
-        position: relative;
-        isolation: isolate;
-        padding-bottom: var(--section-gap);
-        border-bottom: 1px solid var(--line);
-        background:
-          radial-gradient(
-            ellipse 45rem 18rem at 83% 18rem,
-            #1c2940,
-            transparent
-          ),
-          var(--intro-bg);
-      }
-      .intro-graph {
-        position: absolute;
-        z-index: -1;
-        inset-block-start: 40px;
-        inset-inline-end: max(0px, calc((100% - 1264px) / 2));
-        width: min(46%, 600px);
-        height: auto;
-        color: #405674;
-        pointer-events: none;
-      }
-      .intro-signal {
-        opacity: 0;
-        stroke: var(--blue);
-        stroke-width: 2;
-        stroke-dasharray: 12 100;
-        stroke-dashoffset: 12;
-      }
-      @media (min-width: 801px) and (prefers-reduced-motion: no-preference) {
-        .intro-signal {
-          animation: trace-branch 2.8s linear 400ms;
-        }
-      }
-      @keyframes trace-branch {
-        15%,
-        80% {
-          opacity: 0.75;
-        }
-        to {
-          opacity: 0;
-          stroke-dashoffset: -100;
-        }
-      }
-      .hero {
-        padding-block: clamp(36px, 4.5vw, 64px) clamp(34px, 4.2vw, 56px);
-      }
-      .hero h1 {
-        max-width: 20ch;
-        margin: 0;
-        font-size: clamp(2.5rem, 5.6vw, 4.5rem);
-        font-weight: 600;
-        line-height: 1.04;
-        letter-spacing: -0.04em;
-        text-wrap: balance;
-      }
-      .hero > p {
-        max-width: 58ch;
-        margin: 16px 0 0;
-        color: var(--muted);
-        font-size: clamp(1rem, 1.55vw, 1.1875rem);
-        line-height: 1.6;
-      }
-      .graph-hint {
-        display: none;
-      }
-      .demo-note {
-        margin: 32px 0 0;
-        color: #949cab;
-        font-size: 13px;
-      }
-
-      .section h2 {
-        margin: 0 0 12px;
-        max-width: 22ch;
-        font-size: clamp(2rem, 3.8vw, 3rem);
-        font-weight: 600;
-        line-height: 1.1;
-        letter-spacing: -0.035em;
-        text-wrap: balance;
-      }
-      .section-columns > div > p {
-        max-width: 62ch;
-        margin: 0;
-        color: var(--muted);
-      }
-      .product {
-        margin-top: clamp(80px, 8.9vw, 128px);
-        align-items: center;
-      }
-      .install-section + .product {
-        margin-top: clamp(68px, 7.3vw, 104px);
-      }
-      .product p + p {
-        margin-top: 12px;
-      }
-      .section-columns {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.55fr);
-        gap: 24px clamp(28px, 5vw, 72px);
-      }
-      .product figure {
-        margin: 0;
-      }
-      .product figure a {
-        display: block;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        overflow: hidden;
-      }
-      .product figure a:hover {
-        border-color: var(--blue);
-      }
-      .product figcaption {
-        margin-top: 8px;
-        color: var(--muted);
-        font-size: 13px;
-      }
-      .install-section {
-        grid-template-columns: minmax(0, 1fr);
-        padding-block: clamp(48px, 5.2vw, 76px) clamp(24px, 3vw, 40px);
-      }
-      .install-section p {
-        font-size: 14px;
-      }
-      .install-box {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: start;
-        gap: 12px 16px;
-        padding: 18px 20px;
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        background: var(--panel);
-      }
-      .install-box pre {
-        margin: 0;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-        font-size: 14px;
-        line-height: 1.8;
-      }
-      .install-box button {
-        min-width: 65px;
-        padding: 6px 10px;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: transparent;
-        color: var(--blue);
-        font: 500 13px/1.5 var(--sans);
-        cursor: pointer;
-      }
-      .install-box button:hover {
-        background: var(--line);
-      }
-      .install-box #copyStatus {
-        grid-column: 1 / -1;
-        color: var(--muted);
-        font-size: 13px;
-      }
-      .install-section .after-install {
-        margin-top: 12px;
-      }
-      .site-footer {
-        margin-top: clamp(80px, 8.9vw, 128px);
-      }
-      .site-footer .shell {
-        padding-block: 22px;
-        color: var(--muted);
-        font-size: 13px;
-      }
-      .site-footer p {
-        margin: 0;
-      }
-
-      /* Browser demos use the app palette. */
-      .rx {
-        --bg: #17171b;
-        --canvas: #141418;
-        --surface: #1e1e24;
-        --raised: #27272f;
-        --hover: #303039;
-        --border: #33333d;
-        --border-strong: #484853;
-        --text: #ececf2;
-        --text2: #c4c4cf;
-        --muted: #a0a0b0;
-        --dim: #9595a5;
-        --accent: #82b4ff;
-        --accent-hover: #a8cbff;
-        --accent-text: #b5d2ff;
-        --accent-soft: #232e42;
-        --accent-border: #425e85;
-        --pink: #f0a1d3;
-        --pink-soft: #352638;
-        --pink-border: #78536e;
-        --teal: #96f2d7;
-        --edge: #7189ae;
-        --dot: #35353f;
-        --waiting: #e3c47f;
-        --failed: #e89481;
-        --true: #69db7c;
-        --false: #ff8787;
-        --sans:
-          Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        --mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
-        color: var(--text);
-        font-family: var(--sans);
-      }
-      .rx button,
-      .rx input,
-      .rx textarea {
-        font: inherit;
-        color: inherit;
-      }
-      .rx .btn {
+      .button {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
-        min-height: 36px;
-        padding: 7px 14px;
-        border-radius: 7px;
-        border: 1px solid var(--border-strong);
-        background: var(--raised);
-        color: var(--text);
-        font-size: 13px;
-        font-weight: 550;
-        text-decoration: none;
-        cursor: pointer;
-        white-space: nowrap;
-        transition:
-          background 0.15s,
-          border-color 0.15s;
-      }
-      .rx .btn:hover {
-        background: var(--hover);
-      }
-      .rx .btn.primary {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: #0b1626;
-      }
-      .rx .btn.primary:hover {
-        background: var(--accent-hover);
-        border-color: var(--accent-hover);
-      }
-      .rx .btn[hidden] {
-        display: none;
-      }
-      .rx .btn:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
-      }
-      .rx .btn svg {
-        flex-shrink: 0;
-      }
-      .rx .app {
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        background: var(--surface);
-        overflow: hidden;
-      }
-      .rx .app-head {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        flex-wrap: wrap;
-        padding: 14px 18px;
-        border-bottom: 1px solid var(--border);
-        background: var(--surface);
-      }
-      .rx .eyeline {
-        font: 600 11px var(--sans);
-        letter-spacing: 1px;
-        color: var(--muted);
-        text-transform: uppercase;
-      }
-      .rx .apptitle {
-        margin: 3px 0 0;
-        font-size: 16px;
-        font-weight: 550;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .rx .pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font: 550 12px var(--sans);
-        padding: 3px 9px;
-        border-radius: 99px;
-        border: 1px solid var(--border-strong);
-        color: var(--muted);
-        background: var(--raised);
-      }
-      .rx .pill.running {
-        color: var(--accent-text);
-        border-color: var(--accent-border);
-        background: var(--accent-soft);
-      }
-      .rx .pill.waiting {
-        color: var(--waiting);
-        border-color: #6b5b33;
-        background: #2d2818;
-      }
-      .rx .pill.completed {
-        color: var(--accent-text);
-        border-color: var(--accent-border);
-        background: var(--accent-soft);
-      }
-      .rx .pill.failed {
-        color: var(--failed);
-        border-color: #6e3f36;
-        background: #2e1e1b;
-      }
-      .rx .replica-tag {
-        margin-left: auto;
-        font: 500 12px var(--sans);
-        color: var(--muted);
-        display: flex;
-        align-items: center;
-        gap: 7px;
-      }
-      .rx .runbar {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-        padding: 12px 18px;
-        border-bottom: 1px solid var(--border);
-        background: #1b1b20;
-      }
-      .rx .runbar label {
-        font-size: 13px;
-        color: var(--muted);
-      }
-      .rx .field {
-        display: flex;
-        align-items: center;
-        gap: 0;
-        border: 1px solid var(--border-strong);
-        border-radius: 7px;
-        background: var(--canvas);
-        overflow: hidden;
-      }
-      .rx .field span {
-        font: 13px var(--mono);
-        color: var(--dim);
-        padding: 0 0 0 10px;
-        white-space: nowrap;
-      }
-      .rx .field input {
+        min-height: 40px;
+        padding: 0 18px;
         border: 0;
-        background: none;
-        outline: none;
-        padding: 8px 10px 8px 4px;
-        width: 132px;
-        font: 13px var(--mono);
-        color: var(--text);
-      }
-      .rx .field:focus-within {
-        border-color: var(--accent);
-      }
-      .rx .chips {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-      }
-      .rx .chip {
-        font: 500 13px var(--sans);
-        padding: 5px 10px;
-        border-radius: 99px;
-        border: 1px solid var(--border);
-        background: var(--raised);
-        color: var(--text2);
-        cursor: pointer;
-      }
-      .rx .chip:hover {
-        border-color: var(--border-strong);
-        color: var(--text);
-      }
-      .rx .chip small {
-        color: var(--dim);
-        font-size: 11px;
-        margin-left: 4px;
-      }
-      .rx .run-error {
-        flex-basis: 100%;
-        margin: 0;
-        font-size: 13px;
-        color: var(--failed);
-      }
-      .rx .run-guide {
-        margin-top: 24px;
-      }
-      .rx .guide-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 14px;
-      }
-      .rx .guide-header h3 {
-        margin: 0;
-        color: var(--text);
-        font-size: 18px;
-        line-height: 1.3;
+        border-radius: 6px;
+        background: var(--neutral-fill);
+        box-shadow: 0 1px 3px #0006;
+        color: #dedede;
+        font-size: 14px;
         font-weight: 600;
+        text-decoration: none;
       }
-      .rx .guide-steps p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 13px;
-        line-height: 1.5;
+      .button:hover {
+        filter: brightness(1.13);
+        color: #fff;
       }
-      .rx .guide-toggle {
+      .button:active {
+        transform: translateY(1px);
+      }
+      .nav-links .button {
+        background: linear-gradient(#3f64f7, #3155eb);
+        box-shadow: 0 2px 5px #0006;
+        color: #fff;
+        min-width: 160px;
+      }
+      .nav-short {
         display: none;
       }
-      .rx .guide-steps {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 16px 24px;
-        margin: 0;
-        padding: 0;
-        list-style: none;
-      }
-      .rx .guide-steps li {
-        padding-top: 10px;
-        border-top: 1px solid var(--border);
-      }
-      .rx .guide-steps li[aria-current] {
-        border-color: var(--accent);
-      }
-      .rx .guide-steps strong {
-        display: block;
-        margin-bottom: 3px;
-        color: var(--text2);
-        font-size: 14px;
-        font-weight: 600;
-      }
-      .rx .guide-steps li[aria-current] strong {
-        color: var(--accent-text);
-      }
-      @media (max-width: 960px) {
-        .rx .guide-steps {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
-      @media (max-width: 680px) {
-        .rx .guide-toggle {
-          display: inline-flex;
-        }
-        .rx .guide-steps {
-          grid-template-columns: minmax(0, 1fr);
-        }
-        .rx
-          .run-guide:has(.guide-toggle[aria-expanded='false'])
-          .guide-steps
-          li:not([aria-current]) {
-          display: none;
-        }
-      }
-      .rx .handoff {
-        align-items: center;
-        gap: 16px;
-        flex-wrap: wrap;
-        padding: 14px 18px;
-        border-bottom: 1px solid var(--border);
-        background: #1a2130;
-      }
-      .rx .handoff:not([hidden]) {
-        display: flex;
-      }
-      .rx .handoff b {
-        display: block;
-        font-size: 14px;
-        font-weight: 550;
-        color: var(--accent-text);
-      }
-      .rx .handoff p {
-        margin: 2px 0 0;
-        font-size: 13px;
-        color: var(--text2);
-        max-width: 62ch;
-        line-height: 1.5;
-      }
-      .rx .handoff .acts {
-        margin-left: auto;
-        display: flex;
-        gap: 8px;
-      }
-      .rx .canvas {
+      .hero {
         position: relative;
-        background: var(--canvas);
-        background-image: radial-gradient(var(--dot) 1px, transparent 1px);
-        background-size: 18px 18px;
-        overflow-x: auto;
-        overflow-y: hidden;
-        border-bottom: 1px solid var(--border);
-        scrollbar-width: thin;
+        isolation: isolate;
+        overflow: hidden;
+        padding: calc(var(--nav-height) + 78px) 0 82px;
+        border-bottom: 1px solid var(--divider);
       }
-      .rx .graph {
-        position: relative;
-        margin: 0 auto;
-      }
-      .rx .graph svg.edges {
+      .hero::before {
+        content: '';
         position: absolute;
         inset: 0;
-        overflow: visible;
+        z-index: -1;
         pointer-events: none;
+        background: url('assets/hero-atmosphere.png') 50% 0 / 100% 100%
+          no-repeat;
+        background-image: image-set(
+          url('assets/hero-atmosphere.png') 1x,
+          url('assets/hero-atmosphere@2x.png') 2x
+        );
       }
-      .rx .edges path {
-        fill: none;
-        stroke: var(--edge);
-        stroke-width: 1.6;
-        opacity: 0.55;
-        transition:
-          opacity 0.3s,
-          stroke 0.3s;
+      .hero h1 {
+        font-size: clamp(56px, 5.55vw, 80px);
+        line-height: 1.03;
+        letter-spacing: -0.035em;
       }
-      .rx .edges path.lit {
-        opacity: 1;
-        stroke: var(--accent);
+      .hero-description {
+        color: #d0d0d4;
+        max-width: 830px;
+        font-size: 21px;
+        line-height: 1.45;
+        margin: 28px 0 62px 4px;
       }
-      .rx .edges text {
-        font: 600 11px var(--sans);
-        fill: var(--muted);
+      .hero .workflow {
+        box-shadow: 0px 5px 25px rgba(0, 0, 0, 0.3);
       }
-      .rx .edges text.t {
-        fill: var(--true);
-      }
-      .rx .edges text.f {
-        fill: var(--false);
-      }
-      .rx .node {
-        position: absolute;
-        width: 168px;
-        height: 96px;
-        padding: 10px 12px;
-        background: var(--raised);
-        border: 1px solid var(--border-strong);
-        border-radius: 9px;
-        cursor: pointer;
-        text-align: left;
-        transition:
-          border-color 0.25s,
-          box-shadow 0.25s,
-          opacity 0.25s;
-      }
-      .rx .node:hover {
-        border-color: #5a5a66;
-      }
-      .rx .node.sel {
-        border-color: var(--accent);
-      }
-      .rx .node.st-running {
-        border-color: var(--accent);
-      }
-      .rx .node.st-waiting {
-        border-color: var(--waiting);
-      }
-      .rx .node.st-failed {
-        border-color: var(--failed);
-      }
-      .rx .node.st-pending {
-        opacity: 0.55;
-      }
-      .rx .node.st-skipped {
-        opacity: 0.4;
-      }
-      .rx .nh {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font: 600 11px var(--sans);
-        letter-spacing: 1px;
-        color: var(--muted);
-        margin-bottom: 8px;
-        text-transform: uppercase;
-      }
-      .rx .ni {
-        width: 26px;
-        height: 26px;
-        display: grid;
-        place-items: center;
-        border: 1px solid var(--accent-border);
-        border-radius: 6px;
-        color: var(--accent-text);
-        background: var(--accent-soft);
-        flex-shrink: 0;
-      }
-      .rx .ni.agent {
-        color: var(--teal);
-        background: #1d302c;
-        border-color: #2f5f52;
-      }
-      .rx .ni.exit {
-        color: var(--pink);
-        background: var(--pink-soft);
-        border-color: var(--pink-border);
-      }
-      .rx .node strong {
-        display: block;
+      .figure-caption {
         font-size: 13px;
-        font-weight: 550;
-        color: var(--text);
-        white-space: nowrap;
+        line-height: 1.4;
+        color: var(--helper);
+        margin: 20px 4px 0;
+      }
+      .workflow {
+        background: var(--inset);
+        border-radius: 12px;
         overflow: hidden;
-        text-overflow: ellipsis;
       }
-      .rx .node small {
-        display: block;
-        font-size: 11px;
-        color: var(--muted);
-        margin-top: 4px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .rx .nstat {
-        position: absolute;
-        left: 0;
-        bottom: calc(100% + 6px);
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        font: 500 11px var(--sans);
-        color: var(--muted);
-        white-space: nowrap;
-      }
-      .rx .st-running .nstat,
-      .rx .st-completed .nstat {
-        color: var(--accent-text);
-      }
-      .rx .st-waiting .nstat {
-        color: var(--waiting);
-      }
-      .rx .st-failed .nstat {
-        color: var(--failed);
-      }
-      .rx .split {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
-      }
-      .rx .timeline {
-        padding: 16px 18px 18px;
-        border-right: 1px solid var(--border);
-        min-height: 96px;
-      }
-      @media (max-width: 680px) {
-        .rx .split {
-          grid-template-columns: minmax(0, 1fr);
-        }
-        .rx .timeline {
-          border-right: 0;
-          border-bottom: 1px solid var(--border);
-          min-height: 0;
-        }
-        .rx .timeline {
-          padding-block: 12px 14px;
-        }
-      }
-      .rx .sechead {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 10px;
-        margin: 0 0 10px;
-      }
-      .rx .sechead .t {
-        margin: 0;
-        font-size: 13px;
-        font-weight: 550;
-      }
-      .rx .sechead #runId {
-        font: 12px var(--mono);
-        color: var(--dim);
-      }
-      .rx .steps {
-        display: flex;
-        flex-direction: column;
-        gap: 7px;
-        margin: 0;
-        padding: 0;
-        list-style: none;
-      }
-      .rx .steprow {
+      .workflow-header {
+        min-height: 56px;
         display: flex;
         align-items: center;
         gap: 12px;
-        width: 100%;
-        padding: 10px 12px;
-        border: 1px solid var(--border);
-        background: var(--surface);
-        border-radius: 6px;
-        cursor: pointer;
-        text-align: left;
-      }
-      .rx .steprow:hover {
-        border-color: var(--border-strong);
-      }
-      .rx .steprow.sel {
-        border-color: var(--accent-border);
-        background: var(--accent-soft);
-      }
-      .rx .steprow .ix {
-        font: 11px var(--mono);
-        color: var(--muted);
-        border: 1px solid var(--border-strong);
-        border-radius: 5px;
-        padding: 4px 6px;
-      }
-      .rx .steprow div {
-        flex: 1;
-        min-width: 0;
-      }
-      .rx .steprow strong {
-        display: block;
-        font-size: 13px;
+        padding: 6px 24px;
+        background: var(--form);
+        border-bottom: 1px solid var(--divider);
+        font-size: 18px;
         font-weight: 500;
+        color: var(--heading);
       }
-      .rx .steprow small {
+      .workflow-header > .icon {
+        color: var(--body);
+      }
+      .workflow-meta {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--helper);
+      }
+      .animation-toggle {
+        width: 44px;
+        height: 44px;
+        padding: 12px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--body);
+      }
+      .animation-toggle:hover {
+        background: #333;
+        color: var(--heading);
+      }
+      .animation-toggle svg {
         display: block;
-        font-size: 12px;
-        color: var(--muted);
-        margin-top: 2px;
       }
-      .rx .steprow .s {
-        font-size: 12px;
-        color: var(--muted);
+      .animation-toggle .play-icon {
+        display: none;
       }
-      .rx .steprow .s.completed {
-        color: var(--accent-text);
+      .animation-toggle[aria-pressed='true'] .play-icon {
+        display: block;
       }
-      .rx .steprow .s.waiting {
-        color: var(--waiting);
+      .animation-toggle[aria-pressed='true'] .pause-icon {
+        display: none;
       }
-      .rx .steprow .s.failed {
-        color: var(--failed);
+      .graph {
+        position: relative;
+        background-image: radial-gradient(#323232 0.7px, transparent 0.7px);
+        background-size: 20px 20px;
       }
-      .rx .steprow .s.running {
-        color: var(--accent-text);
+      .hero-graph {
+        height: 432px;
+        display: grid;
+        grid-template-columns: 0.78fr 1fr 1fr 1fr 1fr 0.7fr;
+        align-items: center;
+        gap: clamp(20px, 3.33vw, 48px);
+        padding: 0 32px 64px;
       }
-      .rx .empty {
-        margin: 0;
-        font-size: 14px;
-        color: var(--muted);
-        line-height: 1.55;
+      .graph-edges {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: visible;
       }
-      .rx .details {
-        padding: 16px 18px 20px;
-        background: var(--surface);
-        min-width: 0;
+      .graph-edges path {
+        fill: none;
+        stroke: var(--blue);
+        stroke-width: 1.2;
+        stroke-linejoin: round;
       }
-      @media (max-width: 680px) {
-        .rx .details {
-          padding-block: 12px 14px;
+      .graph-edges marker path {
+        fill: var(--blue);
+        stroke: none;
+      }
+      .graph-edges path.is-active {
+        stroke: #b4caff;
+        stroke-width: 2;
+        stroke-dasharray: 6 5;
+        animation: flow 0.7s linear infinite;
+      }
+      @keyframes flow {
+        to {
+          stroke-dashoffset: -22;
         }
       }
-      .rx .dlabel {
-        font: 600 11px var(--sans);
-        letter-spacing: 1px;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin: 16px 0 6px;
-      }
-      .rx .dlabel:first-child {
-        margin-top: 0;
-      }
-      .rx .dtitle {
-        font-size: 16px;
-        font-weight: 550;
-        margin: 2px 0 2px;
-      }
-      .rx .dstate {
+      .editor-toolbar {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px;
+        background: var(--structural);
+        border-radius: 8px;
         font-size: 13px;
+        color: var(--body);
       }
-      .rx .dstate.completed,
-      .rx .dstate.running {
-        color: var(--accent-text);
-      }
-      .rx .dstate.waiting {
-        color: var(--waiting);
-      }
-      .rx .dstate.failed {
-        color: var(--failed);
-      }
-      .rx .dstate.pending {
-        color: var(--muted);
-      }
-      .rx pre.json {
-        margin: 0;
-        max-height: 220px;
-        overflow: auto;
-        background: var(--canvas);
-        border: 1px solid var(--border);
+      .editor-mode {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        padding: 4px;
+        background: #121212;
         border-radius: 6px;
-        padding: 10px 12px;
+      }
+      .editor-mode span {
+        padding: 4px 12px;
+      }
+      .editor-mode .selected {
+        background: var(--neutral-fill);
+        color: var(--heading);
+        border-radius: 4px;
+      }
+      .editor-add {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px;
+        background: var(--neutral-fill);
+        border-radius: 6px;
+        color: #dedede;
+      }
+      .node {
+        position: relative;
+        z-index: 1;
+        min-width: 0;
+        min-height: 128px;
+        padding: 14px;
+        border-radius: 9px;
+        background: var(--node-fill);
+        box-shadow: var(--node-shadow);
+        color: var(--heading);
+      }
+      .node--entry,
+      .node--exit {
+        min-height: 112px;
+      }
+      .node--branch {
+        min-height: 144px;
+      }
+      .node-kind {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 10px;
+        line-height: 1.3;
+        color: var(--body);
+        font-weight: 500;
+      }
+      .node-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        background: #26334b;
+        color: #b4caff;
+        flex-shrink: 0;
+      }
+      .node-icon svg.icon {
+        width: 16px;
+        height: 16px;
+      }
+      .node--agent .node-icon {
+        background: #213832;
+        color: var(--mint);
+      }
+      .node--branch .node-icon,
+      .node--workflow .node-icon,
+      .node--exit .node-icon {
+        background: #352a44;
+        color: var(--orchid);
+      }
+      .node-title {
+        font-size: 17px;
+        line-height: 1.3;
+        font-weight: 500;
+        margin-top: 10px;
+      }
+      .node-detail {
         font-size: 12px;
-        line-height: 1.6;
-        color: var(--text2);
+        line-height: 1.4;
+        color: var(--body);
+        margin-top: 8px;
+        overflow-wrap: anywhere;
+      }
+      .handle {
+        position: absolute;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #98b9ff;
+        top: calc(50% - 3px);
+      }
+      .handle--in {
+        left: -3px;
+      }
+      .handle--out,
+      .handle--yes,
+      .handle--no {
+        right: -3px;
+      }
+      .handle--yes {
+        top: 111px;
+      }
+      .handle--no {
+        top: 81px;
+      }
+      .branch-label {
+        position: absolute;
+        right: 12px;
+        font-size: 12px;
+        color: var(--link);
+      }
+      .branch-label--yes {
+        top: 106px;
+      }
+      .branch-label--no {
+        top: 76px;
+      }
+      .node-done {
+        position: absolute;
+        right: 9px;
+        top: 9px;
+        color: #8bd3a9;
+        display: none;
+      }
+      .node-done svg.icon {
+        width: 13px;
+        height: 13px;
+      }
+      .node.is-done .node-done {
+        display: block;
+      }
+      .node.is-active {
+        outline: 2px solid var(--blue);
+        outline-offset: 0;
+      }
+      .node.is-active .node-icon {
+        color: #c7d7ff;
+        background: #30416b;
+      }
+      .section {
+        border-bottom: 1px solid var(--divider);
+        padding: 72px 0 84px;
+      }
+      .section-copy {
+        margin: 16px 4px 0;
+        max-width: 1000px;
+      }
+      .section-copy + .section-copy {
+        margin-top: 24px;
+      }
+      .section-figure {
+        margin-top: 52px;
+      }
+      .install-terminal {
+        background: var(--inset);
+        border-radius: 8px;
+        margin: 32px 0;
+        min-height: 112px;
+        padding: 24px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+      }
+      .install-terminal pre {
+        margin: 0;
+        color: #e6e6e6;
+        font: 400 17px/1.8 var(--mono);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
       }
-      .rx pre.json .k {
-        color: #a8cbff;
+      .terminal-label {
+        display: none;
       }
-      .rx pre.json .s {
-        color: #9fe0b0;
+      .install-terminal .button {
+        flex-shrink: 0;
+        min-width: 112px;
       }
-      .rx pre.json .n {
-        color: #f0c987;
+      .install-terminal .icon {
+        width: 16px;
+        height: 16px;
       }
-      .rx pre.json .b {
-        color: var(--pink);
+      .install-next {
+        font-size: 17px;
+        max-width: 920px;
+        margin-left: 4px;
       }
-      .rx .src {
-        font-size: 12px;
-        color: var(--dim);
+      #copy-status {
+        margin: -16px 4px 24px;
+        font-size: 14px;
+        color: var(--link);
+      }
+      .build-graph {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: clamp(32px, 5.55vw, 80px);
+        padding: 64px 32px;
+        min-height: 256px;
+        border-radius: 12px;
+      }
+      .build-graph .node {
+        padding: 14px 16px;
+      }
+      .build-graph .node-kind {
+        font-size: 11px;
+      }
+      .build-graph .node-title {
+        font-size: 22px;
+      }
+      .build-graph .node-detail {
+        font-size: 14px;
+        margin-top: 16px;
+      }
+      .agent-modes {
+        background: var(--inset);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .agent-mode {
+        min-height: 132px;
+        padding: 30px 28px;
+        display: grid;
+        grid-template-columns: 40% 1fr;
+        align-items: center;
+        gap: 20px;
+      }
+      .agent-mode + .agent-mode {
+        border-top: 1px solid var(--divider);
+      }
+      .agent-mode-heading {
+        display: grid;
+        grid-template-columns: 32px 1fr;
+        align-items: start;
+        column-gap: 20px;
+        row-gap: 8px;
+      }
+      .agent-mode-heading > :first-child {
+        grid-row: span 2;
         margin-top: 6px;
       }
-      .rx .src b {
-        color: var(--true);
+      .agent-mode-heading p {
+        font-size: 15px;
+      }
+      .agent-mode-detail {
+        color: #dedede;
+        font-size: 21px;
         font-weight: 500;
       }
-      .rx .src b.c {
-        color: var(--waiting);
-      }
-      .rx .prompt {
-        font-size: 13px;
-        line-height: 1.55;
-        color: var(--text2);
-        background: var(--canvas);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        padding: 10px 12px;
-        margin: 0;
-      }
-      .rx .console,
-      .rx .run-outcome {
-        border-bottom: 1px solid var(--border);
-        background: #1a2130;
-        padding: 14px 18px;
-      }
-      .rx .console h3,
-      .rx .run-outcome h3 {
-        margin: 0 0 4px;
-        font-size: 15px;
-        font-weight: 600;
-        color: var(--accent-text);
-      }
-      .rx .run-outcome p {
-        max-width: 68ch;
-        margin: 0;
-        font-size: 14px;
-        color: var(--text2);
-        overflow-wrap: anywhere;
-      }
-      .rx .console textarea {
-        display: block;
-        width: 100%;
-        max-width: 72ch;
-        min-height: 128px;
-        resize: vertical;
-        border: 1px solid var(--border-strong);
-        border-radius: 6px;
-        background: var(--canvas);
-        padding: 10px 12px;
-        font: 13px/1.6 var(--mono);
-        color: var(--text);
-      }
-      .rx .console textarea:focus {
-        outline: none;
-        border-color: var(--accent);
-      }
-      .rx .console .row {
+      .harness-names {
         display: flex;
-        gap: 8px;
+        align-items: center;
         flex-wrap: wrap;
-        margin-top: 10px;
+        gap: 0 10px;
       }
-      .rx .verdict {
-        margin: 10px 0 0;
-        font: 13px/1.5 var(--mono);
-        padding: 9px 11px;
+      .mcp-detail {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+      }
+      .mcp-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        min-height: 32px;
+        padding: 0 16px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--link);
+        background: #26334b;
+      }
+      .terminal-icon {
+        display: flex;
+        padding: 7px;
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        background: #26334b;
+        color: var(--link);
+      }
+      .terminal-icon svg.icon {
+        width: 18px;
+        height: 18px;
+      }
+      .automation-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+      .automation-card {
+        border-radius: 12px;
+        background: var(--form);
+        box-shadow: 0 4px 12px #0003;
+        overflow: hidden;
+        min-width: 0;
+      }
+      .automation-card h3 {
+        min-height: 72px;
+        padding: 20px 24px;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        border-bottom: 1px solid var(--divider);
+      }
+      .automation-card h3 svg.icon {
+        color: var(--link);
+      }
+      .schedule-details {
+        padding: 24px;
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        gap: 24px 16px;
+        align-items: center;
+        margin: 0;
+        font-size: 15px;
+      }
+      .schedule-details dt {
+        color: var(--body);
+      }
+      .schedule-details dd {
+        margin: 0;
+        color: var(--heading);
+        font-size: 16px;
+      }
+      .schedule-details code {
+        font: 400 15px var(--mono);
+        display: block;
+        background: var(--inset);
+        padding: 12px 14px;
         border-radius: 6px;
       }
-      .rx .verdict.err {
-        color: var(--failed);
-        background: #2a1c1a;
-        border: 1px solid #5a362f;
+      .schedule-details .overlap {
+        grid-column: 1 / -1;
+        color: var(--body);
       }
-      .rx .hint {
-        font-size: 13px;
-        color: var(--muted);
-        margin: 8px 0 0;
-      }
-      .rx .console .hint {
-        margin: 0 0 10px;
-      }
-      .rx .apptitle h2 {
+      .event-details {
         margin: 0;
-        font: inherit;
-        font-weight: 600;
+        padding: 24px;
+        display: grid;
+        gap: 12px;
       }
-      .rx .canvas:focus-visible {
-        outline-offset: -3px;
+      .event-details dt {
+        font-size: 14px;
       }
-      .rx .field input {
-        width: 110px;
+      .event-details dd {
+        margin: 0 0 12px;
+        color: var(--heading);
+        font-size: 20px;
+        font-weight: 500;
       }
-      @media (max-width: 1224px) {
-        .graph-hint {
-          display: block;
-          margin: 0;
-          padding: 6px 18px;
-          background: var(--canvas);
-          color: var(--muted);
+      .report {
+        background: var(--structural);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .report-header {
+        padding: 22px 28px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        border-bottom: 1px solid var(--divider);
+      }
+      .report-header h3 {
+        font-size: 22px;
+      }
+      .report-header p {
+        font-size: 15px;
+      }
+      .report-body {
+        display: grid;
+        grid-template-columns: 55% 45%;
+      }
+      .report-timing,
+      .report-usage {
+        padding: 28px;
+      }
+      .report-body h3 {
+        font-size: 17px;
+        margin-bottom: 24px;
+      }
+      .report-usage {
+        border-left: 1px solid var(--divider);
+      }
+      .timing-row {
+        display: grid;
+        grid-template-columns: 130px 1fr 84px;
+        gap: 18px;
+        align-items: center;
+        margin: 0 0 24px;
+        font-size: 14px;
+      }
+      .timing-row:last-child {
+        margin-bottom: 12px;
+      }
+      .timing-value {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        color: var(--heading);
+      }
+      .timing-bar {
+        height: 12px;
+        background: #7e9aff;
+        border-radius: 2px;
+      }
+      .timing-bar--human {
+        width: 56%;
+        background: var(--orchid);
+      }
+      .timing-bar--engine {
+        width: 17%;
+        background: var(--mint);
+      }
+      .usage-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+      }
+      .usage-table th {
+        font-size: 14px;
+        color: var(--body);
+        font-weight: 400;
+        padding: 0 16px 18px 0;
+      }
+      .usage-table td {
+        font-size: 17px;
+        color: var(--heading);
+        padding-right: 16px;
+      }
+      .usage-table td:last-child {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+      }
+      .usage-note {
+        font-size: 14px;
+        margin-top: 36px;
+      }
+      .closing {
+        padding: 88px 0 87px;
+        border-bottom: 1px solid var(--divider);
+      }
+      .closing h2 {
+        font-size: 64px;
+        line-height: 1.05;
+        margin-bottom: 36px;
+      }
+      .closing p {
+        margin-left: 4px;
+      }
+      .closing p + p {
+        margin-top: 24px;
+      }
+      .site-footer {
+        padding: 40px 0 52px;
+        background: var(--workspace);
+      }
+      .footer-details {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 12px;
+        margin-top: 20px;
+        font-size: 16px;
+      }
+      .footer-details a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        text-decoration: none;
+      }
+      .footer-details a:hover {
+        text-decoration: underline;
+      }
+      .footer-author {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+      }
+      @media (max-width: 1100px) and (min-width: 701px) {
+        .shell {
+          width: calc(100% - 80px);
+        }
+        .hero-graph {
+          gap: 24px;
+          padding-inline: 24px;
+        }
+        .node {
+          padding: 12px 10px;
+        }
+        .node-kind {
+          gap: 5px;
+          font-size: 9px;
+        }
+        .node-icon {
+          width: 22px;
+          height: 22px;
+        }
+        .node-title {
+          font-size: 15px;
+        }
+        .node-detail {
+          font-size: 11px;
+        }
+        .node-kind .node-icon svg {
+          width: 14px;
+          height: 14px;
+        }
+        .agent-mode {
+          grid-template-columns: 42% 1fr;
+        }
+        .agent-mode-detail {
+          font-size: 18px;
+        }
+        .timing-row {
+          grid-template-columns: 92px 1fr 65px;
+          gap: 12px;
           font-size: 12px;
         }
-      }
-      @media (min-width: 801px) {
-        .product--inspect {
-          grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+        .report-timing,
+        .report-usage {
+          padding: 24px;
         }
-        .product--inspect > div {
-          grid-area: 1 / 2;
+        .usage-table th {
+          font-size: 12px;
         }
-        .product--inspect figure {
-          grid-area: 1 / 1;
-        }
-        .product--agent figure {
-          width: min(100%, 38rem);
-          justify-self: center;
+        .usage-table td {
+          font-size: 15px;
         }
       }
-      @media (max-width: 800px) {
-        .shell {
-          width: calc(100% - 40px);
+      @media (max-width: 900px) {
+        .hero-graph {
+          height: 552px;
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: 112px 144px 112px;
+          column-gap: 54px;
+          row-gap: 24px;
+          padding: 72px 16px 64px;
+          align-items: center;
         }
-        .site-nav {
-          min-height: 60px;
-        }
-        .product {
-          grid-template-columns: minmax(0, 1fr);
-        }
-        .hero h1 {
-          font-size: clamp(2.25rem, 9.5vw, 3.5rem);
-        }
-        .intro-graph {
-          inset-block-start: 28px;
-          width: 54%;
-          opacity: 0.4;
-        }
-        .rx .chips {
-          flex-basis: 100%;
-        }
-      }
-      @media (max-width: 420px) {
-        .install-box {
-          column-gap: 8px;
+        .hero-graph .node {
           padding: 12px;
+          min-height: 112px;
         }
-        .install-box pre {
-          font-size: 13px;
+        .hero-graph .node--entry,
+        .hero-graph .node--exit {
+          min-height: 104px;
         }
-        .install-box button {
-          min-width: 56px;
-          padding-inline: 6px;
+        .hero-graph .node--branch {
+          min-height: 144px;
         }
-        .rx .app-head {
-          gap: 5px 12px;
+        .hero-graph .node-kind {
+          font-size: 11px;
+          gap: 8px;
         }
-        .rx .replica-tag {
-          margin-left: 0;
+        .hero-graph .node-title {
+          font-size: 16px;
+          margin-top: 12px;
         }
-        .rx .field span {
+        .hero-graph .node--branch .node-title {
+          font-size: 14px;
+        }
+        .hero-graph .node-detail {
+          font-size: 12px;
+        }
+        .hero-graph .node-icon {
+          width: 22px;
+          height: 22px;
+        }
+        .hero-graph .handle--yes {
+          top: 81px;
+        }
+        .hero-graph .handle--no {
+          top: 113px;
+        }
+        .hero-graph .branch-label--yes {
+          top: 76px;
+        }
+        .hero-graph .branch-label--no {
+          top: 108px;
+        }
+        .editor-toolbar {
           display: none;
         }
-        .rx .runbar label {
-          flex-basis: 100%;
+        .build-graph {
+          grid-template-columns: 1fr 1fr;
+          gap: 48px 54px;
+          padding: 24px 16px;
+        }
+      }
+      @media (max-width: 700px) {
+        .desktop-break {
+          display: none;
+        }
+
+        body {
+          font-size: 17px;
+          line-height: 1.53;
+        }
+        .shell {
+          width: calc(100% - 48px);
+        }
+        .site-nav {
+          min-height: var(--nav-height);
+          gap: 12px;
+        }
+        .brand {
+          gap: 10px;
+          font-size: 22px;
+        }
+        .nav-links {
+          gap: 12px;
+        }
+        .nav-links > a {
+          font-size: 14px;
+        }
+        .nav-links .button {
+          min-width: 96px;
+          padding-inline: 16px;
+        }
+        .nav-full {
+          display: none;
+        }
+        .nav-short {
+          display: inline;
+        }
+        h1 {
+          font-size: 42px;
+          line-height: 1.05;
+          letter-spacing: -0.025em;
+          max-width: 480px;
+        }
+        h2 {
+          font-size: 32px;
+          line-height: 1.16;
+          letter-spacing: -0.025em;
+        }
+        .hero {
+          padding: calc(var(--nav-height) + 52px) 0 56px;
+        }
+        .hero::before {
+          background-size: auto 720px;
+          background-position: 64% -60px;
+        }
+        .hero h1 {
+          font-size: 44px;
+          line-height: 1.05;
+        }
+        .hero-description {
+          font-size: 17px;
+          line-height: 1.53;
+          margin: 24px 0 40px;
+          max-width: 540px;
+        }
+        .workflow-header {
+          padding: 6px 16px;
+          gap: 10px;
+          font-size: 17px;
+        }
+        .workflow-meta {
+          gap: 8px;
+          font-size: 12px;
+        }
+        .workflow-version {
+          display: none;
+        }
+        .animation-toggle {
+          width: 44px;
+          height: 44px;
+          padding: 12px;
+        }
+        .workflow-header > .icon {
+          width: 18px;
+          height: 18px;
+        }
+        .hero-graph {
+          height: 552px;
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: 112px 144px 112px;
+          column-gap: 54px;
+          row-gap: 24px;
+          padding: 72px 16px 64px;
+          align-items: center;
+        }
+        .node {
+          padding: 12px;
+          min-height: 112px;
+        }
+        .node--entry,
+        .node--exit {
+          min-height: 104px;
+        }
+        .node--branch {
+          min-height: 144px;
+        }
+        .node-kind {
+          font-size: 11px;
+          gap: 8px;
+        }
+        .node-icon {
+          width: 22px;
+          height: 22px;
+          border-radius: 5px;
+        }
+        .node-icon svg.icon {
+          width: 14px;
+          height: 14px;
+        }
+        .node-title {
+          font-size: 16px;
+          margin-top: 12px;
+        }
+        .node--branch .node-title {
+          font-size: 14px;
+        }
+        .node-detail {
+          font-size: 12px;
+          margin-top: 8px;
+          line-height: 1.4;
+        }
+        .handle--yes {
+          top: 81px;
+        }
+        .handle--no {
+          top: 113px;
+        }
+        .branch-label--yes {
+          top: 76px;
+        }
+        .branch-label--no {
+          top: 108px;
+        }
+        .node-done {
+          right: 6px;
+          top: 6px;
+        }
+        .node-done svg.icon {
+          width: 10px;
+          height: 10px;
+        }
+        .editor-toolbar {
+          display: none;
+        }
+        .figure-caption {
+          margin: 16px 0 0;
+          font-size: 13px;
+        }
+        .section {
+          padding: 56px 0;
+        }
+        .section-copy {
+          margin: 16px 0 0;
+        }
+        .section-copy + .section-copy {
+          margin-top: 16px;
+        }
+        .section-figure {
+          margin-top: 32px;
+        }
+        .install-terminal {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          gap: 28px 12px;
+          padding: 20px 16px 24px;
+        }
+        .terminal-label {
+          display: block;
+          font-size: 14px;
+          font-weight: 500;
+        }
+        .install-terminal pre {
+          grid-column: 1 / -1;
+          grid-row: 2;
+          font-size: clamp(11px, 3.58vw, 16px);
+          line-height: 1.8;
+        }
+        .install-terminal .button {
+          min-height: 44px;
+          min-width: 96px;
+        }
+        .install-next {
+          font-size: 17px;
+          margin-left: 0;
+        }
+        .build-graph {
+          grid-template-columns: 1fr 1fr;
+          gap: 48px 54px;
+          padding: 24px 16px;
+          min-height: 336px;
+        }
+        .build-graph .node {
+          padding: 12px;
+          min-height: 120px;
+        }
+        .build-graph .node-detail {
+          font-size: 12px;
+          margin-top: 0;
+        }
+        .agent-mode {
+          display: block;
+          padding: 18px 16px 24px;
+          min-height: 164px;
+        }
+        .agent-mode-heading {
+          column-gap: 8px;
+          row-gap: 6px;
+        }
+        .agent-mode-heading > :first-child {
+          margin-top: 8px;
+        }
+        .agent-mode h3 {
+          font-size: 18px;
+        }
+        .agent-mode-heading p {
+          font-size: 14px;
+        }
+        .agent-mode-detail {
+          margin-top: 18px;
+          font-size: 17px;
+        }
+        .harness-names {
+          max-width: 310px;
+          gap: 0 8px;
+        }
+        .mcp-detail {
+          font-size: 16px;
+          gap: 12px;
+        }
+        .mcp-badge {
+          padding: 0 10px;
+          font-size: 13px;
+          min-height: 28px;
+        }
+        .automation-grid {
+          grid-template-columns: 1fr;
+          gap: 24px;
+        }
+        .automation-card h3 {
+          padding: 20px 16px;
+          min-height: 72px;
+          gap: 12px;
+          font-size: 18px;
+        }
+        .schedule-details {
+          padding: 24px 16px 28px;
+          grid-template-columns: 100px 1fr;
+          gap: 24px 16px;
+          font-size: 14px;
+        }
+        .schedule-details dt:first-child {
+          grid-column: 1 / -1;
+        }
+        .schedule-details dd:nth-child(2) {
+          grid-column: 1 / -1;
+          margin-top: -12px;
+        }
+        .schedule-details dd {
+          font-size: 15px;
+        }
+        .schedule-details code {
+          padding: 12px 14px;
+        }
+        .event-details {
+          padding: 24px 16px;
+          gap: 8px;
+        }
+        .event-details dd {
+          font-size: 18px;
+          margin-bottom: 16px;
+        }
+        .report-header {
+          display: block;
+          padding: 20px 16px;
+        }
+        .report-header h3 {
+          font-size: 18px;
+        }
+        .report-header p {
+          font-size: 14px;
+          margin-top: 4px;
+        }
+        .report-body {
+          display: block;
+        }
+        .report-timing,
+        .report-usage {
+          padding: 24px 16px;
+        }
+        .report-body h3 {
+          font-size: 18px;
+          margin-bottom: 24px;
+        }
+        .report-usage {
+          border-left: 0;
+          border-top: 1px solid var(--divider);
+        }
+        .timing-row {
+          grid-template-columns: 1fr 76px;
+          gap: 10px;
+          margin-bottom: 20px;
+        }
+        .timing-bar {
+          grid-row: 2;
+          grid-column: 1 / -1;
+          width: 100%;
+        }
+        .timing-bar--human {
+          width: 56%;
+        }
+        .timing-bar--engine {
+          width: 17%;
+        }
+        .timing-value {
+          grid-row: 1;
+          grid-column: 2;
+          font-size: 14px;
+        }
+        .timing-row:last-child {
+          margin-bottom: 0;
+        }
+        .usage-table th {
+          font-size: 14px;
+          padding-right: 0;
+        }
+        .usage-table th:last-child {
+          font-size: 13px;
+        }
+        .usage-table td {
+          font-size: 16px;
+          padding-right: 0;
+        }
+        .usage-note {
+          margin-top: 24px;
+        }
+        .closing {
+          padding: 64px 0;
+        }
+        .closing h2 {
+          font-size: 40px;
+          line-height: 1.05;
+          margin-bottom: 24px;
+        }
+        .closing p {
+          margin-left: 0;
+        }
+        .closing p + p {
+          margin-top: 24px;
+        }
+        .site-footer {
+          padding: 40px 0;
+        }
+        .footer-details {
+          font-size: 14px;
+          gap: 0 8px;
+          max-width: 342px;
+          margin-top: 20px;
+        }
+      }
+      @media (max-width: 370px) {
+        .hero-graph .node--branch .node-title {
+          font-size: 12px;
+        }
+
+        .shell {
+          width: calc(100% - 32px);
+        }
+        .site-nav .brand {
+          font-size: 19px;
+          gap: 6px;
+        }
+        .site-nav .brand img {
+          width: 28px;
+          height: 28px;
+        }
+        .nav-links {
+          gap: 8px;
+        }
+        .nav-links .button {
+          min-width: 76px;
+          padding-inline: 12px;
+        }
+        .hero-graph,
+        .build-graph {
+          column-gap: 36px;
+          padding-inline: 14px;
+        }
+        .node {
+          padding-inline: 9px;
+        }
+        .node-kind {
+          gap: 5px;
+          font-size: 9px;
+        }
+        .node-detail {
+          font-size: 11px;
+        }
+        .workflow-header {
+          gap: 7px;
+          padding-inline: 12px;
+          font-size: 15px;
+        }
+        .workflow-meta {
+          gap: 4px;
+        }
+        .schedule-details {
+          grid-template-columns: 90px 1fr;
+          gap: 24px 8px;
         }
       }
       @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
         *::after {
-          transition: none !important;
+          animation: none !important;
+          scroll-behavior: auto !important;
         }
+      }
+
+      .animation-paused .graph-edges path.is-active {
+        animation-play-state: paused;
       }
     </style>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
     <header class="site-header" id="top">
-      <nav class="shell site-nav" aria-label="Main">
-        <a class="mark" href="#top"
-          ><svg
-            width="16"
-            height="16"
-            viewBox="0 0 32 32"
-            fill="none"
-            aria-hidden="true"
-          >
-            <g stroke-width="2.6">
-              <rect
-                x="5"
-                y="5"
-                width="14"
-                height="14"
-                rx="2.5"
-                stroke="#82b4ff"
-              />
-              <rect
-                x="13"
-                y="13"
-                width="14"
-                height="14"
-                rx="2.5"
-                stroke="#f0a1d3"
-              />
-            </g></svg
-          >Interlock</a
+      <nav class="site-nav shell" aria-label="Main navigation">
+        <a class="brand" href="#top"
+          ><img src="interlock-logo.svg" width="32" height="32" alt="" /><span
+            >Interlock</span
+          ></a
         >
         <div class="nav-links">
-          <a
-            class="github-link"
-            href="https://github.com/dgca/interlock"
-            target="_blank"
-            rel="noopener"
-            aria-label="GitHub (opens in a new tab)"
+          <a href="https://github.com/dgca/interlock">GitHub</a
+          ><a class="button" href="#install"
+            ><span class="nav-full">Install Interlock</span
+            ><span class="nav-short">Install</span></a
           >
-            GitHub
-            <!--
-              Lucide ExternalLink (ISC License)
-              Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT).
-              All other copyright (c) for Lucide are held by Lucide Contributors 2022.
-
-              Permission to use, copy, modify, and/or distribute this software for any
-              purpose with or without fee is hereby granted, provided that the above
-              copyright notice and this permission notice appear in all copies.
-
-              THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-              WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-              MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-              ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-              WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-              ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-              OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-            -->
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M15 3h6v6" />
-              <path d="M10 14 21 3" />
-              <path
-                d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
-              />
-            </svg>
-          </a>
-          <a class="install-link" href="#install">Install</a>
         </div>
       </nav>
     </header>
-
-    <main id="main">
-      <div class="intro">
-        <svg
-          class="intro-graph"
-          width="620"
-          height="290"
-          viewBox="0 0 620 290"
-          fill="none"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <g stroke="currentColor">
-            <path d="M14 174H122Q138 174 138 158V146Q138 130 154 130H202" />
-            <path d="M228 130H294Q310 130 310 114V87Q310 71 326 71H421" />
-            <path d="M228 130H294Q310 130 310 146V218Q310 234 326 234H479" />
-            <path d="M453 71H512Q528 71 528 87V105Q528 121 544 121H606" />
-            <path d="M511 234H555Q571 234 571 218V196Q571 180 587 180H606" />
-          </g>
-          <path
-            class="intro-signal"
-            pathLength="100"
-            d="M228 130H294Q310 130 310 114V87Q310 71 326 71H421"
-          />
-          <g fill="#1a2539" stroke="currentColor">
-            <rect x="202" y="117" width="26" height="26" rx="5" />
-            <rect x="421" y="58" width="32" height="26" rx="5" />
-            <rect x="479" y="221" width="32" height="26" rx="5" />
-          </g>
-        </svg>
+    <main id="main" tabindex="-1">
+      <section class="hero" aria-labelledby="hero-title">
         <div class="shell">
-          <header class="hero">
-            <h1>Repeatable workflows for AI agents</h1>
-            <p>
-              Interlock follows the steps you define. It runs the code, gives
-              your agent the steps that need judgment, and checks results
-              against your rules. Your agent can build and run workflows through
-              Interlock’s local MCP server.
-            </p>
-          </header>
-
-          <div class="rx">
-            <div
-              class="app"
-              id="run"
-              role="region"
-              aria-labelledby="demo-title"
-            >
-              <div class="app-head">
-                <div>
-                  <div class="apptitle">
-                    <h2 id="demo-title">Size up a Pokémon</h2>
-                    <span class="pill" id="runPill" role="status">ready</span>
-                  </div>
-                </div>
-                <span class="replica-tag">Interactive demo</span>
-              </div>
-              <div class="runbar">
-                <label for="pkName">Pokémon</label>
-                <div class="field">
-                  <span>{"name": "</span
-                  ><input
-                    id="pkName"
-                    value="togepi"
-                    autocomplete="off"
-                    spellcheck="false"
-                    aria-describedby="pkHelp runError"
-                  /><span style="padding-right: 10px">"}</span>
-                </div>
-                <button class="btn primary" id="runBtn" type="button">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    aria-hidden="true"
+          <h1 id="hero-title">
+            Repeatable workflows<br class="desktop-break" />
+            for <span class="keep-together">AI agents.</span>
+          </h1>
+          <p class="hero-description">
+            Define the steps. Interlock runs the code, gives agents the work
+            that needs judgment, and checks the results. Build and run workflows
+            in the editor or through MCP.
+          </p>
+          <figure aria-labelledby="workflow-caption">
+            <div class="workflow">
+              <div class="workflow-header">
+                <svg
+                  class="icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="6" cy="5" r="2" />
+                  <circle cx="18" cy="5" r="2" />
+                  <circle cx="12" cy="19" r="2" />
+                  <path d="M6 7v2a6 6 0 0 0 6 6v2m6-10v2a6 6 0 0 1-6 6" /></svg
+                ><span>Build and review</span>
+                <div class="workflow-meta">
+                  <span class="workflow-version">Published v3</span
+                  ><span>Example</span
+                  ><button
+                    id="animation-toggle"
+                    class="animation-toggle"
+                    type="button"
+                    aria-label="Pause workflow animation"
+                    aria-pressed="false"
+                    hidden
                   >
-                    <path d="M7 4v16l13-8z" /></svg
-                  ><span id="runLabel">Run workflow</span>
-                </button>
-                <div
-                  class="chips"
-                  id="pkChips"
-                  aria-label="Try another input"
-                ></div>
-                <span id="pkHelp" class="visually-hidden"
-                  >Enter a Pokémon name or choose an example.</span
-                >
-                <p class="run-error" id="runError" role="alert" hidden></p>
-              </div>
-              <div class="handoff" id="rxHandoff" hidden>
-                <div>
-                  <b>Waiting for an agent</b>
-                  <p>
-                    You’re the agent for this step. Claim the assignment to try
-                    a reply.
-                  </p>
-                </div>
-                <div class="acts">
-                  <button class="btn primary" id="claimBtn" type="button">
-                    Claim assignment
+                    <svg
+                      class="icon pause-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M8 5v14M16 5v14" /></svg
+                    ><svg
+                      class="icon play-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m8 5 11 7-11 7Z" />
+                    </svg>
                   </button>
                 </div>
               </div>
-              <form
-                class="console"
-                id="agentReply"
-                aria-labelledby="reply-title"
-                hidden
-              >
-                <h3 id="reply-title" tabindex="-1">Submit your reply</h3>
-                <p class="hint" id="replyHint">
-                  Submit the incomplete sample to see what Interlock catches.
-                </p>
-                <label class="visually-hidden" for="agentOut"
-                  >Agent reply JSON</label
-                >
-                <textarea
-                  id="agentOut"
-                  aria-describedby="replyHint replyError"
-                  spellcheck="false"
-                ></textarea>
-                <div class="row">
-                  <button class="btn primary" type="submit" id="submitBtn">
-                    Submit result
-                  </button>
-                  <button class="btn" type="button" id="fixBtn">
-                    Fill in a complete reply
-                  </button>
-                </div>
-                <p class="verdict err" id="replyError" role="alert" hidden></p>
-              </form>
-              <div class="run-outcome" id="runOutcome" hidden>
-                <h3 id="outcomeTitle" tabindex="-1"></h3>
-                <p id="outcomeText"></p>
-              </div>
-              <p class="graph-hint">Scroll sideways to see all steps.</p>
               <div
-                class="canvas"
-                id="canvas"
-                role="region"
-                aria-label="Workflow graph"
-                tabindex="0"
+                class="graph hero-graph"
+                id="hero-graph"
+                role="img"
+                aria-label="Example workflow: Entry sends a task to Build using Codex, then Review using Claude Code. If issues are found, return to Build. Otherwise, run the Open PR script with GitHub CLI and exit with a PR link."
               >
-                <div class="graph" id="graph"></div>
-              </div>
-              <div class="split">
-                <div class="timeline">
-                  <div class="sechead">
-                    <span class="t">Execution timeline</span
-                    ><span id="runId"></span>
+                <svg class="graph-edges" aria-hidden="true"></svg>
+                <div class="editor-toolbar" aria-hidden="true">
+                  <div class="editor-mode">
+                    <span class="selected">Visual</span><span>Raw</span>
                   </div>
-                  <ol class="steps" id="steps"></ol>
-                  <p class="empty" id="stepsEmpty">
-                    Steps will appear here when the workflow runs.
-                  </p>
+                  <span class="editor-add"
+                    ><svg
+                      class="icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 5v14M5 12h14" /></svg
+                    >Add node</span
+                  >
                 </div>
-                <div
-                  class="details"
-                  id="details"
-                  role="region"
-                  aria-label="Execution details"
-                  tabindex="-1"
-                ></div>
+                <div class="node node--entry" id="demo-entry">
+                  <div class="node-kind">
+                    <span class="node-icon"
+                      ><svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 19V5m-5 5 5-5 5 5" /></svg></span
+                    >ENTRY
+                  </div>
+                  <div class="node-title">Entry</div>
+                  <div class="node-detail">Task request</div>
+                  <span class="handle handle--in"></span
+                  ><span class="handle handle--out"></span>
+                  <span class="node-done"
+                    ><svg
+                      class="icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m5 12 4 4L19 6" /></svg
+                  ></span>
+                </div>
+                <div class="node node--agent" id="demo-build">
+                  <div class="node-kind">
+                    <span class="node-icon"
+                      ><svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect x="4" y="7" width="16" height="13" rx="3" />
+                        <path
+                          d="M12 3v4M8 12v3m8-3v3M9 18h6M1 12h3m16 0h3"
+                        /></svg></span
+                    >AGENT
+                  </div>
+                  <div class="node-title">Build</div>
+                  <div class="node-detail">Codex · builder</div>
+                  <span class="handle handle--in"></span
+                  ><span class="handle handle--out"></span>
+                  <span class="node-done"
+                    ><svg
+                      class="icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m5 12 4 4L19 6" /></svg
+                  ></span>
+                </div>
+                <div class="node node--agent" id="demo-review">
+                  <div class="node-kind">
+                    <span class="node-icon"
+                      ><svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect x="4" y="7" width="16" height="13" rx="3" />
+                        <path
+                          d="M12 3v4M8 12v3m8-3v3M9 18h6M1 12h3m16 0h3"
+                        /></svg></span
+                    >AGENT
+                  </div>
+                  <div class="node-title">Review</div>
+                  <div class="node-detail">Claude Code · reviewer</div>
+                  <span class="handle handle--in"></span
+                  ><span class="handle handle--out"></span>
+                  <span class="node-done"
+                    ><svg
+                      class="icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m5 12 4 4L19 6" /></svg
+                  ></span>
+                </div>
+                <div class="node node--branch" id="demo-branch">
+                  <div class="node-kind">
+                    <span class="node-icon"
+                      ><svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="6" cy="5" r="2" />
+                        <circle cx="18" cy="5" r="2" />
+                        <circle cx="12" cy="19" r="2" />
+                        <path
+                          d="M6 7v2a6 6 0 0 0 6 6v2m6-10v2a6 6 0 0 1-6 6"
+                        /></svg></span
+                    >BRANCH
+                  </div>
+                  <div class="node-title">Issues found?</div>
+                  <span class="handle handle--in"></span
+                  ><span class="branch-label branch-label--yes">Yes</span
+                  ><span class="handle handle--yes"></span
+                  ><span class="branch-label branch-label--no">No</span
+                  ><span class="handle handle--no"></span>
+                  <span class="node-done"
+                    ><svg
+                      class="icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m5 12 4 4L19 6" /></svg
+                  ></span>
+                </div>
+                <div class="node node--script" id="demo-pr">
+                  <div class="node-kind">
+                    <span class="node-icon"
+                      ><svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="m5 6 5 5-5 5m8 1h6" /></svg></span
+                    >SCRIPT
+                  </div>
+                  <div class="node-title">Open PR</div>
+                  <div class="node-detail">GitHub CLI</div>
+                  <span class="handle handle--in"></span
+                  ><span class="handle handle--out"></span>
+                  <span class="node-done"
+                    ><svg
+                      class="icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m5 12 4 4L19 6" /></svg
+                  ></span>
+                </div>
+                <div class="node node--exit" id="demo-exit">
+                  <div class="node-kind">
+                    <span class="node-icon"
+                      ><svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 5v14m-5-5 5 5 5-5" /></svg></span
+                    >EXIT
+                  </div>
+                  <div class="node-title">Exit</div>
+                  <div class="node-detail">PR link</div>
+                  <span class="handle handle--in"></span
+                  ><span class="handle handle--out"></span>
+                  <span class="node-done"
+                    ><svg
+                      class="icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m5 12 4 4L19 6" /></svg
+                  ></span>
+                </div>
               </div>
             </div>
-            <div class="run-guide">
-              <div class="guide-header">
-                <h3 id="guideTitle">How this demo works</h3>
-                <button
-                  class="btn guide-toggle"
-                  id="guideToggle"
-                  type="button"
-                  aria-expanded="false"
-                  aria-controls="guideSteps"
-                  hidden
-                >
-                  Show all steps
-                </button>
-              </div>
-              <ol
-                class="guide-steps"
-                id="guideSteps"
-                aria-labelledby="guideTitle"
-                role="list"
+            <figcaption class="figure-caption" id="workflow-caption">
+              Illustrative workflow
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+      <section class="section" id="install" aria-labelledby="install-title">
+        <div class="shell">
+          <h2 id="install-title">Install Interlock</h2>
+          <p class="section-copy">
+            Requires Node.js 24.13 or later on macOS or Linux.
+          </p>
+          <div class="install-terminal">
+            <span class="terminal-label">Terminal</span>
+            <pre id="install-commands"><code>npm install -g @type_of/interlock
+interlock</code></pre>
+            <button class="button" id="copy-install" type="button" hidden>
+              <svg
+                class="icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
               >
-                <li aria-current="step">
-                  <strong>1. Build the stat sheet</strong>
-                  <p>
-                    Fetch looks up the Pokémon. A script pulls out its height,
-                    weight, and base stats.
-                  </p>
-                </li>
-                <li>
-                  <strong>2. Hand off to an agent</strong>
-                  <p>
-                    Small Pokémon take the branch that asks for a mascot pitch.
-                  </p>
-                </li>
-                <li>
-                  <strong>3. Submit a reply</strong>
-                  <p>
-                    Claim the assignment to try the sample reply or write your
-                    own.
-                  </p>
-                </li>
-                <li>
-                  <strong>4. Check and save the result</strong>
-                  <p>
-                    Interlock flags missing fields so you can fix the reply and
-                    submit again.
-                  </p>
-                </li>
-              </ol>
-            </div>
+                <rect x="8" y="8" width="12" height="13" rx="2" />
+                <path
+                  d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"
+                /></svg
+              ><span>Copy</span>
+            </button>
           </div>
-          <noscript
-            ><p class="demo-note">
-              Enable JavaScript to run the browser demo.
-            </p></noscript
-          >
-          <p class="demo-note">
-            This browser demo uses PokéAPI data and sample agent replies.
+          <p id="copy-status" role="status" class="visually-hidden"></p>
+          <p class="install-next">
+            Open 127.0.0.1:4310. Use Connect with MCP in the sidebar to connect
+            your agent, or open Workflows → Import → Starters to browse example
+            workflows.
           </p>
         </div>
-      </div>
-
-      <div class="shell">
-        <section
-          class="section section-columns install-section"
-          id="install"
-          aria-labelledby="install-title"
-        >
-          <div>
-            <h2 id="install-title">Install Interlock</h2>
-            <p>Requires Node.js 24.13 or later on macOS or Linux.</p>
-          </div>
-          <div>
-            <div class="install-box">
-              <pre><code id="installCommands">npm install -g @type_of/interlock
-interlock</code></pre>
-              <button
-                type="button"
-                id="copyInstall"
-                aria-label="Copy install commands"
-                hidden
-              >
-                Copy
-              </button>
-              <span
-                class="visually-hidden"
-                id="copyStatus"
-                role="status"
+      </section>
+      <section class="section" id="build" aria-labelledby="build-title">
+        <div class="shell">
+          <h2 id="build-title">Build your workflow</h2>
+          <p class="section-copy">
+            Define the steps you want to follow. Run code, assign work to
+            agents, and branch based on the results. Combine smaller workflows
+            into larger ones to reuse common steps and keep complex processes
+            manageable.
+          </p>
+          <p class="section-copy">
+            Build in the editor, or ask your agent to create workflows through
+            the built-in MCP server.
+          </p>
+          <div
+            class="graph build-graph section-figure"
+            id="build-graph"
+            role="img"
+            aria-label="Your Process Every Time. Four workflow building blocks: Script to run code, Agent to assign work, Batch to process items, and Workflow to reuse a workflow."
+          >
+            <svg class="graph-edges" aria-hidden="true"></svg>
+            <div class="node node--script">
+              <div class="node-kind">
+                <span class="node-icon"
+                  ><svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m5 6 5 5-5 5m8 1h6" /></svg></span
+                >SCRIPT
+              </div>
+              <div class="node-title">Your</div>
+              <div class="node-detail">Run code</div>
+              <span class="handle handle--in"></span
+              ><span class="handle handle--out"></span>
+              <span class="node-done"
+                ><svg
+                  class="icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m5 12 4 4L19 6" /></svg
               ></span>
             </div>
-            <p class="after-install" id="connect">
-              Open <a href="http://127.0.0.1:4310">127.0.0.1:4310</a>. Use
-              <strong>Connect with MCP</strong> in the sidebar to connect your
-              agent, or open <strong>Workflows → Import → Starters</strong> to
-              browse example workflows.
-            </p>
+            <div class="node node--agent">
+              <div class="node-kind">
+                <span class="node-icon"
+                  ><svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="4" y="7" width="16" height="13" rx="3" />
+                    <path
+                      d="M12 3v4M8 12v3m8-3v3M9 18h6M1 12h3m16 0h3"
+                    /></svg></span
+                >AGENT
+              </div>
+              <div class="node-title">Process</div>
+              <div class="node-detail">Assign work</div>
+              <span class="handle handle--in"></span
+              ><span class="handle handle--out"></span>
+              <span class="node-done"
+                ><svg
+                  class="icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m5 12 4 4L19 6" /></svg
+              ></span>
+            </div>
+            <div class="node node--batch">
+              <div class="node-kind">
+                <span class="node-icon"
+                  ><svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect
+                      x="14"
+                      y="14"
+                      width="7"
+                      height="7"
+                      rx="1"
+                    /></svg></span
+                >BATCH
+              </div>
+              <div class="node-title">Every</div>
+              <div class="node-detail">Process items</div>
+              <span class="handle handle--in"></span
+              ><span class="handle handle--out"></span>
+              <span class="node-done"
+                ><svg
+                  class="icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m5 12 4 4L19 6" /></svg
+              ></span>
+            </div>
+            <div class="node node--workflow">
+              <div class="node-kind">
+                <span class="node-icon"
+                  ><svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="3" width="6" height="6" rx="1" />
+                    <rect x="15" y="15" width="6" height="6" rx="1" />
+                    <path d="M6 9v9h9M9 6h9v9" /></svg></span
+                >WORKFLOW
+              </div>
+              <div class="node-title">Time</div>
+              <div class="node-detail">Reuse a workflow</div>
+              <span class="handle handle--in"></span
+              ><span class="handle handle--out"></span>
+              <span class="node-done"
+                ><svg
+                  class="icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m5 12 4 4L19 6" /></svg
+              ></span>
+            </div>
           </div>
-        </section>
-
-        <section
-          class="section section-columns product"
-          id="define"
-          aria-labelledby="editor-title"
-        >
-          <div>
-            <h2 id="editor-title">Build your workflow</h2>
-            <p>
-              Tell your agent what the workflow should do. Over MCP, it can
-              create a draft or update one you already have. Open the same draft
-              in the visual editor to adjust the graph or edit its JSON.
-            </p>
-            <p>
-              Set input and output contracts so Interlock can check what each
-              step receives and returns.
-            </p>
+        </div>
+      </section>
+      <section class="section" id="agents" aria-labelledby="agents-title">
+        <div class="shell">
+          <h2 id="agents-title">Bring your own agent</h2>
+          <p class="section-copy">
+            Use your preferred models and providers. Let Interlock run agent
+            steps automatically through a configured harness, or run workflows
+            from your existing agent session through MCP.
+          </p>
+          <div class="agent-modes section-figure">
+            <div class="agent-mode">
+              <div class="agent-mode-heading">
+                <img src="interlock-logo.svg" width="32" height="32" alt="" />
+                <h3>Automatic execution</h3>
+                <p>Interlock runs the assignments</p>
+              </div>
+              <p class="agent-mode-detail harness-names">
+                <span>Claude Code</span><span aria-hidden="true">·</span
+                ><span>Codex</span><span aria-hidden="true">·</span
+                ><span>Pi</span><span aria-hidden="true">·</span
+                ><span>Custom harness</span>
+              </p>
+            </div>
+            <div class="agent-mode">
+              <div class="agent-mode-heading">
+                <span class="terminal-icon"
+                  ><svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m5 6 5 5-5 5m8 1h6" /></svg
+                ></span>
+                <h3>Your existing session</h3>
+                <p>Work directly from your harness</p>
+              </div>
+              <p class="agent-mode-detail mcp-detail">
+                <span class="mcp-badge">MCP</span
+                ><span>Connect an MCP-capable agent</span>
+              </p>
+            </div>
           </div>
-          <figure id="real">
-            <a
-              href="shots/workflow-editor.png"
-              aria-label="Open full-size workflow editor screenshot"
-            >
-              <img
-                src="shots/workflow-editor.png"
-                width="1280"
-                height="620"
-                alt="Interlock's visual editor with the Pokémon workflow open and connected nodes on the canvas."
-                loading="lazy"
-              />
-            </a>
-            <figcaption>The demo workflow in Interlock's editor.</figcaption>
+        </div>
+      </section>
+      <section
+        class="section"
+        id="automations"
+        aria-labelledby="automations-title"
+      >
+        <div class="shell">
+          <h2 id="automations-title">Run on demand or autonomously</h2>
+          <p class="section-copy">
+            Start a workflow yourself, set a schedule, or trigger it when
+            another workflow completes or fails. Workflows can run unattended
+            and wait for your input when a step needs an answer or approval.
+          </p>
+          <figure class="section-figure">
+            <div class="automation-grid">
+              <div class="automation-card">
+                <h3>
+                  <svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="5" width="18" height="16" rx="2" />
+                    <path d="M16 3v4M8 3v4M3 11h18m-13 4h3m2 0h3" /></svg
+                  >Morning repository review
+                </h3>
+                <dl class="schedule-details">
+                  <dt>When</dt>
+                  <dd><code>0 9 * * 1-5</code></dd>
+                  <dt>Timezone</dt>
+                  <dd>America/Denver</dd>
+                  <dt class="visually-hidden">Overlap policy</dt>
+                  <dd class="overlap">Skip overlapping runs</dd>
+                </dl>
+              </div>
+              <div class="automation-card">
+                <h3>
+                  <svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="3" width="6" height="6" rx="1" />
+                    <rect x="15" y="15" width="6" height="6" rx="1" />
+                    <path d="M6 9v9h9M9 6h9v9" /></svg
+                  >Follow up when a run fails
+                </h3>
+                <dl class="event-details">
+                  <dt>When</dt>
+                  <dd>Repository review → Failed</dd>
+                  <dt>Start</dt>
+                  <dd>Investigate failure</dd>
+                </dl>
+              </div>
+            </div>
+            <figcaption class="figure-caption">
+              Illustrative automations. The local engine must be running for
+              scheduled work to start.
+            </figcaption>
           </figure>
-        </section>
-
-        <section
-          class="section section-columns product product--inspect"
-          id="inspect"
-          aria-labelledby="runs-title"
-        >
-          <div>
-            <h2 id="runs-title">Inspect your runs</h2>
-            <p>
-              Open Runs to follow a live execution or revisit a past one. The
-              graph shows which path the run took and where it's waiting. Select
-              a step to see its inputs, outputs, or errors.
-            </p>
-            <p>
-              For a Batch, drill into any item. If the Batch fails, retry it
-              from the inspector and keep the items that already succeeded.
-            </p>
-          </div>
-          <figure>
-            <a
-              href="shots/run-inspector.png"
-              aria-label="Open full-size run inspector screenshot"
-            >
-              <img
-                src="shots/run-inspector.png"
-                width="1280"
-                height="620"
-                alt="Run inspector showing completed steps, a run waiting for an agent, and the selected assignment alongside the graph."
-                loading="lazy"
-              />
-            </a>
-            <figcaption>A run paused at an Agent step.</figcaption>
+        </div>
+      </section>
+      <section class="section" id="reports" aria-labelledby="reports-title">
+        <div class="shell">
+          <h2 id="reports-title">Inspect your runs</h2>
+          <p class="section-copy">
+            See each step’s inputs, outputs, and errors. Track run duration and
+            waiting time, along with reported model usage and cost.
+          </p>
+          <figure class="section-figure">
+            <div class="report">
+              <div class="report-header">
+                <h3>Repository review</h3>
+                <p>Last 7 days</p>
+              </div>
+              <div class="report-body">
+                <div class="report-timing">
+                  <h3>Where time went</h3>
+                  <div class="timing-row">
+                    <span>Agent work</span
+                    ><span class="timing-bar" aria-hidden="true"></span
+                    ><span class="timing-value">6m 12s</span>
+                  </div>
+                  <div class="timing-row">
+                    <span>Human wait</span
+                    ><span
+                      class="timing-bar timing-bar--human"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="timing-value">3m 28s</span>
+                  </div>
+                  <div class="timing-row">
+                    <span>Engine steps</span
+                    ><span
+                      class="timing-bar timing-bar--engine"
+                      aria-hidden="true"
+                    ></span
+                    ><span class="timing-value">1m 04s</span>
+                  </div>
+                </div>
+                <div class="report-usage">
+                  <h3>Reported usage</h3>
+                  <table class="usage-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Harness / alias</th>
+                        <th scope="col">Reported cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Codex · builder</td>
+                        <td>$0.84</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p class="usage-note">
+                    Coverage and missing measurements stay visible.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <figcaption class="figure-caption">
+              Illustrative report. Usage and cost depend on available
+              measurements. Cost estimates are not account billing.
+            </figcaption>
           </figure>
-        </section>
-
-        <section
-          class="section section-columns product product--agent"
-          id="agent"
-          aria-labelledby="agent-title"
-        >
-          <div>
-            <h2 id="agent-title">Bring your own agent</h2>
-            <p>
-              Connect your agent over MCP. When a run needs an agent, copy its
-              instructions into your conversation so the agent can claim and
-              complete the assignment.
-            </p>
-            <p>
-              For automatic execution, configure Claude Code, Codex, or Pi in
-              Harnesses and select it in the workflow's settings. Interlock can
-              then launch a session when an assignment is ready.
-            </p>
-          </div>
-          <figure>
-            <a
-              href="shots/agent-connection.png"
-              aria-label="Open full-size MCP connection screenshot"
-            >
-              <img
-                src="shots/agent-connection.png"
-                width="1000"
-                height="620"
-                alt="Connect with MCP dialog showing client tabs and a copyable Codex configuration for the local server."
-                loading="lazy"
-              />
-            </a>
-            <figcaption>Interlock's MCP setup for Codex.</figcaption>
-          </figure>
-        </section>
-      </div>
+        </div>
+      </section>
+      <section class="closing" aria-labelledby="closing-title">
+        <div class="shell">
+          <h2 id="closing-title">
+            Free, local,<br />
+            and open source
+          </h2>
+          <p>
+            Interlock runs on your machine. Your workflows and run history are
+            stored locally, under your control.
+          </p>
+          <p>Use it to make the world a better place.</p>
+        </div>
+      </section>
     </main>
-
     <footer class="site-footer">
       <div class="shell">
-        <p>
-          MIT licensed <span aria-hidden="true">•</span>&nbsp;<a
-            href="https://github.com/dgca/interlock"
+        <a class="brand" href="#top"
+          ><img src="interlock-logo.svg" width="32" height="32" alt="" /><span
+            >Interlock</span
+          ></a
+        >
+        <div class="footer-details">
+          <span>MIT licensed</span><span aria-hidden="true">•</span
+          ><a href="https://github.com/dgca/interlock"
             >github.com/dgca/interlock</a
+          ><span aria-hidden="true">•</span
+          ><span class="footer-author"
+            >By
+            <a href="https://app.ens.domains/typeof.eth">Dan Cortes</a></span
           >
-          <span aria-hidden="true">•</span>&nbsp;By
-          <a href="https://app.ens.domains/typeof.eth">Dan Cortes</a>
-        </p>
+        </div>
       </div>
     </footer>
-
     <script>
       (() => {
-        'use strict';
+        const namespace = 'http://www.w3.org/2000/svg';
+        const compactGraph = matchMedia('(max-width: 900px)');
         const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-        const $ = (s, r = document) => r.querySelector(s);
-        const el = (tag, attrs = {}, html = '') => {
-          const e = document.createElement(tag);
-          for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
-          if (html) e.innerHTML = html;
-          return e;
-        };
-        const esc = (s) =>
-          String(s).replace(
-            /[&<>"]/g,
-            (c) =>
-              ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c],
-          );
-        const sleep = (ms) =>
-          new Promise((r) => setTimeout(r, reducedMotion.matches ? 0 : ms));
-        const hex = () =>
-          Math.random().toString(16).slice(2, 10).padEnd(8, '0');
-        const clock = (d = new Date()) =>
-          d.toLocaleTimeString([], {
-            hour: 'numeric',
-            minute: '2-digit',
-            second: '2-digit',
-          });
-
-        /* ---------- icons (Lucide, the set Interlock's UI uses) ---------- */
-        const P = {
-          entry:
-            '<path d="m18 9-6-6-6 6"/><path d="M12 3v14"/><path d="M5 21h14"/>',
-          exit: '<path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/>',
-          agent:
-            '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
-          script:
-            '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
-          fetch:
-            '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
-          condition:
-            '<path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/>',
-          completed:
-            '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
-          running: '<circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 2"/>',
-          waiting:
-            '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
-          pending:
-            '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
-          failed:
-            '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
-        };
-        const icon = (k, size = 15) =>
-          `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[k]}</svg>`;
-
-        /* ---------- JSON pretty-print with highlighting ---------- */
-        const jsonHtml = (v) =>
-          esc(JSON.stringify(v, null, 2)).replace(
-            /(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|(-?\d+\.?\d*)/g,
-            (m, str, colon, lit, num) =>
-              str
-                ? colon
-                  ? `<span class="k">${str}</span>${colon}`
-                  : `<span class="s">${str}</span>`
-                : lit
-                  ? `<span class="b">${lit}</span>`
-                  : `<span class="n">${num}</span>`,
-          );
-
-        /* ---------- the original Pokémon example ---------- */
-        const SCRIPT = `const body = input.body;
-if (!body || typeof body.name !== 'string')
-  throw new Error('PokéAPI did not recognize that name');
-const stats = {};
-for (const stat of body.stats ?? []) stats[stat.stat.name] = stat.base_stat;
-return {
-  name: body.name,
-  types: (body.types ?? []).map((entry) => entry.type.name),
-  heightM: (body.height ?? 0) / 10,
-  weightKg: (body.weight ?? 0) / 10,
-  smallAndAdorable: (body.height ?? 999) <= 6,
-  stats,
-};`;
-        const AsyncFn = Object.getPrototypeOf(async function () {}).constructor;
-        const runScript = new AsyncFn('input', SCRIPT);
-        const PROMPT_V1 =
-          'Write a delightfully overcommitted mascot pitch for the Pokémon in the input, a scouting sheet with name, types, height, weight, and base stats. One short paragraph that leans into how small and adorable it is while citing one real stat as evidence. Do not invent abilities or moves. Return an object with name, pitch, and reasoning.';
-        const OUT_SCHEMA = {
-          type: 'object',
-          required: ['name', 'pitch', 'reasoning'],
-          properties: {
-            name: { type: 'string' },
-            pitch: { type: 'string' },
-            reasoning: { type: 'string' },
-          },
-        };
-
-        /* contract check, matching Interlock's assertContract wording (packages/core) */
-        function contractErrors(schema, value, label) {
-          const kind = (v) =>
-            v === null
-              ? 'null'
-              : Array.isArray(v)
-                ? 'a list'
-                : typeof v === 'string'
-                  ? 'text'
-                  : typeof v === 'object'
-                    ? 'an object'
-                    : typeof v;
-          const names = {
-            array: 'a list',
-            object: 'an object',
-            string: 'text',
-            boolean: 'yes/no',
-            integer: 'a whole number',
-            number: 'a number',
-          };
-          const errs = [];
-          if (
-            schema.type === 'object' &&
-            (value === null ||
-              typeof value !== 'object' ||
-              Array.isArray(value))
-          )
-            errs.push(
-              `"value" expects an object; received ${kind(value)}: ${JSON.stringify(value)?.slice(0, 100)}.`,
-            );
-          else {
-            for (const r of schema.required || [])
-              if (!(r in value)) errs.push(`Missing required field "${r}".`);
-            for (const [k, s] of Object.entries(schema.properties || {}))
-              if (k in value) {
-                const v = value[k];
-                const ok = s.type === 'string' ? typeof v === 'string' : true;
-                if (!ok)
-                  errs.push(
-                    `"${k}" expects ${names[s.type]}; received ${kind(v)}: ${JSON.stringify(v).slice(0, 100)}.`,
-                  );
-              }
-          }
-          return errs.length ? `${label}: ${errs.join(' ')}` : null;
-        }
-
-        /* ---------- PokéAPI: live, with a cached copy of the suggested names ---------- */
-        const STAT_NAMES = [
-          'hp',
-          'attack',
-          'defense',
-          'special-attack',
-          'special-defense',
-          'speed',
-        ];
-        const CACHE = {
-          togepi: [3, 15, ['fairy'], [35, 20, 65, 40, 65, 20]],
-          pikachu: [4, 60, ['electric'], [35, 55, 40, 50, 50, 90]],
-          eevee: [3, 65, ['normal'], [55, 55, 50, 45, 65, 55]],
-          jigglypuff: [5, 55, ['normal', 'fairy'], [115, 45, 20, 45, 25, 20]],
-          snorlax: [21, 4600, ['normal'], [160, 110, 65, 65, 110, 30]],
-          gengar: [15, 405, ['ghost', 'poison'], [60, 65, 60, 130, 75, 110]],
-          lapras: [25, 2200, ['water', 'ice'], [130, 85, 80, 85, 95, 60]],
-          bulbasaur: [7, 69, ['grass', 'poison'], [45, 49, 49, 65, 65, 45]],
-        };
-        const cachedBody = (n) => {
-          const [height, weight, types, st] = CACHE[n];
-          return {
-            name: n,
-            height,
-            weight,
-            types: types.map((t) => ({ type: { name: t } })),
-            stats: st.map((b, i) => ({
-              base_stat: b,
-              stat: { name: STAT_NAMES[i] },
-            })),
-          };
-        };
-        const memo = new Map();
-        async function pokeFetch(raw) {
-          const name = String(raw).trim().toLowerCase();
-          if (memo.has(name)) return memo.get(name);
-          const url = `https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(name)}`;
-          let res;
-          try {
-            const ctl = new AbortController();
-            const t = setTimeout(() => ctl.abort(), 8000);
-            const r = await fetch(url, { signal: ctl.signal });
-            clearTimeout(t);
-            if (!r.ok)
-              res = {
-                status: r.status,
-                headers: {
-                  'content-type': r.headers.get('content-type') || 'text/plain',
-                },
-                body: (await r.text()).slice(0, 200),
-                source: 'live',
-              };
-            else {
-              const full = await r.json();
-              res = {
-                status: 200,
-                headers: {
-                  'content-type':
-                    r.headers.get('content-type') || 'application/json',
-                },
-                body: {
-                  name: full.name,
-                  height: full.height,
-                  weight: full.weight,
-                  types: full.types.map((x) => ({
-                    type: { name: x.type.name },
-                  })),
-                  stats: full.stats.map((x) => ({
-                    base_stat: x.base_stat,
-                    stat: { name: x.stat.name },
-                  })),
-                },
-                source: 'live',
-              };
-            }
-          } catch (e) {
-            if (!Object.hasOwn(CACHE, name))
-              throw new Error(
-                'Fetch could not reach PokéAPI from this browser',
-              );
-            res = {
-              status: 200,
-              headers: { 'content-type': 'application/json; charset=utf-8' },
-              body: cachedBody(name),
-              source: 'cache',
+        const hero = document.querySelector('#hero-graph');
+        const build = document.querySelector('#build-graph');
+        const nodes = [...hero.querySelectorAll('.node')];
+        const toggle = document.querySelector('#animation-toggle');
+        let activeEdge = '';
+        function connect(graph, isHero) {
+          const svg = graph.querySelector('.graph-edges');
+          const rect = graph.getBoundingClientRect();
+          const items = [...graph.querySelectorAll('.node')];
+          const handle = (index, side) => {
+            const h = items[index]
+              .querySelector('.handle--' + side)
+              .getBoundingClientRect();
+            return {
+              x: h.x + h.width / 2 - rect.x,
+              y: h.y + h.height / 2 - rect.y,
             };
-          }
-          res.url = url;
-          memo.set(name, res);
-          return res;
-        }
-
-        /* Sample agent reply based on the stat sheet. */
-        const nice = (s) => s.replace(/-/g, ' ');
-        function draftPitch(sheet, withReasoning) {
-          const [top, val] = Object.entries(sheet.stats).sort(
-            (a, b) => b[1] - a[1],
-          )[0];
-          const Name = sheet.name[0].toUpperCase() + sheet.name.slice(1);
-          const out = {
-            name: sheet.name,
-            pitch: `${Name} stands ${sheet.heightM} metres tall and weighs ${sheet.weightKg} kilograms, small enough to ride along to every photo op, and its base ${nice(top)} of ${val} is the number it leads with.`,
           };
-          if (withReasoning)
-            out.reasoning = `Height ${sheet.heightM} m and weight ${sheet.weightKg} kg carry the small-and-adorable angle; ${nice(top)} ${val} is its highest base stat. No abilities or moves are cited.`;
-          return out;
+          svg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`);
+          svg.replaceChildren();
+          const markerId = graph.id + '-arrow';
+          const defs = document.createElementNS(namespace, 'defs');
+          const marker = document.createElementNS(namespace, 'marker');
+          for (const [k, v] of Object.entries({
+            id: markerId,
+            viewBox: '0 0 8 8',
+            refX: '7',
+            refY: '4',
+            markerWidth: '5',
+            markerHeight: '5',
+            orient: 'auto',
+            markerUnits: 'userSpaceOnUse',
+          }))
+            marker.setAttribute(k, v);
+          const arrow = document.createElementNS(namespace, 'path');
+          arrow.setAttribute('d', 'M1 1 7 4 1 7Z');
+          marker.append(arrow);
+          defs.append(marker);
+          svg.append(defs);
+          const add = (id, d) => {
+            const path = document.createElementNS(namespace, 'path');
+            path.setAttribute('d', d);
+            path.setAttribute('data-edge', id);
+            path.setAttribute('marker-end', `url(#${markerId})`);
+            path.classList.toggle('is-active', id === activeEdge && isHero);
+            svg.append(path);
+          };
+          const straight = (a, b) =>
+            `M${a.x},${a.y} C${(a.x + b.x) / 2},${a.y} ${(a.x + b.x) / 2},${b.y} ${b.x},${b.y}`;
+          const wrap = (a, b, y) =>
+            `M${a.x},${a.y} H${rect.width - 8} V${y} H8 V${b.y} H${b.x}`;
+          for (let i = 0; i < items.length - 1; i++) {
+            const a = handle(i, isHero && i === 3 ? 'no' : 'out'),
+              b = handle(i + 1, 'in');
+            const rowChange = compactGraph.matches && i % 2 === 1;
+            const midpoint =
+              (items[i].getBoundingClientRect().bottom +
+                items[i + 1].getBoundingClientRect().top) /
+                2 -
+              rect.top;
+            add('edge-' + i, rowChange ? wrap(a, b, midpoint) : straight(a, b));
+          }
+          if (isHero) {
+            const a = handle(3, 'yes'),
+              b = handle(1, 'in');
+            const top = items[1].getBoundingClientRect().top - rect.top;
+            const y = compactGraph.matches
+              ? top - 28
+              : items[3].getBoundingClientRect().bottom - rect.top + 48;
+            const right = compactGraph.matches ? rect.width - 4 : a.x + 24;
+            const left = compactGraph.matches ? b.x - 16 : b.x - 24;
+            add(
+              'loop',
+              `M${a.x},${a.y} H${right} V${y} H${left} V${b.y} H${b.x}`,
+            );
+          }
         }
+        const observer = new ResizeObserver(() => {
+          connect(hero, true);
+          connect(build, false);
+        });
+        observer.observe(hero);
+        observer.observe(build);
+        document.fonts.ready.then(() => {
+          connect(hero, true);
+          connect(build, false);
+        });
 
-        /* Run inspector demo */
-        const NODES = [
-          {
-            id: 'entry',
-            kind: 'entry',
-            label: 'Pokémon name',
-            meta: 'Workflow input',
-            x: 12,
-            y: 32,
-          },
-          {
-            id: 'lookup',
-            kind: 'fetch',
-            label: 'Ask PokéAPI',
-            meta: 'Method: GET',
-            x: 200,
-            y: 32,
-          },
-          {
-            id: 'stats',
-            kind: 'script',
-            label: 'Build a stat sheet',
-            meta: 'JavaScript',
-            x: 388,
-            y: 32,
-          },
-          {
-            id: 'cute',
-            kind: 'condition',
-            label: 'Small and adorable?',
-            meta: 'Height ≤ 0.6 m',
-            x: 576,
-            y: 32,
-          },
-          {
-            id: 'pitch',
-            kind: 'agent',
-            label: 'Write a mascot pitch',
-            meta: 'Requires a result',
-            x: 784,
-            y: 32,
-          },
-          {
-            id: 'exitPitch',
-            kind: 'exit',
-            label: 'Mascot pitch',
-            meta: 'Return workflow result',
-            x: 976,
-            y: 32,
-          },
-          {
-            id: 'exitStats',
-            kind: 'exit',
-            label: 'Stat sheet',
-            meta: 'Return workflow result',
-            x: 784,
-            y: 154,
-          },
+        // One illustrative run revisits Build, passes review, then opens a PR.
+        const steps = [
+          { node: 0, ms: 1000 },
+          { node: 1, edge: 'edge-0', ms: 3200 },
+          { node: 2, edge: 'edge-1', ms: 2400 },
+          { node: 3, edge: 'edge-2', ms: 1100 },
+          { node: 1, edge: 'loop', ms: 3000, revision: true },
+          { node: 2, edge: 'edge-1', ms: 2400 },
+          { node: 3, edge: 'edge-2', ms: 1100 },
+          { node: 4, edge: 'edge-3', ms: 1800 },
+          { node: 5, edge: 'edge-4', ms: 1100 },
+          { node: -1, ms: 2600 },
         ];
-        const EDGES = [
-          ['entry', 'lookup'],
-          ['lookup', 'stats'],
-          ['stats', 'cute'],
-          ['cute', 'pitch', 'True', 't'],
-          ['pitch', 'exitPitch'],
-          ['cute', 'exitStats', 'False', 'f'],
-        ];
-        const NW = 168,
-          NH = 96,
-          GW = 1160,
-          GH = 268;
-        const LABELS = {
-          pending: 'Not started',
-          running: 'Running',
-          completed: 'Finished',
-          waiting: 'Waiting for an agent',
-          working: 'Agent working',
-          failed: 'Failed',
-        };
-        const graph = $('#graph');
-        graph.style.width = GW + 'px';
-        graph.style.height = GH + 'px';
-        const svg = document.createElementNS(
-          'http://www.w3.org/2000/svg',
-          'svg',
-        );
-        svg.setAttribute('class', 'edges');
-        svg.setAttribute('width', GW);
-        svg.setAttribute('height', GH);
-        svg.setAttribute('aria-hidden', 'true');
-        graph.appendChild(svg);
-        const nodeEls = {},
-          edgeEls = {};
-        const pos = Object.fromEntries(NODES.map((n) => [n.id, n]));
-        for (const [a, b, lab, cls] of EDGES) {
-          const A = pos[a],
-            B = pos[b],
-            x1 = A.x + NW,
-            y1 = A.y + NH / 2 + (lab ? (cls === 't' ? -14 : 14) : 0),
-            x2 = B.x,
-            y2 = B.y + NH / 2,
-            mx = (x1 + x2) / 2;
-          const p = document.createElementNS(
-            'http://www.w3.org/2000/svg',
-            'path',
+        let index = 0,
+          timer,
+          paused = reducedMotion.matches,
+          inView = false;
+        function paint() {
+          const step = steps[index];
+          if (index === 0) nodes.forEach((n) => n.classList.remove('is-done'));
+          if (step.revision)
+            nodes.slice(1).forEach((n) => n.classList.remove('is-done'));
+          nodes.forEach((node, i) =>
+            node.classList.toggle('is-active', i === step.node),
           );
-          p.setAttribute(
-            'd',
-            `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`,
-          );
-          svg.appendChild(p);
-          edgeEls[a + '>' + b] = p;
-          if (lab) {
-            const t = document.createElementNS(
-              'http://www.w3.org/2000/svg',
-              'text',
+          activeEdge = step.edge || '';
+          hero
+            .querySelectorAll('[data-edge]')
+            .forEach((p) =>
+              p.classList.toggle('is-active', p.dataset.edge === activeEdge),
             );
-            t.setAttribute('x', x1 + 8);
-            t.setAttribute('y', y1 - 5);
-            t.setAttribute('class', cls);
-            t.textContent = lab;
-            svg.appendChild(t);
-          }
         }
-        for (const n of NODES) {
-          const b = el('button', {
-            type: 'button',
-            class: 'node st-idle',
-            style: `left:${n.x}px;top:${n.y}px`,
-            'aria-label': `${n.label}, ${n.kind}`,
-            'aria-pressed': 'false',
-          });
-          b.innerHTML = `<span class="nstat"></span><span class="nh"><span class="ni ${n.kind}">${icon(n.kind, 15)}</span>${n.kind === 'agent' ? 'Agent' : n.kind === 'condition' ? 'Branch' : n.kind}</span><strong>${esc(n.label)}</strong><small>${esc(n.meta)}</small>`;
-          b.addEventListener('click', () => select(n.id));
-          graph.appendChild(b);
-          nodeEls[n.id] = b;
+        function schedule() {
+          clearTimeout(timer);
+          hero.classList.toggle(
+            'animation-paused',
+            paused || !inView || document.hidden,
+          );
+          if (paused || !inView || document.hidden) return;
+          timer = setTimeout(() => {
+            if (steps[index].node >= 0)
+              nodes[steps[index].node].classList.add('is-done');
+            index = (index + 1) % steps.length;
+            paint();
+            schedule();
+          }, steps[index].ms);
         }
-
-        const R = {
-          id: null,
-          nodes: {},
-          execs: [],
-          sel: null,
-          resolveAgent: null,
-          token: 0,
-        };
-        const guideToggle = $('#guideToggle');
-        const guideSteps = [...$('#guideSteps').children];
-        const agentReply = $('#agentReply');
-        const agentOut = $('#agentOut');
-        const replyError = $('#replyError');
-        const pkName = $('#pkName');
-        const runError = $('#runError');
-        guideToggle.hidden = false;
-        guideToggle.addEventListener('click', () => {
-          const open = guideToggle.getAttribute('aria-expanded') === 'false';
-          guideToggle.setAttribute('aria-expanded', String(open));
-          guideToggle.textContent = open
-            ? 'Show current step'
-            : 'Show all steps';
+        function syncToggle() {
+          toggle.hidden = false;
+          toggle.setAttribute('aria-pressed', String(paused));
+          toggle.setAttribute(
+            'aria-label',
+            paused ? 'Play workflow animation' : 'Pause workflow animation',
+          );
+          schedule();
+        }
+        toggle.addEventListener('click', () => {
+          paused = !paused;
+          if (!paused) paint();
+          syncToggle();
         });
-        function setGuideStep(step) {
-          for (const item of guideSteps) item.removeAttribute('aria-current');
-          guideSteps[step - 1].setAttribute('aria-current', 'step');
-        }
-        function showDemoMessage(element, message) {
-          element.hidden = !message;
-          element.textContent = message;
-        }
-        function focusDemoHeading(heading) {
-          heading.focus({ preventScroll: true });
-          heading.scrollIntoView({ block: 'nearest' });
-        }
-        function showOutcome(title, detail) {
-          $('#outcomeTitle').textContent = title;
-          $('#outcomeText').textContent = detail;
-          $('#runOutcome').hidden = false;
-        }
-        function setNode(id, st) {
-          R.nodes[id] = st;
-          const e = nodeEls[id];
-          e.className = `node st-${st === 'working' ? 'running' : st}${R.sel === id ? ' sel' : ''}`;
-          const ic =
-            st === 'completed'
-              ? 'completed'
-              : st === 'running' || st === 'working'
-                ? 'running'
-                : st === 'failed'
-                  ? 'failed'
-                  : 'pending';
-          e.querySelector('.nstat').innerHTML =
-            st === 'idle' ? '' : `${icon(ic, 12)}${LABELS[st] || ''}`;
-        }
-        function lightEdge(a, b) {
-          edgeEls[a + '>' + b].classList.add('lit');
-        }
-        function setPill(pillEl, st, text) {
-          pillEl.className = 'pill ' + st;
-          pillEl.textContent = text || st;
-        }
-        function exec(nodeId, input) {
-          const n = pos[nodeId];
-          const x = {
-            node: nodeId,
-            kind: n.kind,
-            label: n.label,
-            input,
-            output: undefined,
-            status: 'running',
-            startedAt: new Date(),
-            endedAt: null,
-            error: null,
-          };
-          R.execs.push(x);
-          renderSteps();
-          return x;
-        }
-        function done(x, output, status = 'completed') {
-          x.output = output;
-          x.status = status;
-          x.endedAt = new Date();
-          renderSteps();
-        }
-
-        function renderSteps() {
-          const ol = $('#steps');
-          const focused = ol.contains(document.activeElement)
-            ? document.activeElement.dataset.node
-            : null;
-          ol.innerHTML = '';
-          $('#stepsEmpty').hidden = R.execs.length > 0;
-          R.execs.forEach((x, i) => {
-            const li = el('li');
-            const b = el('button', {
-              type: 'button',
-              class: 'steprow' + (R.sel === x.node ? ' sel' : ''),
-              'data-node': x.node,
-              'aria-pressed': String(R.sel === x.node),
-            });
-            const st = x.status === 'working' ? 'running' : x.status;
-            b.innerHTML = `<span class="ix">${String(i + 1).padStart(2, '0')}</span><div><strong>${esc(x.label)}</strong><small>${x.kind} · ${clock(x.startedAt)}</small></div><span class="s ${st}">${x.status === 'working' ? 'running' : x.status === 'waiting' ? 'waiting' : x.status}</span>`;
-            b.addEventListener('click', () => select(x.node));
-            li.appendChild(b);
-            ol.appendChild(li);
-            if (focused === x.node) b.focus({ preventScroll: true });
-          });
-        }
-        function select(id) {
-          R.sel = id;
-          for (const n of NODES) {
-            const selected = n.id === id;
-            nodeEls[n.id].classList.toggle('sel', selected);
-            nodeEls[n.id].setAttribute('aria-pressed', String(selected));
-          }
-          renderSteps();
-          renderDetails();
-        }
-
-        function renderDetails() {
-          const d = $('#details');
-          const id = R.sel;
-          if (!id) {
-            d.innerHTML = `<div class="dlabel">Execution details</div><p class="empty" style="padding-top:4px">Select a node or a timeline step to inspect its input and output.</p>`;
-            return;
-          }
-          const n = pos[id];
-          const x = [...R.execs].reverse().find((e) => e.node === id);
-          const st = R.nodes[id] || 'idle';
-          let h = `<div class="dlabel">Execution details</div><div class="dtitle">${esc(n.label)}</div><div class="dstate ${st === 'working' ? 'running' : st}">${LABELS[st] || 'Not started'}</div>`;
-          if (id === 'lookup')
-            h += `<div class="dlabel">Request</div><pre class="json">GET https://pokeapi.co/api/v2/pokemon/{{input.name}}</pre>`;
-          if (id === 'stats')
-            h += `<div class="dlabel">Script · JavaScript</div><pre class="json">${esc(SCRIPT)}</pre>`;
-          if (id === 'cute')
-            h += `<div class="dlabel">Branch</div><pre class="json">smallAndAdorable equals true</pre>`;
-          if (x) {
-            h += `<div class="dlabel">Input</div><pre class="json">${jsonHtml(x.input)}</pre>`;
-            if (id === 'lookup' && x.output)
-              h += `<p class="src">${x.output.source === 'live' ? '<b>Live response</b> from pokeapi.co, trimmed to the fields the Script reads.' : '<b class="c">Cached copy</b>: PokéAPI was unreachable, so this suggested name used a stored response.'}</p>`;
-            if (x.error)
-              h += `<div class="dlabel">Error</div><p class="verdict err">${esc(x.error)}</p>`;
-            if (
-              x.output !== undefined &&
-              !(id === 'pitch' && st !== 'completed')
-            )
-              h += `<div class="dlabel">Output</div><pre class="json">${jsonHtml(x.output)}</pre>`;
-            if (id === 'cute' && R.port)
-              h += `<p class="src">Followed the <b${R.port === 'true' ? '' : ' class="c"'}>${R.port === 'true' ? 'True' : 'False'}</b> route. The branch passes its input through unchanged.</p>`;
-          }
-          if (id === 'pitch') {
-            h += `<div class="dlabel">Prompt and context</div><p class="prompt">${esc(PROMPT_V1)}</p><div class="dlabel">Expected output schema</div><pre class="json">${jsonHtml(OUT_SCHEMA)}</pre>`;
-            if (st === 'waiting')
-              h += `<p class="hint">Use <b>Claim assignment</b> to submit a result.</p>`;
-          }
-          d.innerHTML = h;
-        }
-
-        function updateReplyHint() {
-          $('#replyHint').textContent =
-            'Submit your reply to check it and finish the run.';
-          agentOut.removeAttribute('aria-invalid');
-          showDemoMessage(replyError, '');
-        }
-        agentOut.addEventListener('input', updateReplyHint);
-        $('#fixBtn').addEventListener('click', () => {
-          agentOut.value = JSON.stringify(draftPitch(R.sheet, true), null, 2);
-          updateReplyHint();
-          $('#submitBtn').focus();
+        reducedMotion.addEventListener('change', () => {
+          paused = reducedMotion.matches;
+          if (paused) {
+            index = 0;
+            activeEdge = '';
+            nodes.forEach((n) => n.classList.remove('is-active', 'is-done'));
+            hero
+              .querySelectorAll('.is-active')
+              .forEach((p) => p.classList.remove('is-active'));
+          } else paint();
+          syncToggle();
         });
-        agentReply.addEventListener('submit', (event) => {
-          event.preventDefault();
-          const resolve = R.resolveAgent;
-          if (!resolve || agentReply.hidden) return;
-          let v;
+        new IntersectionObserver(
+          ([entry]) => {
+            inView = entry.isIntersecting;
+            schedule();
+          },
+          { threshold: 0.1 },
+        ).observe(hero);
+        document.addEventListener('visibilitychange', schedule);
+        if (!paused) paint();
+        syncToggle();
+
+        const copy = document.querySelector('#copy-install');
+        const status = document.querySelector('#copy-status');
+        const commands = document.querySelector('#install-commands');
+        let resetCopy;
+        copy.hidden = false;
+        copy.addEventListener('click', async () => {
+          clearTimeout(resetCopy);
           try {
-            v = JSON.parse(agentOut.value);
+            await navigator.clipboard.writeText(commands.textContent);
+            copy.querySelector('span').textContent = 'Copied';
+            status.classList.add('visually-hidden');
+            status.textContent = 'Installation commands copied.';
+            resetCopy = setTimeout(() => {
+              copy.querySelector('span').textContent = 'Copy';
+            }, 2500);
           } catch {
-            agentOut.setAttribute('aria-invalid', 'true');
-            showDemoMessage(replyError, 'Enter valid JSON and try again.');
-            return;
-          }
-          const err = contractErrors(OUT_SCHEMA, v, 'Agent result');
-          if (err) {
-            agentOut.setAttribute('aria-invalid', 'true');
-            $('#replyHint').textContent =
-              'Edit your reply or fill in a complete reply.';
-            showDemoMessage(replyError, err);
-            return;
-          }
-          R.resolveAgent = null;
-          agentReply.hidden = true;
-          $('#runLabel').textContent = 'Run workflow';
-          setGuideStep(4);
-          showOutcome('Result accepted', v.pitch);
-          focusDemoHeading($('#outcomeTitle'));
-          resolve(v);
-        });
-
-        $('#claimBtn').addEventListener('click', () => {
-          if (R.nodes.pitch !== 'waiting') return;
-          agentOut.value = JSON.stringify(draftPitch(R.sheet, false), null, 2);
-          agentOut.removeAttribute('aria-invalid');
-          showDemoMessage(replyError, '');
-          $('#replyHint').textContent =
-            'Submit the incomplete sample to see what Interlock catches.';
-          setNode('pitch', 'working');
-          setPill($('#runPill'), 'running', 'running');
-
-          const x = R.execs.find((e) => e.node === 'pitch');
-          x.status = 'working';
-          $('#rxHandoff').hidden = true;
-          $('#runLabel').textContent = 'Restart demo';
-          setGuideStep(3);
-          agentReply.hidden = false;
-          select('pitch');
-          focusDemoHeading($('#reply-title'));
-        });
-
-        function clearRunError() {
-          pkName.removeAttribute('aria-invalid');
-          showDemoMessage(runError, '');
-        }
-        pkName.addEventListener('input', clearRunError);
-
-        async function startRun(example) {
-          if (
-            !agentReply.hidden &&
-            !window.confirm('Restart the demo and discard your current reply?')
-          )
-            return;
-          const name =
-            (example ?? pkName.value).trim().toLowerCase() || 'togepi';
-          pkName.value = name;
-          const token = ++R.token;
-          R.id = hex();
-          R.execs = [];
-          R.sel = null;
-          R.port = null;
-          R.resolveAgent?.();
-          R.resolveAgent = null;
-          R.sheet = null;
-          clearRunError();
-          $('#runId').textContent = R.id;
-          $('#rxHandoff').hidden = true;
-          agentReply.hidden = true;
-          $('#runOutcome').hidden = true;
-          $('#runLabel').textContent = 'Run workflow';
-          setGuideStep(1);
-          for (const n of NODES) {
-            setNode(n.id, 'pending');
-            nodeEls[n.id].setAttribute('aria-pressed', 'false');
-          }
-          for (const k in edgeEls) edgeEls[k].classList.remove('lit');
-          setPill($('#runPill'), 'running', 'running');
-
-          renderDetails();
-          const alive = () => token === R.token;
-          const fail = (x, nodeId, msg, message) => {
-            x.error = msg;
-            done(x, x.output, 'failed');
-            setNode(nodeId, 'failed');
-            setPill($('#runPill'), 'failed', 'failed');
-            showDemoMessage(runError, message);
-            select(nodeId);
-          };
-          // Entry
-          let x = exec('entry', { name });
-          setNode('entry', 'running');
-          await sleep(250);
-          if (!alive()) return;
-          done(x, { name });
-          setNode('entry', 'completed');
-          lightEdge('entry', 'lookup');
-          // Fetch
-          x = exec('lookup', { name });
-          setNode('lookup', 'running');
-          select('lookup');
-          let res;
-          try {
-            [res] = await Promise.all([pokeFetch(name), sleep(500)]);
-          } catch (e) {
-            if (alive())
-              fail(
-                x,
-                'lookup',
-                e.message,
-                'Couldn’t reach PokéAPI. Try Togepi or Snorlax to use a saved example.',
-              );
-            return;
-          }
-          if (!alive()) return;
-          const fetchOut = {
-            status: res.status,
-            headers: res.headers,
-            body: res.body,
-            source: res.source,
-          };
-          if (res.status < 200 || res.status >= 300) {
-            x.output = fetchOut;
-            if (res.status === 404) pkName.setAttribute('aria-invalid', 'true');
-            fail(
-              x,
-              'lookup',
-              `Fetch returned HTTP ${res.status}`,
-              res.status === 404
-                ? 'Pokémon not found. Try Togepi or Snorlax.'
-                : 'PokéAPI returned an error. Try running the workflow again.',
-            );
-            return;
-          }
-          done(x, fetchOut);
-          setNode('lookup', 'completed');
-          lightEdge('lookup', 'stats');
-          // Script (the workflow's own code)
-          x = exec('stats', {
-            status: res.status,
-            headers: res.headers,
-            body: res.body,
-          });
-          setNode('stats', 'running');
-          select('stats');
-          await sleep(450);
-          if (!alive()) return;
-          let sheet;
-          try {
-            sheet = await runScript({
-              status: res.status,
-              headers: res.headers,
-              body: res.body,
-            });
-          } catch (e) {
-            if (alive())
-              fail(
-                x,
-                'stats',
-                e.message,
-                'Couldn’t build the stat sheet. Try Togepi or Snorlax.',
-              );
-            return;
-          }
-          if (!alive()) return;
-          R.sheet = sheet;
-          done(x, sheet);
-          setNode('stats', 'completed');
-          lightEdge('stats', 'cute');
-          // Condition
-          x = exec('cute', sheet);
-          setNode('cute', 'running');
-          await sleep(300);
-          if (!alive()) return;
-          R.port = sheet.smallAndAdorable === true ? 'true' : 'false';
-          done(x, sheet);
-          setNode('cute', 'completed');
-          if (R.port === 'false') {
-            lightEdge('cute', 'exitStats');
-            setNode('pitch', 'skipped');
-            setNode('exitPitch', 'skipped');
-            nodeEls.pitch.querySelector('.nstat').innerHTML =
-              `${icon('pending', 12)}Not started`;
-            nodeEls.exitPitch.querySelector('.nstat').innerHTML =
-              `${icon('pending', 12)}Not started`;
-            x = exec('exitStats', sheet);
-            setNode('exitStats', 'running');
-            await sleep(250);
-            if (!alive()) return;
-            done(x, sheet);
-            setNode('exitStats', 'completed');
-            setPill($('#runPill'), 'completed', 'completed');
-            setGuideStep(4);
-            showOutcome(
-              'Stat sheet ready',
-              `${sheet.name[0].toUpperCase() + sheet.name.slice(1)} is ${sheet.heightM} m tall and weighs ${sheet.weightKg} kg. The branch routed straight to the stat sheet.`,
-            );
-            const control = document.activeElement;
-            if (control.closest('.runbar')) {
-              const rect = control.getBoundingClientRect();
-              if (rect.top >= 0 && rect.bottom <= innerHeight) {
-                $('#runOutcome').scrollIntoView({ block: 'nearest' });
-              }
-            }
-
-            select('exitStats');
-            return;
-          }
-          // Agent
-          lightEdge('cute', 'pitch');
-          setNode('exitStats', 'skipped');
-          nodeEls.exitStats.querySelector('.nstat').innerHTML =
-            `${icon('pending', 12)}Not started`;
-          x = exec('pitch', sheet);
-          x.status = 'waiting';
-          renderSteps();
-          setNode('pitch', 'waiting');
-          setPill($('#runPill'), 'waiting', 'waiting');
-
-          setGuideStep(2);
-          $('#rxHandoff').hidden = false;
-          select('pitch');
-          const result = await new Promise((r) => {
-            R.resolveAgent = r;
-          });
-          if (!alive()) return;
-          done(x, result);
-          setNode('pitch', 'completed');
-          lightEdge('pitch', 'exitPitch');
-          x = exec('exitPitch', result);
-          setNode('exitPitch', 'running');
-          await sleep(250);
-          if (!alive()) return;
-          done(x, result);
-          setNode('exitPitch', 'completed');
-          setPill($('#runPill'), 'completed', 'completed');
-
-          select('exitPitch');
-        }
-        $('#runBtn').addEventListener('click', () => startRun());
-        pkName.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' && !e.isComposing) startRun();
-        });
-        const chipBox = $('#pkChips');
-        for (const [n, hint] of [
-          ['togepi', 'agent path'],
-          ['snorlax', 'stats only'],
-        ]) {
-          const c = el(
-            'button',
-            { type: 'button', class: 'chip' },
-            `${n} <small>${hint}</small>`,
-          );
-          c.addEventListener('click', () => startRun(n));
-          chipBox.appendChild(c);
-        }
-        for (const n of NODES) setNode(n.id, 'idle');
-        renderDetails();
-
-        const copyInstall = $('#copyInstall');
-        const copyStatus = $('#copyStatus');
-        copyInstall.hidden = false;
-        copyInstall.addEventListener('click', async () => {
-          try {
-            await navigator.clipboard.writeText(
-              $('#installCommands').textContent,
-            );
-            copyInstall.textContent = 'Copied';
-            copyStatus.classList.add('visually-hidden');
-            copyStatus.textContent = 'Commands copied.';
-          } catch {
-            copyInstall.textContent = 'Copy';
-            copyStatus.classList.remove('visually-hidden');
-            copyStatus.textContent = 'Select the commands to copy them.';
+            const selection = getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(commands);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            status.classList.remove('visually-hidden');
+            status.textContent =
+              'Could not copy. Select the commands and copy them manually.';
+            copy.querySelector('span').textContent = 'Copy';
           }
         });
       })();
