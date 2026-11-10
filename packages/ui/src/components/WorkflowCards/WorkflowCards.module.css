@@ -58,6 +58,26 @@
   margin: 10px 0 0;
   overflow-wrap: anywhere;
 }
+.description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.readMore {
+  position: relative;
+  z-index: 2;
+  margin-top: 4px;
+}
+.readingText {
+  max-width: 65ch;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--mantine-font-size-md);
+  line-height: 1.65;
+}
 .link {
   appearance: none;
   padding: 0;

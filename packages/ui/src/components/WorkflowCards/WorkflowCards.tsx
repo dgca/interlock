@@ -1,6 +1,12 @@
-import { LoadingSkeleton, Placeholder } from '../../design-system';
+import {
+  Button,
+  LoadingSkeleton,
+  Modal,
+  ModalBody,
+  Placeholder,
+} from '../../design-system';
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ChevronRight, GitBranch } from 'lucide-react';
 
@@ -29,6 +35,37 @@ export function WorkflowCard({
   onOpen,
   disabled,
 }: CardProps) {
+  const paragraph = useRef<HTMLParagraphElement>(null);
+  const readMore = useRef<HTMLButtonElement>(null);
+  const navigation = useRef<HTMLAnchorElement | HTMLButtonElement>(null);
+  const [truncated, setTruncated] = useState(false);
+  const [reading, setReading] = useState(false);
+
+  useEffect(() => {
+    const element = paragraph.current;
+    if (!element) {
+      setTruncated(false);
+      setReading(false);
+      return;
+    }
+    let current = true;
+    const measure = () => {
+      if (current)
+        setTruncated(element.scrollHeight > element.clientHeight + 1);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    const fonts = document.fonts;
+    void fonts?.ready.then(measure);
+    fonts?.addEventListener('loadingdone', measure);
+    return () => {
+      current = false;
+      observer.disconnect();
+      fonts?.removeEventListener('loadingdone', measure);
+    };
+  }, [description]);
+
   return (
     <article
       className={classes.card}
@@ -44,7 +81,13 @@ export function WorkflowCard({
       <div className={classes.body}>
         <h2>
           {to !== undefined ? (
-            <Link className={classes.link} to={to}>
+            <Link
+              className={classes.link}
+              to={to}
+              ref={(element) => {
+                navigation.current = element;
+              }}
+            >
               {name}
             </Link>
           ) : (
@@ -53,19 +96,50 @@ export function WorkflowCard({
               className={classes.link}
               onClick={onOpen}
               disabled={disabled}
+              ref={(element) => {
+                navigation.current = element;
+              }}
               aria-label={`Open ${name}`}
             >
               {name}
             </button>
           )}
         </h2>
-        {description && <p>{description}</p>}
+        {description && (
+          <p ref={paragraph} className={classes.description}>
+            {description}
+          </p>
+        )}
+        {description && truncated && (
+          <Button
+            ref={readMore}
+            variant="ghost"
+            className={classes.readMore}
+            aria-haspopup="dialog"
+            aria-label={`Read more about ${name}`}
+            onClick={() => setReading(true)}
+          >
+            Read more
+          </Button>
+        )}
       </div>
       <div className={classes.footer}>
         <span>{metadata}</span>
         {status}
         <ChevronRight size={16} aria-hidden="true" />
       </div>
+      {description && reading && (
+        <Modal
+          title={name}
+          size={680}
+          onClose={() => setReading(false)}
+          returnFocusTo={() => readMore.current ?? navigation.current}
+        >
+          <ModalBody>
+            <p className={classes.readingText}>{description}</p>
+          </ModalBody>
+        </Modal>
+      )}
     </article>
   );
 }
