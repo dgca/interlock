@@ -28,6 +28,7 @@ import {
   resultCheckSchema,
   assignmentSizeQuerySchema,
   definitionSchema,
+  authoringJsonSchema,
   draftLayoutSchema,
   jsonSchema,
   runQuerySchema,
@@ -572,7 +573,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     'Preflight stored draft or supplied JSON definition without saving. Returns draftRevision, saveable, publishable and located diagnostics. Save errors cover malformed/unknown fields and ownership. Publication checks graph, contracts, Batch/Parallel scopes, bindings, prompts and versions. Conservative contract warnings report unknown for ambiguous sources or unsupported schemas; runtime checks are authoritative. 2 MiB envelope limit; omit definition to validate a saved draft.',
     {
       id: z.string(),
-      definition: jsonSchema.optional(),
+      definition: authoringJsonSchema.optional(),
     },
     (input) => client.workflows.validate(input),
   );

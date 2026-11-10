@@ -160,7 +160,7 @@ Existing workflows can be adopted, reparented or released through MCP while pres
 
 ### Follow an execution
 
-Open **Runs** to find active executions and past results. The live view shows step states and Batch item counts. Select a Batch child step, then an item, to inspect that item's input, output, and errors.
+Open **Runs** to find active executions and past results. The live view shows step states and progress for Batch items and Parallel branches. Open an item or branch from its group to inspect its input, output, and errors.
 
 Starting a workflow with connected-agent execution does not launch an agent. When an assignment is ready, select **Copy instructions for agent** and paste the instructions into a connected agent conversation. The instructions resume the existing execution. **Waiting for an agent** means work is available; **Agent working** means an executor has claimed it.
 

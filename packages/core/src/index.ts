@@ -156,6 +156,12 @@ export const jsonSchema: z.ZodType<Json> = z.lazy(() =>
     z.record(jsonSchema),
   ]),
 );
+// Authoring validators need the original keys for draft and contract diagnostics.
+// A Zod record checks "__proto__" values but drops the key from its parsed copy.
+export const authoringJsonSchema = z.custom<Json>(
+  (value) => jsonSchema.safeParse(value).success,
+  'Expected a JSON value',
+);
 export const contractSchema = z.record(z.unknown());
 export const contextPolicySchema = z.object({
   tier: modelTierSchema.optional(),

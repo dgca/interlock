@@ -79,7 +79,23 @@ it.each(['http', 'stdio'])(
         definition,
       });
       const group = definition.nodes.find((n) => n.kind === 'parallel')!;
-      await call('edit_workflow', {
+      const unsafeContract = JSON.parse(
+        '{"type":"object","properties":{"__proto__":{"type":"string"}}}',
+      );
+      group.outputSchema = unsafeContract;
+      const contractDiagnostic = expect.objectContaining({
+        category: 'publication',
+        message: expect.stringContaining('Use patternProperties'),
+      });
+      expect(
+        await call('validate_workflow', { id: workflow.id, definition }),
+      ).toMatchObject({
+        draftRevision: workflow.draftRevision,
+        saveable: true,
+        publishable: false,
+        diagnostics: expect.arrayContaining([contractDiagnostic]),
+      });
+      const edited = await call('edit_workflow', {
         id: workflow.id,
         draftRevision: workflow.draftRevision,
         edits: [
@@ -88,6 +104,44 @@ it.each(['http', 'stdio'])(
             id: group.id,
             set: {
               branches: [{ id: 'r0', key: '__proto__' }, group.branches[1]],
+              outputSchema: unsafeContract,
+            },
+          },
+        ],
+      });
+      expect(edited).toMatchObject({
+        applied: true,
+        diagnostics: expect.arrayContaining([contractDiagnostic]),
+      });
+      const saved = await call('get_workflow', { id: workflow.id });
+      expect(
+        saved.draft.nodes.find((node: { id: string }) => node.id === group.id)
+          .outputSchema,
+      ).toEqual(unsafeContract);
+      expect(
+        await call('validate_workflow', { id: workflow.id }),
+      ).toMatchObject({ saveable: true, publishable: false });
+      const blocked = await client.callTool({
+        name: 'publish_workflow',
+        arguments: { id: workflow.id },
+      });
+      expect(blocked.isError).toBe(true);
+      expect(JSON.stringify(blocked.content)).toContain(
+        'Use patternProperties',
+      );
+      await call('edit_workflow', {
+        id: workflow.id,
+        draftRevision: edited.draftRevision,
+        edits: [
+          {
+            op: 'update_node',
+            id: group.id,
+            set: {
+              outputSchema: {
+                type: 'object',
+                required: ['__proto__', 'code'],
+                patternProperties: { '^__proto__$': { type: 'null' } },
+              },
             },
           },
         ],
