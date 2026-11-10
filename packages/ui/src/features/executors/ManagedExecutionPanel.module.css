@@ -185,8 +185,7 @@
   flex-direction: column;
 }
 .views > :global(.mantine-SegmentedControl-root) {
-  min-height: 44px;
-  font-size: 14px;
+  flex-shrink: 0;
 }
 .viewPanel {
   padding-top: 16px;

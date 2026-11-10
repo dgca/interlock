@@ -216,7 +216,7 @@ function Execution({
         {active && viewingCurrent && (
           <div className={styles.stop}>
             <Button
-              variant="ghost"
+              variant="danger"
               disabled={!!busy}
               aria-busy={busy === 'stop'}
               onClick={() =>

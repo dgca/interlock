@@ -12,7 +12,11 @@
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-color: var(--border-strong) transparent;
-  padding: 0 4px 20px 0;
+  padding: 16px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--canvas);
 }
 .scroll:focus-visible {
   outline: 2px solid var(--field-focus);
@@ -88,7 +92,7 @@
   padding-block: 4px;
 }
 .tool {
-  background: var(--canvas);
+  background: var(--surface);
   border-radius: var(--radius-control);
 }
 .tool summary {
