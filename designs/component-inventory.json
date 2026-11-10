@@ -1096,7 +1096,7 @@
       "family": "Workflow card and grid",
       "implementation": "Existing shared",
       "owners": ["packages/ui/src/components/WorkflowCards/WorkflowCards.tsx"],
-      "variants": "4-line description/Read more; metadata/status, actions, disabled/highlighted",
+      "variants": "4-line description; inline Show More/Show Less; metadata/status; separate actions",
       "board": "Product",
       "penStatus": "proposed-specimen",
       "penComponents": [

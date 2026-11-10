@@ -1,12 +1,6 @@
-import {
-  Button,
-  LoadingSkeleton,
-  Modal,
-  ModalBody,
-  Placeholder,
-} from '../../design-system';
+import { Anchor, LoadingSkeleton, Placeholder } from '../../design-system';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ChevronRight, GitBranch } from 'lucide-react';
 
@@ -36,22 +30,32 @@ export function WorkflowCard({
   disabled,
 }: CardProps) {
   const paragraph = useRef<HTMLParagraphElement>(null);
-  const readMore = useRef<HTMLButtonElement>(null);
+  const disclosure = useRef<HTMLButtonElement>(null);
   const navigation = useRef<HTMLAnchorElement | HTMLButtonElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const descriptionId = useId();
   const [truncated, setTruncated] = useState(false);
-  const [reading, setReading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     const element = paragraph.current;
     if (!element) {
       setTruncated(false);
-      setReading(false);
+      setExpanded(false);
       return;
     }
+    if (expanded) return;
     let current = true;
     const measure = () => {
-      if (current)
-        setTruncated(element.scrollHeight > element.clientHeight + 1);
+      if (!current || element.dataset.expanded === 'true') return;
+      const overflows = element.scrollHeight > element.clientHeight + 1;
+      if (!overflows && document.activeElement === disclosure.current) {
+        const target = navigation.current;
+        if (target instanceof HTMLButtonElement && target.disabled)
+          heading.current?.focus();
+        else target?.focus();
+      }
+      setTruncated(overflows);
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -64,7 +68,7 @@ export function WorkflowCard({
       observer.disconnect();
       fonts?.removeEventListener('loadingdone', measure);
     };
-  }, [description]);
+  }, [description, expanded]);
 
   return (
     <article
@@ -79,7 +83,7 @@ export function WorkflowCard({
         <div className={classes.actions}>{actions}</div>
       </div>
       <div className={classes.body}>
-        <h2>
+        <h2 ref={heading} tabIndex={-1}>
           {to !== undefined ? (
             <Link
               className={classes.link}
@@ -106,21 +110,29 @@ export function WorkflowCard({
           )}
         </h2>
         {description && (
-          <p ref={paragraph} className={classes.description}>
+          <p
+            id={descriptionId}
+            ref={paragraph}
+            className={classes.description}
+            data-expanded={expanded || undefined}
+          >
             {description}
           </p>
         )}
-        {description && truncated && (
-          <Button
-            ref={readMore}
-            variant="ghost"
-            className={classes.readMore}
-            aria-haspopup="dialog"
-            aria-label={`Read more about ${name}`}
-            onClick={() => setReading(true)}
+        {description && (expanded || truncated) && (
+          <Anchor
+            component="button"
+            type="button"
+            size="sm"
+            ref={disclosure}
+            className={classes.disclosure}
+            aria-expanded={expanded}
+            aria-controls={descriptionId}
+            aria-label={`${expanded ? 'Show Less' : 'Show More'} about ${name}`}
+            onClick={() => setExpanded((value) => !value)}
           >
-            Read more
-          </Button>
+            {expanded ? 'Show Less' : 'Show More'}
+          </Anchor>
         )}
       </div>
       <div className={classes.footer}>
@@ -128,18 +140,6 @@ export function WorkflowCard({
         {status}
         <ChevronRight size={16} aria-hidden="true" />
       </div>
-      {description && reading && (
-        <Modal
-          title={name}
-          size={680}
-          onClose={() => setReading(false)}
-          returnFocusTo={() => readMore.current ?? navigation.current}
-        >
-          <ModalBody>
-            <p className={classes.readingText}>{description}</p>
-          </ModalBody>
-        </Modal>
-      )}
     </article>
   );
 }

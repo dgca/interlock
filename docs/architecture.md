@@ -415,7 +415,7 @@ The Workflows library, Automations, the global Runs list, Prompts, Variables, an
 
 The main and owned-child workflow collections share `components/WorkflowCards` for card layout, metadata, navigation, menus, and matching loading placeholders, plus the design system's `EmptyState` for filtered and initial empty states. Child collections use the shared tab toolbar inside the workflow page without a duplicate header. Search and Active/Archived counts stay within their collection scope. Library and lazy-route loading use the same header, tab, and card skeletons.
 
-The shared workflow card clamps descriptions to four rendered lines and detects truncation as content, width, or fonts change. Truncated descriptions offer **Read more**, a separate button that opens the shared dialog for reading the full plain text without navigating or modifying the workflow.
+The shared workflow card clamps descriptions to four rendered lines and detects truncation as content, width, or fonts change. Truncated descriptions offer **Show More**, a link-style button that expands the full plain text in place and changes to **Show Less**. Expansion stays independent of workflow navigation and preserves paragraph breaks. The disclosure exposes its state and controlled paragraph to assistive technology.
 
 [UI interaction patterns](ui-patterns.md) documents dialog layout, loading states, run attention, approval, recovery, and browser review conventions.
 

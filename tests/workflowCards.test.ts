@@ -71,7 +71,7 @@ afterEach(async () => {
 });
 
 const openWorkflow = vi.fn();
-async function render(description?: string) {
+async function render(description?: string, disabled = false) {
   await act(async () =>
     root.render(
       h(
@@ -85,81 +85,74 @@ async function render(description?: string) {
             description,
             metadata: '3 nodes',
             onOpen: openWorkflow,
+            disabled,
           }),
         ),
       ),
     ),
   );
 }
-const readMore = () =>
-  container.querySelector<HTMLButtonElement>(
-    'button[aria-label="Read more about Mission briefing"]',
-  );
+const disclosure = () =>
+  container.querySelector<HTMLButtonElement>('button[aria-controls]');
 async function resize() {
   await act(async () => {
     for (const observer of observers)
       if (observer.element instanceof HTMLParagraphElement) observer.notify();
   });
 }
-async function frame() {
-  await act(
-    async () =>
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => resolve()),
-      ),
-  );
-}
-async function close() {
-  await act(async () =>
-    document
-      .querySelector('[aria-label="Close dialog"]')!
-      .dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-      ),
-  );
-  await frame();
-}
-
-it('offers Read more only for rendered overflow, updating after resize, fonts, and text changes', async () => {
+it('offers Show More only for rendered overflow, updating after resize, fonts, and text changes', async () => {
   await render();
-  expect(readMore()).toBeNull();
+  expect(disclosure()).toBeNull();
   await render('Fits in four lines.');
-  expect(readMore()).toBeNull();
+  expect(disclosure()).toBeNull();
   overflow = 21;
   await resize();
-  expect(readMore()?.textContent).toBe('Read more');
+  expect(disclosure()?.textContent).toBe('Show More');
   overflow = 0;
   await resize();
-  expect(readMore()).toBeNull();
+  expect(disclosure()).toBeNull();
   overflow = 21;
   await act(async () => finishFonts());
-  expect(readMore()).not.toBeNull();
+  expect(disclosure()).not.toBeNull();
   overflow = 0;
   await act(async () => fonts.dispatchEvent(new Event('loadingdone')));
-  expect(readMore()).toBeNull();
+  expect(disclosure()).toBeNull();
   overflow = 21;
   await resize();
   overflow = 0;
   await render('A shorter replacement.');
-  expect(readMore()).toBeNull();
+  expect(disclosure()).toBeNull();
 });
 
-it('opens the complete plain text separately from workflow navigation and returns focus on Escape', async () => {
+it('expands and collapses complete plain text without navigating or opening a dialog', async () => {
   openWorkflow.mockClear();
   overflow = 21;
   const description = 'First paragraph.\n\n<script>preserved as text</script>';
   await render(description);
-  const trigger = readMore()!;
+  const trigger = disclosure()!;
+  const paragraph = container.querySelector('p')!;
+  expect(trigger.tagName).toBe('BUTTON');
+  expect(trigger.type).toBe('button');
+  expect(trigger.getAttribute('aria-controls')).toBe(paragraph.id);
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
   trigger.focus();
   await act(async () => trigger.click());
-  await frame();
-  const dialog = document.querySelector('[role="dialog"]')!;
-  expect(dialog).not.toBeNull();
-  expect(dialog.textContent).toContain(description);
-  expect(dialog.querySelector('script')).toBeNull();
-  expect(openWorkflow).not.toHaveBeenCalled();
-  await close();
+  expect(disclosure()).toBe(trigger);
+  expect(trigger.textContent).toBe('Show Less');
+  expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  expect(paragraph.dataset.expanded).toBe('true');
+  expect(paragraph.textContent).toBe(description);
+  expect(container.querySelector('script')).toBeNull();
   expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(openWorkflow).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(trigger);
+  await resize();
+  expect(trigger.textContent).toBe('Show Less');
+  await act(async () => trigger.click());
+  expect(disclosure()).toBe(trigger);
+  expect(trigger.textContent).toBe('Show More');
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  expect(paragraph.dataset.expanded).toBeUndefined();
   expect(document.activeElement).toBe(trigger);
   await act(async () =>
     container
@@ -171,18 +164,39 @@ it('opens the complete plain text separately from workflow navigation and return
   expect(openWorkflow).toHaveBeenCalledOnce();
 });
 
-it('returns focus to workflow navigation if a resize removes Read more while the dialog is open', async () => {
+it('keeps Show Less available after resizing and preserves focus if collapsed content now fits', async () => {
   overflow = 21;
   await render('A description that currently overflows.');
-  readMore()!.focus();
-  await act(async () => readMore()!.click());
-  await frame();
+  const trigger = disclosure()!;
+  trigger.focus();
+  await act(async () => trigger.click());
   overflow = 0;
   await resize();
-  expect(readMore()).toBeNull();
-  await close();
-  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(disclosure()).toBe(trigger);
+  expect(trigger.textContent).toBe('Show Less');
+  await act(async () => trigger.click());
+  expect(disclosure()).toBeNull();
   expect(document.activeElement).toBe(
     container.querySelector('button[aria-label="Open Mission briefing"]'),
   );
+});
+
+it('returns focus to the heading when a fitting description collapses on a guarded child card', async () => {
+  openWorkflow.mockClear();
+  overflow = 21;
+  await render('A description that currently overflows.', true);
+  const trigger = disclosure()!;
+  trigger.focus();
+  await act(async () => trigger.click());
+  overflow = 0;
+  await resize();
+  await act(async () => trigger.click());
+  expect(disclosure()).toBeNull();
+  expect(document.activeElement).toBe(container.querySelector('h2'));
+  expect(
+    container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open Mission briefing"]',
+    )?.disabled,
+  ).toBe(true);
+  expect(openWorkflow).not.toHaveBeenCalled();
 });

@@ -8,4 +8,4 @@ Align sidebar and page-header title dividers at an 88px minimum height. Combine 
 
 Repair single-workflow loading with shared attached tabs and a centered canvas spinner.
 
-Limit workflow card descriptions to four lines and offer Read more for truncated text in a reading dialog.
+Limit workflow card descriptions to four lines, with link-style Show More and Show Less actions to expand and collapse text in place.
