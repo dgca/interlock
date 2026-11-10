@@ -21,18 +21,18 @@ import classes from './RunList.module.css';
 import { attentionText, waitReasonText, type RunTab } from './runAttention';
 import { runProjectionText } from './runProjectionText';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
+import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
 import { RetentionSettingsDialog } from './RetentionSettings';
 import type { Action } from '../../lib/useActionFeedback';
 import { ChevronDown, ChevronRight, Activity } from 'lucide-react';
 import { ComparisonContext } from './ComparisonContext';
-import { api, errorMessage } from '../../lib/api';
+import { errorMessage } from '../../lib/api';
 import { RunListBoard, type BoardPreview } from './RunListBoard';
 import { RunTags } from './RunTags';
 import { RunTagFilter, AppliedRunTagFilters } from './RunTagFilter';
 
-type Page = Awaited<ReturnType<typeof api.runs.summaries.query>>;
 const pageSize = 100;
 
 export function RunList({
@@ -68,7 +68,6 @@ export function RunList({
   const historyTrigger = useRef<HTMLButtonElement>(null);
   const [localTags, setLocalTags] = useState(tags);
   const selectedTags = onTagsChange ? tags : localTags;
-  const tagsKey = JSON.stringify(selectedTags ?? {});
   const changeTags = (next?: Record<string, string>) => {
     if (onTagsChange) onTagsChange(next);
     else {
@@ -90,126 +89,64 @@ export function RunList({
   };
   const queryTab = selectedMode === 'overview' ? 'active' : tab;
   const queryOffset = selectedMode === 'overview' ? 0 : offset;
-  const [previewReload, setPreviewReload] = useState(0);
-  const [previewSnapshot, setPreviewSnapshot] = useState<{
-    key: string;
-    data: BoardPreview;
-  }>();
-  const previewKey = JSON.stringify({ workflowId, tagsKey });
-  const refreshPreview = useRef<() => void>(undefined);
-  useEffect(() => {
-    if (selectedMode !== 'overview') return;
-    let current = true;
-    let inFlight = false;
-    let queued = false;
-    const load = async () => {
-      if (inFlight) {
-        queued = true;
-        return;
-      }
-      inFlight = true;
-      do {
-        queued = false;
-        const [attention, completed] = await Promise.allSettled([
-          api.runs.summaries.query({
-            tab: 'attention',
-            workflowId,
-            tags: selectedTags,
-            offset: 0,
-            limit: 6,
-          }),
-          api.runs.summaries.query({
-            tab: 'history',
-            status: 'completed',
-            workflowId,
-            tags: selectedTags,
-            offset: 0,
-            limit: 6,
-          }),
-        ]);
-        if (current)
-          setPreviewSnapshot({
-            key: previewKey,
-            data: {
-              ...(attention.status === 'fulfilled'
-                ? { attention: attention.value }
-                : { attentionError: errorMessage(attention.reason) }),
-              ...(completed.status === 'fulfilled'
-                ? { completed: completed.value }
-                : { completedError: errorMessage(completed.reason) }),
-            },
-          });
-      } while (current && queued);
-      inFlight = false;
-    };
-    refreshPreview.current = () => void load();
-    return () => {
-      current = false;
-      refreshPreview.current = undefined;
-    };
-  }, [selectedMode, previewKey]);
-  useEffect(
-    () => refreshPreview.current?.(),
-    [selectedMode, previewKey, tick, previewReload],
-  );
   const [cleanup, setCleanup] = useState(false);
   const [retention, setRetention] = useState(false);
-  const [snapshot, setSnapshot] = useState<{
-    tab: RunTab;
-    workflowId?: string;
-    tagsKey: string;
-    page: Page;
-  }>();
-  const [error, setError] = useState('');
-  const refresh = useRef<() => void>(undefined);
-  useEffect(() => {
-    let current = true;
-    let inFlight = false;
-    let queued = false;
-    setError('');
-    const load = async () => {
-      if (inFlight) {
-        queued = true;
-        return;
-      }
-      inFlight = true;
-      do {
-        queued = false;
-        try {
-          const page = await api.runs.summaries.query({
-            tab: queryTab,
-            workflowId,
-            tags: selectedTags,
-            offset: queryOffset,
-            limit: pageSize,
-          });
-          if (current) {
-            setSnapshot({ tab: queryTab, workflowId, tagsKey, page });
-            setError('');
-          }
-        } catch (error) {
-          if (current) setError(errorMessage(error));
-        }
-      } while (current && queued);
-      inFlight = false;
-    };
-    refresh.current = () => void load();
-    return () => {
-      current = false;
-      refresh.current = undefined;
-    };
-  }, [queryTab, workflowId, queryOffset, tagsKey]);
-  useEffect(
-    () => refresh.current?.(),
-    [queryTab, workflowId, queryOffset, tagsKey, tick],
+  const runs = useQuery(
+    trpc.runs.summaries.queryOptions({
+      tab: queryTab,
+      workflowId,
+      tags: selectedTags,
+      offset: queryOffset,
+      limit: pageSize,
+    }),
   );
-  const scoped =
-    snapshot?.workflowId === workflowId && snapshot?.tagsKey === tagsKey
-      ? snapshot
-      : undefined;
-  const lastPage = scoped?.tab === queryTab ? scoped.page : undefined;
-  const page = lastPage?.offset === queryOffset ? lastPage : undefined;
-  const counts = scoped?.page.counts;
+  const attention = useQuery(
+    trpc.runs.summaries.queryOptions(
+      {
+        tab: 'attention',
+        workflowId,
+        tags: selectedTags,
+        offset: 0,
+        limit: 6,
+      },
+      { enabled: selectedMode === 'overview' },
+    ),
+  );
+  const completed = useQuery(
+    trpc.runs.summaries.queryOptions(
+      {
+        tab: 'history',
+        status: 'completed',
+        workflowId,
+        tags: selectedTags,
+        offset: 0,
+        limit: 6,
+      },
+      { enabled: selectedMode === 'overview' },
+    ),
+  );
+  useRefreshOnTick(tick, runs.refetch, true, runs.isFetching);
+  useRefreshOnTick(
+    tick,
+    attention.refetch,
+    selectedMode === 'overview',
+    attention.isFetching,
+  );
+  useRefreshOnTick(
+    tick,
+    completed.refetch,
+    selectedMode === 'overview',
+    completed.isFetching,
+  );
+  const page = runs.data;
+  const error = runs.error ? errorMessage(runs.error) : '';
+  const counts = page?.counts;
+  const preview: BoardPreview = {
+    attention: attention.data,
+    completed: completed.data,
+    attentionError: attention.error ? errorMessage(attention.error) : undefined,
+    completedError: completed.error ? errorMessage(completed.error) : undefined,
+  };
   const historyActions = act ? (
     <Menu
       position="bottom-end"
@@ -258,9 +195,7 @@ export function RunList({
     ...view,
     count: counts
       ? counts[view.value] +
-        (view.value === 'attention'
-          ? (scoped?.page.scheduleAttentionCount ?? 0)
-          : 0)
+        (view.value === 'attention' ? (page?.scheduleAttentionCount ?? 0) : 0)
       : undefined,
   }));
   const content = (
@@ -279,7 +214,7 @@ export function RunList({
           title={page ? 'Runs may be out of date' : 'Could not load runs'}
         >
           {error}
-          <Button variant="ghost" onClick={() => refresh.current?.()}>
+          <Button variant="ghost" onClick={() => void runs.refetch()}>
             Retry
           </Button>
         </Alert>
@@ -294,14 +229,13 @@ export function RunList({
       ) : selectedMode === 'overview' ? (
         <RunListBoard
           page={page}
-          preview={
-            previewSnapshot?.key === previewKey
-              ? previewSnapshot.data
-              : undefined
-          }
+          preview={preview}
           onOpen={onOpen}
           onTabChange={showListTab}
-          retry={() => setPreviewReload((value) => value + 1)}
+          retry={() => {
+            void attention.refetch();
+            void completed.refetch();
+          }}
           onClearFilters={
             Object.keys(selectedTags ?? {}).length ? clearFilters : undefined
           }

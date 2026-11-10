@@ -3,7 +3,8 @@ import { Alert, Button, Group, Text } from '../../design-system';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
-import { api, errorMessage } from '../../lib/api';
+import { errorMessage } from '../../lib/api';
+import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
 import { paths } from '../../routes/paths';
 
 export function AutomationAlerts({
@@ -15,33 +16,22 @@ export function AutomationAlerts({
   tick: number;
   onCount?: (count: number) => void;
 }) {
-  const [page, setPage] =
-    useState<Awaited<ReturnType<typeof api.triggers.attention.query>>>();
   const [offset, setOffset] = useState(0);
-  const [error, setError] = useState('');
+  const result = useQuery(
+    trpc.triggers.attention.queryOptions({ workflowId, offset }),
+  );
+  useRefreshOnTick(tick, result.refetch, true, result.isFetching);
+  const page = result.data;
+  const error = result.error ? errorMessage(result.error) : '';
   useEffect(() => {
-    let current = true;
-    void api.triggers.attention
-      .query({ workflowId, offset })
-      .then((result) => {
-        if (current) {
-          if (offset > 0 && offset >= result.total) {
-            setOffset(Math.max(0, Math.floor((result.total - 1) / 20) * 20));
-            return;
-          }
-          setPage(result);
-          setError('');
-          onCount?.(result.total);
-        }
-      })
-      .catch((e) => {
-        if (current) setError(errorMessage(e));
-      });
-    return () => {
-      current = false;
-    };
-  }, [workflowId, offset, onCount, tick]);
-  if (error)
+    if (!page) return;
+    if (offset > 0 && offset >= page.total) {
+      setOffset(Math.max(0, Math.floor((page.total - 1) / 20) * 20));
+      return;
+    }
+    onCount?.(page.total);
+  }, [page, offset, onCount]);
+  if (error && !page?.total)
     return (
       <Text role="alert" c="red">
         Could not load automation alerts. {error}
@@ -50,6 +40,11 @@ export function AutomationAlerts({
   if (!page?.total) return null;
   return (
     <section aria-label="Automation alerts">
+      {error && (
+        <Text role="alert" c="red">
+          Could not refresh automation alerts. {error}
+        </Text>
+      )}
       <Text fw={600} size="sm" mb="sm">
         Automation alerts · {page.total}
       </Text>

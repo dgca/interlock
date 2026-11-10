@@ -26,11 +26,17 @@ import {
   Search,
   Trash2,
 } from 'lucide-react';
-import type { PromptContent, PromptUsage, SavedPrompt } from '@interlock/core';
+import type { PromptContent, SavedPrompt } from '@interlock/core';
 
 import type { Action } from '../../lib/useActionFeedback';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
+import {
+  trpc,
+  useQuery,
+  useQueryClient,
+  useRefreshOnTick,
+} from '../../lib/query';
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 
@@ -249,8 +255,13 @@ export function PromptEditor({
   const navigate = useNavigate();
   const [baseline, setBaseline] = useState(prompt);
   const [draft, setDraft] = useState(() => fields(prompt));
-  const [usage, setUsage] = useState<PromptUsage[]>([]);
-  const [usageError, setUsageError] = useState('');
+  const queryClient = useQueryClient();
+  const promptQuery = useQuery(
+    trpc.prompts.get.queryOptions({ id: prompt.id }),
+  );
+  useRefreshOnTick(tick, promptQuery.refetch, true, promptQuery.isFetching);
+  const usage = promptQuery.data?.usage ?? [];
+  const usageError = promptQuery.error ? errorMessage(promptQuery.error) : '';
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -269,23 +280,6 @@ export function PromptEditor({
       setDraft(fields(prompt));
     }
   }, [prompt, baseline.revision, dirty]);
-  useEffect(() => {
-    let active = true;
-    void api.prompts.get
-      .query({ id: prompt.id })
-      .then((p) => {
-        if (active) {
-          setUsage(p.usage);
-          setUsageError('');
-        }
-      })
-      .catch((e) => {
-        if (active) setUsageError(errorMessage(e));
-      });
-    return () => {
-      active = false;
-    };
-  }, [prompt.id, tick]);
   return (
     <section className={workspacePage.page}>
       <PageHeader
@@ -375,6 +369,19 @@ export function PromptEditor({
                       revision: baseline.revision,
                       ...draft,
                     });
+                    await queryClient.cancelQueries(
+                      trpc.prompts.get.queryFilter({ id: prompt.id }),
+                    );
+                    queryClient.setQueryData(
+                      trpc.prompts.get.queryKey({ id: prompt.id }),
+                      (current) =>
+                        current && current.revision <= saved.revision
+                          ? { ...current, ...saved }
+                          : current,
+                    );
+                    void queryClient.invalidateQueries(
+                      trpc.prompts.list.pathFilter(),
+                    );
                     setBaseline(saved);
                     setDraft(fields(saved));
                   },
@@ -473,6 +480,16 @@ export function PromptEditor({
                   await act(
                     async () => {
                       await api.prompts.delete.mutate({ id: prompt.id });
+                      await queryClient.cancelQueries(
+                        trpc.prompts.get.queryFilter({ id: prompt.id }),
+                      );
+                      queryClient.removeQueries({
+                        queryKey: trpc.prompts.get.queryKey({ id: prompt.id }),
+                        exact: true,
+                      });
+                      void queryClient.invalidateQueries(
+                        trpc.prompts.list.pathFilter(),
+                      );
                       deleted = true;
                     },
                     'Prompt deleted.',

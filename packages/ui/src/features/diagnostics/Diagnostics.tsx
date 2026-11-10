@@ -10,7 +10,7 @@ import {
   workspacePage,
 } from '../../design-system';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import {
   CheckCircle2,
@@ -26,6 +26,7 @@ import type {
   DiagnosticCheck,
 } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
+import { trpc, useQuery } from '../../lib/query';
 
 import { DiagnosticsLoadingContent } from './DiagnosticsSkeleton';
 import styles from './Diagnostics.module.css';
@@ -50,27 +51,35 @@ const categoryDescriptions: Record<DiagnosticCategory, string> = {
 };
 
 export function Diagnostics() {
-  const [report, setReport] = useState<DoctorReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [liveProbe, setLiveProbe] = useState(false);
-
-  const fetchDiagnostics = useCallback(async (live: boolean) => {
-    setLoading(true);
-    setError(null);
+  const [liveReport, setLiveReport] = useState<DoctorReport>();
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState('');
+  const query = useQuery({
+    ...trpc.system.doctor.queryOptions({ live: false }),
+    meta: { engineRefresh: false },
+  });
+  const report = liveProbe ? liveReport : query.data;
+  const loading = liveProbe ? liveLoading : query.isFetching;
+  const error = liveProbe
+    ? liveError
+    : query.error
+      ? errorMessage(query.error)
+      : '';
+  const fetchDiagnostics = async (live: boolean) => {
+    if (!live) return query.refetch({ cancelRefetch: false });
+    // Live probes may invoke a model. They are explicit actions, never automatic
+    // cache revalidation or engine-event work.
+    setLiveLoading(true);
+    setLiveError('');
     try {
-      const result = await api.system.doctor.query({ live });
-      setReport(result);
-    } catch (err) {
-      setError(errorMessage(err));
+      setLiveReport(await api.system.doctor.query({ live: true }));
+    } catch (error) {
+      setLiveError(errorMessage(error));
     } finally {
-      setLoading(false);
+      setLiveLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    void fetchDiagnostics(liveProbe);
-  }, [fetchDiagnostics, liveProbe]);
+  };
 
   const categories: DiagnosticCategory[] = [
     'system',
@@ -88,7 +97,11 @@ export function Diagnostics() {
           <Switch
             label="Live probe"
             checked={liveProbe}
-            onChange={(e) => setLiveProbe(e.currentTarget.checked)}
+            onChange={(e) => {
+              const live = e.currentTarget.checked;
+              setLiveProbe(live);
+              void fetchDiagnostics(live);
+            }}
             disabled={loading}
             size="xs"
             aria-label="Include live harness model verification"

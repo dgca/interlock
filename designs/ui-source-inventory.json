@@ -1,6 +1,6 @@
 {
   "scope": "UI source inventory; not a runtime or accessibility audit. Refreshed during the v2 migration.",
-  "tsxFileCount": 98,
+  "tsxFileCount": 99,
   "tsxFiles": [
     {
       "file": "packages/ui/src/App.tsx",
@@ -1372,6 +1372,7 @@
         "NativeSelect",
         "NumberInput",
         "RetentionSettings",
+        "RetentionSettingsForm",
         "SimpleGrid",
         "Skeleton",
         "Stack",
@@ -2782,12 +2783,31 @@
       "nativePatterns": {}
     },
     {
+      "file": "packages/ui/src/lib/query.tsx",
+      "exports": [
+        "QueryProvider",
+        "createQueryClient",
+        "notifyManager",
+        "queryClient",
+        "refreshQueries",
+        "trpc",
+        "useQuery",
+        "useQueryClient",
+        "useRefreshOnTick"
+      ],
+      "mantineImports": [],
+      "designSystemImports": [],
+      "jsxElements": ["QueryClientProvider"],
+      "nativePatterns": {}
+    },
+    {
       "file": "packages/ui/src/main.tsx",
       "exports": [],
       "mantineImports": [],
       "designSystemImports": [["DesignSystemProvider"]],
       "jsxElements": [
         "DesignSystemProvider",
+        "QueryProvider",
         "RouterProvider",
         "StrictMode",
         "UiFeaturesContext.Provider"

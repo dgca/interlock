@@ -21,6 +21,7 @@ import { needsManagedAttention } from '../executors/managedStatus';
 import { ArrowUpRight, RotateCcw, Square, Download } from 'lucide-react';
 
 import { api, download, errorMessage } from '../../lib/api';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
 
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
 
@@ -44,19 +45,6 @@ const stallLabels = {
   humanWaitStallMs: 'External input stall',
   runStallMs: 'Run transition stall',
 };
-type Detail = Awaited<ReturnType<typeof api.runs.get.query>> & {
-  availableWork: Awaited<ReturnType<typeof api.work.list.query>>;
-  cancellableRunCount: number;
-};
-async function inspectRun(id: string): Promise<Detail> {
-  const [detail, availableWork, cancellation] = await Promise.all([
-    api.runs.get.query({ id }),
-    api.work.list.query({ runId: id }),
-    api.runs.previewCancellation.query({ id, includeDetached: true, limit: 1 }),
-  ]);
-  return { ...detail, availableWork, cancellableRunCount: cancellation.total };
-}
-
 export function RunInspector({
   id,
   tick,
@@ -84,13 +72,65 @@ export function RunInspector({
   const [versionDialog, setVersionDialog] = useState(false);
   const [cancellationDialog, setCancellationDialog] = useState(false);
   const [returnMenuFocus, setReturnMenuFocus] = useState(true);
-  const [data, setData] = useState<Detail>(),
-    [error, setError] = useState(''),
-    [selected, setSelected] = useState<{
-      nodeId: string;
-      runId?: string;
-      executionId?: string;
-    }>();
+  const queryClient = useQueryClient();
+  const detail = useQuery(trpc.runs.get.queryOptions({ id }));
+  const workQuery = useQuery(trpc.work.list.queryOptions({ runId: id }));
+  const cancellation = useQuery(
+    trpc.runs.previewCancellation.queryOptions({
+      id,
+      includeDetached: true,
+      limit: 1,
+    }),
+  );
+  const previousTick = useRef(tick);
+  useEffect(() => {
+    if (previousTick.current === tick) return;
+    previousTick.current = tick;
+    let current = true;
+    // Explicit cancellation also supersedes an initial read with no cached
+    // data; refetch alone joins that initial request instead of replacing it.
+    void Promise.all([
+      queryClient.cancelQueries(trpc.runs.get.queryFilter({ id })),
+      queryClient.cancelQueries(trpc.work.list.queryFilter({ runId: id })),
+      queryClient.cancelQueries(
+        trpc.runs.previewCancellation.queryFilter({
+          id,
+          includeDetached: true,
+          limit: 1,
+        }),
+      ),
+    ]).then(() => {
+      if (!current) return;
+      void detail.refetch();
+      void workQuery.refetch();
+      void cancellation.refetch();
+    });
+    return () => {
+      current = false;
+    };
+  }, [
+    tick,
+    id,
+    queryClient,
+    detail.refetch,
+    workQuery.refetch,
+    cancellation.refetch,
+  ]);
+  const data =
+    detail.data && workQuery.data && cancellation.data
+      ? {
+          ...detail.data,
+          availableWork: workQuery.data,
+          cancellableRunCount: cancellation.data.total,
+        }
+      : undefined;
+  const failure = detail.error ?? workQuery.error ?? cancellation.error;
+  const error = failure ? errorMessage(failure) : '';
+  const [selected, setSelected] = useState<{
+    nodeId: string;
+    runId?: string;
+    executionId?: string;
+  }>();
   useEffect(() => {
     if (!focusReview.current) return;
     focusReview.current = false;
@@ -98,23 +138,10 @@ export function RunInspector({
     detailRef.current?.scrollIntoView?.({ block: 'start' });
   }, [selected]);
   const refresh = () => {
-    void inspectRun(id)
-      .then(setData)
-      .catch((e) => setError(errorMessage(e)));
+    void detail.refetch();
+    void workQuery.refetch();
+    void cancellation.refetch();
   };
-  useEffect(() => {
-    let active = true;
-    inspectRun(id)
-      .then((d) => {
-        if (active) setData(d);
-      })
-      .catch((e) => {
-        if (active) setError(errorMessage(e));
-      });
-    return () => {
-      active = false;
-    };
-  }, [id, tick]);
   useEffect(() => {
     if (!data) return;
     const drafts = resultDrafts.current;
@@ -493,6 +520,7 @@ export function RunInspector({
           <a href="#workflow-result">View result</a>
         )}
       </div>
+      <ActionError message={error} />
       <ActionError message={retryError} />
       {!!run.variableCaptures?.length && (
         <details className={styles.independent}>

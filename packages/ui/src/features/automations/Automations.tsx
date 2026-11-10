@@ -9,7 +9,8 @@ import {
 } from '../../design-system';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
 import {
   Link,
   useLocation,
@@ -31,7 +32,7 @@ import {
 import type { AppContext } from '../../App';
 import { PageTabs } from '../../components/PageLayout/PageLayout';
 import { paths } from '../../routes/paths';
-import { api, errorMessage } from '../../lib/api';
+import { errorMessage } from '../../lib/api';
 import { AutomationEditor } from './AutomationEditor';
 import { AutomationDetail } from './AutomationDetail';
 import {
@@ -49,7 +50,6 @@ import {
   statusViews,
   timestamp,
   timingLabel,
-  type Listing,
 } from './model';
 import classes from './Automations.module.css';
 
@@ -158,53 +158,26 @@ function AutomationList() {
   const { workflows, tick } = useOutletContext<AppContext>();
   const [search, setSearch] = useSearchParams();
   const query = listQuery(search);
-  const [snapshot, setSnapshot] = useState<{
-    queryKey: string;
-    page: Listing;
-  }>();
-  const [failure, setFailure] = useState<{
-    queryKey: string;
-    message: string;
-  }>();
-  const [reload, setReload] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const queryKey = JSON.stringify(query);
-  const page = snapshot?.queryKey === queryKey ? snapshot.page : undefined;
-  const error = failure?.queryKey === queryKey ? failure.message : '';
+  const result = useQuery(
+    trpc.triggers.list.queryOptions({ ...query, limit: 20 }),
+  );
+  useRefreshOnTick(tick, result.refetch, true, result.isFetching);
+  const page = result.data;
+  const error = result.error ? errorMessage(result.error) : '';
+  const loading = result.isFetching;
   useEffect(() => {
-    let current = true;
-    setLoading(true);
-    void api.triggers.list
-      .query({ ...query, limit: 20 })
-      .then(
-        (result) => {
-          if (!current) return;
-          if (result.total > 0 && query.offset >= result.total) {
-            setSearch(
-              new URLSearchParams(
-                listHref({
-                  ...query,
-                  offset: Math.floor((result.total - 1) / 20) * 20,
-                }).split('?')[1],
-              ),
-              { replace: true },
-            );
-            return;
-          }
-          setSnapshot({ queryKey, page: result });
-          setFailure(undefined);
-        },
-        (e) => {
-          if (current) setFailure({ queryKey, message: errorMessage(e) });
-        },
-      )
-      .finally(() => {
-        if (current) setLoading(false);
-      });
-    return () => {
-      current = false;
-    };
-  }, [queryKey, tick, reload]);
+    if (page && page.total > 0 && query.offset >= page.total) {
+      setSearch(
+        new URLSearchParams(
+          listHref({
+            ...query,
+            offset: Math.floor((page.total - 1) / 20) * 20,
+          }).split('?')[1],
+        ),
+        { replace: true },
+      );
+    }
+  }, [page, query.offset, setSearch]);
   const change = (key: string, value?: string) =>
     setSearch(
       (previous) => {
@@ -272,7 +245,7 @@ function AutomationList() {
             }
           >
             {error}
-            <Button variant="ghost" onClick={() => setReload((n) => n + 1)}>
+            <Button variant="ghost" onClick={() => void result.refetch()}>
               Retry loading
             </Button>
           </Alert>

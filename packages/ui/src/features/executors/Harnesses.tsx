@@ -25,6 +25,7 @@ import { executorProfileSchema, type ExecutorProfile } from '@interlock/core';
 
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
+import { trpc, useQuery } from '../../lib/query';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import { HarnessRowsSkeleton, harnessColumns } from './HarnessListSkeleton';
@@ -94,9 +95,13 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     [trackDirty],
   );
   const request = useRef(0);
-  const [profiles, setProfiles] = useState<Profile[]>(),
-    [error, setError] = useState(''),
-    [checking, setChecking] = useState(false),
+  const profilesQuery = useQuery(trpc.executors.profiles.queryOptions());
+  const profiles = profilesQuery.data;
+  const [checkError, setCheckError] = useState('');
+  const error =
+    checkError ||
+    (profilesQuery.error ? errorMessage(profilesQuery.error) : '');
+  const [checking, setChecking] = useState(false),
     [adding, setAdding] = useState(false);
 
   const [customModalOpen, setCustomModalOpen] = useState(false);
@@ -108,23 +113,19 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
 
   const refresh = async (check = false) => {
     const current = ++request.current;
-    setError('');
+    setCheckError('');
     setChecking(true);
     try {
       if (check)
         await api.executors.manage.mutate({ action: 'list', refresh: true });
-      const next = await api.executors.profiles.query();
-      if (request.current === current) setProfiles(next);
-      return next;
+      const result = await profilesQuery.refetch({ throwOnError: true });
+      return result.data;
     } catch (e) {
-      if (request.current === current) setError(errorMessage(e));
+      if (request.current === current) setCheckError(errorMessage(e));
     } finally {
       if (request.current === current) setChecking(false);
     }
   };
-  useEffect(() => {
-    void refresh();
-  }, []);
   useEffect(() => {
     if (activeTab !== 'harnesses') setAdding(false);
   }, [activeTab]);
@@ -296,11 +297,11 @@ function ProfileRow({
   const wasOpen = useRef(false);
   const [open, setOpen] = useState(false),
     [draft, setDraft] = useState<ExecutorProfile>(() => configuration(profile)),
+    [baseline, setBaseline] = useState<ExecutorProfile>(() =>
+      configuration(profile),
+    ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
-  useEffect(() => {
-    if (!open) setDraft(configuration(profile));
-  }, [profile.revision, open]);
   useEffect(() => {
     if (wasOpen.current && !open)
       row.current
@@ -310,13 +311,20 @@ function ProfileRow({
   }, [open]);
   const changed =
     JSON.stringify({ ...draft, revision: 0 }) !==
-    JSON.stringify({ ...configuration(profile), revision: 0 });
+    JSON.stringify({ ...baseline, revision: 0 });
+  useEffect(() => {
+    if (open && changed) return;
+    const next = configuration(profile);
+    setDraft(next);
+    setBaseline(next);
+  }, [profile, open, changed]);
   const dirty = open && changed;
   const dirtyId = 'profile:' + profile.id;
   useEffect(() => onDirty(dirtyId, dirty), [onDirty, dirtyId, dirty]);
   useEffect(() => () => onDirty(dirtyId, false), [onDirty, dirtyId]);
   const cancel = () => {
     setDraft(configuration(profile));
+    setBaseline(configuration(profile));
     setOpen(false);
     setError('');
   };
@@ -327,6 +335,7 @@ function ProfileRow({
       const current = latest?.find((p) => p.id === profile.id);
       if (current) {
         setDraft(configuration(current));
+        setBaseline(configuration(current));
         setError('');
       }
     } finally {

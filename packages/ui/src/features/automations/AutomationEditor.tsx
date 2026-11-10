@@ -40,6 +40,7 @@ import { SchemaInput } from '../../components/SchemaInput/SchemaInput';
 
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
+import { trpc, useQueryClient } from '../../lib/query';
 import { paths } from '../../routes/paths';
 import {
   eventLabels,
@@ -49,6 +50,7 @@ import {
   timestamp,
   timingLabel,
   type AutomationConfig,
+  type Inspection,
 } from './model';
 import classes from './Automations.module.css';
 
@@ -112,6 +114,7 @@ export function AutomationEditor({
   const { workflows, onScheduleDirty, onSchedulePending } =
     useOutletContext<AppContext>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [search] = useSearchParams();
   const [config, setConfig] = useState<AutomationConfig>(() =>
     initialConfig(kind),
@@ -341,6 +344,22 @@ export function AutomationEditor({
       );
       if (!result.trigger)
         throw new Error('The saved automation was not returned.');
+      const saved = result.trigger;
+      await queryClient.cancelQueries(trpc.triggers.inspect.pathFilter());
+      queryClient.setQueriesData<Inspection>(
+        trpc.triggers.inspect.pathFilter(),
+        (previous) =>
+          previous?.trigger.id === saved.id &&
+          previous.trigger.revision <= saved.revision
+            ? ({
+                ...previous,
+                trigger: { ...previous.trigger, ...saved },
+              } as Inspection)
+            : previous,
+      );
+      void queryClient.invalidateQueries(trpc.triggers.pathFilter(), {
+        cancelRefetch: false,
+      });
       flushSync(() => {
         setBaseline(current);
         onScheduleDirty(false);

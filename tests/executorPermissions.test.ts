@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
@@ -29,30 +29,33 @@ const rpc = vi.hoisted(() => ({
   manage: vi.fn(),
   aliases: vi.fn(),
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    modelAliases: { read: { query: rpc.aliases } },
-    stalls: {
-      settings: {
-        query: async () => ({ id: 'library', revision: 0, policy: {} }),
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      modelAliases: { read: { query: rpc.aliases } },
+      stalls: {
+        settings: {
+          query: async () => ({ id: 'library', revision: 0, policy: {} }),
+        },
+        configure: {
+          mutate: async (q: { expectedRevision: number; policy: unknown }) => ({
+            id: 'library',
+            revision: q.expectedRevision + 1,
+            policy: q.policy,
+          }),
+        },
       },
-      configure: {
-        mutate: async (q: { expectedRevision: number; policy: unknown }) => ({
-          id: 'library',
-          revision: q.expectedRevision + 1,
-          policy: q.policy,
-        }),
+      executors: {
+        profiles: { query: rpc.profiles },
+        settings: { query: rpc.settings },
+        manage: { mutate: rpc.manage },
+        models: { query: rpc.models },
       },
-    },
-    executors: {
-      profiles: { query: rpc.profiles },
-      settings: { query: rpc.settings },
-      manage: { mutate: rpc.manage },
-      models: { query: rpc.models },
-    },
-  },
-  errorMessage: (error: Error) => error.message,
-}));
+    }),
+    errorMessage: (error: Error) => error.message,
+  };
+});
 let root: Root, container: HTMLDivElement;
 beforeEach(() => {
   vi.stubGlobal(
@@ -694,4 +697,58 @@ it('switches node model controls and advisory tiers without losing either settin
     effort: 'high',
     context: { tier: 'fast' },
   });
+});
+
+it('keeps cached harness rows visible when returning while their background read is pending', async () => {
+  rpc.profiles.mockResolvedValue([harnessProfile()]);
+  const renderHarnesses = (visible: boolean) =>
+    act(async () => {
+      root.render(h(DesignSystemProvider, {}, visible ? h(Harnesses) : null));
+    });
+  await renderHarnesses(true);
+  expect(button('Configure')).toBeTruthy();
+  await renderHarnesses(false);
+  rpc.profiles.mockImplementationOnce(() => new Promise(() => {}));
+  await renderHarnesses(true);
+  expect(button('Configure')).toBeTruthy();
+  expect(
+    container.querySelector('[aria-label="Loading harnesses"]'),
+  ).toBeNull();
+});
+
+it('updates an unedited open harness from refreshed data without marking it dirty', async () => {
+  const onDirty = vi.fn();
+  const original = harnessProfile();
+  rpc.profiles.mockResolvedValue([original]);
+  await act(async () =>
+    root.render(h(DesignSystemProvider, {}, h(Harnesses, { onDirty }))),
+  );
+  await act(async () => button('Configure').click());
+  const input = container.querySelector<HTMLInputElement>(
+    'input[maxlength="120"]',
+  )!;
+  const updated = {
+    ...original,
+    revision: original.revision + 1,
+    name: 'Updated elsewhere',
+  };
+  rpc.profiles.mockResolvedValue([updated]);
+  rpc.manage.mockResolvedValue([]);
+  await act(async () => button('Check installations').click());
+  expect(input.value).toBe('Updated elsewhere');
+  expect(onDirty).toHaveBeenLastCalledWith(false);
+  await act(async () => setInput(input, 'Local edit'));
+  rpc.manage.mockImplementation(async (q) => {
+    if (q.action === 'save') throw new Error('Save blocked for this check');
+    return [];
+  });
+  await act(async () => button('Save configuration').click());
+  expect(rpc.manage).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      profile: expect.objectContaining({
+        expectedRevision: updated.revision,
+        name: 'Local edit',
+      }),
+    }),
+  );
 });

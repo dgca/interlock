@@ -3,7 +3,7 @@ import { transferableAbortController } from 'node:util';
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { createMemoryRouter, RouterProvider } from 'react-router';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { calculateDistribution, type WorkflowReport } from '@interlock/core';
 import { routes } from '../packages/ui/src/routes';
@@ -12,20 +12,25 @@ const query = vi.hoisted(() => vi.fn());
 vi.mock('../packages/ui/src/lib/engineEvents', () => ({
   subscribeToEngineEvents: () => () => {},
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    connection: { query: async () => ({ engineUrl: 'http://127.0.0.1:4310' }) },
-    workflows: {
-      list: { query: async () => [{ id: 'w1', name: 'Tagged work' }] },
-    },
-    prompts: { list: { query: async () => [] } },
-    runs: { attention: { query: async () => [] } },
-    triggers: { attention: { query: async () => ({ items: [], total: 0 }) } },
-    pauses: { list: { query: async () => ({ items: [], total: 0 }) } },
-    report: { summary: { query } },
-  },
-  errorMessage: (error: Error) => error.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      connection: {
+        query: async () => ({ engineUrl: 'http://127.0.0.1:4310' }),
+      },
+      workflows: {
+        list: { query: async () => [{ id: 'w1', name: 'Tagged work' }] },
+      },
+      prompts: { list: { query: async () => [] } },
+      runs: { attention: { query: async () => [] } },
+      triggers: { attention: { query: async () => ({ items: [], total: 0 }) } },
+      pauses: { list: { query: async () => ({ items: [], total: 0 }) } },
+      report: { summary: { query } },
+    }),
+    errorMessage: (error: Error) => error.message,
+  };
+});
 vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
   WorkflowEditor: ({ onReport }: { onReport: () => void }) =>
     h('button', { onClick: onReport }, 'Open workflow report'),
@@ -340,7 +345,7 @@ it('hides earlier totals and spend while Apply loads or fails, then retries the 
   expect(runCount()).toContain('1');
   expect(container.textContent).toContain('1.0000 USD');
 });
-it('hides filtered totals and spend when Clear fails, then retries the unfiltered scope', async () => {
+it('restores the cached unfiltered report when Clear refresh fails, then retries that scope', async () => {
   await mount();
   await addRepoFilter();
   await click('Apply filters');
@@ -353,12 +358,14 @@ it('hides filtered totals and spend when Clear fails, then retries the unfiltere
   expect(
     container.querySelector('button[aria-haspopup="dialog"]')!.textContent,
   ).not.toContain('(1)');
-  expectNoMetrics();
+  expect(runCount()).toContain('4');
+  expect(spend()).toContain('4.0000 USD');
   await act(async () =>
     pending.reject(new Error('Unfiltered report unavailable')),
   );
   expect(container.textContent).toContain('Unfiltered report unavailable');
-  expectNoMetrics();
+  expect(runCount()).toContain('4');
+  expect(spend()).toContain('4.0000 USD');
   await click('Refresh');
   expect(query.mock.lastCall![0]).not.toHaveProperty('tags');
   expect(runCount()).toContain('4');
@@ -476,4 +483,23 @@ it('labels mixed provider costs without presenting an invalid currency total', a
   query.mockResolvedValue(mixed);
   await mount();
   expect(container.textContent).toContain('Mixed currencies');
+});
+
+it('returns to the cached report without a skeleton and retains it when background refresh fails', async () => {
+  await mount();
+  expect(runCount()).toContain('4');
+  const firstSince = query.mock.lastCall![0].since;
+  await act(async () => router.navigate('/runs'));
+  const pending = pendingReport();
+  query.mockReturnValueOnce(pending.promise);
+  await act(async () => router.navigate('/report'));
+  expect(runCount()).toContain('4');
+  expect(container.textContent).not.toContain('Loading report');
+  expect(query.mock.lastCall![0].since >= firstSince).toBe(true);
+  await act(async () =>
+    pending.reject(new Error('Background report unavailable')),
+  );
+  expect(container.textContent).toContain('Background report unavailable');
+  expect(runCount()).toContain('4');
+  expect(spend()).toContain('4.0000 USD');
 });

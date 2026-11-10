@@ -2,15 +2,17 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   blankDefinition,
   scheduleConfigSchema,
   eventConfigSchema,
+  SCHEDULE_LAG_THRESHOLD_MS,
   type Workflow,
 } from '@interlock/core';
 import { Automations } from '../packages/ui/src/features/automations/Automations';
+import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
 const rpc = vi.hoisted(() => ({
   list: vi.fn(),
   inspect: vi.fn(),
@@ -18,18 +20,21 @@ const rpc = vi.hoisted(() => ({
   manage: vi.fn(),
   versions: vi.fn(),
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    triggers: {
-      list: { query: rpc.list },
-      inspect: { query: rpc.inspect },
-      preview: { query: rpc.preview },
-      manage: { mutate: rpc.manage },
-    },
-    workflows: { versions: { query: rpc.versions } },
-  },
-  errorMessage: (e: Error) => e.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      triggers: {
+        list: { query: rpc.list },
+        inspect: { query: rpc.inspect },
+        preview: { query: rpc.preview },
+        manage: { mutate: rpc.manage },
+      },
+      workflows: { versions: { query: rpc.versions } },
+    }),
+    errorMessage: (e: Error) => e.message,
+  };
+});
 const definition = {
   ...blankDefinition(),
   inputSchema: {
@@ -73,6 +78,9 @@ const trigger = () => ({
   createdAt: workflow.createdAt,
   updatedAt: workflow.createdAt,
   consecutiveFailures: 0,
+  lagMs: 0,
+  lagThresholdMs: SCHEDULE_LAG_THRESHOLD_MS,
+  excessiveLag: false,
   workflowName: workflow.name,
   canEnable: true,
   holds: [],
@@ -86,7 +94,9 @@ const inspection = (t = trigger()) => ({
   deliveries: { items: [], total: 0, nextOffset: null },
 });
 let root: Root, container: HTMLDivElement, tick: number;
+let queryClient: ReturnType<typeof useQueryClient>;
 function Layout() {
+  queryClient = useQueryClient();
   const location = useLocation();
   return h(
     'div',
@@ -794,4 +804,36 @@ it('does not label disabled automation as auto-paused when old pause metadata re
   expect(document.querySelector('header [role=status]')?.textContent).toBe(
     'Every 5 minutes · Repository review',
   );
+});
+
+it('does not replace a newer cached revision with an older mutation acknowledgment', async () => {
+  await render('/automations/t');
+  let acknowledge!: (result: unknown) => void;
+  rpc.manage.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        acknowledge = resolve;
+      }),
+  );
+  await act(async () => field('Enabled').click());
+  const newer = inspection({ ...trigger(), revision: 6, enabled: false });
+  await act(async () => {
+    queryClient.setQueryData(
+      trpc.triggers.inspect.queryKey({ id: 't', offset: 0, limit: 20 }),
+      newer,
+    );
+  });
+  rpc.inspect.mockImplementationOnce(() => new Promise(() => {}));
+  await act(async () =>
+    acknowledge({
+      applied: true,
+      trigger: { ...trigger(), revision: 5, enabled: true },
+    }),
+  );
+  expect(field('Enabled').checked).toBe(false);
+  expect(
+    queryClient.getQueryData(
+      trpc.triggers.inspect.queryKey({ id: 't', offset: 0, limit: 20 }),
+    ),
+  ).toMatchObject({ trigger: { revision: 6, enabled: false } });
 });

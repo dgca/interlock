@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { RunSummary } from '@interlock/core';
 import { RunList } from '../packages/ui/src/features/runs/RunList';
@@ -10,25 +10,29 @@ import { MemoryRouter } from 'react-router';
 
 const query = vi.hoisted(() => vi.fn());
 const retentionSettings = vi.hoisted(() => vi.fn());
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    triggers: {
-      attention: {
-        query: () => Promise.resolve({ items: [], total: 0, nextOffset: null }),
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      triggers: {
+        attention: {
+          query: () =>
+            Promise.resolve({ items: [], total: 0, nextOffset: null }),
+        },
       },
-    },
-    runs: {
-      summaries: { query },
-      retentionSettings: { query: retentionSettings },
-      retentionStatus: {
-        query: async () => ({
-          storage: { databaseBytes: 0, reusableBytes: 0 },
-        }),
+      runs: {
+        summaries: { query },
+        retentionSettings: { query: retentionSettings },
+        retentionStatus: {
+          query: async () => ({
+            storage: { databaseBytes: 0, reusableBytes: 0 },
+          }),
+        },
       },
-    },
-  },
-  errorMessage: (error: Error) => error.message,
-}));
+    }),
+    errorMessage: (error: Error) => error.message,
+  };
+});
 
 beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -1142,3 +1146,67 @@ it.each(['Retention settings', 'Clean up history'])(
     }
   },
 );
+
+it('reuses the exact cached Runs page on remount while refreshing, retaining it after a refresh failure', async () => {
+  const run = {
+    id: 'cached-run',
+    workflowId: 'selected',
+    workflowName: 'Cached workflow',
+    version: 1,
+    status: 'waiting',
+    createdAt: '2026-11-09T12:00:00Z',
+    updatedAt: '2026-11-09T12:01:00Z',
+    executionCount: 1,
+  };
+  query.mockResolvedValue({
+    items: [run],
+    counts: { active: 1, attention: 0, history: 0 },
+    total: 1,
+    offset: 0,
+    nextOffset: null,
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const view = (visible: boolean, workflowId = 'selected') =>
+    h(
+      DesignSystemProvider,
+      { env: 'test' },
+      visible
+        ? h(RunList, {
+            tick: 0,
+            offset: 0,
+            tab: 'active',
+            workflowId,
+            workflows: [],
+            onOffsetChange: vi.fn(),
+            onTabChange: vi.fn(),
+            onOpen: vi.fn(),
+          })
+        : h('div'),
+    );
+  try {
+    await act(async () => root.render(view(true)));
+    expect(container.textContent).toContain('Cached workflow');
+    await act(async () => root.render(view(false)));
+    let reject!: (error: Error) => void;
+    query.mockImplementation(
+      () =>
+        new Promise((_, fail) => {
+          reject = fail;
+        }),
+    );
+    await act(async () => root.render(view(true)));
+    expect(container.textContent).toContain('Cached workflow');
+    expect(container.textContent).not.toContain('Loading runs…');
+    await act(async () => reject(new Error('Refresh unavailable')));
+    expect(container.textContent).toContain('Cached workflow');
+    expect(container.textContent).toContain('Runs may be out of date');
+    await act(async () => root.render(view(true, 'another-workflow')));
+    expect(container.textContent).not.toContain('Cached workflow');
+    expect(container.textContent).toContain('Loading runs…');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});

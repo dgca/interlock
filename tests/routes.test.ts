@@ -2,10 +2,11 @@
 import { transferableAbortController } from 'node:util';
 import { act, createElement as h, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { routes } from '../packages/ui/src/routes';
+import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
 
 beforeAll(async () => {
   await import('../packages/ui/src/features/runs/RunList');
@@ -31,34 +32,55 @@ vi.mock('../packages/ui/src/lib/engineEvents', () => ({
     return () => streamListeners.clear();
   },
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    system: { doctor: { query: queries.doctor } },
-    triggers: {
-      attention: {
-        query: () => Promise.resolve({ items: [], total: 0, nextOffset: null }),
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      system: { doctor: { query: queries.doctor } },
+      triggers: {
+        attention: {
+          query: () =>
+            Promise.resolve({ items: [], total: 0, nextOffset: null }),
+        },
       },
-    },
-    pauses: {
-      list: {
-        query: () => Promise.resolve({ items: [], total: 0, nextOffset: null }),
+      pauses: {
+        list: {
+          query: () =>
+            Promise.resolve({ items: [], total: 0, nextOffset: null }),
+        },
       },
-    },
-    connection: {
-      query: () => Promise.resolve({ engineUrl: 'http://127.0.0.1:4310' }),
-    },
-    workflows: { list: { query: queries.workflows } },
-    runs: {
-      summaries: { query: queries.summaries },
-      attention: { query: queries.attention },
-    },
-    prompts: { list: { query: () => Promise.resolve([]) } },
-  },
-  errorMessage: (error: Error) => error.message,
-}));
+      connection: {
+        query: () => Promise.resolve({ engineUrl: 'http://127.0.0.1:4310' }),
+      },
+      workflows: { list: { query: queries.workflows } },
+      runs: {
+        summaries: { query: queries.summaries },
+        attention: { query: queries.attention },
+      },
+      prompts: { list: { query: () => Promise.resolve([]) } },
+    }),
+    errorMessage: (error: Error) => error.message,
+  };
+});
 vi.mock('../packages/ui/src/features/workflows/WorkflowLibrary', () => ({
-  WorkflowLibrary: ({ onOpen }: any) =>
-    h('button', { onClick: () => onOpen('w1') }, 'Open workflow'),
+  WorkflowLibrary: ({ onOpen }: any) => {
+    const client = useQueryClient();
+    return h(
+      'div',
+      {},
+      h('button', { onClick: () => onOpen('w1') }, 'Open workflow'),
+      h(
+        'button',
+        {
+          onClick: () =>
+            void client.refetchQueries({
+              queryKey: trpc.workflows.list.queryKey(),
+            }),
+        },
+        'Refresh library',
+      ),
+    );
+  },
 }));
 vi.mock('../packages/ui/src/features/executors/Harnesses', () => ({
   Harnesses: ({ onDirty }: any) =>
@@ -807,4 +829,40 @@ it('returns to the original List tab even when an inspected run has a different 
   await click('Child run');
   await click('Back to runs');
   expect(window.location.search).toBe('?tab=history');
+});
+
+it('reports a background workspace query failure even when refresh was initiated by another observer', async () => {
+  await mount('/workflows');
+  queries.workflows.mockRejectedValueOnce(
+    new Error('Background read unavailable'),
+  );
+  await click('Refresh library');
+  expect(container.textContent).toContain('Could not refresh workspace data.');
+  expect(container.textContent).toContain('Open workflow');
+  expect(container.textContent).not.toContain('Loading workflows');
+});
+
+it('returns to cached Runs immediately while its revisit request is pending', async () => {
+  await mount('/runs?tab=history');
+  expect(container.querySelector('button.run-row')).not.toBeNull();
+  await act(async () => router.navigate('/workflows'));
+  let finish!: (value: unknown) => void;
+  const nextPage = {
+    items: [],
+    counts: { active: 0, attention: 0, history: 0 },
+    total: 0,
+    offset: 0,
+    nextOffset: null,
+  };
+  queries.summaries.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await act(async () => router.navigate('/runs?tab=history'));
+  expect(container.querySelector('button.run-row')).not.toBeNull();
+  expect(container.textContent).not.toContain('Loading runs…');
+  await act(async () => finish(nextPage));
+  expect(container.querySelector('button.run-row')).toBeNull();
 });

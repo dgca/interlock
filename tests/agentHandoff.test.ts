@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
@@ -17,18 +17,21 @@ const rpc = vi.hoisted(() => ({
   preview: vi.fn(),
   cancel: vi.fn(),
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    runs: {
-      get: { query: rpc.get },
-      previewCancellation: { query: rpc.preview },
-      cancelTree: { mutate: rpc.cancel },
-    },
-    work: { list: { query: rpc.work } },
-  },
-  errorMessage: (e: Error) => e.message,
-  download: vi.fn(),
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      runs: {
+        get: { query: rpc.get },
+        previewCancellation: { query: rpc.preview },
+        cancelTree: { mutate: rpc.cancel },
+      },
+      work: { list: { query: rpc.work } },
+    }),
+    errorMessage: (e: Error) => e.message,
+    download: vi.fn(),
+  };
+});
 vi.mock('../packages/ui/src/features/runs/RunGraph', () => ({
   RunGraph: (props: any) => {
     graph.props = props;
@@ -581,6 +584,37 @@ it('refreshes tree cancellation availability when detached work beneath a termin
       ),
     ).toBe(false);
     expect(engine.store.historyRuns()).toEqual(before);
+    expect(rpc.cancel).not.toHaveBeenCalled();
+  } finally {
+    engine.stop();
+    engine.store.close();
+  }
+});
+
+it('supersedes an initial pending availability read after a run change', async () => {
+  const engine = new Engine(new Store(':memory:'), process.cwd());
+  try {
+    const { first, child, finish } = chainWithIndependentSuccessorWork(engine);
+    const stale = engine.previewRunCancellation({
+      id: first,
+      includeDetached: true,
+      limit: 1,
+    });
+    let resolve!: (value: typeof stale) => void;
+    rpc.preview.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    await render(0, first);
+    expect(container.textContent).toContain('Loading run…');
+    finish(child);
+    await render(1, first);
+    expect(container.textContent).not.toContain('Loading run…');
+    expect(container.textContent).not.toContain('Cancel run tree');
+    await act(async () => resolve(stale));
+    expect(container.textContent).not.toContain('Cancel run tree');
     expect(rpc.cancel).not.toHaveBeenCalled();
   } finally {
     engine.stop();

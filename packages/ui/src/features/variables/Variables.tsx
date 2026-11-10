@@ -31,6 +31,12 @@ import {
   type VariableBinding,
 } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
+import {
+  trpc,
+  useQuery,
+  useQueryClient,
+  useRefreshOnTick,
+} from '../../lib/query';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 
 import { paths } from '../../routes/paths';
@@ -43,8 +49,37 @@ import styles from './Variables.module.css';
 import { VariablePicker } from './VariablePicker';
 
 type Read = Awaited<ReturnType<typeof api.variables.read.query>>;
-type Listing = Extract<Read, { items: unknown }>;
 type Inspection = Extract<Read, { dependencies: unknown }>;
+type ConfigValue = { id: string; value: string };
+// The value revision belongs to cache identity, not the server input. Secret
+// values never use this read path or enter the query cache.
+function configReadOptions(id: string, revision: number) {
+  const options = trpc.variables.read.queryOptions({
+    action: 'config_value',
+    id,
+  });
+  const queryKey: readonly unknown[] = [
+    options.queryKey[0],
+    { ...options.queryKey[1], revision },
+  ];
+  return {
+    queryKey,
+    queryFn: async (): Promise<ConfigValue> => {
+      const result = await api.variables.read.query({
+        action: 'config_value',
+        id,
+      });
+      if (
+        !('value' in result) ||
+        typeof result.id !== 'string' ||
+        typeof result.value !== 'string'
+      )
+        throw new Error('Could not read the config value.');
+      return { id: result.id, value: result.value };
+    },
+  };
+}
+
 const statusName = {
   ready: 'Ready',
   unset: 'Value not set',
@@ -54,44 +89,36 @@ const statusName = {
 
 export function VariableLibrary() {
   const { tick } = useOutletContext<AppContext>();
-  const [snapshot, setSnapshot] = useState<{ key: string; data: Listing }>();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [offset, setOffset] = useState(0);
-  const [failure, setFailure] = useState<{ key: string; message: string }>();
-  const [reload, setReload] = useState(0);
   const searchInput = useRef<HTMLInputElement>(null);
-  const key = JSON.stringify({ search, offset });
-  const data = snapshot?.key === key ? snapshot.data : undefined;
-  const error = failure?.key === key ? failure.message : '';
+  const result = useQuery({
+    ...trpc.variables.read.queryOptions({ action: 'list', search, offset }),
+    enabled: search === debouncedSearch,
+  });
+  useRefreshOnTick(
+    tick,
+    result.refetch,
+    search === debouncedSearch,
+    result.isFetching,
+  );
+  const data = result.data && 'items' in result.data ? result.data : undefined;
+  const error = result.error ? errorMessage(result.error) : '';
   const loading = !data && !error;
   const updateSearch = (value: string) => {
     setSearch(value);
     setOffset(0);
   };
   useEffect(() => {
-    let active = true;
-    const timer = setTimeout(() => {
-      void api.variables.read
-        .query({ action: 'list', search, offset })
-        .then((r) => {
-          if (active && 'items' in r) {
-            if (offset > 0 && offset >= r.total) {
-              setOffset(Math.max(0, Math.floor((r.total - 1) / 25) * 25));
-              return;
-            }
-            setSnapshot({ key, data: r });
-            setFailure(undefined);
-          }
-        })
-        .catch((e) => {
-          if (active) setFailure({ key, message: errorMessage(e) });
-        });
-    }, 150);
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [tick, search, offset, reload]);
+    if (search === debouncedSearch) return;
+    const timer = setTimeout(() => setDebouncedSearch(search), 150);
+    return () => clearTimeout(timer);
+  }, [search, debouncedSearch]);
+  useEffect(() => {
+    if (data && offset > 0 && offset >= data.total)
+      setOffset(Math.max(0, Math.floor((data.total - 1) / 25) * 25));
+  }, [data, offset]);
   return (
     <section className={workspacePage.page}>
       <PageHeader
@@ -130,7 +157,7 @@ export function VariableLibrary() {
             }
           >
             {error}
-            <Button variant="ghost" onClick={() => setReload((n) => n + 1)}>
+            <Button variant="ghost" onClick={() => void result.refetch()}>
               Retry loading
             </Button>
           </Alert>
@@ -239,17 +266,41 @@ function VariableEditor({ id }: { id: string }) {
   const formId = useId();
   const { act, onDirty, tick } = useOutletContext<AppContext>();
   const navigate = useNavigate();
-  const [saved, setSaved] = useState<Inspection>();
-  const [name, setName] = useState('');
+  const queryClient = useQueryClient();
+  const cached = queryClient.getQueryData(
+    trpc.variables.read.queryKey({ action: 'inspect', id, offset: 0 }),
+  );
+  const initial = cached && 'dependencies' in cached ? cached : undefined;
+  const [saved, setSaved] = useState<Inspection | undefined>(initial);
+  const [name, setName] = useState(initial?.name ?? '');
   const [nameTouched, setNameTouched] = useState(false);
-  const [description, setDescription] = useState('');
-  const [kind, setKind] = useState<'secret' | 'config'>('secret');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [kind, setKind] = useState<'secret' | 'config'>(
+    initial?.kind ?? 'secret',
+  );
   const [value, setValue] = useState('');
   const [replacingSecret, setReplacingSecret] = useState(false);
-  const [config, setConfig] = useState<{
-    revision: number | null;
-    value: string;
-  }>();
+  const [config, setConfig] = useState<
+    | {
+        revision: number | null;
+        value: string;
+      }
+    | undefined
+  >(() => {
+    if (
+      !initial ||
+      initial.kind !== 'config' ||
+      initial.availability === 'locked'
+    )
+      return undefined;
+    if (initial.valueRevision === null) return { revision: null, value: '' };
+    const cachedValue = queryClient.getQueryData<ConfigValue>(
+      configReadOptions(id, initial.valueRevision).queryKey,
+    );
+    return cachedValue && 'value' in cachedValue
+      ? { revision: initial.valueRevision, value: cachedValue.value }
+      : undefined;
+  });
   const [configDraft, setConfigDraft] = useState<string>();
   const [configError, setConfigError] = useState('');
   const [valueRequired, setValueRequired] = useState(false);
@@ -295,11 +346,13 @@ function VariableEditor({ id }: { id: string }) {
   useEffect(() => {
     if (creating || dirty || busy) return;
     let active = true;
-    void api.variables.read
-      .query({ action: 'inspect', id, offset })
+    void queryClient
+      .fetchQuery(
+        trpc.variables.read.queryOptions({ action: 'inspect', id, offset }),
+      )
       .then(async (r) => {
         if (!active || !('dependencies' in r)) return;
-        let nextConfig: typeof config;
+        let nextConfig: typeof config = undefined;
         let readError = '';
         if (r.kind === 'config' && r.availability !== 'locked') {
           if (config?.revision === r.valueRevision) {
@@ -308,10 +361,9 @@ function VariableEditor({ id }: { id: string }) {
             nextConfig = { revision: null, value: '' };
           } else {
             try {
-              const result = await api.variables.read.query({
-                action: 'config_value',
-                id,
-              });
+              const result = await queryClient.fetchQuery(
+                configReadOptions(id, r.valueRevision),
+              );
               if ('value' in result)
                 nextConfig = { revision: r.valueRevision, value: result.value };
             } catch (e) {
@@ -389,6 +441,35 @@ function VariableEditor({ id }: { id: string }) {
                       : {}),
                 },
           );
+          await queryClient.cancelQueries(trpc.variables.read.pathFilter());
+          queryClient.setQueriesData<Read>(
+            trpc.variables.read.pathFilter(),
+            (current) =>
+              current &&
+              'dependencies' in current &&
+              'name' in result &&
+              current.id === result.id &&
+              current.revision <= result.revision
+                ? { ...current, ...result }
+                : current,
+          );
+          if (
+            'name' in result &&
+            result.kind === 'config' &&
+            result.valueRevision !== null
+          ) {
+            const savedValue = creating
+              ? value
+              : configChanged
+                ? configDraft
+                : undefined;
+            if (savedValue !== undefined)
+              queryClient.setQueryData<ConfigValue>(
+                configReadOptions(result.id, result.valueRevision).queryKey,
+                { id: result.id, value: savedValue },
+              );
+          }
+          void queryClient.invalidateQueries(trpc.variables.read.pathFilter());
           // Clear the entered Secret replacement before refreshing the view.
           returnToValue.current = replacingSecret;
           setValue('');
@@ -437,19 +518,40 @@ function VariableEditor({ id }: { id: string }) {
               kind: rebind.binding.kind,
               expectedRevision: rebind.binding.revision,
             });
-          else if (confirmation === 'delete')
+          else if (confirmation === 'delete') {
             await api.variables.manage.mutate({
               action: 'delete',
               id,
               expectedRevision: saved.revision,
             });
-          else
-            await api.variables.manage.mutate({
+            for (const filter of [
+              trpc.variables.read.queryFilter({ action: 'inspect', id }),
+              trpc.variables.read.queryFilter({ action: 'config_value', id }),
+            ]) {
+              await queryClient.cancelQueries(filter);
+              queryClient.removeQueries(filter);
+            }
+          } else {
+            const result = await api.variables.manage.mutate({
               action: 'update',
               id,
               expectedRevision: saved.revision,
               enabled: confirmation === 'enable',
             });
+            await queryClient.cancelQueries(trpc.variables.read.pathFilter());
+            queryClient.setQueriesData<Read>(
+              trpc.variables.read.pathFilter(),
+              (current) =>
+                current &&
+                'dependencies' in current &&
+                'name' in result &&
+                current.id === result.id &&
+                current.revision <= result.revision
+                  ? { ...current, ...result }
+                  : current,
+            );
+          }
+          void queryClient.invalidateQueries(trpc.variables.read.pathFilter());
           setConfirmation(undefined);
           setRebind(undefined);
           if (confirmation === 'delete') void navigate(paths.variables);

@@ -18,10 +18,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { retentionPolicySchema, type RetentionPolicy } from '@interlock/core';
 
 import { api, errorMessage } from '../../lib/api';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
 import styles from './RetentionSettings.module.css';
 
 type Settings = Awaited<ReturnType<typeof api.runs.retentionSettings.query>>;
-type Status = Awaited<ReturnType<typeof api.runs.retentionStatus.query>>;
 type Mode = 'inherit' | 'disabled' | 'enabled';
 const modeFor = (settings: Settings): Mode =>
   settings.inherited ? 'inherit' : settings.policy ? 'enabled' : 'disabled';
@@ -42,27 +42,60 @@ function describe(policy: RetentionPolicy | null) {
   return `Delete ${limits.join(' or ')} when unprotected.`;
 }
 
-export function RetentionSettings({
-  workflowId,
-  onDirty,
-  onBusy,
-  showHeading = true,
-}: {
+type RetentionSettingsProps = {
   workflowId?: string;
   onDirty?: (dirty: boolean) => void;
   onBusy?: (busy: boolean) => void;
   showHeading?: boolean;
-}) {
-  const [settings, setSettings] = useState<Settings>();
-  const [status, setStatus] = useState<Status>();
-  const [mode, setMode] = useState<Mode>(workflowId ? 'inherit' : 'disabled');
-  const [age, setAge] = useState<string | number>('');
-  const [count, setCount] = useState<string | number>('');
-  const [loading, setLoading] = useState(true);
+};
+
+export function RetentionSettings(props: RetentionSettingsProps) {
+  return (
+    <RetentionSettingsForm
+      key={
+        props.workflowId === undefined
+          ? 'library'
+          : `workflow:${props.workflowId}`
+      }
+      {...props}
+    />
+  );
+}
+
+function RetentionSettingsForm({
+  workflowId,
+  onDirty,
+  onBusy,
+  showHeading = true,
+}: RetentionSettingsProps) {
+  const queryClient = useQueryClient();
+  const settingsQuery = useQuery(
+    trpc.runs.retentionSettings.queryOptions({ workflowId }),
+  );
+  const statusQuery = useQuery(trpc.runs.retentionStatus.queryOptions());
+  const [settings, setSettings] = useState(settingsQuery.data);
+  const status = statusQuery.data;
+  const [mode, setMode] = useState<Mode>(
+    settingsQuery.data
+      ? modeFor(settingsQuery.data)
+      : workflowId
+        ? 'inherit'
+        : 'disabled',
+  );
+  const [age, setAge] = useState<string | number>(
+    settingsQuery.data?.policy?.maxAgeDays ?? '',
+  );
+  const [count, setCount] = useState<string | number>(
+    settingsQuery.data?.policy?.maxCompletedRuns ?? '',
+  );
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
-  const [statusError, setStatusError] = useState('');
+  const [actionError, setError] = useState('');
+  const error =
+    actionError ||
+    (settingsQuery.error ? errorMessage(settingsQuery.error) : '');
+  const statusError = statusQuery.error ? errorMessage(statusQuery.error) : '';
   const generation = useRef(0);
   const apply = (next: Settings) => {
     setSettings(next);
@@ -71,39 +104,31 @@ export function RetentionSettings({
     setCount(next.policy?.maxCompletedRuns ?? '');
   };
   const refreshStatus = useCallback(async () => {
+    await statusQuery.refetch();
+  }, [statusQuery.refetch]);
+  const load = async () => {
     const request = generation.current;
-    try {
-      const next = await api.runs.retentionStatus.query();
-      if (request === generation.current) {
-        setStatus(next);
-        setStatusError('');
-      }
-    } catch (e) {
-      if (request === generation.current) setStatusError(errorMessage(e));
-    }
-  }, []);
-  const load = useCallback(async () => {
-    const request = ++generation.current;
     setLoading(true);
     setError('');
     setSaved(false);
     try {
-      const next = await api.runs.retentionSettings.query({ workflowId });
-      if (request === generation.current) apply(next);
+      const { data: next } = await settingsQuery.refetch({
+        throwOnError: true,
+      });
+      if (request === generation.current && next) apply(next);
     } catch (e) {
       if (request === generation.current) setError(errorMessage(e));
     } finally {
       if (request === generation.current) setLoading(false);
     }
     if (request === generation.current) await refreshStatus();
-  }, [workflowId, refreshStatus]);
-  useEffect(() => {
-    setSettings(undefined);
-    void load();
-    return () => {
+  };
+  useEffect(
+    () => () => {
       generation.current++;
-    };
-  }, [load]);
+    },
+    [],
+  );
   const policy: RetentionPolicy = {
     ...(age !== '' ? { maxAgeDays: Number(age) } : {}),
     ...(count !== '' ? { maxCompletedRuns: Number(count) } : {}),
@@ -117,6 +142,10 @@ export function RetentionSettings({
   const dirty =
     !!settings && JSON.stringify(initialValue) !== JSON.stringify(value);
   const valid = mode !== 'enabled' || parsed.success;
+  useEffect(() => {
+    if (settingsQuery.data && !dirty && !busy && !loading)
+      apply(settingsQuery.data);
+  }, [settingsQuery.data, dirty, busy, loading]);
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
   useEffect(() => () => onDirty?.(false), [onDirty]);
   useEffect(() => onBusy?.(busy), [busy, onBusy]);
@@ -151,6 +180,17 @@ export function RetentionSettings({
                     : (value as 'inherit' | null),
               });
               if (request === generation.current) {
+                await queryClient.cancelQueries(
+                  trpc.runs.retentionSettings.queryFilter({ workflowId }),
+                );
+                queryClient.setQueryData(
+                  trpc.runs.retentionSettings.queryKey({ workflowId }),
+                  next,
+                );
+                void queryClient.invalidateQueries({
+                  ...trpc.runs.retentionSettings.pathFilter(),
+                  refetchType: 'none',
+                });
                 apply(next);
                 setSaved(true);
                 await refreshStatus();

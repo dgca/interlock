@@ -1,28 +1,32 @@
 // @vitest-environment jsdom
-import { act, createElement as h } from 'react';
+import { act, createElement as h, Fragment } from 'react';
 import { createRoot } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { RetentionSettings } from '../packages/ui/src/features/runs/RetentionSettings';
+import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
 
 const mocks = vi.hoisted(() => ({
   settings: vi.fn(),
   configure: vi.fn(),
   status: vi.fn(),
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    runs: {
-      retentionSettings: { query: mocks.settings },
-      configureRetention: { mutate: mocks.configure },
-      retentionStatus: { query: mocks.status },
-    },
-  },
-  errorMessage: (error: Error) => error.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      runs: {
+        retentionSettings: { query: mocks.settings },
+        configureRetention: { mutate: mocks.configure },
+        retentionStatus: { query: mocks.status },
+      },
+    }),
+    errorMessage: (error: Error) => error.message,
+  };
+});
 let root: ReturnType<typeof createRoot>, container: HTMLDivElement;
 const library = {
-  scope: 'library',
+  scope: 'library' as const,
   revision: 0,
   policy: null,
   effectivePolicy: null,
@@ -63,13 +67,23 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-const render = (workflowId?: string) =>
+let queryClient: ReturnType<typeof useQueryClient>;
+function QueryCapture() {
+  queryClient = useQueryClient();
+  return null;
+}
+const render = (workflowId?: string, visible = true) =>
   act(async () =>
     root.render(
       h(
         DesignSystemProvider,
         { env: 'test' },
-        h(RetentionSettings, { workflowId }),
+        h(
+          Fragment,
+          {},
+          h(QueryCapture),
+          visible && h(RetentionSettings, { workflowId }),
+        ),
       ),
     ),
   );
@@ -201,4 +215,39 @@ it('preserves unsaved thresholds and the reviewed revision after a stale save er
   );
   expect(input('Completed run trees to keep').value).toBe('5');
   expect(saveButton().disabled).toBe(true);
+});
+
+it('reuses the exact settings cache on return and keeps dirty thresholds separate from background updates', async () => {
+  await render();
+  await render(undefined, false);
+  mocks.settings.mockImplementationOnce(() => new Promise(() => {}));
+  await render();
+  expect(mode().value).toBe('disabled');
+  expect(container.textContent).not.toContain('Loading retention settings');
+  await changeMode('enabled');
+  await enter(input('Maximum age in days'), '14');
+  await act(async () => {
+    queryClient.setQueryData(
+      trpc.runs.retentionSettings.queryKey({ workflowId: undefined }),
+      {
+        ...library,
+        revision: 8,
+        policy: { maxCompletedRuns: 5 },
+        effectivePolicy: { maxCompletedRuns: 5 },
+      },
+    );
+  });
+  expect(mode().value).toBe('enabled');
+  expect(input('Maximum age in days').value).toBe('14');
+  mocks.configure.mockRejectedValueOnce(new Error('Revision changed'));
+  await submit();
+  expect(mocks.configure).toHaveBeenCalledWith({
+    workflowId: undefined,
+    expectedRevision: 0,
+    policy: { maxAgeDays: 14 },
+  });
+  expect(input('Maximum age in days').value).toBe('14');
+  mocks.settings.mockImplementationOnce(() => new Promise(() => {}));
+  await render('other-workflow');
+  expect(container.querySelector('select')).toBeNull();
 });

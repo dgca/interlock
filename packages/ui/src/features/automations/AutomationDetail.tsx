@@ -26,6 +26,12 @@ import type { AppContext } from '../../App';
 import { PageTabs } from '../../components/PageLayout/PageLayout';
 
 import { api, errorMessage } from '../../lib/api';
+import {
+  trpc,
+  useQuery,
+  useQueryClient,
+  useRefreshOnTick,
+} from '../../lib/query';
 import { paths, runOffset } from '../../routes/paths';
 import {
   automationStatus,
@@ -45,11 +51,18 @@ export function AutomationDetail({ id }: { id: string }) {
   const [search] = useSearchParams();
   const view = search.get('view') === 'settings' ? 'settings' : 'activity';
   const offset = runOffset(search.get('offset'));
-  const [data, setData] = useState<Inspection>();
-  const [error, setError] = useState('');
+  const queryClient = useQueryClient();
+  const inspectionOptions = trpc.triggers.inspect.queryOptions({
+    id,
+    offset,
+    limit: 20,
+  });
+  const inspection = useQuery(inspectionOptions);
+  useRefreshOnTick(tick, inspection.refetch, true, inspection.isFetching);
+  const data = inspection.data;
+  const error = inspection.error ? errorMessage(inspection.error) : '';
   const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
-  const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<'disable' | 'delete'>();
   const inFlight = useRef(false);
@@ -58,29 +71,15 @@ export function AutomationDetail({ id }: { id: string }) {
   const resumeTrigger = useRef<HTMLButtonElement>(null);
   const returnFocusAfterResume = useRef(false);
   useEffect(() => {
-    let current = true;
-    void api.triggers.inspect.query({ id, offset, limit: 20 }).then(
-      (next) => {
-        if (!current) return;
-        const history =
-          next.trigger.kind === 'schedule' ? next.fires : next.deliveries;
-        if (offset > 0 && offset >= history.total) {
-          const nextSearch = new URLSearchParams(search);
-          nextSearch.delete('offset');
-          navigate(`${paths.automation(id)}?${nextSearch}`, { replace: true });
-          return;
-        }
-        setData(next);
-        setError('');
-      },
-      (e) => {
-        if (current) setError(errorMessage(e));
-      },
-    );
-    return () => {
-      current = false;
-    };
-  }, [id, tick, offset, reload]);
+    if (!data) return;
+    const history =
+      data.trigger.kind === 'schedule' ? data.fires : data.deliveries;
+    if (offset > 0 && offset >= history.total) {
+      const nextSearch = new URLSearchParams(search);
+      nextSearch.delete('offset');
+      navigate(`${paths.automation(id)}?${nextSearch}`, { replace: true });
+    }
+  }, [data, id, offset, navigate, search]);
   const trigger = data?.trigger;
   useEffect(() => {
     if (!trigger?.autoPaused && returnFocusAfterResume.current) {
@@ -105,26 +104,39 @@ export function AutomationDetail({ id }: { id: string }) {
       });
       setConfirmation(undefined);
       if (!result.trigger) {
+        queryClient.removeQueries({
+          ...trpc.triggers.inspect.pathFilter(),
+          predicate: (query) =>
+            (query.state.data as Inspection | undefined)?.trigger.id === id,
+        });
+        void queryClient.invalidateQueries(trpc.triggers.pathFilter());
         void navigate(returnHref(search));
         return;
       }
       const saved = result.trigger;
       if (resumingWithFocus && !saved.autoPaused)
         returnFocusAfterResume.current = true;
-      setData((previous) =>
-        previous
-          ? ({
-              ...previous,
-              trigger: { ...previous.trigger, ...saved },
-            } as Inspection)
-          : previous,
+      // Acknowledged writes win over any read that started before the save.
+      await queryClient.cancelQueries(trpc.triggers.inspect.pathFilter());
+      queryClient.setQueriesData<Inspection>(
+        trpc.triggers.inspect.pathFilter(),
+        (previous) =>
+          previous?.trigger.id === id &&
+          previous.trigger.revision <= saved.revision
+            ? ({
+                ...previous,
+                trigger: { ...previous.trigger, ...saved },
+              } as Inspection)
+            : previous,
       );
       setNotice(
         action === 'enable'
           ? ''
           : 'Automation disabled. Existing runs continue.',
       );
-      setReload((n) => n + 1);
+      void queryClient.invalidateQueries(trpc.triggers.pathFilter(), {
+        cancelRefetch: false,
+      });
     } catch (e) {
       setActionError(errorMessage(e));
     } finally {
@@ -249,7 +261,7 @@ export function AutomationDetail({ id }: { id: string }) {
             }
           >
             {error}
-            <Button variant="ghost" onClick={() => setReload((n) => n + 1)}>
+            <Button variant="ghost" onClick={() => void inspection.refetch()}>
               Reload automation
             </Button>
           </Alert>

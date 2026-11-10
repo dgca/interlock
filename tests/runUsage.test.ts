@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { blankDefinition } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
@@ -12,10 +12,13 @@ import {
 } from '../packages/ui/src/features/runs/RunUsage';
 
 const query = vi.hoisted(() => vi.fn());
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: { runs: { usage: { query } } },
-  errorMessage: (error: Error) => error.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({ runs: { usage: { query } } }),
+    errorMessage: (error: Error) => error.message,
+  };
+});
 let root: Root,
   container: HTMLDivElement,
   store: Store,
