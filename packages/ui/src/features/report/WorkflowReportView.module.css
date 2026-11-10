@@ -10,9 +10,6 @@
   width: 140px;
   max-width: 100%;
 }
-.tagFilter {
-  max-width: 600px;
-}
 .tokens {
   padding-bottom: 20px;
   border-bottom: 1px solid var(--border);

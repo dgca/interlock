@@ -1112,13 +1112,13 @@
       "id": "run-card",
       "group": "Product patterns",
       "family": "Run board card",
-      "implementation": "Existing feature composition with Board and List presentations",
+      "implementation": "Existing feature composition with List and Overview modes",
       "owners": [
         "packages/ui/src/features/runs/RunList.tsx",
         "packages/ui/src/features/runs/RunListBoard.tsx",
         "packages/ui/src/features/runs/RunListSkeleton.tsx"
       ],
-      "variants": "Attention/active/completed, bounded previews, metadata, recovery actions, list fallback; no inferred progress ratio",
+      "variants": "Active/attention/completed, bounded previews, metadata, recovery actions, full List links; no inferred progress ratio",
       "board": "Product",
       "penStatus": "base-with-partial-state-coverage",
       "penComponents": [
@@ -1385,6 +1385,20 @@
       "penStatus": "inventory-only",
       "penComponents": [],
       "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "run-tag-filter",
+      "group": "Product patterns",
+      "family": "Run tag filtering",
+      "implementation": "Shared product composition using design-system Popover and Pill",
+      "owners": [
+        "packages/ui/src/features/runs/RunTagFilter.tsx",
+        "packages/ui/src/features/runs/RunTags.tsx"
+      ],
+      "variants": "Manual exact conditions; Apply/dismiss drafts; removable applied chips; global and scoped Runs and Report",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": []
     }
   ],
   "penRoot": "r93lT",

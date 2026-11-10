@@ -157,7 +157,7 @@ export function RunListBoard({
   retry: () => void;
   onClearFilters?: () => void;
 }) {
-  // Keep every run in the selected active page visible. The bounded attention
+  // Keep every run in the bounded active preview visible. The bounded attention
   // preview also includes terminal runs still waiting for recovery confirmation.
   const activeIds = new Set(page.items.map((run) => run.id));
   const attention = [
@@ -183,9 +183,40 @@ export function RunListBoard({
   );
   return (
     <div className={classes.board}>
+      <BoardColumn title="Active runs" count={running.length} tone="running">
+        {cards(running)}
+        {!running.length && (
+          <Text size="sm" c="dimmed">
+            {page.total
+              ? 'Active runs in this preview need attention.'
+              : onClearFilters
+                ? 'No active runs match these tags.'
+                : 'No active runs.'}
+          </Text>
+        )}
+        {!page.total && onClearFilters && (
+          <>
+            <Text size="sm" c="dimmed">
+              Change or clear the tag filters to see other runs.
+            </Text>
+            <Button variant="ghost" onClick={onClearFilters}>
+              Clear filters
+            </Button>
+          </>
+        )}
+        {page.total > page.items.length && (
+          <Text size="xs" c="dimmed">
+            Showing the first {page.items.length} of {page.total} active runs
+            across these columns.
+          </Text>
+        )}
+        <Button variant="ghost" onClick={() => onTabChange('active')}>
+          View all active
+        </Button>
+      </BoardColumn>
       <BoardColumn
         title="Needs attention"
-        count={page.counts.attention}
+        count={page.counts.attention + (page.scheduleAttentionCount ?? 0)}
         tone="attention"
       >
         {cards(attention)}
@@ -202,6 +233,13 @@ export function RunListBoard({
               : 'No runs need your attention.'}
           </Text>
         ) : null}
+        {(page.scheduleAttentionCount ?? 0) > 0 && (
+          <Text size="sm" c="dimmed">
+            {page.scheduleAttentionCount} automation{' '}
+            {page.scheduleAttentionCount === 1 ? 'alert' : 'alerts'}. View all
+            attention to review.
+          </Text>
+        )}
         {attention.length > 0 && page.counts.attention > attention.length && (
           <Text size="xs" c="dimmed">
             Showing {attention.length} of {page.counts.attention} runs.
@@ -210,28 +248,6 @@ export function RunListBoard({
         <Button variant="ghost" onClick={() => onTabChange('attention')}>
           View all attention
         </Button>
-      </BoardColumn>
-      <BoardColumn title="Active runs" count={running.length} tone="running">
-        {cards(running)}
-        {!running.length && (
-          <Text size="sm" c="dimmed">
-            {page.total
-              ? 'No other active runs on this page.'
-              : onClearFilters
-                ? 'No active runs match these tags.'
-                : 'No active runs.'}
-          </Text>
-        )}
-        {!page.total && onClearFilters && (
-          <>
-            <Text size="sm" c="dimmed">
-              Change or clear the tag filters to see other runs.
-            </Text>
-            <Button variant="ghost" onClick={onClearFilters}>
-              Clear filters
-            </Button>
-          </>
-        )}
       </BoardColumn>
       <BoardColumn
         title="Completed runs"

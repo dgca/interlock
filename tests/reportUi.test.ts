@@ -151,7 +151,7 @@ async function mount(path = '/report') {
 }
 async function click(label: string) {
   const control = [
-    ...container.querySelectorAll<HTMLElement>('button, nav a'),
+    ...document.querySelectorAll<HTMLElement>('button, nav a'),
   ].find(
     (element) =>
       (element.getAttribute('aria-label') ?? element.textContent) === label,
@@ -160,7 +160,7 @@ async function click(label: string) {
   await act(async () => control!.click());
 }
 async function input(label: string, value: string) {
-  const field = container.querySelector<HTMLInputElement>(
+  const field = document.querySelector<HTMLInputElement>(
     `input[aria-label="${label}"]`,
   )!;
   expect(field, label).toBeTruthy();
@@ -220,10 +220,10 @@ it('applies every literal tag only on Apply and clears back to the unfiltered re
   expect(query.mock.calls[0][0]).not.toHaveProperty('tags');
   expect(runCount()).toContain('4');
   await openTags();
-  await click('Add tag');
+  await click('Add condition');
   await input('Matching tags key 1', 'repo.name');
   await input('Matching tags value 1', 'org/repo');
-  await click('Add tag');
+  await click('Add condition');
   await input('Matching tags key 2', '__proto__');
   await input('Matching tags value 2', 'batch=1');
   expect(query).toHaveBeenCalledTimes(1);
@@ -235,9 +235,9 @@ it('applies every literal tag only on Apply and clears back to the unfiltered re
   );
   expect(runCount()).toContain('1');
   expect(
-    container.querySelector('button[aria-controls]')!.textContent,
+    container.querySelector('button[aria-haspopup="dialog"]')!.textContent,
   ).toContain('(2)');
-  await click('Clear filters');
+  await click('Clear all');
   expect(query.mock.lastCall![0]).not.toHaveProperty('tags');
   expect(runCount()).toContain('4');
   expect(
@@ -248,26 +248,28 @@ it('applies every literal tag only on Apply and clears back to the unfiltered re
 it('focuses duplicate-tag feedback and retains edits across a server error before clearing', async () => {
   await mount();
   await openTags();
-  await click('Add tag');
+  await click('Add condition');
   await input('Matching tags key 1', 'batch');
-  await click('Add tag');
+  await click('Add condition');
   await input('Matching tags key 2', 'batch');
   await click('Apply filters');
   expect(query).toHaveBeenCalledTimes(1);
-  const error = container.querySelector('[role="alert"]')!;
+  const error = document.querySelector('[role="alert"]')!;
   expect(error.textContent).toBe('Each tag key must be unique.');
   expect(document.activeElement).toBe(error);
   await input('Matching tags key 2', 'repo');
-  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(document.querySelector('[role="alert"]')).toBeNull();
   query.mockRejectedValueOnce(new Error('Report unavailable'));
   await click('Apply filters');
   expect(container.textContent).toContain('Report unavailable');
+  await click('Filter by tags (2)');
   expect(
-    container.querySelector<HTMLInputElement>(
+    document.querySelector<HTMLInputElement>(
       'input[aria-label="Matching tags key 2"]',
     )!.value,
   ).toBe('repo');
-  await click('Clear filters');
+  await click('Cancel');
+  await click('Clear all');
   expect(container.textContent).not.toContain('Report unavailable');
   expect(runCount()).toContain('4');
 });
@@ -281,7 +283,7 @@ it('keeps the current filtered report when an earlier request finishes later', a
   );
   await mount();
   await openTags();
-  await click('Add tag');
+  await click('Add condition');
   await input('Matching tags key 1', 'batch');
   await click('Apply filters');
   expect(runCount()).toContain('1');
@@ -305,7 +307,7 @@ function expectNoMetrics() {
 }
 async function addRepoFilter() {
   await openTags();
-  await click('Add tag');
+  await click('Add condition');
   await input('Matching tags key 1', 'repo');
   await input('Matching tags value 1', 'private/repo');
 }
@@ -318,7 +320,7 @@ it('hides earlier totals and spend while Apply loads or fails, then retries the 
   query.mockReturnValueOnce(pending.promise);
   await click('Apply filters');
   expect(
-    container.querySelector('button[aria-controls]')!.textContent,
+    container.querySelector('button[aria-haspopup="dialog"]')!.textContent,
   ).toContain('(1)');
   expect(query).toHaveBeenLastCalledWith(
     expect.objectContaining({ tags: { repo: 'private/repo' } }),
@@ -346,10 +348,10 @@ it('hides filtered totals and spend when Clear fails, then retries the unfiltere
   expect(container.textContent).toContain('1.0000 USD');
   const pending = pendingReport();
   query.mockReturnValueOnce(pending.promise);
-  await click('Clear filters');
+  await click('Clear all');
   expect(query.mock.lastCall![0]).not.toHaveProperty('tags');
   expect(
-    container.querySelector('button[aria-controls]')!.textContent,
+    container.querySelector('button[aria-haspopup="dialog"]')!.textContent,
   ).not.toContain('(1)');
   expectNoMetrics();
   await act(async () =>

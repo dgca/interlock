@@ -38,13 +38,15 @@ beforeEach(() => {
   );
 });
 
-async function showBoard(container: HTMLElement) {
+async function showOverview(container: HTMLElement) {
   await act(async () =>
-    container.querySelector<HTMLInputElement>('input[value="board"]')!.click(),
+    container
+      .querySelector<HTMLInputElement>('input[value="overview"]')!
+      .click(),
   );
 }
 
-it('defaults lazy and data loading to List and switches to Board when selected', async () => {
+it('defaults lazy and data loading to List and switches to Overview when selected', async () => {
   query.mockImplementation(() => new Promise(() => {}));
   const container = document.createElement('div');
   document.body.append(container);
@@ -101,7 +103,7 @@ it('defaults lazy and data loading to List and switches to Board when selected',
       [
         ...container.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
       ].map((input) => input.value),
-    ).toEqual(['list', 'board']);
+    ).toEqual(['list', 'overview']);
     expect(
       container.querySelector<HTMLInputElement>('input[value="list"]')?.checked,
     ).toBe(true);
@@ -116,9 +118,15 @@ it('defaults lazy and data loading to List and switches to Board when selected',
     expect(query).not.toHaveBeenCalledWith(
       expect.objectContaining({ limit: 6 }),
     );
-    await showBoard(container);
+    await showOverview(container);
     expect(container.textContent).toContain('Active runs');
     expect(container.textContent).not.toContain('Started');
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
+    expect(
+      [...container.querySelectorAll('h2')].map(
+        (heading) => heading.textContent,
+      ),
+    ).toEqual(['Active runs', 'Needs attention', 'Completed runs']);
   } finally {
     await act(async () => root.unmount());
     container.remove();
@@ -173,7 +181,7 @@ it('scopes empty board messages to exact tag filters and clears them through the
     await act(async () =>
       root.render(h(DesignSystemProvider, { env: 'test' }, h(Harness))),
     );
-    await showBoard(container);
+    await showOverview(container);
     expect(container.textContent).toContain('No active runs match these tags.');
     expect(container.textContent).toContain(
       'No matching runs need your attention.',
@@ -272,12 +280,13 @@ it('renders active and history pages and opens the selected run', async () => {
   const root = createRoot(container);
   try {
     await act(async () => root.render(h(Harness)));
-    const panel = () => container.querySelector('[role="tabpanel"]')!;
+    const panel = () =>
+      container.querySelector('[role="tabpanel"]') ?? container;
     expect(panel().textContent).toContain('running workflow');
     expect(
       [...panel().querySelectorAll('strong')].map((title) => title.textContent),
     ).not.toContain('completed workflow');
-    await showBoard(container);
+    await showOverview(container);
     expect(panel().textContent).toContain('running workflow');
     expect(panel().textContent).toContain('waiting workflow');
     expect(panel().textContent).toContain('Completed runs');
@@ -287,9 +296,7 @@ it('renders active and history pages and opens the selected run', async () => {
     expect(panel().textContent).toContain(
       'Started independently · from completed workflow',
     );
-    expect(container.querySelector('[role="tab"]')?.textContent).toBe(
-      'Active 3',
-    );
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
     await act(async () =>
       container.querySelector<HTMLInputElement>('input[value="list"]')!.click(),
     );
@@ -538,13 +545,13 @@ it('applies all exact tag pairs before paging and clears the filter', async () =
   }
   const click = async (label: string) =>
     act(async () =>
-      [...container.querySelectorAll<HTMLButtonElement>('button')]
+      [...document.querySelectorAll<HTMLButtonElement>('button')]
         .find((element) => element.textContent === label)!
         .click(),
     );
   const input = async (label: string, value: string) =>
     act(async () => {
-      const field = container.querySelector<HTMLInputElement>(
+      const field = document.querySelector<HTMLInputElement>(
         `input[aria-label="${label}"]`,
       )!;
       Object.getOwnPropertyDescriptor(
@@ -557,10 +564,10 @@ it('applies all exact tag pairs before paging and clears the filter', async () =
     await act(async () => root.render(h(Harness)));
     expect(container.textContent).toContain('repo.name=org/repo');
     await click('Filter by tags');
-    await click('Add tag');
+    await click('Add condition');
     await input('Matching tags key 1', 'repo.name');
     await input('Matching tags value 1', 'org/repo');
-    await click('Add tag');
+    await click('Add condition');
     await input('Matching tags key 2', 'priority');
     await input('Matching tags value 2', 'High');
     expect(query).toHaveBeenLastCalledWith(
@@ -578,7 +585,7 @@ it('applies all exact tag pairs before paging and clears the filter', async () =
         (name) => name.textContent,
       ),
     ).toEqual(['Match']);
-    await click('Clear filters');
+    await click('Clear all');
     expect(query).toHaveBeenLastCalledWith(
       expect.objectContaining({ tags: undefined, offset: 0 }),
     );
@@ -589,7 +596,7 @@ it('applies all exact tag pairs before paging and clears the filter', async () =
   }
 });
 
-it('keeps the paged active runs and adds bounded recovery and completed previews without duplicates', async () => {
+it('uses an independent bounded active preview and adds recovery and completed runs without duplicates', async () => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -654,7 +661,8 @@ it('keeps the paged active runs and adds bounded recovery and completed previews
   document.body.append(container);
   const root = createRoot(container),
     open = vi.fn(),
-    changePage = vi.fn();
+    changePage = vi.fn(),
+    changeTab = vi.fn();
   try {
     await act(async () =>
       root.render(
@@ -669,13 +677,13 @@ it('keeps the paged active runs and adds bounded recovery and completed previews
             workflowId: 'selected',
             tags: { repository: 'org/repo' },
             tab: 'active',
-            onTabChange: vi.fn(),
+            onTabChange: changeTab,
             onOpen: open,
           }),
         ),
       ),
     );
-    await showBoard(container);
+    await showOverview(container);
     expect(query).toHaveBeenCalledWith(
       expect.objectContaining({
         tab: 'attention',
@@ -712,10 +720,15 @@ it('keeps the paged active runs and adds bounded recovery and completed previews
     expect(open).toHaveBeenCalledWith('recovery-child', 'stopped');
     await act(async () =>
       [...container.querySelectorAll('button')]
-        .find((button) => button.textContent === 'Next')!
+        .find((button) => button.textContent === 'View all active')!
         .click(),
     );
-    expect(changePage).toHaveBeenCalledWith(200);
+    expect(changeTab).toHaveBeenCalledWith('active');
+    expect(changePage).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({ tab: 'active', offset: 0, limit: 100 }),
+    );
+    expect(container.querySelector('[role="tabpanel"]')).not.toBeNull();
   } finally {
     await act(async () => root.unmount());
     container.remove();
@@ -778,7 +791,7 @@ it('does not let an old workflow preview replace the current board', async () =>
     );
   try {
     await act(async () => render('old'));
-    await showBoard(container);
+    await showOverview(container);
     await act(async () => render('new'));
     expect(container.textContent).toContain('new completed');
     await act(async () => pending.forEach((resolve) => resolve()));
@@ -849,7 +862,7 @@ it('coalesces refreshes while a board preview is loading and accepts the in-flig
     );
   try {
     await act(async () => render(0));
-    await showBoard(container);
+    await showOverview(container);
     await act(async () => render(1));
     await act(async () => render(2));
     expect(pending).toHaveLength(2);
@@ -858,6 +871,104 @@ it('coalesces refreshes while a board preview is loading and accepts the in-flig
     expect(pending).toHaveLength(4);
     await act(async () => pending.slice(2).forEach((resolve) => resolve()));
     expect(pending).toHaveLength(4);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
+it('renders Overview loading without a List status strip for global and embedded deep links', async () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    for (const embedded of [false, true]) {
+      await act(async () =>
+        root.render(
+          h(
+            DesignSystemProvider,
+            { env: 'test' },
+            h(
+              MemoryRouter,
+              {
+                initialEntries: [
+                  embedded
+                    ? '/workflows/w1?view=runs&mode=overview&tab=history'
+                    : '/runs?mode=overview&tab=history',
+                ],
+                key: String(embedded),
+              },
+              h(RunListSkeleton, { embedded }),
+            ),
+          ),
+        ),
+      );
+      expect(container.querySelector('[aria-current="page"]')).toBeNull();
+      expect(container.textContent).not.toContain('Started');
+      expect(
+        [...container.querySelectorAll('h2')].map(
+          (heading) => heading.textContent,
+        ),
+      ).toEqual(['Active runs', 'Needs attention', 'Completed runs']);
+    }
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
+it('keeps automation attention visible in Overview even when exact tags match no runs', async () => {
+  query.mockImplementation(async ({ offset }) => ({
+    items: [],
+    counts: { active: 0, attention: 0, history: 0 },
+    scheduleAttentionCount: 2,
+    offset,
+    total: 0,
+    nextOffset: null,
+  }));
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const changeTab = vi.fn();
+  try {
+    await act(async () =>
+      root.render(
+        h(
+          DesignSystemProvider,
+          { env: 'test' },
+          h(RunList, {
+            tick: 0,
+            offset: 100,
+            onOffsetChange: vi.fn(),
+            workflows: [],
+            tab: 'history',
+            mode: 'overview',
+            tags: { repo: 'missing' },
+            onTabChange: changeTab,
+            onOpen: vi.fn(),
+          }),
+        ),
+      ),
+    );
+    const attention = [...container.querySelectorAll('section')].find(
+      (section) =>
+        section.querySelector('h2')?.textContent === 'Needs attention',
+    )!;
+    expect(attention.textContent).toContain('Needs attention2');
+    expect(attention.textContent).toContain('2 automation alerts.');
+    await act(async () =>
+      [...attention.querySelectorAll('button')]
+        .find((button) => button.textContent === 'View all attention')!
+        .click(),
+    );
+    expect(changeTab).toHaveBeenCalledWith('attention');
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tab: 'active',
+        offset: 0,
+        tags: { repo: 'missing' },
+      }),
+    );
   } finally {
     await act(async () => root.unmount());
     container.remove();

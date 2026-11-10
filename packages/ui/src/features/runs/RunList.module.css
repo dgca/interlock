@@ -66,14 +66,6 @@
 .started {
   font-variant-numeric: tabular-nums;
 }
-.filterPanel {
-  margin-bottom: 24px;
-  max-width: 560px;
-  padding: 24px;
-  background: var(--form);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-}
 .board {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

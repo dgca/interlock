@@ -37,6 +37,8 @@ export function TagFields({
   description = 'Up to 16 tags. Keys and values can have at most 64 characters. Values may be empty.',
   error,
   showLabel = true,
+  addLabel = 'Add tag',
+  showFieldLabels = false,
 }: {
   rows: TagRow[];
   onChange: (rows: TagRow[]) => void;
@@ -44,6 +46,8 @@ export function TagFields({
   description?: string;
   error?: string;
   showLabel?: boolean;
+  addLabel?: string;
+  showFieldLabels?: boolean;
 }) {
   const errorId = useId();
   const errorRef = useRef<HTMLParagraphElement>(null);
@@ -63,8 +67,14 @@ export function TagFields({
           {description}
         </Text>
         {rows.map((row, index) => (
-          <Group key={index} gap="xs" wrap="nowrap" align="flex-start">
+          <Group
+            key={index}
+            gap="xs"
+            wrap="nowrap"
+            align={showFieldLabels ? 'flex-end' : 'flex-start'}
+          >
             <TextInput
+              label={showFieldLabels ? 'Key' : undefined}
               aria-label={`${label} key ${index + 1}`}
               placeholder="Key"
               value={row.key}
@@ -82,6 +92,7 @@ export function TagFields({
               }
             />
             <TextInput
+              label={showFieldLabels ? 'Value' : undefined}
               aria-label={`${label} value ${index + 1}`}
               placeholder="Value"
               value={row.value}
@@ -114,7 +125,7 @@ export function TagFields({
             disabled={rows.length >= 16}
             onClick={() => onChange([...rows, { key: '', value: '' }])}
           >
-            Add tag
+            {addLabel}
           </Button>
         </Group>
         {error && (

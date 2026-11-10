@@ -700,3 +700,111 @@ it('shows a static diagnostics loading state and allows retry after failure', as
   expect(container.textContent).toContain('Storage check');
   expect(queries.doctor).toHaveBeenLastCalledWith({ live: false });
 });
+
+async function selectRunMode(mode: 'list' | 'overview') {
+  await act(async () =>
+    container
+      .querySelector<HTMLInputElement>(`input[value="${mode}"]`)!
+      .click(),
+  );
+}
+
+it('bookmarks Overview independently of the remembered List tab and offset, including Back and Forward', async () => {
+  const tags = { repo: ' dgca/interlock ', priority: 'High' };
+  const initial = new URLSearchParams({
+    tab: 'history',
+    offset: '100',
+    tags: JSON.stringify(tags),
+  });
+  await mount(`/runs?${initial}`);
+  await selectRunMode('overview');
+  expect(new URLSearchParams(window.location.search).get('mode')).toBe(
+    'overview',
+  );
+  expect(new URLSearchParams(window.location.search).get('offset')).toBe('100');
+  expect(container.querySelector('[role="tablist"]')).toBeNull();
+  expect(queries.summaries).toHaveBeenCalledWith(
+    expect.objectContaining({ tab: 'active', offset: 0, limit: 100, tags }),
+  );
+  await selectRunMode('list');
+  expect(window.location.search).toBe(`?${initial}`);
+  expect(queries.summaries).toHaveBeenLastCalledWith(
+    expect.objectContaining({ tab: 'history', offset: 100, tags }),
+  );
+  await traverse('back');
+  expect(
+    container.querySelector<HTMLInputElement>('input[value="overview"]')
+      ?.checked,
+  ).toBe(true);
+  await traverse('forward');
+  expect(
+    container.querySelector<HTMLInputElement>('input[value="list"]')?.checked,
+  ).toBe(true);
+});
+
+it('switches Overview shortcuts to List atomically and restores Overview with one Back', async () => {
+  await mount('/runs?mode=overview&tab=history&offset=100');
+  await click('View all attention');
+  expect(window.location.search).toBe('?tab=attention');
+  expect(
+    container.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
+  ).toContain('Needs attention');
+  await traverse('back');
+  expect(window.location.search).toBe('?mode=overview&tab=history&offset=100');
+  expect(container.querySelector('[role="tablist"]')).toBeNull();
+  await click('View all active');
+  expect(window.location.search).toBe('');
+  await traverse('back');
+  await click('View history');
+  expect(window.location.search).toBe('?tab=history');
+});
+
+it('preserves scoped Overview and exact tags through inspector links and return navigation', async () => {
+  const tags = { repo: ' dgca/interlock ', priority: 'High' };
+  const initial = new URLSearchParams({
+    view: 'runs',
+    mode: 'overview',
+    tab: 'history',
+    offset: '100',
+    tags: JSON.stringify(tags),
+  });
+  await mount(`/workflows/w1?${initial}`);
+  expect(container.querySelector('[role="tablist"]')).toBeNull();
+  expect(queries.summaries).toHaveBeenCalledWith(
+    expect.objectContaining({
+      tab: 'active',
+      offset: 0,
+      workflowId: 'w1',
+      tags,
+    }),
+  );
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('button.run-row')!.click(),
+  );
+  expect(window.location.pathname).toBe('/runs/r1');
+  expect(new URLSearchParams(window.location.search).get('mode')).toBe(
+    'overview',
+  );
+  await click('Child run');
+  expect(new URLSearchParams(window.location.search).get('mode')).toBe(
+    'overview',
+  );
+  await click('Back to runs');
+  const returned = new URLSearchParams(window.location.search);
+  expect(window.location.pathname).toBe('/workflows/w1');
+  for (const [key, value] of initial) expect(returned.get(key)).toBe(value);
+  expect(
+    container.querySelector<HTMLInputElement>('input[value="overview"]')
+      ?.checked,
+  ).toBe(true);
+});
+
+it('returns to the original List tab even when an inspected run has a different status', async () => {
+  await mount('/runs?tab=history');
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('button.run-row')!.click(),
+  );
+  await click('Child run');
+  await click('Back to runs');
+  expect(window.location.search).toBe('?tab=history');
+});
