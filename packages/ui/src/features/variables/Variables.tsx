@@ -24,7 +24,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
 import { flushSync } from 'react-dom';
 
-import { ArrowRight, ChevronRight, Plus, Search } from 'lucide-react';
+import { ArrowRight, ChevronRight, Plus, Search, Trash2 } from 'lucide-react';
 import type { AppContext } from '../../App';
 import {
   variableRequirementSchema,
@@ -309,9 +309,7 @@ function VariableEditor({ id }: { id: string }) {
   const pending = useRef(false);
   const [refresh, setRefresh] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [confirmation, setConfirmation] = useState<
-    'disable' | 'enable' | 'delete'
-  >();
+  const [deleting, setDeleting] = useState(false);
   const [rebind, setRebind] = useState<{
     binding: VariableBinding;
     target: string;
@@ -319,6 +317,7 @@ function VariableEditor({ id }: { id: string }) {
   const valueInput = useRef<HTMLTextAreaElement>(null);
   const nameInput = useRef<HTMLInputElement>(null);
   const replaceButton = useRef<HTMLButtonElement>(null);
+  const deleteTrigger = useRef<HTMLButtonElement>(null);
   const returnToValue = useRef(false);
   const nameValidation = variableRequirementSchema.shape.name.safeParse(name);
   const nameError = nameValidation.success
@@ -503,7 +502,7 @@ function VariableEditor({ id }: { id: string }) {
     }
   };
   const change = async () => {
-    if (!saved || pending.current) return;
+    if (!saved || pending.current || (!rebind && !deleting)) return;
     pending.current = true;
     setBusy(true);
     setError('');
@@ -518,7 +517,7 @@ function VariableEditor({ id }: { id: string }) {
               kind: rebind.binding.kind,
               expectedRevision: rebind.binding.revision,
             });
-          else if (confirmation === 'delete') {
+          else {
             await api.variables.manage.mutate({
               action: 'delete',
               id,
@@ -531,30 +530,11 @@ function VariableEditor({ id }: { id: string }) {
               await queryClient.cancelQueries(filter);
               queryClient.removeQueries(filter);
             }
-          } else {
-            const result = await api.variables.manage.mutate({
-              action: 'update',
-              id,
-              expectedRevision: saved.revision,
-              enabled: confirmation === 'enable',
-            });
-            await queryClient.cancelQueries(trpc.variables.read.pathFilter());
-            queryClient.setQueriesData<Read>(
-              trpc.variables.read.pathFilter(),
-              (current) =>
-                current &&
-                'dependencies' in current &&
-                'name' in result &&
-                current.id === result.id &&
-                current.revision <= result.revision
-                  ? { ...current, ...result }
-                  : current,
-            );
           }
           void queryClient.invalidateQueries(trpc.variables.read.pathFilter());
-          setConfirmation(undefined);
+          setDeleting(false);
           setRebind(undefined);
-          if (confirmation === 'delete') void navigate(paths.variables);
+          if (deleting) void navigate(paths.variables);
           else setRefresh((n) => n + 1);
         },
         rebind ? 'Binding updated.' : 'Variable updated.',
@@ -585,6 +565,18 @@ function VariableEditor({ id }: { id: string }) {
             <Button disabled={busy || (!creating && !dirty)} onClick={discard}>
               {creating ? 'Cancel' : 'Discard changes'}
             </Button>
+            {!creating && saved && (
+              <Button
+                variant="secondary"
+                ref={deleteTrigger}
+                aria-label="Delete variable"
+                leftSection={<Trash2 size={16} aria-hidden="true" />}
+                disabled={dirty || busy}
+                onClick={() => setDeleting(true)}
+              >
+                Delete
+              </Button>
+            )}
             <Button
               variant="primary"
               disabled={busy || !dirty || !name.trim()}
@@ -709,7 +701,7 @@ function VariableEditor({ id }: { id: string }) {
       {header}
       <div className={workspacePage.content}>
         <div className={workspacePage.formContent}>
-          {!confirmation && !rebind && (
+          {!deleting && !rebind && (
             <ActionError message={error} className={styles.error} />
           )}
           <form
@@ -827,7 +819,7 @@ function VariableEditor({ id }: { id: string }) {
                     )}
                     {saved.availability === 'disabled' && (
                       <Text size="xs" c="yellow">
-                        Disabled. Enable use under Danger zone.
+                        This variable is disabled. Restore access with the CLI.
                       </Text>
                     )}
                   </Stack>
@@ -944,28 +936,6 @@ function VariableEditor({ id }: { id: string }) {
                   </section>
 
                   <div className={styles.editorDisclosures}>
-                    <details className={styles.dangerZone}>
-                      <summary>Danger zone</summary>
-                      <Group gap={8} className={styles.dangerActions}>
-                        <Button
-                          disabled={dirty || busy}
-                          onClick={() =>
-                            setConfirmation(
-                              saved.enabled ? 'disable' : 'enable',
-                            )
-                          }
-                        >
-                          {saved.enabled ? 'Disable use' : 'Enable use'}
-                        </Button>
-                        <Button
-                          variant="danger"
-                          disabled={dirty || busy}
-                          onClick={() => setConfirmation('delete')}
-                        >
-                          Delete variable
-                        </Button>
-                      </Group>
-                    </details>
                     <details>
                       <summary>Storage and recovery</summary>
                       <Text size="xs" c="dimmed">
@@ -992,21 +962,14 @@ function VariableEditor({ id }: { id: string }) {
           </form>
         </div>
       </div>
-      {(confirmation || rebind) && saved && (
+      {(deleting || rebind) && saved && (
         <Modal
-          title={
-            rebind
-              ? 'Change portable binding'
-              : confirmation === 'delete'
-                ? 'Delete variable'
-                : confirmation === 'disable'
-                  ? 'Disable use'
-                  : 'Enable use'
-          }
+          title={rebind ? 'Change portable binding' : 'Delete variable'}
           busy={busy}
+          returnFocusTo={deleting ? () => deleteTrigger.current : undefined}
           onClose={() => {
             if (!busy) {
-              setConfirmation(undefined);
+              setDeleting(false);
               setRebind(undefined);
             }
           }}
@@ -1028,17 +991,11 @@ function VariableEditor({ id }: { id: string }) {
                     onChange={(target) => setRebind({ ...rebind, target })}
                   />
                 </>
-              ) : confirmation === 'delete' ? (
+              ) : (
                 <Text size="sm">
                   {blocked
                     ? 'This variable is still referenced. Remove draft and retained published references and finish active runs or comparisons before deletion.'
                     : 'Delete this variable and its protected value revisions? Historical metadata remains. Backups may retain encrypted values.'}
-                </Text>
-              ) : (
-                <Text size="sm">
-                  {confirmation === 'disable'
-                    ? 'New runs and later steps in existing runs cannot use this variable. Values already delivered to an operation cannot be recalled. Cancel active work or revoke the credential at its provider when needed.'
-                    : 'Existing captures can use their original retained revision again. New runs capture the current value.'}
                 </Text>
               )}
               <ActionError message={error} className={styles.error} />
@@ -1048,32 +1005,24 @@ function VariableEditor({ id }: { id: string }) {
             <Button
               disabled={busy}
               onClick={() => {
-                setConfirmation(undefined);
+                setDeleting(false);
                 setRebind(undefined);
               }}
             >
               Cancel
             </Button>
             <Button
-              variant={confirmation === 'delete' ? 'danger' : 'primary'}
+              variant={deleting ? 'danger' : 'primary'}
               disabled={
                 busy ||
-                (confirmation === 'delete' && blocked) ||
+                (deleting && blocked) ||
                 (!!rebind &&
                   (!rebind.target ||
                     rebind.target === rebind.binding.variableId))
               }
               onClick={() => void change()}
             >
-              {busy
-                ? 'Saving…'
-                : rebind
-                  ? 'Change binding'
-                  : confirmation === 'delete'
-                    ? 'Delete variable'
-                    : confirmation === 'disable'
-                      ? 'Disable use'
-                      : 'Enable use'}
+              {busy ? 'Saving…' : rebind ? 'Change binding' : 'Delete variable'}
             </Button>
           </ModalFooter>
         </Modal>

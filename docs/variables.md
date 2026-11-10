@@ -59,12 +59,22 @@ republishing. Existing runs keep their captured value revision through delayed
 steps, retries, and restart. The editor clears entered Secret text after the
 server acknowledges the write, even if a later view refresh fails.
 
-To stop later consumption by existing and new runs, select **Disable use** under
-**Danger zone** and confirm. Already delivered values cannot be recalled. Cancel running work or
-revoke credentials at their provider when needed. Re-enabling permits existing
-captures to use their original retained revisions again.
+The editor has no variable enable/disable controls. Existing disabled variables
+remain disabled until restored through the CLI or shared API. To restore one,
+inspect its current revision, then update it with `enabled: true`:
 
-Review **Used by** before renaming or deleting. Renames preserve ID-based
+```sh
+interlock variables read '{"action":"inspect","id":"VARIABLE_ID"}'
+interlock variables manage '{"action":"update","id":"VARIABLE_ID","expectedRevision":1,"enabled":true}'
+```
+
+Replace `VARIABLE_ID` and use the inspected revision for `expectedRevision`.
+Restoring access allows existing runs to use their original retained value
+revisions again. Already delivered values cannot be recalled. Cancel running work
+or revoke credentials at their provider when needed.
+
+Review **Used by** before renaming or deleting. To delete a saved variable, choose
+**Delete** in its header and review the confirmation. Renames preserve ID-based
 references. Deletion is blocked by draft or retained published references, active
 runs, and running comparisons. Remove those dependencies first. Allowed deletion
 removes current protected revisions while keeping historical capture metadata.

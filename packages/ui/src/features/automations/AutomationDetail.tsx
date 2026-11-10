@@ -2,7 +2,6 @@ import {
   Alert,
   Button,
   Group,
-  Menu,
   Switch,
   Modal,
   ModalBody,
@@ -21,7 +20,7 @@ import {
   useSearchParams,
 } from 'react-router';
 
-import { ChevronDown, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import type { AppContext } from '../../App';
 import { PageTabs } from '../../components/PageLayout/PageLayout';
 
@@ -66,7 +65,7 @@ export function AutomationDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<'disable' | 'delete'>();
   const inFlight = useRef(false);
-  const actionsTrigger = useRef<HTMLButtonElement>(null);
+  const deleteTrigger = useRef<HTMLButtonElement>(null);
   const enabledTrigger = useRef<HTMLInputElement>(null);
   const resumeTrigger = useRef<HTMLButtonElement>(null);
   const returnFocusAfterResume = useRef(false);
@@ -184,35 +183,19 @@ export function AutomationDetail({ id }: { id: string }) {
               >
                 Edit
               </Button>
-              <Menu
-                position="bottom-end"
-                width={190}
-                withinPortal
-                returnFocus={!confirmation}
+              <Button
+                variant="secondary"
+                ref={deleteTrigger}
+                aria-label="Delete automation"
+                leftSection={<Trash2 size={16} aria-hidden="true" />}
+                disabled={busy || !!error}
+                onClick={() => {
+                  setActionError('');
+                  setConfirmation('delete');
+                }}
               >
-                <Menu.Target>
-                  <Button
-                    variant="secondary"
-                    ref={actionsTrigger}
-                    rightSection={<ChevronDown size={16} aria-hidden="true" />}
-                    disabled={busy || !!error}
-                  >
-                    Actions
-                  </Button>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  <Menu.Item
-                    color="red"
-                    leftSection={<Trash2 size={14} />}
-                    onClick={() => {
-                      setActionError('');
-                      setConfirmation('delete');
-                    }}
-                  >
-                    Delete automation
-                  </Menu.Item>
-                </Menu.Dropdown>
-              </Menu>
+                Delete
+              </Button>
               <div className={classes.enabledControl}>
                 <Switch
                   ref={enabledTrigger}
@@ -487,8 +470,8 @@ export function AutomationDetail({ id }: { id: string }) {
           onClose={() => setConfirmation(undefined)}
           returnFocusTo={() =>
             confirmation === 'disable'
-              ? (enabledTrigger.current ?? actionsTrigger.current)
-              : actionsTrigger.current
+              ? (enabledTrigger.current ?? deleteTrigger.current)
+              : deleteTrigger.current
           }
         >
           <ModalBody>

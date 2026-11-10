@@ -1,6 +1,6 @@
 {
   "scope": "UI source inventory; not a runtime or accessibility audit. Refreshed during the v2 migration.",
-  "tsxFileCount": 99,
+  "tsxFileCount": 100,
   "tsxFiles": [
     {
       "file": "packages/ui/src/App.tsx",
@@ -424,7 +424,6 @@
           "Alert",
           "Button",
           "Group",
-          "Menu",
           "Switch",
           "Modal",
           "ModalBody",
@@ -439,14 +438,9 @@
         "ActionError",
         "Alert",
         "Button",
-        "ChevronDown",
         "Group",
         "Link",
         "LoadingSkeleton",
-        "Menu",
-        "Menu.Dropdown",
-        "Menu.Item",
-        "Menu.Target",
         "Modal",
         "ModalBody",
         "ModalFooter",
@@ -988,19 +982,15 @@
       "designSystemImports": [
         [
           "LoadingSkeleton",
-          "ActionIcon",
           "Button",
           "Combobox",
-          "Group",
           "InputBase",
           "Input",
-          "Loader",
           "Text",
           "useCombobox"
         ]
       ],
       "jsxElements": [
-        "ActionIcon",
         "Button",
         "Combobox",
         "Combobox.Chevron",
@@ -1011,10 +1001,8 @@
         "Combobox.Options",
         "Combobox.Search",
         "Combobox.Target",
-        "Group",
         "Input.Label",
         "InputBase",
-        "Loader",
         "LoadingSkeleton",
         "RefreshCw",
         "Text",
@@ -1140,9 +1128,7 @@
       "mantineImports": [],
       "designSystemImports": [
         [
-          "ActionIcon",
           "Button",
-          "Menu",
           "Stack",
           "Text",
           "TextInput",
@@ -1158,21 +1144,15 @@
       ],
       "jsxElements": [
         "ActionError",
-        "ActionIcon",
         "ArrowRight",
         "Button",
         "EmptyState",
         "Link",
         "ListTable",
         "ListTableRow",
-        "Menu",
-        "Menu.Dropdown",
-        "Menu.Item",
-        "Menu.Target",
         "Modal",
         "ModalBody",
         "ModalFooter",
-        "MoreHorizontal",
         "PageHeader",
         "Plus",
         "PromptFields",
@@ -2002,6 +1982,7 @@
         "Text",
         "TextInput",
         "Textarea",
+        "Trash2",
         "VariableEditor",
         "VariablePicker",
         "VariableRowsSkeleton",
@@ -2025,8 +2006,8 @@
         "form": 1,
         "fieldset": 1,
         "code": 3,
-        "details": 2,
-        "summary": 2
+        "details": 1,
+        "summary": 1
       }
     },
     {
@@ -2434,6 +2415,14 @@
       }
     },
     {
+      "file": "packages/ui/src/features/workflows/RestoreHandleBounds.tsx",
+      "exports": ["RestoreHandleBounds"],
+      "mantineImports": [],
+      "designSystemImports": [],
+      "jsxElements": [],
+      "nativePatterns": {}
+    },
+    {
       "file": "packages/ui/src/features/workflows/ResultRulesEditor.tsx",
       "exports": ["ResultRulesEditor"],
       "mantineImports": [],
@@ -2597,9 +2586,7 @@
       "mantineImports": [],
       "designSystemImports": [
         [
-          "ActionIcon",
           "Badge",
-          "Menu",
           "Tabs",
           "TextInput",
           "Button",
@@ -2612,19 +2599,13 @@
         ]
       ],
       "jsxElements": [
-        "ActionIcon",
         "Badge",
         "Button",
         "DeleteWorkflowDialog",
         "EmptyState",
-        "Menu",
-        "Menu.Dropdown",
-        "Menu.Item",
-        "Menu.Target",
         "Modal",
         "ModalBody",
         "ModalFooter",
-        "MoreHorizontal",
         "PageTabList",
         "Plus",
         "Search",
@@ -2687,6 +2668,7 @@
         "PublishReviewDialog",
         "ReactFlow",
         "Redo2",
+        "RestoreHandleBounds",
         "Save",
         "SegmentedControl",
         "Settings2",

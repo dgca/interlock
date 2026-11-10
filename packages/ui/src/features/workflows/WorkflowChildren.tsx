@@ -1,7 +1,5 @@
 import {
-  ActionIcon,
   Badge,
-  Menu,
   Tabs,
   TextInput,
   Button,
@@ -15,7 +13,7 @@ import {
 
 import { useId, useRef, useState } from 'react';
 
-import { MoreHorizontal, Plus, Search, Trash2 } from 'lucide-react';
+import { Plus, Search, Trash2 } from 'lucide-react';
 import type { Workflow } from '@interlock/core';
 
 import type { Action } from '../../lib/useActionFeedback';
@@ -46,6 +44,7 @@ export function WorkflowChildren({
 }) {
   const createFormId = useId();
   const searchInput = useRef<HTMLInputElement>(null);
+  const deleteTrigger = useRef<HTMLButtonElement | null>(null);
   const [name, setName] = useState('');
   const [archived, setArchived] = useState(false);
   const [query, setQuery] = useState('');
@@ -141,27 +140,18 @@ export function WorkflowChildren({
                   }
                   metadata={`${steps} ${steps === 1 ? 'step' : 'steps'} · ${uses ? `Used in ${uses} ${uses === 1 ? 'step' : 'steps'}` : 'Not used in draft'}`}
                   actions={
-                    <Menu position="bottom-end" width={160}>
-                      <Menu.Target>
-                        <ActionIcon
-                          variant="subtle"
-                          color="gray"
-                          aria-label={`Actions for ${child.name}`}
-                          disabled={disabled}
-                        >
-                          <MoreHorizontal size={19} />
-                        </ActionIcon>
-                      </Menu.Target>
-                      <Menu.Dropdown>
-                        <Menu.Item
-                          color="red"
-                          leftSection={<Trash2 size={14} />}
-                          onClick={() => setDeleting(child)}
-                        >
-                          Delete
-                        </Menu.Item>
-                      </Menu.Dropdown>
-                    </Menu>
+                    <Button
+                      variant="secondary"
+                      aria-label={`Delete ${child.name}`}
+                      leftSection={<Trash2 size={16} aria-hidden="true" />}
+                      disabled={disabled}
+                      onClick={(event) => {
+                        deleteTrigger.current = event.currentTarget;
+                        setDeleting(child);
+                      }}
+                    >
+                      Delete
+                    </Button>
                   }
                 />
               );
@@ -270,8 +260,17 @@ export function WorkflowChildren({
         <DeleteWorkflowDialog
           workflow={deleting}
           act={act}
+          returnFocusTo={() => {
+            const target = deleteTrigger.current;
+            return target?.isConnected && !target.disabled
+              ? target
+              : searchInput.current;
+          }}
           onClose={() => setDeleting(undefined)}
-          onDeleted={() => setDeleting(undefined)}
+          onDeleted={() => {
+            deleteTrigger.current = null;
+            setDeleting(undefined);
+          }}
         />
       )}
     </Tabs>

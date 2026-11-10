@@ -1,7 +1,5 @@
 import {
-  ActionIcon,
   Button,
-  Menu,
   Stack,
   Text,
   TextInput,
@@ -18,14 +16,7 @@ import {
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 
-import {
-  ArrowRight,
-  MoreHorizontal,
-  Plus,
-  Save,
-  Search,
-  Trash2,
-} from 'lucide-react';
+import { ArrowRight, Plus, Save, Search, Trash2 } from 'lucide-react';
 import type { PromptContent, SavedPrompt } from '@interlock/core';
 
 import type { Action } from '../../lib/useActionFeedback';
@@ -266,7 +257,7 @@ export function PromptEditor({
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [saveError, setSaveError] = useState('');
-  const actionsTrigger = useRef<HTMLButtonElement>(null);
+  const deleteTrigger = useRef<HTMLButtonElement>(null);
   const formId = useId();
   const dirty = !same(draft, baseline);
   useBeforeUnloadWarning(dirty);
@@ -306,32 +297,19 @@ export function PromptEditor({
             >
               Discard changes
             </Button>
-            <Menu position="bottom-end" width={180}>
-              <Menu.Target>
-                <ActionIcon
-                  variant="subtle"
-                  color="gray"
-                  ref={actionsTrigger}
-                  aria-label="Prompt actions"
-                  disabled={busy}
-                >
-                  <MoreHorizontal size={19} />
-                </ActionIcon>
-              </Menu.Target>
-              <Menu.Dropdown>
-                <Menu.Item
-                  color="red"
-                  leftSection={<Trash2 size={14} />}
-                  disabled={dirty}
-                  onClick={() => {
-                    setDeleteError('');
-                    setDeleting(true);
-                  }}
-                >
-                  Delete prompt
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
+            <Button
+              variant="secondary"
+              ref={deleteTrigger}
+              aria-label="Delete prompt"
+              leftSection={<Trash2 size={16} aria-hidden="true" />}
+              disabled={busy || dirty}
+              onClick={() => {
+                setDeleteError('');
+                setDeleting(true);
+              }}
+            >
+              Delete
+            </Button>
             <Button
               form={formId}
               type="submit"
@@ -448,7 +426,7 @@ export function PromptEditor({
           busy={busy}
           onClose={() => !busy && setDeleting(false)}
           title={`Delete ${baseline.name}?`}
-          returnFocusTo={() => actionsTrigger.current}
+          returnFocusTo={() => deleteTrigger.current}
         >
           <ModalBody>
             <p>

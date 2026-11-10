@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Background, Controls, ReactFlow, useStoreApi } from '@xyflow/react';
+import { useMemo, useState } from 'react';
+import { Background, Controls, ReactFlow } from '@xyflow/react';
 import type { WorkflowDefinition } from '@interlock/core';
 import { FlowNode } from '../workflows/FlowNode';
+import { RestoreHandleBounds } from '../workflows/RestoreHandleBounds';
 import { LoopEdge } from '../workflows/LoopEdge';
 import { OrthoEdge } from '../workflows/OrthoEdge';
 import { canvasGraph } from '../workflows/canvasGraph';
@@ -11,42 +12,6 @@ import styles from '../workflows/CanvasNavigation.module.css';
 import type { NodeProgress } from './runProgress';
 const nodeTypes = { workflow: FlowNode };
 const edgeTypes = { loop: LoopEdge, ortho: OrthoEdge };
-
-function RestoreHandleBounds() {
-  const store = useStoreApi();
-  useEffect(() => {
-    let frame: number | undefined;
-    const unsubscribe = store.subscribe((state, previous) => {
-      if (state.nodes === previous.nodes || frame !== undefined) return;
-      // Replacing the controlled nodes can clear their cached port positions
-      // even when the cards haven't resized. Measure after the DOM updates.
-      frame = requestAnimationFrame(() => {
-        frame = undefined;
-        const { domNode, nodeLookup, updateNodeInternals } = store.getState();
-        const updates = new Map<
-          string,
-          { id: string; nodeElement: HTMLDivElement; force: boolean }
-        >();
-        for (const nodeElement of domNode?.querySelectorAll<HTMLDivElement>(
-          'div.react-flow__node[data-id]',
-        ) ?? []) {
-          const id = nodeElement.dataset.id;
-          if (id === undefined) continue;
-          const node = nodeLookup.get(id);
-          if (node && !node.hidden && !node.internals.handleBounds) {
-            updates.set(id, { id, nodeElement, force: true });
-          }
-        }
-        if (updates.size) updateNodeInternals(updates);
-      });
-    });
-    return () => {
-      unsubscribe();
-      if (frame !== undefined) cancelAnimationFrame(frame);
-    };
-  }, [store]);
-  return null;
-}
 
 export function RunGraph({
   definition,

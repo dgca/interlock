@@ -7,9 +7,14 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { blankDefinition, type Workflow } from '@interlock/core';
 import { WorkflowLibrary } from '../packages/ui/src/features/workflows/WorkflowLibrary';
 import { WorkflowChildren } from '../packages/ui/src/features/workflows/WorkflowChildren';
-const rpc = vi.hoisted(() => ({ create: vi.fn() }));
+const rpc = vi.hoisted(() => ({ create: vi.fn(), delete: vi.fn() }));
 vi.mock('../packages/ui/src/lib/api', () => ({
-  api: { workflows: { create: { mutate: rpc.create } } },
+  api: {
+    workflows: {
+      create: { mutate: rpc.create },
+      delete: { mutate: rpc.delete },
+    },
+  },
   download: vi.fn(),
   errorMessage: (e: Error) => e.message,
 }));
@@ -71,7 +76,9 @@ afterEach(async () => {
 });
 async function render(element: ReturnType<typeof h>) {
   await act(async () =>
-    root.render(h(DesignSystemProvider, {}, h(MemoryRouter, {}, element))),
+    root.render(
+      h(DesignSystemProvider, { env: 'test' }, h(MemoryRouter, {}, element)),
+    ),
   );
 }
 function button(text: string) {
@@ -146,15 +153,56 @@ it('scopes child cards to their owner and preserves disabled navigation', async 
   const onOpen = vi.fn();
   const props = {
     workflow: parent,
-    workflows,
+    workflows: [...workflows, workflow('second', 'Second helper', 'parent')],
     onOpen,
     onCreate: vi.fn(),
     act: perform,
     disabled: false,
   };
   await render(h(WorkflowChildren, props));
-  expect(container.querySelectorAll('article')).toHaveLength(1);
+  expect(container.querySelectorAll('article')).toHaveLength(2);
   expect(container.textContent).not.toContain('Other helper');
+  const remove = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Delete Active helper"]',
+  )!;
+  expect(remove.textContent).toBe('Delete');
+  await act(async () => {
+    remove.focus();
+    remove.click();
+  });
+  expect(onOpen).not.toHaveBeenCalled();
+  expect(document.querySelector('[role=dialog]')?.textContent).toContain(
+    'Active helper',
+  );
+  await act(async () => {
+    const cancelButton = [
+      ...document.querySelectorAll<HTMLButtonElement>('[role=dialog] button'),
+    ].find((button) => button.textContent === 'Cancel')!;
+    cancelButton.focus();
+    cancelButton.click();
+    await new Promise(requestAnimationFrame);
+  });
+  await act(async () => new Promise(requestAnimationFrame));
+  expect(document.activeElement).toBe(remove);
+  await act(async () => {
+    remove.focus();
+    remove.click();
+  });
+  await act(async () => {
+    const confirm = [
+      ...document.querySelectorAll<HTMLButtonElement>('[role=dialog] button'),
+    ].find((button) => button.textContent === 'Delete')!;
+    confirm.focus();
+    confirm.click();
+    await new Promise(requestAnimationFrame);
+  });
+  await act(async () => new Promise(requestAnimationFrame));
+  expect(rpc.delete).toHaveBeenCalledWith({ id: 'child' });
+  expect(document.activeElement).toBe(
+    container.querySelector('input[aria-label="Search child workflows"]'),
+  );
+  expect(onOpen).not.toHaveBeenCalled();
+
   await act(async () => button('Archived 1').click());
   const open = container.querySelector<HTMLButtonElement>(
     'button[aria-label="Open Archived helper"]',
@@ -167,6 +215,11 @@ it('scopes child cards to their owner and preserves disabled navigation', async 
   )!;
   expect(disabled.disabled).toBe(true);
   expect(button('New child').disabled).toBe(true);
+  expect(
+    container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Delete Archived helper"]',
+    )!.disabled,
+  ).toBe(true);
   onOpen.mockClear();
   await act(async () => disabled.click());
   expect(onOpen).not.toHaveBeenCalled();

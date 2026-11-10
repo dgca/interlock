@@ -1,12 +1,9 @@
 import {
   LoadingSkeleton,
-  ActionIcon,
   Button,
   Combobox,
-  Group,
   InputBase,
   Input,
-  Loader,
   Text,
   useCombobox,
 } from '../../design-system';
@@ -194,22 +191,9 @@ export function ModelPicker({
   );
   return (
     <div>
-      <Group justify="space-between" gap="xs" wrap="nowrap" mb={4}>
-        <Input.Label htmlFor={id} id={`${id}-label`}>
-          {label}
-        </Input.Label>
-        {profileId && (
-          <ActionIcon
-            variant="subtle"
-            aria-label="Refresh models"
-            title="Refresh models"
-            disabled={disabled || loading}
-            onClick={() => void load(true)}
-          >
-            {loading ? <Loader size={12} /> : <RefreshCw size={13} />}
-          </ActionIcon>
-        )}
-      </Group>
+      <Input.Label htmlFor={id} id={`${id}-label`}>
+        {label}
+      </Input.Label>
       <Combobox
         store={combobox}
         onOptionSubmit={(option) => {
@@ -334,6 +318,19 @@ export function ModelPicker({
           </Combobox.Options>
         </Combobox.Dropdown>
       </Combobox>
+      {profileId && (
+        <Button
+          type="button"
+          variant="ghost"
+          mt="xs"
+          leftSection={<RefreshCw size={14} aria-hidden="true" />}
+          loading={loading}
+          disabled={disabled || loading}
+          onClick={() => void load(true)}
+        >
+          Refresh models
+        </Button>
+      )}
       {allowAliases && (aliasError || referenceError) && (
         <Text size="xs" c="red" role="alert">
           Model aliases could not be loaded. {aliasError || referenceError}{' '}

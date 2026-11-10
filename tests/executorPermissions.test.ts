@@ -185,6 +185,40 @@ afterEach(async () => {
   container.remove();
   vi.unstubAllGlobals();
 });
+it('refreshes models for the draft harness paths without submitting or replacing its selected model', async () => {
+  rpc.profiles.mockResolvedValue([harnessProfile()]);
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(Harnesses))));
+  await act(async () => button('Configure').click());
+  const trigger = container.querySelector<HTMLButtonElement>(
+    'button[aria-haspopup="listbox"]',
+  )!;
+  let rejectRefresh!: (error: Error) => void;
+  rpc.models.mockReturnValueOnce(
+    new Promise((_resolve, reject) => {
+      rejectRefresh = reject;
+    }),
+  );
+  await act(async () => button('Refresh models').click());
+  expect(rpc.models).toHaveBeenLastCalledWith({
+    profileId: 'codex',
+    paths: { command: '/installed/codex', cwd: '/project' },
+    refresh: true,
+  });
+  expect(button('Refresh models').disabled).toBe(true);
+  expect(trigger.textContent).toContain('custom-model');
+  expect(rpc.manage).not.toHaveBeenCalled();
+  await act(async () => rejectRefresh(new Error('Discovery unavailable')));
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+    'Discovery unavailable',
+  );
+  expect(button('Refresh models').disabled).toBe(false);
+  expect(trigger.textContent).toContain('custom-model');
+  await act(async () => button('Refresh models').click());
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(trigger.textContent).toContain('custom-model');
+  expect(button('Save configuration').disabled).toBe(true);
+  expect(rpc.manage).not.toHaveBeenCalled();
+});
 const harnessProfile = () => ({
   ...executorProfileSchema.parse({
     id: 'codex',
@@ -436,6 +470,7 @@ it('locks a pending save and preserves model, paths, capabilities and permission
   await act(async () => button('Save configuration').click());
   expect(input.disabled).toBe(true);
   expect(button('Cancel editing').disabled).toBe(true);
+  expect(button('Refresh models').disabled).toBe(true);
   expect(
     container.querySelector<HTMLButtonElement>(
       'button[aria-haspopup="listbox"]',
@@ -751,4 +786,118 @@ it('updates an unedited open harness from refreshed data without marking it dirt
       }),
     }),
   );
+});
+
+it('orders detected harnesses first and each group by saved name across enable/refetch without remounting open drafts', async () => {
+  const base = harnessProfile();
+  const missing = { status: 'missing', message: 'Not installed' };
+  const source = Object.freeze([
+    {
+      ...base,
+      id: 'missing-z',
+      name: 'Zulu missing',
+      enabled: true,
+      detection: missing,
+    },
+    { ...base, id: 'detected-z', name: 'Zulu detected', enabled: false },
+    { ...base, id: 'tie-b', name: 'twin', enabled: true },
+    {
+      ...base,
+      id: 'missing-a',
+      name: 'alpha missing',
+      enabled: false,
+      detection: missing,
+    },
+    { ...base, id: 'detected-a', name: 'Alpha detected', enabled: true },
+    { ...base, id: 'tie-a', name: 'Twin', enabled: false },
+  ]);
+  let response = source;
+  rpc.profiles.mockReset().mockImplementation(async () => response);
+  rpc.manage.mockImplementation(async (request) => {
+    expect(request.action).toBe('save');
+    response = Object.freeze(
+      [...source].reverse().map((profile) =>
+        profile.id === request.profile.id
+          ? {
+              ...profile,
+              enabled: request.profile.enabled,
+              revision: profile.revision + 1,
+            }
+          : profile,
+      ),
+    );
+    return {};
+  });
+  const onDirty = vi.fn();
+  await act(async () =>
+    root.render(h(DesignSystemProvider, {}, h(Harnesses, { onDirty }))),
+  );
+  const names = () =>
+    [
+      ...container.querySelectorAll('#harnesses > div > section[aria-label]'),
+    ].map((section) => section.getAttribute('aria-label'));
+  const expected = [
+    'Alpha detected',
+    'Twin',
+    'twin',
+    'Zulu detected',
+    'alpha missing',
+    'Zulu missing',
+  ];
+  expect(names()).toEqual(expected);
+  expect(source.map((profile) => profile.id)).toEqual([
+    'missing-z',
+    'detected-z',
+    'tie-b',
+    'missing-a',
+    'detected-a',
+    'tie-a',
+  ]);
+  const alpha = container.querySelector<HTMLElement>(
+    'section[aria-label="Alpha detected"]',
+  )!;
+  const configure = alpha.querySelector<HTMLButtonElement>(
+    'button[aria-controls]',
+  )!;
+  await act(async () => configure.click());
+  const draft = alpha.querySelector<HTMLInputElement>(
+    'input[maxlength="120"]',
+  )!;
+  await act(async () => setInput(draft, 'ZZZ unsaved draft'));
+  expect(onDirty).toHaveBeenLastCalledWith(true);
+  const toggle = container.querySelector<HTMLInputElement>(
+    'input[aria-label="Enable Zulu detected"]',
+  )!;
+  await act(async () => {
+    toggle.focus();
+    toggle.click();
+  });
+  expect(rpc.manage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action: 'save',
+      profile: expect.objectContaining({
+        id: 'detected-z',
+        enabled: true,
+        expectedRevision: base.revision,
+      }),
+    }),
+  );
+  expect(rpc.profiles).toHaveBeenCalledTimes(2);
+  expect(names()).toEqual(expected);
+  expect(
+    container.querySelector('input[aria-label="Enable Zulu detected"]'),
+  ).toBe(toggle);
+  expect(toggle.checked).toBe(true);
+  expect(alpha.querySelector('input[maxlength="120"]')).toBe(draft);
+  expect(configure.getAttribute('aria-expanded')).toBe('true');
+  expect(draft.value).toBe('ZZZ unsaved draft');
+  expect(onDirty).toHaveBeenLastCalledWith(true);
+  expect(source.map((profile) => profile.id)).toEqual([
+    'missing-z',
+    'detected-z',
+    'tie-b',
+    'missing-a',
+    'detected-a',
+    'tie-a',
+  ]);
 });

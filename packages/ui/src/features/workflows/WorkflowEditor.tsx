@@ -55,6 +55,7 @@ import { SettingsDialog, type Settings } from './SettingsDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { PublishReviewDialog } from './PublishReviewDialog';
 import { FlowNode, type CanvasNode } from './FlowNode';
+import { RestoreHandleBounds } from './RestoreHandleBounds';
 import { LoopEdge } from './LoopEdge';
 import { OrthoEdge } from './OrthoEdge';
 import { canvasGraph, withoutNodes } from './canvasGraph';
@@ -1021,6 +1022,7 @@ export function WorkflowEditor({
                     editing || boxZoom.active ? null : ['Backspace', 'Delete']
                   }
                 >
+                  <RestoreHandleBounds active={section === 'editor'} />
                   <Background color="var(--canvas-dot)" gap={22} size={1} />
                   <Controls
                     showInteractive={false}
