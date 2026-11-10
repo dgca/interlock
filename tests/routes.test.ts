@@ -120,6 +120,14 @@ let container: HTMLDivElement;
 let router: ReturnType<typeof createBrowserRouter>;
 
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   vi.clearAllMocks();
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({

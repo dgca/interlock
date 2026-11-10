@@ -1,6 +1,6 @@
 {
   "scope": "UI source inventory; not a runtime or accessibility audit. Refreshed during the v2 migration.",
-  "tsxFileCount": 95,
+  "tsxFileCount": 96,
   "tsxFiles": [
     {
       "file": "packages/ui/src/App.tsx",
@@ -1548,6 +1548,7 @@
           "Alert",
           "Button",
           "Group",
+          "SegmentedControl",
           "Tabs",
           "Text",
           "PageHeader",
@@ -1569,8 +1570,10 @@
         "PageHeader",
         "PageTabList",
         "RetentionSettingsDialog",
+        "RunListBoard",
         "RunRowsSkeleton",
         "RunTags",
+        "SegmentedControl",
         "SlidersHorizontal",
         "Tabs",
         "Tabs.Panel",
@@ -1586,6 +1589,33 @@
         "time"
       ],
       "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/runs/RunListBoard.tsx",
+      "exports": ["BoardPreview", "RunListBoard"],
+      "mantineImports": [],
+      "designSystemImports": [["Badge", "Button", "Text"]],
+      "jsxElements": [
+        "ArrowUpRight",
+        "Badge",
+        "BoardColumn",
+        "Button",
+        "ComparisonContext",
+        "RunCard",
+        "RunTags",
+        "StatusBadge",
+        "Text",
+        "button",
+        "div",
+        "h2",
+        "section",
+        "span",
+        "strong",
+        "time"
+      ],
+      "nativePatterns": {
+        "button": 1
+      }
     },
     {
       "file": "packages/ui/src/features/runs/RunListSkeleton.tsx",
@@ -1870,6 +1900,7 @@
           "Text",
           "TextInput",
           "Textarea",
+          "EmptyState",
           "Modal",
           "ModalBody",
           "ModalFooter",
@@ -1887,9 +1918,9 @@
         "Badge",
         "Button",
         "ChevronRight",
+        "EmptyState",
         "FormPlaceholder",
         "Group",
-        "KeyRound",
         "Link",
         "ListTable",
         "ListTableRow",

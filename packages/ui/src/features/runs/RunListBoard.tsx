@@ -1,0 +1,243 @@
+import { Badge, Button, Text } from '../../design-system';
+import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
+import { ArrowUpRight } from 'lucide-react';
+import { useId, type ReactNode } from 'react';
+import type { api } from '../../lib/api';
+import { ComparisonContext } from './ComparisonContext';
+import { RunTags } from './RunTags';
+import { attentionText, waitReasonText, type RunTab } from './runAttention';
+import { runProjectionText } from './runProjectionText';
+import classes from './RunList.module.css';
+
+type Page = Awaited<ReturnType<typeof api.runs.summaries.query>>;
+type RunItem = Page['items'][number];
+export type BoardPreview = {
+  attention?: Page;
+  completed?: Page;
+  attentionError?: string;
+  completedError?: string;
+};
+
+function RunCard({
+  run,
+  onOpen,
+}: {
+  run: RunItem;
+  onOpen: (id: string, executionId?: string) => void;
+}) {
+  const attention = run.attention;
+  const reason = run.actor
+    ? runProjectionText(
+        run,
+        run.waiting?.kind === 'human_request' && attention ? '' : undefined,
+      )
+    : run.waitReason && !attention
+      ? waitReasonText[run.waitReason]
+      : undefined;
+  return (
+    <button
+      type="button"
+      className={`run-row ${classes.runCard}`}
+      data-attention={!!attention || undefined}
+      onClick={() =>
+        attention
+          ? onOpen(attention.target.runId, attention.target.executionId)
+          : onOpen(run.id)
+      }
+    >
+      <span className={classes.cardBody}>
+        <span className={classes.cardMetadata}>
+          <span className={classes.runId} title={run.id}>
+            {run.id.slice(0, 8)}
+          </span>
+          <span>v{run.version}</span>
+        </span>
+        <strong className={classes.cardTitle}>{run.workflowName}</strong>
+        <span className={classes.cardStatuses}>
+          {attention ? (
+            attention.reasons.map((reason) => (
+              <Badge
+                key={reason}
+                component="span"
+                color="yellow"
+                variant="light"
+              >
+                {attentionText({ ...attention, reasons: [reason] })}
+              </Badge>
+            ))
+          ) : (
+            <StatusBadge status={run.status} />
+          )}
+        </span>
+        {reason && <span className={classes.cardReason}>{reason}</span>}
+        <ComparisonContext comparison={run.comparison} />
+        <RunTags tags={run.tags} compact />
+        {run.parentMode === 'detached' && (
+          <span className={classes.cardNote}>
+            Started independently · from{' '}
+            {run.parentWorkflowName ?? run.parentRunId?.slice(0, 8)}
+          </span>
+        )}
+        <span className={classes.cardMetadata}>
+          <span>
+            {run.executionCount}{' '}
+            {run.executionCount === 1 ? 'execution' : 'executions'}
+          </span>
+          <time
+            dateTime={run.createdAt}
+            title={new Date(run.createdAt).toLocaleString()}
+          >
+            {new Date(run.createdAt).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })}{' '}
+            ·{' '}
+            {new Date(run.createdAt).toLocaleTimeString(undefined, {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              timeZoneName: 'short',
+            })}
+          </time>
+        </span>
+      </span>
+      <span className={classes.cardAction}>
+        {attention
+          ? attention.reasons.includes('recovery')
+            ? 'Review recovery'
+            : 'Review request'
+          : 'Open run'}
+        <ArrowUpRight size={16} aria-hidden="true" />
+      </span>
+    </button>
+  );
+}
+
+function BoardColumn({
+  title,
+  count,
+  tone,
+  children,
+}: {
+  title: string;
+  count?: number;
+  tone: string;
+  children: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <section className={classes.boardColumn} aria-labelledby={id}>
+      <div className={classes.columnHeading}>
+        <span
+          className={classes.columnDot}
+          data-tone={tone}
+          aria-hidden="true"
+        />
+        <h2 id={id}>{title}</h2>
+        {count !== undefined && <Badge color="gray">{count}</Badge>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export function RunListBoard({
+  page,
+  preview,
+  onOpen,
+  onTabChange,
+  retry,
+}: {
+  page: Page;
+  preview?: BoardPreview;
+  onOpen: (id: string, executionId?: string) => void;
+  onTabChange: (tab: RunTab) => void;
+  retry: () => void;
+}) {
+  // Keep every run in the selected active page visible. The bounded attention
+  // preview also includes terminal runs still waiting for recovery confirmation.
+  const activeIds = new Set(page.items.map((run) => run.id));
+  const attention = [
+    ...page.items.filter((run) => run.attention),
+    ...(preview?.attention?.items.filter(
+      (run) => run.attention && !activeIds.has(run.id),
+    ) ?? []),
+  ];
+  const running = page.items.filter((run) => !run.attention);
+  const completed =
+    preview?.completed?.items.filter((run) => run.status === 'completed') ?? [];
+  const cards = (items: RunItem[]) =>
+    items.map((run) => <RunCard key={run.id} run={run} onOpen={onOpen} />);
+  const previewError = (message: string) => (
+    <div role="alert">
+      <Text c="red" size="sm">
+        {message}
+      </Text>
+      <Button variant="ghost" onClick={retry}>
+        Retry preview
+      </Button>
+    </div>
+  );
+  return (
+    <div className={classes.board}>
+      <BoardColumn
+        title="Needs attention"
+        count={page.counts.attention}
+        tone="attention"
+      >
+        {cards(attention)}
+        {preview?.attentionError ? (
+          previewError(preview.attentionError)
+        ) : !preview?.attention ? (
+          <Text size="sm" c="dimmed" role="status">
+            Loading attention preview…
+          </Text>
+        ) : !attention.length ? (
+          <Text size="sm" c="dimmed">
+            No runs need your attention.
+          </Text>
+        ) : null}
+        {attention.length > 0 && page.counts.attention > attention.length && (
+          <Text size="xs" c="dimmed">
+            Showing {attention.length} of {page.counts.attention} runs.
+          </Text>
+        )}
+        <Button variant="ghost" onClick={() => onTabChange('attention')}>
+          View all attention
+        </Button>
+      </BoardColumn>
+      <BoardColumn title="Active runs" count={running.length} tone="running">
+        {cards(running)}
+        {!running.length && (
+          <Text size="sm" c="dimmed">
+            {page.total
+              ? 'No other active runs on this page.'
+              : 'No active runs.'}
+          </Text>
+        )}
+      </BoardColumn>
+      <BoardColumn
+        title="Completed runs"
+        count={completed.length}
+        tone="completed"
+      >
+        {cards(completed)}
+        {preview?.completedError ? (
+          previewError(preview.completedError)
+        ) : !preview?.completed ? (
+          <Text size="sm" c="dimmed" role="status">
+            Loading completed preview…
+          </Text>
+        ) : !completed.length ? (
+          <Text size="sm" c="dimmed">
+            No completed runs yet.
+          </Text>
+        ) : null}
+        <Button variant="ghost" onClick={() => onTabChange('history')}>
+          View history
+        </Button>
+      </BoardColumn>
+    </div>
+  );
+}

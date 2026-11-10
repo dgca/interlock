@@ -75,7 +75,6 @@ function EnvironmentRow({
           required
         />
         <ActionIcon
-          size={36}
           variant="subtle"
           color="gray"
           aria-label={`Remove ${entry.name || 'environment variable'}`}
@@ -108,7 +107,6 @@ function EnvironmentRow({
           required
           pattern="[A-Za-z_][A-Za-z0-9_]*"
           error={error || undefined}
-          styles={{ description: { lineHeight: 1.4 } }}
           onChange={(event) => {
             setEditingName(true);
             onChange({ ...entry, name: event.currentTarget.value });
@@ -160,7 +158,6 @@ export function EnvironmentEditor({
         </Text>
         <Button
           variant="ghost"
-          className={styles.action}
           onClick={() => update([...value, { name: '', variableId: '' }])}
         >
           <Plus size={14} />
@@ -199,7 +196,6 @@ export function EnvironmentEditor({
         {!!value.length && (
           <Button
             variant="ghost"
-            className={styles.action}
             onClick={() => setRefreshKey((key) => key + 1)}
           >
             <RefreshCw size={14} />

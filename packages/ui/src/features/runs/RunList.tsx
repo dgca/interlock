@@ -2,6 +2,7 @@ import {
   Alert,
   Button,
   Group,
+  SegmentedControl,
   Tabs,
   Text,
   PageHeader,
@@ -25,6 +26,7 @@ import type { Action } from '../../lib/useActionFeedback';
 import { ChevronRight, SlidersHorizontal, Activity } from 'lucide-react';
 import { ComparisonContext } from './ComparisonContext';
 import { api, errorMessage } from '../../lib/api';
+import { RunListBoard, type BoardPreview } from './RunListBoard';
 import {
   RunTags,
   TagFields,
@@ -78,6 +80,69 @@ export function RunList({
     }
   };
   const [filterOpen, setFilterOpen] = useState(false);
+  const [presentation, setPresentation] = useState('board');
+  const [previewReload, setPreviewReload] = useState(0);
+  const [previewSnapshot, setPreviewSnapshot] = useState<{
+    key: string;
+    data: BoardPreview;
+  }>();
+  const previewKey = JSON.stringify({ workflowId, tagsKey });
+  const refreshPreview = useRef<() => void>(undefined);
+  useEffect(() => {
+    if (tab !== 'active' || presentation !== 'board') return;
+    let current = true;
+    let inFlight = false;
+    let queued = false;
+    const load = async () => {
+      if (inFlight) {
+        queued = true;
+        return;
+      }
+      inFlight = true;
+      do {
+        queued = false;
+        const [attention, completed] = await Promise.allSettled([
+          api.runs.summaries.query({
+            tab: 'attention',
+            workflowId,
+            tags: selectedTags,
+            offset: 0,
+            limit: 6,
+          }),
+          api.runs.summaries.query({
+            tab: 'history',
+            status: 'completed',
+            workflowId,
+            tags: selectedTags,
+            offset: 0,
+            limit: 6,
+          }),
+        ]);
+        if (current)
+          setPreviewSnapshot({
+            key: previewKey,
+            data: {
+              ...(attention.status === 'fulfilled'
+                ? { attention: attention.value }
+                : { attentionError: errorMessage(attention.reason) }),
+              ...(completed.status === 'fulfilled'
+                ? { completed: completed.value }
+                : { completedError: errorMessage(completed.reason) }),
+            },
+          });
+      } while (current && queued);
+      inFlight = false;
+    };
+    refreshPreview.current = () => void load();
+    return () => {
+      current = false;
+      refreshPreview.current = undefined;
+    };
+  }, [tab, presentation, previewKey]);
+  useEffect(
+    () => refreshPreview.current?.(),
+    [tab, presentation, previewKey, tick, previewReload],
+  );
   const filterId = useId();
   const [cleanup, setCleanup] = useState(false);
   const [retention, setRetention] = useState(false);
@@ -176,6 +241,17 @@ export function RunList({
           toolbar={
             <>
               {workflowId && historyActions}
+              {tab === 'active' && (
+                <SegmentedControl
+                  aria-label="Run presentation"
+                  value={presentation}
+                  onChange={setPresentation}
+                  data={[
+                    { value: 'board', label: 'Board' },
+                    { value: 'list', label: 'List' },
+                  ]}
+                />
+              )}
               <Button
                 variant="secondary"
                 leftSection={<SlidersHorizontal size={14} />}
@@ -259,6 +335,18 @@ export function RunList({
           )}
           {!page ? (
             !error && <RunRowsSkeleton />
+          ) : tab === 'active' && presentation === 'board' ? (
+            <RunListBoard
+              page={page}
+              preview={
+                previewSnapshot?.key === previewKey
+                  ? previewSnapshot.data
+                  : undefined
+              }
+              onOpen={onOpen}
+              onTabChange={onTabChange}
+              retry={() => setPreviewReload((value) => value + 1)}
+            />
           ) : page.items.length ? (
             <ListTable columns={runColumns}>
               {page.items.map((r) => {

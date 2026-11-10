@@ -100,7 +100,6 @@ export function TagFields({
             <ActionIcon
               variant="subtle"
               color="gray"
-              size="lg"
               aria-label={`Remove ${label.toLowerCase()} ${index + 1}`}
               onClick={() => onChange(rows.filter((_, i) => i !== index))}
             >

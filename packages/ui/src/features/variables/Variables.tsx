@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   Textarea,
+  EmptyState,
   Modal,
   ModalBody,
   ModalFooter,
@@ -24,7 +25,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
 import { flushSync } from 'react-dom';
 
-import { ArrowRight, ChevronRight, KeyRound, Plus, Search } from 'lucide-react';
+import { ArrowRight, ChevronRight, Plus, Search } from 'lucide-react';
 import type { AppContext } from '../../App';
 import {
   variableRequirementSchema,
@@ -113,7 +114,7 @@ export function VariableLibrary() {
       >
         <TextInput
           ref={searchInput}
-          className={styles.search}
+          className={workspacePage.search}
           aria-label="Search variables"
           placeholder="Search variables"
           leftSection={<Search size={14} />}
@@ -155,8 +156,6 @@ export function VariableLibrary() {
                   variant="light"
                   color="gray"
                   size="sm"
-                  tt="none"
-                  fw={500}
                 >
                   {v.kind === 'secret' ? 'Secret' : 'Config'}
                 </Badge>
@@ -176,13 +175,14 @@ export function VariableLibrary() {
           </ListTable>
         ) : (
           data && (
-            <div className={styles.empty}>
-              {search ? (
-                <Search size={22} aria-hidden="true" />
-              ) : (
-                <KeyRound size={22} aria-hidden="true" />
-              )}
-              <h2>{search ? 'No matching variables' : 'No variables yet'}</h2>
+            <EmptyState
+              title={search ? 'No matching variables' : 'No variables yet'}
+              description={
+                search
+                  ? undefined
+                  : 'Reuse settings and credentials across workflows.'
+              }
+            >
               {search ? (
                 <Button
                   variant="secondary"
@@ -194,20 +194,15 @@ export function VariableLibrary() {
                   Clear search
                 </Button>
               ) : (
-                <>
-                  <Text size="sm" c="dimmed">
-                    Reuse settings and credentials across workflows.
-                  </Text>
-                  <Button
-                    component={Link}
-                    variant="secondary"
-                    to={paths.variable('new')}
-                  >
-                    Create a variable
-                  </Button>
-                </>
+                <Button
+                  component={Link}
+                  variant="secondary"
+                  to={paths.variable('new')}
+                >
+                  Create a variable
+                </Button>
               )}
-            </div>
+            </EmptyState>
           )
         )}
         {data && (offset > 0 || data.truncated) && (
@@ -667,8 +662,6 @@ function VariableEditor({ id }: { id: string }) {
                         variant="light"
                         color="gray"
                         size="sm"
-                        tt="none"
-                        fw={500}
                         w="fit-content"
                       >
                         {kind === 'secret' ? 'Secret' : 'Config'}
@@ -865,7 +858,7 @@ function VariableEditor({ id }: { id: string }) {
                           {saved.enabled ? 'Disable use' : 'Enable use'}
                         </Button>
                         <Button
-                          className={styles.deleteAction}
+                          variant="danger"
                           disabled={dirty || busy}
                           onClick={() => setConfirmation('delete')}
                         >
