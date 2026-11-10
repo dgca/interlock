@@ -192,21 +192,31 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
               !error && <HarnessRowsSkeleton />
             ) : (
               <ListTable columns={harnessColumns}>
-                {profiles.map((p) => (
-                  <ProfileRow
-                    key={p.id}
-                    profile={p}
-                    refresh={() => refresh()}
-                    onDirty={trackDirty}
-                    onConfigureCustom={(prof) => {
-                      customTrigger.current =
-                        document.activeElement as HTMLElement;
-                      setCustomModalProfile(prof);
-                      setCustomModalInitialName(prof.name);
-                      setCustomModalOpen(true);
-                    }}
-                  />
-                ))}
+                {[...profiles]
+                  .sort(
+                    (a, b) =>
+                      Number(b.detection.status === 'detected') -
+                        Number(a.detection.status === 'detected') ||
+                      a.name.localeCompare(b.name, undefined, {
+                        sensitivity: 'base',
+                      }) ||
+                      a.id.localeCompare(b.id),
+                  )
+                  .map((p) => (
+                    <ProfileRow
+                      key={p.id}
+                      profile={p}
+                      refresh={() => refresh()}
+                      onDirty={trackDirty}
+                      onConfigureCustom={(prof) => {
+                        customTrigger.current =
+                          document.activeElement as HTMLElement;
+                        setCustomModalProfile(prof);
+                        setCustomModalInitialName(prof.name);
+                        setCustomModalOpen(true);
+                      }}
+                    />
+                  ))}
               </ListTable>
             )}
             <div className={styles.bottom}>
@@ -556,12 +566,11 @@ function ProfileRow({
                 data={permissionOptions}
               />
             </div>
-            <p className={styles.note}>
-              Sign-in and project settings come from the harness. Approvals
-              apply to one request; manage permanent rules in the harness.
-              {draft.permissions === 'read-only' &&
-                ' Read-only restrictions do not sandbox project startup hooks.'}
-            </p>
+            {draft.permissions === 'read-only' && (
+              <p className={styles.note}>
+                Read-only restrictions do not sandbox project startup hooks.
+              </p>
+            )}
           </fieldset>
           <details className={styles.advanced}>
             <summary>Advanced settings</summary>

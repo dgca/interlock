@@ -172,6 +172,9 @@
   padding: 0;
   margin-bottom: 16px;
 }
+.fieldGroup > .fields {
+  margin-top: 20px;
+}
 
 .errorRow {
   display: flex;

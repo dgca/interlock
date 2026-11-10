@@ -982,19 +982,15 @@
       "designSystemImports": [
         [
           "LoadingSkeleton",
-          "ActionIcon",
           "Button",
           "Combobox",
-          "Group",
           "InputBase",
           "Input",
-          "Loader",
           "Text",
           "useCombobox"
         ]
       ],
       "jsxElements": [
-        "ActionIcon",
         "Button",
         "Combobox",
         "Combobox.Chevron",
@@ -1005,10 +1001,8 @@
         "Combobox.Options",
         "Combobox.Search",
         "Combobox.Target",
-        "Group",
         "Input.Label",
         "InputBase",
-        "Loader",
         "LoadingSkeleton",
         "RefreshCw",
         "Text",

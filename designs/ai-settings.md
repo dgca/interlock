@@ -27,6 +27,8 @@ The sidebar retains the scoped AI Settings destination. It does not restore a ge
 ## Source behavior retained
 
 - Harness installation state, enable controls, Configure, Check installations, Add configuration, setup guidance, and authentication caveat remain visible. Installation checks make no model calls.
+- Harness rows show detected configurations first and sort each detection group alphabetically by display name. Enablement and opening Configure do not change their order.
+- Execution defaults keep space between concurrency and the model/permission row. Model refresh is a labeled action below the input, keeping model and permission inputs aligned.
 - Model aliases keep ordered candidates, workflow-harness inheritance, explicit model choice, add/remove/reorder, optional description, and Save/Cancel.
 - Candidate order selects the first choice with an available harness configuration. It does not retry a failed request on another model.
 - Thinking effort remains conditional on a model or effort value and its available capabilities. It is not shown in the pictured blank-model draft; after selection it stays within the candidate's model column.
