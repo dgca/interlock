@@ -44,6 +44,8 @@ import {
 } from 'lucide-react';
 import {
   validateDefinition,
+  applyWorkflowPositions,
+  sameWorkflowContent,
   type Workflow,
   type WorkflowNode,
   type WorkflowEdge,
@@ -59,7 +61,12 @@ import { RestoreHandleBounds } from './RestoreHandleBounds';
 import { LoopEdge } from './LoopEdge';
 import { OrthoEdge } from './OrthoEdge';
 import { canvasGraph, withoutNodes } from './canvasGraph';
-import { serializeSnapshot, useWorkflowHistory } from './useWorkflowHistory';
+import {
+  serializeContentSnapshot,
+  changedPositions,
+  useWorkflowHistory,
+} from './useWorkflowHistory';
+import { useWorkflowLayout } from './useWorkflowLayout';
 import { useBoxZoom } from './useBoxZoom';
 import { canvasNavigation, CanvasZoomBox } from './CanvasNavigation';
 import navigationStyles from './CanvasNavigation.module.css';
@@ -90,7 +97,7 @@ export function WorkflowEditor({
   onOpenWorkflow,
   onReport,
 }: {
-  workflow: Workflow;
+  workflow: Workflow & { layoutRevision?: number };
   workflows: Workflow[];
   prompts?: import('@interlock/core').SavedPrompt[];
   onBack: () => void;
@@ -136,8 +143,11 @@ export function WorkflowEditor({
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
   const [hovered, setHovered] = useState<string>();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const layout = useWorkflowLayout(workflow);
+  const dragging = useRef<WorkflowDefinition | undefined>(undefined);
+  const lastRawDefinition = useRef<WorkflowDefinition | undefined>(undefined);
   const history = useWorkflowHistory({
-    draft: workflow.draft,
+    draft: applyWorkflowPositions(workflow.draft, layout.positions),
     name: workflow.name,
     description: workflow.description,
   });
@@ -150,18 +160,31 @@ export function WorkflowEditor({
     });
     return () => cancelAnimationFrame(frame);
   }, [draft]);
+  const latestDraft = useRef(draft);
+  latestDraft.current = draft;
   const setDraft = (
     update:
       WorkflowDefinition | ((draft: WorkflowDefinition) => WorkflowDefinition),
-  ) =>
-    history.change((current) => ({
-      ...current,
-      draft: typeof update === 'function' ? update(current.draft) : update,
-    }));
-  const latestDraft = useRef(draft);
+  ) => {
+    const before = latestDraft.current;
+    const next = typeof update === 'function' ? update(before) : update;
+    latestDraft.current = next;
+    history.change((current) => ({ ...current, draft: next }));
+    if (!dragging.current) layout.update(changedPositions(before, next));
+  };
   useEffect(() => {
-    latestDraft.current = draft;
-  }, [draft]);
+    if (!dragging.current) history.layout(layout.positions);
+  }, [layout.positions]);
+  const beginDrag = () => {
+    dragging.current = latestDraft.current;
+    history.begin();
+  };
+  const endDrag = () => {
+    const before = dragging.current;
+    dragging.current = undefined;
+    history.end();
+    if (before) layout.update(changedPositions(before, latestDraft.current));
+  };
   const applyTidy = (before: WorkflowDefinition, next: WorkflowDefinition) => {
     if (JSON.stringify(next) === JSON.stringify(before)) {
       void flowRef.current?.fitView({ ...editorFitView, duration: 180 });
@@ -196,11 +219,15 @@ export function WorkflowEditor({
   );
   const [raw, setRaw] = useState('');
   const [rawBaseline, setRawBaseline] = useState('');
-  const rawEdited = view === 'raw' && raw !== rawBaseline;
   const rawResult = useMemo(
     () => (view === 'raw' ? parseRawDefinition(raw) : undefined),
     [view, raw],
   );
+  const rawEdited =
+    view === 'raw' &&
+    raw !== rawBaseline &&
+    (!rawResult?.definition ||
+      !sameWorkflowContent(rawResult.definition, draft));
   const rawInvalid = Boolean(rawResult?.error);
   const effectiveDraft = rawResult?.definition ?? draft;
   const canTidy = Boolean(
@@ -245,7 +272,10 @@ export function WorkflowEditor({
     if (next === view) return;
     if (pending || (next === 'visual' && rawEdited)) return;
     cancelTidy();
+    if (next === 'visual' && rawResult?.definition)
+      setDraft(layout.apply(rawResult.definition));
     if (next === 'raw') {
+      lastRawDefinition.current = draft;
       const text = JSON.stringify(draft, null, 2);
       setRaw(text);
       setRawBaseline(text);
@@ -253,17 +283,17 @@ export function WorkflowEditor({
     setView(next);
   };
   const [saved, setSaved] = useState(
-    serializeSnapshot({
+    serializeContentSnapshot({
       draft: workflow.draft,
       name: workflow.name,
       description: workflow.description,
     }),
   );
   const dirty =
-    rawEdited ||
     rawInvalid ||
-    serializeSnapshot({ draft: effectiveDraft, name, description }) !== saved;
-  const remoteSnapshot = serializeSnapshot({
+    serializeContentSnapshot({ draft: effectiveDraft, name, description }) !==
+      saved;
+  const remoteSnapshot = serializeContentSnapshot({
     draft: workflow.draft,
     name: workflow.name,
     description: workflow.description,
@@ -273,12 +303,14 @@ export function WorkflowEditor({
     (workflow.draftRevision === revision && remoteSnapshot !== saved);
   const loadLatest = () => {
     history.reset({
-      draft: workflow.draft,
+      draft: layout.apply(workflow.draft),
       name: workflow.name,
       description: workflow.description,
     });
-    setRaw(JSON.stringify(workflow.draft, null, 2));
-    setRawBaseline(JSON.stringify(workflow.draft, null, 2));
+    const next = layout.apply(workflow.draft);
+    lastRawDefinition.current = next;
+    setRaw(JSON.stringify(next, null, 2));
+    setRawBaseline(JSON.stringify(next, null, 2));
     setRevision(workflow.draftRevision);
     setSaved(remoteSnapshot);
     setEditing(undefined);
@@ -305,7 +337,7 @@ export function WorkflowEditor({
     onDirty(dirty);
     return () => onDirty(false);
   }, [dirty, onDirty]);
-  useBeforeUnloadWarning(dirty);
+  useBeforeUnloadWarning(dirty || layout.saving || Boolean(layout.error));
   const historyBlocked = Boolean(
     editing ||
     deleting ||
@@ -320,7 +352,11 @@ export function WorkflowEditor({
     if (direction === 'undo' ? !canUndo : !canRedo) return;
     const target =
       direction === 'undo' ? history.past.at(-1)! : history.future[0];
+    const before = latestDraft.current;
+    latestDraft.current = target.draft;
     history[direction]();
+    layout.update(changedPositions(before, target.draft));
+    lastRawDefinition.current = target.draft;
     setRaw(JSON.stringify(target.draft, null, 2));
     setRawBaseline(JSON.stringify(target.draft, null, 2));
     setSelected(new Set());
@@ -394,6 +430,7 @@ export function WorkflowEditor({
   );
   const save = async () => {
     if (rawInvalid) throw new Error('Fix the raw JSON before saving.');
+    await layout.flush();
     if (!dirty) return workflow;
     if (remoteChanged)
       throw new Error('Load the latest draft before saving your changes.');
@@ -409,17 +446,20 @@ export function WorkflowEditor({
       description,
       draft: effectiveDraft,
       draftRevision: revision,
+      layout: 'preserve',
     });
+    layout.receive(w);
     setRevision(w.draftRevision);
     if (view === 'raw') {
-      setDraft(w.draft);
-      setRawBaseline(JSON.stringify(w.draft, null, 2));
+      const next = layout.apply(w.draft);
+      history.change((current) => ({ ...current, draft: next }));
+      setRawBaseline(JSON.stringify(next, null, 2));
       setRaw((current) =>
-        current === raw ? JSON.stringify(w.draft, null, 2) : current,
+        current === raw ? JSON.stringify(next, null, 2) : current,
       );
     }
     setSaved(
-      serializeSnapshot({
+      serializeContentSnapshot({
         draft: w.draft,
         name: w.name,
         description: w.description,
@@ -459,7 +499,7 @@ export function WorkflowEditor({
         });
         setRevision(result.parent.draftRevision);
         setSaved(
-          serializeSnapshot({
+          serializeContentSnapshot({
             draft: result.parent.draft,
             name: result.parent.name,
             description: result.parent.description,
@@ -537,6 +577,7 @@ export function WorkflowEditor({
             {workflow.latestVersion
               ? `v${workflow.latestVersion} published`
               : 'Unpublished'}
+            {layout.saving && <span role="status"> · Saving layout…</span>}
           </span>
         }
         actions={
@@ -713,6 +754,14 @@ export function WorkflowEditor({
         }
       />
       <PauseBanner workflowId={workflow.id} />
+      {layout.error && (
+        <div role="alert" className={styles.conflict}>
+          <span>Layout could not be saved. {layout.error}</span>
+          <Button disabled={layout.saving} onClick={() => void layout.retry()}>
+            Retry layout save
+          </Button>
+        </div>
+      )}
       {owner && (
         <div className={styles.conflict}>
           <span>
@@ -850,7 +899,21 @@ export function WorkflowEditor({
                   label="Workflow JSON"
                   language="json"
                   value={raw}
-                  onChange={setRaw}
+                  onChange={(text) => {
+                    setRaw(text);
+                    const parsed = parseRawDefinition(text);
+                    if (parsed.definition) {
+                      const positions = changedPositions(
+                        lastRawDefinition.current ?? latestDraft.current,
+                        parsed.definition,
+                      );
+                      lastRawDefinition.current = parsed.definition;
+                      setDraft(
+                        applyWorkflowPositions(latestDraft.current, positions),
+                      );
+                      layout.update(positions);
+                    }
+                  }}
                   fullHeight
                 />
                 <div className={styles.rawActions}>
@@ -862,7 +925,18 @@ export function WorkflowEditor({
                   <Button
                     variant="ghost"
                     disabled={!rawEdited || Boolean(pending)}
-                    onClick={() => setRaw(rawBaseline)}
+                    onClick={() => {
+                      const baseline =
+                        parseRawDefinition(rawBaseline).definition;
+                      const text = baseline
+                        ? JSON.stringify(layout.apply(baseline), null, 2)
+                        : rawBaseline;
+                      lastRawDefinition.current = baseline
+                        ? layout.apply(baseline)
+                        : undefined;
+                      setRaw(text);
+                      setRawBaseline(text);
+                    }}
                   >
                     Discard
                   </Button>
@@ -889,10 +963,10 @@ export function WorkflowEditor({
                   edges={edges}
                   nodeTypes={nodeTypes}
                   edgeTypes={edgeTypes}
-                  onNodeDragStart={history.begin}
-                  onNodeDragStop={history.end}
-                  onSelectionDragStart={history.begin}
-                  onSelectionDragStop={history.end}
+                  onNodeDragStart={beginDrag}
+                  onNodeDragStop={endDrag}
+                  onSelectionDragStart={beginDrag}
+                  onSelectionDragStop={endDrag}
                   onBeforeDelete={async ({
                     nodes: deletingNodes,
                     edges: deletingEdges,
@@ -1201,6 +1275,9 @@ export function WorkflowEditor({
           }
           onClose={() => setEditing(undefined)}
           onApply={(next) => {
+            const before = latestDraft.current;
+            latestDraft.current = next.definition;
+            layout.update(changedPositions(before, next.definition));
             history.change(() => ({
               name: next.name,
               description: next.description,

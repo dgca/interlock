@@ -1,6 +1,5 @@
 import { statfsSync, existsSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { isDeepStrictEqual } from 'node:util';
 import {
   VERSION,
   type DiagnosticCheck,
@@ -10,6 +9,7 @@ import {
   variableReferences,
   modelReferences,
   promptIds,
+  sameWorkflowContent,
   type ResourceReservation,
   type ManagedExecution,
   type PauseHold,
@@ -718,7 +718,7 @@ export async function runDoctor(
           workflow.latestVersion,
         );
         if (latest) {
-          const draftMatches = isDeepStrictEqual(
+          const draftMatches = sameWorkflowContent(
             workflow.draft,
             latest.definition,
           );

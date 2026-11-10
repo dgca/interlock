@@ -4,6 +4,9 @@ import {
   nextScheduleSlot,
   type WorkflowTrigger,
   compareWorkflow,
+  applyWorkflowPositions,
+  sameWorkflowContent,
+  workflowPositions,
   type DiffItem,
 } from '@interlock/core';
 import { isDeepStrictEqual } from 'node:util';
@@ -24,6 +27,10 @@ import {
 import { definitionHash } from './versionIdentity.js';
 import { Variables } from './variables.js';
 import { ModelAliases } from './modelAliases.js';
+import {
+  readWorkflowLayout,
+  persistWorkflowPositions,
+} from './workflowLayouts.js';
 import {
   variableReferences,
   modelReferences,
@@ -71,7 +78,13 @@ export function exportWorkflows(
       name: w.name,
       description: w.description,
       ownerWorkflowId: w.ownerWorkflowId ?? null,
-      draft: w.draft,
+      draft:
+        draft && id === rootId
+          ? w.draft
+          : applyWorkflowPositions(
+              w.draft,
+              readWorkflowLayout(store, id).positions,
+            ),
       draftRevision: w.draftRevision,
       versions,
       ...(store.workflowTriggers(id).some((t) => t.kind === 'schedule')
@@ -481,7 +494,7 @@ export function importWorkflows(
         throw new InterlockError(`Ownership conflict for ${entry.id}`);
       const sameDraft =
         existing &&
-        isDeepStrictEqual(existing.draft, entry.draft) &&
+        sameWorkflowContent(existing.draft, entry.draft) &&
         existing.name === entry.name &&
         existing.description === entry.description;
       if (
@@ -569,19 +582,29 @@ export function importWorkflows(
         ...entry.versions.map((v) => v.version),
         ...(entry.deletedVersions ?? []).map((v) => v.version),
       );
-      if (
+      const contentChanged =
         !sameDraft ||
         latestVersion !== existing?.latestVersion ||
-        added.has(entry.id)
-      )
-        changed.push(entry.id);
+        added.has(entry.id);
+      const importedPositions = workflowPositions(entry.draft);
+      const layoutChanged =
+        !existing ||
+        !isDeepStrictEqual(
+          workflowPositions(
+            applyWorkflowPositions(
+              existing.draft,
+              readWorkflowLayout(store, entry.id).positions,
+            ),
+          ),
+          importedPositions,
+        );
       const workflow: Workflow = {
         id: entry.id,
         ownerWorkflowId: entry.ownerWorkflowId,
         name: entry.name,
         description: entry.description,
         archived: existing?.archived ?? false,
-        draft: entry.draft,
+        draft: sameDraft ? existing!.draft : entry.draft,
         draftRevision: existing
           ? existing.draftRevision + (sameDraft ? 0 : 1)
           : 1,
@@ -595,6 +618,9 @@ export function importWorkflows(
             : existing.updatedAt,
       };
       store.put('workflows', workflow);
+      if (layoutChanged)
+        persistWorkflowPositions(store, entry.id, importedPositions);
+      if (contentChanged || layoutChanged) changed.push(entry.id);
     }
     const scheduleIds = new Set<string>();
     for (const entry of bundle.workflows)

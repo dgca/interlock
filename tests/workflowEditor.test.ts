@@ -2,10 +2,13 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import {
   blankDefinition,
   definitionSchema,
+  applyWorkflowPositions,
+  workflowPositions,
+  type WorkflowPositions,
   type Workflow,
 } from '@interlock/core';
 import { batchDefinition, nestedBatches } from './fixtures/batch';
@@ -16,6 +19,8 @@ const canvas = vi.hoisted(() => ({ props: undefined as any }));
 const rawEditor = vi.hoisted(() => ({ props: undefined as any }));
 const rpc = vi.hoisted(() => ({
   update: vi.fn(),
+  saveLayout: vi.fn(),
+  get: vi.fn(),
   publish: vi.fn(),
   versions: vi.fn(),
   remove: vi.fn(),
@@ -26,6 +31,8 @@ vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
     workflows: {
       update: { mutate: rpc.update },
+      saveLayout: { mutate: rpc.saveLayout },
+      get: { query: rpc.get },
       createChild: { mutate: rpc.createChild },
       publish: { mutate: rpc.publish },
       versions: { query: rpc.versions },
@@ -165,7 +172,9 @@ vi.mock('../packages/ui/src/design-system/CodeEditor/CodeEditor', () => ({
 }));
 let root: Root;
 let container: HTMLDivElement;
-let workflow: Workflow;
+let workflow: Workflow & { layoutRevision?: number };
+let layoutRevision: number;
+let layoutPositions: WorkflowPositions;
 const saved = vi.fn();
 const opened = vi.fn();
 const reportOpened = vi.fn();
@@ -180,26 +189,28 @@ const runAction = async (fn: () => Promise<unknown>) => {
 };
 let section: 'editor' | 'runs';
 const deleted = vi.fn();
-const render = async () => {
+const render = async (visible = true) => {
   await act(async () =>
     root.render(
       h(
         DesignSystemProvider,
         { env: 'test' },
-        h(WorkflowEditor, {
-          workflow,
-          section,
-          onDeleted: deleted,
-          runsView: h('p', {}, 'Workflow runs'),
-          workflows: [workflow],
-          onBack: vi.fn(),
-          onOpenWorkflow: opened,
-          onReport: reportOpened,
-          onRun: vi.fn(),
-          onSaved: saved,
-          onDirty,
-          act: runAction,
-        }),
+        visible
+          ? h(WorkflowEditor, {
+              workflow,
+              section,
+              onDeleted: deleted,
+              runsView: h('p', {}, 'Workflow runs'),
+              workflows: [workflow],
+              onBack: vi.fn(),
+              onOpenWorkflow: opened,
+              onReport: reportOpened,
+              onRun: vi.fn(),
+              onSaved: saved,
+              onDirty,
+              act: runAction,
+            })
+          : null,
       ),
     ),
   );
@@ -266,6 +277,32 @@ beforeEach(() => {
     createdAt: '',
     updatedAt: '',
   };
+  layoutRevision = 0;
+  layoutPositions = workflowPositions(workflow.draft);
+  rpc.saveLayout.mockImplementation(
+    async (input: {
+      id: string;
+      expectedRevision: number;
+      positions: WorkflowPositions;
+    }) => {
+      if (input.expectedRevision !== layoutRevision)
+        throw new Error('Layout changed elsewhere');
+      layoutPositions = Object.fromEntries([
+        ...Object.entries(layoutPositions),
+        ...Object.entries(input.positions),
+      ]);
+      return {
+        id: workflow.id,
+        revision: ++layoutRevision,
+        positions: layoutPositions,
+      };
+    },
+  );
+  rpc.get.mockImplementation(async () => ({
+    ...workflow,
+    draft: applyWorkflowPositions(workflow.draft, layoutPositions),
+    layoutRevision,
+  }));
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -365,12 +402,13 @@ it('keeps multiple nodes selected through a move without saving selection as dra
       .filter((node: any) => node.selected)
       .map((node: any) => node.id),
   ).toEqual(ids);
-  await click('Save draft');
-  expect(
-    rpc.update.mock.calls[0][0].draft.nodes.every(
-      (node: any) => !('selected' in node),
-    ),
-  ).toBe(true);
+  expect(button('Save draft').disabled).toBe(true);
+  expect(rpc.update).not.toHaveBeenCalled();
+  expect(rpc.saveLayout).toHaveBeenCalledWith({
+    id: workflow.id,
+    expectedRevision: 0,
+    positions: { [ids[0]]: { x: 200, y: 250 } },
+  });
   await act(async () => canvas.props.onPaneClick());
   expect(canvas.props.nodes.some((node: any) => node.selected)).toBe(false);
 });
@@ -617,8 +655,12 @@ it('keeps nested Batch item nodes on the main canvas and preserves positions ind
   expect(container.textContent).not.toContain('Open inline');
   expect(container.textContent).not.toContain('Back to parent');
   await click('Move batch');
-  await click('Save draft');
-  const draft = rpc.update.mock.calls[0][0].draft;
+  expect(button('Save draft').disabled).toBe(true);
+  expect(rpc.update).not.toHaveBeenCalled();
+  const draft = {
+    ...workflow.draft,
+    nodes: canvas.props.nodes.map((n: any) => n.data.node),
+  };
   expect(draft.nodes.find((n: any) => n.id === 'batch').position).toEqual({
     x: 200,
     y: 250,
@@ -766,7 +808,9 @@ it('undoes a complete group drag in one step and redoes it', async () => {
   expect(button('Save draft').disabled).toBe(true);
   await click('Redo');
   expect(positions()).toEqual(moved);
-  expect(button('Save draft').disabled).toBe(false);
+  expect(button('Save draft').disabled).toBe(true);
+  expect(onDirty).toHaveBeenLastCalledWith(false);
+  expect(rpc.update).not.toHaveBeenCalled();
 });
 
 it('restores a deleted Batch, descendants, and all connections as one action', async () => {
@@ -795,6 +839,8 @@ it('restores a deleted Batch, descendants, and all connections as one action', a
 
 it('keeps history through saving and publishing without undoing the saved revision or publication', async () => {
   await render();
+  await click('Workflow settings');
+  await click('Apply local edit');
   const original = positions();
   await click(`Move ${original[0].id}`);
   await reviewPublish();
@@ -803,6 +849,8 @@ it('keeps history through saving and publishing without undoing the saved revisi
   expect(button('Save draft').disabled).toBe(true);
   await click('Undo');
   expect(positions()).toEqual(original);
+  expect(button('Save draft').disabled).toBe(true);
+  await click('Undo');
   expect(button('Save draft').disabled).toBe(false);
   expect(button('Run v2')).toBeDefined();
   expect(rpc.publish).toHaveBeenCalledTimes(1);
@@ -810,6 +858,7 @@ it('keeps history through saving and publishing without undoing the saved revisi
   expect(rpc.update).toHaveBeenLastCalledWith(
     expect.objectContaining({ draftRevision: 2 }),
   );
+  await click('Redo');
   await click('Redo');
   expect(positions()).not.toEqual(original);
 });
@@ -928,8 +977,7 @@ it('caps history at 50 actions and clears it when loading another draft or reope
   expect(button('Undo').disabled).toBe(true);
   workflow = { ...workflow, draftRevision: 2 };
   await render();
-  await click('Load latest draft');
-  await click('Discard and load draft');
+  expect(container.textContent).not.toContain('changed elsewhere');
   expect(button('Undo').disabled).toBe(true);
   expect(button('Redo').disabled).toBe(true);
   await click(`Move ${id}`);
@@ -982,19 +1030,33 @@ it.each(['nested Batches', 'parallel routes'])(
       await tidy('Dagre');
       const arranged = positions();
       expect(arranged).not.toEqual(original);
-      expect(button('Save draft').disabled).toBe(false);
+      expect(button('Save draft').disabled).toBe(true);
       await tidy('Dagre');
       await click('Undo');
       expect(positions()).toEqual(original);
       expect(button('Undo').disabled).toBe(true);
       await click('Redo');
       expect(positions()).toEqual(arranged);
-      await click('Save draft');
-      const savedDraft = rpc.update.mock.calls[0][0].draft;
+      expect(rpc.update).not.toHaveBeenCalled();
+      const savedDraft = {
+        ...workflow.draft,
+        nodes: canvas.props.nodes.map((n: any) => n.data.node),
+      };
+      expect(layoutPositions).toEqual(
+        expect.objectContaining(
+          Object.fromEntries(arranged.map((n: any) => [n.id, n.position])),
+        ),
+      );
       expect(savedDraft.edges).toEqual(workflow.draft.edges);
       expect(
-        savedDraft.nodes.map(({ position, ...node }: any) => node),
-      ).toEqual(workflow.draft.nodes.map(({ position, ...node }) => node));
+        Object.fromEntries(
+          savedDraft.nodes.map(({ position, ...node }: any) => [node.id, node]),
+        ),
+      ).toEqual(
+        Object.fromEntries(
+          workflow.draft.nodes.map(({ position, ...node }) => [node.id, node]),
+        ),
+      );
     } finally {
       vi.unstubAllGlobals();
     }
@@ -1034,7 +1096,7 @@ it('applies the ELK layout as one undoable action and reports failures', async (
       position: { ...p.position, x: p.position.x + 40 },
     })),
   );
-  expect(button('Save draft').disabled).toBe(false);
+  expect(button('Save draft').disabled).toBe(true);
   await click('Undo');
   expect(positions()).toEqual(original);
   expect(button('Undo').disabled).toBe(true);
@@ -1047,7 +1109,7 @@ it('applies the ELK layout as one undoable action and reports failures', async (
   expect(positions()).toEqual(original);
 });
 
-it('discards invalid raw edits while retaining earlier unsaved visual changes', async () => {
+it('discards invalid raw edits while retaining the automatically saved visual layout', async () => {
   await render();
   const id = canvas.props.nodes[0].id;
   await click(`Move ${id}`);
@@ -1060,7 +1122,8 @@ it('discards invalid raw edits while retaining earlier unsaved visual changes', 
   expect(rawEditor.props.value).toBe(baseline);
   expect(rpc.update).not.toHaveBeenCalled();
   await click('Visual');
-  expect(button('Save draft').disabled).toBe(false);
+  expect(button('Save draft').disabled).toBe(true);
+  expect(onDirty).toHaveBeenLastCalledWith(false);
   expect(canvas.props.nodes[0].position).toEqual({ x: 200, y: 250 });
 });
 
@@ -1291,4 +1354,232 @@ it('opens the workflow report through its optional route callback', async () => 
   await click('Workflow actions');
   await click('Performance & cost report');
   expect(reportOpened).toHaveBeenCalledOnce();
+});
+
+it('serializes and coalesces layout writes without dirtying content or saving a draft', async () => {
+  let finish!: () => void;
+  rpc.saveLayout.mockImplementationOnce(
+    (input) =>
+      new Promise((resolve) => {
+        finish = () => {
+          layoutPositions = { ...layoutPositions, ...input.positions };
+          layoutRevision++;
+          resolve({
+            id: workflow.id,
+            revision: layoutRevision,
+            positions: layoutPositions,
+          });
+        };
+      }),
+  );
+  await render();
+  const id = workflow.draft.nodes[0].id;
+  await click(`Move ${id}`);
+  for (const x of [300, 400])
+    await act(async () =>
+      canvas.props.onNodesChange([
+        { type: 'position', id, position: { x, y: 250 } },
+      ]),
+    );
+  expect(rpc.saveLayout).toHaveBeenCalledTimes(1);
+  expect(button('Save draft').disabled).toBe(true);
+  expect(onDirty).toHaveBeenLastCalledWith(false);
+  const pendingUnload = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(pendingUnload);
+  expect(pendingUnload.defaultPrevented).toBe(true);
+  await act(async () => finish());
+  expect(rpc.saveLayout).toHaveBeenCalledTimes(2);
+  expect(rpc.saveLayout).toHaveBeenLastCalledWith({
+    id: workflow.id,
+    expectedRevision: 1,
+    positions: { [id]: { x: 400, y: 250 } },
+  });
+  expect(rpc.update).not.toHaveBeenCalled();
+  expect(rpc.publish).not.toHaveBeenCalled();
+  const savedUnload = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(savedUnload);
+  expect(savedUnload.defaultPrevented).toBe(false);
+});
+
+it('retains a failed layout patch and retries against the latest layout without overwriting other nodes', async () => {
+  rpc.saveLayout.mockRejectedValueOnce(new Error('Offline'));
+  await render();
+  const [first, second] = workflow.draft.nodes;
+  await click(`Move ${first.id}`);
+  expect(container.textContent).toContain('Layout could not be saved. Offline');
+  expect(onDirty).toHaveBeenLastCalledWith(false);
+  expect(button('Save draft').disabled).toBe(true);
+  layoutRevision = 4;
+  layoutPositions = { ...layoutPositions, [second.id]: { x: 900, y: 950 } };
+  await click('Retry layout save');
+  expect(rpc.get).toHaveBeenCalledWith({ id: workflow.id });
+  expect(rpc.saveLayout).toHaveBeenLastCalledWith({
+    id: workflow.id,
+    expectedRevision: 4,
+    positions: { [first.id]: { x: 200, y: 250 } },
+  });
+  expect(
+    canvas.props.nodes.find((n: any) => n.id === second.id).position,
+  ).toEqual({ x: 900, y: 950 });
+  expect(container.textContent).not.toContain('Layout could not be saved');
+  expect(rpc.update).not.toHaveBeenCalled();
+});
+
+it('keeps a pending layout through leaving and reopening while discarded content stays unsaved', async () => {
+  let finish!: () => void;
+  rpc.saveLayout.mockImplementationOnce(
+    (input) =>
+      new Promise((resolve) => {
+        finish = () => {
+          layoutPositions = { ...layoutPositions, ...input.positions };
+          layoutRevision++;
+          resolve({
+            id: workflow.id,
+            revision: layoutRevision,
+            positions: layoutPositions,
+          });
+        };
+      }),
+  );
+  await render();
+  await click('Workflow settings');
+  await click('Apply local edit');
+  const id = workflow.draft.nodes[0].id;
+  await click(`Move ${id}`);
+  expect(onDirty).toHaveBeenLastCalledWith(true);
+  await render(false);
+  await render();
+  expect(onDirty).toHaveBeenLastCalledWith(false);
+  expect(canvas.props.nodes[0].position).toEqual({ x: 200, y: 250 });
+  expect(rpc.saveLayout).toHaveBeenCalledTimes(1);
+  await act(async () => finish());
+  expect(layoutPositions[id]).toEqual({ x: 200, y: 250 });
+  expect(rpc.update).not.toHaveBeenCalled();
+  await click('Raw');
+  expect(JSON.parse(rawEditor.props.value).maxSteps).toBe(
+    workflow.draft.maxSteps,
+  );
+});
+
+it('applies newer remote layout after an older acknowledgement without resetting content edits', async () => {
+  let finish!: () => void;
+  rpc.saveLayout.mockImplementationOnce(
+    (input) =>
+      new Promise((resolve) => {
+        finish = () =>
+          resolve({
+            id: workflow.id,
+            revision: 1,
+            positions: { ...layoutPositions, ...input.positions },
+          });
+      }),
+  );
+  await render();
+  await click('Workflow settings');
+  await click('Apply local edit');
+  const id = workflow.draft.nodes[0].id;
+  await click(`Move ${id}`);
+  workflow = {
+    ...workflow,
+    layoutRevision: 2,
+    draft: applyWorkflowPositions(workflow.draft, { [id]: { x: 700, y: 750 } }),
+  };
+  await render();
+  await act(async () => finish());
+  expect(canvas.props.nodes[0].position).toEqual({ x: 700, y: 750 });
+  expect(container.textContent).not.toContain('changed elsewhere');
+  expect(onDirty).toHaveBeenLastCalledWith(true);
+  await click('Raw');
+  expect(JSON.parse(rawEditor.props.value).maxSteps).toBe(60);
+});
+
+it('autosaves Raw position-only changes and keeps them undoable without a draft save', async () => {
+  await render();
+  await click('Raw');
+  const draft = JSON.parse(rawEditor.props.value);
+  const original = draft.nodes[0].position;
+  draft.nodes[0].position = { x: 888, y: 999 };
+  await act(async () => rawEditor.props.onChange(JSON.stringify(draft)));
+  expect(button('Save').disabled).toBe(true);
+  expect(viewControl('Visual').disabled).toBe(false);
+  expect(onDirty).toHaveBeenLastCalledWith(false);
+  expect(layoutPositions[draft.nodes[0].id]).toEqual({ x: 888, y: 999 });
+  await click('Visual');
+  expect(canvas.props.nodes[0].position).toEqual({ x: 888, y: 999 });
+  await click('Undo');
+  expect(canvas.props.nodes[0].position).toEqual(original);
+  expect(rpc.update).not.toHaveBeenCalled();
+  expect(rpc.publish).not.toHaveBeenCalled();
+});
+
+it('saves only locally dragged nodes when another node moves remotely during the drag', async () => {
+  await render();
+  const [first, second] = workflow.draft.nodes;
+  await act(async () => canvas.props.onNodeDragStart());
+  await act(async () =>
+    canvas.props.onNodesChange([
+      {
+        type: 'position',
+        id: first.id,
+        position: { x: 500, y: 550 },
+        dragging: true,
+      },
+    ]),
+  );
+  layoutRevision = 1;
+  layoutPositions = { ...layoutPositions, [second.id]: { x: 900, y: 950 } };
+  workflow = {
+    ...workflow,
+    layoutRevision,
+    draft: applyWorkflowPositions(workflow.draft, layoutPositions),
+  };
+  await render();
+  expect(rpc.saveLayout).not.toHaveBeenCalled();
+  await act(async () => canvas.props.onNodeDragStop());
+  expect(rpc.saveLayout).toHaveBeenLastCalledWith({
+    id: workflow.id,
+    expectedRevision: 1,
+    positions: { [first.id]: { x: 500, y: 550 } },
+  });
+  expect(
+    canvas.props.nodes.find((n: any) => n.id === second.id).position,
+  ).toEqual({ x: 900, y: 950 });
+  await click('Undo');
+  expect(
+    canvas.props.nodes.find((n: any) => n.id === first.id).position,
+  ).toEqual(first.position);
+  expect(
+    canvas.props.nodes.find((n: any) => n.id === second.id).position,
+  ).toEqual({ x: 900, y: 950 });
+  expect(rpc.saveLayout).toHaveBeenLastCalledWith({
+    id: workflow.id,
+    expectedRevision: 2,
+    positions: { [first.id]: first.position },
+  });
+});
+
+it('does not save stale Raw positions while editing content after a remote layout update', async () => {
+  await render();
+  await click('Raw');
+  const draft = JSON.parse(rawEditor.props.value);
+  const id = workflow.draft.nodes[0].id;
+  layoutRevision = 1;
+  layoutPositions = { ...layoutPositions, [id]: { x: 777, y: 888 } };
+  workflow = {
+    ...workflow,
+    layoutRevision,
+    draft: applyWorkflowPositions(workflow.draft, layoutPositions),
+  };
+  await render();
+  draft.maxSteps = 61;
+  await act(async () => rawEditor.props.onChange(JSON.stringify(draft)));
+  expect(rpc.saveLayout).not.toHaveBeenCalled();
+  await click('Save');
+  expect(rpc.update).toHaveBeenCalledWith(
+    expect.objectContaining({ layout: 'preserve' }),
+  );
+  expect(layoutPositions[id]).toEqual({ x: 777, y: 888 });
+  await click('Visual');
+  expect(canvas.props.nodes[0].position).toEqual({ x: 777, y: 888 });
+  expect(rpc.saveLayout).not.toHaveBeenCalled();
 });

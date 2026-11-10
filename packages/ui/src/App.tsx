@@ -240,9 +240,11 @@ export function App() {
       queryClient.setQueryData(trpc.workflows.list.queryKey(), (all = []) =>
         all.some((old) => old.id === w.id)
           ? all.map((old) =>
-              old.id === w.id ? { draftMatchesLatest: null, ...w } : old,
+              old.id === w.id
+                ? { ...old, draftMatchesLatest: null, ...w }
+                : old,
             )
-          : [...all, { draftMatchesLatest: null, ...w }],
+          : [...all, { draftMatchesLatest: null, layoutRevision: 0, ...w }],
       ),
     onRun: setRunDialog,
     onConnect: features.connectAgent ? () => setConnectDialog(true) : undefined,

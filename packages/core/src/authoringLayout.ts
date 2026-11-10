@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 export const draftLayoutSchema = z
-  .literal('tidy')
+  .enum(['tidy', 'preserve'])
   .describe(
-    'Optional full-workflow Dagre Tidy on this save. Only positions change, with Batch scopes and port ordering. Omit to preserve positions. Updates require current draftRevision even without a replacement draft. Prefer for new graphs or structural edits; no ELK, incremental placement, or preview.',
+    'Presentation layout: tidy runs full-workflow Dagre with Batch scopes and port ordering; preserve keeps saved positions for existing nodes and seeds new nodes from the supplied draft. Updates require current draftRevision, even without a replacement draft. Layout-only changes do not advance it or publish. Omit to accept supplied positions. No server ELK or preview.',
   );
 export type DraftLayout = z.infer<typeof draftLayoutSchema>;

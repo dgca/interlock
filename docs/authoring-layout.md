@@ -1,32 +1,29 @@
-# Arrange drafts during authoring
+# Arrange workflows without changing their content
 
-Set top-level `layout: "tidy"` on MCP `create_workflow`, `update_workflow`, or `edit_workflow` to arrange the saved draft. The shared API uses the same option on `workflows.create`, `createSummary`, `update`, `updateSummary`, and `edit`.
+Dragging nodes or using **Tidy** saves their positions automatically. Layout does
+not require **Save draft**, change `draftRevision`, or publish a version. Undo and
+Redo save the resulting arrangement. Discarding content edits retains saved
+positions for surviving nodes. Node, route, contract, and execution-setting edits
+still use the draft save and publication flow.
 
-The option runs the same Dagre implementation, card geometry, Batch layout, and port-aware crossing reduction as the editor's **Tidy → Dagre**. It is independent of the browser's last selected Tidy mode. Nested Batch positions stay relative to their parent.
+Layouts belong to the workflow and are shared across browsers connected to the
+same Interlock instance. The editor reports pending or failed layout saves and
+offers retry after a failure. Keep Interlock available until a pending save
+finishes. Existing embedded positions remain the fallback until a saved layout
+exists. Batch child positions remain relative to their parent.
 
-Use it when creating a workflow or making structural changes. Omit it for text-only changes or to preserve a manual layout. Without the option, position handling is unchanged, including the `{x:0,y:0}` default for omitted node positions.
+Published definitions and historical run graphs retain their captured positions.
+New publications capture the current layout without changing older versions.
+`draftMatchesLatest` compares content rather than presentation coordinates, so a
+layout-only difference does not produce an unpublished-draft diagnostic.
 
-## Create or update
+## Arrange through MCP or the shared API
 
-Include `layout` beside the definition, not inside it:
-
-```json
-{
-  "name": "New workflow",
-  "definition": {
-    "nodes": [
-      { "id": "entry", "kind": "entry", "label": "Input" },
-      { "id": "exit", "kind": "exit", "label": "Output" }
-    ],
-    "edges": [{ "id": "finish", "source": "entry", "target": "exit" }]
-  },
-  "layout": "tidy"
-}
-```
-
-Incomplete routes and disconnected nodes can still be saved. Publication checks remain separate from layout.
-
-For a full replacement, send `id`, `draftRevision`, `draft`, and `layout` to `update_workflow`. To arrange the stored draft without replacing it, omit `draft`:
+Set top-level `layout: "tidy"` on MCP `create_workflow`, `update_workflow`, or
+`edit_workflow` to run full-workflow Dagre. The shared API accepts the same option
+on `workflows.create`, `createSummary`, `update`, `updateSummary`, and `edit`.
+It uses the editor's Dagre geometry, Batch scopes, and port-aware crossing
+reduction. ELK remains an editor option.
 
 ```json
 {
@@ -36,28 +33,48 @@ For a full replacement, send `id`, `draftRevision`, `draft`, and `layout` to `up
 }
 ```
 
-Read the current revision with `get_workflow` first. Layout and other requested changes save together. Missing or stale revisions reject without saving metadata or positions. Layout-only updates count as a draft save and increment its revision once.
+Read the current revision with `get_workflow` first. Missing or stale revisions
+reject the request without saving metadata, content, or positions. Layout and
+content changes in one request commit together. Only content changes advance
+`draftRevision`; layout-only changes leave the workflow timestamp unchanged.
 
-## Combine layout with edits
+Use `layout: "preserve"` when replacing content while retaining the separately
+saved positions of existing nodes. New nodes use their supplied positions. Omit
+`layout` to accept supplied position changes. Incomplete routes and disconnected
+nodes remain saveable; publication checks stay separate.
 
-Add `layout: "tidy"` beside `edits` in `edit_workflow`. Layout runs after all edits pass save validation. The response's `changes.nodes.updated` includes existing nodes moved by layout. Edits and layout share one revision increment; a request that changes neither keeps its revision and timestamp. An empty edits array can arrange the stored draft.
+`edit_workflow` applies layout after all edits pass save validation. Moved nodes
+appear in `changes.nodes.updated` even when the content revision stays unchanged.
+An empty edits array can arrange the stored graph. A request that changes neither
+content nor positions preserves both revisions.
 
-`detail: "summary"` on create/update and `diagnostics: "summary"` on edit keep their existing compact response behavior. Read `get_workflow` when you need saved positions. This feature does not add a layout preview or return an additional full definition.
+Full workflow reads return current positions in `draft.nodes[].position`, plus
+`layoutRevision`. Compact authoring summaries retain their existing shape. The
+editor uses `workflows.saveLayout` with `id`, `expectedRevision`, and a position
+map to save presentation independently. That operation merges node positions,
+checks the layout revision, and never writes draft content.
 
 ## CLI
 
-Legacy single-workflow creation through `import` accepts `layout` in its JSON input:
-
 ```sh
-interlock import @workflow.json
 interlock update WORKFLOW_ID '{"draftRevision":3,"layout":"tidy"}'
-interlock edit WORKFLOW_ID '{"draftRevision":4,"edits":[],"layout":"tidy"}'
+interlock edit WORKFLOW_ID '{"draftRevision":3,"edits":[],"layout":"tidy"}'
 ```
 
-`update` accepts metadata or a replacement draft, with the same revision rules as the shared API. `edit` accepts stable-ID edits and optional diagnostic mode. Both accept JSON or `@file`. Portable bundle import retains the positions in the bundle; it does not request layout.
+Use the current content revision for each command. Layout-only commands do not
+advance it. Legacy single-workflow creation through `import` also accepts `layout`
+beside `definition`. Both `update` and `edit` accept JSON or `@file`.
 
-## Limits
+## Export and import
 
-Only `"tidy"` is accepted, and it always uses Dagre. ELK remains available in the editor. Incremental placement of missing positions and read-only layout preview are outside this increment.
+Bundle formats remain unchanged. Export embeds the current layout in draft node
+positions and keeps every published definition and deletion identity intact.
+Explicit draft export uses the supplied draft's positions. Import reads embedded
+draft positions into the separate layout record, including old bundles and legacy
+single-workflow files. No bulk rewrite of old definitions is required.
 
-Layout changes positions only and preserves every edge and port, including parallel routes between the same nodes. It does not publish, change retained versions or runs, alter graph execution rules, or repair invalid routes. The request is not a workflow setting and is not saved or exported in the definition. Dagre computes on the local server; large graphs add work to the draft save.
+Position-only differences in an existing draft update layout without a content
+conflict or content-revision increment. Content and metadata replacements retain
+their revision/force checks. Published versions still require exact matching
+content, including their original positions. Any import failure rolls back layout
+updates with the rest of the import.

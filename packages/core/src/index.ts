@@ -1435,6 +1435,7 @@ export * from './pauseHolds.js';
 export * from './workflowTriggers.js';
 
 export * from './workflowDiff.js';
+export * from './workflowLayout.js';
 export * from './eventTriggers.js';
 export * from './doctor.js';
 export * from './report.js';

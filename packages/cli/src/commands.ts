@@ -628,7 +628,7 @@ export async function runCommand(argv: string[]) {
           'executors [json|@file] (list by default; settings/save_settings for shared concurrency, save local profiles with optional concurrency, discover models/efforts, inspect work, respond, retry_model after a model refusal, stop or reconcile an interrupted execution)',
           'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
           'workflow <id>',
-          'update <workflow-id> <json|@file> (metadata or draft replacement; layout:"tidy" arranges with Dagre; draft/layout changes require draftRevision)',
+          'update <workflow-id> <json|@file> (metadata or draft replacement; layout:"tidy" arranges with Dagre, "preserve" keeps saved positions; draft/layout requests require draftRevision; layout-only changes preserve it)',
           'edit <workflow-id> <json|@file> (draftRevision and edits required; optional layout:"tidy"; atomic stable-ID edits)',
           'archive <id>',
           'restore <id>',

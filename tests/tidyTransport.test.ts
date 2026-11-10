@@ -51,7 +51,7 @@ it.each(['http', 'stdio'])(
       ]) {
         const schema = tools.find((t) => t.name === name)!.inputSchema
           .properties!.layout as any;
-        expect(schema.const ?? schema.enum?.[0]).toBe('tidy');
+        expect(schema.enum).toEqual(['tidy', 'preserve']);
         expect(schema.description).toContain('Dagre');
         expect(
           tools.find((t) => t.name === name)!.inputSchema.required,
@@ -75,6 +75,25 @@ it.each(['http', 'stdio'])(
         definition: d,
       });
       expect(plain.draft).toEqual(d);
+      engine.saveLayout({
+        id: plain.id,
+        expectedRevision: 0,
+        positions: { entry: { x: 720, y: 450 } },
+      });
+      const changedContent = structuredClone(plain.draft);
+      changedContent.nodes[1].label = 'Updated content';
+      const preserved = await call('update_workflow', {
+        id: plain.id,
+        draftRevision: plain.draftRevision,
+        draft: changedContent,
+        layout: 'preserve',
+      });
+      expect(preserved.draftRevision).toBe(plain.draftRevision + 1);
+      expect(preserved.draft.nodes[0].position).toEqual({ x: 720, y: 450 });
+      expect(preserved.draft.nodes[1].label).toBe('Updated content');
+      const readPreserved = await call('get_workflow', { id: plain.id });
+      expect(readPreserved.draft.nodes[0].position).toEqual({ x: 720, y: 450 });
+      expect(readPreserved.layoutRevision).toBe(1);
       const w = await call('create_workflow', {
         name: 'Tidy',
         definition: d,
@@ -106,23 +125,23 @@ it.each(['http', 'stdio'])(
         layout: 'tidy',
         detail: 'summary',
       });
-      expect(updated).toMatchObject({ draftRevision: 2 });
+      expect(updated).toMatchObject({ draftRevision: 1 });
       expect(updated).not.toHaveProperty('draft');
       expect(engine.workflow(w.id).draft).toEqual(tidyWorkflow(d));
       const stale = await call('edit_workflow', {
         id: w.id,
-        draftRevision: 1,
+        draftRevision: 2,
         edits: [],
         layout: 'tidy',
       });
       expect(stale).toMatchObject({
         applied: false,
-        draftRevision: 2,
+        draftRevision: 1,
         diagnostics: [{ code: 'stale_revision' }],
       });
       const edited = await call('edit_workflow', {
         id: w.id,
-        draftRevision: 2,
+        draftRevision: 1,
         layout: 'tidy',
         diagnostics: 'summary',
         edits: [
@@ -139,7 +158,7 @@ it.each(['http', 'stdio'])(
       });
       expect(edited).toMatchObject({
         applied: true,
-        draftRevision: 3,
+        draftRevision: 2,
         changes: { nodes: { added: ['new'] } },
       });
       const added = engine
@@ -152,7 +171,7 @@ it.each(['http', 'stdio'])(
         (
           await client.callTool({
             name: 'update_workflow',
-            arguments: { id: w.id, draftRevision: 3, layout: 'missing' },
+            arguments: { id: w.id, draftRevision: 2, layout: 'missing' },
           })
         ).isError,
       ).toBe(true);
@@ -181,7 +200,7 @@ it.each(['http', 'stdio'])(
       ])) as any;
       expect(cliEdited).toMatchObject({
         applied: true,
-        draftRevision: cliUpdated.draftRevision + 1,
+        draftRevision: cliUpdated.draftRevision,
       });
       expect(engine.workflow(imported.id).draft).toEqual(tidyWorkflow(d));
       const layoutOnly = (await runCommand([
@@ -192,7 +211,7 @@ it.each(['http', 'stdio'])(
           layout: 'tidy',
         }),
       ])) as any;
-      expect(layoutOnly.draftRevision).toBe(cliEdited.draftRevision + 1);
+      expect(layoutOnly.draftRevision).toBe(cliEdited.draftRevision);
       expect(layoutOnly.draft).toEqual(tidyWorkflow(d));
     } finally {
       if (previousUrl === undefined) delete process.env.INTERLOCK_URL;
