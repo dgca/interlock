@@ -736,3 +736,112 @@ it('keeps cancellation reasons and continuation context in the live summary', as
     engine.store.close();
   }
 });
+
+it('keeps request errors and accepted versus forwarded results scoped while changing selected node types', async () => {
+  rpc.work.mockResolvedValue([]);
+  detail.definition.nodes = [
+    { id: 'entry', label: 'Input', kind: 'entry' },
+    { id: 'fetch', label: 'Load records', kind: 'fetch' },
+    { id: 'script', label: 'Summarize records', kind: 'script' },
+    { id: 'exit', label: 'Output', kind: 'exit' },
+  ];
+  detail.definition.edges = [];
+  detail.run.status = 'failed';
+  detail.run.executions = [
+    {
+      id: 'http-step',
+      nodeId: 'fetch',
+      label: 'Load records',
+      kind: 'fetch',
+      status: 'failed',
+      input: { query: 'open' },
+      error: 'Service unavailable',
+      request: { method: 'GET', url: 'https://example.test/records' },
+      childRunIds: [],
+      startedAt: new Date().toISOString(),
+    },
+    {
+      id: 'script-step',
+      nodeId: 'script',
+      label: 'Summarize records',
+      kind: 'script',
+      status: 'completed',
+      input: { records: [] },
+      result: { count: 0 },
+      output: { total: 0 },
+      childRunIds: [],
+      startedAt: new Date().toISOString(),
+    },
+  ];
+  await render();
+  await act(async () => graph.props.onSelect('fetch'));
+  const sidebar = container.querySelector('aside')!;
+  expect(sidebar.textContent).toContain('Service unavailable');
+  expect(
+    sidebar.querySelector('[data-json-label="HTTP request"]')?.textContent,
+  ).toContain('example.test');
+  await act(async () => graph.props.onSelect('script'));
+  expect(sidebar.textContent).not.toContain('Service unavailable');
+  expect(sidebar.querySelector('[data-json-label="HTTP request"]')).toBeNull();
+  expect(
+    sidebar.querySelector('[data-json-label="Accepted result"]')?.textContent,
+  ).toBe('{"count":0}');
+  expect(
+    sidebar.querySelector('[data-json-label="Forwarded output"]')?.textContent,
+  ).toBe('{"total":0}');
+});
+
+it('retains falsy polling output and copies the exact external-input target from its contained controls', async () => {
+  rpc.work.mockResolvedValue([]);
+  detail.definition.nodes[1] = {
+    id: 'wait',
+    label: 'Wait for readiness',
+    kind: 'wait',
+    timing: { kind: 'poll' },
+  };
+  detail.run.executions = [
+    {
+      id: 'poll-step',
+      nodeId: 'wait',
+      label: 'Wait for readiness',
+      kind: 'wait',
+      status: 'waiting',
+      nextCheckAt: new Date(Date.now() + 60_000).toISOString(),
+      input: {},
+      check: { count: 3, at: new Date().toISOString(), output: false },
+      childRunIds: [],
+      startedAt: new Date().toISOString(),
+    },
+  ];
+  await render();
+  expect(
+    container.querySelector('aside [data-json-label="Last check output"]')
+      ?.textContent,
+  ).toBe('false');
+  expect(container.querySelector('aside')?.textContent).toContain('Next check');
+  detail.definition.nodes[1] = {
+    id: 'input',
+    label: 'Approve release',
+    kind: 'input',
+  };
+  detail.run.executions.push({
+    id: 'submission-step',
+    nodeId: 'input',
+    label: 'Approve release',
+    kind: 'input',
+    status: 'waiting',
+    input: {},
+    childRunIds: [],
+    startedAt: new Date().toISOString(),
+  });
+  await render(1);
+  await act(async () => graph.props.onSelect('input'));
+  await click('Copy submission target');
+  expect(JSON.parse(writeText.mock.calls[0][0])).toEqual({
+    runId: 'root-run',
+    executionId: 'submission-step',
+  });
+  expect(
+    container.querySelector('aside [data-json-label="Last check output"]'),
+  ).toBeNull();
+});

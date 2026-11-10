@@ -331,27 +331,47 @@ export function RunInspector({
           return child ? [child] : [];
         })
       : [];
-  const stepData = (
+  const managedSelection = selectedWork.some(
+    (work) => work.executor && work.managedExecution?.executionId,
+  );
+  const stepStatus =
+    nodeProgress?.state === 'pending'
+      ? 'not_started'
+      : (nodeProgress?.state ?? execution?.status ?? 'not_started');
+  const kind = nodeKindLabel(node?.kind ?? execution?.kind ?? 'entry');
+  const kindLabel = kind[0].toUpperCase() + kind.slice(1);
+  const stepTitle = node?.label ?? execution?.label ?? 'Workflow input';
+  const stepData = (execution || !nodeId) && (
     <details
       className={styles.stepData}
       open={selectedWork.some((w) => w.executor) ? undefined : true}
     >
       <summary>Step data</summary>
-      {(execution || !nodeId) && (
-        <JsonEditor
-          label="Input"
-          value={execution ? execution.input : run.input}
-        />
-      )}
-      {execution?.result !== undefined && (
-        <JsonEditor label="Accepted result" value={execution.result} />
-      )}
-      {execution?.output !== undefined && (
-        <JsonEditor
-          label={execution.result !== undefined ? 'Forwarded output' : 'Output'}
-          value={execution.output}
-        />
-      )}{' '}
+      <div className={styles.dataContainer}>
+        {(execution || !nodeId) && (
+          <JsonEditor
+            label="Input"
+            rows={5}
+            value={execution ? execution.input : run.input}
+          />
+        )}
+        {execution?.result !== undefined && (
+          <JsonEditor
+            rows={5}
+            label="Accepted result"
+            value={execution.result}
+          />
+        )}
+        {execution?.output !== undefined && (
+          <JsonEditor
+            label={
+              execution.result !== undefined ? 'Forwarded output' : 'Output'
+            }
+            rows={5}
+            value={execution.output}
+          />
+        )}
+      </div>
     </details>
   );
   return (
@@ -598,10 +618,16 @@ export function RunInspector({
           ref={detailRef}
           tabIndex={-1}
           aria-label="Selected step"
-          className={`${styles.detail} ${selectedWork.some((w) => w.executor && w.managedExecution?.executionId) ? styles.managedDetail : ''}`}
+          className={`${styles.detail} ${managedSelection ? styles.managedDetail : ''}`}
         >
           <div className="inspector-heading">
-            <h2>{node?.label ?? execution?.label ?? 'Workflow input'}</h2>
+            <h2>{stepTitle}</h2>
+            {!managedSelection && (
+              <div className={styles.stepMeta}>
+                {kindLabel !== stepTitle && <span>{kindLabel}</span>}
+                <StatusBadge status={stepStatus} />
+              </div>
+            )}
             {selectedWork[0] && assignmentScope(selectedWork[0]) && (
               <p className={styles.stepScope}>
                 {assignmentScope(selectedWork[0])}
@@ -625,9 +651,23 @@ export function RunInspector({
                 />
               );
             })}
-            {progressLabel && !selectedWork.some((w) => w.executor) && (
-              <p className={styles.progressLabel}>{progressLabel}</p>
-            )}
+            {progressLabel &&
+              !waitingForInput &&
+              !execution?.resumeAt &&
+              !execution?.check &&
+              !selectedWork.length &&
+              ![
+                'queued',
+                'not started',
+                'running',
+                'waiting',
+                'finished',
+                'completed',
+                'failed',
+                'cancelled',
+              ].includes(progressLabel.toLowerCase()) && (
+                <p className={styles.progressLabel}>{progressLabel}</p>
+              )}
             {node?.batchId && (
               <section>
                 <h3>Item executions</h3>
@@ -635,60 +675,41 @@ export function RunInspector({
                   Select an item to inspect its own input, output, and
                   assignment.
                 </p>
-                {nodeProgress?.items.length ? (
-                  nodeProgress.items.map((item) => (
-                    <button
-                      key={item.run.id}
-                      className={`${styles.child} ${owner?.id === item.run.id ? styles.selected : ''}`}
-                      onClick={() =>
-                        setSelected({ nodeId: node.id, runId: item.run.id })
-                      }
-                    >
-                      <span>
-                        Item {item.index + 1}
-                        <small>{item.run.id.slice(0, 8)}</small>
-                      </span>
-                      <StatusBadge status={item.state} />
-                    </button>
-                  ))
-                ) : (
-                  <p className="hint">No items have started yet.</p>
-                )}
+                <div className={styles.linkedRuns}>
+                  {nodeProgress?.items.length ? (
+                    nodeProgress.items.map((item) => (
+                      <button
+                        key={item.run.id}
+                        className={`${styles.child} ${owner?.id === item.run.id ? styles.selected : ''}`}
+                        onClick={() =>
+                          setSelected({ nodeId: node.id, runId: item.run.id })
+                        }
+                      >
+                        <span>
+                          Item {item.index + 1}
+                          <small>{item.run.id.slice(0, 8)}</small>
+                        </span>
+                        <StatusBadge status={item.state} />
+                      </button>
+                    ))
+                  ) : (
+                    <p className="hint">No items have started yet.</p>
+                  )}
+                </div>
               </section>
             )}
             {itemRuns.length > 0 && (
               <section>
                 <h3>Batch items</h3>
-                {itemRuns.map((child, index) => (
-                  <button
-                    key={child.id}
-                    className={styles.child}
-                    onClick={() => onOpen(child.id)}
-                  >
-                    <span>
-                      Item {index + 1}
-                      <small>{child.id.slice(0, 8)}</small>
-                    </span>
-                    <StatusBadge
-                      status={progress.runStates[child.id] ?? child.status}
-                    />
-                    <ArrowUpRight size={14} />
-                  </button>
-                ))}
-              </section>
-            )}
-            {execution?.kind === 'workflow' &&
-              execution.childRunIds.map((childId) => {
-                const child = runIndex.get(childId);
-                return child?.parentMode === 'detached' ? (
-                  <section key={child.id}>
-                    <h3>Started run</h3>
+                <div className={styles.linkedRuns}>
+                  {itemRuns.map((child, index) => (
                     <button
+                      key={child.id}
                       className={styles.child}
                       onClick={() => onOpen(child.id)}
                     >
                       <span>
-                        {child.workflowName}
+                        Item {index + 1}
                         <small>{child.id.slice(0, 8)}</small>
                       </span>
                       <StatusBadge
@@ -696,6 +717,35 @@ export function RunInspector({
                       />
                       <ArrowUpRight size={14} />
                     </button>
+                  ))}
+                </div>
+              </section>
+            )}
+            {execution?.kind === 'workflow' &&
+              execution.childRunIds.map((childId) => {
+                const child = runIndex.get(childId);
+                return child ? (
+                  <section key={child.id}>
+                    <h3>
+                      {child.parentMode === 'detached'
+                        ? 'Started run'
+                        : 'Child run'}
+                    </h3>
+                    <div className={styles.linkedRuns}>
+                      <button
+                        className={styles.child}
+                        onClick={() => onOpen(child.id)}
+                      >
+                        <span>
+                          {child.workflowName}
+                          <small>{child.id.slice(0, 8)}</small>
+                        </span>
+                        <StatusBadge
+                          status={progress.runStates[child.id] ?? child.status}
+                        />
+                        <ArrowUpRight size={14} />
+                      </button>
+                    </div>
                   </section>
                 ) : null;
               })}
@@ -705,14 +755,17 @@ export function RunInspector({
               </Button>
             )}
             {selected && !execution && (
-              <p className="hint">
+              <p className={styles.statePanel}>
                 {node?.batchId && !owner
                   ? 'Choose an item above to see its data.'
                   : 'This step has not started.'}
               </p>
             )}
             {waitingForInput && owner && (
-              <>
+              <section
+                className={styles.statePanel}
+                aria-label="External input status"
+              >
                 {(inputHeld ||
                   Boolean(execution.externalInput?.revision) ||
                   progressLabel !== 'Waiting for external input') && (
@@ -742,10 +795,10 @@ export function RunInspector({
                     </Button>
                   )}
                 </CopyButton>
-              </>
+              </section>
             )}
             {execution?.resumeAt && (
-              <p className="hint">
+              <p className={styles.statePanel}>
                 {execution.status === 'waiting'
                   ? 'Resumes at'
                   : 'Scheduled for'}{' '}
@@ -753,56 +806,82 @@ export function RunInspector({
               </p>
             )}
             {execution?.port === 'timeout' && (
-              <p className="hint">Followed Timeout with the original input.</p>
+              <p className={styles.statePanel}>
+                Followed Timeout with the original input.
+              </p>
             )}
             {(execution?.kind === 'script' ||
               execution?.kind === 'fetch' ||
               execution?.kind === 'workflow') &&
               execution.port === 'failed' && (
-                <p className="hint">Followed Failed with error data.</p>
+                <p className={styles.statePanel}>
+                  Followed Failed with error data.
+                </p>
               )}
             {execution?.background && (
-              <>
-                <p className="hint">
-                  Background Script: {execution.background.state}. Deadline{' '}
-                  {new Date(execution.background.deadline).toLocaleString()}.
-                </p>
-                {execution.background.progress && (
-                  <details>
-                    <summary>Script progress</summary>
-                    <pre className={styles.errorDetails}>
-                      {execution.background.progress}
-                    </pre>
-                  </details>
-                )}
-              </>
+              <section>
+                <h3>Script execution</h3>
+                <div className={styles.statePanel}>
+                  <p className="hint">
+                    Background Script: {execution.background.state}. Deadline{' '}
+                    {new Date(execution.background.deadline).toLocaleString()}.
+                  </p>
+                  {execution.background.progress && (
+                    <details>
+                      <summary>Script progress</summary>
+                      <pre className={styles.errorDetails}>
+                        {execution.background.progress}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              </section>
             )}
             {execution?.check && (
-              <>
-                <p className="hint">
-                  Check {execution.check.count} at{' '}
-                  {new Date(execution.check.at).toLocaleString()}
-                  {execution.check.error
-                    ? ` failed: ${execution.check.error}`
-                    : ''}
+              <section>
+                <h3>Latest check</h3>
+                <div className={styles.statePanel}>
+                  <p className="hint">
+                    Check {execution.check.count} at{' '}
+                    {new Date(execution.check.at).toLocaleString()}
+                    {execution.check.error
+                      ? ` failed: ${execution.check.error}`
+                      : ''}
+                  </p>
+                  {execution.nextCheckAt && (
+                    <p className="hint">
+                      Next check{' '}
+                      {new Date(execution.nextCheckAt).toLocaleString()}
+                    </p>
+                  )}
+                  {execution.timeoutAt && (
+                    <p className="hint">
+                      Deadline {new Date(execution.timeoutAt).toLocaleString()}
+                    </p>
+                  )}
+                  {execution.check.output !== undefined && (
+                    <JsonEditor
+                      label="Last check output"
+                      rows={5}
+                      value={execution.check.output}
+                    />
+                  )}
+                </div>
+              </section>
+            )}
+            {(execution?.kind === 'switch' ||
+              execution?.kind === 'condition') &&
+              execution.port && (
+                <p className={styles.statePanel}>
+                  Followed route <strong>{execution.port}</strong>.
                 </p>
-                {execution.check.output !== undefined && (
-                  <JsonEditor
-                    label="Last check output"
-                    value={execution.check.output}
-                  />
-                )}
-              </>
-            )}
-            {execution?.kind === 'switch' && execution.port && (
-              <p className="hint">Followed route {execution.port}.</p>
-            )}
+              )}
             {data.stalls?.items
               .filter((s) => s.executionId === execution?.id)
               .map((s) => (
                 <section key={s.id}>
                   <h3>Stalled</h3>
-                  <p>
+                  <p className={styles.statePanel}>
                     {stallLabels[s.kind]} after {formatDuration(s.thresholdMs)}{' '}
                     of active time. Waiting since{' '}
                     {new Date(s.since).toLocaleString()}.
@@ -824,23 +903,29 @@ export function RunInspector({
                   </p>
                 ))}
             {execution?.error && (
-              <details>
+              <details className={styles.errorPanel} open>
                 <summary>Error details</summary>
                 <pre className={styles.errorDetails}>{execution.error}</pre>
               </details>
             )}
             {execution?.request && (
-              <>
-                <JsonEditor label="HTTP request" value={execution.request} />
-                {execution.completedAt && (
-                  <p className="hint">
-                    Duration:{' '}
-                    {Date.parse(execution.completedAt) -
-                      Date.parse(execution.startedAt)}{' '}
-                    ms
-                  </p>
-                )}
-              </>
+              <section>
+                <div className={styles.statePanel}>
+                  <JsonEditor
+                    label="HTTP request"
+                    rows={5}
+                    value={execution.request}
+                  />
+                  {execution.completedAt && (
+                    <p className="hint">
+                      Duration:{' '}
+                      {Date.parse(execution.completedAt) -
+                        Date.parse(execution.startedAt)}{' '}
+                      ms
+                    </p>
+                  )}
+                </div>
+              </section>
             )}
             {!selectedWork.some(
               (w) => w.executor && w.managedExecution?.executionId,

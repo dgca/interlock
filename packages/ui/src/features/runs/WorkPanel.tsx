@@ -16,7 +16,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import { Bot, Copy } from 'lucide-react';
+import { Copy } from 'lucide-react';
 
 import { api, errorMessage } from '../../lib/api';
 import type { WorkRequest } from '@interlock/core';
@@ -127,14 +127,8 @@ export function WorkPanel({
   );
   return (
     <section
-      className={`work-panel ${styles.workPanel} ${hasManagedExecution ? styles.managed : ''}`}
+      className={`work-panel ${styles.workPanel} ${hasManagedExecution ? styles.managed : styles.connected}`}
     >
-      {!hasManagedExecution && (
-        <div className="section-heading">
-          <Bot size={17} />
-          <h3>Agent assignment</h3>
-        </div>
-      )}
       {!hasManagedExecution && (
         <p className="hint">
           {work.status === 'available'
