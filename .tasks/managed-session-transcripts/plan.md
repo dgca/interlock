@@ -1,0 +1,49 @@
+# Implement managed session transcripts
+
+The [accepted specification](spec.md) owns behavior and AC identifiers. The [intent](intent.md) records scope and the original Git baseline. D1 was explicitly approved by the user. No further product decision is needed for this plan.
+
+## Approach and sequence
+
+1. Add core transcript entry, page, receipt, and bounded query/message contracts. Extend the existing executor operation union with transcript, message, and receipt reads. Keep ordinary inspection compact. Covers AC1, AC6–AC8.
+2. Add dedicated indexed SQLite transcript tables through an appended migration. Expose a small storage module through Store for append, page, delivery receipt, finish, prune, and deletion operations. Maintain byte/count accounting transactionally and prune before inserts. Associate data with managed execution/run IDs and remove it transactionally when managed records or run history are deleted. Covers AC2–AC4, AC8.
+3. Keep transcript payloads outside the managed execution JSON so each progress update does not rewrite the conversation. Reuse SQLite pages, retain bounded entries rather than raw token streams, and checkpoint at bounded intervals. Stop adding transcript data if a pinned reader lets the WAL exceed a conservative write threshold. Never apply a maximum database size to unrelated engine data. Covers AC2–AC4.
+4. Add runtime capture/redaction and operator delivery policy to the executor manager, with small adapter callbacks for visible events and registration of an active message channel. Derive redaction from run-captured Secret revisions plus the active credentials; fail closed if those values cannot be read safely. Keep failures isolated from Agent execution. Persist message identity before dispatch; never retry uncertain delivery. Recheck exact work/attempt ownership, reject unsupported transports, and clear channels on turn completion. Covers AC1, AC4, AC5, AC7, AC8.
+5. Capture visible native events in Codex, Claude Code, and Pi. Use active-turn steering, live streamed input, and Pi steering respectively. Custom launchers reuse the existing message operation and partial progress capture; direct custom execution remains explicitly unsupported for messaging. Do not change permissions or result envelopes. Covers AC1, AC7.
+6. Add a paginated transcript reader and message composer to the existing managed panel. Reuse shared form controls, existing attempt/history information, and preserved mutation acknowledgements. Add bounded transcript reads to the shared server and existing CLI/MCP executor commands. Covers AC6, AC9.
+7. Update managed execution, current limits, history cleanup, README and CLI/MCP guidance. Add a pending patch changeset. Covers AC10.
+
+## Build verification and expected outcomes
+
+Use temporary file-backed and memory stores. Do not point automated checks at the user's `.interlock` library.
+
+| Failure or behavior                                          | Direct check and valid control                                                                                                                                                      | Expected result                                                                                              | Criteria  |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------- |
+| Oversized Unicode or many tiny messages bypass caps          | Append normal text, then oversized multibyte text and a large stream using smaller internal test limits                                                                             | Valid control retained; text remains Unicode; byte/count limits hold and gaps appear                         | AC2       |
+| Repeated capture/prune grows database or WAL forever         | Cycle inserts and pruning in a file-backed store; inspect file sizes; reopen and repeat; hold a second SQLite reader as a negative case                                             | Allocation reaches a reusable high-water mark; capture yields safely when WAL pressure exceeds its threshold | AC2–AC4   |
+| Restart or opt-in history settings defeat expiry             | End an execution, advance time beyond age, restart store/manager with history retention disabled; include a recent control                                                          | Only expired transcript content disappears; recent control and run results remain                            | AC3       |
+| Capture or redaction failure breaks useful work              | Inject a transcript write failure and locked protected store alongside a successful fake harness assignment                                                                         | Agent completes normally; capture reports an omission without leaking credentials                            | AC4, AC5  |
+| Secrets leak through tool output                             | Emit known Secret, encoded variants, claim token and ticket in messages, tool arguments/results and error text; inspect persisted content and transport responses                   | Known values are masked before persistence and reads; ordinary text survives                                 | AC5       |
+| Lost response, duplicate click, or terminal race sends twice | Controlled fake native adapter and launcher count external sends; repeat request ID, conflict its content, finish execution during a pending send, and restart with pending receipt | One dispatch at most; conflicts reject; uncertain delivery stays uncertain and never auto-resends            | AC7, AC8  |
+| Paging mixes executions or skips pruned ranges silently      | Query two attempts with before/after cursors and a pruning step between reads                                                                                                       | Pages remain scoped, bounded, ordered and report gaps                                                        | AC1, AC6  |
+| Native normalization loses tool identity or sends a new turn | Exercise existing native process fixtures with message and tool events and a steering request                                                                                       | Calls/results correlate and target the same active turn; unsupported versions fail explicitly                | AC1, AC7  |
+| History deletion leaves transcript or receipt records        | Preview/delete an eligible tree with transcript data and a surviving control tree                                                                                                   | Deleted tree content is removed transactionally; control and native files remain                             | AC3       |
+| Clients discover inconsistent parameters                     | Exercise HTTP and stdio MCP transport discovery plus CLI/API calls                                                                                                                  | Shared schemas, defaults, bounds and receipt guidance agree                                                  | AC6, AC10 |
+
+Run relevant storage/runtime/adapter/UI tests, affected HTTP and stdio transport tests, `pnpm build`, `pnpm test:package`, and `pnpm format:check`. Record actual results and file-growth measurements, including any native live-test gaps. No real-account model call is part of routine checks.
+
+## Representative UI journey
+
+Use a temporary server with a controllable harness fixture. At desktop, intermediate, and phone widths, open the run's managed step, expand Transcript, inspect a tool result, load older entries, and return to Latest. Type multiline guidance and send it. Confirm the recorded acknowledgement survives a forced refresh error. Reopen the run, select an older attempt, and confirm messaging is unavailable there. Exercise one rejected send to verify draft preservation and one uncertain receipt to verify there is no resend action. Check keyboard focus and readable wrapping. Covers AC6–AC9.
+
+Apply the existing design-system tokens and the Impeccable craft floor before UI edits. Inspect the rendered journey and run its required detector once after the UI is finished. Reuse existing test/browser infrastructure rather than adding a parallel UI framework.
+
+## Independent review and delivery
+
+Build owns the implementation and evidence above. The workflow's fresh reviewer independently reads the complete committed task diff against the original baseline, checks the saved proof, and repeats a focused storage or delivery boundary check. The reviewer must verify caps include receipts, cleanup protects unrelated data, and uncertain sends cannot repeat. Any real defect returns to build through the existing workflow. Final delivery verifies the reviewed commit and reports local completion. No PR or merge is requested.
+
+## Risks and limits
+
+- A SQLite payload budget is not an exact filesystem quota. Index overhead, earlier database allocation, backups, and native harness logs are separate. Checkpointing cannot reclaim a journal pinned by an external reader; skip capture under that pressure and document the limit.
+- Native interfaces evolve. Current official Codex/Claude contracts and installed Pi docs establish the intended paths, but fixture tests do not prove every installed binary supports messaging.
+- Known-value redaction cannot recognize credentials independently acquired by tools. Do not turn transcript capture into an implicit global Secret read or add those values to Agent context.
+- A delivery timeout cannot establish whether a harness accepted a message. Preserve unknown outcomes and request identities rather than claiming exactly-once delivery.
