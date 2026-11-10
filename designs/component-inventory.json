@@ -7,7 +7,7 @@
       "group": "Primitives",
       "family": "Button",
       "implementation": "Existing shared + Mantine",
-      "owners": ["packages/ui/src/components/Button/Button.tsx"],
+      "owners": ["packages/ui/src/design-system/Button.tsx"],
       "variants": "Primary, neutral, ghost, danger; icon, busy, disabled, focus",
       "board": "Actions",
       "penStatus": "base-with-partial-state-coverage",
@@ -132,7 +132,7 @@
       "family": "Textarea",
       "implementation": "Mantine directly",
       "owners": [
-        "packages/ui/src/components/JsonEditor/JsonEditor.tsx",
+        "packages/ui/src/design-system/JsonEditor/JsonEditor.tsx",
         "packages/ui/src/features/workflows/NodeInspector.tsx"
       ],
       "variants": "Resizable multiline, instructions, validation, read-only",
@@ -342,7 +342,7 @@
       "family": "Status badge and count",
       "implementation": "Existing shared + Mantine",
       "owners": [
-        "packages/ui/src/components/Badge/Badge.tsx",
+        "packages/ui/src/components/StatusBadge/StatusBadge.tsx",
         "packages/ui/src/components/PageLayout/PageLayout.tsx"
       ],
       "variants": "Semantic state text, counts, neutral version; avoid color-only status",
@@ -436,7 +436,7 @@
       "family": "Static skeleton",
       "implementation": "Existing shared + Mantine",
       "owners": [
-        "packages/ui/src/components/LoadingSkeleton/LoadingSkeleton.tsx"
+        "packages/ui/src/design-system/LoadingSkeleton/LoadingSkeleton.tsx"
       ],
       "variants": "Text, form, card, list row; no false live data",
       "board": "Feedback",
@@ -711,8 +711,8 @@
       "family": "Modal shell and footer",
       "implementation": "Existing shared over Mantine",
       "owners": [
-        "packages/ui/src/components/Modal/Modal.tsx",
-        "packages/ui/src/components/Modal/ModalLayout.tsx"
+        "packages/ui/src/design-system/Modal/Modal.tsx",
+        "packages/ui/src/design-system/Modal/ModalLayout.tsx"
       ],
       "variants": "Fixed chrome/scroll body; cancel/apply; busy dismissal restrictions",
       "board": "Compositions",
@@ -779,7 +779,7 @@
       "family": "Empty and no-results state",
       "implementation": "Existing shared + feature markup",
       "owners": [
-        "packages/ui/src/components/EmptyState/EmptyState.tsx",
+        "packages/ui/src/design-system/EmptyState/EmptyState.tsx",
         "packages/ui/src/features/workflows/WorkflowLibrary.tsx"
       ],
       "variants": "Initial versus filtered empty; useful recovery action",
@@ -974,7 +974,7 @@
       "group": "Specialist editors",
       "family": "JSON editor",
       "implementation": "Existing shared",
-      "owners": ["packages/ui/src/components/JsonEditor/JsonEditor.tsx"],
+      "owners": ["packages/ui/src/design-system/JsonEditor/JsonEditor.tsx"],
       "variants": "Editable/read-only, invalid text retained, validation, monospace",
       "board": "Fields",
       "penStatus": "base-with-partial-state-coverage",
@@ -993,7 +993,7 @@
       "family": "Script/code editor",
       "implementation": "Existing shared + Prism/simple editor",
       "owners": [
-        "packages/ui/src/components/CodeEditor/CodeEditor.tsx",
+        "packages/ui/src/design-system/CodeEditor/CodeEditor.tsx",
         "packages/ui/src/features/workflows/ScriptCode.tsx"
       ],
       "variants": "Line gutter, JavaScript/Bash/JSON, language choice, full-height raw",

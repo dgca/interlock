@@ -1,4 +1,5 @@
-import { Group, NativeSelect, TextInput } from '@mantine/core';
+import { Group, NativeSelect, TextInput } from '../../design-system';
+
 import { useEffect, useRef, useState } from 'react';
 
 const units = [

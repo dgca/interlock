@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { blankDefinition, nodeSchema } from '@interlock/core';
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
@@ -10,7 +10,7 @@ import { switchDefinition } from './fixtures/switch';
 import { canvasGraph } from '../packages/ui/src/features/workflows/canvasGraph';
 import { parseRawDefinition } from '../packages/ui/src/features/workflows/rawDefinition';
 
-vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
+vi.mock('../packages/ui/src/design-system/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', {}, children),
 }));
 vi.mock(
@@ -104,7 +104,7 @@ it('creates a Branch with editable Boolean routes', async () => {
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Test',
@@ -157,7 +157,7 @@ it('removes deleted and renamed Switch connections only when settings are applie
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Test',
@@ -240,7 +240,7 @@ it('creates a Batch from the ordinary add dialog without a nested definition or 
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Test',
@@ -323,7 +323,7 @@ it('adds an Agent directly inside a Batch and connects its first item route', as
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Test',
@@ -378,7 +378,7 @@ it.each(['entry', 'exit'] as const)(
     await act(async () =>
       root.render(
         h(
-          MantineProvider,
+          DesignSystemProvider,
           {},
           h(SettingsDialog, {
             name: 'Test',
@@ -426,7 +426,7 @@ it('shows intrinsic Batch array contracts and explains selection by Items path',
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Test',
@@ -500,7 +500,7 @@ it.each([undefined, 'parent'])(
       await act(async () =>
         root.render(
           h(
-            MantineProvider,
+            DesignSystemProvider,
             {},
             h(SettingsDialog, {
               key: kind,
@@ -556,7 +556,7 @@ it('creates a named unpublished child from Add node and keeps the dialog after a
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Parent',
@@ -640,7 +640,7 @@ it('offers only library workflows and the current parents children as targets', 
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Parent',
@@ -668,7 +668,7 @@ it('creates a Wait with a duration expressed in days', async () => {
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Test',
@@ -719,7 +719,7 @@ it('removes the Timeout edge when disabling the deadline, preserving the Result 
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Test',

@@ -2,7 +2,7 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import {
   definitionSchema,
   blankDefinition,
@@ -14,7 +14,7 @@ import {
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
 import { DurationInput } from '../packages/ui/src/features/workflows/DurationInput';
 
-vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
+vi.mock('../packages/ui/src/design-system/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', {}, children),
 }));
 let root: Root, container: HTMLDivElement;
@@ -64,7 +64,7 @@ async function render(
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Test',
@@ -877,7 +877,7 @@ it('clears obsolete fractional validity when a parent replaces the controlled du
     await act(async () =>
       root.render(
         h(
-          MantineProvider,
+          DesignSystemProvider,
           {},
           h(DurationInput, {
             label: 'Duration',
@@ -948,7 +948,7 @@ it('edits shared workflow stall durations while preserving every threshold', asy
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Workflow',
@@ -1077,7 +1077,7 @@ it('isolates invalid resource drafts when changing node type', async () => {
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           creating: true,
@@ -1121,7 +1121,7 @@ it('applies prompt pinning through workflow settings and cancels unpublished edi
     await act(async () =>
       root.render(
         h(
-          MantineProvider,
+          DesignSystemProvider,
           {},
           h(SettingsDialog, {
             name: 'Workflow',

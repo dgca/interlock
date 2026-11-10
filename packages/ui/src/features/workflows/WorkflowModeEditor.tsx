@@ -1,4 +1,5 @@
-import { Radio, Stack } from '@mantine/core';
+import { Radio, Stack } from '../../design-system';
+
 import { useRef } from 'react';
 import { STARTED_RUN_SCHEMA, type WorkflowNode } from '@interlock/core';
 

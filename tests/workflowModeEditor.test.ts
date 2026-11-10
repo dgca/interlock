@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { STARTED_RUN_SCHEMA, type WorkflowNode } from '@interlock/core';
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
 import { workflowCall } from './fixtures/detached';
-vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
+vi.mock('../packages/ui/src/design-system/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', {}, children),
 }));
 let container: HTMLDivElement, root: Root;
@@ -60,7 +60,7 @@ async function render(
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Supervisor',

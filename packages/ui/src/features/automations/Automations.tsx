@@ -1,3 +1,13 @@
+import {
+  Alert,
+  Button,
+  Loader,
+  Select,
+  TextInput,
+  PageHeader,
+  workspacePage,
+} from '../../design-system';
+
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import { useEffect, useState } from 'react';
 import {
@@ -8,7 +18,7 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router';
-import { Alert, Button, Loader, Select, TextInput } from '@mantine/core';
+
 import {
   ArrowRight,
   CalendarClock,
@@ -19,11 +29,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { AppContext } from '../../App';
-import {
-  PageHeader,
-  PageTabs,
-  workspacePage,
-} from '../../components/PageLayout/PageLayout';
+import { PageTabs } from '../../components/PageLayout/PageLayout';
 import { paths } from '../../routes/paths';
 import { api, errorMessage } from '../../lib/api';
 import { AutomationEditor } from './AutomationEditor';
@@ -66,7 +72,10 @@ export function Automations() {
           {context.loadError ? (
             <>
               <Alert color="red">{context.loadError}</Alert>
-              <Button onClick={() => void context.retryLoad()}>
+              <Button
+                variant="primary"
+                onClick={() => void context.retryLoad()}
+              >
                 Retry loading
               </Button>
             </>
@@ -109,7 +118,7 @@ function AutomationType() {
         backLabel="Back to automations"
         actions={
           <Button
-            variant="default"
+            variant="secondary"
             onClick={() => void navigate(returnHref(search))}
           >
             Cancel
@@ -222,7 +231,7 @@ function AutomationList() {
       <PageHeader
         title="Automations"
         actions={
-          <Button component={Link} to={newHref}>
+          <Button variant="primary" component={Link} to={newHref}>
             New automation
           </Button>
         }
@@ -260,7 +269,7 @@ function AutomationList() {
             }
           >
             {error}
-            <Button variant="subtle" onClick={() => setReload((n) => n + 1)}>
+            <Button variant="ghost" onClick={() => setReload((n) => n + 1)}>
               Retry loading
             </Button>
           </Alert>
@@ -341,7 +350,7 @@ function AutomationList() {
               </span>
               {query.offset > 0 && (
                 <Button
-                  variant="default"
+                  variant="secondary"
                   component={Link}
                   to={listHref({
                     ...query,
@@ -353,7 +362,7 @@ function AutomationList() {
               )}
               {page.nextOffset !== null && (
                 <Button
-                  variant="default"
+                  variant="secondary"
                   component={Link}
                   to={listHref({ ...query, offset: page.nextOffset })}
                 >
@@ -375,7 +384,7 @@ function AutomationList() {
                 ? 'Change your filters or create an automation.'
                 : 'Start a workflow on a schedule or when an Interlock event occurs.'}
             </p>
-            <Button component={Link} to={newHref}>
+            <Button variant="primary" component={Link} to={newHref}>
               New automation
             </Button>
           </div>

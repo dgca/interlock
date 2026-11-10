@@ -1,6 +1,7 @@
-import { LoadingSkeleton } from '../../components/LoadingSkeleton/LoadingSkeleton';
+import { LoadingSkeleton, Select, Stack, Text } from '../../design-system';
+
 import { useEffect, useRef, useState } from 'react';
-import { Select, Stack, Text } from '@mantine/core';
+
 import { api, errorMessage } from '../../lib/api';
 import { paths } from '../../routes/paths';
 import type { SavedVariable } from '@interlock/core';

@@ -1,4 +1,5 @@
-import { NativeSelect, Stack, Text, TextInput } from '@mantine/core';
+import { NativeSelect, Stack, Text, TextInput } from '../../design-system';
+
 import {
   variableImportBindingsSchema,
   type VariableImportBindings,

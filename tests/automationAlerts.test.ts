@@ -2,7 +2,7 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { RunList } from '../packages/ui/src/features/runs/RunList';
 const rpc = vi.hoisted(() => ({ attention: vi.fn(), summaries: vi.fn() }));
@@ -65,7 +65,7 @@ it('UI236-R1 retains attention offset across unrelated run ticks and clamps afte
     act(async () =>
       root.render(
         h(
-          MantineProvider,
+          DesignSystemProvider,
           {},
           h(
             MemoryRouter,

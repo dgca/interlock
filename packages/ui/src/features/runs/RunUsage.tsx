@@ -1,9 +1,18 @@
-import { LoadingSkeleton } from '../../components/LoadingSkeleton/LoadingSkeleton';
+import {
+  LoadingSkeleton,
+  Checkbox,
+  Group,
+  NativeSelect,
+  Stack,
+  Text,
+  Button,
+} from '../../design-system';
+
 import { useEffect, useState } from 'react';
-import { Checkbox, Group, NativeSelect, Stack, Text } from '@mantine/core';
+
 import type { UsageMetric } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
-import { Button } from '../../components/Button/Button';
+
 import styles from './RunUsage.module.css';
 
 type Report = Awaited<ReturnType<typeof api.runs.usage.query>>;

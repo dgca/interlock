@@ -1,4 +1,14 @@
-import { NativeSelect, Textarea } from '@mantine/core';
+import {
+  NativeSelect,
+  Textarea,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  FormPlaceholder,
+  LoadingSkeleton,
+  Button,
+} from '../../design-system';
+
 import { useEffect, useState, useRef } from 'react';
 import { Play } from 'lucide-react';
 import type {
@@ -7,13 +17,7 @@ import type {
   WorkflowVersion,
   RunVersionPolicy,
 } from '@interlock/core';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import {
-  FormPlaceholder,
-  LoadingSkeleton,
-} from '../../components/LoadingSkeleton/LoadingSkeleton';
-import { Button } from '../../components/Button/Button';
+
 import { SchemaInput } from '../../components/SchemaInput/SchemaInput';
 import { api, errorMessage } from '../../lib/api';
 import { TagFields, tagsFromRows, type TagRow } from './RunTags';

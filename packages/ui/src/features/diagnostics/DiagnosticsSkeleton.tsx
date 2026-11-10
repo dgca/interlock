@@ -1,12 +1,11 @@
-import { Group, Stack } from '@mantine/core';
 import {
-  PageHeader,
-  workspacePage,
-} from '../../components/PageLayout/PageLayout';
-import {
+  Group,
+  Stack,
   LoadingSkeleton,
   Placeholder,
-} from '../../components/LoadingSkeleton/LoadingSkeleton';
+  PageHeader,
+  workspacePage,
+} from '../../design-system';
 
 export function DiagnosticsLoadingContent() {
   return (

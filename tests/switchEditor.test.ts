@@ -2,12 +2,12 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import type { Json } from '@interlock/core';
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
 import { switchDefinition } from './fixtures/switch';
 
-vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
+vi.mock('../packages/ui/src/design-system/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', {}, children),
 }));
 let root: Root, container: HTMLDivElement;
@@ -71,7 +71,7 @@ async function render(
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(SettingsDialog, {
           name: 'Test',

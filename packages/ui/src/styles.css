@@ -1,62 +1,21 @@
-:root {
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  color-scheme: dark;
-  --font: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --mono: 'SFMono-Regular', Consolas, monospace;
-  --bg: var(--mantine-color-dark-8);
-  --surface: var(--mantine-color-dark-7);
-  --surface-raised: var(--mantine-color-dark-6);
-  --surface-hover: #303039;
-  --canvas: var(--mantine-color-dark-9);
-  --toolbar: #202027ee;
-  --border: var(--mantine-color-dark-5);
-  --border-strong: var(--mantine-color-dark-4);
-  --text: var(--mantine-color-dark-0);
-  --text-secondary: var(--mantine-color-dark-1);
-  --muted: var(--mantine-color-dark-2);
-  --text-dim: var(--mantine-color-dark-3);
-  --accent: var(--mantine-color-blue-4);
-  --accent-hover: var(--mantine-color-blue-3);
-  --accent-text: var(--mantine-color-blue-2);
-  --accent-soft: #232e42;
-  --accent-border: #425e85;
-  --pink: var(--mantine-color-pink-3);
-  --pink-soft: #352638;
-  --pink-border: #78536e;
-  --edge: #7189ae;
-  --edge-exception: var(--mantine-color-yellow-5);
-  --focus-ring: #82b4ff22;
-  --canvas-dot: #35353f;
-}
 * {
   box-sizing: border-box;
 }
 body {
   margin: 0;
 }
-button,
 h1 {
   font-size: 30px;
-  letter-spacing: -0.8px;
-  font-weight: 550;
+  letter-spacing: 0;
+  font-weight: 600;
 }
 h2 {
   font-size: 17px;
-  font-weight: 550;
+  font-weight: 600;
 }
 h3 {
   font-size: 13px;
-  font-weight: 550;
+  font-weight: 600;
 }
 p {
   line-height: 1.7;

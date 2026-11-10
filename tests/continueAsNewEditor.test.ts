@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { expect, it, vi } from 'vitest';
 import { blankDefinition, type WorkflowNode } from '@interlock/core';
 import { NodeInspector } from '../packages/ui/src/features/workflows/NodeInspector';
@@ -28,7 +28,7 @@ it('edits Exit continuation without changing the workflow output contract', asyn
     act(async () =>
       root.render(
         h(
-          MantineProvider,
+          DesignSystemProvider,
           {},
           h(NodeInspector, {
             node,

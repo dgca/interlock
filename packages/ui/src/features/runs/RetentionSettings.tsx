@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Group,
@@ -8,11 +7,16 @@ import {
   Skeleton,
   Stack,
   Text,
-} from '@mantine/core';
+  Button,
+  Modal,
+  ModalBody,
+  ModalFooter,
+} from '../../design-system';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { retentionPolicySchema, type RetentionPolicy } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
+
 import { api, errorMessage } from '../../lib/api';
 import styles from './RetentionSettings.module.css';
 

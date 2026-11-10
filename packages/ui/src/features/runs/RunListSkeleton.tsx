@@ -1,12 +1,15 @@
-import { useSearchParams } from 'react-router';
-import { Stack } from '@mantine/core';
-import { Placeholder } from '../../components/LoadingSkeleton/LoadingSkeleton';
-import { ListTableSkeleton } from '../../components/ListTable/ListTable';
 import {
+  Stack,
+  Placeholder,
   PageHeader,
   PageTabsSkeleton,
   workspacePage,
-} from '../../components/PageLayout/PageLayout';
+} from '../../design-system';
+
+import { useSearchParams } from 'react-router';
+
+import { ListTableSkeleton } from '../../components/ListTable/ListTable';
+
 import { runTab } from './runAttention';
 import { runColumns, runViews } from './runListConfig';
 import classes from './RunList.module.css';
@@ -16,9 +19,15 @@ export function RunListSkeleton({ embedded = false }: { embedded?: boolean }) {
   return (
     <section className={workspacePage.page} aria-busy="true">
       {!embedded && <PageHeader title="Runs" />}
-      <PageTabsSkeleton items={runViews} value={runTab(search.get('tab'))}>
-        <Placeholder h={30} w={130} />
-      </PageTabsSkeleton>
+      <PageTabsSkeleton
+        items={runViews}
+        value={runTab(search.get('tab'))}
+        toolbar={
+          <>
+            <Placeholder h={30} w={130} />
+          </>
+        }
+      />
       <div className={workspacePage.content}>
         <RunRowsSkeleton />
       </div>

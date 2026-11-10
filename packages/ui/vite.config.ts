@@ -1,5 +1,24 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 export default defineConfig({
+  plugins: [
+    {
+      name: 'interlock-font-license',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'assets/ibm-plex-OFL.txt',
+          source: readFileSync(
+            new URL(
+              './src/design-system/assets/fonts/OFL.txt',
+              import.meta.url,
+            ),
+            'utf8',
+          ),
+        });
+      },
+    },
+  ],
   server: {
     port: 5173,
     strictPort: true,

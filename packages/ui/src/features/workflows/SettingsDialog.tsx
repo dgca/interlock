@@ -1,14 +1,19 @@
-import { StallPolicyEditor } from '../executors/StallSettings';
-import { ExecutorSelect } from '../executors/ExecutorSelect';
 import {
-  Button as MantineButton,
+  Button,
   TextInput,
   Textarea,
   NativeSelect,
   Input,
   SegmentedControl,
   Switch,
-} from '@mantine/core';
+  Modal,
+  ModalBody,
+  ModalFooter,
+} from '../../design-system';
+
+import { StallPolicyEditor } from '../executors/StallSettings';
+import { ExecutorSelect } from '../executors/ExecutorSelect';
+
 import { useRef, useState } from 'react';
 import { Download, Plus, Trash2 } from 'lucide-react';
 import {
@@ -18,9 +23,7 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@interlock/core';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import { Button } from '../../components/Button/Button';
+
 import {
   ContractEditor,
   ContractForm,
@@ -535,14 +538,14 @@ export function SettingsDialog({
                 !creating &&
                 node.kind !== 'entry' &&
                 node.kind !== 'exit' && (
-                  <MantineButton
-                    variant="subtle"
+                  <Button
+                    variant="ghost"
                     color="red"
                     leftSection={<Trash2 size={14} aria-hidden />}
                     onClick={onDelete}
                   >
                     Delete node
-                  </MantineButton>
+                  </Button>
                 )}
               {!node && !creating && (
                 <p className="hint">

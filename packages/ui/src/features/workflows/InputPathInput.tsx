@@ -1,5 +1,7 @@
+import { Autocomplete } from '../../design-system';
+
 import type { ComponentProps } from 'react';
-import { Autocomplete } from '@mantine/core';
+
 import { contractAtPath, contractPaths, type Contract } from '@interlock/core';
 import { SuggestionInput } from './SuggestionInput';
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
@@ -22,7 +22,7 @@ vi.mock('../packages/ui/src/lib/api', () => ({
   },
   errorMessage: (error: Error) => error.message,
 }));
-vi.mock('../packages/ui/src/components/JsonEditor/JsonEditor', () => ({
+vi.mock('../packages/ui/src/design-system/JsonEditor/JsonEditor', () => ({
   JsonEditor: () => null,
 }));
 
@@ -31,7 +31,7 @@ let work: WorkRequest;
 function display() {
   root.render(
     h(
-      MantineProvider,
+      DesignSystemProvider,
       {},
       h(WorkPanel, {
         work: (({ token, ...rest }) => rest)(work),

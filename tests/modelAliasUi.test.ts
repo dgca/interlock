@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import type { SavedModelAlias } from '@interlock/core';
 import { ModelAliases } from '../packages/ui/src/features/executors/ModelAliases';
@@ -19,7 +19,7 @@ vi.mock('../packages/ui/src/lib/api', () => ({
   },
   errorMessage: (error: Error) => error.message,
 }));
-vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
+vi.mock('../packages/ui/src/design-system/Modal/Modal', () => ({
   Modal: ({ title, children }: any) =>
     h('section', { role: 'dialog', 'aria-label': title }, children),
 }));
@@ -121,7 +121,9 @@ async function settle() {
 }
 async function renderSection(onDirty = vi.fn()) {
   await act(async () =>
-    root.render(h(MantineProvider, {}, h(ModelAliases, { profiles, onDirty }))),
+    root.render(
+      h(DesignSystemProvider, {}, h(ModelAliases, { profiles, onDirty })),
+    ),
   );
   await settle();
   return onDirty;
@@ -296,7 +298,7 @@ it('selects stable alias IDs and leaves thinking effort to candidate settings', 
       onEffortChange: vi.fn(),
     });
   }
-  await act(async () => root.render(h(MantineProvider, {}, h(Picker))));
+  await act(async () => root.render(h(DesignSystemProvider, {}, h(Picker))));
   await settle();
   await click(labelled('Model'));
   expect(document.body.textContent).toContain('Model aliases');
@@ -317,7 +319,7 @@ it('preserves explicit effort overrides on an alias without claiming they are un
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(ModelSettings, {
           allowAliases: true,
@@ -347,7 +349,7 @@ it('selects a long literal model ID without sending it as an alias search', asyn
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(ModelSettings, {
           allowAliases: true,

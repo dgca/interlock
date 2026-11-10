@@ -1,4 +1,4 @@
-import { Badge as MantineBadge } from '@mantine/core';
+import { Badge } from '../../design-system';
 
 const statusColors: Record<string, string> = {
   completed: 'green',
@@ -11,16 +11,14 @@ const statusColors: Record<string, string> = {
   failed: 'red',
   cancelled: 'gray',
 };
-export function Badge({ status }: { status: string }) {
+export function StatusBadge({ status }: { status: string }) {
   return (
-    <MantineBadge
+    <Badge
+      component="span"
       color={statusColors[status] ?? 'gray'}
       variant="light"
-      size="sm"
-      tt="none"
-      fw={500}
     >
       {status.replaceAll('_', ' ')}
-    </MantineBadge>
+    </Badge>
   );
 }

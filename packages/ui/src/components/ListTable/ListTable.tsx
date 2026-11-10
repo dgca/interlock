@@ -1,6 +1,8 @@
+import { LoadingSkeleton } from '../../design-system';
+
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
-import { LoadingSkeleton } from '../LoadingSkeleton/LoadingSkeleton';
+
 import classes from './ListTable.module.css';
 
 export type ListTableColumn = {

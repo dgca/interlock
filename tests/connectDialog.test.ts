@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ConnectDialog } from '../packages/ui/src/components/ConnectDialog/ConnectDialog';
 
@@ -10,7 +10,7 @@ vi.mock('../packages/ui/src/lib/api', () => ({
   api: { connection: { query } },
   errorMessage: (error: Error) => error.message,
 }));
-vi.mock('../packages/ui/src/components/Modal/Modal', () => ({
+vi.mock('../packages/ui/src/design-system/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', {}, children),
 }));
 let root: Root, container: HTMLDivElement;
@@ -48,7 +48,9 @@ beforeEach(async () => {
   document.body.append(container);
   root = createRoot(container);
   await act(async () =>
-    root.render(h(MantineProvider, {}, h(ConnectDialog, { onClose: vi.fn() }))),
+    root.render(
+      h(DesignSystemProvider, {}, h(ConnectDialog, { onClose: vi.fn() })),
+    ),
   );
 });
 afterEach(async () => {

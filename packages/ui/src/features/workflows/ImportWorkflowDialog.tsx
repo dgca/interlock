@@ -1,13 +1,21 @@
 import {
   LoadingSkeleton,
   Placeholder,
-} from '../../components/LoadingSkeleton/LoadingSkeleton';
+  Checkbox,
+  Radio,
+  Stack,
+  Textarea,
+  TextInput,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  Button,
+} from '../../design-system';
+
 import { useEffect, useRef, useState } from 'react';
-import { Checkbox, Radio, Stack, Textarea, TextInput } from '@mantine/core';
+
 import { BookOpen, Braces, FileJson, FolderGit2, Upload } from 'lucide-react';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import { Button } from '../../components/Button/Button';
+
 import { api, errorMessage } from '../../lib/api';
 import type { Action } from '../../lib/useActionFeedback';
 import { importWorkflowJson } from './importWorkflowJson';

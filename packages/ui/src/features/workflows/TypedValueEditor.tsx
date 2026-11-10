@@ -1,4 +1,11 @@
-import { Input, SegmentedControl, Select, TextInput } from '@mantine/core';
+import {
+  Input,
+  SegmentedControl,
+  Select,
+  TextInput,
+  JsonEditor,
+} from '../../design-system';
+
 import { useEffect, useRef, useState } from 'react';
 import {
   fieldType,
@@ -6,7 +13,7 @@ import {
   type Contract,
   type Json,
 } from '@interlock/core';
-import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
+
 import { SuggestionInput } from './SuggestionInput';
 import styles from './SwitchEditor.module.css';
 

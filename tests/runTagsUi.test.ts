@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { blankDefinition, type Workflow } from '@interlock/core';
 import { RunDialog } from '../packages/ui/src/features/runs/RunDialog';
@@ -70,7 +70,7 @@ async function render() {
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         { env: 'test' },
         h(RunDialog, {
           workflow: {

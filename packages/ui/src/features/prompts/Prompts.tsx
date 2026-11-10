@@ -1,14 +1,24 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
 import {
   ActionIcon,
-  Button as MantineButton,
+  Button,
   Menu,
   Stack,
   Text,
   TextInput,
   Textarea,
-} from '@mantine/core';
+  Modal,
+  ModalBody,
+  ModalFooter,
+  EmptyState,
+  ActionError,
+  PageHeader,
+  PageToolbar,
+  workspacePage,
+} from '../../design-system';
+
+import { useEffect, useId, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router';
+
 import {
   ArrowRight,
   MoreHorizontal,
@@ -18,22 +28,15 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { PromptContent, PromptUsage, SavedPrompt } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import { ActionError } from '../../components/ActionError/ActionError';
+
 import type { Action } from '../../lib/useActionFeedback';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
-import {
-  PageHeader,
-  PageToolbar,
-  workspacePage,
-} from '../../components/PageLayout/PageLayout';
+
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
-import { EmptyState } from '../../components/EmptyState/EmptyState';
+
 import { promptColumns } from './PromptSkeleton';
 import styles from './Prompts.module.css';
 
@@ -116,9 +119,9 @@ export function PromptLibrary({
       <PageHeader
         title="Prompts"
         actions={
-          <MantineButton variant="filled" onClick={openCreate}>
+          <Button variant="primary" onClick={openCreate}>
             <Plus size={14} /> New prompt
-          </MantineButton>
+          </Button>
         }
       />
       <PageToolbar
@@ -162,8 +165,8 @@ export function PromptLibrary({
           </ListTable>
         ) : (
           <EmptyState title={query ? 'No matching prompts' : 'No prompts yet'}>
-            <MantineButton
-              variant="default"
+            <Button
+              variant="secondary"
               onClick={
                 query
                   ? () => {
@@ -174,7 +177,7 @@ export function PromptLibrary({
               }
             >
               {query ? 'Clear search' : 'Create a prompt'}
-            </MantineButton>
+            </Button>
           </EmptyState>
         )}
       </div>

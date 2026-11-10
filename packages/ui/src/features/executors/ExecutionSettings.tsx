@@ -1,17 +1,20 @@
-import { StallSettings } from './StallSettings';
-import { RetentionSettings } from '../runs/RetentionSettings';
-import { useEffect, useId, useState } from 'react';
 import {
   NativeSelect,
   NumberInput,
   Skeleton,
   VisuallyHidden,
-} from '@mantine/core';
+  Button,
+  workspacePage,
+} from '../../design-system';
+
+import { StallSettings } from './StallSettings';
+import { RetentionSettings } from '../runs/RetentionSettings';
+import { useEffect, useId, useState } from 'react';
+
 import { executorSettingsSchema } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
+
 import { api, errorMessage } from '../../lib/api';
 import styles from './Harnesses.module.css';
-import { workspacePage } from '../../components/PageLayout/PageLayout';
 
 export function ExecutionSettings({
   onDirty,

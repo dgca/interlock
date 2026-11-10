@@ -2,7 +2,7 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { VariableLibrary } from '../packages/ui/src/features/variables/Variables';
 const rpc = vi.hoisted(() => ({ read: vi.fn() }));
@@ -54,7 +54,7 @@ async function render() {
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(
           MemoryRouter,

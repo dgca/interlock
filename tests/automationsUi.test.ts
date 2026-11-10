@@ -2,7 +2,7 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   blankDefinition,
@@ -144,7 +144,7 @@ async function render(path = '/automations/new?type=schedule&workflow=w') {
   await act(async () =>
     root.render(
       h(
-        MantineProvider,
+        DesignSystemProvider,
         {},
         h(
           MemoryRouter,

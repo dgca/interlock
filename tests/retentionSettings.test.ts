@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { RetentionSettings } from '../packages/ui/src/features/runs/RetentionSettings';
 
@@ -66,7 +66,11 @@ afterEach(async () => {
 const render = (workflowId?: string) =>
   act(async () =>
     root.render(
-      h(MantineProvider, { env: 'test' }, h(RetentionSettings, { workflowId })),
+      h(
+        DesignSystemProvider,
+        { env: 'test' },
+        h(RetentionSettings, { workflowId }),
+      ),
     ),
   );
 const saveButton = () =>

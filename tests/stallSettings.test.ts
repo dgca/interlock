@@ -2,7 +2,7 @@
 import { act, createElement as h } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { MantineProvider } from '../packages/ui/node_modules/@mantine/core';
+import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { StallSettings } from '../packages/ui/src/features/executors/StallSettings';
 
 const mocks = vi.hoisted(() => ({ settings: vi.fn(), configure: vi.fn() }));
@@ -57,7 +57,7 @@ it('Reload restores valid stall settings even when value and revision match an i
   mocks.settings.mockResolvedValue(saved);
   mocks.configure.mockRejectedValueOnce(new Error('Save unavailable'));
   await act(async () =>
-    root.render(h(MantineProvider, { env: 'test' }, h(StallSettings))),
+    root.render(h(DesignSystemProvider, { env: 'test' }, h(StallSettings))),
   );
   await fill('2');
   await act(async () => button('Save stall settings').click());
@@ -96,7 +96,7 @@ it('uses library switches to configure and disable thresholds and idle recovery'
     policy: request.policy,
   }));
   await act(async () =>
-    root.render(h(MantineProvider, { env: 'test' }, h(StallSettings))),
+    root.render(h(DesignSystemProvider, { env: 'test' }, h(StallSettings))),
   );
   const toggle = async (name: string) => {
     const label = [...container.querySelectorAll('label')].find((label) =>
@@ -133,7 +133,7 @@ it('keeps zero-attempt recovery off until enabled and requires a positive count'
     policy: { idleRecovery: { maxRecoveries: 0, message: 'Existing nudge' } },
   });
   await act(async () =>
-    root.render(h(MantineProvider, { env: 'test' }, h(StallSettings))),
+    root.render(h(DesignSystemProvider, { env: 'test' }, h(StallSettings))),
   );
   const label = [...container.querySelectorAll('label')].find((label) =>
     label.textContent?.includes('Managed idle recovery'),

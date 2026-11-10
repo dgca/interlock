@@ -1,9 +1,14 @@
-import { LoadingSkeleton } from '../../components/LoadingSkeleton/LoadingSkeleton';
+import {
+  LoadingSkeleton,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  Button,
+} from '../../design-system';
+
 import { useEffect, useState } from 'react';
 import type { WorkflowDefinition, WorkflowVersion } from '@interlock/core';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import { Button } from '../../components/Button/Button';
+
 import { api, errorMessage } from '../../lib/api';
 import {
   compareWorkflow,

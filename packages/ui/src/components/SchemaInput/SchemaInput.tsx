@@ -4,10 +4,12 @@ import {
   NumberInput,
   Select,
   SegmentedControl,
-} from '@mantine/core';
+  JsonEditor,
+} from '../../design-system';
+
 import { useRef } from 'react';
 import type { Json } from '@interlock/core';
-import { JsonEditor } from '../JsonEditor/JsonEditor';
+
 /** Common object contracts get fields; complex values remain editable JSON. */
 export function SchemaInput({
   schema,

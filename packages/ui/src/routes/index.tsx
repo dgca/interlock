@@ -1,4 +1,12 @@
 import {
+  Button,
+  Center,
+  Loader,
+  PageHeader,
+  workspacePage,
+} from '../design-system';
+
+import {
   runTab as parseRunTab,
   type RunTab,
 } from '../features/runs/runAttention';
@@ -16,9 +24,9 @@ import { App, type AppContext } from '../App';
 import { paths, runOffset, runTagFilter } from './paths';
 import { flushSync } from 'react-dom';
 import { lazy, Suspense, useState } from 'react';
-import { Button, Center, Loader } from '@mantine/core';
+
 import { RouteSkeleton, type LoadingSubject } from './RouteSkeleton';
-import { PageHeader, workspacePage } from '../components/PageLayout/PageLayout';
+
 import { RunListSkeleton } from '../features/runs/RunListSkeleton';
 import {
   VariableEditorSkeleton,
@@ -221,7 +229,7 @@ function Loading({ subject }: { subject: LoadingSubject }) {
         Could not load {subject}. {loadError}
       </p>
       <Button
-        variant="default"
+        variant="secondary"
         disabled={retrying}
         onClick={async () => {
           setRetrying(true);

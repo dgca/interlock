@@ -1,21 +1,29 @@
 import {
   LoadingSkeleton,
   FormPlaceholder,
-} from '../../components/LoadingSkeleton/LoadingSkeleton';
-import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
-import { flushSync } from 'react-dom';
-import {
   Alert,
   Badge,
-  Button as MantineButton,
+  Button,
   Group,
   SegmentedControl,
   Stack,
   Text,
   TextInput,
   Textarea,
-} from '@mantine/core';
+  Modal,
+  ModalBody,
+  ModalFooter,
+  Placeholder,
+  ActionError,
+  PageHeader,
+  PageToolbar,
+  workspacePage,
+} from '../../design-system';
+
+import { useEffect, useId, useRef, useState } from 'react';
+import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
+import { flushSync } from 'react-dom';
+
 import { ArrowRight, ChevronRight, KeyRound, Plus, Search } from 'lucide-react';
 import type { AppContext } from '../../App';
 import {
@@ -24,19 +32,12 @@ import {
 } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
-import { Button } from '../../components/Button/Button';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import { ActionError } from '../../components/ActionError/ActionError';
+
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
-import {
-  PageHeader,
-  PageToolbar,
-  workspacePage,
-} from '../../components/PageLayout/PageLayout';
+
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
-import { Placeholder } from '../../components/LoadingSkeleton/LoadingSkeleton';
+
 import { VariableRowsSkeleton, variableColumns } from './VariableListSkeleton';
 import styles from './Variables.module.css';
 import { VariablePicker } from './VariablePicker';
@@ -96,13 +97,9 @@ export function VariableLibrary() {
       <PageHeader
         title="Variables"
         actions={
-          <MantineButton
-            component={Link}
-            variant="filled"
-            to={paths.variable('new')}
-          >
+          <Button component={Link} variant="primary" to={paths.variable('new')}>
             <Plus size={14} /> New variable
-          </MantineButton>
+          </Button>
         }
       />
       <PageToolbar
@@ -134,12 +131,9 @@ export function VariableLibrary() {
             }
           >
             {error}
-            <MantineButton
-              variant="subtle"
-              onClick={() => setReload((n) => n + 1)}
-            >
+            <Button variant="ghost" onClick={() => setReload((n) => n + 1)}>
               Retry loading
-            </MantineButton>
+            </Button>
           </Alert>
         )}
         {loading ? (
@@ -190,27 +184,27 @@ export function VariableLibrary() {
               )}
               <h2>{search ? 'No matching variables' : 'No variables yet'}</h2>
               {search ? (
-                <MantineButton
-                  variant="default"
+                <Button
+                  variant="secondary"
                   onClick={() => {
                     updateSearch('');
                     searchInput.current?.focus();
                   }}
                 >
                   Clear search
-                </MantineButton>
+                </Button>
               ) : (
                 <>
                   <Text size="sm" c="dimmed">
                     Reuse settings and credentials across workflows.
                   </Text>
-                  <MantineButton
+                  <Button
                     component={Link}
-                    variant="default"
+                    variant="secondary"
                     to={paths.variable('new')}
                   >
                     Create a variable
-                  </MantineButton>
+                  </Button>
                 </>
               )}
             </div>
@@ -518,12 +512,12 @@ function VariableEditor({ id }: { id: string }) {
             {error ? (
               <Alert color="red" title="Could not load variable">
                 {error}
-                <MantineButton
-                  variant="subtle"
+                <Button
+                  variant="ghost"
                   onClick={() => setRefresh((n) => n + 1)}
                 >
                   Retry loading
-                </MantineButton>
+                </Button>
               </Alert>
             ) : (
               <div>

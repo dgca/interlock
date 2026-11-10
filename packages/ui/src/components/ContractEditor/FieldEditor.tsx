@@ -1,4 +1,11 @@
-import { Checkbox, NativeSelect, Textarea, TextInput } from '@mantine/core';
+import {
+  Checkbox,
+  NativeSelect,
+  Textarea,
+  TextInput,
+  Button,
+} from '../../design-system';
+
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import {
@@ -11,7 +18,7 @@ import {
   type Contract,
   type FieldType,
 } from '@interlock/core';
-import { Button } from '../Button/Button';
+
 import styles from './ContractEditor.module.css';
 
 export function FieldEditor({

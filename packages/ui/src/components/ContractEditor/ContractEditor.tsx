@@ -1,4 +1,12 @@
-import { Tabs, Textarea } from '@mantine/core';
+import {
+  Tabs,
+  Textarea,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  Button,
+} from '../../design-system';
+
 import { createContext, useContext, useRef, useState } from 'react';
 import { Braces, List, WandSparkles } from 'lucide-react';
 import {
@@ -11,9 +19,7 @@ import {
   visualIssues,
   type Contract,
 } from '@interlock/core';
-import { Modal } from '../Modal/Modal';
-import { ModalBody, ModalFooter } from '../Modal/ModalLayout';
-import { Button } from '../Button/Button';
+
 import { FieldEditor } from './FieldEditor';
 import styles from './ContractEditor.module.css';
 

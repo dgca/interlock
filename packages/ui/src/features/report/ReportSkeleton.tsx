@@ -1,13 +1,13 @@
-import { SimpleGrid, Stack } from '@mantine/core';
 import {
+  SimpleGrid,
+  Stack,
+  LoadingSkeleton,
+  Placeholder,
   PageHeader,
   PageToolbar,
   workspacePage,
-} from '../../components/PageLayout/PageLayout';
-import {
-  LoadingSkeleton,
-  Placeholder,
-} from '../../components/LoadingSkeleton/LoadingSkeleton';
+} from '../../design-system';
+
 import styles from './WorkflowReportView.module.css';
 
 export function ReportLoadingContent() {

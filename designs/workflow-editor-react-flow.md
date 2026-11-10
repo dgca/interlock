@@ -36,7 +36,7 @@ The selected node and its immediate execution-edge neighbors share the same `#6C
 
 ## Agent modal compatibility
 
-The modal follows [SettingsDialog](../packages/ui/src/features/workflows/SettingsDialog.tsx) and the shared [Modal](../packages/ui/src/components/Modal/Modal.tsx), which wraps Mantine. It preserves an 880 × 820px desktop dialog and 164px section navigation.
+The modal follows [SettingsDialog](../packages/ui/src/features/workflows/SettingsDialog.tsx) and the shared [Modal](../packages/ui/src/design-system/Modal/Modal.tsx), which wraps Mantine. It preserves an 880 × 820px desktop dialog and 164px section navigation.
 
 Assignment contains Name, Stage, Saved prompts, and Task instructions. Input, Result, and Execution retain their current editors and behavior. The prompt picker remains searchable and supports ordered prompt references; the depicted state has none selected.
 

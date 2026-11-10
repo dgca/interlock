@@ -1,5 +1,3 @@
-import { Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
 import {
   NativeSelect,
   Stack,
@@ -7,7 +5,13 @@ import {
   Switch,
   Text,
   Group,
-} from '@mantine/core';
+  Button,
+  JsonEditor,
+} from '../../design-system';
+
+import { Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+
 import {
   contractAtPath,
   nodeOutputContract,
@@ -19,8 +23,7 @@ import {
   type WorkflowDefinition,
   type ValueBinding,
 } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
-import { JsonEditor } from '../../components/JsonEditor/JsonEditor';
+
 import { bindingNodes } from './inputBindings';
 import { InputPathInput } from './InputPathInput';
 import { TypedValueEditor, suggestedMatchValue } from './TypedValueEditor';

@@ -1,6 +1,5 @@
-import { LoadingSkeleton } from '../../components/LoadingSkeleton/LoadingSkeleton';
-import { useEffect, useId, useRef, useState } from 'react';
 import {
+  LoadingSkeleton,
   ActionIcon,
   Button,
   Combobox,
@@ -10,7 +9,10 @@ import {
   Loader,
   Text,
   useCombobox,
-} from '@mantine/core';
+} from '../../design-system';
+
+import { useEffect, useId, useRef, useState } from 'react';
+
 import { RefreshCw } from 'lucide-react';
 import type { ExecutorModels, SavedModelAlias } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
@@ -198,7 +200,6 @@ export function ModelPicker({
         </Input.Label>
         {profileId && (
           <ActionIcon
-            size="sm"
             variant="subtle"
             aria-label="Refresh models"
             title="Refresh models"
@@ -338,7 +339,7 @@ export function ModelPicker({
           Model aliases could not be loaded. {aliasError || referenceError}{' '}
           <Button
             size="compact-xs"
-            variant="subtle"
+            variant="ghost"
             onClick={() => setAliasReload((n) => n + 1)}
           >
             Retry aliases

@@ -1,6 +1,8 @@
+import { Alert, Button, Group, Text } from '../../design-system';
+
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { Alert, Button, Group, Text } from '@mantine/core';
+
 import { api, errorMessage } from '../../lib/api';
 import { paths } from '../../routes/paths';
 
@@ -67,14 +69,14 @@ export function AutomationAlerts({
       <Group>
         {offset > 0 && (
           <Button
-            variant="subtle"
+            variant="ghost"
             onClick={() => setOffset((n) => Math.max(0, n - 20))}
           >
             Previous automation alerts
           </Button>
         )}
         {page.nextOffset !== null && (
-          <Button variant="subtle" onClick={() => setOffset(page.nextOffset!)}>
+          <Button variant="ghost" onClick={() => setOffset(page.nextOffset!)}>
             More automation alerts
           </Button>
         )}

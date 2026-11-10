@@ -1,6 +1,18 @@
+import {
+  ActionIcon,
+  Menu,
+  Tabs,
+  TextInput,
+  Button,
+  EmptyState,
+  PageHeader,
+  PageTabList,
+  workspacePage,
+} from '../../design-system';
+
 import { useUiFeatures } from '../../lib/uiFeatures';
 import type { Action } from '../../lib/useActionFeedback';
-import { ActionIcon, Menu, Tabs, TextInput } from '@mantine/core';
+
 import { useRef, useState } from 'react';
 import {
   BookOpen,
@@ -14,22 +26,18 @@ import {
   MoreHorizontal,
 } from 'lucide-react';
 import type { Workflow } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
-import { Badge } from '../../components/Badge/Badge';
+
+import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
 import { api, download } from '../../lib/api';
 import { ImportWorkflowDialog } from './ImportWorkflowDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { paths } from '../../routes/paths';
-import {
-  PageHeader,
-  PageTabList,
-  workspacePage,
-} from '../../components/PageLayout/PageLayout';
+
 import {
   WorkflowCard,
   WorkflowGrid,
 } from '../../components/WorkflowCards/WorkflowCards';
-import { EmptyState } from '../../components/EmptyState/EmptyState';
+
 import { workflowTabs } from './workflowListConfig';
 export function WorkflowLibrary({
   workflows,
@@ -97,17 +105,23 @@ export function WorkflowLibrary({
           </>
         }
       />
-      <PageTabList label="Workflow status" items={workflowTabs(scope)}>
-        <TextInput
-          ref={searchInput}
-          className={workspacePage.search}
-          aria-label="Search workflows"
-          placeholder="Search workflows"
-          leftSection={<Search size={14} />}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </PageTabList>
+      <PageTabList
+        label="Workflow status"
+        items={workflowTabs(scope)}
+        toolbar={
+          <>
+            <TextInput
+              ref={searchInput}
+              className={workspacePage.search}
+              aria-label="Search workflows"
+              placeholder="Search workflows"
+              leftSection={<Search size={14} />}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </>
+        }
+      />
       <Tabs.Panel
         value={archived ? 'archived' : 'active'}
         className={workspacePage.content}
@@ -126,7 +140,9 @@ export function WorkflowLibrary({
                   to={paths.workflow(w.id)}
                   highlighted={importedIds.includes(w.id)}
                   status={
-                    <Badge status={w.latestVersion ? 'published' : 'draft'} />
+                    <StatusBadge
+                      status={w.latestVersion ? 'published' : 'draft'}
+                    />
                   }
                   metadata={[
                     `${w.draft.nodes.length} nodes`,

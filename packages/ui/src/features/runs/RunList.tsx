@@ -1,16 +1,23 @@
-import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
-import { runColumns, runViews } from './runListConfig';
-import { AutomationAlerts } from '../automations/AutomationAlerts';
 import {
+  Alert,
+  Button,
+  Group,
+  Tabs,
+  Text,
   PageHeader,
   PageTabList,
   workspacePage,
-} from '../../components/PageLayout/PageLayout';
+} from '../../design-system';
+
+import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
+import { runColumns, runViews } from './runListConfig';
+import { AutomationAlerts } from '../automations/AutomationAlerts';
+
 import { RunRowsSkeleton } from './RunListSkeleton';
 import classes from './RunList.module.css';
 import { attentionText, waitReasonText, type RunTab } from './runAttention';
 import { runProjectionText } from './runProjectionText';
-import { Alert, Button, Group, Tabs, Text } from '@mantine/core';
+
 import { useEffect, useId, useRef, useState } from 'react';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
 import { RetentionSettingsDialog } from './RetentionSettings';
@@ -133,10 +140,10 @@ export function RunList({
   const historyActions =
     tab === 'history' && act ? (
       <>
-        <Button variant="default" onClick={() => setRetention(true)}>
+        <Button variant="secondary" onClick={() => setRetention(true)}>
           Retention settings
         </Button>
-        <Button variant="light" onClick={() => setCleanup(true)}>
+        <Button variant="secondary" onClick={() => setCleanup(true)}>
           Clean up history
         </Button>
       </>
@@ -163,21 +170,27 @@ export function RunList({
           )
         }
       >
-        <PageTabList label="Run views" items={tabItems}>
-          {workflowId && historyActions}
-          <Button
-            variant="default"
-            leftSection={<SlidersHorizontal size={14} />}
-            aria-expanded={filterOpen}
-            aria-controls={filterId}
-            onClick={() => setFilterOpen((open) => !open)}
-          >
-            Filter by tags
-            {Object.keys(selectedTags ?? {}).length
-              ? ` (${Object.keys(selectedTags!).length})`
-              : ''}
-          </Button>
-        </PageTabList>
+        <PageTabList
+          label="Run views"
+          items={tabItems}
+          toolbar={
+            <>
+              {workflowId && historyActions}
+              <Button
+                variant="secondary"
+                leftSection={<SlidersHorizontal size={14} />}
+                aria-expanded={filterOpen}
+                aria-controls={filterId}
+                onClick={() => setFilterOpen((open) => !open)}
+              >
+                Filter by tags
+                {Object.keys(selectedTags ?? {}).length
+                  ? ` (${Object.keys(selectedTags!).length})`
+                  : ''}
+              </Button>
+            </>
+          }
+        />
         <Tabs.Panel value={tab} className={workspacePage.content}>
           <div
             id={filterId}
@@ -199,7 +212,7 @@ export function RunList({
             />
             <Group mt="sm" gap="xs">
               <Button
-                size="xs"
+                variant="primary"
                 onClick={() => {
                   try {
                     changeTags(tagsFromRows(filterRows));
@@ -212,8 +225,7 @@ export function RunList({
                 Apply filters
               </Button>
               <Button
-                size="xs"
-                variant="subtle"
+                variant="ghost"
                 onClick={() => {
                   setFilterRows([]);
                   setFilterError('');
@@ -240,7 +252,7 @@ export function RunList({
               title={page ? 'Runs may be out of date' : 'Could not load runs'}
             >
               {error}
-              <Button variant="subtle" onClick={() => refresh.current?.()}>
+              <Button variant="ghost" onClick={() => refresh.current?.()}>
                 Retry
               </Button>
             </Alert>
@@ -365,7 +377,7 @@ export function RunList({
               </Text>
               <Group gap="xs">
                 <Button
-                  variant="subtle"
+                  variant="ghost"
                   aria-disabled={offset === 0}
                   data-disabled={offset === 0 || undefined}
                   onClick={() => {
@@ -380,7 +392,7 @@ export function RunList({
                   Previous
                 </Button>
                 <Button
-                  variant="subtle"
+                  variant="ghost"
                   aria-disabled={page?.nextOffset == null}
                   data-disabled={page?.nextOffset == null || undefined}
                   onClick={() => {

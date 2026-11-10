@@ -1,14 +1,3 @@
-import { StallPolicyEditor } from '../executors/StallSettings';
-import { ExecutorSelect } from '../executors/ExecutorSelect';
-import { ResourceBindingsEditor } from './ResourceBindingsEditor';
-import { useRef, useState } from 'react';
-import {
-  NodeSettingsSections,
-  NodeSection,
-  type NodeSectionName,
-} from './NodeSettingsSections';
-import { BranchEditor } from './BranchEditor';
-import { NodeResultEditor } from './NodeResultEditor';
 import {
   TextInput,
   TagsInput,
@@ -20,7 +9,21 @@ import {
   Radio,
   Stack,
   NumberInput,
-} from '@mantine/core';
+  Button,
+} from '../../design-system';
+
+import { StallPolicyEditor } from '../executors/StallSettings';
+import { ExecutorSelect } from '../executors/ExecutorSelect';
+import { ResourceBindingsEditor } from './ResourceBindingsEditor';
+import { useRef, useState } from 'react';
+import {
+  NodeSettingsSections,
+  NodeSection,
+  type NodeSectionName,
+} from './NodeSettingsSections';
+import { BranchEditor } from './BranchEditor';
+import { NodeResultEditor } from './NodeResultEditor';
+
 import {
   DEFAULT_BATCH_MAX_ITEMS,
   MAX_BATCH_ITEMS,
@@ -43,7 +46,7 @@ import { TypedValueEditor } from './TypedValueEditor';
 import { FetchEditor } from './FetchEditor';
 import { EnvironmentEditor } from '../variables/EnvironmentEditor';
 import { WorkflowModeEditor } from './WorkflowModeEditor';
-import { Button } from '../../components/Button/Button';
+
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
 import { ScriptCode } from './ScriptCode';
 import { PromptPicker } from '../prompts/PromptPicker';

@@ -1,3 +1,5 @@
+import { ActionIcon, Button, Stack, Text } from '../../design-system';
+
 import {
   createContext,
   useCallback,
@@ -7,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { ActionIcon, Button, Stack, Text } from '@mantine/core';
+
 import { Pause, Play, RefreshCw } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
 import styles from './PauseControls.module.css';
@@ -170,7 +172,6 @@ export function WorkflowPauseButton({
         : 'Pause workflow';
   const Icon = status?.error ? RefreshCw : local ? Play : Pause;
   const props = {
-    variant: 'default',
     disabled:
       !context ||
       status?.busy ||
@@ -186,11 +187,16 @@ export function WorkflowPauseButton({
     },
   };
   return compact ? (
-    <ActionIcon {...props} aria-label={label} title={props.title ?? label}>
+    <ActionIcon
+      {...props}
+      variant="default"
+      aria-label={label}
+      title={props.title ?? label}
+    >
       <Icon size={16} />
     </ActionIcon>
   ) : (
-    <Button {...props} size="xs" leftSection={<Icon size={14} />}>
+    <Button variant="secondary" {...props} leftSection={<Icon size={14} />}>
       {label}
     </Button>
   );
@@ -237,8 +243,7 @@ export function PauseBanner({
       </Stack>
       {status.error ? (
         <Button
-          variant="subtle"
-          size="xs"
+          variant="ghost"
           disabled={status.busy}
           onClick={() => context?.refresh(workflowId)}
         >

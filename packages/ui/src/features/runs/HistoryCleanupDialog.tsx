@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Button,
@@ -10,9 +9,13 @@ import {
   Table,
   Text,
   TextInput,
-} from '@mantine/core';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
+  Modal,
+  ModalBody,
+  ModalFooter,
+} from '../../design-system';
+
+import { useEffect, useRef, useState } from 'react';
+
 import { api, errorMessage } from '../../lib/api';
 import type { Action } from '../../lib/useActionFeedback';
 import styles from './HistoryCleanupDialog.module.css';
@@ -158,7 +161,11 @@ export function HistoryCleanupDialog({
             rollover chains. Protected history cannot be selected.
           </Text>
           <Group>
-            <Button variant="light" loading={busy} onClick={() => void load()}>
+            <Button
+              variant="secondary"
+              loading={busy}
+              onClick={() => void load()}
+            >
               Preview history
             </Button>
           </Group>
@@ -260,14 +267,14 @@ export function HistoryCleanupDialog({
               {(preview.offset > 0 || preview.nextOffset !== null) && (
                 <Group>
                   <Button
-                    variant="subtle"
+                    variant="ghost"
                     disabled={busy || preview.offset === 0}
                     onClick={() => void load(Math.max(0, preview.offset - 20))}
                   >
                     Previous
                   </Button>
                   <Button
-                    variant="subtle"
+                    variant="ghost"
                     disabled={busy || preview.nextOffset === null}
                     onClick={() => void load(preview.nextOffset!)}
                   >
@@ -309,13 +316,12 @@ export function HistoryCleanupDialog({
         </Stack>
       </ModalBody>
       <ModalFooter>
-        <Button variant="default" disabled={busy} onClick={onClose}>
+        <Button variant="secondary" disabled={busy} onClick={onClose}>
           {removed ? 'Done' : 'Cancel'}
         </Button>
         {preview && (
           <Button
-            color="red"
-            variant="light"
+            variant="danger"
             disabled={busy || !acknowledged || !selected.length}
             loading={busy}
             onClick={() => void remove()}

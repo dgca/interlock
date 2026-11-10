@@ -1,5 +1,6 @@
+import { Autocomplete } from '../../design-system';
+
 import { useState, type ComponentProps } from 'react';
-import { Autocomplete } from '@mantine/core';
 
 export function SuggestionInput({
   value,

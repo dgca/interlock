@@ -1,10 +1,21 @@
+import {
+  ActionIcon,
+  Menu,
+  Tabs,
+  Button,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  CodeEditor,
+} from '../../design-system';
+
 import { WorkflowPauseButton, PauseBanner } from '../pauses/PauseControls';
 import type { Action } from '../../lib/useActionFeedback';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react';
-import { ActionIcon, Menu, Tabs } from '@mantine/core';
+
 import { useMergedRef, useResizeObserver } from '@mantine/hooks';
 import {
   ReactFlow,
@@ -36,10 +47,7 @@ import {
   type WorkflowEdge,
   type WorkflowDefinition,
 } from '@interlock/core';
-import { Button } from '../../components/Button/Button';
-import { Modal } from '../../components/Modal/Modal';
-import { ModalBody, ModalFooter } from '../../components/Modal/ModalLayout';
-import { CodeEditor } from '../../components/CodeEditor/CodeEditor';
+
 import { parseRawDefinition } from './rawDefinition';
 import { SettingsDialog, type Settings } from './SettingsDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
