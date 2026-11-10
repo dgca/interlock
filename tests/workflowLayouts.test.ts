@@ -270,3 +270,29 @@ it('ignores only direct node positions when comparing content and keeps publicat
     store.getVersion(workflow.id, 2)!.definition.nodes[0].position,
   ).toEqual({ x: 33, y: 44 });
 });
+
+it('compares replacement positions with the displayed layout when content also changes', async () => {
+  const { engine, store, api } = setup();
+  const workflow = engine.create('Return to embedded position');
+  const initial = structuredClone(workflow.draft.nodes[0].position);
+  const id = workflow.draft.nodes[0].id;
+  await api.workflows.saveLayout({
+    id: workflow.id,
+    expectedRevision: 0,
+    positions: { [id]: { x: 999, y: 888 } },
+  });
+  const current = await api.workflows.get({ id: workflow.id });
+  current.draft.nodes[0].position = initial;
+  current.draft.nodes[0].label = 'Edited content';
+  const saved = await api.workflows.update({
+    id: workflow.id,
+    draftRevision: current.draftRevision,
+    draft: current.draft,
+  });
+  expect(saved.draft.nodes[0].position).toEqual(initial);
+  expect(saved.draftRevision).toBe(current.draftRevision + 1);
+  expect(saved.layoutRevision).toBe(2);
+  expect(
+    store.get<Workflow>('workflows', workflow.id)!.draft.nodes[0].label,
+  ).toBe('Edited content');
+});
