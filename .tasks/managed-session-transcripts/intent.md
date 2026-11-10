@@ -6,7 +6,7 @@
 - User request: "Let's tackle 365. Make sure we've got safeguards in place to prevent taking up a ton of HDD".
 - The user selected Interlock's published SDLC workflow on November 10, 2026.
 - Execution uses SDLC workflow `cc973113-577c-4f6c-b5ea-a213605c92cb`, published version 4, run `c22c7c1f-f852-4068-bb01-11f65d727fde`.
-- Review policy is the workflow default, `auto`. Human decision assignments remain unclaimed until the user answers. Local delivery is requested, with no PR, merge, or publication.
+- Review policy is the workflow default, `auto`. Human decision assignments remain unclaimed until the user answers. Initial delivery finished locally. On November 10, 2026, the user then requested a pull request. Merge and publication remain unrequested.
 
 ## Repository baseline
 

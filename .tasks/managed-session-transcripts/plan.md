@@ -63,7 +63,6 @@ The first full suite passed 2,180 tests across 188 files before additional nativ
 
 The package smoke test passed global/npx installation, CLI, bundled UI assets, HTTP/stdio MCP, persistence/restart, script recovery and guarded cleanup. Final build, format, package and test logs are retained in the same evidence directory. Native fixture coverage does not establish compatibility with every installed harness version. Native session files, backups, and unrelated SQLite content remain outside the transcript payload cap.
 
-
 ## Independent review revisions
 
 The first independent review returned four findings against `14e1f6f5cc40c866564765bc5a3463ce2dd94053`. All corrections retain the approved policy:
@@ -76,3 +75,22 @@ The first independent review returned four findings against `14e1f6f5cc40c866564
 Revision evidence lives in `/tmp/interlock365-proof-20261110/`: `revision-full-tests.log` passed 2,191 tests in 189 files; `revision-ui-final.log` passed all six UI cases after the engine-refresh correction; `revision-build.log`, `revision-package.log`, and `revision-format.log` record the build, package, and formatting checks. The only change after the full test suite was removing the query's engine-event refresh opt-out; focused UI checks and the build were repeated.
 
 `historical.yaml` and `historical.png` show real historical selection and its messaging restriction. `accepted-refresh-error.png` preserves the accepted receipt alongside a forced transcript refresh error. `unknown-delivery.yaml` and `unknown-delivery.png` show an unknown native delivery, Check delivery, and no resend action. `browser-trace/` saves the keyboard/focus/selection trace and associated resources. Native transport fixtures and the prior default-capacity measurement remain applicable; no storage limits or payload accounting changed in this revision.
+
+## UI refinements after local SDLC completion
+
+The SDLC run completed with an independent pass at `08567fb598acf50d729bbce16848194b93b3684e`. The user then tried the UI and requested the following refinements, committed through `234d851fa811070dda35de8ca4a8e2571f19192a`:
+
+- A compact managed execution header and Conversation/Details segmented control. Conversation keeps chronological messages, collapsed tool activity, and a composer below the scrollable history. Details groups session information, capture statistics, prompt/context, and execution data.
+- A centered segmented control, a red Stop agent button, and a bordered transcript container.
+- Consistent headers and contained data/activity for other run node inspectors, including child/item navigation and external-input controls.
+- A persistent transcript footer using Mantine compound pagination controls without numbered items. Oldest, Older, Newer, and Latest use bounded server cursors. Failed history reads preserve Latest recovery, while drafts and delivery identity remain mounted.
+
+Focused checks passed 56 tests for the other-node pass and 53 tests for the final footer pass. Browser checks used actual selection, keyboard typing/submission, native scrolling, and navigation controls at desktop, intermediate, and phone widths. In `footer-desktop.png` and `footer-scrolled.png`, the footer stayed at the same vertical position while the message scroll offset changed by 1,800 pixels. `footer-phone.png` shows the controls within a 390-pixel page without horizontal overflow. Other-node screenshots, logs, and sample states are in the same external evidence directory. The demo workflows and helper scripts are temporary fixtures and are not part of the PR.
+
+The user requested opening a PR after trying the 15-node playground. The original SDLC run remains completed; this request authorizes PR delivery. The approved storage policy and runtime behavior remain unchanged. The PR description records fresh CI-equivalent checks and the native live-version verification gap.
+
+## PR delivery checks
+
+On November 10, 2026, fresh checks of the final code passed: `pnpm test` (2,195 tests in 189 files), `pnpm build`, `pnpm test:package`, `pnpm site:build` (19 HTML pages and 587 local links/assets), `pnpm format:check`, and `git diff --check`. Logs are `pr-tests.log`, `pr-build.log`, `pr-package.log`, `pr-site.log`, and `pr-format.log` in the existing external evidence directory. The remaining commit only aligns the guide and task artifacts with the authorized final UI and PR delivery. No implementation changed after these checks.
+
+The final affected documentation review includes the new run-inspection guide, README, managed-execution guidance, architecture, current limits, history cleanup, CLI help, and executor MCP discovery/operations. HTTP and stdio transport checks are included in the full suite and package smoke test. This remains an affected-flow audit; no comprehensive audit of unrelated MCP tools is claimed. Installed native binaries and real provider accounts were not used for live delivery verification.

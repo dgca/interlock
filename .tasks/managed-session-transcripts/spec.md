@@ -70,16 +70,16 @@ Pending permissions and questions retain their existing response controls. A mes
 
 ## UI proposal
 
-This is an Operate surface for someone inspecting a slow or misdirected execution. Preserve the existing managed-execution header, approvals, recovery controls, session links, and design system.
+This is an Operate surface for someone inspecting a slow or misdirected execution. Preserve approvals, recovery controls, session links, and the design system. This proposal includes the user's UI refinements requested after the SDLC review on November 10, 2026.
 
-- Add an expandable **Transcript** reader beside the existing session/progress details. Opening it loads a bounded recent page. Earlier attempts are selectable and clearly labeled, with messaging restricted to the current active attempt.
-- Show timestamps, speaker or tool labels, selectable wrapped text, and expandable tool details. Use the existing technical font for commands and results. Oversized results stay bounded even when expanded.
-- Put capture gaps and retention notices next to the reader. Distinguish no messages yet, capture unsupported, partial capture, pre-upgrade history unavailable, truncation, expiry, and budget eviction.
-- Place a multiline **Message agent** field and **Send message** button with the active transcript. Enter inserts a newline. Sending is explicit. Tab reaches the reader controls, field, and button with visible focus.
+- Use a compact execution header with status, an attempt selector, and a colored Stop agent action. A centered **Conversation / Details** segmented control selects the view. Conversation loads a bounded recent page. Details groups session information, prompt/context, execution data, and retention statistics. Earlier attempts are selectable and clearly labeled, with messaging and stopping restricted to the current active attempt.
+- Show chronological messages in a bordered, scrollable container, with timestamps, speaker or tool labels, selectable wrapped text, and expandable tool details. Use normal body type for conversation and the existing technical font for commands and results. Oversized results stay bounded even when expanded.
+- Put capture gaps next to the reader and capacity/retention details in **Details**. Distinguish no messages yet, capture unsupported, partial capture, pre-upgrade history unavailable, truncation, expiry, and budget eviction.
+- Keep a multiline **Message agent** field and **Send message** button below the active transcript's scroll area. Enter inserts a newline. Sending is explicit. Tab reaches the reader controls, field, and button with visible focus.
 - Disable repeat sends while pending. Keep text after a definite rejection. On accepted delivery, clear that submitted text and show the receipt even if the following refresh fails. Unknown delivery preserves the request identity and offers a status read rather than another send.
-- Preserve scroll position while someone reads older content. Offer a **Latest** action when new entries arrive. Do not announce each streamed token to screen readers or steal focus during refresh.
+- Preserve scroll position while someone reads older content. Keep Oldest, Older, Newer, and Latest cursor controls in a persistent footer inside the history card, using Mantine compound pagination without numbered items. Do not announce each streamed token to screen readers or steal focus during refresh.
 - Initial loading uses the existing skeleton pattern. Refresh errors retain the current page and offer Retry. Switching attempts cannot display a late response from another attempt or carry a draft message to a different execution.
-- Narrow inspection remains a single scrolling page. Controls wrap within the panel, content does not force horizontal page overflow, and tool text remains keyboard accessible.
+- Narrow inspection stacks above the graph, with the conversation constrained to its own scroll area. Controls wrap within the panel, content does not force horizontal page overflow, and tool text remains keyboard accessible.
 
 ## Acceptance criteria
 
