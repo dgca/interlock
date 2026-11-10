@@ -331,6 +331,29 @@ export function RunInspector({
           return child ? [child] : [];
         })
       : [];
+  const stepData = (
+    <details
+      className={styles.stepData}
+      open={selectedWork.some((w) => w.executor) ? undefined : true}
+    >
+      <summary>Step data</summary>
+      {(execution || !nodeId) && (
+        <JsonEditor
+          label="Input"
+          value={execution ? execution.input : run.input}
+        />
+      )}
+      {execution?.result !== undefined && (
+        <JsonEditor label="Accepted result" value={execution.result} />
+      )}
+      {execution?.output !== undefined && (
+        <JsonEditor
+          label={execution.result !== undefined ? 'Forwarded output' : 'Output'}
+          value={execution.output}
+        />
+      )}{' '}
+    </details>
+  );
   return (
     <div
       className={`${styles.page} ${!definition ? styles.withoutDefinition : ''} ${run.comparison ? styles.comparison : ''}`}
@@ -575,7 +598,7 @@ export function RunInspector({
           ref={detailRef}
           tabIndex={-1}
           aria-label="Selected step"
-          className={styles.detail}
+          className={`${styles.detail} ${selectedWork.some((w) => w.executor && w.managedExecution?.executionId) ? styles.managedDetail : ''}`}
         >
           <div className="inspector-heading">
             <h2>{node?.label ?? execution?.label ?? 'Workflow input'}</h2>
@@ -592,6 +615,7 @@ export function RunInspector({
                 <WorkPanel
                   key={w.id}
                   work={w}
+                  details={stepData}
                   onRefresh={refresh}
                   draft={resultDrafts.current.get(key)}
                   onDraftChange={(value) => {
@@ -818,31 +842,9 @@ export function RunInspector({
                 )}
               </>
             )}
-            <details
-              className={styles.stepData}
-              open={selectedWork.some((w) => w.executor) ? undefined : true}
-            >
-              <summary>Step data</summary>
-              {(execution || !nodeId) && (
-                <JsonEditor
-                  label="Input"
-                  value={execution ? execution.input : run.input}
-                />
-              )}
-              {execution?.result !== undefined && (
-                <JsonEditor label="Accepted result" value={execution.result} />
-              )}
-              {execution?.output !== undefined && (
-                <JsonEditor
-                  label={
-                    execution.result !== undefined
-                      ? 'Forwarded output'
-                      : 'Output'
-                  }
-                  value={execution.output}
-                />
-              )}{' '}
-            </details>
+            {!selectedWork.some(
+              (w) => w.executor && w.managedExecution?.executionId,
+            ) && stepData}
           </div>
         </aside>
         <section className={styles.overview}>

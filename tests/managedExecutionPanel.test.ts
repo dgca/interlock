@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { executorProfileSchema, type WorkRequest } from '@interlock/core';
 import { ManagedExecutionPanel } from '../packages/ui/src/features/executors/ManagedExecutionPanel';
@@ -9,19 +9,39 @@ const rpc = vi.hoisted(() => ({
   inspect: vi.fn(),
   manage: vi.fn(),
   models: vi.fn(),
+  transcript: vi.fn(),
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    executors: {
-      inspect: { query: rpc.inspect },
-      manage: { mutate: rpc.manage },
-      models: { query: rpc.models },
-    },
-  },
-  errorMessage: (e: Error) => e.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      executors: {
+        inspect: { query: rpc.inspect },
+        manage: { mutate: rpc.manage },
+        models: { query: rpc.models },
+        transcript: { query: rpc.transcript },
+      },
+    }),
+    errorMessage: (e: Error) => e.message,
+  };
+});
 let root: Root, container: HTMLDivElement;
 beforeEach(() => {
+  Object.defineProperty(document, 'fonts', {
+    configurable: true,
+    value: { addEventListener: vi.fn(), removeEventListener: vi.fn() },
+  });
+  rpc.transcript.mockReset().mockResolvedValue({
+    items: [],
+    retainedEntries: 0,
+    retainedBytes: 0,
+    gap: false,
+    omitted: 0,
+    older: null,
+    newer: null,
+    capability: 'unavailable',
+    messageAvailable: false,
+  });
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -120,6 +140,7 @@ async function mount(work: WorkRequest) {
 }
 it('submits a custom native answer using the exact pending request identity', async () => {
   await render(true);
+  await chooseView('details');
   const input = container.querySelector('textarea')!;
   expect(input).not.toBeNull();
   await act(async () => input.focus());
@@ -130,11 +151,11 @@ it('submits a custom native answer using the exact pending request identity', as
     )!.set!.call(input, 'Rust');
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  const button = [...container.querySelectorAll('button')].find(
+  const sendButton = [...container.querySelectorAll('button')].find(
     (b) => b.textContent === 'Send answers',
   )!;
-  expect(button.disabled).toBe(false);
-  await act(async () => button.click());
+  expect(sendButton.disabled).toBe(false);
+  await act(async () => sendButton.click());
   expect(rpc.manage).toHaveBeenCalledWith({
     action: 'respond',
     executionId: 'execution:1',
@@ -145,7 +166,9 @@ it('submits a custom native answer using the exact pending request identity', as
 it('keeps single-choice questions within their native options', async () => {
   await render(false);
   expect(container.querySelector('textarea')).toBeNull();
-  const select = container.querySelector('select')!;
+  const select = [...container.querySelectorAll('select')].find((s) =>
+    [...s.options].some((o) => o.value === 'Python'),
+  )!;
   await act(async () => {
     select.value = 'Python';
     select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -160,6 +183,12 @@ it('keeps single-choice questions within their native options', async () => {
   );
 });
 
+async function chooseView(view: string) {
+  const input = container.querySelector<HTMLInputElement>(
+    `input[type="radio"][value="${view}"]`,
+  )!;
+  await act(async () => input.click());
+}
 function button(text: string) {
   const result = [...container.querySelectorAll('button')].find(
     (b) => b.textContent?.trim() === text,
@@ -268,7 +297,9 @@ it('records a denial even if refreshing fails, without offering the same request
 });
 it('retains a failed question answer and allows correction and retry', async () => {
   await render(false);
-  const select = container.querySelector('select')!;
+  const select = [...container.querySelectorAll('select')].find((s) =>
+    [...s.options].some((o) => o.value === 'Python'),
+  )!;
   await act(async () => {
     select.value = 'Python';
     select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -353,5 +384,69 @@ it('shows submission on the deny action rather than implying that approval was s
   await act(async () => resolve({ applied: true }));
   expect(container.textContent).toContain(
     'Denied. The agent will receive your decision.',
+  );
+});
+
+it('keeps the conversation draft through the Details view and isolates historical attempt controls', async () => {
+  const { record, work } = await render(false);
+  const active = {
+    ...record,
+    id: 'execution:2',
+    attempt: 2,
+    requests: [],
+    state: 'running',
+  };
+  const old = { ...active, id: 'execution:0', attempt: 0, state: 'completed' };
+  rpc.inspect.mockResolvedValue({ items: [active], total: 2, history: [old] });
+  rpc.transcript.mockImplementation(
+    ({ executionId }: { executionId: string }) =>
+      Promise.resolve({
+        items: [
+          {
+            sequence: 1,
+            kind: 'assistant',
+            at: new Date().toISOString(),
+            text:
+              executionId === old.id ? 'Historical message' : 'Current message',
+          },
+        ],
+        retainedEntries: 1,
+        retainedBytes: 100,
+        gap: false,
+        omitted: 0,
+        older: null,
+        newer: null,
+        capability: 'conversation',
+        messageAvailable: executionId === active.id,
+      }),
+  );
+  await mount({ ...work, attempt: 2 });
+  const textarea = container.querySelector('textarea')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      'value',
+    )!.set!.call(textarea, 'Draft guidance');
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await chooseView('details');
+  const detailPanel = container.querySelector<HTMLElement>(
+    'section[aria-label="Execution details"]',
+  )!;
+  expect(detailPanel.textContent).toContain('Harness');
+  expect(detailPanel.hidden).toBe(false);
+  await chooseView('conversation');
+  expect(container.querySelector('textarea')!.value).toBe('Draft guidance');
+  const select = container.querySelector(
+    'select[aria-label="Execution attempt"]',
+  )! as HTMLSelectElement;
+  await act(async () => {
+    select.value = old.id;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(container.textContent).toContain('Historical message');
+  expect(container.querySelector('textarea')).toBeNull();
+  expect(container.textContent).toContain(
+    'Messages can only be sent to the current active attempt',
   );
 });

@@ -1,24 +1,32 @@
-.section {
-  margin-top: 20px;
+.conversation {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
-.section > summary {
-  cursor: pointer;
-  font-weight: 600;
-  padding-block: 12px;
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--border-strong) transparent;
+  padding: 0 4px 20px 0;
 }
-.reader {
-  min-width: 0;
+.scroll:focus-visible {
+  outline: 2px solid var(--field-focus);
+  outline-offset: -2px;
 }
 .metadata,
-.retention {
+.empty {
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
-.retention {
-  margin-top: 16px;
+.empty {
+  padding-block: 24px;
 }
 .notice {
   color: var(--attention-text);
@@ -32,7 +40,7 @@
   overflow-wrap: anywhere;
 }
 .navigation {
-  margin-block: 12px;
+  margin-block: 8px 16px;
 }
 .entries {
   list-style: none;
@@ -40,43 +48,114 @@
   padding: 0;
 }
 .entries > li {
-  border-top: 1px solid var(--border);
-  padding-block: 14px;
+  padding-block: 16px;
   min-width: 0;
 }
-.entryHeading {
+.entryHeading,
+.tool summary {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
   font-size: 13px;
 }
-.entryHeading time {
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
+.entryHeading strong {
+  font-weight: 600;
 }
-.entries pre {
+.entryHeading time,
+.tool time {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.message {
+  margin-top: 8px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-family: var(--mono);
-  font-size: 12px;
-  line-height: 1.65;
-  max-height: 360px;
-  overflow: auto;
+  font-size: 14px;
+  line-height: 1.7;
 }
-.entries summary {
-  cursor: pointer;
-  margin-top: 8px;
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-.composer {
-  margin-top: 20px;
-  padding: 20px;
+.entries > li[data-kind='operator'],
+.entries > li[data-kind='user'] {
+  padding: 16px;
+  margin-block: 8px;
   background: var(--form);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+}
+.entries > li[data-kind='tool_call'],
+.entries > li[data-kind='tool_result'] {
+  padding-block: 4px;
+}
+.tool {
+  background: var(--canvas);
+  border-radius: var(--radius-control);
+}
+.tool summary {
+  align-items: center;
+  cursor: pointer;
+  padding: 12px;
+  color: var(--text-secondary);
+}
+.tool summary:hover {
+  color: var(--text);
+}
+.tool summary:focus-visible {
+  outline: 2px solid var(--field-focus);
+  outline-offset: -2px;
+}
+.toolName {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.toolName > span {
+  margin-left: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.tool pre {
+  margin: 0;
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 12px/1.65 var(--mono);
+  max-height: 320px;
+  overflow: auto;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.tool .metadata {
+  padding-inline: 12px;
+}
+.composer {
+  flex-shrink: 0;
+  padding: 16px;
+  background: var(--form);
+  border-radius: var(--radius-card);
 }
 .composer > :last-child {
   margin-top: 12px;
+}
+.recording {
+  border-top: 1px solid var(--border);
+  margin-top: 24px;
+  padding-top: 20px;
+}
+.recording h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+@media (max-width: 600px) {
+  .tool summary {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+.toolChevron {
+  flex-shrink: 0;
+}
+.tool[open] .toolChevron {
+  transform: rotate(90deg);
 }

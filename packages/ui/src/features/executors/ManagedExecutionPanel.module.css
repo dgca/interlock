@@ -1,5 +1,9 @@
 .panel {
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 .heading {
   display: flex;
@@ -9,7 +13,7 @@
   gap: 12px;
   font-size: 14px;
 }
-.heading > div {
+.heading > div:first-child {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -30,6 +34,7 @@
 }
 .request,
 .recovery {
+  flex-shrink: 0;
   margin-top: 20px;
   padding: 20px;
   background: var(--form);
@@ -156,7 +161,53 @@
   flex-shrink: 0;
 }
 .stop {
-  margin-top: 20px;
+  margin: 0;
+}
+.heading > div:first-child {
+  margin-right: auto;
+}
+.attemptRow {
+  max-width: 210px;
+  margin-top: 12px;
+}
+.attention {
+  min-height: 0;
+  flex-shrink: 1;
+  max-height: 45%;
+  overflow: auto;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.views {
+  margin-top: 16px;
+  min-height: 260px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.views > :global(.mantine-SegmentedControl-root) {
+  min-height: 44px;
+  font-size: 14px;
+}
+.viewPanel {
+  padding-top: 16px;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.views .detailBody {
+  overflow: auto;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.detailBody > details {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.detailBody > details > summary {
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
 }
 .feedback:empty {
   display: none;
@@ -202,37 +253,6 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-}
-.sessionMeta {
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 13px;
-}
-.sessionLabel {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-}
-.sessionId {
-  overflow-wrap: anywhere;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text);
-  background: var(--canvas);
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-}
-.sessionName {
-  font-size: 12px;
-  color: var(--text-secondary);
-  max-width: min(300px, 100%);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .sessionActions {
   display: flex;
@@ -312,4 +332,8 @@
   .details dd + dt {
     margin-top: 10px;
   }
+}
+
+.viewPanel[hidden] {
+  display: none;
 }

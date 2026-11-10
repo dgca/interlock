@@ -87,26 +87,21 @@ afterEach(async () => {
   container.remove();
   vi.restoreAllMocks();
 });
-async function render(
-  history: { id: string; attempt: number; state: string }[] = [],
-) {
+async function render(executionId = 'attempt', opened = true) {
   await act(async () =>
     root.render(
       h(
         DesignSystemProvider,
         null,
         h(ManagedTranscript, {
-          current: { id: 'attempt', attempt: 1, state: 'running' },
-          history,
+          key: executionId,
+          executionId,
+          current: executionId === 'attempt',
+          opened,
         }),
       ),
     ),
   );
-  const details = container.querySelector('details')!;
-  await act(async () => {
-    details.open = true;
-    details.dispatchEvent(new Event('toggle'));
-  });
 }
 function button(label: string) {
   return [...container.querySelectorAll('button')].find(
@@ -200,12 +195,8 @@ it('isolates historical-attempt responses and never offers its message controls'
             items: [{ ...page.items[0], text: 'Historical content' }],
           }),
   );
-  await render([{ id: 'older-attempt', attempt: 0, state: 'completed' }]);
-  const select = container.querySelector('select')!;
-  await act(async () => {
-    select.value = 'older-attempt';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  });
+  await render();
+  await render('older-attempt');
   expect(container.textContent).toContain('Historical content');
   expect(container.querySelector('textarea')).toBeNull();
   await act(async () =>
@@ -215,26 +206,16 @@ it('isolates historical-attempt responses and never offers its message controls'
     }),
   );
   expect(container.textContent).not.toContain('Current content');
-  await act(async () => {
-    select.value = 'attempt';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  });
+  await render();
   expect(container.textContent).toContain('Current content');
   expect(container.querySelector('textarea')).not.toBeNull();
 });
 
-it('preserves the active draft and delivery identity while the disclosure is closed', async () => {
+it('preserves the active draft while the conversation view is hidden', async () => {
   await render();
   await type('Draft to keep');
-  const details = container.querySelector('details')!;
-  await act(async () => {
-    details.open = false;
-    details.dispatchEvent(new Event('toggle'));
-  });
-  await act(async () => {
-    details.open = true;
-    details.dispatchEvent(new Event('toggle'));
-  });
+  await render('attempt', false);
+  await render();
   expect(container.querySelector('textarea')!.value).toBe('Draft to keep');
 });
 

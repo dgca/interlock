@@ -39,3 +39,13 @@
     padding: 16px;
   }
 }
+
+.managed {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.managed > :global(.actions):empty {
+  display: none;
+}

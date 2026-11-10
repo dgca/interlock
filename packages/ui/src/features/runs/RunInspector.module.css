@@ -339,3 +339,31 @@
 .events > div > span {
   overflow-wrap: anywhere;
 }
+
+.managedDetail {
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+  overflow: hidden;
+}
+.managedDetail :global(.inspector-heading) {
+  flex-shrink: 0;
+}
+.managedDetail :global(.inspector-heading) h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.managedDetail :global(.inspector-fields) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+@media (max-width: 1100px) {
+  .managedDetail {
+    height: 760px;
+    max-height: calc(100dvh - 160px);
+    min-height: 560px;
+  }
+}
