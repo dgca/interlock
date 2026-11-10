@@ -1140,7 +1140,6 @@
       "mantineImports": [],
       "designSystemImports": [
         [
-          "ActionIcon",
           "Button",
           "Menu",
           "Stack",
@@ -1158,9 +1157,9 @@
       ],
       "jsxElements": [
         "ActionError",
-        "ActionIcon",
         "ArrowRight",
         "Button",
+        "ChevronDown",
         "EmptyState",
         "Link",
         "ListTable",
@@ -1172,7 +1171,6 @@
         "Modal",
         "ModalBody",
         "ModalFooter",
-        "MoreHorizontal",
         "PageHeader",
         "Plus",
         "PromptFields",

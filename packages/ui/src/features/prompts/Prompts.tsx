@@ -1,5 +1,4 @@
 import {
-  ActionIcon,
   Button,
   Menu,
   Stack,
@@ -20,7 +19,7 @@ import { Link, useNavigate } from 'react-router';
 
 import {
   ArrowRight,
-  MoreHorizontal,
+  ChevronDown,
   Plus,
   Save,
   Search,
@@ -306,17 +305,21 @@ export function PromptEditor({
             >
               Discard changes
             </Button>
-            <Menu position="bottom-end" width={180}>
+            <Menu
+              position="bottom-end"
+              width={180}
+              withinPortal
+              returnFocus={!deleting}
+            >
               <Menu.Target>
-                <ActionIcon
-                  variant="subtle"
-                  color="gray"
+                <Button
+                  variant="secondary"
                   ref={actionsTrigger}
-                  aria-label="Prompt actions"
+                  rightSection={<ChevronDown size={16} aria-hidden="true" />}
                   disabled={busy}
                 >
-                  <MoreHorizontal size={19} />
-                </ActionIcon>
+                  Actions
+                </Button>
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Item
