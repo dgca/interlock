@@ -1,8 +1,9 @@
 import {
-  ActionIcon,
   Alert,
   Button,
+  Group,
   Menu,
+  Switch,
   Modal,
   ModalBody,
   ModalFooter,
@@ -20,7 +21,7 @@ import {
   useSearchParams,
 } from 'react-router';
 
-import { MoreHorizontal, Trash2 } from 'lucide-react';
+import { ChevronDown, Trash2 } from 'lucide-react';
 import type { AppContext } from '../../App';
 import { PageTabs } from '../../components/PageLayout/PageLayout';
 
@@ -53,7 +54,9 @@ export function AutomationDetail({ id }: { id: string }) {
   const [confirmation, setConfirmation] = useState<'disable' | 'delete'>();
   const inFlight = useRef(false);
   const actionsTrigger = useRef<HTMLButtonElement>(null);
-  const disableTrigger = useRef<HTMLButtonElement>(null);
+  const enabledTrigger = useRef<HTMLInputElement>(null);
+  const resumeTrigger = useRef<HTMLButtonElement>(null);
+  const returnFocusAfterResume = useRef(false);
   useEffect(() => {
     let current = true;
     void api.triggers.inspect.query({ id, offset, limit: 20 }).then(
@@ -79,8 +82,17 @@ export function AutomationDetail({ id }: { id: string }) {
     };
   }, [id, tick, offset, reload]);
   const trigger = data?.trigger;
+  useEffect(() => {
+    if (!trigger?.autoPaused && returnFocusAfterResume.current) {
+      returnFocusAfterResume.current = false;
+      if (document.activeElement === document.body)
+        enabledTrigger.current?.focus();
+    }
+  }, [trigger?.autoPaused]);
   const perform = async (action: 'enable' | 'disable' | 'delete') => {
     if (!trigger || inFlight.current) return;
+    const resumingWithFocus =
+      action === 'enable' && document.activeElement === resumeTrigger.current;
     inFlight.current = true;
     setBusy(true);
     setActionError('');
@@ -97,6 +109,8 @@ export function AutomationDetail({ id }: { id: string }) {
         return;
       }
       const saved = result.trigger;
+      if (resumingWithFocus && !saved.autoPaused)
+        returnFocusAfterResume.current = true;
       setData((previous) =>
         previous
           ? ({
@@ -127,19 +141,22 @@ export function AutomationDetail({ id }: { id: string }) {
     return paths.automation(id) + (next.size ? `?${next}` : '');
   };
   const history = trigger?.kind === 'schedule' ? data?.fires : data?.deliveries;
-  const status = trigger ? automationStatus(trigger) : '';
   return (
     <section className={workspacePage.page}>
       <PageHeader
         title={trigger?.name ?? 'Automation'}
         status={
-          trigger ? (
-            <>
-              {status}
-              {trigger.kind === 'schedule' &&
-                ` · ${timingLabel(trigger)}`} · {trigger.workflowName}
-            </>
-          ) : undefined
+          trigger
+            ? [
+                trigger.enabled && trigger.autoPaused
+                  ? 'Auto-paused'
+                  : undefined,
+                trigger.kind === 'schedule' ? timingLabel(trigger) : undefined,
+                trigger.workflowName,
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : undefined
         }
         onBack={() => void navigate(returnHref(search))}
         backLabel="Back to automations"
@@ -155,29 +172,23 @@ export function AutomationDetail({ id }: { id: string }) {
               >
                 Edit
               </Button>
-              <Menu position="bottom-end" width={190}>
+              <Menu
+                position="bottom-end"
+                width={190}
+                withinPortal
+                returnFocus={!confirmation}
+              >
                 <Menu.Target>
-                  <ActionIcon
-                    variant="subtle"
-                    color="gray"
+                  <Button
+                    variant="secondary"
                     ref={actionsTrigger}
-                    aria-label="Automation actions"
+                    rightSection={<ChevronDown size={16} aria-hidden="true" />}
                     disabled={busy || !!error}
                   >
-                    <MoreHorizontal size={19} />
-                  </ActionIcon>
+                    Actions
+                  </Button>
                 </Menu.Target>
                 <Menu.Dropdown>
-                  {trigger.enabled && trigger.autoPaused && (
-                    <Menu.Item
-                      onClick={() => {
-                        setActionError('');
-                        setConfirmation('disable');
-                      }}
-                    >
-                      Disable automation
-                    </Menu.Item>
-                  )}
                   <Menu.Item
                     color="red"
                     leftSection={<Trash2 size={14} />}
@@ -190,32 +201,25 @@ export function AutomationDetail({ id }: { id: string }) {
                   </Menu.Item>
                 </Menu.Dropdown>
               </Menu>
-              {trigger.enabled && !trigger.autoPaused ? (
-                <Button
-                  ref={disableTrigger}
-                  variant="secondary"
-                  disabled={busy || !!error}
-                  onClick={() => {
-                    setActionError('');
-                    setConfirmation('disable');
+              <div className={classes.enabledControl}>
+                <Switch
+                  ref={enabledTrigger}
+                  label="Enabled"
+                  labelPosition="left"
+                  size="md"
+                  checked={trigger.enabled}
+                  disabled={
+                    busy || !!error || (!trigger.enabled && !trigger.canEnable)
+                  }
+                  onChange={(event) => {
+                    if (event.currentTarget.checked) void perform('enable');
+                    else {
+                      setActionError('');
+                      setConfirmation('disable');
+                    }
                   }}
-                >
-                  Disable
-                </Button>
-              ) : (
-                <Button
-                  variant="primary"
-                  disabled={busy || !trigger.canEnable || !!error}
-                  loading={busy && !confirmation}
-                  onClick={() => void perform('enable')}
-                >
-                  {busy
-                    ? 'Enabling…'
-                    : trigger.autoPaused
-                      ? 'Resume automation'
-                      : 'Enable automation'}
-                </Button>
-              )}
+                />
+              </div>
             </>
           )
         }
@@ -268,6 +272,19 @@ export function AutomationDetail({ id }: { id: string }) {
               <Alert color="yellow" mb="md">
                 {trigger.autoPaused.reason} · Review recent activity before
                 resuming.
+                {trigger.enabled && (
+                  <Group mt="sm">
+                    <Button
+                      ref={resumeTrigger}
+                      variant="secondary"
+                      disabled={busy || !trigger.canEnable || !!error}
+                      loading={busy && !confirmation}
+                      onClick={() => void perform('enable')}
+                    >
+                      Resume automation
+                    </Button>
+                  </Group>
+                )}
               </Alert>
             )}
             {trigger.holdCount > 0 && (
@@ -458,7 +475,7 @@ export function AutomationDetail({ id }: { id: string }) {
           onClose={() => setConfirmation(undefined)}
           returnFocusTo={() =>
             confirmation === 'disable'
-              ? (disableTrigger.current ?? actionsTrigger.current)
+              ? (enabledTrigger.current ?? actionsTrigger.current)
               : actionsTrigger.current
           }
         >
