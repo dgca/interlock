@@ -7,10 +7,13 @@ import { UiTestProvider } from './uiTestProvider';
 import { VariableRoute } from '../packages/ui/src/features/variables/Variables';
 
 const read = vi.hoisted(() => vi.fn());
+const manage = vi.hoisted(() => vi.fn());
 vi.mock('../packages/ui/src/lib/api', async () => {
   const { mockRpcClient } = await import('./mockRpcClient');
   return {
-    api: mockRpcClient({ variables: { read: { query: read } } }),
+    api: mockRpcClient({
+      variables: { read: { query: read }, manage: { mutate: manage } },
+    }),
     errorMessage: (error: Error) => error.message,
   };
 });
@@ -82,6 +85,7 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   read.mockReset();
+  manage.mockReset();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -174,12 +178,14 @@ it.each([0, 1])(
         .map((button) => button.textContent)
         .filter(Boolean),
     ).toEqual(['Discard changes', 'Delete', 'Save changes']);
-    const danger = [...container.querySelectorAll('details')].find(
-      (details) =>
-        details.querySelector('summary')?.textContent === 'Danger zone',
-    )!;
-    expect(danger.textContent).toContain('Disable use');
-    expect(danger.textContent).not.toContain('Delete variable');
+    expect(
+      [...container.querySelectorAll('summary')].map(
+        (summary) => summary.textContent,
+      ),
+    ).not.toContain('Danger zone');
+    expect(container.textContent).not.toContain('Disable use');
+    expect(container.textContent).not.toContain('Enable use');
+    expect(container.textContent).toContain('Storage and recovery');
     expect(remove.disabled).toBe(false);
     await act(async () => {
       remove.focus();
@@ -225,4 +231,50 @@ it('omits variable Delete while creating a new variable', async () => {
     'Delete',
   );
   expect(read).not.toHaveBeenCalled();
+});
+
+it('keeps already-disabled variables read-only about their status while metadata saves omit enablement', async () => {
+  let saved = { ...savedVariable(), enabled: false, availability: 'disabled' };
+  read.mockImplementation(async () => saved);
+  manage.mockImplementation(async (input) => {
+    saved = {
+      ...saved,
+      name: input.name,
+      description: input.description,
+      revision: saved.revision + 1,
+    };
+    return saved;
+  });
+  await show();
+  expect(container.textContent).toContain(
+    'This variable is disabled. Restore access with the CLI.',
+  );
+  expect(container.textContent).not.toContain('Enable use');
+  expect(container.textContent).not.toContain('Disable use');
+  expect(container.textContent).not.toContain('Danger zone');
+  expect(manage).not.toHaveBeenCalled();
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!.call(field('Name'), 'renamed_variable');
+    field('Name').dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () =>
+    container
+      .querySelector('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+  );
+  expect(manage).toHaveBeenCalledWith({
+    action: 'update',
+    id: 'v',
+    expectedRevision: 1,
+    name: 'renamed_variable',
+    description: 'Saved description',
+  });
+  expect(manage.mock.lastCall![0]).not.toHaveProperty('enabled');
+  expect(saved.enabled).toBe(false);
+  expect(container.textContent).toContain(
+    'This variable is disabled. Restore access with the CLI.',
+  );
 });

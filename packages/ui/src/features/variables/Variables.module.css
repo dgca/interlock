@@ -74,9 +74,6 @@
   overflow-wrap: anywhere;
   white-space: normal;
 }
-.editorDisclosures > details + details {
-  margin-top: 12px;
-}
 .editorDisclosures summary {
   min-height: 44px;
   padding: 10px 0;
@@ -84,14 +81,6 @@
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 24px;
-}
-.editorDisclosures .dangerZone > summary {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--mantine-color-red-3);
-}
-.dangerActions {
-  padding-bottom: 12px;
 }
 
 @media (max-width: 900px) {
