@@ -779,7 +779,7 @@ export class Engine {
         validateWorkflowReferences(w.id, next, this.store.workflows());
         contentChanged = !sameWorkflowContent(w.draft, next);
         const positions = workflowPositions(next);
-        const before = workflowPositions(w.draft);
+        const before = workflowPositions(this.describeWorkflow(w).draft);
         const savedPositions = readWorkflowLayout(this.store, id).positions;
         persistWorkflowPositions(
           this.store,
@@ -805,7 +805,7 @@ export class Engine {
         if (contentChanged) {
           w.draft =
             patch.layout === 'preserve'
-              ? applyWorkflowPositions(next, before)
+              ? applyWorkflowPositions(next, workflowPositions(w.draft))
               : next;
           w.draftRevision++;
         }

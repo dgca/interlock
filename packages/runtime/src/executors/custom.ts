@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process';
+import { spawnManagedProcess } from './process.js';
 import type { HarnessAdapter, HarnessRun, HarnessResult } from './contracts.js';
-import { HarnessResultError } from './contracts.js';
+import { HarnessResultError, HarnessCleanupError } from './contracts.js';
 import type { Json, ModelUsage } from '@interlock/core';
 
 export function interpolateTokens(
@@ -50,6 +50,104 @@ export interface CustomTurnEnvelope {
   usage?: ModelUsage[];
 }
 
+/** Run trusted shell source with assignment values kept in the environment. */
+export async function executeCustomCommand(input: {
+  command: string;
+  cwd: string;
+  env?: Record<string, string>;
+  payload?: unknown;
+  tokens: Record<string, string>;
+  signal?: AbortSignal;
+  timeoutSeconds?: number;
+  retainChildrenOnSuccess?: boolean;
+  onProgress?: (msg: string) => void;
+}): Promise<string> {
+  if (input.signal?.aborted) throw new Error('Custom command aborted');
+  const payload =
+    input.payload === undefined ? undefined : JSON.stringify(input.payload);
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const [key, value] of Object.entries(input.env ?? {}))
+    env[key] = interpolateTokens(value, input.tokens);
+  // Identity metadata is also available to scripts reading their environment.
+  // Input is delivered through stdin and may exceed OS environment limits, so
+  // export it only when the command explicitly references that token.
+  for (const [key, value] of Object.entries(input.tokens))
+    if (key.startsWith('INTERLOCK_') && key !== 'INTERLOCK_INPUT')
+      env[key] = value;
+  if (/\$(?:INTERLOCK_INPUT\b|\{INTERLOCK_INPUT\b)/.test(input.command))
+    env.INTERLOCK_INPUT = input.tokens.INTERLOCK_INPUT;
+  const managed = spawnManagedProcess('/bin/sh', ['-c', input.command], {
+    cwd: input.cwd,
+    env,
+  });
+  const child = managed.child;
+  let timer: NodeJS.Timeout | undefined;
+  let aborted: (() => void) | undefined;
+  let succeeded = false;
+  try {
+    const output = await new Promise<string>((resolve, reject) => {
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk.toString();
+      });
+      child.stderr.on('data', (chunk) => {
+        const text = chunk.toString();
+        stderr += text;
+        input.onProgress?.(text);
+      });
+      child.on('error', reject);
+      // A command may finish successfully without consuming stdin. Drain its
+      // output and let the exit status decide; other stream errors still fail.
+      child.stdin.on('error', (error: NodeJS.ErrnoException) => {
+        if (error.code !== 'EPIPE') reject(error);
+      });
+      child.on('close', (code) => {
+        code === 0
+          ? resolve(stdout.trim())
+          : reject(
+              new Error(
+                `Custom command failed with exit code ${code}${stderr ? ': ' + stderr.trim() : ''}`,
+              ),
+            );
+      });
+      aborted = () => reject(new Error('Custom command aborted'));
+      input.signal?.addEventListener('abort', aborted, { once: true });
+      if (input.signal?.aborted) {
+        aborted();
+        return;
+      }
+      if (input.timeoutSeconds && input.timeoutSeconds > 0)
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                `Custom command timed out after ${input.timeoutSeconds} seconds`,
+              ),
+            ),
+          input.timeoutSeconds * 1000,
+        );
+      child.stdin.end(payload);
+    });
+    succeeded = true;
+    return output;
+  } finally {
+    clearTimeout(timer);
+    if (aborted) input.signal?.removeEventListener('abort', aborted);
+    if (!succeeded || !input.retainChildrenOnSuccess) {
+      try {
+        // Cleanup includes descendants that remain after their shell exits.
+        await managed.close();
+      } catch (error) {
+        throw new HarnessCleanupError(
+          'Custom harness subprocess termination could not be confirmed',
+          { cause: error },
+        );
+      }
+    }
+  }
+}
+
 export async function executeSubprocessTurn(input: {
   command: string;
   cwd: string;
@@ -60,109 +158,18 @@ export async function executeSubprocessTurn(input: {
   timeoutSeconds?: number;
   onProgress?: (msg: string) => void;
 }): Promise<CustomTurnEnvelope> {
-  const interpolatedCommand = interpolateTokens(input.command, input.tokens);
-  const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
-  if (input.env) {
-    for (const [k, v] of Object.entries(input.env)) {
-      resolvedEnv[k] = interpolateTokens(v, input.tokens);
-    }
+  const stdout = await executeCustomCommand(input);
+  if (!stdout)
+    throw new HarnessResultError(
+      'Custom turn command completed with empty STDOUT; expected JSON envelope',
+    );
+  try {
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new HarnessResultError(
+      `Failed to parse custom turn STDOUT JSON: ${error instanceof Error ? error.message : String(error)}\nOutput was: ${stdout.slice(0, 500)}`,
+    );
   }
-
-  return new Promise<CustomTurnEnvelope>((resolve, reject) => {
-    let timer: NodeJS.Timeout | undefined;
-    const child = spawn(interpolatedCommand, {
-      cwd: input.cwd,
-      env: resolvedEnv,
-      shell: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-
-    let stdoutData = '';
-    let stderrData = '';
-
-    child.stdout.on('data', (chunk) => {
-      stdoutData += chunk.toString();
-    });
-
-    child.stderr.on('data', (chunk) => {
-      const text = chunk.toString();
-      stderrData += text;
-      input.onProgress?.(text);
-    });
-
-    if (input.timeoutSeconds && input.timeoutSeconds > 0) {
-      timer = setTimeout(() => {
-        try {
-          child.kill('SIGKILL');
-        } catch {}
-        reject(
-          new Error(
-            `Custom harness turn timed out after ${input.timeoutSeconds} seconds`,
-          ),
-        );
-      }, input.timeoutSeconds * 1000);
-    }
-
-    const abortHandler = () => {
-      try {
-        child.kill('SIGTERM');
-      } catch {}
-      setTimeout(() => {
-        try {
-          child.kill('SIGKILL');
-        } catch {}
-      }, 1000);
-      reject(new Error('Turn aborted by signal'));
-    };
-
-    if (input.signal.aborted) {
-      abortHandler();
-      return;
-    }
-    input.signal.addEventListener('abort', abortHandler, { once: true });
-
-    child.on('error', (err) => {
-      if (timer) clearTimeout(timer);
-      input.signal.removeEventListener('abort', abortHandler);
-      reject(err);
-    });
-
-    child.on('close', (code) => {
-      if (timer) clearTimeout(timer);
-      input.signal.removeEventListener('abort', abortHandler);
-      if (code !== 0) {
-        return reject(
-          new Error(
-            `Custom turn command failed with exit code ${code}${
-              stderrData ? `: ${stderrData.trim()}` : ''
-            }`,
-          ),
-        );
-      }
-      try {
-        const trimmed = stdoutData.trim();
-        if (!trimmed) {
-          throw new HarnessResultError(
-            'Custom turn command completed with empty STDOUT; expected JSON envelope',
-          );
-        }
-        const parsed = JSON.parse(trimmed);
-        resolve(parsed);
-      } catch (err) {
-        reject(
-          new HarnessResultError(
-            `Failed to parse custom turn STDOUT JSON: ${
-              err instanceof Error ? err.message : String(err)
-            }\nOutput was: ${stdoutData.slice(0, 500)}`,
-          ),
-        );
-      }
-    });
-
-    // Write input payload to stdin and close
-    child.stdin.write(JSON.stringify(input.payload));
-    child.stdin.end();
-  });
 }
 
 export async function executeHttpTurn(input: {

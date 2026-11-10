@@ -237,7 +237,9 @@ export function App() {
     onDirty: setEditorDirty,
     onScheduleDirty: setScheduleDirty,
     onSchedulePending: setSchedulePending,
-    onSaved: (w) =>
+    onSaved: (w) => {
+      // Cancellation is synchronous; earlier list reads cannot replace this acknowledgement.
+      void queryClient.cancelQueries(trpc.workflows.list.queryFilter());
       queryClient.setQueryData(trpc.workflows.list.queryKey(), (all = []) =>
         all.some((old) => old.id === w.id)
           ? all.map((old) =>
@@ -246,7 +248,8 @@ export function App() {
                 : old,
             )
           : [...all, { draftMatchesLatest: null, layoutRevision: 0, ...w }],
-      ),
+      );
+    },
     onRun: setRunDialog,
     onConnect: features.connectAgent ? () => setConnectDialog(true) : undefined,
   };

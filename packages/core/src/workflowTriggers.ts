@@ -142,40 +142,32 @@ export const triggerConfigSchema = z.union([
   eventConfigSchema,
 ]);
 export type TriggerConfig = z.infer<typeof triggerConfigSchema>;
+function triggerConfigFields(kind: WorkflowTrigger['kind']) {
+  return Object.keys(
+    kind === 'schedule'
+      ? scheduleConfigSchema.innerType().shape
+      : eventConfigSchema.innerType().shape,
+  );
+}
 export function triggerConfig(trigger: WorkflowTrigger): TriggerConfig {
-  const fields =
-    trigger.kind === 'schedule'
-      ? [
-          'kind',
-          'name',
-          'tags',
-          'timing',
-          'input',
-          'bindings',
-          'overlapPolicy',
-          'missedFirePolicy',
-          'pauseAfterConsecutiveFailures',
-        ]
-      : [
-          'kind',
-          'name',
-          'tags',
-          'events',
-          'scope',
-          'action',
-          'exitNodeId',
-          'waitForQuiescence',
-          'maxTriggerDepth',
-          'pauseAfterConsecutiveFailures',
-        ];
   return triggerConfigSchema.parse(
     Object.fromEntries(
-      fields.flatMap((key) => {
+      triggerConfigFields(trigger.kind).flatMap((key) => {
         const value = (trigger as unknown as Record<string, unknown>)[key];
         return value === undefined ? [] : [[key, value]];
       }),
     ),
   );
+}
+/** Replace authored configuration while retaining local operational state. */
+export function replaceTriggerConfig(
+  trigger: WorkflowTrigger,
+  config: TriggerConfig,
+): WorkflowTrigger {
+  const next = { ...trigger };
+  const record = next as unknown as Record<string, unknown>;
+  for (const key of triggerConfigFields(trigger.kind)) delete record[key];
+  return Object.assign(next, config);
 }
 export const triggerListQuerySchema = z
   .object({

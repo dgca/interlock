@@ -6,6 +6,11 @@ Redo save the resulting arrangement. Discarding content edits retains saved
 positions for surviving nodes. Node, route, contract, and execution-setting edits
 still use the draft save and publication flow.
 
+Raw JSON edits, including node coordinates, stay local until **Save**.
+**Discard** removes staged Raw edits while retaining previously saved visual
+positions and newer positions saved elsewhere. A position-only Raw save changes
+layout without advancing the content revision or publishing a version.
+
 Layouts belong to the workflow and are shared across browsers connected to the
 same Interlock instance. The editor reports pending or failed layout saves and
 offers retry after a failure. Keep Interlock available until a pending save

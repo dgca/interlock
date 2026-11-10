@@ -1507,17 +1507,22 @@ it('applies newer remote layout after an older acknowledgement without resetting
   expect(JSON.parse(rawEditor.props.value).maxSteps).toBe(60);
 });
 
-it('autosaves Raw position-only changes and keeps them undoable without a draft save', async () => {
+it('stages Raw position-only changes until Save without saving draft content', async () => {
   await render();
   await click('Raw');
   const draft = JSON.parse(rawEditor.props.value);
   const original = draft.nodes[0].position;
   draft.nodes[0].position = { x: 888, y: 999 };
   await act(async () => rawEditor.props.onChange(JSON.stringify(draft)));
-  expect(button('Save').disabled).toBe(true);
-  expect(viewControl('Visual').disabled).toBe(false);
-  expect(onDirty).toHaveBeenLastCalledWith(false);
+  expect(button('Save').disabled).toBe(false);
+  expect(viewControl('Visual').disabled).toBe(true);
+  expect(onDirty).toHaveBeenLastCalledWith(true);
+  expect(rpc.saveLayout).not.toHaveBeenCalled();
+  expect(canvas.props.nodes[0].position).toEqual(original);
+  await click('Save');
   expect(layoutPositions[draft.nodes[0].id]).toEqual({ x: 888, y: 999 });
+  expect(button('Save').disabled).toBe(true);
+  expect(onDirty).toHaveBeenLastCalledWith(false);
   await click('Visual');
   expect(canvas.props.nodes[0].position).toEqual({ x: 888, y: 999 });
   await click('Undo');
@@ -1725,3 +1730,154 @@ it.each(['pending', 'failed'])(
     expect(unload.defaultPrevented).toBe(false);
   },
 );
+
+it('discards Raw content and coordinate edits without persisting discarded positions', async () => {
+  await render();
+  await click(`Move ${workflow.draft.nodes[0].id}`);
+  const before = structuredClone(layoutPositions);
+  rpc.saveLayout.mockClear();
+  await click('Raw');
+  const baseline = JSON.parse(rawEditor.props.value);
+  const candidate = structuredClone(baseline);
+  candidate.maxSteps = 61;
+  candidate.nodes[0].position = { x: 888, y: 999 };
+  await act(async () => rawEditor.props.onChange(JSON.stringify(candidate)));
+  expect(rpc.saveLayout).not.toHaveBeenCalled();
+  await click('Discard');
+  expect(JSON.parse(rawEditor.props.value)).toEqual(baseline);
+  expect(layoutPositions).toEqual(before);
+  await click('Visual');
+  expect(canvas.props.nodes[0].position).toEqual(baseline.nodes[0].position);
+  expect(rpc.update).not.toHaveBeenCalled();
+  expect(rpc.saveLayout).not.toHaveBeenCalled();
+});
+
+it('saves only locally edited Raw coordinates while preserving a remote move', async () => {
+  await render();
+  await click('Raw');
+  const candidate = JSON.parse(rawEditor.props.value);
+  const [first, second] = candidate.nodes;
+  first.position = { x: 888, y: 999 };
+  candidate.maxSteps = 61;
+  await act(async () => rawEditor.props.onChange(JSON.stringify(candidate)));
+  layoutRevision = 1;
+  layoutPositions = { ...layoutPositions, [second.id]: { x: 777, y: 666 } };
+  workflow = {
+    ...workflow,
+    layoutRevision,
+    draft: applyWorkflowPositions(workflow.draft, layoutPositions),
+  };
+  await render();
+  expect(rpc.saveLayout).not.toHaveBeenCalled();
+  await click('Save');
+  expect(rpc.saveLayout).toHaveBeenCalledWith({
+    id: workflow.id,
+    expectedRevision: 1,
+    positions: { [first.id]: { x: 888, y: 999 } },
+  });
+  expect(layoutPositions[second.id]).toEqual({ x: 777, y: 666 });
+  await click('Visual');
+  expect(
+    canvas.props.nodes.find((n: any) => n.id === first.id).position,
+  ).toEqual({ x: 888, y: 999 });
+  expect(
+    canvas.props.nodes.find((n: any) => n.id === second.id).position,
+  ).toEqual({ x: 777, y: 666 });
+  await click('Undo');
+  expect(
+    canvas.props.nodes.find((n: any) => n.id === first.id).position,
+  ).toEqual(workflow.draft.nodes[0].position);
+  expect(
+    canvas.props.nodes.find((n: any) => n.id === second.id).position,
+  ).toEqual({ x: 777, y: 666 });
+});
+
+it('retains Raw coordinates after a failed content save without applying them', async () => {
+  await render();
+  await click('Raw');
+  const candidate = JSON.parse(rawEditor.props.value);
+  candidate.maxSteps = 61;
+  candidate.nodes[0].position = { x: 888, y: 999 };
+  await act(async () => rawEditor.props.onChange(JSON.stringify(candidate)));
+  rpc.update.mockRejectedValueOnce(new Error('Offline'));
+  await click('Save');
+  expect(rpc.saveLayout).not.toHaveBeenCalled();
+  expect(JSON.parse(rawEditor.props.value)).toEqual(candidate);
+  expect(button('Save').disabled).toBe(false);
+  await click('Discard');
+  expect(rpc.saveLayout).not.toHaveBeenCalled();
+  await click('Visual');
+  expect(canvas.props.nodes[0].position).toEqual(
+    workflow.draft.nodes[0].position,
+  );
+});
+
+it('discards position-only Raw edits and protects them from navigation until discarded', async () => {
+  await render();
+  await click('Raw');
+  const baseline = rawEditor.props.value;
+  const candidate = JSON.parse(baseline);
+  candidate.nodes[0].position = { x: 888, y: 999 };
+  await act(async () => rawEditor.props.onChange(JSON.stringify(candidate)));
+  const unload = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(unload);
+  expect(unload.defaultPrevented).toBe(true);
+  expect(button('Undo').disabled).toBe(true);
+  await click('Discard');
+  expect(rawEditor.props.value).toBe(baseline);
+  expect(onDirty).toHaveBeenLastCalledWith(false);
+  expect(rpc.saveLayout).not.toHaveBeenCalled();
+  await click('Visual');
+  expect(button('Undo').disabled).toBe(true);
+});
+
+it('retains newer remote layout when discarding staged Raw coordinates', async () => {
+  await render();
+  await click('Raw');
+  const candidate = JSON.parse(rawEditor.props.value);
+  candidate.nodes[0].position = { x: 888, y: 999 };
+  candidate.maxSteps = 61;
+  await act(async () => rawEditor.props.onChange(JSON.stringify(candidate)));
+  const id = candidate.nodes[0].id;
+  layoutRevision = 1;
+  layoutPositions = { ...layoutPositions, [id]: { x: 777, y: 666 } };
+  workflow = {
+    ...workflow,
+    layoutRevision,
+    draft: applyWorkflowPositions(workflow.draft, layoutPositions),
+  };
+  await render();
+  await click('Discard');
+  expect(JSON.parse(rawEditor.props.value).nodes[0].position).toEqual({
+    x: 777,
+    y: 666,
+  });
+  expect(JSON.parse(rawEditor.props.value).maxSteps).toBe(
+    workflow.draft.maxSteps,
+  );
+  expect(rpc.saveLayout).not.toHaveBeenCalled();
+});
+
+it('retains staged Raw text through layout-save failure and records a successful retry once', async () => {
+  await render();
+  await click('Raw');
+  const candidate = JSON.parse(rawEditor.props.value);
+  const original = candidate.nodes[0].position;
+  candidate.nodes[0].position = { x: 888, y: 999 };
+  const text = JSON.stringify(candidate);
+  await act(async () => rawEditor.props.onChange(text));
+  rpc.saveLayout.mockRejectedValueOnce(new Error('Offline'));
+  await click('Save');
+  expect(rawEditor.props.value).toBe(text);
+  expect(onDirty).toHaveBeenLastCalledWith(true);
+  expect(container.textContent).toContain('Layout could not be saved. Offline');
+  await click('Retry layout save');
+  await click('Save');
+  expect(onDirty).toHaveBeenLastCalledWith(false);
+  expect(layoutPositions[candidate.nodes[0].id]).toEqual({ x: 888, y: 999 });
+  await click('Visual');
+  await click('Undo');
+  expect(canvas.props.nodes[0].position).toEqual(original);
+  expect(button('Undo').disabled).toBe(true);
+  expect(rpc.update).not.toHaveBeenCalled();
+});

@@ -42,10 +42,12 @@ import { workflowTabs } from './workflowListConfig';
 export function WorkflowLibrary({
   workflows,
   onOpen,
+  onSaved,
   act,
 }: {
   workflows: Workflow[];
   onOpen: (id: string) => void;
+  onSaved: (workflow: Workflow) => void;
   act: Action;
 }) {
   const features = useUiFeatures();
@@ -66,6 +68,7 @@ export function WorkflowLibrary({
         const workflow = await api.workflows.create.mutate({
           name: 'Untitled workflow',
         });
+        onSaved(workflow);
         onOpen(workflow.id);
       }, 'Workflow created.');
     } finally {
@@ -170,6 +173,7 @@ export function WorkflowLibrary({
                               const copy = await api.workflows.clone.mutate({
                                 id: w.id,
                               });
+                              onSaved(copy);
                               onOpen(copy.id);
                             }, 'Workflow cloned.')
                           }

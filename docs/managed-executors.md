@@ -84,11 +84,11 @@ The command or HTTP endpoint must return a JSON result envelope:
   "sessionId": "optional-session-id",
   "model": "optional-model",
   "provider": "optional-provider",
-  "usage": { "promptTokens": 100, "completionTokens": 50 }
+  "usage": [{ "provider": "custom", "model": "agent-model", "inputTokens": 100, "outputTokens": 50 }]
 }
 ```
 
-Interlock validates `output` against `outputSchema` and submits the result. A non-zero process exit code or HTTP error status records an execution failure and consumes an attempt according to the workflow's retry policy.
+Interlock validates `output` against `outputSchema` and submits the result. Invalid result envelopes consume the ordinary failure allowance. Process exits and HTTP errors without an accepted result leave external effects uncertain and hold the assignment for reconciliation after any configured transient recovery attempts. An unconfirmed subprocess stop always interrupts the execution without automatic retry.
 
 ### Delegated Claim-Ticket Mode (Launcher)
 
@@ -99,24 +99,27 @@ Launcher mode delegates execution to an external agent application (such as a de
 - **Lifecycle Hooks**: Custom launcher profiles can define optional lifecycle hooks (via subprocess command or HTTP POST endpoint):
   - `statusCommand` / `statusUrl`: Interlock polls session state (`working`, `idle`, `needs_attention`, `ended`).
   - `messageCommand` / `messageUrl`: Delivers idle nudges or recovery instructions to the external session.
-  - `stopCommand` / `stopUrl`: Requests the external session to stop on assignment cancellation or server shutdown.
+  - `stopCommand` / `stopUrl`: Requests the external session to stop on assignment cancellation or an explicit stop action.
   - `archiveCommand` / `archiveUrl`: Invoked when the session's final assignment in the run completes.
 
 ### Template tokens and working directories
 
-Command lines and HTTP URLs support environment variable token replacement:
+Subprocess commands receive Interlock token values through the environment. HTTP URLs, headers, and configured environment values support token replacement:
 
 - `$INTERLOCK_WORK_ID`
 - `$INTERLOCK_RUN_ID`
-- `$INTERLOCK_EXECUTION_ID`
-- `$INTERLOCK_NODE_ID`
 - `$INTERLOCK_SESSION_ID`
 - `$INTERLOCK_CWD`
 - `$INTERLOCK_CLAIM_TOKEN`
 - `$INTERLOCK_CLAIM_TICKET`
 - `$INTERLOCK_SESSION_NAME`
+- `$INTERLOCK_INPUT`
+
+Commands use normal shell quoting. Double-quote token arguments, such as `agent --session "$INTERLOCK_SESSION_NAME"`, to preserve spaces and special characters as data. Single quotes keep token names literal. Token values never become shell source. Identity tokens are also available to scripts through their environment. Turn and launch commands receive the full assignment payload as JSON on stdin. Their `$INTERLOCK_INPUT` token exposes the assignment input; message commands use that token for the recovery message. Status, stop, and archive commands have no input token. The input token enters the subprocess environment only when explicitly referenced in the command. Use stdin for large inputs because operating systems limit environment and argument sizes.
 
 Custom harness commands do not require absolute executable paths; binary names resolved from `PATH` and arbitrary shell commands are permitted. Configured and dynamic `cwd` values must resolve to an existing directory contained inside the declared `allowedRoots`.
+
+Direct turns and launcher command operations stop their process group before reporting timeout, cancellation, or failure. Cleanup includes descendants left after the shell exits. A turn cannot retry automatically when termination cannot be confirmed; inspect external effects and reconcile the interrupted execution first. A successful launch command can leave its delegated session running. Server shutdown aborts and waits for owned command processes, then retains interrupted ownership for delegated sessions. It does not dispatch remote stop operations; verify those sessions stopped before reconciling. Status, message, archive, and stop commands have a ten-second limit; launch commands use the configured timeout or sixty seconds.
 
 ## Session visibility: name templates, deep links and live tail
 

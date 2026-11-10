@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
 import { isAbsolute } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -52,6 +51,7 @@ type ManagedAssignment = Pick<
 };
 import {
   HarnessResultError,
+  HarnessCleanupError,
   HarnessModelError,
   classifyHarnessError,
   isModelRefusal,
@@ -59,7 +59,11 @@ import {
   type HarnessRequest,
   type HarnessResult,
 } from './contracts.js';
-import { buildTokenMap, interpolateTokens } from './custom.js';
+import {
+  buildTokenMap,
+  interpolateTokens,
+  executeCustomCommand,
+} from './custom.js';
 import {
   evaluateSessionNameTemplate,
   evaluateCommandOrUrlTemplate,
@@ -82,6 +86,7 @@ interface LauncherSession {
   launchedAt: string;
   lastStatusAt: number;
   archived: boolean;
+  cleanupFailed?: boolean;
 }
 
 const profilesCollection = 'executorProfiles',
@@ -161,6 +166,11 @@ export class ExecutorManager {
   private launchIdempotency = new Map<string, LauncherSession>();
   private idleRecovering = new Set<string>();
   private launcherStops = new Map<string, Promise<void>>();
+  private launcherCommands = new Map<string, Map<string, Promise<string>>>();
+  private customCommands = new Set<{
+    abort: AbortController;
+    done: Promise<string>;
+  }>();
   private running = false;
   private stopped = false;
   private scheduled = false;
@@ -979,6 +989,8 @@ export class ExecutorManager {
               runId: offered.runId,
               attempt: offered.attempt,
               state:
+                this.stopped ||
+                err instanceof HarnessCleanupError ||
                 this.engine.store.get<WorkRequest>('work', offered.id)
                   ?.status === 'cancelled'
                   ? 'interrupted'
@@ -1244,13 +1256,14 @@ export class ExecutorManager {
         session.runId,
       );
       if (
+        !session.cleanupFailed &&
         (session.profile.statusCommand || session.profile.statusUrl) &&
         Date.now() - session.lastStatusAt > 2000
       ) {
         session.lastStatusAt = Date.now();
         void this.pollLauncherStatus(session).catch(() => {});
       }
-      if (current?.status === 'claimed')
+      if (!session.cleanupFailed && current?.status === 'claimed')
         void this.recoverIdleLauncher(session, current).catch(() => {});
       const runEnded =
         run && ['completed', 'failed', 'cancelled'].includes(run.status);
@@ -1270,7 +1283,8 @@ export class ExecutorManager {
           void this.requestLauncherStop(session)
             .then(() => this.archiveLauncherSession(session))
             .catch(() => {});
-        } else void this.archiveLauncherSession(session).catch(() => {});
+        } else if (!session.cleanupFailed)
+          void this.archiveLauncherSession(session).catch(() => {});
       }
     }
   }
@@ -1379,50 +1393,21 @@ export class ExecutorManager {
           `Custom profile "${profile.id}" in launcher subprocess mode requires launchCommand`,
         );
       }
-      const interpolatedCmd = interpolateTokens(cmd, tokenMap);
-      const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
-      if (profile.env) {
-        for (const [k, v] of Object.entries(profile.env)) {
-          resolvedEnv[k] = interpolateTokens(v, tokenMap);
-        }
-      }
-      resolvedEnv.INTERLOCK_SESSION_NAME = sessionName;
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn(interpolatedCmd, {
-          cwd,
-          env: resolvedEnv,
-          shell: true,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-        let stdoutData = '';
-        let stderrData = '';
-        child.stdout.on('data', (d) => {
-          stdoutData += d.toString();
-        });
-        child.stderr.on('data', (d) => {
-          stderrData += d.toString();
-        });
-        child.on('error', reject);
-        child.on('close', (code) => {
-          if (code !== 0) {
-            reject(
-              new Error(
-                `Launch command failed with code ${code}: ${stderrData}`,
-              ),
-            );
-          } else {
-            try {
-              const parsed = JSON.parse(stdoutData.trim());
-              remoteSessionId = parsed.sessionId;
-              remoteResumeCommand = parsed.resumeCommand;
-              remoteDeepLink = parsed.deepLink;
-            } catch {}
-            resolve();
-          }
-        });
-        child.stdin.write(JSON.stringify(launchPayload));
-        child.stdin.end();
+      const output = await this.runCustomCommand({
+        command: cmd,
+        cwd,
+        env: profile.env,
+        tokens: tokenMap,
+        payload: launchPayload,
+        timeoutSeconds: profile.timeoutSeconds ?? 60,
+        retainChildrenOnSuccess: true,
       });
+      try {
+        const parsed = JSON.parse(output);
+        remoteSessionId = parsed.sessionId;
+        remoteResumeCommand = parsed.resumeCommand;
+        remoteDeepLink = parsed.deepLink;
+      } catch {}
     }
 
     const effectiveSessionId = remoteSessionId || logicalSession;
@@ -1486,6 +1471,7 @@ export class ExecutorManager {
     this.launchIdempotency.set(idempotencyKey, sessionRecord);
     const current = this.engine.store.get<WorkRequest>('work', work.id);
     if (
+      this.stopped ||
       current?.status === 'cancelled' ||
       this.engine.run(work.runId).status === 'cancelled'
     ) {
@@ -1497,6 +1483,7 @@ export class ExecutorManager {
     return sessionRecord;
   }
   private async pollLauncherStatus(session: LauncherSession) {
+    if (session.cleanupFailed) return;
     const tokenMap = {
       INTERLOCK_WORK_ID: session.workId,
       INTERLOCK_RUN_ID: session.runId,
@@ -1528,31 +1515,13 @@ export class ExecutorManager {
         }
       } catch {}
     } else if (session.profile.statusCommand) {
-      const cmd = interpolateTokens(session.profile.statusCommand, tokenMap);
-      const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
-      if (session.profile.env) {
-        for (const [k, v] of Object.entries(session.profile.env)) {
-          resolvedEnv[k] = interpolateTokens(v, tokenMap);
-        }
-      }
-      resolvedEnv.INTERLOCK_SESSION_NAME = session.sessionName ?? '';
       try {
-        const output = await new Promise<string>((resolve, reject) => {
-          const child = spawn(cmd, {
-            cwd: session.cwd,
-            env: resolvedEnv,
-            shell: true,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          });
-          let stdoutData = '';
-          child.stdout.on('data', (d) => {
-            stdoutData += d.toString();
-          });
-          child.on('error', reject);
-          child.on('close', (code) => {
-            if (code === 0) resolve(stdoutData.trim());
-            else reject(new Error(`Exit ${code}`));
-          });
+        const output = await this.runLauncherCommand(session, 'status', {
+          command: session.profile.statusCommand,
+          cwd: session.cwd,
+          env: session.profile.env,
+          tokens: tokenMap,
+          timeoutSeconds: 10,
         });
         try {
           const parsed = JSON.parse(output);
@@ -1729,6 +1698,59 @@ export class ExecutorManager {
       this.idleRecovering.delete(captured.id);
     }
   }
+  private runCustomCommand(input: Parameters<typeof executeCustomCommand>[0]) {
+    if (this.stopped)
+      return Promise.reject(
+        new Error('Interlock stopped before launching command'),
+      );
+    const abort = new AbortController();
+    const done = executeCustomCommand({ ...input, signal: abort.signal });
+    const command = { abort, done };
+    this.customCommands.add(command);
+    void done
+      .finally(() => this.customCommands.delete(command))
+      .catch(() => {});
+    return done;
+  }
+  private runLauncherCommand(
+    session: LauncherSession,
+    operation: 'status' | 'message' | 'archive' | 'stop',
+    input: Parameters<typeof executeCustomCommand>[0],
+  ): Promise<string> {
+    if (session.cleanupFailed && operation !== 'stop')
+      return Promise.reject(
+        new HarnessCleanupError(
+          'Launcher command cleanup requires stop confirmation',
+        ),
+      );
+    const commands =
+      this.launcherCommands.get(session.workId) ??
+      new Map<string, Promise<string>>();
+    const pending = commands.get(operation);
+    if (pending) return pending;
+    const command = (async () => {
+      try {
+        return await this.runCustomCommand(input);
+      } catch (error) {
+        if (error instanceof HarnessCleanupError) {
+          session.cleanupFailed = true;
+          const record = this.latest(session.workId);
+          if (record)
+            this.interrupted(
+              record,
+              `Launcher ${operation} cleanup is uncertain. Confirm its subprocesses stopped before reconciling.`,
+            );
+        }
+        throw error;
+      } finally {
+        commands.delete(operation);
+        if (!commands.size) this.launcherCommands.delete(session.workId);
+      }
+    })();
+    commands.set(operation, command);
+    this.launcherCommands.set(session.workId, commands);
+    return command;
+  }
   private async sendLauncherMessage(session: LauncherSession, message: string) {
     const tokenMap = {
       INTERLOCK_WORK_ID: session.workId,
@@ -1766,29 +1788,13 @@ export class ExecutorManager {
       if (!response.ok)
         throw new Error(`Launcher operation failed (${response.status})`);
     } else if (session.profile.messageCommand) {
-      const cmd = interpolateTokens(session.profile.messageCommand, tokenMap);
-      const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
-      if (session.profile.env) {
-        for (const [k, v] of Object.entries(session.profile.env)) {
-          resolvedEnv[k] = interpolateTokens(v, tokenMap);
-        }
-      }
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn(cmd, {
-          cwd: session.cwd,
-          env: resolvedEnv,
-          shell: true,
-          timeout: 10000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-        child.on('close', (code) =>
-          code === 0
-            ? resolve()
-            : reject(new Error(`Launcher operation exited ${code}`)),
-        );
-        child.on('error', reject);
-        child.stdin.write(JSON.stringify(payload));
-        child.stdin.end();
+      await this.runLauncherCommand(session, 'message', {
+        command: session.profile.messageCommand,
+        cwd: session.cwd,
+        env: session.profile.env,
+        tokens: tokenMap,
+        payload,
+        timeoutSeconds: 10,
       });
     }
   }
@@ -1824,25 +1830,14 @@ export class ExecutorManager {
         body: JSON.stringify(payload),
       }).catch(() => {});
     } else if (session.profile.archiveCommand) {
-      const cmd = interpolateTokens(session.profile.archiveCommand, tokenMap);
-      const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
-      if (session.profile.env) {
-        for (const [k, v] of Object.entries(session.profile.env)) {
-          resolvedEnv[k] = interpolateTokens(v, tokenMap);
-        }
-      }
-      await new Promise<void>((resolve) => {
-        const child = spawn(cmd, {
-          cwd: session.cwd,
-          env: resolvedEnv,
-          shell: true,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-        child.on('close', () => resolve());
-        child.on('error', () => resolve());
-        child.stdin.write(JSON.stringify(payload));
-        child.stdin.end();
-      });
+      await this.runLauncherCommand(session, 'archive', {
+        command: session.profile.archiveCommand,
+        cwd: session.cwd,
+        env: session.profile.env,
+        tokens: tokenMap,
+        payload,
+        timeoutSeconds: 10,
+      }).catch(() => {});
     }
   }
   private requestLauncherStop(session: LauncherSession) {
@@ -1893,29 +1888,13 @@ export class ExecutorManager {
       if (!response.ok)
         throw new Error(`Launcher operation failed (${response.status})`);
     } else if (session.profile.stopCommand) {
-      const cmd = interpolateTokens(session.profile.stopCommand, tokenMap);
-      const resolvedEnv: NodeJS.ProcessEnv = { ...process.env };
-      if (session.profile.env) {
-        for (const [k, v] of Object.entries(session.profile.env)) {
-          resolvedEnv[k] = interpolateTokens(v, tokenMap);
-        }
-      }
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn(cmd, {
-          cwd: session.cwd,
-          env: resolvedEnv,
-          shell: true,
-          timeout: 10000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-        child.on('close', (code) =>
-          code === 0
-            ? resolve()
-            : reject(new Error(`Launcher operation exited ${code}`)),
-        );
-        child.on('error', reject);
-        child.stdin.write(JSON.stringify(payload));
-        child.stdin.end();
+      await this.runLauncherCommand(session, 'stop', {
+        command: session.profile.stopCommand,
+        cwd: session.cwd,
+        env: session.profile.env,
+        tokens: tokenMap,
+        payload,
+        timeoutSeconds: 10,
       });
     }
   }
@@ -2279,6 +2258,14 @@ export class ExecutorManager {
         } catch (error) {
           if (this.stopped || job.abort.signal.aborted) return;
           const classification = classifyHarnessError(error);
+          if (error instanceof HarnessCleanupError) {
+            this.interruptJob(
+              job,
+              errorText(error) +
+                '. Confirm the old session stopped before retrying.',
+            );
+            return;
+          }
 
           if (error instanceof HarnessModelError || isModelRefusal(error)) {
             this.recordRecoveryEvent(r, {
@@ -2678,6 +2665,7 @@ export class ExecutorManager {
     if (launcher) void this.requestLauncherStop(launcher).catch(() => {});
   }
   private interrupted(record: ManagedExecution, reason: string) {
+    this.claimTickets.delete(record.workId);
     for (const session of this.engine.store.forRuns<Session>(
       sessionsCollection,
       new Set([record.runId]),
@@ -2760,7 +2748,8 @@ export class ExecutorManager {
     if (
       this.jobs.has(record.workId) ||
       this.pendingLaunches.has(record.workId) ||
-      this.launcherStops.has(record.workId)
+      this.launcherStops.has(record.workId) ||
+      this.launcherCommands.has(record.workId)
     )
       throw new InterlockError('The old harness is still stopping');
     const work = this.engine.store.get<WorkRequest>('work', record.workId);
@@ -2825,12 +2814,32 @@ export class ExecutorManager {
     clearInterval(this.interval);
     for (const request of this.modelRequests.values())
       request.abort.abort(new Error('Interlock stopped'));
+    for (const command of this.customCommands) command.abort.abort();
+    for (const id of new Set([
+      ...this.pendingLaunches.keys(),
+      ...this.launchedWork.keys(),
+    ])) {
+      const record = this.latest(id);
+      if (
+        record &&
+        (active(record) ||
+          this.pendingLaunches.has(id) ||
+          this.launcherCommands.has(id))
+      )
+        this.interrupted(
+          record,
+          'Interlock stopped. Confirm the delegated session and subprocesses stopped before retrying.',
+        );
+    }
     for (const job of this.jobs.values())
       this.interruptJob(
         job,
         'Interlock stopped during execution. Confirm the previous session and subprocesses stopped before retrying.',
       );
     await Promise.allSettled([...this.jobs.values()].map((j) => j.done));
+    await Promise.allSettled(
+      [...this.customCommands].map((command) => command.done),
+    );
     await Promise.allSettled(
       [...this.modelRequests.values()].map((r) => r.done),
     );

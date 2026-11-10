@@ -1,12 +1,14 @@
 import { createServer } from 'node:http';
 import { resolve, join } from 'node:path';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { blankDefinition, definitionSchema } from '@interlock/core';
 import { nativeAdapters } from '../packages/runtime/src/executors/native';
+import * as customCommands from '../packages/runtime/src/executors/custom';
+import { HarnessCleanupError } from '../packages/runtime/src/executors/contracts';
 
 const engines: Engine[] = [];
 const dirs: string[] = [];
@@ -591,6 +593,314 @@ it.each(['library', 'workflow'] as const)(
       );
       server.closeAllConnections();
       await closed;
+    }
+  },
+);
+
+it('keeps a delegated background session alive after its launch command succeeds', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'interlock-launch-session-'));
+  dirs.push(root);
+  const marker = join(root, 'session-alive');
+  const child = `setTimeout(()=>require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'alive'),300)`;
+  const script = `process.stdin.resume(); const child = require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(child)}],{stdio:'ignore'}); child.unref(); console.log(JSON.stringify({sessionId:'background-session'}));`;
+  const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+  const e = create();
+  const profile = e.executors.saveProfile({
+    id: 'background-launcher',
+    harness: 'custom',
+    name: 'Background launcher',
+    enabled: true,
+    expectedRevision: 0,
+    mode: 'launcher',
+    transport: 'subprocess',
+    launchCommand: `node -e ${quote(script)}`,
+  });
+  const w = workflow(e, profile.id);
+  const run = e.start(w.id, {}).run;
+  const offered = e.available(run.id)[0];
+  const session = await (e.executors as any).launchCustom(
+    offered,
+    profile,
+    root,
+    'logical-session',
+  );
+  expect(session.sessionId).toBe('background-session');
+  await vi.waitFor(() => expect(existsSync(marker)).toBe(true));
+});
+
+it.each(['message', 'archive', 'stop', 'status'] as const)(
+  'passes literal token data through launcher %s commands',
+  async (operation) => {
+    const root = mkdtempSync(join(tmpdir(), 'interlock-launch-operation-'));
+    dirs.push(root);
+    const marker = join(root, 'operation-argument');
+    const literal = '$(printf shell-evaluated) `printf also-evaluated` "quote"';
+    const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+    const script = `process.stdin.resume(); require('node:fs').writeFileSync(${JSON.stringify(marker)},process.argv[1]); console.log(JSON.stringify({status:'active'}));`;
+    const command = `node -e ${quote(script)} "$INTERLOCK_SESSION_ID"`;
+    const e = create();
+    const session = {
+      workId: 'work',
+      runId: 'run',
+      cwd: root,
+      claimTicket: 'ticket',
+      sessionId: literal,
+      profile: { [operation + 'Command']: command },
+    };
+    if (operation === 'message')
+      await (e.executors as any).sendLauncherMessage(session, 'continue');
+    if (operation === 'archive')
+      await (e.executors as any).archiveLauncherSession(session);
+    if (operation === 'stop')
+      await (e.executors as any).stopLauncherSession(session);
+    if (operation === 'status')
+      await (e.executors as any).pollLauncherStatus(session);
+    expect(readFileSync(marker, 'utf8')).toBe(literal);
+  },
+);
+
+it.each(['status', 'archive', 'message', 'stop'] as const)(
+  'preserves launcher uncertainty when %s command cleanup fails',
+  async (operation) => {
+    const e = create();
+    const profile = e.executors.saveProfile({
+      id: 'uncertain-launcher',
+      harness: 'custom',
+      name: 'Uncertain launcher',
+      enabled: true,
+      expectedRevision: 0,
+      mode: 'launcher',
+      transport: 'subprocess',
+      launchCommand: 'printf \'{"sessionId":"session"}\'',
+      [operation + 'Command']: 'exit 0',
+    });
+    const w = workflow(e, profile.id);
+    const run = e.start(w.id, {}).run;
+    const work = e.available(run.id)[0];
+    const session = await (e.executors as any).launchCustom(
+      work,
+      profile,
+      process.cwd(),
+      'logical-session',
+    );
+    const ticket = session.claimTicket;
+    const command = vi
+      .spyOn(customCommands, 'executeCustomCommand')
+      .mockRejectedValue(new HarnessCleanupError('termination not confirmed'));
+    if (operation === 'status')
+      await (e.executors as any).pollLauncherStatus(session);
+    if (operation === 'archive')
+      await (e.executors as any).archiveLauncherSession(session);
+    if (operation === 'message')
+      await expect(
+        (e.executors as any).sendLauncherMessage(session, 'continue'),
+      ).rejects.toBeInstanceOf(HarnessCleanupError);
+    if (operation === 'stop')
+      await expect(
+        (e.executors as any).requestLauncherStop(session),
+      ).rejects.toBeInstanceOf(HarnessCleanupError);
+    expect(e.executors.inspect(work.id).items[0].state).toBe('interrupted');
+    expect(session.cleanupFailed).toBe(true);
+    expect(() =>
+      e.claim(work.id, {
+        workerId: 'late remote agent',
+        freshContext: false,
+        tools: [],
+        skills: [],
+        claimTicket: ticket,
+      }),
+    ).toThrow();
+    await (e.executors as any).pollLauncherStatus(session);
+    (e.executors as any).checkJobs();
+    await Promise.resolve();
+    expect(command).toHaveBeenCalledTimes(1);
+  },
+);
+
+it('does not reconcile an interrupted launcher while another command is pending', async () => {
+  const e = create();
+  const profile = e.executors.saveProfile({
+    id: 'pending-launcher',
+    harness: 'custom',
+    name: 'Pending launcher',
+    enabled: true,
+    expectedRevision: 0,
+    mode: 'launcher',
+    transport: 'subprocess',
+    launchCommand: 'printf \'{"sessionId":"session"}\'',
+    statusCommand: 'exit 0',
+  });
+  const w = workflow(e, profile.id);
+  const run = e.start(w.id, {}).run;
+  const work = e.available(run.id)[0];
+  const session = await (e.executors as any).launchCustom(
+    work,
+    profile,
+    process.cwd(),
+    'logical-session',
+  );
+  let resolveCommand!: (value: string) => void;
+  vi.spyOn(customCommands, 'executeCustomCommand').mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveCommand = resolve;
+      }),
+  );
+  const pending = (e.executors as any).pollLauncherStatus(session);
+  const record = e.executors.inspect(work.id).items[0];
+  (e.executors as any).interrupted(record, 'test cancellation');
+  expect(() => e.executors.confirmStopped(record.id, true)).toThrow(
+    'still stopping',
+  );
+  resolveCommand('{"status":"ended"}');
+  await pending;
+  expect(() => e.executors.confirmStopped(record.id, true)).not.toThrow();
+});
+
+it('still requests remote stop after status-command cleanup becomes uncertain', async () => {
+  const e = create();
+  const profile = e.executors.saveProfile({
+    id: 'cancel-uncertain-launcher',
+    harness: 'custom',
+    name: 'Cancel uncertain launcher',
+    enabled: true,
+    expectedRevision: 0,
+    mode: 'launcher',
+    transport: 'subprocess',
+    launchCommand: 'printf \'{"sessionId":"session"}\'',
+    statusCommand: 'exit 0',
+    stopCommand: 'printf stopped',
+  });
+  const w = workflow(e, profile.id);
+  const run = e.start(w.id, {}).run;
+  const work = e.available(run.id)[0];
+  const session = await (e.executors as any).launchCustom(
+    work,
+    profile,
+    process.cwd(),
+    'logical-session',
+  );
+  const command = vi
+    .spyOn(customCommands, 'executeCustomCommand')
+    .mockRejectedValueOnce(new HarnessCleanupError('termination not confirmed'))
+    .mockResolvedValue('stopped');
+  await (e.executors as any).pollLauncherStatus(session);
+  e.cancel(run.id);
+  (e.executors as any).checkJobs();
+  await vi.waitFor(() =>
+    expect(command).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'printf stopped' }),
+    ),
+  );
+});
+
+it('stops an in-flight launch process group before server shutdown finishes', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'interlock-stop-launch-'));
+  dirs.push(root);
+  const ready = join(root, 'ready'),
+    marker = join(root, 'after-stop');
+  const script = `process.stdin.resume();require('node:fs').writeFileSync(${JSON.stringify(ready)},'ready');setTimeout(()=>{require('node:fs').writeFileSync(${JSON.stringify(marker)},'alive');console.log(JSON.stringify({sessionId:'session'}));},500);`;
+  const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+  const e = create();
+  const profile = e.executors.saveProfile({
+    id: 'stop-launcher',
+    harness: 'custom',
+    name: 'Stop launcher',
+    enabled: true,
+    expectedRevision: 0,
+    mode: 'launcher',
+    transport: 'subprocess',
+    launchCommand: `node -e ${quote(script)}; :`,
+  });
+  e.executors.start(nativeAdapters);
+  const w = workflow(e, profile.id);
+  const run = e.start(w.id, {}).run;
+  await vi.waitFor(() => expect(existsSync(ready)).toBe(true));
+  await e.executors.stop();
+  await new Promise((resolve) => setTimeout(resolve, 650));
+  expect(existsSync(marker)).toBe(false);
+  await vi.waitFor(() =>
+    expect(e.executors.inspect(e.available(run.id)[0].id).items[0].state).toBe(
+      'interrupted',
+    ),
+  );
+});
+
+it('does not turn a completed archived delegated session into an interruption on shutdown', async () => {
+  const e = create();
+  const profile = e.executors.saveProfile({
+    id: 'completed-launcher',
+    harness: 'custom',
+    name: 'Completed launcher',
+    enabled: true,
+    expectedRevision: 0,
+    mode: 'launcher',
+    transport: 'subprocess',
+    launchCommand: 'printf \'{"sessionId":"session"}\'',
+    statusCommand: 'printf \'{"status":"ended"}\'',
+    archiveCommand: 'exit 0',
+  });
+  const w = workflow(e, profile.id);
+  const run = e.start(w.id, {}).run;
+  const work = e.available(run.id)[0];
+  const session = await (e.executors as any).launchCustom(
+    work,
+    profile,
+    process.cwd(),
+    'logical-session',
+  );
+  const claimed = e.claim(work.id, {
+    workerId: 'remote worker',
+    freshContext: false,
+    tools: [],
+    skills: [],
+    claimTicket: session.claimTicket,
+  });
+  e.submit(claimed.id, claimed.token!, {});
+  await (e.executors as any).pollLauncherStatus(session);
+  (e.executors as any).checkJobs();
+  await vi.waitFor(() =>
+    expect((e.executors as any).launcherCommands.size).toBe(0),
+  );
+  expect(session.archived).toBe(true);
+  expect(e.executors.inspect(work.id).items[0].state).toBe('completed');
+  await e.executors.stop();
+  expect(e.executors.inspect(work.id).items[0].state).toBe('completed');
+});
+
+it.each(['direct', 'launcher'] as const)(
+  'accepts a successful %s command that does not consume its large stdin payload',
+  async (mode) => {
+    const e = create();
+    const command = `printf '{"output":{"ok":true},"sessionId":"no-stdin-session"}'`;
+    const profile = e.executors.saveProfile({
+      id: 'no-stdin-' + mode,
+      harness: 'custom',
+      name: 'No stdin ' + mode,
+      enabled: true,
+      expectedRevision: 0,
+      mode,
+      transport: 'subprocess',
+      ...(mode === 'direct'
+        ? { turnCommand: command }
+        : { launchCommand: command }),
+    });
+    if (mode === 'direct') e.executors.start(nativeAdapters);
+    const w = workflow(e, profile.id);
+    const run = e.start(w.id, { input: 'x'.repeat(1_000_000) }).run;
+    if (mode === 'direct') {
+      await vi.waitFor(() => expect(e.run(run.id).status).toBe('completed'));
+      expect(e.run(run.id).output).toEqual({ ok: true });
+    } else {
+      const work = e.available(run.id)[0];
+      const session = await (e.executors as any).launchCustom(
+        work,
+        profile,
+        process.cwd(),
+        'logical-session',
+      );
+      expect(session.sessionId).toBe('no-stdin-session');
+      expect((e.executors as any).claimTickets.get(work.id)).toBeDefined();
     }
   },
 );

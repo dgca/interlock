@@ -103,7 +103,12 @@ async function search(label: string, text: string) {
 }
 it('keeps child workflows out of library results and switches archive scope while searching', async () => {
   await render(
-    h(WorkflowLibrary, { workflows, onOpen: vi.fn(), act: perform }),
+    h(WorkflowLibrary, {
+      workflows,
+      onSaved: vi.fn(),
+      onOpen: vi.fn(),
+      act: perform,
+    }),
   );
   expect(
     container.querySelector('header input[aria-label="Search workflows"]'),
@@ -137,7 +142,9 @@ it('keeps New workflow stable and prevents repeated pending creation', async () 
         resolve = done;
       }),
   );
-  await render(h(WorkflowLibrary, { workflows, onOpen, act: perform }));
+  await render(
+    h(WorkflowLibrary, { workflows, onSaved: vi.fn(), onOpen, act: perform }),
+  );
   const create = button('New workflow');
   await act(async () => {
     create.click();

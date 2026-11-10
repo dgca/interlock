@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { expect, it, vi } from 'vitest';
 import { blankDefinition, type WorkflowNode } from '@interlock/core';
 import { NodeInspector } from '../packages/ui/src/features/workflows/NodeInspector';

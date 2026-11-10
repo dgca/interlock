@@ -76,6 +76,9 @@ export function resultEnvelope(work: WorkRequest) {
 /** A completed native attempt returned an explicit failure or invalid result. */
 export class HarnessResultError extends Error {}
 
+/** External subprocess ownership remains uncertain; never retry automatically. */
+export class HarnessCleanupError extends Error {}
+
 /** Definite model refusal before task actions; thrown only after native cleanup. */
 export class HarnessModelError extends Error {}
 
@@ -152,6 +155,9 @@ export function isMissingResultError(error: unknown): boolean {
  */
 export function classifyHarnessError(error: unknown): ClassifiedHarnessError {
   const message = extractErrorText(error);
+
+  if (error instanceof HarnessCleanupError)
+    return { errorClass: 'permanent', retryable: false, reason: message };
 
   if (error instanceof HarnessModelError || isModelRefusal(error)) {
     return {
