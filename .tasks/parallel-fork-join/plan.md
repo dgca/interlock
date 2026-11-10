@@ -48,3 +48,17 @@ Implementation commit `02a370c9753d3724ce5aad99936b32e669904801`. The evidence c
 - `pnpm build`, `pnpm format:check`, and `pnpm test:package`: passed. See `build.log`, `format.log`, and `package.log`.
 - `pnpm site:build`: passed. See `site.log`, including 585 checked local references.
 - The browser scenario uses deterministic test results and demonstrates eligibility and joining. It does not measure model latency or provider capacity.
+
+## Review revision
+
+Revision commit `ff42deedc0cf278234f67304f45fac5382aa9f54`. The previous review covered `fc39f58ca322a5e80404f142fde44a904d18edb1`.
+
+| Finding | Correction and proof |
+| --- | --- |
+| `fc39f58-admission` (AC8) | Treat Parallel branches like Batch items in run admission and dependency lookup. The original `stage-capacity-before.log` shows the excluded Review stage still yielded `Workflow capacity 2/1`. The regression admits a second root with both first-run branches active. The ordinary capacity and lifecycle budget control still passes. |
+| `fc39f58-literal-contract` (AC3, AC9) | Use the existing own-property validator for Parallel group contracts. Publication rejects the unsafe `properties.__proto__` declaration with `patternProperties` guidance. The regression publishes the supported pattern, rejects a numeric branch result without forwarding it, and completes with a string under the literal key. External input validation and version preview tests passed. |
+| `fc39f58-docs` (AC16) | The guide uses **Add node**, matching the saved editor evidence, and documents the literal key pattern. The README says Join returns results after every branch succeeds. The documentation build checked 585 local links and assets. |
+
+`revision-tests.log` records 76 passing tests in eight files: Parallel, both Parallel transports, admission, external input, versioning and its transports, run start transports, and general transport discovery. The general transport tests retained 66 tools and 298,195 B of definitions on HTTP and stdio. `revision-build.log`, `revision-format.log`, and `revision-site.log` passed. Proof files are in the directory above.
+
+The browser journey, CLI example, package smoke, and full suite evidence remain at `02a370c9753d3724ce5aad99936b32e669904801`. The revision did not change the UI, CLI, package layout, or MCP definitions. The new runtime behavior is exercised by the revision tests; the retained checks establish the original authoring journey, packaging, and broader compatibility at their recorded commit.
