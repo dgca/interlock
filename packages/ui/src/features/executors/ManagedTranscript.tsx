@@ -6,8 +6,9 @@ import {
   Skeleton,
   Textarea,
 } from '../../design-system';
-import type { MessageReceipt, TranscriptPage } from '@interlock/core';
+import type { MessageReceipt } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
+import { trpc, useQuery } from '../../lib/query';
 import styles from './ManagedTranscript.module.css';
 
 type Attempt = { id: string; attempt: number; state: string };
@@ -19,6 +20,7 @@ export function ManagedTranscript({
   history: Attempt[];
 }) {
   const [open, setOpen] = useState(false);
+  const [visited, setVisited] = useState(false);
   const [selected, setSelected] = useState(current.id);
   useEffect(() => {
     setSelected(current.id);
@@ -26,10 +28,13 @@ export function ManagedTranscript({
   return (
     <details
       className={styles.section}
-      onToggle={(e) => setOpen(e.currentTarget.open)}
+      onToggle={(e) => {
+        setOpen(e.currentTarget.open);
+        if (e.currentTarget.open) setVisited(true);
+      }}
     >
       <summary>Transcript</summary>
-      {open && (
+      {visited && (
         <>
           {history.length > 0 && (
             <NativeSelect
@@ -46,6 +51,7 @@ export function ManagedTranscript({
             key={selected}
             executionId={selected}
             current={selected === current.id}
+            opened={open}
           />
         </>
       )}
@@ -55,69 +61,53 @@ export function ManagedTranscript({
 function Transcript({
   executionId,
   current,
+  opened,
 }: {
   executionId: string;
   current: boolean;
+  opened: boolean;
 }) {
-  const [page, setPage] = useState<TranscriptPage>();
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState<{ before?: number; after?: number }>({});
-  const [reload, setReload] = useState(0);
-  const generation = useRef(0);
-  useEffect(() => {
-    let alive = true;
-    const read = async () => {
-      const version = ++generation.current;
-      setLoading(true);
-      try {
-        const result = await api.executors.transcript.query({
-          executionId,
-          ...cursor,
-          limit: 50,
-        });
-        if (alive && version === generation.current) {
-          setPage(result);
-          setError('');
-        }
-      } catch (e) {
-        if (alive && version === generation.current) setError(errorMessage(e));
-      } finally {
-        if (alive && version === generation.current) setLoading(false);
-      }
-    };
-    void read();
-    const interval = setInterval(() => {
-      if (
-        current &&
-        !document.hidden &&
-        cursor.before === undefined &&
-        cursor.after === undefined
-      )
-        void read();
-    }, 5000);
-    return () => {
-      alive = false;
-      clearInterval(interval);
-      ++generation.current;
-    };
-  }, [executionId, cursor, reload, current]);
+  const query = useQuery({
+    ...trpc.executors.transcript.queryOptions({
+      executionId,
+      ...cursor,
+      limit: 50,
+    }),
+    enabled: opened,
+    refetchInterval:
+      opened &&
+      current &&
+      cursor.before === undefined &&
+      cursor.after === undefined
+        ? 5000
+        : false,
+  });
+  const page = query.data,
+    error = query.error ? errorMessage(query.error) : '',
+    loading = query.isFetching;
   const latest = () => {
     setCursor({});
-    setReload((v) => v + 1);
+    if (cursor.before === undefined && cursor.after === undefined)
+      void query.refetch();
   };
   return (
     <div className={styles.reader}>
       {error && (
         <div role="alert" className={styles.error}>
           {error}{' '}
-          <Button variant="ghost" onClick={() => setReload((v) => v + 1)}>
+          <Button variant="ghost" onClick={() => void query.refetch()}>
             Retry transcript
           </Button>
         </div>
       )}
       {!page && loading && (
         <Skeleton height={100} aria-label="Loading transcript" />
+      )}
+      {!page && (cursor.before !== undefined || cursor.after !== undefined) && (
+        <Button variant="ghost" onClick={latest}>
+          Latest
+        </Button>
       )}
       {page && (
         <>
@@ -133,7 +123,9 @@ function Transcript({
           {(page.gap || page.reason) && (
             <p role="status" className={styles.notice}>
               {page.reason ?? 'Older content was removed by transcript limits.'}
-              {page.omitted > 0 ? ` ${page.omitted} entries omitted.` : ''}
+              {page.omitted > 0
+                ? ` At least ${page.omitted} entries omitted.`
+                : ''}
             </p>
           )}
           <Group gap="xs" justify="space-between" className={styles.navigation}>
@@ -155,13 +147,17 @@ function Transcript({
               Newer
             </Button>
           </Group>
-          {current && (
-            <Composer
-              executionId={executionId}
-              enabled={page.messageAvailable}
-              onRecorded={latest}
-            />
-          )}
+        </>
+      )}
+      {current && (
+        <Composer
+          executionId={executionId}
+          enabled={page?.messageAvailable ?? false}
+          onRecorded={latest}
+        />
+      )}
+      {page && (
+        <>
           <ol className={styles.entries} aria-label="Transcript entries">
             {page.items.toReversed().map((entry) => (
               <li key={entry.sequence}>
@@ -318,10 +314,10 @@ function Composer({
       if (alive.current) setBusy(false);
     }
   };
-  if (!enabled && !receipt && !pending.current) return null;
+  if (!enabled && !receipt && !pending.current && !text) return null;
   return (
     <div className={styles.composer}>
-      {(enabled || receipt || pending.current) && (
+      {(enabled || receipt || pending.current || text) && (
         <Textarea
           label="Message agent"
           value={text}

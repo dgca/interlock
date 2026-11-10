@@ -2,7 +2,7 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { ManagedTranscript } from '../packages/ui/src/features/executors/ManagedTranscript';
 import {
   transcriptLimits,
@@ -14,16 +14,19 @@ const rpc = vi.hoisted(() => ({
   manage: vi.fn(),
   receipt: vi.fn(),
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    executors: {
-      transcript: { query: rpc.transcript },
-      manage: { mutate: rpc.manage },
-      receipt: { query: rpc.receipt },
-    },
-  },
-  errorMessage: (e: Error) => e.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      executors: {
+        transcript: { query: rpc.transcript },
+        manage: { mutate: rpc.manage },
+        receipt: { query: rpc.receipt },
+      },
+    }),
+    errorMessage: (e: Error) => e.message,
+  };
+});
 let root: Root, container: HTMLDivElement;
 const page: TranscriptPage = {
   items: [
@@ -84,7 +87,9 @@ afterEach(async () => {
   container.remove();
   vi.restoreAllMocks();
 });
-async function render() {
+async function render(
+  history: { id: string; attempt: number; state: string }[] = [],
+) {
   await act(async () =>
     root.render(
       h(
@@ -92,7 +97,7 @@ async function render() {
         null,
         h(ManagedTranscript, {
           current: { id: 'attempt', attempt: 1, state: 'running' },
-          history: [],
+          history,
         }),
       ),
     ),
@@ -155,4 +160,106 @@ it('preserves uncertain request identity and reads its receipt instead of sendin
   expect(container.textContent).toContain('This request will not be resent');
   expect(rpc.manage).toHaveBeenCalledTimes(1);
   expect(button('Send message')).toBeUndefined();
+});
+
+it('never displays latest-page rows while a different cursor loads or fails, and recovers the exact cached query', async () => {
+  rpc.transcript.mockResolvedValueOnce({ ...page, older: 10 });
+  await render();
+  let reject!: (error: Error) => void;
+  rpc.transcript.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, fail) => {
+        reject = fail;
+      }),
+  );
+  await act(async () => button('Older').click());
+  expect(container.textContent).not.toContain('Working');
+  expect(
+    container.querySelector('[aria-label="Loading transcript"]'),
+  ).not.toBeNull();
+  await act(async () => reject(new Error('Older page unavailable')));
+  expect(container.textContent).toContain('Older page unavailable');
+  expect(container.textContent).not.toContain('Working');
+  rpc.transcript.mockResolvedValueOnce(page);
+  await act(async () => button('Latest').click());
+  expect(container.textContent).toContain('Working');
+});
+
+it('isolates historical-attempt responses and never offers its message controls', async () => {
+  let resolve!: (page: TranscriptPage) => void;
+  const current = new Promise<TranscriptPage>((done) => {
+    resolve = done;
+  });
+  rpc.transcript.mockImplementation(
+    ({ executionId }: { executionId: string }) =>
+      executionId === 'attempt'
+        ? current
+        : Promise.resolve({
+            ...page,
+            messageAvailable: false,
+            items: [{ ...page.items[0], text: 'Historical content' }],
+          }),
+  );
+  await render([{ id: 'older-attempt', attempt: 0, state: 'completed' }]);
+  const select = container.querySelector('select')!;
+  await act(async () => {
+    select.value = 'older-attempt';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(container.textContent).toContain('Historical content');
+  expect(container.querySelector('textarea')).toBeNull();
+  await act(async () =>
+    resolve({
+      ...page,
+      items: [{ ...page.items[0], text: 'Current content' }],
+    }),
+  );
+  expect(container.textContent).not.toContain('Current content');
+  await act(async () => {
+    select.value = 'attempt';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(container.textContent).toContain('Current content');
+  expect(container.querySelector('textarea')).not.toBeNull();
+});
+
+it('preserves the active draft and delivery identity while the disclosure is closed', async () => {
+  await render();
+  await type('Draft to keep');
+  const details = container.querySelector('details')!;
+  await act(async () => {
+    details.open = false;
+    details.dispatchEvent(new Event('toggle'));
+  });
+  await act(async () => {
+    details.open = true;
+    details.dispatchEvent(new Event('toggle'));
+  });
+  expect(container.querySelector('textarea')!.value).toBe('Draft to keep');
+});
+
+it('keeps draft and uncertain delivery identity across page changes', async () => {
+  rpc.transcript.mockResolvedValueOnce({ ...page, older: 10 });
+  await render();
+  await type('Keep this guidance');
+  rpc.manage.mockRejectedValue(new Error('Lost response'));
+  await act(async () => button('Send message').click());
+  let resolve!: (value: TranscriptPage) => void;
+  rpc.transcript.mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  await act(async () => button('Older').click());
+  expect(container.querySelector('textarea')!.value).toBe('Keep this guidance');
+  expect(button('Check delivery')).toBeDefined();
+  await act(async () => resolve({ ...page, older: null }));
+  rpc.receipt.mockResolvedValue({ receipt: { ...receipt, status: 'unknown' } });
+  await act(async () => button('Check delivery').click());
+  expect(container.textContent).toContain('This request will not be resent');
+  expect(rpc.receipt.mock.calls[0][0].requestId).toBe(
+    rpc.manage.mock.calls[0][0].requestId,
+  );
+  expect(rpc.manage).toHaveBeenCalledTimes(1);
 });

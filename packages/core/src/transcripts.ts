@@ -73,6 +73,7 @@ export interface TranscriptPage {
   items: TranscriptEntry[];
   retainedBytes: number;
   retainedEntries: number;
+  /** Lower bound: journal-pressure omissions share one durable marker. */
   omitted: number;
   gap: boolean;
   reason?: string;

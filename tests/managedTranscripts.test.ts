@@ -345,3 +345,44 @@ it('does not dispatch when receipt persistence fails and prevents cleanup while 
   resolve();
   await promise;
 });
+
+it('rejects protected operator and request metadata before persistence, audit or dispatch', async () => {
+  const { e, record, input, send } = await setup();
+  const secret = 'sensitive-metadata-sentinel';
+  const variable = e.variables.mutate({
+    action: 'create',
+    name: 'metadataSecret',
+    kind: 'secret',
+    value: secret,
+  }) as { id: string };
+  const run = e.store.get<Run>('runs', record.runId)!;
+  run.variableCaptures = e.variables.captureIds([variable.id]);
+  e.store.put('runs', run);
+  for (const metadata of [
+    { operator: secret, requestId: 'one' },
+    { operator: 'local-user', requestId: secret },
+    { operator: input.work.token!, requestId: 'three' },
+  ]) {
+    await expect(
+      e.executors.message({
+        executionId: record.id,
+        message: 'Guidance',
+        ...metadata,
+      }),
+    ).rejects.toThrow('contains protected data');
+    expect(
+      e.store.transcripts.receipt(record.id, metadata.requestId),
+    ).toBeUndefined();
+  }
+  expect(send).not.toHaveBeenCalled();
+  const safe = await e.executors.message({
+    executionId: record.id,
+    requestId: 'safe',
+    message: secret,
+  });
+  expect(safe.status).toBe('accepted');
+  expect(JSON.stringify(safe)).not.toContain(secret);
+  expect(
+    JSON.stringify(e.store.forRuns('events', new Set([record.runId]))),
+  ).not.toContain(secret);
+});

@@ -224,6 +224,7 @@ it('reuses file allocation over repeated pruning cycles and yields under a pinne
       break;
     }
   expect(rejected).toBe(true);
+  expect(t.page({ executionId: 'a', limit: 50 }).gap).toBe(true);
   const wal = statSync(`${file}-wal`).size;
   for (let i = 0; i < 50; i++)
     expect(t.append('a', { kind: 'assistant', text: 'blocked' })).toBe(false);
@@ -231,4 +232,8 @@ it('reuses file allocation over repeated pruning cycles and yields under a pinne
   expect(wal).toBeLessThan(limits.walBytes + 64 * 1024);
   reader.exec('ROLLBACK');
   expect(t.append('a', { kind: 'assistant', text: 'resumed' })).toBe(true);
+  const reopened = setup(file);
+  expect(reopened.page().gap).toBe(true);
+  expect(reopened.page().omitted).toBeGreaterThan(0);
+  expect(reopened.page().reason).toContain('Journal pressure');
 });

@@ -18,6 +18,7 @@ type Meta = {
   omitted: number;
   reason: string | null;
   receipts_pruned: number;
+  pressure_gap: number;
 };
 
 /** Indexed payload storage. Accounting and eviction share the caller's SQLite transaction. */
@@ -150,7 +151,16 @@ export class Transcripts {
     return true;
   }
   append(executionId: string, event: TranscriptEvent) {
-    if (!this.writable()) return false;
+    if (!this.writable()) {
+      // One small durable marker per execution, never one write per rejected
+      // entry. This stays bounded even while a reader keeps the journal pinned.
+      this.db
+        .prepare(
+          "UPDATE transcript_executions SET pressure_gap = 1, omitted = omitted + 1, reason = 'Content omitted while SQLite journal was pinned' WHERE execution_id = ? AND pressure_gap = 0",
+        )
+        .run(executionId);
+      return false;
+    }
     return this.transaction(() => {
       if (!this.meta(executionId)) return false;
       if (
@@ -287,7 +297,9 @@ export class Transcripts {
       gap: !!meta?.omitted,
       reason: this.pressure
         ? 'Capture paused by SQLite journal pressure'
-        : (meta?.reason ?? undefined),
+        : meta?.pressure_gap
+          ? `${meta.reason ?? 'Some content omitted'}. Journal pressure also caused capture gaps.`
+          : (meta?.reason ?? undefined),
       older,
       newer,
       limits: transcriptLimits,

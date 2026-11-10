@@ -295,7 +295,7 @@ export const migrations: readonly Migration[] = [
         CREATE TABLE transcript_executions (
           execution_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, capability TEXT NOT NULL,
           ended_at INTEGER, omitted INTEGER NOT NULL DEFAULT 0, reason TEXT,
-          receipts_pruned INTEGER NOT NULL DEFAULT 0,
+          receipts_pruned INTEGER NOT NULL DEFAULT 0, pressure_gap INTEGER NOT NULL DEFAULT 0,
           retained_entries INTEGER NOT NULL DEFAULT 0, retained_bytes INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX transcript_run ON transcript_executions(run_id);

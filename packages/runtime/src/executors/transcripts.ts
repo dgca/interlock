@@ -6,6 +6,29 @@ import { sanitizeMessage } from './templates.js';
 /** Never let optional capture errors escape into execution or result submission. */
 export class ManagedTranscripts {
   constructor(private engine: Engine) {}
+  private redactor(record: ManagedExecution, credentials: string[]) {
+    const run = this.engine.store.get<Run>('runs', record.runId);
+    const ids =
+      run?.variableCaptures
+        ?.filter((c) => c.kind === 'secret')
+        .map((c) => c.referenceId) ?? [];
+    const secrets = run ? this.engine.variables.resolve(run, ids).secrets : [];
+    return secretRedaction([...secrets, ...credentials].filter(Boolean));
+  }
+  safeMetadata(
+    record: ManagedExecution,
+    values: string[],
+    credentials: string[],
+  ) {
+    try {
+      const redact = this.redactor(record, credentials);
+      return values.every(
+        (value) => value === sanitizeMessage(redact.text(value)),
+      );
+    } catch {
+      return false;
+    }
+  }
   register(record: ManagedExecution) {
     try {
       record.transcriptCapture =
@@ -26,19 +49,9 @@ export class ManagedTranscripts {
   ) {
     try {
       if (!record.transcriptCapture) this.register(record);
-      const run = this.engine.store.get<Run>('runs', record.runId);
-      const ids =
-        run?.variableCaptures
-          ?.filter((c) => c.kind === 'secret')
-          .map((c) => c.referenceId) ?? [];
-      const secrets = run
-        ? this.engine.variables.resolve(run, ids).secrets
-        : [];
       // Bound redaction work before creating any preview, so a partial Secret cannot leak.
       const tooLarge = Buffer.byteLength(event.text) > 1024 * 1024;
-      const redact = secretRedaction(
-        [...secrets, ...credentials].filter(Boolean),
-      );
+      const redact = this.redactor(record, credentials);
       const clean = (value: string) =>
         Buffer.byteLength(value) > 1024 * 1024
           ? '[Oversized content omitted]'
@@ -70,6 +83,7 @@ export class ManagedTranscripts {
       if (!accepted)
         record.transcriptError =
           'Transcript capture limited by storage capacity';
+      else record.transcriptError = undefined;
     } catch {
       record.transcriptError =
         'Transcript content omitted: storage or protected-value redaction unavailable';

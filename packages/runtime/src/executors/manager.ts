@@ -1015,6 +1015,23 @@ export class ExecutorManager {
   async message(input: unknown): Promise<MessageReceipt> {
     const q = executorMessageSchema.parse(input);
     const record = this.execution(q.executionId);
+    const currentWork = this.engine.store.get<WorkRequest>(
+      'work',
+      record.workId,
+    );
+    if (
+      !this.transcripts.safeMetadata(
+        record,
+        [q.operator, q.requestId],
+        [
+          currentWork?.token ?? '',
+          this.launchedWork.get(record.workId)?.claimTicket ?? '',
+        ],
+      )
+    )
+      throw new InterlockError(
+        'Message not sent: request ID or operator label contains protected data, or its protection is unavailable. Choose safe metadata.',
+      );
     const hash = createHash('sha256')
       .update(JSON.stringify([q.message, q.operator]))
       .digest('hex');
