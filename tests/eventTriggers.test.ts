@@ -10,6 +10,10 @@ import {
   type EventTrigger,
   type Json,
 } from '@interlock/core';
+import {
+  exportWorkflows,
+  importWorkflows,
+} from '../packages/runtime/src/transfer';
 
 const engines: Engine[] = [];
 afterEach(() => {
@@ -86,6 +90,100 @@ function start(engine: Engine, id: string, input: Json = {}) {
   engine.pump();
   return r.run;
 }
+
+it.each(['update', 'force import'])(
+  'removes omitted event filters during full configuration replacement by %s',
+  (operation) => {
+    const e = setup(),
+      definition = blankDefinition();
+    Object.assign(
+      definition.nodes.find((node) => node.kind === 'agent')!,
+      {
+        maxAttempts: 1,
+      },
+    );
+    const source = publish(e, definition),
+      target = publish(e),
+      t = trigger(
+        e,
+        target,
+        config(source, {
+          exitNodeId: 'exit',
+          action: { type: 'workflow' },
+          tags: { purpose: 'old' },
+        }),
+      );
+    const previous = {
+      ...t,
+      consecutiveFailures: 2,
+      lastFireAt: '2026-01-01T00:00:00Z',
+      previousRunId: 'previous-handler',
+    };
+    e.store.put('workflowTriggers', previous);
+    const replacement = config(undefined, { events: ['failed'] });
+    if (operation === 'update') {
+      e.triggers.mutate({
+        action: 'update',
+        id: t.id,
+        expectedRevision: t.revision,
+        config: replacement,
+      });
+    } else {
+      const bundle = exportWorkflows(e.store, target);
+      bundle.workflows.find(
+        (workflow) => workflow.id === target,
+      )!.eventTriggers![0].config = replacement;
+      importWorkflows(e.store, bundle, { force: true });
+    }
+    const saved = e.store.get<EventTrigger>('workflowTriggers', t.id)!;
+    expect(saved).not.toHaveProperty('exitNodeId');
+    expect(saved).not.toHaveProperty('action');
+    expect(saved).not.toHaveProperty('tags');
+    expect(saved).toMatchObject({
+      id: t.id,
+      workflowId: target,
+      createdAt: t.createdAt,
+      revision: t.revision + 1,
+      enabled: operation === 'update',
+      consecutiveFailures: operation === 'update' ? 2 : 0,
+      events: ['failed'],
+      scope: { type: 'library' },
+    });
+    if (operation === 'update') {
+      expect(saved.lastFireAt).toBe(previous.lastFireAt);
+      expect(saved.previousRunId).toBe(previous.previousRunId);
+    } else {
+      expect(saved.lastFireAt).toBeUndefined();
+      expect(saved.previousRunId).toBeUndefined();
+      e.triggers.mutate({
+        action: 'enable',
+        id: saved.id,
+        expectedRevision: saved.revision,
+      });
+    }
+    expect(() => exportWorkflows(e.store, target)).not.toThrow();
+    const run = start(e, source);
+    const work = e.store.work('available', run.id)[0];
+    const claim = e.claim(work.id, {
+      workerId: 'event-replacement-test',
+      freshContext: false,
+      tools: [],
+      skills: [],
+    });
+    e.reportFailure(work.id, claim.token!, 'Source failed');
+    e.pump();
+    expect(e.run(run.id).status).toBe('failed');
+    const [delivery] = deliveries(e, saved);
+    expect(delivery).toMatchObject({
+      sourceRunId: run.id,
+      outcome: 'started',
+    });
+    expect(e.run(delivery.runId!).input).toMatchObject({
+      type: 'failed',
+      runId: run.id,
+    });
+  },
+);
 
 it('delivers a compact completed payload once, with published version, task and causal identity', () => {
   const e = setup(),

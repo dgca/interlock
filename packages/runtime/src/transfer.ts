@@ -1,5 +1,6 @@
 import {
   triggerConfig,
+  replaceTriggerConfig,
   eventConfigSchema,
   nextScheduleSlot,
   type WorkflowTrigger,
@@ -650,9 +651,9 @@ export function importWorkflows(
         if (existing && existing.kind !== schedule.config.kind)
           throw new InterlockError('Trigger identity cannot change kind');
         store.put<WorkflowTrigger>('workflowTriggers', {
-          ...existing,
-          tags: schedule.config.tags,
-          ...schedule.config,
+          ...(existing
+            ? replaceTriggerConfig(existing, schedule.config)
+            : schedule.config),
           id: schedule.id,
           workflowId: entry.id,
           revision: (existing?.revision ?? 0) + 1,

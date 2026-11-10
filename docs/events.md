@@ -31,7 +31,7 @@ To send an HTTP notification, use an event-triggered workflow with a Fetch node.
 }
 ```
 
-Pass this request to `interlock triggers manage @event-trigger.json`, the shared API `triggers.manage`, or MCP `manage_workflow_triggers` inside its `request` field. The UI exposes workflow handlers; use CLI or MCP for tags, failure policies, depth limits, and new Exit filters. Editing a handler in the UI preserves existing advanced settings. Inspect the trigger and use its current `revision` as `expectedRevision` for update, enable, disable, or delete. Update replaces the entire configuration. A trigger's kind cannot change.
+Pass this request to `interlock triggers manage @event-trigger.json`, the shared API `triggers.manage`, or MCP `manage_workflow_triggers` inside its `request` field. The UI exposes workflow handlers; use CLI or MCP for tags, failure policies, depth limits, and new Exit filters. Editing a handler in the UI preserves existing advanced settings. Inspect the trigger and use its current `revision` as `expectedRevision` for update, enable, disable, or delete. Update replaces the entire configuration. Omit optional fields, such as `exitNodeId`, to remove them. A trigger's kind cannot change.
 
 | Field                           | Behavior                                                                                                                                                                                                                |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
