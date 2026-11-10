@@ -1,12 +1,11 @@
 .settings {
   display: grid;
   gap: 24px;
-  max-width: 1000px;
-  margin: 0 auto;
+  width: 100%;
 }
 .settingsHeading {
   margin: 0 0 16px;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
 }
 .settings h3 {
@@ -17,7 +16,6 @@
 }
 .sharedForm {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
   gap: 24px;
   align-items: start;
 }
@@ -27,7 +25,7 @@
 }
 .sharedLabel {
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
 }
 .sharedCopy p {
@@ -50,9 +48,6 @@
   display: flex;
   align-items: center;
   gap: 10px;
-}
-.limitValueActions > button {
-  min-width: 88px;
 }
 .limitInput {
   width: 88px;
@@ -95,7 +90,7 @@
 }
 .identity h2,
 .newProfile h2 {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   margin: 0 0 6px;
   overflow-wrap: anywhere;
@@ -113,7 +108,7 @@
   flex-shrink: 0;
 }
 .customIcon {
-  color: var(--mantine-color-violet-4, #b197fc);
+  color: var(--mantine-color-violet-4);
   flex-shrink: 0;
 }
 
@@ -127,7 +122,7 @@
 .configuration {
   margin: 0;
   padding: 24px;
-  background: var(--surface);
+  background: var(--form);
   border-top: 1px solid var(--border);
 }
 .fields {
@@ -195,7 +190,9 @@
   justify-content: flex-end;
   gap: 10px;
   margin-top: 24px;
-  padding-top: 20px;
+  padding: 20px 24px 0;
+  margin-inline: -24px;
+  border-top: 1px solid var(--border);
 }
 .bottom {
   display: flex;
@@ -217,12 +214,6 @@
   color: var(--mantine-color-red-4);
   font-size: 13px;
   overflow-wrap: anywhere;
-}
-@media (max-width: 1150px) {
-  .sharedForm {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 18px;
-  }
 }
 @media (max-width: 900px) {
   .rowHeading > .profileIdentity {
@@ -270,11 +261,13 @@
 .aiContent {
   display: flex;
   flex-direction: column;
-  gap: 44px;
+  gap: 24px;
 }
 .aiSection {
   scroll-margin-top: 24px;
   min-width: 0;
+  width: 100%;
+  max-width: 1040px;
 }
 .sectionHeading {
   display: flex;
@@ -292,10 +285,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.aiContent .settings {
-  max-width: none;
-  margin: 0;
 }
 @media (max-width: 800px) {
   .sectionHeading {

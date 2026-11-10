@@ -218,6 +218,27 @@ it('creates an alias using a concrete model picker and cancels another draft wit
   expect(rpc.mutate).toHaveBeenCalledTimes(1);
 });
 
+it('focuses alias editing and protects dirty Back navigation without losing candidate state', async () => {
+  await renderSection();
+  await edit();
+  expect(
+    document.querySelector('button[aria-label="Edit alias reviewer"]'),
+  ).toBeNull();
+  await fill(labelled('Alias name') as HTMLInputElement, 'unsaved');
+  await click(button('Back to model aliases'));
+  expect(
+    document.querySelector(
+      '[role="dialog"][aria-label="Discard unsaved alias changes?"]',
+    ),
+  ).toBeTruthy();
+  await click(button('Keep editing'));
+  expect((labelled('Alias name') as HTMLInputElement).value).toBe('unsaved');
+  await click(button('Back to model aliases'));
+  await click(button('Discard changes'));
+  expect(document.querySelector('form')).toBeNull();
+  expect(rpc.mutate).not.toHaveBeenCalled();
+});
+
 it('keeps edits on conflicts and explicitly reloads the saved revision before another save', async () => {
   await renderSection();
   await edit();
@@ -256,7 +277,7 @@ it('confirms deletion with the current revision and explains future-run impact',
     id: 'alias-reviewer',
     expectedRevision: 4,
   });
-  expect(container.textContent).toContain('No model aliases yet.');
+  expect(container.textContent).toContain('No model aliases yet');
 });
 
 it('pages bounded results and recovers from a list failure', async () => {

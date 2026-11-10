@@ -16,9 +16,9 @@
 }
 
 .sectionTitle {
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 600;
-  color: var(--mantine-color-dark-1, #c1c2c5);
+  color: var(--text-secondary);
   margin-bottom: 2px;
   display: flex;
   align-items: center;
@@ -27,7 +27,7 @@
 
 .gridTwo {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -40,18 +40,17 @@
 .fieldLabel {
   font-size: 12px;
   font-weight: 500;
-  color: var(--mantine-color-dark-1, #c1c2c5);
+  color: var(--text-secondary);
 }
 
 .fieldHelper {
-  font-size: 11px;
-  color: var(--mantine-color-dark-3, #909296);
+  font-size: 12px;
+  color: var(--muted);
   margin-top: 2px;
 }
 
 .monoInput input {
   font-family: var(--mantine-font-family-monospace, monospace);
-  font-size: 12px;
 }
 
 /* Key Value Table */
@@ -80,21 +79,21 @@
 }
 
 .keyInput {
+  min-width: 0;
   flex: 1;
 }
 
 .keyInput input {
   font-family: var(--mantine-font-family-monospace, monospace);
-  font-size: 11px;
 }
 
 .valueInput {
+  min-width: 0;
   flex: 2;
 }
 
 .valueInput input {
   font-family: var(--mantine-font-family-monospace, monospace);
-  font-size: 11px;
 }
 
 /* Token Chips */
@@ -107,26 +106,12 @@
 }
 
 .tokenChipsLabel {
-  font-size: 11px;
-  color: var(--mantine-color-dark-3, #909296);
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .tokenChip {
-  background: var(--mantine-color-dark-6, #25262b);
-  border: 1px solid var(--mantine-color-dark-4, #2c2e33);
-  color: var(--mantine-color-violet-3, #d0bfff);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-family: var(--mantine-font-family-monospace, monospace);
-  font-size: 10px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.tokenChip:hover {
-  background: var(--mantine-color-violet-9, #381a4a);
-  border-color: var(--mantine-color-violet-6, #9775fa);
-  color: #fff;
+  font-family: var(--mono);
 }
 
 /* Collapsible Lifecycle Hooks */
@@ -138,49 +123,30 @@
 }
 
 .hookCard {
-  background: var(--mantine-color-dark-8, #141517);
-  border: 1px solid var(--mantine-color-dark-5, #2c2e33);
-  border-radius: 6px;
-  overflow: hidden;
+  border-top: 1px solid var(--border);
 }
 
 .hookHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  cursor: pointer;
-  background: transparent;
   width: 100%;
-  border: none;
-  color: var(--mantine-color-dark-1, #c1c2c5);
-  font-size: 12px;
-  font-weight: 500;
   text-align: left;
 }
-
-.hookHeader:hover {
-  background: var(--mantine-color-dark-6, #25262b);
+.hookHeader :global(.mantine-Button-label) {
+  flex: 1;
+  justify-content: space-between;
 }
 
 .hookTitleGroup {
+  min-width: 0;
+  white-space: normal;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.hookTag {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: var(--mantine-color-dark-6, #25262b);
-  color: var(--mantine-color-dark-2, #a6a7ab);
-}
-
 .hookBody {
   padding: 12px;
-  border-top: 1px solid var(--mantine-color-dark-5, #2c2e33);
-  background: var(--mantine-color-dark-7, #1a1b1e);
+  border-top: 1px solid var(--border);
+
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -193,6 +159,10 @@
   gap: 6px;
 }
 
+.rootRow > :first-child {
+  min-width: 0;
+  flex: 1;
+}
 .rootRow {
   display: flex;
   gap: 8px;

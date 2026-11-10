@@ -61,7 +61,14 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowLibrary', () => ({
     h('button', { onClick: () => onOpen('w1') }, 'Open workflow'),
 }));
 vi.mock('../packages/ui/src/features/executors/Harnesses', () => ({
-  Harnesses: () => h('section', {}, 'AI settings content'),
+  Harnesses: ({ onDirty }: any) =>
+    h(
+      'section',
+      {},
+      'AI settings content',
+      h('button', { onClick: () => onDirty(true) }, 'Edit AI settings'),
+      h('button', { onClick: () => onDirty(false) }, 'Save AI settings'),
+    ),
 }));
 vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
   WorkflowEditor: ({
@@ -217,6 +224,67 @@ it('redirects legacy Harnesses links to AI Settings with their query and anchor'
   expect(window.location.search).toBe('?source=workflow');
   expect(window.location.hash).toBe('#concurrency');
   expect(container.textContent).toContain('AI settings content');
+});
+
+it('guards dirty AI Settings query tabs and anchor navigation', async () => {
+  await mount('/settings/ai?tab=harnesses');
+  await click('Edit AI settings');
+  await act(async () => {
+    void router.navigate('/settings/ai?tab=model-aliases');
+  });
+  expect(document.body.textContent).toContain('Discard unsaved changes?');
+  await click('Keep editing');
+  expect(window.location.search).toBe('?tab=harnesses');
+  await act(async () => {
+    void router.navigate('/settings/ai#concurrency');
+  });
+  expect(document.body.textContent).toContain('Discard unsaved changes?');
+  await click('Discard changes');
+  expect(window.location.hash).toBe('#concurrency');
+});
+
+it('guards dirty AI Settings browser Back and Forward', async () => {
+  await mount('/settings/ai?tab=harnesses');
+  await act(async () => {
+    await router.navigate('/settings/ai?tab=model-aliases');
+  });
+  await click('Edit AI settings');
+  await traverse('back');
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(document.body.textContent).toContain('Discard unsaved changes?');
+  await click('Discard changes');
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(window.location.search).toBe('?tab=harnesses');
+  await click('Edit AI settings');
+  await traverse('forward');
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(document.body.textContent).toContain('Discard unsaved changes?');
+  await click('Discard changes');
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(window.location.search).toBe('?tab=model-aliases');
+});
+
+it('keeps dirty protection when an AI task canonicalizes a legacy anchor without changing tasks', async () => {
+  await mount('/settings/ai#concurrency');
+  await click('Edit AI settings');
+  await act(async () => {
+    await router.navigate('/settings/ai?tab=execution');
+  });
+  expect(document.body.textContent).not.toContain('Discard unsaved changes?');
+  await act(async () => {
+    void router.navigate('/workflows');
+  });
+  expect(document.body.textContent).toContain('Discard unsaved changes?');
+  await click('Keep editing');
+  expect(window.location.pathname).toBe('/settings/ai');
 });
 async function traverse(direction: 'back' | 'forward') {
   await act(async () => {

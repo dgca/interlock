@@ -14,7 +14,14 @@ import { ExecutorSelect } from '../packages/ui/src/features/executors/ExecutorSe
 import { NodeInspector } from '../packages/ui/src/features/workflows/NodeInspector';
 import { ExecutionSettings } from '../packages/ui/src/features/executors/ExecutionSettings';
 import { Harnesses as HarnessesPage } from '../packages/ui/src/features/executors/Harnesses';
-const Harnesses = () => h(MemoryRouter, {}, h(HarnessesPage));
+const Harnesses = ({
+  path = '/settings/ai',
+  onDirty,
+}: {
+  path?: string;
+  onDirty?: (dirty: boolean) => void;
+}) =>
+  h(MemoryRouter, { initialEntries: [path] }, h(HarnessesPage, { onDirty }));
 const rpc = vi.hoisted(() => ({
   profiles: vi.fn(),
   models: vi.fn(),
@@ -322,7 +329,10 @@ it('preserves open configuration edits across refresh and reloads only on explic
     'input[maxlength="120"]',
   )!;
   await act(async () => setInput(input, 'Unsaved name'));
-  expect(container.querySelector('#execution-settings')).not.toBeNull();
+  expect(container.querySelector('#execution-settings')).toBeNull();
+  expect(container.querySelector('a[href*="tab=execution"]')?.textContent).toBe(
+    'Execution settings',
+  );
   expect(container.querySelector('#harnesses')).not.toBeNull();
   expect(input.value).toBe('Unsaved name');
   const updated = { ...original, revision: 1, name: 'Updated elsewhere' };
@@ -339,6 +349,71 @@ it('preserves open configuration edits across refresh and reloads only on explic
   await act(async () => button('Reload configuration').click());
   expect(input.value).toBe('Updated elsewhere');
   expect(button('Save configuration').disabled).toBe(true);
+});
+
+it('opens the requested AI task and maps legacy execution anchors before rendering', async () => {
+  rpc.profiles.mockResolvedValue([harnessProfile()]);
+  await act(async () =>
+    root.render(
+      h(
+        DesignSystemProvider,
+        {},
+        h(Harnesses, { path: '/settings/ai?source=workflow#concurrency' }),
+      ),
+    ),
+  );
+  expect(container.querySelector('#concurrency')).toBeTruthy();
+  expect(container.querySelector('#harnesses')).toBeNull();
+  const harnessLink = container.querySelector<HTMLAnchorElement>(
+    'a[href*="tab=harnesses"]',
+  )!;
+  expect(harnessLink.search).toContain('source=workflow');
+  expect(harnessLink.hash).toBe('');
+  await act(async () => harnessLink.click());
+  expect(container.querySelector('#harnesses')).toBeTruthy();
+  expect(container.querySelector('#concurrency')).toBeNull();
+  await act(async () =>
+    container
+      .querySelector<HTMLAnchorElement>('a[href*="tab=model-aliases"]')!
+      .click(),
+  );
+  expect(container.querySelector('#model-aliases')).toBeTruthy();
+  expect(container.querySelector('#harnesses')).toBeNull();
+});
+
+it('clears dirty policy state when leaving its task and restores the saved policy on return', async () => {
+  const onDirty = vi.fn();
+  rpc.profiles.mockResolvedValue([harnessProfile()]);
+  await act(async () =>
+    root.render(
+      h(
+        DesignSystemProvider,
+        {},
+        h(Harnesses, { path: '/settings/ai?tab=execution', onDirty }),
+      ),
+    ),
+  );
+  const input = container.querySelector<HTMLInputElement>(
+    '#concurrency input:not([type="hidden"])',
+  )!;
+  await act(async () => setInput(input, '5'));
+  expect(onDirty).toHaveBeenLastCalledWith(true);
+  await act(async () =>
+    container
+      .querySelector<HTMLAnchorElement>('a[href*="tab=harnesses"]')!
+      .click(),
+  );
+  expect(onDirty).toHaveBeenLastCalledWith(false);
+  await act(async () =>
+    container
+      .querySelector<HTMLAnchorElement>('a[href*="tab=execution"]')!
+      .click(),
+  );
+  expect(
+    container.querySelector<HTMLInputElement>(
+      '#concurrency input:not([type="hidden"])',
+    )!.value,
+  ).toBe('3');
 });
 it('locks a pending save and preserves model, paths, capabilities and permissions', async () => {
   const original = harnessProfile();

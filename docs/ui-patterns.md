@@ -27,20 +27,11 @@ Active Runs offers a board and a dense List view. The board retains the current 
 
 Runs tables share the Automations row spacing, title-case headings, typography, status dots, and navigation chevrons. Run rows retain their stage, actor, attention reason, version, tags, comparison context, and exact start time. Tag filters open from the padded toolbar above the tabs into a form card. Global history actions live in the page header; workflow-scoped history actions remain above the run tabs.
 
-AI Settings presents Harnesses, Model aliases, and Execution settings as sections
-on one scrollable page. Each section keeps its
-own actions. Expanded harness configurations stay inside the table surface;
-new configurations use form cards. The alias list, empty state, and
-editor share one form container, with a divider before an open editor. Alias editors retain
-unsaved changes through list refreshes, guard revision conflicts, and keep
-ordered candidates keyed across reordering. Execution settings retain concurrency,
-stall detection, and history retention cards with consistent subheadings and
-short guidance explaining their effects. Library stall switches reveal threshold
-fields when enabled; workflow and node editors retain inheritance choices.
-Form save actions align to the right. Existing `/settings/harnesses`
-links redirect to `/settings/ai`, preserving query strings and anchors such as
-`#concurrency`. Custom harness setup uses the shared modal with a scrollable body,
-grouped fields, and a fixed action footer.
+AI Settings uses three URL-backed task tabs: Harnesses, Model aliases, and Execution settings. Collections and policy forms use a 1040px content column; the focused alias editor uses an 840px column. Both begin at the workspace inset. Each task keeps its own actions. Expanded native harness configurations stay inside the collection surface; new configurations use contained forms. Custom configuration keeps the shared modal and fixed action footer.
+
+New alias and Edit alias open a focused editor with metadata and ordered candidates in one solid form surface. Reordering retains candidate identity and entered values. Back protects dirty edits; Cancel explicitly discards them. Alias refreshes retain edits, and save conflicts offer reload. Task changes and browser Back or Forward use the workspace discard guard. Anchors within the current task retain edits and dirty protection.
+
+Concurrency, stall detection, and history retention retain independent save boundaries. Stall switches reveal threshold fields; workflow and node editors retain inheritance choices. Form save actions align to the right. Existing `/settings/harnesses` links redirect to `/settings/ai`, preserving query strings and anchors. Legacy anchors such as `#concurrency` select Execution settings. Task URLs use `?tab=harnesses`, `?tab=model-aliases`, and `?tab=execution`.
 
 Variable creation and editing use the shared header with Back, Cancel or Discard changes, and Create or Save changes. Forms use the shared card and content widths. Preserve write-only Secret behavior and metadata-only list reads. List loading and failed searches never show rows from another search; rejected reads offer retry.
 

@@ -1,6 +1,6 @@
-# AI Settings layout proposal
+# AI Settings layout
 
-This is a static desktop proposal in [the Pen file](../interlock-design-directions.pen), under `Interlock / AI settings` (`Q9js48`). It extends the current Grid design system and does not change the application.
+This desktop reference is in [the Pen file](../interlock-design-directions.pen), under `Interlock / AI settings` (`Q9js48`). The user approved its three task tabs and focused alias editor for implementation on 2026-11-09. It extends the Grid design system. Static specimens remain separate from runtime verification.
 
 ## Views
 
@@ -16,13 +16,13 @@ This is a static desktop proposal in [the Pen file](../interlock-design-directio
 
 Use three attached task tabs within AI Settings: Harnesses, Model aliases, and Execution settings. They replace the long stacked settings page. Keep dirty-edit navigation protection when changing tabs or leaving an editor.
 
-Collections and policy forms use a 1040px content column. Alias editing uses an 840px column. Both begin at the existing 28px workspace inset. These widths belong to this surface proposal, not to a new global control or layout token.
+Collections and policy forms use a 1040px content column. Alias editing uses an 840px column. Both begin at the existing 28px workspace inset. These widths belong to AI Settings, rather than a global control or layout token.
 
 New alias opens a focused subview in the Model aliases section. Its metadata, choice fields, ordering controls, add action, and footer share one bounded container. A single solid form surface contains the model choices, with full-width dividers rather than nested cards. Two 384px field columns fit inside the padded form; the choices no longer expand to the full page width.
 
 Header actions align to their content column. Standard controls retain 40px heights and shared Pen masters. Containers remain solid; buttons retain the approved elevation. The existing 44px attached tabs match the owned workspace surface.
 
-The sidebar proposal includes the existing scoped AI Settings destination. It does not restore a generic Settings page or Recent workflows.
+The sidebar retains the scoped AI Settings destination. It does not restore a generic Settings page or Recent workflows.
 
 ## Source behavior retained
 
@@ -46,6 +46,6 @@ The live route was inspected at its resting state and after opening New alias at
 
 Harness states and the disabled concurrency/stall/retention save states reflect that inspection. The alias draft and saved-alias collection are illustrative. The proposal is desktop-only and does not verify keyboard/focus behavior, portal positioning, narrow layouts, or actual route changes.
 
-Rendered previews are exported to `/tmp/interlock-ai-settings-design/`. All application controls continue to use the existing design system; the proposed information architecture and compositions await user review.
+The original rendered previews were exported to `/tmp/interlock-ai-settings-design/`. Implementation uses the shared design-system controls. Native harness configuration remains inline within the Harnesses tab, and custom configuration retains its existing modal. This approved information architecture takes precedence over the older standalone Configure harness frame; that frame remains a visual guide for the form styling.
 
-An independent finish review returned **ship** for the static desktop proposal, with no material findings across the five previews. A separate documentation review found the proposal consistent with the established system and source contracts. Neither review validates a running implementation or establishes user approval of the new layout.
+An independent finish review returned **ship** for the original static desktop proposal, with no material findings across the five previews. A separate documentation review found it consistent with the established system and source contracts. Those reviews did not validate a running implementation. User approval and implementation verification are separate steps.

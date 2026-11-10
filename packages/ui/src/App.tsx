@@ -23,6 +23,7 @@ import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
 import { api, errorMessage } from './lib/api';
 import { subscribeToEngineEvents } from './lib/engineEvents';
 import type { Action } from './lib/useActionFeedback';
+import { aiSettingsTab } from './features/executors/aiSettingsNavigation';
 
 export type AppContext = {
   workflows: Workflow[];
@@ -89,7 +90,10 @@ export function App() {
   const [loadError, setLoadError] = useState('');
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
-      (editorDirty && currentLocation.pathname !== nextLocation.pathname) ||
+      (editorDirty &&
+        (currentLocation.pathname !== nextLocation.pathname ||
+          (currentLocation.pathname === paths.harnesses &&
+            aiSettingsTab(currentLocation) !== aiSettingsTab(nextLocation)))) ||
       ((scheduleDirty || schedulePending) &&
         (currentLocation.pathname !== nextLocation.pathname ||
           currentLocation.search !== nextLocation.search)),

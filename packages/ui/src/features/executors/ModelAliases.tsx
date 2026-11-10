@@ -9,9 +9,17 @@ import {
   ModalFooter,
   ActionError,
   workspacePage,
+  EmptyState,
 } from '../../design-system';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
 
 import { ArrowDown, ArrowUp, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import {
@@ -53,6 +61,16 @@ export function ModelAliases({
   const [reload, setReload] = useState(0);
   const [editing, setEditing] = useState<SavedModelAlias | null>();
   const [opening, setOpening] = useState(false);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [editorBusy, setEditorBusy] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const trackDirty = useCallback(
+    (dirty: boolean) => {
+      setEditorDirty(dirty);
+      onDirty?.(dirty);
+    },
+    [onDirty],
+  );
   const [notice, setNotice] = useState('');
   const [loadError, setLoadError] = useState('');
   const addButton = useRef<HTMLButtonElement>(null);
@@ -116,152 +134,188 @@ export function ModelAliases({
   return (
     <section
       id="model-aliases"
-      className={styles.section}
+      className={`${styles.section} ${editing !== undefined ? styles.focused : ''}`}
       aria-labelledby="model-aliases-title"
     >
       <div className={styles.heading}>
-        <h2 id="model-aliases-title">Model aliases</h2>
-        <div className={styles.headingActions}>
-          <ActionIcon
-            variant="subtle"
-            aria-label="Refresh aliases"
-            onClick={() => setReload((n) => n + 1)}
-          >
-            <RefreshCw size={16} />
-          </ActionIcon>
+        <h2 id="model-aliases-title">
+          {editing === undefined
+            ? 'Model aliases'
+            : editing
+              ? `Edit ${editing.name}`
+              : 'New alias'}
+        </h2>
+        {editing !== undefined ? (
           <Button
-            ref={addButton}
-            variant="primary"
-            disabled={editing !== undefined || opening}
-            onClick={() => {
-              setNotice('');
-              setEditing(null);
-            }}
+            variant="ghost"
+            disabled={editorBusy}
+            onClick={() => (editorDirty ? setConfirmClose(true) : close())}
           >
-            <Plus size={14} />
-            New alias
+            Back to model aliases
           </Button>
-        </div>
-      </div>
-      <div className={`${workspacePage.card} ${styles.body}`}>
-        <p className={styles.intro}>
-          Name a model choice once, then select it across workflows. Each run
-          captures the alias configuration it starts with.
-        </p>
-        {notice && (
-          <p role="status" className={styles.notice}>
-            {notice}
-          </p>
-        )}
-        <ActionError message={loadError} />
-        {error ? (
-          <div className={styles.error}>
-            <ActionError message={error} />
-            <Button onClick={() => setReload((n) => n + 1)}>
-              Retry loading aliases
+        ) : (
+          <div className={styles.headingActions}>
+            <ActionIcon
+              variant="subtle"
+              aria-label="Refresh aliases"
+              onClick={() => setReload((n) => n + 1)}
+            >
+              <RefreshCw size={16} />
+            </ActionIcon>
+            <Button
+              ref={addButton}
+              variant="primary"
+              disabled={editing !== undefined || opening}
+              onClick={() => {
+                setNotice('');
+                setEditing(null);
+              }}
+            >
+              <Plus size={14} />
+              New alias
             </Button>
           </div>
-        ) : !page ? (
-          <ListTableSkeleton
-            columns={columns}
-            className={styles.aliasTable}
-            label="Loading model aliases…"
-          >
-            <span>—</span>
-            <span>—</span>
-            <span>—</span>
-            <span />
-          </ListTableSkeleton>
-        ) : page.items.length ? (
-          <>
-            <ListTable columns={columns} className={styles.aliasTable}>
-              {page.items.map((alias) => {
-                const first = alias.candidates[0];
-                const profile = profiles?.find(
-                  (profile) => profile.id === first?.profileId,
-                );
-                return (
-                  <ListTableRow key={alias.id} className={styles.aliasRow}>
-                    <span className={styles.identity}>
-                      <strong>{alias.name}</strong>
-                      {alias.description && <span>{alias.description}</span>}
-                    </span>
-                    <span className={styles.identity}>
-                      <span>{first?.model ?? 'No model configured'}</span>
-                      <span>
-                        {first?.profileId
-                          ? (profile?.name ?? 'Missing harness')
-                          : 'Workflow harness'}
-                        {profile?.enabled === false ? ' · disabled' : ''}
-                        {first?.effort ? ` · ${first.effort} effort` : ''}
-                      </span>
-                    </span>
-                    <span>
-                      {Math.max(0, alias.candidates.length - 1)}
-                      <span className={styles.compactLabel}>
-                        {' '}
-                        alternative{alias.candidates.length === 2 ? '' : 's'}
-                      </span>
-                    </span>
-                    <span className={styles.rowActions}>
-                      <Button
-                        variant="ghost"
-                        disabled={opening || editing !== undefined}
-                        onClick={() => void open(alias.id)}
-                        aria-label={`Edit alias ${alias.name}`}
-                      >
-                        Edit
-                      </Button>
-                    </span>
-                  </ListTableRow>
-                );
-              })}
-            </ListTable>
-            <div className={styles.pagination}>
-              <span>
-                {page.total} alias{page.total === 1 ? '' : 'es'}
-              </span>
-              <Button
-                disabled={offset === 0}
-                onClick={() => setOffset((n) => Math.max(0, n - 10))}
-              >
-                Previous
-              </Button>
-              <Button
-                disabled={!page.truncated}
-                onClick={() => setOffset((n) => n + 10)}
-              >
-                Next
-              </Button>
-            </div>
-          </>
-        ) : editing === undefined ? (
-          <p className={styles.empty}>
-            No model aliases yet. Create one for a role such as builder or
-            reviewer.
-          </p>
-        ) : null}
-        {editing !== undefined && (
-          <div ref={editor}>
-            <AliasEditor
-              key={editing?.id ?? 'new'}
-              alias={editing}
-              profiles={profiles}
-              onDirty={onDirty}
-              onCancel={close}
-              onReload={(alias) => setEditing(alias)}
-              onSaved={(name, deleted) => {
-                changed();
-                setNotice(
-                  deleted
-                    ? `Alias ${name} deleted. Existing runs keep their captured configuration.`
-                    : `Alias ${name} saved.`,
-                );
-              }}
-            />
-          </div>
         )}
       </div>
+      {editing === undefined && (
+        <div>
+          <p className={styles.intro}>
+            Name a model choice once, then select it across workflows. Each run
+            captures the alias configuration it starts with.
+          </p>
+          {notice && (
+            <p role="status" className={styles.notice}>
+              {notice}
+            </p>
+          )}
+          <ActionError message={loadError} />
+          {error ? (
+            <div className={styles.error}>
+              <ActionError message={error} />
+              <Button onClick={() => setReload((n) => n + 1)}>
+                Retry loading aliases
+              </Button>
+            </div>
+          ) : !page ? (
+            <ListTableSkeleton
+              columns={columns}
+
+              label="Loading model aliases…"
+            >
+              <span>—</span>
+              <span>—</span>
+              <span>—</span>
+              <span />
+            </ListTableSkeleton>
+          ) : page.items.length ? (
+            <>
+              <ListTable columns={columns}>
+                {page.items.map((alias) => {
+                  const first = alias.candidates[0];
+                  const profile = profiles?.find(
+                    (profile) => profile.id === first?.profileId,
+                  );
+                  return (
+                    <ListTableRow key={alias.id} className={styles.aliasRow}>
+                      <span className={styles.identity}>
+                        <strong>{alias.name}</strong>
+                        {alias.description && <span>{alias.description}</span>}
+                      </span>
+                      <span className={styles.identity}>
+                        <span>{first?.model ?? 'No model configured'}</span>
+                        <span>
+                          {first?.profileId
+                            ? (profile?.name ?? 'Missing harness')
+                            : 'Workflow harness'}
+                          {profile?.enabled === false ? ' · disabled' : ''}
+                          {first?.effort ? ` · ${first.effort} effort` : ''}
+                        </span>
+                      </span>
+                      <span>
+                        {Math.max(0, alias.candidates.length - 1)}
+                        <span className={styles.compactLabel}>
+                          {' '}
+                          alternative{alias.candidates.length === 2 ? '' : 's'}
+                        </span>
+                      </span>
+                      <span className={styles.rowActions}>
+                        <Button
+                          variant="ghost"
+                          disabled={opening || editing !== undefined}
+                          onClick={() => void open(alias.id)}
+                          aria-label={`Edit alias ${alias.name}`}
+                        >
+                          Edit
+                        </Button>
+                      </span>
+                    </ListTableRow>
+                  );
+                })}
+              </ListTable>
+              <div className={styles.pagination}>
+                <span>
+                  {page.total} alias{page.total === 1 ? '' : 'es'}
+                </span>
+                <Button
+                  disabled={offset === 0}
+                  onClick={() => setOffset((n) => Math.max(0, n - 10))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  disabled={!page.truncated}
+                  onClick={() => setOffset((n) => n + 10)}
+                >
+                  Next
+                </Button>
+              </div>
+            </>
+          ) : editing === undefined ? (
+            <EmptyState title="No model aliases yet" />
+          ) : null}
+        </div>
+      )}
+      {editing !== undefined && (
+        <div ref={editor}>
+          <AliasEditor
+            key={editing?.id ?? 'new'}
+            alias={editing}
+            profiles={profiles}
+            onDirty={trackDirty}
+            onBusy={setEditorBusy}
+            onCancel={close}
+            onReload={(alias) => setEditing(alias)}
+            onSaved={(name, deleted) => {
+              changed();
+              setNotice(
+                deleted
+                  ? `Alias ${name} deleted. Existing runs keep their captured configuration.`
+                  : `Alias ${name} saved.`,
+              );
+            }}
+          />
+        </div>
+      )}
+      {confirmClose && (
+        <Modal
+          title="Discard unsaved alias changes?"
+          onClose={() => setConfirmClose(false)}
+        >
+          <ModalBody>Your changes to this alias have not been saved.</ModalBody>
+          <ModalFooter>
+            <Button onClick={() => setConfirmClose(false)}>Keep editing</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setConfirmClose(false);
+                close();
+              }}
+            >
+              Discard changes
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
     </section>
   );
 }
@@ -270,6 +324,7 @@ function AliasEditor({
   alias,
   profiles,
   onDirty,
+  onBusy,
   onCancel,
   onReload,
   onSaved,
@@ -277,6 +332,7 @@ function AliasEditor({
   alias: SavedModelAlias | null;
   profiles: Profile[] | undefined;
   onDirty?: (dirty: boolean) => void;
+  onBusy?: (busy: boolean) => void;
   onCancel: () => void;
   onReload: (alias: SavedModelAlias) => void;
   onSaved: (name: string, deleted?: boolean) => void;
@@ -321,6 +377,8 @@ function AliasEditor({
       setError('');
     }
   }, [alias]);
+  useEffect(() => onBusy?.(busy), [busy, onBusy]);
+  useEffect(() => () => onBusy?.(false), [onBusy]);
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
   useEffect(() => () => onDirty?.(false), [onDirty]);
   useEffect(() => {
@@ -354,7 +412,7 @@ function AliasEditor({
   };
   return (
     <form
-      className={styles.editor}
+      className={`${workspacePage.card} ${styles.editor}`}
       aria-label={alias ? `Edit alias ${alias.name}` : 'New model alias'}
       onSubmit={(event) => {
         event.preventDefault();
@@ -386,7 +444,6 @@ function AliasEditor({
         });
       }}
     >
-      <h3>{alias ? `Edit ${alias.name}` : 'New alias'}</h3>
       <div className={styles.metadata}>
         <TextInput
           ref={nameInput}
@@ -414,7 +471,7 @@ function AliasEditor({
         </p>
       )}
       <div className={styles.candidateIntro}>
-        <h4>Model choices</h4>
+        <h3>Model choices</h3>
         <p>
           Interlock selects the first choice with an available harness
           configuration. This order does not retry failed requests on another
@@ -426,93 +483,98 @@ function AliasEditor({
           (profile) => profile.id === candidate.profileId,
         );
         return (
-          <fieldset
-            key={candidate.key}
-            className={styles.candidate}
-            disabled={busy}
-          >
-            <legend>
-              {index === 0 ? 'Primary choice' : `Alternative ${index}`}
-            </legend>
-            <div className={styles.candidateActions}>
-              <ActionIcon
-                variant="subtle"
-                aria-label={`Move choice ${index + 1} up`}
-                disabled={busy || index === 0}
-                onClick={() => move(index, -1)}
-              >
-                <ArrowUp size={16} />
-              </ActionIcon>
-              <ActionIcon
-                variant="subtle"
-                aria-label={`Move choice ${index + 1} down`}
-                disabled={busy || index === candidates.length - 1}
-                onClick={() => move(index, 1)}
-              >
-                <ArrowDown size={16} />
-              </ActionIcon>
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                aria-label={`Remove choice ${index + 1}`}
-                disabled={busy || candidates.length === 1}
-                onClick={() =>
-                  setCandidates((list) =>
-                    list.filter((item) => item.key !== candidate.key),
-                  )
-                }
-              >
-                <Trash2 size={16} />
-              </ActionIcon>
-            </div>
-            <div className={styles.fields}>
-              <div>
-                <NativeSelect
-                  label={`Harness for choice ${index + 1}`}
-                  value={candidate.profileId ?? ''}
-                  disabled={busy || !profiles}
-                  onChange={(event) =>
-                    update(candidate.key, {
-                      profileId: event.currentTarget.value || undefined,
-                    })
+          <Fragment key={candidate.key}>
+            {index > 0 && (
+              <div className={styles.candidateDivider} aria-hidden="true" />
+            )}
+            <fieldset
+              key={candidate.key}
+              className={styles.candidate}
+              disabled={busy}
+            >
+              <legend>
+                {index === 0 ? 'Primary choice' : `Alternative ${index}`}
+              </legend>
+              <div className={styles.candidateActions}>
+                <ActionIcon
+                  variant="subtle"
+                  aria-label={`Move choice ${index + 1} up`}
+                  disabled={busy || index === 0}
+                  onClick={() => move(index, -1)}
+                >
+                  <ArrowUp size={16} />
+                </ActionIcon>
+                <ActionIcon
+                  variant="subtle"
+                  aria-label={`Move choice ${index + 1} down`}
+                  disabled={busy || index === candidates.length - 1}
+                  onClick={() => move(index, 1)}
+                >
+                  <ArrowDown size={16} />
+                </ActionIcon>
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  aria-label={`Remove choice ${index + 1}`}
+                  disabled={busy || candidates.length === 1}
+                  onClick={() =>
+                    setCandidates((list) =>
+                      list.filter((item) => item.key !== candidate.key),
+                    )
                   }
-                  data={[
-                    { value: '', label: 'Use workflow harness' },
-                    ...(profiles ?? []).map((profile) => ({
-                      value: profile.id,
-                      label: `${profile.name}${profile.enabled ? '' : ' · disabled'}`,
-                    })),
-                    ...(candidate.profileId && !profile
-                      ? [
-                          {
-                            value: candidate.profileId,
-                            label: `${candidate.profileId} · missing`,
-                          },
-                        ]
-                      : []),
-                  ]}
-                />
-                {!profiles && (
-                  <p className={styles.intro}>
-                    Harness choices will appear once configurations load.
-                  </p>
-                )}
+                >
+                  <Trash2 size={16} />
+                </ActionIcon>
               </div>
-              <ModelSettings
-                label={`Model for choice ${index + 1}`}
-                defaultLabel="Choose a model"
-                effortDefaultLabel="Inherit workflow or harness effort"
-                profileId={profile?.id}
-                model={candidate.model || undefined}
-                effort={candidate.effort}
-                onModelChange={(model) =>
-                  update(candidate.key, { model: model ?? '' })
-                }
-                onEffortChange={(effort) => update(candidate.key, { effort })}
-                disabled={busy}
-              />
-            </div>
-          </fieldset>
+              <div className={styles.fields}>
+                <div>
+                  <NativeSelect
+                    label={`Harness for choice ${index + 1}`}
+                    value={candidate.profileId ?? ''}
+                    disabled={busy || !profiles}
+                    onChange={(event) =>
+                      update(candidate.key, {
+                        profileId: event.currentTarget.value || undefined,
+                      })
+                    }
+                    data={[
+                      { value: '', label: 'Use workflow harness' },
+                      ...(profiles ?? []).map((profile) => ({
+                        value: profile.id,
+                        label: `${profile.name}${profile.enabled ? '' : ' · disabled'}`,
+                      })),
+                      ...(candidate.profileId && !profile
+                        ? [
+                            {
+                              value: candidate.profileId,
+                              label: `${candidate.profileId} · missing`,
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                  {!profiles && (
+                    <p className={styles.intro}>
+                      Harness choices will appear once configurations load.
+                    </p>
+                  )}
+                </div>
+                <ModelSettings
+                  label={`Model for choice ${index + 1}`}
+                  defaultLabel="Choose a model"
+                  effortDefaultLabel="Inherit workflow or harness effort"
+                  profileId={profile?.id}
+                  model={candidate.model || undefined}
+                  effort={candidate.effort}
+                  onModelChange={(model) =>
+                    update(candidate.key, { model: model ?? '' })
+                  }
+                  onEffortChange={(effort) => update(candidate.key, { effort })}
+                  disabled={busy}
+                />
+              </div>
+            </fieldset>
+          </Fragment>
         );
       })}
       <Button
