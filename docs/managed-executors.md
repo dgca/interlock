@@ -50,7 +50,7 @@ Progress records contain bounded tool/status updates. New managed executions als
 
 ## Transcripts and operator messages
 
-Select a managed Agent step in the run inspector. The **Conversation / Details** segmented control switches views. **Conversation** opens its recent messages and tool activity, with guidance input below the scrollable history. **Older**, **Newer**, and **Latest** navigate retained content. The header's attempt selector reads earlier attempts without offering to message or stop them. **Details** contains session information, capture statistics, retention limits, prompt/context, and step data. Pending approvals, questions, and recovery controls remain visible above either view.
+Select a managed Agent step in the run inspector. The **Conversation / Details** segmented control switches views. **Conversation** opens its recent messages and tool activity, with guidance input below the scrollable history. The persistent footer controls navigate to the oldest retained content, older or newer entries, or the latest messages. Navigation stays visible while the conversation scrolls. The header's attempt selector reads earlier attempts without offering to message or stop them. **Details** contains session information, capture statistics, retention limits, prompt/context, and step data. Pending approvals, questions, and recovery controls remain visible above either view.
 
 Codex, Claude Code, and Pi capture visible assistant text, tool calls, and tool results. Custom commands and launchers expose partial progress capture. Historical attempts have no reconstructed conversation. Binary content and private reasoning are excluded. Unknown capture or unsupported message delivery is shown explicitly.
 

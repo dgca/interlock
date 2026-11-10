@@ -23,6 +23,7 @@ export {
   NativeSelect,
   Notification,
   NumberInput,
+  Pagination,
   Pill,
   Popover,
   Progress,

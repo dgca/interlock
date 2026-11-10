@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Group, Skeleton, Textarea } from '../../design-system';
+import {
+  Button,
+  Group,
+  Pagination,
+  Skeleton,
+  Textarea,
+} from '../../design-system';
 import { ChevronRight } from 'lucide-react';
 import type { MessageReceipt } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
@@ -53,162 +59,169 @@ export function ManagedTranscript({
   }, []);
   useEffect(() => {
     if (!opened || !scroll.current || !page) return;
-    if (cursor.before !== undefined) scroll.current.scrollTop = 0;
+    if (cursor.before !== undefined || cursor.after === 0)
+      scroll.current.scrollTop = 0;
     else if (following.current)
       scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [page, opened, cursor]);
   return (
     <div className={styles.conversation}>
-      <div
-        className={styles.scroll}
-        ref={scroll}
-        role="region"
-        aria-label="Conversation messages"
-        tabIndex={0}
-        onScroll={(event) => {
-          const el = event.currentTarget;
-          following.current =
-            el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-        }}
-      >
-        {query.error && (
-          <div role="alert" className={styles.error}>
-            {errorMessage(query.error)}{' '}
-            <Button variant="ghost" onClick={() => void query.refetch()}>
-              Retry transcript
-            </Button>
-          </div>
-        )}
-        {!page && loading && (
-          <Skeleton height={100} aria-label="Loading transcript" />
-        )}
-        {!page &&
-          (cursor.before !== undefined || cursor.after !== undefined) && (
-            <Button variant="ghost" onClick={latest}>
-              Latest
-            </Button>
+      <div className={styles.history}>
+        <div
+          className={styles.scroll}
+          ref={scroll}
+          role="region"
+          aria-label="Conversation messages"
+          tabIndex={0}
+          onScroll={(event) => {
+            const el = event.currentTarget;
+            following.current =
+              el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          }}
+        >
+          {query.error && (
+            <div role="alert" className={styles.error}>
+              {errorMessage(query.error)}{' '}
+              <Button variant="ghost" onClick={() => void query.refetch()}>
+                Retry transcript
+              </Button>
+            </div>
           )}
-        {page && (
-          <>
-            {(page.gap || page.reason) && (
-              <p role="status" className={styles.notice}>
-                {page.reason ??
-                  'Older content was removed by transcript limits.'}
-                {page.omitted > 0
-                  ? ` At least ${page.omitted} entries omitted.`
-                  : ''}
-              </p>
-            )}
-            {(page.older !== null ||
-              page.newer !== null ||
-              cursor.before !== undefined ||
-              cursor.after !== undefined) && (
-              <Group
-                gap="xs"
-                justify="space-between"
-                className={styles.navigation}
-              >
-                <Button
-                  variant="ghost"
-                  disabled={!page.older || loading}
-                  onClick={() => {
-                    following.current = false;
-                    setCursor({ before: page.older! });
-                  }}
-                >
-                  Older
-                </Button>
-                <Button variant="ghost" disabled={loading} onClick={latest}>
-                  Latest
-                </Button>
-                <Button
-                  variant="ghost"
-                  disabled={!page.newer || loading}
-                  onClick={() => {
-                    following.current = true;
-                    setCursor({ after: page.newer! });
-                  }}
-                >
-                  Newer
-                </Button>
-              </Group>
-            )}
-            <ol className={styles.entries} aria-label="Transcript entries">
-              {page.items.map((entry) => (
-                <li key={entry.sequence} data-kind={entry.kind}>
-                  {entry.kind === 'tool_call' ||
-                  entry.kind === 'tool_result' ? (
-                    <details className={styles.tool}>
-                      <summary>
-                        <ChevronRight
-                          className={styles.toolChevron}
-                          size={14}
-                          aria-hidden="true"
-                        />
-                        <span className={styles.toolName}>
-                          {entry.tool ?? 'Tool'}
-                          <span>
-                            {entry.kind === 'tool_call' ? 'Call' : 'Result'}
+          {!page && loading && (
+            <Skeleton height={100} aria-label="Loading transcript" />
+          )}
+          {page && (
+            <>
+              {(page.gap || page.reason) && (
+                <p role="status" className={styles.notice}>
+                  {page.reason ??
+                    'Older content was removed by transcript limits.'}
+                  {page.omitted > 0
+                    ? ` At least ${page.omitted} entries omitted.`
+                    : ''}
+                </p>
+              )}
+              <ol className={styles.entries} aria-label="Transcript entries">
+                {page.items.map((entry) => (
+                  <li key={entry.sequence} data-kind={entry.kind}>
+                    {entry.kind === 'tool_call' ||
+                    entry.kind === 'tool_result' ? (
+                      <details className={styles.tool}>
+                        <summary>
+                          <ChevronRight
+                            className={styles.toolChevron}
+                            size={14}
+                            aria-hidden="true"
+                          />
+                          <span className={styles.toolName}>
+                            {entry.tool ?? 'Tool'}
+                            <span>
+                              {entry.kind === 'tool_call' ? 'Call' : 'Result'}
+                            </span>
                           </span>
-                        </span>
-                        <time dateTime={entry.at}>
-                          {new Date(entry.at).toLocaleTimeString()}
-                        </time>
-                      </summary>
-                      {entry.callId && (
-                        <p className={styles.metadata}>Call {entry.callId}</p>
-                      )}
-                      <pre tabIndex={0}>{entry.text}</pre>
-                    </details>
-                  ) : (
-                    <>
-                      <div className={styles.entryHeading}>
-                        <strong>
-                          {entry.kind === 'assistant'
-                            ? 'Assistant'
-                            : entry.kind === 'operator'
-                              ? 'You'
-                              : entry.kind === 'user'
-                                ? 'User'
-                                : 'Activity'}
-                        </strong>
-                        <time dateTime={entry.at}>
-                          {new Date(entry.at).toLocaleTimeString()}
-                        </time>
-                      </div>
-                      <div className={styles.message}>{entry.text}</div>
-                    </>
-                  )}
-                  {entry.truncated && (
-                    <p className={styles.notice}>
-                      Truncated
-                      {entry.originalBytes
-                        ? ` from ${entry.originalBytes.toLocaleString()} bytes`
-                        : ''}
-                      .
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ol>
-            {!page.items.length && (
-              <p className={styles.empty}>
-                {page.gap
-                  ? 'No transcript content remains within the retention policy.'
-                  : page.capability === 'unavailable'
-                    ? 'Conversation recording was unavailable for this attempt. Session links and progress are in Details.'
-                    : 'Waiting for the agent’s first message…'}
-              </p>
-            )}
-            {(!current || !page.messageAvailable) && (
-              <p className={styles.metadata}>
-                {current
-                  ? page.messageReason
-                  : 'Messages can only be sent to the current active attempt.'}
-              </p>
-            )}
-          </>
-        )}
+                          <time dateTime={entry.at}>
+                            {new Date(entry.at).toLocaleTimeString()}
+                          </time>
+                        </summary>
+                        {entry.callId && (
+                          <p className={styles.metadata}>Call {entry.callId}</p>
+                        )}
+                        <pre tabIndex={0}>{entry.text}</pre>
+                      </details>
+                    ) : (
+                      <>
+                        <div className={styles.entryHeading}>
+                          <strong>
+                            {entry.kind === 'assistant'
+                              ? 'Assistant'
+                              : entry.kind === 'operator'
+                                ? 'You'
+                                : entry.kind === 'user'
+                                  ? 'User'
+                                  : 'Activity'}
+                          </strong>
+                          <time dateTime={entry.at}>
+                            {new Date(entry.at).toLocaleTimeString()}
+                          </time>
+                        </div>
+                        <div className={styles.message}>{entry.text}</div>
+                      </>
+                    )}
+                    {entry.truncated && (
+                      <p className={styles.notice}>
+                        Truncated
+                        {entry.originalBytes
+                          ? ` from ${entry.originalBytes.toLocaleString()} bytes`
+                          : ''}
+                        .
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ol>
+              {!page.items.length && (
+                <p className={styles.empty}>
+                  {page.gap
+                    ? 'No transcript content remains within the retention policy.'
+                    : page.capability === 'unavailable'
+                      ? 'Conversation recording was unavailable for this attempt. Session links and progress are in Details.'
+                      : 'Waiting for the agent’s first message…'}
+                </p>
+              )}
+              {(!current || !page.messageAvailable) && (
+                <p className={styles.metadata}>
+                  {current
+                    ? page.messageReason
+                    : 'Messages can only be sent to the current active attempt.'}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+        <nav className={styles.navigation} aria-label="Transcript history">
+          {/* Cursor reads have no numbered pages. Server cursors drive each control. */}
+          <Pagination.Root
+            total={1}
+            size={40}
+            classNames={{ control: styles.pageControl }}
+          >
+            <Group gap="xs" justify="center">
+              <Pagination.First
+                aria-label="Oldest messages"
+                title="Oldest messages"
+                disabled={!page?.older || loading}
+                onClick={() => {
+                  following.current = false;
+                  setCursor({ after: 0 });
+                }}
+              />
+              <Pagination.Previous
+                aria-label="Older messages"
+                title="Older messages"
+                disabled={!page?.older || loading}
+                onClick={() => {
+                  following.current = false;
+                  setCursor({ before: page!.older! });
+                }}
+              />
+              <Pagination.Next
+                aria-label="Newer messages"
+                title="Newer messages"
+                disabled={!page?.newer || loading}
+                onClick={() => {
+                  following.current = true;
+                  setCursor({ after: page!.newer! });
+                }}
+              />
+              <Pagination.Last
+                aria-label="Latest messages"
+                title="Latest messages"
+                disabled={loading}
+                onClick={latest}
+              />
+            </Group>
+          </Pagination.Root>
+        </nav>
       </div>
       {current && (
         <Composer

@@ -105,7 +105,9 @@ async function render(executionId = 'attempt', opened = true) {
 }
 function button(label: string) {
   return [...container.querySelectorAll('button')].find(
-    (b) => b.textContent === label,
+    (b) =>
+      b.textContent === label ||
+      b.getAttribute('aria-label') === `${label} messages`,
   )!;
 }
 async function type(text: string) {
@@ -243,4 +245,38 @@ it('keeps draft and uncertain delivery identity across page changes', async () =
     rpc.manage.mock.calls[0][0].requestId,
   );
   expect(rpc.manage).toHaveBeenCalledTimes(1);
+});
+
+it('navigates server cursors with compound controls and disables unavailable directions', async () => {
+  rpc.transcript.mockResolvedValueOnce({ ...page, older: 50 });
+  await render();
+  expect(button('Older').disabled).toBe(false);
+  expect(button('Newer').disabled).toBe(true);
+  rpc.transcript.mockResolvedValueOnce({ ...page, older: null, newer: 10 });
+  await act(async () => button('Oldest').click());
+  expect(rpc.transcript.mock.calls.at(-1)![0]).toEqual({
+    executionId: 'attempt',
+    after: 0,
+    limit: 50,
+  });
+  expect(button('Oldest').disabled).toBe(true);
+  expect(button('Older').disabled).toBe(true);
+  expect(button('Newer').disabled).toBe(false);
+  rpc.transcript.mockResolvedValueOnce({ ...page, older: 50, newer: null });
+  await act(async () => button('Newer').click());
+  expect(rpc.transcript.mock.calls.at(-1)![0]).toEqual({
+    executionId: 'attempt',
+    after: 10,
+    limit: 50,
+  });
+  rpc.transcript.mockResolvedValueOnce(page);
+  await act(async () => button('Latest').click());
+  expect(rpc.transcript.mock.calls.at(-1)![0]).toEqual({
+    executionId: 'attempt',
+    limit: 50,
+  });
+  expect(
+    container.querySelector('nav[aria-label="Transcript history"]')
+      ?.textContent,
+  ).not.toMatch(/\d/);
 });
