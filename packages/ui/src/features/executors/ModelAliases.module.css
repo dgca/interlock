@@ -116,7 +116,7 @@
 .candidateDivider {
   height: 1px;
   background: var(--border);
-  margin-inline: -24px;
+  margin-inline: calc(-1 * var(--card-padding));
 }
 .candidate legend {
   padding: 0 12px 0 0;
@@ -134,8 +134,8 @@
   align-items: center;
   gap: 12px;
   border-top: 1px solid var(--border);
-  margin: 24px -24px -24px;
-  padding: 20px 24px;
+  margin: 24px calc(-1 * var(--card-padding)) calc(-1 * var(--card-padding));
+  padding: 20px var(--card-padding);
 }
 .footer > div {
   flex: 1;
@@ -154,14 +154,4 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-@media (max-width: 600px) {
-  .candidateDivider {
-    margin-inline: -20px;
-  }
-  .footer {
-    margin-inline: -20px;
-    margin-bottom: -20px;
-    padding-inline: 20px;
-  }
 }

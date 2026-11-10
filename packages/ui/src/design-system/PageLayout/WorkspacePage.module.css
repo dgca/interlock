@@ -168,7 +168,8 @@
   margin: 0 auto;
 }
 .card {
-  padding: 24px;
+  --card-padding: 24px;
+  padding: var(--card-padding);
   background: var(--form);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
@@ -218,7 +219,7 @@
     padding-inline: 16px;
   }
   .card {
-    padding: 20px;
+    --card-padding: 20px;
   }
 }
 .search {

@@ -1,9 +1,33 @@
-import { useId } from 'react';
-import Editor from 'react-simple-code-editor';
-import Prism from 'prismjs';
-import 'prismjs/components/prism-bash';
-import 'prismjs/components/prism-json';
+import { lazy, Suspense, useId } from 'react';
 import styles from './CodeEditor.module.css';
+
+export interface EditorProps {
+  textareaId: string;
+  language: 'javascript' | 'bash' | 'json';
+  value: string;
+  onChange: (value: string) => void;
+}
+
+function PlainEditor({ textareaId, value, onChange }: EditorProps) {
+  return (
+    <textarea
+      id={textareaId}
+      className={`${styles.editor} ${styles.plainEditor}`}
+      value={value}
+      onChange={(event) => onChange(event.currentTarget.value)}
+      rows={Math.max(6, value.split('\n').length)}
+      wrap="off"
+      spellCheck={false}
+      autoCapitalize="off"
+      autoComplete="off"
+      aria-description="Syntax highlighting is unavailable. Plain-text editing is still available."
+    />
+  );
+}
+
+const HighlightedEditor = /* @__PURE__ */ lazy(() =>
+  import('./HighlightedEditor').catch(() => ({ default: PlainEditor })),
+);
 
 export function CodeEditor({
   label,
@@ -31,18 +55,23 @@ export function CodeEditor({
               <span key={index}>{index + 1}</span>
             ))}
           </div>
-          <Editor
-            textareaId={id}
-            value={value}
-            onValueChange={onChange}
-            highlight={(code) =>
-              Prism.highlight(code, Prism.languages[language], language)
+          <Suspense
+            fallback={
+              <div
+                role="status"
+                className={`${styles.editor} ${styles.loading}`}
+              >
+                Loading editor for {label}…
+              </div>
             }
-            padding={12}
-            ignoreTabKey
-            className={styles.editor}
-            preClassName={styles.highlight}
-          />
+          >
+            <HighlightedEditor
+              textareaId={id}
+              value={value}
+              onChange={onChange}
+              language={language}
+            />
+          </Suspense>
         </div>
       </div>
     </div>

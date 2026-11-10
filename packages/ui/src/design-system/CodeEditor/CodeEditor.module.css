@@ -55,6 +55,21 @@
   line-height: 1.7;
 }
 
+.loading {
+  padding: 12px;
+  color: var(--muted);
+}
+
+.plainEditor {
+  padding: 12px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  resize: none;
+  outline: none;
+}
+
 .gutter {
   position: sticky;
   left: 0;
