@@ -358,6 +358,22 @@
   font-size: 10px;
   color: var(--accent-text);
 }
+.parallelStart {
+  position: absolute;
+  left: 22px;
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  width: 102px;
+  color: var(--accent-text);
+  font-size: 12px;
+}
+.parallelStart strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .portInput,
 .portOutput {
   position: absolute;

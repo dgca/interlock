@@ -601,7 +601,7 @@
             "id": "dispatch",
             "label": "Captain badge · Start and continue",
             "position": {
-              "x": 1240,
+              "x": 1860,
               "y": 840
             },
             "inputSchema": {
@@ -631,7 +631,7 @@
             "id": "agent",
             "label": "Write mission briefing",
             "position": {
-              "x": 1240,
+              "x": 1860,
               "y": 1160
             },
             "inputSchema": {
@@ -771,12 +771,57 @@
             "id": "exit",
             "label": "Mission briefing",
             "position": {
-              "x": 1240,
+              "x": 1860,
               "y": 1500
             },
             "inputSchema": {},
             "outputSchema": {},
             "kind": "exit"
+          },
+          {
+            "id": "badge-checks",
+            "kind": "parallel",
+            "label": "Check badges",
+            "branches": [
+              {
+                "id": "count",
+                "key": "count"
+              },
+              {
+                "id": "named",
+                "key": "allNamed"
+              }
+            ],
+            "position": {
+              "x": 1240,
+              "y": 840
+            }
+          },
+          {
+            "id": "badge-count",
+            "kind": "script",
+            "label": "Count badges",
+            "language": "javascript",
+            "command": "return input.length;",
+            "parallelId": "badge-checks",
+            "parallelBranchId": "count",
+            "position": {
+              "x": 172,
+              "y": 160
+            }
+          },
+          {
+            "id": "badge-names",
+            "kind": "script",
+            "label": "Check for missing names",
+            "language": "javascript",
+            "command": "return input.every((badge) => badge.name.length > 0);",
+            "parallelId": "badge-checks",
+            "parallelBranchId": "named",
+            "position": {
+              "x": 172,
+              "y": 356
+            }
           }
         ],
         "edges": [
@@ -878,9 +923,9 @@
             "port": "complete"
           },
           {
-            "id": "bash-default-dispatch",
+            "id": "bash-default-badge-checks",
             "source": "bash",
-            "target": "dispatch",
+            "target": "badge-checks",
             "port": "default"
           },
           {
@@ -912,6 +957,38 @@
             "source": "not-ready",
             "target": "exit",
             "port": "default"
+          },
+          {
+            "id": "start-count",
+            "source": "badge-checks",
+            "target": "badge-count",
+            "port": "branch:count"
+          },
+          {
+            "id": "start-named",
+            "source": "badge-checks",
+            "target": "badge-names",
+            "port": "branch:named"
+          },
+          {
+            "id": "join-count",
+            "source": "badge-count",
+            "target": "badge-checks",
+            "port": "default",
+            "targetHandle": "join"
+          },
+          {
+            "id": "join-named",
+            "source": "badge-names",
+            "target": "badge-checks",
+            "port": "default",
+            "targetHandle": "join"
+          },
+          {
+            "id": "badge-checks-complete-dispatch",
+            "source": "badge-checks",
+            "target": "dispatch",
+            "port": "complete"
           }
         ],
         "maxSteps": 50

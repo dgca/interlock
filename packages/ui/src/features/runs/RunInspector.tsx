@@ -260,7 +260,10 @@ export function RunInspector({
   const nodeProgress = nodeId ? progress.nodes[nodeId] : undefined;
   const owner = selected?.runId
     ? [run, ...descendants].find((owner) => owner.id === selected.runId)
-    : node?.batchId !== run.batchNodeId && node?.batchId
+    : (node?.batchId && node.batchId !== run.batchNodeId) ||
+        (node?.parallelId &&
+          (node.parallelId !== run.parallelBranch?.nodeId ||
+            node.parallelBranchId !== run.parallelBranch?.id))
       ? undefined
       : run;
   const execution = selected?.executionId
@@ -276,7 +279,9 @@ export function RunInspector({
   const progressLabel =
     execution?.kind === 'input' && !waitingForInput
       ? execution.status[0].toUpperCase() + execution.status.slice(1)
-      : nodeProgress?.label;
+      : execution?.kind === 'parallel'
+        ? undefined
+        : nodeProgress?.label;
   let holdScope = waitingForInput ? owner : undefined;
   while (
     holdScope &&
@@ -301,6 +306,7 @@ export function RunInspector({
       (item) => item.run.id === w.runId,
     );
     const owner = runIndex.get(w.runId);
+    if (owner?.parallelBranch) return owner.parallelBranch.key;
     return owner?.batchNodeId && item
       ? `Item ${item.index + 1}`
       : w.runId !== run.id
@@ -331,6 +337,30 @@ export function RunInspector({
           return child ? [child] : [];
         })
       : [];
+  const branchRows =
+    execution?.kind === 'parallel'
+      ? [
+          ...execution.childRunIds.flatMap((id) => {
+            const child = runIndex.get(id);
+            return child?.parallelBranch
+              ? [
+                  {
+                    id: child.parallelBranch.id,
+                    key: child.parallelBranch.key,
+                    run: child,
+                  },
+                ]
+              : [];
+          }),
+          ...(node?.kind === 'parallel' &&
+          execution.status !== 'completed' &&
+          (execution.version ?? run.version) === run.version
+            ? node.branches
+                .slice(execution.nextItem)
+                .map((branch) => ({ ...branch, run: undefined }))
+            : []),
+        ]
+      : [];
   return (
     <div
       className={`${styles.page} ${!definition ? styles.withoutDefinition : ''} ${run.comparison ? styles.comparison : ''}`}
@@ -354,7 +384,11 @@ export function RunInspector({
         }
         actions={
           <div className={styles.headerActions}>
-            <Button onClick={() => setVersionDialog(true)}>Run version</Button>
+            {!run.parallelBranch && (
+              <Button onClick={() => setVersionDialog(true)}>
+                Run version
+              </Button>
+            )}
             {run.chain?.previousRunId && (
               <Button onClick={() => onOpen(run.chain!.previousRunId!)}>
                 Previous run
@@ -397,12 +431,15 @@ export function RunInspector({
                 {run.parentMode === 'detached' ? 'Started by' : 'Parent run'}
               </Button>
             )}
-            {run.status === 'failed' && definition && !data.handledFailure && (
-              <Button disabled={retrying} onClick={() => void retry()}>
-                <RotateCcw />
-                {retrying ? 'Requesting retry…' : 'Retry failed step'}
-              </Button>
-            )}
+            {run.status === 'failed' &&
+              definition &&
+              !data.handledFailure &&
+              !run.parallelBranch && (
+                <Button disabled={retrying} onClick={() => void retry()}>
+                  <RotateCcw />
+                  {retrying ? 'Requesting retry…' : 'Retry failed step'}
+                </Button>
+              )}
             {['queued', 'running', 'waiting'].includes(run.status) && (
               <Button
                 onClick={() =>
@@ -653,6 +690,46 @@ export function RunInspector({
                 ))}
               </section>
             )}
+            {branchRows.length > 0 && (
+              <section aria-label="Parallel branches">
+                <h3>Branches</h3>
+                <p className={styles.progressLabel}>
+                  {
+                    branchRows.filter(
+                      (branch) => branch.run?.status === 'completed',
+                    ).length
+                  }{' '}
+                  of {branchRows.length} finished
+                </p>
+                {branchRows.map(({ id, key, run: child }) =>
+                  child ? (
+                    <button
+                      key={id}
+                      className={styles.child}
+                      onClick={() => onOpen(child.id)}
+                    >
+                      <span className={styles.branchName}>{key}</span>
+                      <StatusBadge
+                        status={progress.runStates[child.id] ?? child.status}
+                      />
+                      <ArrowUpRight size={14} />
+                    </button>
+                  ) : (
+                    <div key={id} className={styles.branchPending}>
+                      <span className={styles.branchName}>{key}</span>
+                      <StatusBadge
+                        status={
+                          execution?.status === 'failed' ||
+                          execution?.status === 'cancelled'
+                            ? 'not started'
+                            : 'queued'
+                        }
+                      />
+                    </div>
+                  ),
+                )}
+              </section>
+            )}
             {execution?.kind === 'workflow' &&
               execution.childRunIds.map((childId) => {
                 const child = runIndex.get(childId);
@@ -677,7 +754,7 @@ export function RunInspector({
               })}
             {owner && owner.id !== run.id && (
               <Button onClick={() => onOpen(owner.id, execution?.id)}>
-                Open item run
+                {owner.parallelBranch ? 'Open branch run' : 'Open item run'}
               </Button>
             )}
             {selected && !execution && (
@@ -855,7 +932,23 @@ export function RunInspector({
                 definition={definition}
                 progress={progress.nodes}
                 selected={nodeId}
-                onSelect={(nodeId) => select({ nodeId })}
+                onSelect={(nodeId) => {
+                  const member = definition.nodes.find(
+                    (node) => node.id === nodeId,
+                  );
+                  const branch = member?.parallelId
+                    ? progress.nodes[nodeId]?.items[0]
+                    : undefined;
+                  select({
+                    nodeId,
+                    ...(branch
+                      ? {
+                          runId: branch.run.id,
+                          executionId: branch.execution?.id,
+                        }
+                      : {}),
+                  });
+                }}
               />
             ) : (
               <p className="hint">

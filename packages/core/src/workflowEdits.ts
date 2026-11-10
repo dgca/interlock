@@ -196,7 +196,10 @@ export function applyWorkflowEdits(
           while (size !== removed.size) {
             size = removed.size;
             for (const node of definition.nodes)
-              if (node.batchId && removed.has(node.batchId))
+              if (
+                (node.batchId && removed.has(node.batchId)) ||
+                (node.parallelId && removed.has(node.parallelId))
+              )
                 removed.add(node.id);
           }
           definition.nodes = definition.nodes.filter((n) => !removed.has(n.id));

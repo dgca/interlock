@@ -123,6 +123,11 @@ export {
   type FetchRequest,
 } from './fetch.js';
 import { validateBatchScopes } from './batchScopes.js';
+import {
+  parallelBranchPort,
+  sameExecutionScope,
+  validateParallelScopes,
+} from './parallel.js';
 import { isStartedRunSchema } from './workflowMode.js';
 export { STARTED_RUN_SCHEMA, isStartedRunSchema } from './workflowMode.js';
 export {
@@ -132,6 +137,12 @@ export {
   type FailureCategory,
 } from './failureRoute.js';
 export { validateBatchScopes } from './batchScopes.js';
+export {
+  parallelBranchPort,
+  parallelConnectionError,
+  sameExecutionScope,
+  validateParallelScopes,
+} from './parallel.js';
 
 export type Json =
   null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -317,23 +328,25 @@ const nodeBase = {
   label: z.string().min(1),
   stage: z.string().trim().min(1).max(200).optional(),
   batchId: z.string().min(1).optional(),
+  parallelId: z.string().min(1).optional(),
+  parallelBranchId: z.string().min(1).optional(),
   position: z.object({ x: z.number(), y: z.number() }).default({ x: 0, y: 0 }),
   inputSchema: contractSchema.default({}),
   outputSchema: contractSchema.default({}),
   inputBindings: valueBindingsSchema
     .optional()
     .describe(
-      'Replace input fields from input, runInput, rootInput, itemInput, node (same-scope completed output), literal {value}, or object {fields}. Blank paths select the source. default covers missing paths; node sourceDefault covers absent completed output. Keys stay literal; use object for nesting (max 10 levels). Original inputs remain immutable.',
+      'Select fields from input, runInput, rootInput, itemInput, same-scope node/execution, literal or object. Blank paths select the source. default covers missing paths; sourceDefault covers absent executions. Keys are literal; inputs remain immutable.',
     ),
   outputBindings: valueBindingsSchema
     .optional()
     .describe(
-      'Optional forwarded output fields after result validation and routing. Same bindings; input selects the raw operation result. Raw result remains inspectable; omission forwards it unchanged.',
+      'Map forwarded fields after validation/routing. input selects the retained raw result. Omit to forward unchanged.',
     ),
   routing: routingSchema
     .optional()
     .describe(
-      'Optional success-result branches for Agent, Script, Fetch or waited Workflow. Match raw validated result before outputBindings; same Switch first-match/fallback semantics. Missing path or unmatched without default fails. Failure/timeout routes remain separate.',
+      'Match the validated raw result before outputBindings on Agent, Script, Fetch or waited Workflow. First match wins; missing path or no match without default fails. Failure/timeout remain separate.',
     ),
 };
 export const MAX_SCRIPT_TIMEOUT_MS = 3_600_000;
@@ -343,7 +356,7 @@ const onFailureSchema = z
   .enum(['fail', 'route'])
   .optional()
   .describe(
-    'Omit or use fail to stop the run. route requires a failed edge and all configured success routes (default without result routing). Failed receives {input, error: {nodeId, executionId, kind: script|fetch, category: execution|http|output, message}, output}. input is the resolved operation input; output is returned JSON or null if unavailable. The success outputSchema does not apply to Failed; its destination validates the envelope. Only operation errors, rejected HTTP statuses and output-contract failures route. Input/request validation, cancellation, step limits, result-routing/output-mapping errors and uncertain interruptions remain terminal. Background Scripts recover authenticated outcomes after restart; foreground interruptions remain terminal. No automatic retry.',
+    'Stop by default. route requires failed and all success edges. Failed sends {input,error:{nodeId,executionId,kind:script|fetch,category:execution|http|output,message},output}, with null when output is absent. The destination validates it. Operation, HTTP and output-contract errors route; validation, cancellation, limits, mapping/routing and uncertain interruptions stay terminal. No automatic retry.',
   );
 
 const nodeShapeSchema = z.discriminatedUnion('kind', [
@@ -526,7 +539,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     ...nodeBase,
     kind: z.literal('workflow'),
     onFailure: onFailureSchema.describe(
-      'Waited calls only: route requires a failed edge and all configured success edges (default without result routing). Failed receives {input,error:{nodeId,executionId,kind:workflow,category:child|output,message,child:{runId,workflowId,version,executionId}},output}. Child failure or rejected successful output routes; caller input/dispatch errors, cancellation and persistence errors stay terminal. No automatic retry.',
+      'Waited calls only. route requires failed and all success edges. Sends {input,error:{nodeId,executionId,kind:workflow,category:child|output,message,child:{runId,workflowId,version,executionId}},output} for child or output-contract failure. Input/dispatch, cancellation and persistence stay terminal. No automatic retry.',
     ),
     mode: z.enum(['wait', 'detached']).optional(),
     workflowId: z.string().min(1),
@@ -540,6 +553,22 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     // Omission preserves existing definitions without rewriting published versions.
     maxItems: z.number().int().min(1).max(MAX_BATCH_ITEMS).optional(),
     failurePolicy: z.enum(['all', 'collect']).default('all'),
+  }),
+  z.object({
+    ...nodeBase,
+    kind: z.literal('parallel'),
+    branches: z
+      .array(
+        z.object({
+          id: z.string().min(1).max(64),
+          key: z.string().max(64),
+        }),
+      )
+      .max(50)
+      .describe(
+        '2–50 unique branch IDs and nonblank unique result keys at publication. Members set parallelId and parallelBranchId; wire branch:<id> to the start, targetHandle:join on return, and complete outward.',
+      ),
+    concurrency: z.number().int().min(1).max(50).default(5),
   }),
 ]);
 export const nodeSchema = z.preprocess((value, ctx) => {
@@ -571,7 +600,7 @@ export const definitionSchema = z.object({
   agentModel: executorModelSchema
     .optional()
     .describe(
-      'Default model ID for managed Agents in this workflow. Node model overrides it; omission inherits each harness default. Connected agents keep their own model; explicit model refusals require a replacement selection; no automatic substitution.',
+      'Managed model ID. Node model overrides it; omission inherits harness defaults. Connected agents choose their own model. Refusals require a replacement; no automatic substitution.',
     ),
   agentEffort: executorEffortSchema
     .nullable()
@@ -607,7 +636,7 @@ export const definitionSchema = z.object({
       source: z.string(),
       target: z.string(),
       port: z.string().min(1).default('default'),
-      targetHandle: z.enum(['default', 'end']).optional(),
+      targetHandle: z.enum(['default', 'end', 'join']).optional(),
     }),
   ),
   maxActiveRuns: z
@@ -617,7 +646,7 @@ export const definitionSchema = z.object({
     .max(Number.MAX_SAFE_INTEGER)
     .optional()
     .describe(
-      'Admitted workflow run cap. Batch items and excluded stages do not count. Omit for no cap.',
+      'Admitted workflow run cap. Batch items, Parallel branches and excluded stages do not count. Omit for no cap.',
     ),
   excludeStages: z
     .array(z.string().trim().min(1).max(120))
@@ -632,7 +661,15 @@ export const definitionSchema = z.object({
     .describe(
       'When true, publishing this workflow captures exact revisions of referenced saved prompts in the immutable workflow version, and runs capture those pinned revisions instead of floating to latest.',
     ),
-  maxSteps: z.number().int().min(2).max(1000).default(100),
+  maxSteps: z
+    .number()
+    .int()
+    .min(2)
+    .max(1000)
+    .default(100)
+    .describe(
+      'Run step limit, shared by its Parallel branches. Batch items and invoked workflows have separate limits.',
+    ),
 });
 export type WorkflowDefinition = z.infer<typeof definitionSchema>;
 export type WorkflowEdge = WorkflowDefinition['edges'][number];
@@ -757,6 +794,9 @@ export interface Run {
   // Item runs execute members of this Batch in the same published graph.
   batchNodeId?: string;
   batchItemIndex?: number;
+  parallelBranch?: { nodeId: string; id: string; key: string };
+  /** Branch node starts charged to this workflow run, including prior visits. */
+  parallelSteps?: number;
   /** Attempt reserved for a Script or Wait step by explicit retry. */
   nextScriptAttempt?: number;
   status: RunStatus;
@@ -784,6 +824,7 @@ export type RunSummary = Pick<
   | 'parentRunId'
   | 'parentMode'
   | 'parentExecutionId'
+  | 'parallelBranch'
   | 'comparison'
   | 'startRequestId'
   | 'externalTask'
@@ -1022,6 +1063,11 @@ export function outgoingPorts(node: WorkflowNode): WorkflowEdge['port'][] {
   if (node.kind === 'exit') return [];
   if (node.kind === 'condition') return ['true', 'false'];
   if (node.kind === 'batch') return ['item', 'complete'];
+  if (node.kind === 'parallel')
+    return [
+      ...node.branches.map(({ id }) => parallelBranchPort(id)),
+      'complete',
+    ];
   const routes = node.kind === 'switch' ? node : node.routing;
   const ports = routes
     ? [
@@ -1176,7 +1222,7 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
         throw new InterlockError(
           `${node.label}: ${binding.source === 'execution' ? 'execution' : 'node'} binding must reference an existing non-Entry/Exit node`,
         );
-      if (target.batchId !== node.batchId)
+      if (!sameExecutionScope(target, node))
         throw new InterlockError(
           `${node.label}: ${binding.source === 'execution' ? 'execution' : 'node'} binding must reference a node in the same execution scope`,
         );
@@ -1240,10 +1286,13 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       expected.some((p) => outgoing.filter((e) => e.port === p).length !== 1)
     )
       throw new InterlockError(
-        `${node.label}: expected outgoing routes ${expected.join(', ') || 'none'}`,
+        node.kind === 'parallel'
+          ? `${node.label}: connect every branch start and Out exactly once`
+          : `${node.label}: expected outgoing routes ${expected.join(', ') || 'none'}`,
       );
   }
   validateBatchScopes(d);
+  validateParallelScopes(d);
   const reachable = new Set<string>();
   const visit = (id: string) => {
     if (reachable.has(id)) return;
@@ -1308,6 +1357,7 @@ export {
 
 export function nodeKindLabel(kind: WorkflowNode['kind']): string {
   if (kind === 'input') return 'External input';
+  if (kind === 'parallel') return 'Parallel';
   return kind === 'switch' || kind === 'condition'
     ? 'Branch'
     : kind === 'batch'

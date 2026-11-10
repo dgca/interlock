@@ -15,6 +15,7 @@ export const nodeDescriptions: Record<WorkflowNode['kind'], string> = {
     'Checks a value and follows one matching branch. The input stays unchanged.',
   workflow:
     'Runs a published workflow. Wait for its result or start it independently.',
+  parallel: 'Runs named branches and joins their results after all succeed.',
   batch:
     'Runs the same steps for each item in a list and collects the results.',
 };

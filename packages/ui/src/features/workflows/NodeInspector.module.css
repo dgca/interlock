@@ -23,3 +23,15 @@
     white-space: normal;
   }
 }
+
+.parallelBranchField {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.parallelBranchField > :first-child {
+  flex: 1 1 220px;
+  min-width: 0;
+}

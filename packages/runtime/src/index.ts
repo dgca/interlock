@@ -78,6 +78,7 @@ import {
   isPollWait,
   hasTimeoutRoute,
   hasFailureRoute,
+  parallelBranchPort,
   type FailureCategory,
   blankDefinition,
   definitionSchema,
@@ -1375,6 +1376,8 @@ export class Engine {
     startOptions?: RunStartOptions,
     schedule?: Run['schedule'],
     triggerChain?: string[],
+    parallelBranch?: Run['parallelBranch'],
+    parentExecutionId?: string,
   ): Run {
     const w = this.workflow(workflowId);
     // Preserve existing dispatch-time failures for invalid nested pins; cleanup
@@ -1385,7 +1388,8 @@ export class Engine {
     const rollover = definition.nodes.find(
       (n) => n.kind === 'exit' && n.continueAsNew,
     );
-    if (rollover && ((parentRunId && !batchNodeId) || comparison))
+    const sameWorkflowChild = Boolean(batchNodeId || parallelBranch);
+    if (rollover && ((parentRunId && !sameWorkflowChild) || comparison))
       throw new InterlockError(
         'Continue-as-new workflows require standalone runs; nested and comparison execution are unsupported',
       );
@@ -1393,9 +1397,19 @@ export class Engine {
       ? definition.edges.find(
           (e) => e.source === batchNodeId && e.port === 'item',
         )
-      : undefined;
-    if (batchNodeId && !itemRoute)
-      throw new InterlockError('Batch item route not found');
+      : parallelBranch
+        ? definition.edges.find(
+            (e) =>
+              e.source === parallelBranch.nodeId &&
+              e.port === parallelBranchPort(parallelBranch.id),
+          )
+        : undefined;
+    if (sameWorkflowChild && !itemRoute)
+      throw new InterlockError(
+        parallelBranch
+          ? 'Parallel branch start not found'
+          : 'Batch item route not found',
+      );
     if (!parentRunId)
       assertContract(definition.inputSchema, input, 'Workflow input');
     let depth = 0,
@@ -1437,11 +1451,14 @@ export class Engine {
         : {}),
       id: randomUUID(),
       workflowId,
-      workflowName: w.name,
+      workflowName: parallelBranch
+        ? `${w.name} · ${parallelBranch.key}`
+        : w.name,
       version,
       ...(versionPolicy ? { versionPolicy } : {}),
       parentRunId,
       batchNodeId,
+      ...(parallelBranch ? { parallelBranch, parentExecutionId } : {}),
       status: 'running',
       input,
       cursor:
@@ -1453,7 +1470,7 @@ export class Engine {
       updatedAt: time,
       promptSnapshots: continuedFrom
         ? continuedFrom.promptSnapshots
-        : batchNodeId && parentRunId
+        : sameWorkflowChild && parentRunId
           ? this.run(parentRunId).promptSnapshots
           : capturedPrompts
             ? promptIds(definition).map((id) => {
@@ -1477,7 +1494,7 @@ export class Engine {
                     definition,
                     continuedFrom.variableCaptures ?? [],
                   )
-                : batchNodeId && parentRunId
+                : sameWorkflowChild && parentRunId
                   ? this.variables.capture(
                       definition,
                       this.run(parentRunId).variableCaptures ?? [],
@@ -1498,7 +1515,7 @@ export class Engine {
                 definition,
                 continuedFrom.modelAliasCaptures ?? [],
               )
-            : batchNodeId && parentRunId
+            : sameWorkflowChild && parentRunId
               ? this.modelAliases.capture(
                   definition,
                   this.run(parentRunId).modelAliasCaptures ?? [],
@@ -1801,7 +1818,9 @@ export class Engine {
     );
     if (
       !edge ||
-      (edge.targetHandle === 'end' && edge.target !== run.batchNodeId)
+      (edge.targetHandle === 'end' && edge.target !== run.batchNodeId) ||
+      (edge.targetHandle === 'join' &&
+        edge.target !== run.parallelBranch?.nodeId)
     )
       return this.fail(run, execution, `${error}; invalid Failed route`);
     const value: Json = {
@@ -1830,10 +1849,14 @@ export class Engine {
     execution.port = 'failed';
     execution.completedAt = now();
     run.value = value;
-    if (edge.targetHandle === 'end') {
+    if (edge.targetHandle === 'end' || edge.targetHandle === 'join') {
       run.status = 'completed';
       run.output = value;
-      this.event(run, 'run.completed', 'Item result returned');
+      this.event(
+        run,
+        'run.completed',
+        run.parallelBranch ? 'Branch result returned' : 'Item result returned',
+      );
     } else {
       run.cursor = edge.target;
       run.status = 'running';
@@ -1864,7 +1887,10 @@ export class Engine {
   }
   private bindingSource(run: Run, input: Json) {
     let workflowRun = run;
-    while (workflowRun.batchNodeId && workflowRun.parentRunId)
+    while (
+      (workflowRun.batchNodeId || workflowRun.parallelBranch) &&
+      workflowRun.parentRunId
+    )
       workflowRun = this.run(workflowRun.parentRunId);
     let root = workflowRun;
     while (root.parentRunId) root = this.run(root.parentRunId);
@@ -1979,6 +2005,13 @@ export class Engine {
       );
     if (edge?.targetHandle === 'end' && edge.target !== run.batchNodeId)
       throw new InterlockError('End must belong to the current Batch group');
+    if (
+      edge?.targetHandle === 'join' &&
+      edge.target !== run.parallelBranch?.nodeId
+    )
+      throw new InterlockError(
+        'Join must belong to the current Parallel group',
+      );
     if (node.kind === 'exit' && !node.continueAsNew)
       assertContract(
         this.definition(run).outputSchema,
@@ -2094,13 +2127,21 @@ export class Engine {
     execution.status = 'completed';
     execution.completedAt = now();
     run.value = output;
-    if (node.kind === 'exit' || edge?.targetHandle === 'end') {
+    if (
+      node.kind === 'exit' ||
+      edge?.targetHandle === 'end' ||
+      edge?.targetHandle === 'join'
+    ) {
       run.status = 'completed';
       run.output = output;
       this.event(
         run,
         'run.completed',
-        run.batchNodeId ? 'Item result returned' : 'Workflow completed',
+        run.parallelBranch
+          ? 'Branch result returned'
+          : run.batchNodeId
+            ? 'Item result returned'
+            : 'Workflow completed',
       );
     } else {
       run.cursor = edge!.target;
@@ -2139,8 +2180,16 @@ export class Engine {
         ...(attempt === undefined ? {} : { attempt }),
       };
       run.executions.push(execution);
-      this.event(run, 'node.started', node.label);
       try {
+        if (node.batchId !== run.batchNodeId)
+          throw new InterlockError('Execution cannot cross Batch groups');
+        if (
+          node.parallelId !== run.parallelBranch?.nodeId ||
+          node.parallelBranchId !== run.parallelBranch?.id
+        )
+          throw new InterlockError('Execution cannot cross Parallel branches');
+        this.chargeStep(run, node, definition.maxSteps);
+        this.event(run, 'node.started', node.label);
         if (node.inputBindings) {
           execution.originalInput = run.value;
           execution.input = resolveBindingFields(
@@ -2148,12 +2197,6 @@ export class Engine {
             this.bindingSource(run, run.value),
           );
         }
-        if (node.batchId !== run.batchNodeId)
-          throw new InterlockError('Execution cannot cross Batch groups');
-        if (run.executions.length > definition.maxSteps)
-          throw new InterlockError(
-            `Workflow step limit exceeded (${definition.maxSteps} steps); could not start ${node.label}`,
-          );
         if (node.kind === 'entry')
           assertContract(definition.inputSchema, run.input, 'Workflow input');
         assertContract(
@@ -2597,6 +2640,8 @@ export class Engine {
           return false;
         }
       }
+      if (node.kind === 'parallel')
+        return this.advanceParallel(run, execution, node, starting);
       if (node.kind === 'workflow' || node.kind === 'batch') {
         const value =
           node.kind !== 'workflow'
@@ -2791,6 +2836,108 @@ export class Engine {
       this.fail(run, execution, message(error));
       return true;
     }
+  }
+  private chargeStep(run: Run, node: WorkflowNode, limit: number) {
+    const owner = run.parallelBranch ? this.run(run.parentRunId!) : run;
+    const branchSteps =
+      (owner.parallelSteps ?? 0) + (run.parallelBranch ? 1 : 0);
+    if (owner.executions.length + branchSteps > limit)
+      throw new InterlockError(
+        `Workflow step limit exceeded (${limit} steps); could not start ${node.label}`,
+      );
+    if (run.parallelBranch) {
+      const group = owner.executions.at(-1);
+      if (
+        terminal(owner.status) ||
+        group?.kind !== 'parallel' ||
+        group.id !== run.parentExecutionId
+      )
+        throw new InterlockError(
+          'Parallel branch no longer belongs to the active invocation',
+        );
+      owner.parallelSteps = branchSteps;
+      // advance runs within the pump transaction, together with the branch execution.
+      this.save(owner);
+    }
+  }
+  private advanceParallel(
+    run: Run,
+    execution: NodeExecution,
+    node: Extract<WorkflowNode, { kind: 'parallel' }>,
+    starting: boolean,
+  ) {
+    const children = execution.childRunIds.map((id) => this.run(id));
+    const failed = children.find(
+      (child) =>
+        (child.status === 'failed' || child.status === 'cancelled') &&
+        !execution.retryChildRunIds?.includes(child.id),
+    );
+    if (failed)
+      throw new InterlockError(
+        `Parallel branch "${failed.parallelBranch?.key}" ${failed.status}: ${failed.error ?? failed.id}`,
+      ); // The ordinary failure path cancels unfinished waited descendants.
+
+    let changed = starting;
+    let active = children.filter((child) => !terminal(child.status)).length;
+    while (execution.retryChildRunIds?.length && active < node.concurrency) {
+      this.resumeStep(this.run(execution.retryChildRunIds.shift()!));
+      active++;
+      changed = true;
+    }
+    while (
+      execution.nextItem < node.branches.length &&
+      active < node.concurrency &&
+      !execution.retryChildRunIds?.length
+    ) {
+      const branch = node.branches[execution.nextItem];
+      const next = { ...execution, childRunIds: [...execution.childRunIds] };
+      this.store.transaction(() => {
+        const child = this.newRun(
+          run.workflowId,
+          run.version,
+          structuredClone(execution.input),
+          run.id,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { nodeId: node.id, id: branch.id, key: branch.key },
+          execution.id,
+        );
+        next.childRunIds.push(child.id);
+        next.nextItem++;
+        next.status = 'waiting';
+        this.save({
+          ...run,
+          status: 'waiting',
+          executions: [...run.executions.slice(0, -1), next],
+        });
+      });
+      Object.assign(execution, next);
+      active++;
+      changed = true;
+    }
+    // Any child resumed or dispatched above needs a chance to advance first.
+    if (
+      active === 0 &&
+      !execution.retryChildRunIds?.length &&
+      children.length === node.branches.length &&
+      children.every((child) => child.status === 'completed')
+    ) {
+      const output: Json = Object.fromEntries(
+        children.map((child) => [child.parallelBranch!.key, child.output!]),
+      );
+      this.finish(run, execution, node, output, 'complete');
+      return true;
+    }
+    if (changed || execution.status !== 'waiting' || run.status !== 'waiting') {
+      execution.status = 'waiting';
+      run.status = 'waiting';
+      this.save(run);
+    }
+    return changed;
   }
   stop() {
     if (this.stopped) return;
@@ -4349,6 +4496,30 @@ export class Engine {
   private assertResumeSafe(run: Run, checked = new Set<string>()) {
     if (checked.has(run.id)) return;
     checked.add(run.id);
+    if (run.parallelBranch) {
+      const attached = new Set(
+        this.store
+          .continuation(run.id)
+          .runs.filter((child) => child.lifecycleRunId === run.id)
+          .map((child) => child.id),
+      );
+      const claim = this.store.forRuns<UncertainClaim>(
+        uncertainClaimCollection,
+        attached,
+      )[0];
+      if (claim)
+        throw new InterlockError(
+          `Confirm stopped for revoked work ${claim.workId}, attempt ${claim.attempt}, before retrying the Parallel group`,
+        );
+      const operation = this.store.forRuns<UncertainOperation>(
+        uncertainOperationCollection,
+        attached,
+      )[0];
+      if (operation)
+        throw new InterlockError(
+          `Confirm stopped for run ${operation.runId}, execution ${operation.executionId}, before retrying the Parallel group`,
+        );
+    }
     const uncertain = run.executions.find(
       (step) => step.background?.state === 'uncertain',
     );
@@ -4357,7 +4528,12 @@ export class Engine {
         `Reconcile the uncertain background Script in run ${run.id}, execution ${uncertain.id}, with stopped:true after inspecting processes and effects before retrying`,
       );
     const execution = run.executions.at(-1);
-    if (execution?.kind !== 'workflow' && execution?.kind !== 'batch') return;
+    if (
+      execution?.kind !== 'workflow' &&
+      execution?.kind !== 'batch' &&
+      execution?.kind !== 'parallel'
+    )
+      return;
     for (const id of execution.childRunIds) {
       const child = this.run(id);
       if (
@@ -4377,9 +4553,10 @@ export class Engine {
       this.save(run);
       return;
     }
-    run.value = Object.hasOwn(execution, 'originalInput')
-      ? execution.originalInput!
-      : execution.input;
+    if (!run.parallelBranch || execution.nodeId === run.cursor)
+      run.value = Object.hasOwn(execution, 'originalInput')
+        ? execution.originalInput!
+        : execution.input;
     if (
       execution.nodeId === run.cursor &&
       (execution.kind === 'script' || execution.kind === 'wait')
@@ -4388,7 +4565,9 @@ export class Engine {
     // Only dispatched child runs have progress to retain. Initialization
     // failures must resolve bindings and validate input again on retry.
     if (
-      (execution.kind === 'batch' || execution.kind === 'workflow') &&
+      (execution.kind === 'batch' ||
+        execution.kind === 'workflow' ||
+        execution.kind === 'parallel') &&
       execution.childRunIds.length > 0
     ) {
       execution.status = 'waiting';
@@ -4407,6 +4586,10 @@ export class Engine {
       const run = this.run(id);
       if (run.status !== 'failed')
         throw new InterlockError('Only failed runs can be retried');
+      if (run.parallelBranch)
+        throw new InterlockError(
+          'Retry the failed Parallel group from its parent run',
+        );
       this.assertResumeSafe(run);
       this.chains.assertRetry(run);
       if (this.handledWorkflowFailure(run))

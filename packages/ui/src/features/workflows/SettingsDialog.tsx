@@ -19,6 +19,7 @@ import { Download, Plus, Trash2 } from 'lucide-react';
 import {
   nodeSchema,
   outgoingPorts,
+  parallelBranchPort,
   type Workflow,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -47,6 +48,7 @@ export function SettingsDialog({
   node,
   creating = false,
   parentBatchId,
+  parentParallel,
   name,
   description,
   definition,
@@ -73,6 +75,7 @@ export function SettingsDialog({
   node?: WorkflowNode;
   creating?: boolean;
   parentBatchId?: string;
+  parentParallel?: { parallelId: string; parallelBranchId: string };
   workflows: Workflow[];
   prompts?: import('@interlock/core').SavedPrompt[];
   onClose: () => void;
@@ -91,6 +94,7 @@ export function SettingsDialog({
             id: newNodeId,
             kind: 'agent',
             batchId: parentBatchId,
+            ...parentParallel,
             label: 'New agent',
             prompt: 'Describe the assignment.',
           })
@@ -113,12 +117,22 @@ export function SettingsDialog({
           id: newNodeId,
           kind,
           batchId: parentBatchId,
+          ...parentParallel,
           label:
             kind === 'switch'
               ? 'New branch'
               : kind === 'batch'
                 ? 'Batch'
-                : `New ${kind}`,
+                : kind === 'parallel'
+                  ? 'Parallel'
+                  : `New ${kind}`,
+          branches:
+            kind === 'parallel'
+              ? [
+                  { id: crypto.randomUUID(), key: 'branch-1' },
+                  { id: crypto.randomUUID(), key: 'branch-2' },
+                ]
+              : undefined,
           prompt: 'Describe the assignment.',
           url: '',
           language: 'javascript',
@@ -190,20 +204,28 @@ export function SettingsDialog({
         }
         if (creating)
           parsed.position = newNodePosition(settings.definition, parsed);
+        const start =
+          parsed.parallelId && parsed.parallelBranchId
+            ? {
+                source: parsed.parallelId,
+                port: parallelBranchPort(parsed.parallelBranchId),
+              }
+            : parsed.batchId
+              ? { source: parsed.batchId, port: 'item' }
+              : undefined;
         const nextDefinition = {
           ...settings.definition,
           edges:
             creating &&
-            parsed.batchId &&
+            start &&
             !settings.definition.edges.some(
-              (e) => e.source === parsed.batchId && e.port === 'item',
+              (e) => e.source === start.source && e.port === start.port,
             )
               ? [
                   ...settings.definition.edges,
                   {
                     id: crypto.randomUUID(),
-                    source: parsed.batchId,
-                    port: 'item' as const,
+                    ...start,
                     target: parsed.id,
                   },
                 ]
@@ -303,7 +325,10 @@ export function SettingsDialog({
                       <option value="input">External input</option>
                       <option value="switch">Branch</option>
                       <option value="workflow">Workflow</option>
-                      <option value="batch">Batch</option>
+                      {!parentParallel && <option value="batch">Batch</option>}
+                      {!parentParallel && !parentBatchId && (
+                        <option value="parallel">Parallel</option>
+                      )}
                     </NativeSelect>
                     {nodeDraft && (
                       <p className="hint">{nodeDescriptions[nodeDraft.kind]}</p>
@@ -454,7 +479,7 @@ export function SettingsDialog({
                     <TextInput
                       mb="md"
                       label="Maximum steps per run"
-                      description="Each Batch item has its own budget. Waiting uses one step, regardless of duration. Entry, Exit, and repeated visits count too."
+                      description="Parallel branch steps share this limit. Each Batch item has its own limit. Entry, Exit, and repeated visits count; waiting adds no steps."
                       type="number"
                       min={2}
                       max={1000}

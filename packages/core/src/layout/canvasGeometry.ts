@@ -8,6 +8,12 @@ import { bindingNodeIds } from './inputBindings.js';
 export const NODE_SIZE = { width: 220, height: 116 };
 export const BATCH_SIZE = { width: 520, height: 340 };
 export const BATCH_INSET = { left: 130, top: 160, right: 120, bottom: 60 };
+export const PARALLEL_INSET = { ...BATCH_INSET, left: 172 };
+export const parallelBranchTop = (index: number) => 218 + index * 196;
+export const parallelSize = (count: number) => ({
+  width: 560,
+  height: Math.max(340, parallelBranchTop(count - 1) + 124),
+});
 export const CANVAS_GAP = 80;
 export const bindingsHeight = (node: WorkflowNode) =>
   bindingNodeIds(node).length * 22;
@@ -19,6 +25,12 @@ export function canvasGeometry(
 ) {
   const index = new Map(definition.nodes.map((node) => [node.id, node]));
   const parentOf = (node: WorkflowNode) => {
+    if (node.parallelId) {
+      const owner = index.get(node.parallelId);
+      return owner?.kind === 'parallel' && !owner.parallelId && !owner.batchId
+        ? owner.id
+        : undefined;
+    }
     const seen = new Set([node.id]);
     let parent = node.batchId;
     while (parent) {
@@ -35,11 +47,13 @@ export function canvasGeometry(
     if (sizes.has(node.id)) return sizes.get(node.id)!;
     const bindings = bindingsHeight(node);
     const result =
-      node.kind !== 'batch'
+      node.kind !== 'batch' && node.kind !== 'parallel'
         ? { ...NODE_SIZE }
         : collapsed?.has(node.id)
           ? { width: 320, height: 116 }
-          : { ...BATCH_SIZE };
+          : node.kind === 'parallel'
+            ? parallelSize(node.branches.length)
+            : { ...BATCH_SIZE };
     result.height += bindings;
     if (node.kind === 'workflow' && node.mode === 'detached')
       result.height += 18;
@@ -53,7 +67,10 @@ export function canvasGeometry(
         result.height,
         32 * outgoingPorts(node).length + 24,
       );
-    if (node.kind === 'batch' && !collapsed?.has(node.id)) {
+    if (
+      (node.kind === 'batch' || node.kind === 'parallel') &&
+      !collapsed?.has(node.id)
+    ) {
       for (const child of definition.nodes.filter(
         (n) => parents.get(n.id) === node.id,
       )) {

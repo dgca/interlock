@@ -1,6 +1,13 @@
 import { graphlib, layout } from '@dagrejs/dagre';
 import type { WorkflowDefinition, WorkflowNode } from '../index.js';
-import { BATCH_INSET, CANVAS_GAP, canvasGeometry } from './canvasGeometry.js';
+import {
+  BATCH_INSET,
+  PARALLEL_INSET,
+  parallelBranchTop,
+  NODE_SIZE,
+  CANVAS_GAP,
+  canvasGeometry,
+} from './canvasGeometry.js';
 import { reduceCrossings } from './reduceCrossings.js';
 
 /** Lay out each Batch before its enclosing scope, using expanded bounds. */
@@ -9,10 +16,28 @@ export function tidyWorkflow(
 ): WorkflowDefinition {
   const result = structuredClone(definition);
   const { parents } = canvasGeometry(result);
-  const arrange = (parentId?: string) => {
-    const members = result.nodes.filter((n) => parents.get(n.id) === parentId);
-    for (const node of members) if (node.kind === 'batch') arrange(node.id);
-    if (!members.length) return;
+  const arrange = (
+    parentId?: string,
+    branchId?: string,
+    branchTop?: number,
+  ) => {
+    const members = result.nodes.filter(
+      (n) =>
+        parents.get(n.id) === parentId &&
+        (branchId === undefined || n.parallelBranchId === branchId),
+    );
+    for (const node of members) {
+      if (node.kind === 'batch') arrange(node.id);
+      if (node.kind === 'parallel') {
+        let top = PARALLEL_INSET.top;
+        for (const branch of node.branches)
+          top = Math.max(
+            top + 196,
+            arrange(node.id, branch.id, top) + CANVAS_GAP,
+          );
+      }
+    }
+    if (!members.length) return branchTop ?? 0;
     const { size } = canvasGeometry(result);
     // Dagre only supplies node positions. A single edge per directed pair avoids
     // its parallel-edge intersection failures; original routes remain untouched.
@@ -36,8 +61,12 @@ export function tidyWorkflow(
         graph.setEdge(edge.source, edge.target, {});
     }
     layout(graph);
-    const left = parentId ? BATCH_INSET.left : 60;
-    const top = parentId ? BATCH_INSET.top : 160;
+    const left = branchId
+      ? PARALLEL_INSET.left
+      : parentId
+        ? BATCH_INSET.left
+        : 60;
+    const top = branchTop ?? (parentId ? BATCH_INSET.top : 160);
     for (const node of members) {
       const placed = graph.node(node.id);
       node.position = {
@@ -46,6 +75,9 @@ export function tidyWorkflow(
       };
     }
     reduceCrossings(members, result.edges, size);
+    return Math.max(
+      ...members.map((node) => node.position.y + size(node).height),
+    );
   };
   arrange();
   return result;
@@ -61,12 +93,28 @@ export function newNodePosition(
     nodes: [...definition.nodes, node],
   });
   const parentId = geometry.parents.get(node.id);
+  const owner = parentId ? geometry.index.get(parentId) : undefined;
   const siblings = definition.nodes.filter(
     (n) => geometry.parents.get(n.id) === parentId,
   );
-  const position = parentId
-    ? { x: BATCH_INSET.left, y: BATCH_INSET.top }
-    : { x: 150, y: 360 };
+  const position =
+    owner?.kind === 'parallel'
+      ? {
+          x: PARALLEL_INSET.left,
+          y:
+            parallelBranchTop(
+              Math.max(
+                0,
+                owner.branches.findIndex(
+                  ({ id }) => id === node.parallelBranchId,
+                ),
+              ),
+            ) -
+            NODE_SIZE.height / 2,
+        }
+      : parentId
+        ? { x: BATCH_INSET.left, y: BATCH_INSET.top }
+        : { x: 150, y: 360 };
   const dimensions = geometry.size(node);
   let collision: WorkflowNode | undefined;
   do {
@@ -94,7 +142,8 @@ export function separateNodes(
   const { parents } = canvasGeometry(result);
   const separate = (parentId?: string) => {
     const members = result.nodes.filter((n) => parents.get(n.id) === parentId);
-    for (const node of members) if (node.kind === 'batch') separate(node.id);
+    for (const node of members)
+      if (node.kind === 'batch' || node.kind === 'parallel') separate(node.id);
     const { size } = canvasGeometry(result);
     members.sort(
       (a, b) => a.position.x - b.position.x || a.position.y - b.position.y,

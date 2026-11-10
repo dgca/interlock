@@ -1,0 +1,135 @@
+{
+  "name": "Parallel checks (demo)",
+  "description": "Run two independent checks on a list and join their named results.",
+  "definition": {
+    "inputSchema": {
+      "type": "object",
+      "required": ["checks"],
+      "properties": {
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "nodes": [
+      {
+        "id": "entry",
+        "kind": "entry",
+        "label": "Checks",
+        "position": {
+          "x": 40,
+          "y": 160
+        }
+      },
+      {
+        "id": "parallel",
+        "kind": "parallel",
+        "label": "Check the list",
+        "branches": [
+          {
+            "id": "count",
+            "key": "count"
+          },
+          {
+            "id": "test",
+            "key": "hasTests"
+          }
+        ],
+        "position": {
+          "x": 350,
+          "y": 160
+        },
+        "outputSchema": {
+          "type": "object",
+          "required": ["count", "hasTests"],
+          "properties": {
+            "count": {
+              "type": "integer"
+            },
+            "hasTests": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
+        "id": "count",
+        "kind": "script",
+        "label": "Count checks",
+        "language": "javascript",
+        "command": "return input.checks.length;",
+        "parallelId": "parallel",
+        "parallelBranchId": "count",
+        "position": {
+          "x": 172,
+          "y": 160
+        }
+      },
+      {
+        "id": "test",
+        "kind": "script",
+        "label": "Find test check",
+        "language": "javascript",
+        "command": "return input.checks.includes(\"test\");",
+        "parallelId": "parallel",
+        "parallelBranchId": "test",
+        "position": {
+          "x": 172,
+          "y": 356
+        }
+      },
+      {
+        "id": "exit",
+        "kind": "exit",
+        "label": "Check results",
+        "position": {
+          "x": 990,
+          "y": 160
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "input",
+        "source": "entry",
+        "target": "parallel",
+        "port": "default"
+      },
+      {
+        "id": "start-count",
+        "source": "parallel",
+        "target": "count",
+        "port": "branch:count"
+      },
+      {
+        "id": "start-test",
+        "source": "parallel",
+        "target": "test",
+        "port": "branch:test"
+      },
+      {
+        "id": "join-count",
+        "source": "count",
+        "target": "parallel",
+        "port": "default",
+        "targetHandle": "join"
+      },
+      {
+        "id": "join-test",
+        "source": "test",
+        "target": "parallel",
+        "port": "default",
+        "targetHandle": "join"
+      },
+      {
+        "id": "complete",
+        "source": "parallel",
+        "target": "exit",
+        "port": "complete"
+      }
+    ]
+  }
+}

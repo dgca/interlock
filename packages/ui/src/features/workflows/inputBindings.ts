@@ -1,4 +1,4 @@
-import type { WorkflowNode } from '@interlock/core';
+import { sameExecutionScope, type WorkflowNode } from '@interlock/core';
 
 export type InputBinding = NonNullable<WorkflowNode['inputBindings']>[string];
 
@@ -9,6 +9,6 @@ export function bindingNodes(node: WorkflowNode, nodes: WorkflowNode[]) {
     (candidate) =>
       candidate.kind !== 'entry' &&
       candidate.kind !== 'exit' &&
-      candidate.batchId === node.batchId,
+      sameExecutionScope(candidate, node),
   );
 }

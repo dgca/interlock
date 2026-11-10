@@ -71,6 +71,10 @@ export class RunVersions {
       const run = this.run(q.runId);
       if (!active(run.status))
         throw new InterlockError('Version policy requires an active run');
+      if (run.parallelBranch)
+        throw new InterlockError(
+          'Parallel branches retain the version of their invocation',
+        );
       if (run.comparison)
         throw new InterlockError(
           'Workflow comparisons keep their selected versions',
@@ -102,6 +106,8 @@ export class RunVersions {
       if (blockers.length < 32) blockers.push(reason.slice(0, 1000));
     };
     if (!active(run.status)) add('Only active runs can move versions');
+    if (run.parallelBranch)
+      add('Parallel branches retain the version of their invocation');
     if (run.comparison)
       add('Workflow comparisons keep their selected versions');
     if (version <= run.version) add('Select a newer published version');
@@ -114,13 +120,21 @@ export class RunVersions {
       );
     let snapshots = run.promptSnapshots;
     if (target && current) {
-      if (run.executions.length >= target.definition.maxSteps)
+      if (
+        run.executions.length + (run.parallelSteps ?? 0) >=
+        target.definition.maxSteps
+      )
         add('Target step limit would reject the next execution');
       const node = target.definition.nodes.find((n) => n.id === run.cursor);
       if (!node) add(`Next node ${run.cursor} is missing from target version`);
       else {
         if (node.batchId !== run.batchNodeId)
           add('Next node belongs to a different Batch scope');
+        if (
+          node.parallelId !== run.parallelBranch?.nodeId ||
+          node.parallelBranchId !== run.parallelBranch?.id
+        )
+          add('Next node belongs to a different Parallel scope');
         if (
           run.batchNodeId &&
           !target.definition.nodes.some(

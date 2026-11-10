@@ -26,6 +26,7 @@ import {
 import {
   nodeKindLabel,
   outgoingPorts,
+  parallelBranchPort,
   hasFailureRoute,
   hasTimeoutRoute,
   STARTED_RUN_SCHEMA,
@@ -34,7 +35,7 @@ import {
 import styles from './WorkflowEditor.module.css';
 import { formatDuration } from './DurationInput';
 import { conditionColors } from './conditionColors';
-import { outputPortTop } from '@interlock/core/layout';
+import { outputPortTop, parallelBranchTop } from '@interlock/core/layout';
 export type CanvasNode = Node<{
   node: WorkflowNode;
   status?: string;
@@ -55,6 +56,7 @@ export type CanvasNode = Node<{
   targetName?: string;
   ownedTarget?: boolean;
   onAdd?: () => void;
+  onAddBranch?: (branchId: string) => void;
   onToggle?: () => void;
   collapsed?: boolean;
   /** `source:<port>` / `target:<handle>` keys of ports whose edge is selected or highlighted. */
@@ -71,6 +73,7 @@ const icons = {
   condition: Split,
   switch: Split,
   batch: Layers,
+  parallel: Split,
   workflow: Workflow,
 };
 function contractLabel(schema: WorkflowNode['inputSchema']): string {
@@ -171,7 +174,7 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
   const portsKey = JSON.stringify(outgoingPorts(n));
   useEffect(() => {
     updateNodeInternals(n.id);
-  }, [n.id, portsKey, updateNodeInternals]);
+  }, [n.id, portsKey, data.collapsed, updateNodeInternals]);
   const boundary = data.boundarySchema ?? {};
   const inputSchema = n.inputSchema.type
     ? n.inputSchema
@@ -190,7 +193,7 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
           ? boundary
           : n.kind === 'batch'
             ? { type: 'array' }
-            : n.kind === 'fetch'
+            : n.kind === 'fetch' || n.kind === 'parallel'
               ? { type: 'object' }
               : n.kind === 'condition' ||
                   n.kind === 'switch' ||
@@ -279,13 +282,13 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
       )}
     </div>
   );
-  if (n.kind === 'batch')
+  if (n.kind === 'batch' || n.kind === 'parallel')
     return (
       <div
         className={`${styles.batchGroup} ${progressClass} ${selected ? styles.nodeSelected : ''}`}
       >
         <div className={`${styles.batchHeader} batch-drag`}>
-          <Layers size={17} />
+          <Icon size={17} />
           <strong>{n.label}</strong>
           {data.status && <span>{data.status}</span>}
           {data.onEdit && (
@@ -303,45 +306,101 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
           <div className={styles.nodeMetadata}>
             {progress}
             <small>
-              Each item runs independently · Up to {n.concurrency} at once
+              {n.kind === 'batch'
+                ? `Each item runs independently · Up to ${n.concurrency} at once`
+                : `${n.branches.length} branches${n.concurrency < n.branches.length ? ` · Up to ${n.concurrency} at once` : ''}`}
             </small>
             <small>{contracts}</small>
           </div>
-          {data.onAdd && !data.collapsed && (
+          {n.kind === 'batch' && data.onAdd && !data.collapsed && (
             <button className="nodrag nopan" onClick={data.onAdd}>
               Add step
             </button>
           )}
         </div>
         {bindings}
-        {!data.collapsed && <span className={styles.batchStart}>Start</span>}
         <Port type="target" id="default" label="In" top={32} />
         <Port type="source" id="complete" label="Out" top={32} />
-        <Handle
-          type="source"
-          position={Position.Right}
-          id="item"
-          style={{
-            left: 32,
-            right: 'auto',
-            top: 218,
-            visibility: data.collapsed ? 'hidden' : 'visible',
-          }}
-          aria-label="Start"
-        />
-        {!data.collapsed && <span className={styles.batchEnd}>End</span>}
-        <Handle
-          type="target"
-          position={Position.Left}
-          id="end"
-          aria-label="End"
-          style={{
-            left: 'auto',
-            right: 32,
-            top: 218,
-            visibility: data.collapsed ? 'hidden' : 'visible',
-          }}
-        />
+        {n.kind === 'parallel' ? (
+          <>
+            {n.branches.map(({ id, key }, index) => {
+              const label = key.trim() || `Branch ${index + 1}`;
+              const top = parallelBranchTop(index);
+              return (
+                <div key={id} hidden={data.collapsed}>
+                  <div
+                    className={styles.parallelStart}
+                    style={{ top: top - 31 }}
+                  >
+                    <strong title={label}>{label}</strong>
+                    {data.onAddBranch && (
+                      <button
+                        className="nodrag nopan"
+                        aria-label={`Add step to ${label}`}
+                        onClick={() => data.onAddBranch?.(id)}
+                      >
+                        Add step
+                      </button>
+                    )}
+                  </div>
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={parallelBranchPort(id)}
+                    aria-label={`Start ${label}`}
+                    style={{ left: 135, right: 'auto', top }}
+                  />
+                </div>
+              );
+            })}
+            <span className={styles.batchEnd} hidden={data.collapsed}>
+              Join
+            </span>
+            <Handle
+              type="target"
+              position={Position.Left}
+              id="join"
+              aria-label="Join"
+              style={{
+                left: 'auto',
+                right: 32,
+                top: 218,
+                visibility: data.collapsed ? 'hidden' : 'visible',
+              }}
+            />
+          </>
+        ) : (
+          <>
+            {!data.collapsed && (
+              <span className={styles.batchStart}>Start</span>
+            )}
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="item"
+              style={{
+                left: 32,
+                right: 'auto',
+                top: 218,
+                visibility: data.collapsed ? 'hidden' : 'visible',
+              }}
+              aria-label="Start"
+            />
+            {!data.collapsed && <span className={styles.batchEnd}>End</span>}
+            <Handle
+              type="target"
+              position={Position.Left}
+              id="end"
+              aria-label="End"
+              style={{
+                left: 'auto',
+                right: 32,
+                top: 218,
+                visibility: data.collapsed ? 'hidden' : 'visible',
+              }}
+            />
+          </>
+        )}
       </div>
     );
   return (

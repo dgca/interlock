@@ -3,6 +3,7 @@ import {
   outgoingPorts,
   type WorkflowDefinition,
 } from './index.js';
+import { isParallelEdge } from './parallel.js';
 
 /** Membership is explicit. Positions and React Flow grouping never determine execution. */
 export function validateBatchScopes(
@@ -46,6 +47,7 @@ export function validateBatchScopes(
       );
     if (target.kind === 'entry')
       throw new InterlockError('Edges cannot target the entry');
+    if (isParallelEdge(source, target, edge.port, edge.targetHandle)) continue;
     const startsItem = source.kind === 'batch' && edge.port === 'item';
     const scope = startsItem ? source.id : source.batchId;
     if (startsItem && edge.targetHandle === 'end')

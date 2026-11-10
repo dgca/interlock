@@ -9,7 +9,7 @@ const currentStep = "json_extract(r.value, '$.executions[#-1].kind')";
 
 type SummaryRow = {
   [Key in keyof RunSummary]-?: Key extends
-    'comparison' | 'externalTask' | 'tags'
+    'comparison' | 'externalTask' | 'tags' | 'parallelBranch'
     ? string | null
     : undefined extends RunSummary[Key]
       ? Exclude<RunSummary[Key], undefined> | null
@@ -41,7 +41,7 @@ export function runSummaries(
     filters.push(
       query.workflowId === undefined
         ? "(json_extract(r.value, '$.parentRunId') IS NULL OR json_extract(r.value, '$.parentMode') = 'detached')"
-        : "json_extract(r.value, '$.batchNodeId') IS NULL",
+        : "json_extract(r.value, '$.batchNodeId') IS NULL AND json_extract(r.value, '$.parallelBranch') IS NULL",
     );
   const scope = filters.join(' AND ');
   const withAttention =
@@ -80,6 +80,7 @@ export function runSummaries(
       json_extract(r.value, '$.parentRunId') AS parentRunId,
       json_extract(r.value, '$.parentMode') AS parentMode,
       json_extract(r.value, '$.parentExecutionId') AS parentExecutionId,
+      json_extract(r.value, '$.parallelBranch') AS parallelBranch,
       json_extract(r.value, '$.comparison') AS comparison,
       json_extract(r.value, '$.externalTask') AS externalTask,
       json_extract(r.value, '$.tags') AS tags,
@@ -97,6 +98,7 @@ export function runSummaries(
           WHEN 'wait' THEN 'timer'
           WHEN 'workflow' THEN 'child'
           WHEN 'batch' THEN 'child'
+          WHEN 'parallel' THEN 'child'
           WHEN 'agent' THEN (
             SELECT CASE json_extract(w.value, '$.status')
               WHEN 'held' THEN 'held'
@@ -123,6 +125,7 @@ export function runSummaries(
       parentRunId,
       parentMode,
       parentExecutionId,
+      parallelBranch,
       parentWorkflowName,
       comparison,
       externalTask,
@@ -135,6 +138,9 @@ export function runSummaries(
       ...(parentRunId === null ? {} : { parentRunId }),
       ...(parentMode === null ? {} : { parentMode }),
       ...(parentExecutionId === null ? {} : { parentExecutionId }),
+      ...(parallelBranch === null
+        ? {}
+        : { parallelBranch: JSON.parse(parallelBranch) }),
       ...(parentWorkflowName === null ? {} : { parentWorkflowName }),
       ...(waitReason === null ? {} : { waitReason }),
       ...(comparison === null ? {} : { comparison: JSON.parse(comparison) }),

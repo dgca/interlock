@@ -46,6 +46,7 @@ import {
   validateDefinition,
   applyWorkflowPositions,
   sameWorkflowContent,
+  parallelConnectionError,
   type Workflow,
   type WorkflowNode,
   type WorkflowEdge,
@@ -199,6 +200,7 @@ export function WorkflowEditor({
     node?: WorkflowNode;
     creating?: boolean;
     batchId?: string;
+    parallel?: { parallelId: string; parallelBranchId: string };
   }>();
   const graphError = useMemo(() => {
     try {
@@ -414,6 +416,11 @@ export function WorkflowEditor({
         onOpenWorkflow,
         workflows,
         onAdd: (batchId) => setEditing({ creating: true, batchId }),
+        onAddBranch: (parallelId, parallelBranchId) =>
+          setEditing({
+            creating: true,
+            parallel: { parallelId, parallelBranchId },
+          }),
         onToggle: (id) =>
           setCollapsed((current) => {
             const next = new Set(current);
@@ -1057,6 +1064,13 @@ export function WorkflowEditor({
                       source.kind !== 'exit' &&
                       target &&
                       target.kind !== 'entry' &&
+                      !parallelConnectionError(
+                        source,
+                        target,
+                        c.sourceHandle ?? 'default',
+                        (c.targetHandle ??
+                          'default') as WorkflowEdge['targetHandle'],
+                      ) &&
                       !(
                         source.kind === 'batch' &&
                         c.sourceHandle === 'item' &&
@@ -1243,6 +1257,7 @@ export function WorkflowEditor({
           node={editing.node}
           creating={editing.creating}
           parentBatchId={editing.batchId}
+          parentParallel={editing.parallel}
           name={name}
           description={description}
           definition={draft}

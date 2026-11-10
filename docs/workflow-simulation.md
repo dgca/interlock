@@ -83,6 +83,6 @@ Use `{"action":"list","workflowId":"WORKFLOW_ID"}` for paginated summaries, or `
 
 ## Supported scope and bounds
 
-Simulation supports graphs with Entry, Exit, Agent, Script, Fetch, Condition, Switch, Wait (both fixed duration and polling checks), and waited child Workflow invocations. It rejects detached Workflow calls (`mode: "detached"`), Batch nodes, and continue-as-new Exits before executing anything, even if an unsupported node would not be visited. It never falls back to live execution. Use ordinary testbench comparisons to test those behaviors.
+Simulation supports graphs with Entry, Exit, Agent, Script, Fetch, Condition, Switch, Wait (both fixed duration and polling checks), and waited child Workflow invocations. It rejects detached Workflow calls (`mode: "detached"`), Batch and Parallel nodes, and continue-as-new Exits before executing anything, even if an unsupported node would not be visited. It never falls back to live execution. Use ordinary testbench comparisons to test those behaviors.
 
 The published `maxSteps` limit applies, with its existing maximum of 1,000. Each case permits at most 1,000 fixtures within the existing 1 MiB suite limit. Input remains limited to 64 KiB. Current saved prompts are limited to 64 entries and 1 MiB. At most four simulations may be active, and each simulation has a 10,000-turn driver limit. Synthetic capabilities and sessions satisfy claims internally; simulations do not test whether a real executor meets those requirements. No UI suite editor or simulation dashboard is included.

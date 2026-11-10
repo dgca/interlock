@@ -9,6 +9,7 @@ import {
 } from './index.js';
 import type { Contract } from './contracts.js';
 import { STARTED_RUN_SCHEMA } from './workflowMode.js';
+import { sameExecutionScope } from './parallel.js';
 
 export type InputHint = {
   schema: Contract;
@@ -93,7 +94,10 @@ export function nodeInputHint(
 
   const incoming = (target: WorkflowNode): InputHint => {
     const edges = definition.edges.filter(
-      (edge) => edge.target === target.id && edge.targetHandle !== 'end',
+      (edge) =>
+        edge.target === target.id &&
+        edge.targetHandle !== 'end' &&
+        edge.targetHandle !== 'join',
     );
     if (!edges.length) return { schema: {}, source: '', inferred: true };
     const candidates = edges.map((edge) => {
@@ -164,7 +168,7 @@ export function nodeInputHint(
         const referenced = nodes.get(binding.nodeId);
         if (
           referenced &&
-          referenced.batchId === target.batchId &&
+          sameExecutionScope(referenced, target) &&
           !hasTimeoutRoute(referenced)
         )
           source = output(referenced, 'default');
@@ -172,6 +176,8 @@ export function nodeInputHint(
       return contractAtPath(source, binding.path);
     });
   const output = (source: WorkflowNode, port: string): Contract => {
+    if (source.kind === 'parallel' && port.startsWith('branch:'))
+      return input(source).schema;
     if (hasFailureRoute(source) && port === 'failed')
       return failureRouteContract(source.kind);
     if (hasTimeoutRoute(source) && port === 'timeout')
@@ -208,6 +214,7 @@ export function nodeInputHint(
     )
       return input(source).schema;
     if (source.kind === 'batch') return { type: 'array' };
+    if (source.kind === 'parallel') return { type: 'object' };
     return {};
   };
 

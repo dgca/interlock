@@ -252,6 +252,10 @@ export class Simulations {
         return [
           `Node ${node.id}: continue as new is unsupported in simulation`,
         ];
+      if (node.kind === 'parallel')
+        return [
+          `Node ${node.id}: Parallel is unsupported in fixture simulation; use an ordinary run or live comparison`,
+        ];
       if (
         ![
           'entry',

@@ -20,6 +20,7 @@ export class RunAdmission {
   ) {
     if (
       run.batchNodeId ||
+      run.parallelBranch ||
       (!definition.maxActiveRuns &&
         !options.after?.length &&
         !(run.schedule?.waitForPrevious && run.schedule.previousRunIds.length))

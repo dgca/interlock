@@ -117,6 +117,16 @@ A collected status is `completed`, `failed`, or `cancelled`. `output` is the ite
 
 For `collect`, downstream nodes read each record's `.output` after checking `.status`. For `all`, they read each array element directly. Both policies emit `[]` for an empty input array. The Batch output contract validates the whole emitted array.
 
+### Parallel groups
+
+A Parallel group owns a fixed list of branch identities and result keys. Members declare `parallelId` and `parallelBranchId`. Each `branch:<id>` source port enters its own path, and `targetHandle: "join"` returns to the group. Publication checks membership, reachable members, return boundaries, and cycles. Outer workflow routes can revisit the group. Parallel and Batch cannot be nested together inline.
+
+Each group execution starts ordinary child runs on its captured version. The parent stores child links in branch order, and each child stores its branch identity and exact parent execution ID. Branches inherit the parent prompt, variable, and model-alias captures. Session bindings and node/execution bindings remain local to each branch. `runInput` retains the owning workflow's original input. Group inputs carry data needed from upstream steps.
+
+Branch runs share workflow admission. Each new branch step charges the owning run's `maxSteps` in the same transaction as its execution record. The group itself counts once, and Join has no separate step. Called workflows retain their limits. Budget scopes and detached boundaries apply as for ordinary descendants.
+
+The group validates and forwards a named result object only after every branch succeeds. On failure, the runtime cancels unfinished waited branches. Retry uses the existing invocation and keeps completed branch outputs. Uncertain external work requires stop confirmation before retry. Briefings expose bounded `parallels` counts and named branch references in descendants. See [authoring and recovery](parallel.md).
+
 ## Agent work
 
 Optional node input bindings select incoming data or original persisted workflow, root, and Batch item inputs, the latest completed output of a node in the current run (`source: "node"`), or engine-verified execution provenance (`source: "execution"`), before input validation. Both `node` and `execution` bindings can set `sourceDefault` for absent completed executions and `default` for a missing path within an available execution. Resolved inputs appear in execution history. See [input bindings](agent-workflows.md#bind-original-input-into-later-steps) for scope and retry semantics.

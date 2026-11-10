@@ -22,6 +22,7 @@ type Options = {
   hovered?: string;
   onEdit?: (node: WorkflowNode) => void;
   onAdd?: (batchId: string) => void;
+  onAddBranch?: (parallelId: string, branchId: string) => void;
   onToggle?: (batchId: string) => void;
   onFocusNode?: (nodeId: string) => void;
   status?: (nodeId: string) => string | undefined;
@@ -61,7 +62,10 @@ export function canvasGraph(
     (index.get(edge.source)?.kind === 'batch' &&
       edge.port === 'item' &&
       Boolean(options.collapsed?.has(edge.source))) ||
-    (edge.targetHandle === 'end' &&
+    (index.get(edge.source)?.kind === 'parallel' &&
+      edge.port !== 'complete' &&
+      Boolean(options.collapsed?.has(edge.source))) ||
+    ((edge.targetHandle === 'end' || edge.targetHandle === 'join') &&
       Boolean(options.collapsed?.has(edge.target)));
   const selectedVisibleEdges = definition.edges.filter(
     (edge) =>
@@ -130,7 +134,10 @@ export function canvasGraph(
     parentId: parents.get(node.id),
     // Add step assigns membership; dragging across a border never changes it.
     extent: parents.get(node.id) ? 'parent' : undefined,
-    dragHandle: node.kind === 'batch' ? '.batch-drag' : undefined,
+    dragHandle:
+      node.kind === 'batch' || node.kind === 'parallel'
+        ? '.batch-drag'
+        : undefined,
     ...size(node),
     style: size(node),
     hidden: hiddenIds.has(node.id),
@@ -192,10 +199,14 @@ export function canvasGraph(
       onEdit:
         options.onEdit &&
         (node.kind === 'batch' ||
+          node.kind === 'parallel' ||
           !(options.selected instanceof Set && options.selected.size > 1))
           ? () => options.onEdit!(node)
           : undefined,
       onAdd: options.onAdd ? () => options.onAdd!(node.id) : undefined,
+      onAddBranch: options.onAddBranch
+        ? (branchId) => options.onAddBranch!(node.id, branchId)
+        : undefined,
       onToggle: options.onToggle ? () => options.onToggle!(node.id) : undefined,
     },
   }));
@@ -341,7 +352,10 @@ export function canvasGraph(
     );
   };
   const targetY = (node: WorkflowNode) =>
-    box(node).top + (node.kind === 'batch' ? 32 : size(node).height / 2);
+    box(node).top +
+    (node.kind === 'batch' || node.kind === 'parallel'
+      ? 32
+      : size(node).height / 2);
   type Point = { x: number; y: number };
   const hits = (points: Point[], skip: Set<string>) => {
     const hit = new Set<WorkflowNode>();
@@ -399,6 +413,7 @@ export function canvasGraph(
       hiddenEdge(edge) ||
       lane.has(edge.id) ||
       edge.targetHandle === 'end' ||
+      edge.targetHandle === 'join' ||
       parents.get(source.id) ||
       parents.get(target.id)
     )
@@ -554,7 +569,11 @@ export function withoutNodes(
   while (changed) {
     changed = false;
     for (const node of definition.nodes)
-      if (node.batchId && removed.has(node.batchId) && !removed.has(node.id)) {
+      if (
+        ((node.batchId && removed.has(node.batchId)) ||
+          (node.parallelId && removed.has(node.parallelId))) &&
+        !removed.has(node.id)
+      ) {
         removed.add(node.id);
         changed = true;
       }

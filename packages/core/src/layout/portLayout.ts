@@ -11,6 +11,7 @@ export function outputPortTop(
   port: string,
 ): number | string {
   if (node.kind === 'batch') return port === 'item' ? 218 : 32;
+  if (node.kind === 'parallel' && port === 'complete') return 32;
   if (node.kind === 'switch' || node.routing) {
     const ports = [...new Set(outgoingPorts(node))].filter((name) =>
       name.trim(),

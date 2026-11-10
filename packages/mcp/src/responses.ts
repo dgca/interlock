@@ -139,7 +139,7 @@ export const authoringDetailSchema = z
   .enum(['full', 'summary'])
   .default('full')
   .describe(
-    'Use summary for an acknowledgment with id, draftRevision, latestVersion, draftMatchesLatest and archived, without a definition. full (default) returns the workflow record and draft. Read get_workflow when you need the full definition.',
+    'summary returns id, draftRevision, latestVersion, draftMatchesLatest and archived. full (default) includes the draft.',
   );
 export const authoringResponseSchema = z
   .object({
