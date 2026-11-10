@@ -384,7 +384,7 @@ it('keeps the editor usable when an incomplete timezone has existing preview tim
     'true',
   );
 });
-it('retains a successful enable acknowledgment when its follow-up read fails', async () => {
+it('retains the saved enabled state and refresh error without an enable-success banner', async () => {
   await render('/automations/t');
   rpc.manage.mockResolvedValueOnce({
     applied: true,
@@ -392,7 +392,7 @@ it('retains a successful enable acknowledgment when its follow-up read fails', a
   });
   rpc.inspect.mockRejectedValueOnce(new Error('Read failed after write'));
   await act(async () => field('Enabled').click());
-  expect(document.body.textContent).toContain('Automation enabled.');
+  expect(document.body.textContent).not.toContain('Automation enabled.');
   expect(document.body.textContent).toContain('Read failed after write');
   expect(field('Enabled').checked).toBe(true);
   expect(field('Enabled').disabled).toBe(true);
@@ -665,6 +665,13 @@ it('keeps the Enabled switch at the saved value while enabling and after rejecti
   expect(field('Enabled').checked).toBe(false);
   expect(field('Enabled').disabled).toBe(false);
   expect(document.body.textContent).toContain('Revision changed');
+  const saved = { ...trigger(), enabled: true, revision: 5 };
+  rpc.manage.mockResolvedValueOnce({ applied: true, trigger: saved });
+  rpc.inspect.mockResolvedValueOnce(inspection(saved));
+  await act(async () => field('Enabled').click());
+  expect(field('Enabled').checked).toBe(true);
+  expect(document.body.textContent).not.toContain('Automation enabled.');
+  expect(document.body.textContent).not.toContain('Revision changed');
 });
 
 it('confirms switch-off even when the workflow cannot be enabled, and preserves state on cancel or failure', async () => {
@@ -709,6 +716,9 @@ it('confirms switch-off even when the workflow cannot be enabled, and preserves 
   expect(field('Enabled').checked).toBe(false);
   expect(field('Enabled').disabled).toBe(true);
   expect(document.querySelector('[role=dialog]')).toBeNull();
+  expect(document.body.textContent).toContain(
+    'Automation disabled. Existing runs continue.',
+  );
 });
 
 it('keeps an auto-paused automation enabled and resumes through its warning action', async () => {
@@ -742,6 +752,7 @@ it('keeps an auto-paused automation enabled and resumes through its warning acti
   });
   expect(field('Enabled').checked).toBe(true);
   expect(document.body.textContent).not.toContain('Resume automation');
+  expect(document.body.textContent).not.toContain('Automation enabled.');
   expect(document.activeElement).toBe(field('Enabled'));
 });
 

@@ -121,7 +121,7 @@ export function AutomationDetail({ id }: { id: string }) {
       );
       setNotice(
         action === 'enable'
-          ? 'Automation enabled.'
+          ? ''
           : 'Automation disabled. Existing runs continue.',
       );
       setReload((n) => n + 1);
