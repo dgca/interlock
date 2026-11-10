@@ -1,6 +1,6 @@
-import { LoadingSkeleton, Placeholder } from '../../design-system';
+import { Anchor, LoadingSkeleton, Placeholder } from '../../design-system';
 
-import type { ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ChevronRight, GitBranch } from 'lucide-react';
 
@@ -29,6 +29,47 @@ export function WorkflowCard({
   onOpen,
   disabled,
 }: CardProps) {
+  const paragraph = useRef<HTMLParagraphElement>(null);
+  const disclosure = useRef<HTMLButtonElement>(null);
+  const navigation = useRef<HTMLAnchorElement | HTMLButtonElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const descriptionId = useId();
+  const [truncated, setTruncated] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    const element = paragraph.current;
+    if (!element) {
+      setTruncated(false);
+      setExpanded(false);
+      return;
+    }
+    if (expanded) return;
+    let current = true;
+    const measure = () => {
+      if (!current || element.dataset.expanded === 'true') return;
+      const overflows = element.scrollHeight > element.clientHeight + 1;
+      if (!overflows && document.activeElement === disclosure.current) {
+        const target = navigation.current;
+        if (target instanceof HTMLButtonElement && target.disabled)
+          heading.current?.focus();
+        else target?.focus();
+      }
+      setTruncated(overflows);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    const fonts = document.fonts;
+    void fonts?.ready.then(measure);
+    fonts?.addEventListener('loadingdone', measure);
+    return () => {
+      current = false;
+      observer.disconnect();
+      fonts?.removeEventListener('loadingdone', measure);
+    };
+  }, [description, expanded]);
+
   return (
     <article
       className={classes.card}
@@ -42,9 +83,15 @@ export function WorkflowCard({
         <div className={classes.actions}>{actions}</div>
       </div>
       <div className={classes.body}>
-        <h2>
+        <h2 ref={heading} tabIndex={-1}>
           {to !== undefined ? (
-            <Link className={classes.link} to={to}>
+            <Link
+              className={classes.link}
+              to={to}
+              ref={(element) => {
+                navigation.current = element;
+              }}
+            >
               {name}
             </Link>
           ) : (
@@ -53,13 +100,40 @@ export function WorkflowCard({
               className={classes.link}
               onClick={onOpen}
               disabled={disabled}
+              ref={(element) => {
+                navigation.current = element;
+              }}
               aria-label={`Open ${name}`}
             >
               {name}
             </button>
           )}
         </h2>
-        {description && <p>{description}</p>}
+        {description && (
+          <p
+            id={descriptionId}
+            ref={paragraph}
+            className={classes.description}
+            data-expanded={expanded || undefined}
+          >
+            {description}
+          </p>
+        )}
+        {description && (expanded || truncated) && (
+          <Anchor
+            component="button"
+            type="button"
+            size="sm"
+            ref={disclosure}
+            className={classes.disclosure}
+            aria-expanded={expanded}
+            aria-controls={descriptionId}
+            aria-label={`${expanded ? 'Show Less' : 'Show More'} about ${name}`}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? 'Show Less' : 'Show More'}
+          </Anchor>
+        )}
       </div>
       <div className={classes.footer}>
         <span>{metadata}</span>

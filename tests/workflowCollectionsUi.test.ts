@@ -98,6 +98,12 @@ it('keeps child workflows out of library results and switches archive scope whil
   await render(
     h(WorkflowLibrary, { workflows, onOpen: vi.fn(), act: perform }),
   );
+  expect(
+    container.querySelector('header input[aria-label="Search workflows"]'),
+  ).not.toBeNull();
+  expect(
+    [...container.querySelectorAll('header button')].at(-1)?.textContent,
+  ).toContain('New workflow');
   expect(container.querySelectorAll('article')).toHaveLength(1);
   expect(container.textContent).toContain('Parent workflow');
   expect(container.textContent).not.toContain('Active helper');

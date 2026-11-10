@@ -1,6 +1,12 @@
 import type { ListTableColumn } from '../../components/ListTable/ListTable';
 import type { RunTab } from './runAttention';
 
+export type RunMode = 'list' | 'overview';
+
+export function runMode(value: string | null): RunMode {
+  return value === 'overview' ? 'overview' : 'list';
+}
+
 export const runViews: { value: RunTab; label: string }[] = [
   { value: 'active', label: 'Active' },
   { value: 'attention', label: 'Needs attention' },

@@ -4,7 +4,6 @@ import {
   LoadingSkeleton,
   Placeholder,
   PageHeader,
-  PageToolbar,
   workspacePage,
 } from '../../design-system';
 
@@ -48,10 +47,16 @@ export function VariableRowsSkeleton() {
 export function VariableLibrarySkeleton() {
   return (
     <section className={workspacePage.page}>
-      <PageHeader title="Variables" />
-      <PageToolbar summary={<Placeholder w={65} h={10} />}>
-        <Placeholder w={220} h={36} />
-      </PageToolbar>
+      <PageHeader
+        title="Variables"
+        subtitle={<Placeholder w={65} h={10} />}
+        controls={
+          <div className={workspacePage.search}>
+            <Placeholder h={40} />
+          </div>
+        }
+        actions={<Placeholder h={40} w={142} />}
+      />
       <div className={workspacePage.content}>
         <VariableRowsSkeleton />
       </div>

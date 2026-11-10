@@ -1,4 +1,13 @@
-import { Group, Stack, LoadingSkeleton, Placeholder } from '../design-system';
+import {
+  Center,
+  Loader,
+  Stack,
+  Placeholder,
+  PageTabsSkeleton,
+  VisuallyHidden,
+  workspacePage,
+} from '../design-system';
+import { useSearchParams } from 'react-router';
 
 import {
   PromptEditorSkeleton,
@@ -13,30 +22,49 @@ export function RouteSkeleton({ subject }: { subject: LoadingSubject }) {
   if (subject === 'workflows') return <WorkflowLibrarySkeleton />;
   if (subject === 'prompts') return <PromptLibrarySkeleton />;
   if (subject === 'prompt') return <PromptEditorSkeleton />;
+  return <WorkflowLoading />;
+}
+
+function WorkflowLoading() {
+  const [search] = useSearchParams();
+  const view = search.get('view');
+  const section = view === 'runs' || view === 'children' ? view : 'editor';
   return (
-    <LoadingSkeleton label={`Loading ${subject}…`} className={editor.editor}>
-      <header className={editor.header}>
-        <Placeholder h={28} w={32} />
-        <Stack gap={6} w="min(45%, 240px)">
-          <Placeholder h={16} />
-          <Placeholder h={10} w="62%" />
-        </Stack>
-      </header>
-      <Group className={editor.subnav} pb="sm">
-        <Placeholder h={23} w={54} />
-        <Placeholder h={23} w={54} />
-        <Placeholder h={23} w={88} />
-      </Group>
-      <div className={editor.canvasWrap}>
-        <Group p="md">
-          <Placeholder h={32} w={105} />
-          <Placeholder h={32} w={82} />
-        </Group>
-        <Group justify="center" gap="md" p="lg" mt="xl">
-          <Placeholder h={82} w="min(36%, 160px)" />
-          <Placeholder h={82} w="min(36%, 160px)" />
-        </Group>
-      </div>
-    </LoadingSkeleton>
+    <>
+      <VisuallyHidden role="status">Loading workflow…</VisuallyHidden>
+      <section className={editor.editor} aria-busy="true" aria-hidden="true">
+        <header className={workspacePage.header}>
+          <div className={workspacePage.headerHeading}>
+            <Placeholder h={40} w={40} />
+            <Stack gap={6} w="min(45%, 240px)">
+              <Placeholder h={28} />
+              <Placeholder h={12} w="62%" />
+            </Stack>
+          </div>
+        </header>
+        <div
+          className={editor.sections}
+          data-canvas-section={section === 'editor' || undefined}
+        >
+          <PageTabsSkeleton
+            items={[
+              { value: 'editor', label: 'Editor' },
+              { value: 'runs', label: 'Runs' },
+              { value: 'children', label: 'Child workflows' },
+            ]}
+            value={section}
+            showCounts={false}
+          />
+          <Center
+            className={
+              section === 'editor' ? editor.canvasWrap : workspacePage.content
+            }
+            mih={0}
+          >
+            <Loader />
+          </Center>
+        </div>
+      </section>
+    </>
   );
 }

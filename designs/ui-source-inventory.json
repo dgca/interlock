@@ -1,6 +1,6 @@
 {
   "scope": "UI source inventory; not a runtime or accessibility audit. Refreshed during the v2 migration.",
-  "tsxFileCount": 96,
+  "tsxFileCount": 98,
   "tsxFiles": [
     {
       "file": "packages/ui/src/App.tsx",
@@ -258,8 +258,9 @@
       "file": "packages/ui/src/components/WorkflowCards/WorkflowCards.tsx",
       "exports": ["WorkflowCard", "WorkflowCardsSkeleton", "WorkflowGrid"],
       "mantineImports": [],
-      "designSystemImports": [["LoadingSkeleton", "Placeholder"]],
+      "designSystemImports": [["Anchor", "LoadingSkeleton", "Placeholder"]],
       "jsxElements": [
+        "Anchor",
         "ChevronRight",
         "GitBranch",
         "Link",
@@ -302,10 +303,27 @@
     },
     {
       "file": "packages/ui/src/design-system/CodeEditor/CodeEditor.tsx",
-      "exports": ["CodeEditor"],
+      "exports": ["CodeEditor", "EditorProps"],
       "mantineImports": [],
       "designSystemImports": [],
-      "jsxElements": ["Editor", "div", "label", "span"],
+      "jsxElements": [
+        "HighlightedEditor",
+        "Suspense",
+        "div",
+        "label",
+        "span",
+        "textarea"
+      ],
+      "nativePatterns": {
+        "textarea": 1
+      }
+    },
+    {
+      "file": "packages/ui/src/design-system/CodeEditor/HighlightedEditor.tsx",
+      "exports": ["HighlightedEditor"],
+      "mantineImports": [],
+      "designSystemImports": [],
+      "jsxElements": ["Editor"],
       "nativePatterns": {}
     },
     {
@@ -1099,7 +1117,6 @@
           "LoadingSkeleton",
           "Placeholder",
           "PageHeader",
-          "PageToolbar",
           "workspacePage"
         ]
       ],
@@ -1108,7 +1125,6 @@
         "ListTableSkeleton",
         "LoadingSkeleton",
         "PageHeader",
-        "PageToolbar",
         "Placeholder",
         "Stack",
         "div",
@@ -1135,7 +1151,6 @@
           "EmptyState",
           "ActionError",
           "PageHeader",
-          "PageToolbar",
           "workspacePage"
         ]
       ],
@@ -1157,7 +1172,6 @@
         "ModalFooter",
         "MoreHorizontal",
         "PageHeader",
-        "PageToolbar",
         "Plus",
         "PromptFields",
         "Save",
@@ -1196,14 +1210,12 @@
           "LoadingSkeleton",
           "Placeholder",
           "PageHeader",
-          "PageToolbar",
           "workspacePage"
         ]
       ],
       "jsxElements": [
         "LoadingSkeleton",
         "PageHeader",
-        "PageToolbar",
         "Placeholder",
         "ReportLoadingContent",
         "SimpleGrid",
@@ -1230,28 +1242,26 @@
           "SimpleGrid",
           "Table",
           "Progress",
-          "Collapse",
           "PageHeader",
-          "PageToolbar",
           "workspacePage"
         ]
       ],
       "jsxElements": [
         "Alert",
         "AlertCircle",
+        "AppliedRunTagFilters",
         "Badge",
         "Button",
         "CheckCircle2",
         "Clock",
         "Coins",
-        "Collapse",
         "Group",
         "Layers",
         "PageHeader",
-        "PageToolbar",
         "Progress",
         "RefreshCw",
         "ReportLoadingContent",
+        "RunTagFilter",
         "Select",
         "SimpleGrid",
         "Stack",
@@ -1262,7 +1272,6 @@
         "Table.Th",
         "Table.Thead",
         "Table.Tr",
-        "TagFields",
         "Text",
         "Title",
         "UserCheck",
@@ -1556,37 +1565,45 @@
           "Alert",
           "Button",
           "Group",
+          "Menu",
           "SegmentedControl",
           "Tabs",
           "Text",
           "PageHeader",
           "PageTabList",
+          "PageToolbar",
           "workspacePage"
         ]
       ],
       "jsxElements": [
         "Activity",
         "Alert",
+        "AppliedRunTagFilters",
         "AutomationAlerts",
         "Button",
+        "ChevronDown",
         "ChevronRight",
         "ComparisonContext",
         "Group",
         "HistoryCleanupDialog",
         "ListTable",
         "ListTableRow",
+        "Menu",
+        "Menu.Dropdown",
+        "Menu.Item",
+        "Menu.Target",
         "PageHeader",
         "PageTabList",
+        "PageToolbar",
         "RetentionSettingsDialog",
         "RunBoardSkeleton",
         "RunListBoard",
         "RunRowsSkeleton",
+        "RunTagFilter",
         "RunTags",
         "SegmentedControl",
-        "SlidersHorizontal",
         "Tabs",
         "Tabs.Panel",
-        "TagFields",
         "Text",
         "div",
         "h2",
@@ -1636,6 +1653,7 @@
           "LoadingSkeleton",
           "Placeholder",
           "PageHeader",
+          "PageToolbar",
           "PageTabsSkeleton",
           "workspacePage"
         ]
@@ -1645,6 +1663,7 @@
         "LoadingSkeleton",
         "PageHeader",
         "PageTabsSkeleton",
+        "PageToolbar",
         "Placeholder",
         "RunBoardSkeleton",
         "RunRowsSkeleton",
@@ -1653,6 +1672,39 @@
         "h2",
         "section",
         "span"
+      ],
+      "nativePatterns": {}
+    },
+    {
+      "file": "packages/ui/src/features/runs/RunTagFilter.tsx",
+      "exports": ["AppliedRunTagFilters", "RunTagFilter"],
+      "mantineImports": [],
+      "designSystemImports": [
+        [
+          "Anchor",
+          "Button",
+          "Code",
+          "Group",
+          "Pill",
+          "Popover",
+          "Stack",
+          "Text"
+        ]
+      ],
+      "jsxElements": [
+        "Anchor",
+        "Button",
+        "Code",
+        "Group",
+        "Pill",
+        "Popover",
+        "Popover.Dropdown",
+        "Popover.Target",
+        "SlidersHorizontal",
+        "Stack",
+        "TagFields",
+        "Text",
+        "div"
       ],
       "nativePatterns": {}
     },
@@ -1869,7 +1921,6 @@
           "LoadingSkeleton",
           "Placeholder",
           "PageHeader",
-          "PageToolbar",
           "workspacePage"
         ]
       ],
@@ -1878,7 +1929,6 @@
         "ListTableSkeleton",
         "LoadingSkeleton",
         "PageHeader",
-        "PageToolbar",
         "Placeholder",
         "Stack",
         "VariableRowsSkeleton",
@@ -1920,7 +1970,6 @@
           "Placeholder",
           "ActionError",
           "PageHeader",
-          "PageToolbar",
           "workspacePage"
         ]
       ],
@@ -1942,7 +1991,6 @@
         "ModalBody",
         "ModalFooter",
         "PageHeader",
-        "PageToolbar",
         "Placeholder",
         "Plus",
         "Search",
@@ -2749,18 +2797,30 @@
       "exports": ["LoadingSubject", "RouteSkeleton"],
       "mantineImports": [],
       "designSystemImports": [
-        ["Group", "Stack", "LoadingSkeleton", "Placeholder"]
+        [
+          "Center",
+          "Loader",
+          "Stack",
+          "Placeholder",
+          "PageTabsSkeleton",
+          "VisuallyHidden",
+          "workspacePage"
+        ]
       ],
       "jsxElements": [
-        "Group",
-        "LoadingSkeleton",
+        "Center",
+        "Loader",
+        "PageTabsSkeleton",
         "Placeholder",
         "PromptEditorSkeleton",
         "PromptLibrarySkeleton",
         "Stack",
+        "VisuallyHidden",
         "WorkflowLibrarySkeleton",
+        "WorkflowLoading",
         "div",
-        "header"
+        "header",
+        "section"
       ],
       "nativePatterns": {}
     },
@@ -2810,7 +2870,7 @@
       "nativePatterns": {}
     }
   ],
-  "stylesheetCount": 47,
+  "stylesheetCount": 48,
   "stylesheets": [
     "packages/ui/src/components/ContractEditor/ContractEditor.module.css",
     "packages/ui/src/components/ListTable/ListTable.module.css",
@@ -2841,6 +2901,7 @@
     "packages/ui/src/features/runs/RunForms.module.css",
     "packages/ui/src/features/runs/RunInspector.module.css",
     "packages/ui/src/features/runs/RunList.module.css",
+    "packages/ui/src/features/runs/RunTagFilter.module.css",
     "packages/ui/src/features/runs/RunTags.module.css",
     "packages/ui/src/features/runs/RunUsage.module.css",
     "packages/ui/src/features/variables/EnvironmentEditor.module.css",

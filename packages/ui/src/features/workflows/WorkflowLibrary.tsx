@@ -87,6 +87,17 @@ export function WorkflowLibrary({
     >
       <PageHeader
         title="Workflows"
+        controls={
+          <TextInput
+            ref={searchInput}
+            className={workspacePage.search}
+            aria-label="Search workflows"
+            placeholder="Search workflows"
+            leftSection={<Search size={14} />}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        }
         actions={
           <>
             <Button onClick={() => setImporting(true)}>
@@ -105,23 +116,7 @@ export function WorkflowLibrary({
           </>
         }
       />
-      <PageTabList
-        label="Workflow status"
-        items={workflowTabs(scope)}
-        toolbar={
-          <>
-            <TextInput
-              ref={searchInput}
-              className={workspacePage.search}
-              aria-label="Search workflows"
-              placeholder="Search workflows"
-              leftSection={<Search size={14} />}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </>
-        }
-      />
+      <PageTabList label="Workflow status" items={workflowTabs(scope)} />
       <Tabs.Panel
         value={archived ? 'archived' : 'active'}
         className={workspacePage.content}

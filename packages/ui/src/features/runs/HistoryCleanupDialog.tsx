@@ -36,11 +36,13 @@ export function HistoryCleanupDialog({
   workflows,
   act,
   onClose,
+  returnFocusTo,
 }: {
   workflowId?: string;
   workflows: { value: string; label: string }[];
   act: Action;
   onClose: () => void;
+  returnFocusTo?: () => HTMLElement | null;
 }) {
   const [workflow, setWorkflow] = useState<string | null>(workflowId ?? null);
   const [before, setBefore] = useState('');
@@ -125,7 +127,13 @@ export function HistoryCleanupDialog({
     if (request === generation.current) setBusy(false);
   };
   return (
-    <Modal onClose={onClose} title="Clean up run history" size="xl" busy={busy}>
+    <Modal
+      returnFocusTo={returnFocusTo}
+      onClose={onClose}
+      title="Clean up run history"
+      size="xl"
+      busy={busy}
+    >
       <ModalBody>
         <Stack>
           <Text size="sm">

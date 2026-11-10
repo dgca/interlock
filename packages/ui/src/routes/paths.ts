@@ -1,11 +1,14 @@
+import type { RunMode } from '../features/runs/runListConfig';
 import type { RunTab } from '../features/runs/runAttention';
 import { runTagsSchema } from '@interlock/core';
 function runListSearch(
   tab: RunTab,
   offset: number,
   tags?: Record<string, string>,
+  mode?: RunMode,
 ) {
   const query = new URLSearchParams();
+  if (mode === 'overview') query.set('mode', mode);
   if (tab !== 'active') query.set('tab', tab);
   if (offset > 0) query.set('offset', String(offset));
   if (tags && Object.keys(tags).length) query.set('tags', JSON.stringify(tags));
@@ -49,8 +52,13 @@ export const paths = {
       ? `/automations/${encodeURIComponent(triggerId)}?from=${encodeURIComponent(new URLSearchParams({ workflow: id }).toString())}`
       : `/automations?workflow=${encodeURIComponent(id)}`,
   workflow: (id: string) => `/workflows/${encodeURIComponent(id)}`,
-  runs: (tab: RunTab = 'active', offset = 0, tags?: Record<string, string>) => {
-    const query = runListSearch(tab, offset, tags);
+  runs: (
+    tab: RunTab = 'active',
+    offset = 0,
+    tags?: Record<string, string>,
+    mode?: RunMode,
+  ) => {
+    const query = runListSearch(tab, offset, tags, mode);
     return `/runs${query.size ? `?${query}` : ''}`;
   },
   workflowRuns: (
@@ -58,8 +66,9 @@ export const paths = {
     tab: RunTab = 'active',
     offset = 0,
     tags?: Record<string, string>,
+    mode?: RunMode,
   ) => {
-    const query = runListSearch(tab, offset, tags);
+    const query = runListSearch(tab, offset, tags, mode);
     return `/workflows/${encodeURIComponent(id)}?view=runs${query.size ? `&${query}` : ''}`;
   },
   run: (
@@ -69,8 +78,10 @@ export const paths = {
     executionId?: string,
     offset = 0,
     tags?: Record<string, string>,
+    mode?: RunMode,
   ) => {
     const query = new URLSearchParams();
+    if (mode) query.set('mode', mode);
     if (workflowId) query.set('workflow', workflowId);
     if (workflowId || tab !== 'active') query.set('tab', tab);
     if (executionId) query.set('execution', executionId);

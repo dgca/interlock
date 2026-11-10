@@ -10,16 +10,17 @@ import { workflowViews } from './workflowListConfig';
 export function WorkflowLibrarySkeleton() {
   return (
     <section className={workspacePage.page}>
-      <PageHeader title="Workflows" />
-      <PageTabsSkeleton
-        items={workflowViews}
-        value="active"
-        toolbar={
+      <PageHeader
+        title="Workflows"
+        controls={<Placeholder h={40} w={240} />}
+        actions={
           <>
-            <Placeholder h={36} w={240} />
+            <Placeholder h={40} w={110} />
+            <Placeholder h={40} w={170} />
           </>
         }
       />
+      <PageTabsSkeleton items={workflowViews} value="active" />
       <div className={workspacePage.content}>
         <WorkflowCardsSkeleton />
       </div>

@@ -10,13 +10,11 @@ import {
   SimpleGrid,
   Table,
   Progress,
-  Collapse,
   PageHeader,
-  PageToolbar,
   workspacePage,
 } from '../../design-system';
 
-import { useCallback, useEffect, useRef, useState, useId } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import {
   Clock,
@@ -35,7 +33,7 @@ import { api, errorMessage } from '../../lib/api';
 
 import { ReportLoadingContent } from './ReportSkeleton';
 import styles from './WorkflowReportView.module.css';
-import { TagFields, tagRows, tagsFromRows, type TagRow } from '../runs/RunTags';
+import { RunTagFilter, AppliedRunTagFilters } from '../runs/RunTagFilter';
 
 function formatMs(ms: number | null | undefined): string {
   if (ms === null || ms === undefined) return '—';
@@ -67,10 +65,7 @@ export function WorkflowReportView({
   );
   const [timePreset, setTimePreset] = useState<TimePreset>('7d');
   const [tags, setTags] = useState<Record<string, string>>();
-  const [filterRows, setFilterRows] = useState<TagRow[]>(tagRows());
-  const [filterError, setFilterError] = useState('');
-  const [tagsOpen, setTagsOpen] = useState(false);
-  const tagsId = useId();
+  const tagFilterId = useId();
   const requestSequence = useRef(0);
   const [workflowsList, setWorkflowsList] = useState<
     { value: string; label: string }[]
@@ -144,20 +139,8 @@ export function WorkflowReportView({
         }
         onBack={onBack}
         backLabel="Back to workflow"
-        actions={
-          <Button
-            variant="secondary"
-            leftSection={<RefreshCw size={14} />}
-            onClick={() => void fetchReport()}
-            disabled={loading}
-          >
-            Refresh
-          </Button>
-        }
-      />
-      <PageToolbar
-        summary={
-          <div className={styles.filters}>
+        controls={
+          <>
             {!initialWorkflowId && (
               <Select
                 placeholder="All workflows"
@@ -195,64 +178,32 @@ export function WorkflowReportView({
               className={styles.timeFilter}
               aria-label="Filter by time window"
             />
-          </div>
+            <RunTagFilter
+              filterId={tagFilterId}
+              key={selectedWorkflowId ?? 'all'}
+              value={tags}
+              onChange={setTags}
+            />
+          </>
         }
-      >
-        <Button
-          variant="secondary"
-          aria-expanded={tagsOpen}
-          aria-controls={tagsId}
-          onClick={() => setTagsOpen((open) => !open)}
-        >
-          Filter by tags
-          {Object.keys(tags ?? {}).length
-            ? ` (${Object.keys(tags!).length})`
-            : ''}
-        </Button>
-      </PageToolbar>
+        actions={
+          <Button
+            variant="secondary"
+            leftSection={<RefreshCw size={14} />}
+            onClick={() => void fetchReport()}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
+        }
+      />
+      <AppliedRunTagFilters
+        filterId={tagFilterId}
+        value={tags}
+        onChange={setTags}
+      />
       <div className={workspacePage.content}>
         <Stack gap="lg">
-          <Collapse expanded={tagsOpen} transitionDuration={0} id={tagsId}>
-            <div className={`${workspacePage.card} ${styles.tagFilter}`}>
-              <TagFields
-                label="Matching tags"
-                showLabel={false}
-                description="Match every key and value exactly. Up to 16 pairs."
-                rows={filterRows}
-                onChange={(rows) => {
-                  setFilterRows(rows);
-                  setFilterError('');
-                }}
-                error={filterError}
-              />
-              <Group mt="sm" gap="xs">
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    try {
-                      setTags(tagsFromRows(filterRows));
-                      setFilterError('');
-                    } catch (error) {
-                      setFilterError(errorMessage(error));
-                    }
-                  }}
-                >
-                  Apply filters
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setFilterRows([]);
-                    setFilterError('');
-                    setTags(undefined);
-                  }}
-                >
-                  Clear filters
-                </Button>
-              </Group>
-            </div>
-          </Collapse>
-
           {error && (
             <Alert
               icon={<AlertCircle size={16} />}

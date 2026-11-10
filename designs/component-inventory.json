@@ -571,12 +571,12 @@
       "id": "page-header",
       "group": "Compositions",
       "family": "Page header",
-      "implementation": "Existing shared; editor has local header",
+      "implementation": "Shared PageHeader and sidebar brand",
       "owners": [
-        "packages/ui/src/components/PageLayout/PageLayout.tsx",
+        "packages/ui/src/design-system/PageLayout/PageLayout.tsx",
         "packages/ui/src/features/workflows/WorkflowEditor.tsx"
       ],
-      "variants": "76px title-only, 88px subtitle/status; actions vertically centered",
+      "variants": "88px title row aligns with sidebar brand; controls before actions; overflow row follows container width",
       "board": "Compositions",
       "penStatus": "base-with-partial-state-coverage",
       "penComponents": [
@@ -625,7 +625,7 @@
         "packages/ui/src/components/PageLayout/PageLayout.tsx",
         "packages/ui/src/features/runs/RunList.tsx"
       ],
-      "variants": "Search, summary, filters, reset; actions padded above attached tabs",
+      "variants": "Scoped embedded search, filters, reset, and actions above local tabs; page-level controls use PageHeader",
       "board": "Compositions",
       "penStatus": "proposed-specimen",
       "penComponents": [
@@ -1096,7 +1096,7 @@
       "family": "Workflow card and grid",
       "implementation": "Existing shared",
       "owners": ["packages/ui/src/components/WorkflowCards/WorkflowCards.tsx"],
-      "variants": "Name/description, metadata/status, separate actions, disabled/highlighted",
+      "variants": "4-line description; inline Show More/Show Less; metadata/status; separate actions",
       "board": "Product",
       "penStatus": "proposed-specimen",
       "penComponents": [
@@ -1112,13 +1112,13 @@
       "id": "run-card",
       "group": "Product patterns",
       "family": "Run board card",
-      "implementation": "Existing feature composition with Board and List presentations",
+      "implementation": "Existing feature composition with List and Overview modes",
       "owners": [
         "packages/ui/src/features/runs/RunList.tsx",
         "packages/ui/src/features/runs/RunListBoard.tsx",
         "packages/ui/src/features/runs/RunListSkeleton.tsx"
       ],
-      "variants": "Attention/active/completed, bounded previews, metadata, recovery actions, list fallback; no inferred progress ratio",
+      "variants": "Active/attention/completed, bounded previews, metadata, recovery actions, full List links; no inferred progress ratio",
       "board": "Product",
       "penStatus": "base-with-partial-state-coverage",
       "penComponents": [
@@ -1385,6 +1385,20 @@
       "penStatus": "inventory-only",
       "penComponents": [],
       "inventoryBoard": "UvuPr"
+    },
+    {
+      "id": "run-tag-filter",
+      "group": "Product patterns",
+      "family": "Run tag filtering",
+      "implementation": "Shared product composition using design-system Popover and Pill",
+      "owners": [
+        "packages/ui/src/features/runs/RunTagFilter.tsx",
+        "packages/ui/src/features/runs/RunTags.tsx"
+      ],
+      "variants": "Manual exact conditions; Apply/dismiss drafts; removable applied chips; global and scoped Runs and Report",
+      "board": "Inventory only",
+      "penStatus": "inventory-only",
+      "penComponents": []
     }
   ],
   "penRoot": "r93lT",

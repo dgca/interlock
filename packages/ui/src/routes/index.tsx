@@ -22,6 +22,7 @@ import {
 } from 'react-router';
 import { App, type AppContext } from '../App';
 import { paths, runOffset, runTagFilter } from './paths';
+import { runMode, type RunMode } from '../features/runs/runListConfig';
 import { flushSync } from 'react-dom';
 import { lazy, Suspense, useState } from 'react';
 
@@ -255,6 +256,14 @@ function useRunPage() {
   const [search, setSearch] = useSearchParams();
   const page = {
     tab: parseRunTab(search.get('tab')),
+    mode: runMode(search.get('mode')),
+    onModeChange: (mode: RunMode) =>
+      setSearch((previous) => {
+        const next = new URLSearchParams(previous);
+        if (mode === 'overview') next.set('mode', mode);
+        else next.delete('mode');
+        return next;
+      }),
     offset: runOffset(search.get('offset')),
     tags: runTagFilter(search.get('tags')),
     onTagsChange: (tags?: Record<string, string>) =>
@@ -269,6 +278,7 @@ function useRunPage() {
     onTabChange: (tab: RunTab) =>
       setSearch((previous) => {
         const next = new URLSearchParams(previous);
+        next.delete('mode');
         if (tab !== 'active') next.set('tab', tab);
         else next.delete('tab');
         next.delete('offset');
@@ -363,6 +373,7 @@ function WorkflowRoute() {
                     executionId,
                     page.offset,
                     page.tags,
+                    page.mode,
                   ),
                 )
               }
@@ -394,6 +405,7 @@ function RunsRoute() {
               executionId,
               page.offset,
               page.tags,
+              page.mode,
             ),
           )
         }
@@ -409,6 +421,9 @@ function RunRoute() {
   const [search] = useSearchParams();
   const workflowId = search.get('workflow') || undefined;
   const returnTab = parseRunTab(search.get('tab'));
+  const returnMode = search.has('mode')
+    ? runMode(search.get('mode'))
+    : undefined;
   const offset = runOffset(search.get('offset'));
   const tags = runTagFilter(search.get('tags'));
   return (
@@ -422,13 +437,21 @@ function RunRoute() {
         initialExecutionId={search.get('execution') ?? undefined}
         onOpen={(id, executionId) =>
           void navigate(
-            paths.run(id, workflowId, returnTab, executionId, offset, tags),
+            paths.run(
+              id,
+              workflowId,
+              returnTab,
+              executionId,
+              offset,
+              tags,
+              returnMode,
+            ),
           )
         }
         onBack={(status) => {
           const tab =
-            returnTab === 'attention'
-              ? 'attention'
+            returnMode !== undefined || returnTab === 'attention'
+              ? returnTab
               : status === 'queued' ||
                   status === 'running' ||
                   status === 'waiting'
@@ -436,8 +459,19 @@ function RunRoute() {
                 : 'history';
           void navigate(
             workflowId
-              ? paths.workflowRuns(workflowId, returnTab, offset, tags)
-              : paths.runs(tab, tab === returnTab ? offset : 0, tags),
+              ? paths.workflowRuns(
+                  workflowId,
+                  returnTab,
+                  offset,
+                  tags,
+                  returnMode,
+                )
+              : paths.runs(
+                  tab,
+                  tab === returnTab ? offset : 0,
+                  tags,
+                  returnMode,
+                ),
           );
         }}
       />

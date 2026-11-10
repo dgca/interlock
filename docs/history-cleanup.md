@@ -4,8 +4,8 @@ Remove selected run trees without deleting their workflows or published versions
 
 ## Use the browser
 
-1. Open **Runs → History**, or the **History** tab in a workflow's Runs section.
-2. Choose **Clean up history**.
+1. Open **Runs**, or a workflow's Runs section, in List or Overview.
+2. Open the **History** menu and choose **Clean up history**.
 3. Select a root workflow or a **Last updated before** cutoff, then choose **Preview history**. A cutoff includes a tree only when every run in it was last updated before that time.
 4. Review the run counts, JSON data sizes, and protection reasons. Select eligible trees. Use **Next** to inspect another page; changing pages or filters clears the selection.
 5. Acknowledge permanent history loss, then choose **Delete selected history**.
@@ -56,7 +56,7 @@ Neither manual cleanup nor automatic retention runs compaction.
 
 ## Enable automatic retention
 
-Library retention is disabled by default. Open **AI Settings → Execution settings → History retention**, choose **Enabled**, enter an age or count limit, and save. Workflow **Runs → History → Retention settings** offers **Inherit library policy**, **Disabled**, or **Override library policy**. Saving an enabled policy authorizes permanent scheduled deletion. Settings apply immediately without publishing a workflow. These local settings stay outside portable exports and imports.
+Library retention is disabled by default. Open **AI Settings → Execution settings → History retention**, choose **Enabled**, enter an age or count limit, and save. In a workflow's Runs section, open the **History** menu and choose **Retention settings** for **Inherit library policy**, **Disabled**, or **Override library policy**. Saving an enabled policy authorizes permanent scheduled deletion. Settings apply immediately without publishing a workflow. These local settings stay outside portable exports and imports.
 
 A workflow override replaces the entire library policy. Disabling an override protects that workflow from library retention. Returning to inheritance removes the override. Scope follows the root workflow, including all invoked children regardless of their own settings. Archived workflows retain their policy and remain eligible for cleanup.
 

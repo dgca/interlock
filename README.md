@@ -49,7 +49,7 @@ Use a coding agent with access to your Git checkout, files, and development comm
    a fresh session or isolated subagent for the final review.
    ```
 
-5. Open **Runs → Active** and select the execution to follow its steps. Active offers a board with bounded attention and completed-run previews, plus a List view. Completed, failed, and cancelled executions appear in **History**.
+5. Open **Runs → Active** in the default List view and select the execution to follow its steps. Overview shows active runs alongside bounded attention and completed-run previews, with links to the full lists. Completed, failed, and cancelled executions appear in List → **History**.
 
 Replace the example request with the change you want. The workflow resolves the target repository and artifact directory, follows that repository's instructions, and asks when a consequential decision remains unresolved. Set `reviewPolicy` to `always` to approve each planning artifact, or `createPr` to `true` to request PR delivery. Your agent's tool approval settings still apply. See [Use the SDLC workflow](docs/sdlc-workflow.md) for inputs, executor requirements, and resuming work.
 
@@ -268,7 +268,7 @@ For embedded UI settings, see [Configure the embedded UI](docs/embedded-ui.md).
 
 Interlock listens on `127.0.0.1:4310` and stores workflows and runs in `~/.interlock/interlock.db`. Restarting the server retains saved data. Scripts use the directory where you started Interlock as their working directory.
 
-Use **Runs → History → Clean up history** to preview and delete selected run trees while keeping their workflows and versions. CLI and MCP expose the same [history cleanup](docs/history-cleanup.md), including protection reasons and storage figures. Optional library and workflow retention settings add scheduled age or count limits. Retention is disabled by default and skips protected whole trees; deleted SQLite pages become reusable without automatic compaction. Idle scheduling uses indexed active-run and assignment lookups, and unchanged waiting steps do not write or wake continuation readers. Retained history still uses disk space, and inspecting large run trees or evaluating their budgets costs more work.
+Open the **History** menu in Runs and choose **Clean up history** to preview and delete selected run trees while keeping their workflows and versions. The menu is available in List and Overview. CLI and MCP expose the same [history cleanup](docs/history-cleanup.md), including protection reasons and storage figures. Optional library and workflow retention settings add scheduled age or count limits. Retention is disabled by default and skips protected whole trees; deleted SQLite pages become reusable without automatic compaction. Idle scheduling uses indexed active-run and assignment lookups, and unchanged waiting steps do not write or wake continuation readers. Retained history still uses disk space, and inspecting large run trees or evaluating their budgets costs more work.
 
 To change the port, script working directory, or database path:
 

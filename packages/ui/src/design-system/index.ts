@@ -23,6 +23,8 @@ export {
   NativeSelect,
   Notification,
   NumberInput,
+  Pill,
+  Popover,
   Progress,
   Radio,
   ScrollArea,

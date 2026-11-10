@@ -19,22 +19,19 @@ export function AutomationListSkeleton() {
     <section className={workspacePage.page} aria-busy="true">
       <PageHeader
         title="Automations"
-        actions={<Placeholder h={32} w={126} />}
-      />
-      <PageTabsSkeleton
-        items={statusViews}
-        value={listQuery(search).status}
-        toolbar={
+        controls={
           <>
             <div className={classes.workflowFilter}>
-              <Placeholder h={36} />
+              <Placeholder h={40} />
             </div>
             <div className={classes.toolbarSearch}>
-              <Placeholder h={36} />
+              <Placeholder h={40} />
             </div>
           </>
         }
+        actions={<Placeholder h={40} w={145} />}
       />
+      <PageTabsSkeleton items={statusViews} value={listQuery(search).status} />
       <div className={workspacePage.content}>
         <AutomationRowsSkeleton />
       </div>

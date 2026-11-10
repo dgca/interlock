@@ -22,6 +22,14 @@ beforeEach(() => {
     addEventListener() {},
     removeEventListener() {},
   });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   rpc.summaries.mockResolvedValue({
     items: [],
     counts: { active: 0, attention: 0, history: 0 },
@@ -37,6 +45,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
 });
 function button(name: string) {
   const b = [...document.querySelectorAll<HTMLButtonElement>('button')].find(

@@ -3,6 +3,7 @@ import {
   LoadingSkeleton,
   Placeholder,
   PageHeader,
+  PageToolbar,
   PageTabsSkeleton,
   workspacePage,
 } from '../../design-system';
@@ -12,27 +13,46 @@ import { useSearchParams } from 'react-router';
 import { ListTableSkeleton } from '../../components/ListTable/ListTable';
 
 import { runTab } from './runAttention';
-import { runColumns, runViews } from './runListConfig';
+import { runColumns, runViews, runMode } from './runListConfig';
 import classes from './RunList.module.css';
 
 export function RunListSkeleton({ embedded = false }: { embedded?: boolean }) {
   const [search] = useSearchParams();
   const tab = runTab(search.get('tab'));
+  const mode = runMode(search.get('mode'));
+  const controls = (
+    <>
+      <Placeholder h={40} w={180} />
+      <Placeholder h={40} w={130} />
+    </>
+  );
+  const actions = <Placeholder h={40} w={110} />;
   return (
     <section className={workspacePage.page} aria-busy="true">
-      {!embedded && <PageHeader title="Runs" />}
-      <PageTabsSkeleton
-        items={runViews}
-        value={tab}
-        toolbar={
-          <>
-            {tab === 'active' && <Placeholder h={40} w={140} />}
-            <Placeholder h={40} w={130} />
-          </>
-        }
-      />
+      {!embedded && (
+        <PageHeader title="Runs" controls={controls} actions={actions} />
+      )}
+      {mode === 'list' ? (
+        <PageTabsSkeleton
+          items={runViews}
+          value={tab}
+          toolbar={
+            embedded ? (
+              <>
+                {controls}
+                {actions}
+              </>
+            ) : undefined
+          }
+        />
+      ) : embedded ? (
+        <PageToolbar>
+          {controls}
+          {actions}
+        </PageToolbar>
+      ) : null}
       <div className={workspacePage.content}>
-        {tab === 'active' ? <RunBoardSkeleton /> : <RunRowsSkeleton />}
+        {mode === 'overview' ? <RunBoardSkeleton /> : <RunRowsSkeleton />}
       </div>
     </section>
   );
@@ -41,7 +61,7 @@ export function RunListSkeleton({ embedded = false }: { embedded?: boolean }) {
 export function RunBoardSkeleton() {
   return (
     <LoadingSkeleton label="Loading runs…" className={classes.board}>
-      {['Needs attention', 'Active runs', 'Completed runs'].map((title) => (
+      {['Active runs', 'Needs attention', 'Completed runs'].map((title) => (
         <div key={title} className={classes.boardColumn}>
           <div className={classes.columnHeading}>
             <h2>{title}</h2>

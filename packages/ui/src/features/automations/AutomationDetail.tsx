@@ -155,32 +155,6 @@ export function AutomationDetail({ id }: { id: string }) {
               >
                 Edit
               </Button>
-              {trigger.enabled && !trigger.autoPaused ? (
-                <Button
-                  ref={disableTrigger}
-                  variant="secondary"
-                  disabled={busy || !!error}
-                  onClick={() => {
-                    setActionError('');
-                    setConfirmation('disable');
-                  }}
-                >
-                  Disable
-                </Button>
-              ) : (
-                <Button
-                  variant="primary"
-                  disabled={busy || !trigger.canEnable || !!error}
-                  loading={busy && !confirmation}
-                  onClick={() => void perform('enable')}
-                >
-                  {busy
-                    ? 'Enabling…'
-                    : trigger.autoPaused
-                      ? 'Resume automation'
-                      : 'Enable automation'}
-                </Button>
-              )}
               <Menu position="bottom-end" width={190}>
                 <Menu.Target>
                   <ActionIcon
@@ -216,6 +190,32 @@ export function AutomationDetail({ id }: { id: string }) {
                   </Menu.Item>
                 </Menu.Dropdown>
               </Menu>
+              {trigger.enabled && !trigger.autoPaused ? (
+                <Button
+                  ref={disableTrigger}
+                  variant="secondary"
+                  disabled={busy || !!error}
+                  onClick={() => {
+                    setActionError('');
+                    setConfirmation('disable');
+                  }}
+                >
+                  Disable
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  disabled={busy || !trigger.canEnable || !!error}
+                  loading={busy && !confirmation}
+                  onClick={() => void perform('enable')}
+                >
+                  {busy
+                    ? 'Enabling…'
+                    : trigger.autoPaused
+                      ? 'Resume automation'
+                      : 'Enable automation'}
+                </Button>
+              )}
             </>
           )
         }

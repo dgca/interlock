@@ -17,7 +17,6 @@ import {
   Placeholder,
   ActionError,
   PageHeader,
-  PageToolbar,
   workspacePage,
 } from '../../design-system';
 
@@ -97,31 +96,30 @@ export function VariableLibrary() {
     <section className={workspacePage.page}>
       <PageHeader
         title="Variables"
-        actions={
-          <Button component={Link} variant="primary" to={paths.variable('new')}>
-            <Plus size={14} /> New variable
-          </Button>
-        }
-      />
-      <PageToolbar
-        summary={
+        subtitle={
           data ? (
             `${data.total} ${data.total === 1 ? 'variable' : 'variables'}`
           ) : loading ? (
             <Placeholder w={65} h={10} />
           ) : undefined
         }
-      >
-        <TextInput
-          ref={searchInput}
-          className={workspacePage.search}
-          aria-label="Search variables"
-          placeholder="Search variables"
-          leftSection={<Search size={14} />}
-          value={search}
-          onChange={(e) => updateSearch(e.target.value)}
-        />
-      </PageToolbar>
+        controls={
+          <TextInput
+            ref={searchInput}
+            className={workspacePage.search}
+            aria-label="Search variables"
+            placeholder="Search variables"
+            leftSection={<Search size={14} />}
+            value={search}
+            onChange={(e) => updateSearch(e.target.value)}
+          />
+        }
+        actions={
+          <Button component={Link} variant="primary" to={paths.variable('new')}>
+            <Plus size={14} /> New variable
+          </Button>
+        }
+      />
       <div className={workspacePage.content}>
         {error && (
           <Alert

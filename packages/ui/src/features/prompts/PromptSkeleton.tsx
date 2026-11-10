@@ -4,7 +4,6 @@ import {
   LoadingSkeleton,
   Placeholder,
   PageHeader,
-  PageToolbar,
   workspacePage,
 } from '../../design-system';
 
@@ -25,12 +24,16 @@ export const promptColumns: readonly ListTableColumn[] = [
 export function PromptLibrarySkeleton() {
   return (
     <section className={workspacePage.page} aria-busy="true">
-      <PageHeader title="Prompts" actions={<Placeholder h={32} w={114} />} />
-      <PageToolbar summary={<Placeholder h={10} w={65} />}>
-        <div className={workspacePage.search}>
-          <Placeholder h={36} />
-        </div>
-      </PageToolbar>
+      <PageHeader
+        title="Prompts"
+        subtitle={<Placeholder h={10} w={65} />}
+        controls={
+          <div className={workspacePage.search}>
+            <Placeholder h={40} />
+          </div>
+        }
+        actions={<Placeholder h={40} w={134} />}
+      />
       <div className={workspacePage.content}>
         <ListTableSkeleton
           columns={promptColumns}
@@ -53,7 +56,7 @@ export function PromptLibrarySkeleton() {
 export function PromptEditorSkeleton() {
   return (
     <section className={workspacePage.page} aria-busy="true">
-      <PageHeader title="Prompt" actions={<Placeholder h={32} w={70} />} />
+      <PageHeader title="Prompt" actions={<Placeholder h={40} w={70} />} />
       <div className={workspacePage.content}>
         <div className={workspacePage.formContent}>
           <LoadingSkeleton

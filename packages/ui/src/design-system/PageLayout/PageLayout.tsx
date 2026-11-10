@@ -12,6 +12,7 @@ export function PageHeader({
   status,
   onBack,
   backLabel = 'Back',
+  controls,
   actions,
   busy = false,
 }: {
@@ -20,6 +21,7 @@ export function PageHeader({
   status?: ReactNode;
   onBack?: () => void;
   backLabel?: string;
+  controls?: ReactNode;
   actions?: ReactNode;
   busy?: boolean;
 }) {
@@ -28,26 +30,33 @@ export function PageHeader({
       className={classes.header}
       data-two-line={Boolean(subtitle || status) || undefined}
     >
-      {onBack && (
-        <ActionIcon
-          variant="subtle"
-          aria-label={backLabel}
-          onClick={onBack}
-          disabled={busy}
-        >
-          <ArrowLeft size={18} />
-        </ActionIcon>
-      )}
-      <div className={classes.title}>
-        <h1 title={title}>{title}</h1>
-        {subtitle && <div className={classes.subtitle}>{subtitle}</div>}
-        {status && (
-          <div className={classes.status} role="status">
-            {status}
-          </div>
+      <div className={classes.headerHeading}>
+        {onBack && (
+          <ActionIcon
+            variant="subtle"
+            aria-label={backLabel}
+            onClick={onBack}
+            disabled={busy}
+          >
+            <ArrowLeft size={18} />
+          </ActionIcon>
         )}
+        <div className={classes.title}>
+          <h1 title={title}>{title}</h1>
+          {subtitle && <div className={classes.subtitle}>{subtitle}</div>}
+          {status && (
+            <div className={classes.status} role="status">
+              {status}
+            </div>
+          )}
+        </div>
       </div>
-      {actions && <div className={classes.actions}>{actions}</div>}
+      {(controls || actions) && (
+        <div className={classes.headerTools}>
+          {controls && <div className={classes.headerControls}>{controls}</div>}
+          {actions && <div className={classes.actions}>{actions}</div>}
+        </div>
+      )}
     </header>
   );
 }

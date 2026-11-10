@@ -10,6 +10,7 @@ import {
   InputWrapper,
   Menu,
   Modal,
+  Popover,
   SegmentedControl,
   Textarea,
   Tabs,
@@ -83,6 +84,9 @@ export const theme = createTheme({
     ],
   },
   components: {
+    Popover: Popover.extend({
+      classNames: { dropdown: classes.dropdown },
+    }),
     Button: Button.extend({
       defaultProps: { size: 'sm' },
       classNames: (_theme, props) => ({
