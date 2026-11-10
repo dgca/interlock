@@ -50,7 +50,8 @@ try {
     !packed.files.some(
       (file) =>
         file.path.startsWith('.interlock/') ||
-        file.path.startsWith('node_modules/'),
+        file.path.startsWith('node_modules/') ||
+        file.path.startsWith('docs/research/'),
     ),
   );
   const prefix = join(temp, 'install');

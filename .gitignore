@@ -10,4 +10,7 @@ test-results/
 .playwright-cli/
 output/
 .impeccable/
+!packages/ui/.impeccable/
+packages/ui/.impeccable/*
+!packages/ui/.impeccable/design.json
 .tasks/
