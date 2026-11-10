@@ -160,32 +160,26 @@ it.each(['secret', 'config'] as const)(
 );
 
 it.each([0, 1])(
-  'keeps variable deletion in the header Actions menu with references: %s',
+  'keeps direct variable deletion in the header with references: %s',
   async (references) => {
     read.mockResolvedValue(savedVariable('secret', references));
     await show();
-    const actions = [
-      ...container.querySelectorAll<HTMLButtonElement>('header button'),
-    ].find((button) => button.textContent === 'Actions')!;
-    expect(actions.getAttribute('aria-haspopup')).toBe('menu');
+    const remove = container.querySelector<HTMLButtonElement>(
+      'header button[aria-label="Delete variable"]',
+    )!;
+    expect(remove.textContent).toBe('Delete');
+    expect(remove.hasAttribute('aria-haspopup')).toBe(false);
     expect(
       [...container.querySelectorAll('header button')]
         .map((button) => button.textContent)
         .filter(Boolean),
-    ).toEqual(['Discard changes', 'Actions', 'Save changes']);
+    ).toEqual(['Discard changes', 'Delete', 'Save changes']);
     const danger = [...container.querySelectorAll('details')].find(
       (details) =>
         details.querySelector('summary')?.textContent === 'Danger zone',
     )!;
     expect(danger.textContent).toContain('Disable use');
     expect(danger.textContent).not.toContain('Delete variable');
-    await act(async () => {
-      actions.focus();
-      actions.click();
-    });
-    const remove =
-      document.querySelector<HTMLButtonElement>('[role=menuitem]')!;
-    expect(remove.textContent).toBe('Delete variable');
     expect(remove.disabled).toBe(false);
     await act(async () => {
       remove.focus();
@@ -210,7 +204,7 @@ it.each([0, 1])(
       await new Promise(requestAnimationFrame);
     });
     await act(async () => new Promise(requestAnimationFrame));
-    expect(document.activeElement).toBe(actions);
+    expect(document.activeElement).toBe(remove);
     await act(async () => {
       Object.getOwnPropertyDescriptor(
         HTMLInputElement.prototype,
@@ -218,18 +212,17 @@ it.each([0, 1])(
       )!.set!.call(field('Name'), 'local_edit');
       field('Name').dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await act(async () => actions.click());
-    expect(
-      document.querySelector<HTMLButtonElement>('[role=menuitem]')!.disabled,
-    ).toBe(true);
+    expect(remove.disabled).toBe(true);
+    await act(async () => remove.click());
+    expect(document.querySelector('[role=dialog]')).toBeNull();
   },
 );
 
-it('omits variable Actions while creating a new variable', async () => {
+it('omits variable Delete while creating a new variable', async () => {
   await show(true, 'new');
   expect(container.querySelector('header')!.textContent).toContain('Create');
   expect(container.querySelector('header')!.textContent).not.toContain(
-    'Actions',
+    'Delete',
   );
   expect(read).not.toHaveBeenCalled();
 });

@@ -5,7 +5,6 @@ import {
   Badge,
   Button,
   Group,
-  Menu,
   SegmentedControl,
   Stack,
   Text,
@@ -25,14 +24,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
 import { flushSync } from 'react-dom';
 
-import {
-  ArrowRight,
-  ChevronDown,
-  ChevronRight,
-  Plus,
-  Search,
-  Trash2,
-} from 'lucide-react';
+import { ArrowRight, ChevronRight, Plus, Search, Trash2 } from 'lucide-react';
 import type { AppContext } from '../../App';
 import {
   variableRequirementSchema,
@@ -327,7 +319,7 @@ function VariableEditor({ id }: { id: string }) {
   const valueInput = useRef<HTMLTextAreaElement>(null);
   const nameInput = useRef<HTMLInputElement>(null);
   const replaceButton = useRef<HTMLButtonElement>(null);
-  const actionsTrigger = useRef<HTMLButtonElement>(null);
+  const deleteTrigger = useRef<HTMLButtonElement>(null);
   const returnToValue = useRef(false);
   const nameValidation = variableRequirementSchema.shape.name.safeParse(name);
   const nameError = nameValidation.success
@@ -595,33 +587,16 @@ function VariableEditor({ id }: { id: string }) {
               {creating ? 'Cancel' : 'Discard changes'}
             </Button>
             {!creating && saved && (
-              <Menu
-                position="bottom-end"
-                width={180}
-                withinPortal
-                returnFocus={confirmation !== 'delete'}
+              <Button
+                variant="secondary"
+                ref={deleteTrigger}
+                aria-label="Delete variable"
+                leftSection={<Trash2 size={16} aria-hidden="true" />}
+                disabled={dirty || busy}
+                onClick={() => setConfirmation('delete')}
               >
-                <Menu.Target>
-                  <Button
-                    variant="secondary"
-                    ref={actionsTrigger}
-                    rightSection={<ChevronDown size={16} aria-hidden="true" />}
-                    disabled={busy}
-                  >
-                    Actions
-                  </Button>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  <Menu.Item
-                    color="red"
-                    leftSection={<Trash2 size={14} />}
-                    disabled={dirty || busy}
-                    onClick={() => setConfirmation('delete')}
-                  >
-                    Delete variable
-                  </Menu.Item>
-                </Menu.Dropdown>
-              </Menu>
+                Delete
+              </Button>
             )}
             <Button
               variant="primary"
@@ -1036,7 +1011,7 @@ function VariableEditor({ id }: { id: string }) {
           }
           busy={busy}
           returnFocusTo={
-            confirmation === 'delete' ? () => actionsTrigger.current : undefined
+            confirmation === 'delete' ? () => deleteTrigger.current : undefined
           }
           onClose={() => {
             if (!busy) {

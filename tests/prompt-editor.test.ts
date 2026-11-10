@@ -86,22 +86,18 @@ afterEach(async () => {
 it('shows deletion failure inside the confirmation dialog', async () => {
   await render();
   queries.delete.mockRejectedValue(new Error('Referenced by Example workflow'));
-  const actions = [
-    ...container.querySelectorAll<HTMLButtonElement>('button'),
-  ].find((button) => button.textContent === 'Actions')!;
-  expect(actions.getAttribute('aria-haspopup')).toBe('menu');
-  await act(async () => {
-    actions.focus();
-    actions.click();
-  });
-  const remove = document.querySelector<HTMLElement>('[role="menuitem"]')!;
+  const remove = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Delete prompt"]',
+  )!;
+  expect(remove.textContent).toBe('Delete');
+  expect(remove.hasAttribute('aria-haspopup')).toBe(false);
   await act(async () => {
     remove.focus();
     remove.click();
   });
-  const confirm = [...document.querySelectorAll('button')].find(
-    (b) => b.textContent === 'Delete',
-  )!;
+  const confirm = [
+    ...document.querySelectorAll<HTMLButtonElement>('[role=dialog] button'),
+  ].find((b) => b.textContent === 'Delete')!;
   await act(async () => confirm.click());
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
     'Referenced by Example workflow',
@@ -115,7 +111,7 @@ it('shows deletion failure inside the confirmation dialog', async () => {
     await new Promise(requestAnimationFrame);
   });
   await act(async () => new Promise(requestAnimationFrame));
-  expect(document.activeElement).toBe(actions);
+  expect(document.activeElement).toBe(remove);
 });
 
 it('clears picker search after selection, preserves order, and exposes missing references', async () => {

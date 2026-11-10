@@ -64,8 +64,8 @@ To stop later consumption by existing and new runs, select **Disable use** under
 revoke credentials at their provider when needed. Re-enabling permits existing
 captures to use their original retained revisions again.
 
-Review **Used by** before renaming or deleting. To delete a saved variable, open
-**Actions → Delete variable** in its header and review the confirmation. Renames preserve ID-based
+Review **Used by** before renaming or deleting. To delete a saved variable, choose
+**Delete** in its header and review the confirmation. Renames preserve ID-based
 references. Deletion is blocked by draft or retained published references, active
 runs, and running comparisons. Remove those dependencies first. Allowed deletion
 removes current protected revisions while keeping historical capture metadata.

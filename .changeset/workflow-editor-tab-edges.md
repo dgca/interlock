@@ -4,4 +4,4 @@
 
 Restore workflow connections after switching from Runs or Child workflows back to Editor, while preserving canvas position, selection, and unsaved edits.
 
-Use an Actions dropdown button in saved prompt and variable headers, matching automation headers.
+Show direct Delete buttons for saved prompts, variables, automations, and child workflow cards instead of delete-only dropdowns. Preserve confirmations, edit guards, and focus return.

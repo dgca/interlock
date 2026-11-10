@@ -766,18 +766,16 @@ it('keeps an auto-paused automation enabled and resumes through its warning acti
   expect(document.activeElement).toBe(field('Enabled'));
 });
 
-it('opens deletion from the Actions button and returns focus there on cancel', async () => {
+it('opens deletion directly and returns focus to Delete on cancel', async () => {
   await render('/automations/t');
-  const actions = button('Actions');
+  const remove = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Delete automation"]',
+  )!;
+  expect(remove.textContent).toBe('Delete');
+  expect(remove.hasAttribute('aria-haspopup')).toBe(false);
   await act(async () => {
-    actions.focus();
-    actions.click();
-  });
-  const item = document.querySelector<HTMLElement>('[role=menuitem]')!;
-  expect(item.textContent).toBe('Delete automation');
-  await act(async () => {
-    item.focus();
-    item.click();
+    remove.focus();
+    remove.click();
   });
   expect(document.querySelector('[role=dialog]')?.textContent).toContain(
     'Delete automation?',
@@ -788,7 +786,7 @@ it('opens deletion from the Actions button and returns focus there on cancel', a
     await new Promise(requestAnimationFrame);
   });
   await act(async () => new Promise(requestAnimationFrame));
-  expect(document.activeElement).toBe(actions);
+  expect(document.activeElement).toBe(remove);
   expect(rpc.manage).not.toHaveBeenCalled();
 });
 
