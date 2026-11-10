@@ -4,10 +4,11 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 10px 21px;
+  padding: 12px var(--workspace-padding);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  background: var(--mantine-color-yellow-light);
+  background: var(--attention-bg);
+  color: var(--attention-text);
 }
 .summary {
   flex: 1;
@@ -19,6 +20,6 @@
 }
 @media (max-width: 600px) {
   .banner {
-    padding-inline: 12px;
+    padding-inline: 16px;
   }
 }

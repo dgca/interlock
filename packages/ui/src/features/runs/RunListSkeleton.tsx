@@ -1,5 +1,6 @@
 import {
   Stack,
+  LoadingSkeleton,
   Placeholder,
   PageHeader,
   PageTabsSkeleton,
@@ -16,22 +17,53 @@ import classes from './RunList.module.css';
 
 export function RunListSkeleton({ embedded = false }: { embedded?: boolean }) {
   const [search] = useSearchParams();
+  const tab = runTab(search.get('tab'));
   return (
     <section className={workspacePage.page} aria-busy="true">
       {!embedded && <PageHeader title="Runs" />}
       <PageTabsSkeleton
         items={runViews}
-        value={runTab(search.get('tab'))}
+        value={tab}
         toolbar={
           <>
-            <Placeholder h={30} w={130} />
+            {tab === 'active' && <Placeholder h={40} w={140} />}
+            <Placeholder h={40} w={130} />
           </>
         }
       />
       <div className={workspacePage.content}>
-        <RunRowsSkeleton />
+        {tab === 'active' ? <RunBoardSkeleton /> : <RunRowsSkeleton />}
       </div>
     </section>
+  );
+}
+
+export function RunBoardSkeleton() {
+  return (
+    <LoadingSkeleton label="Loading runs…" className={classes.board}>
+      {['Needs attention', 'Active runs', 'Completed runs'].map((title) => (
+        <div key={title} className={classes.boardColumn}>
+          <div className={classes.columnHeading}>
+            <h2>{title}</h2>
+            <Placeholder h={20} w={24} />
+          </div>
+          {[0, 1].map((card) => (
+            <div key={card} className={classes.runCard} data-loading>
+              <div className={classes.cardBody}>
+                <Placeholder h={12} w={90} />
+                <Placeholder h={22} w="80%" />
+                <Placeholder h={26} w={105} />
+                <Placeholder h={14} w="70%" />
+                <Placeholder h={12} w="95%" />
+              </div>
+              <div className={classes.cardAction}>
+                <Placeholder h={13} w={100} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </LoadingSkeleton>
   );
 }
 

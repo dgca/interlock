@@ -308,6 +308,7 @@
   }
   .formWorkspace {
     overflow: visible;
+    flex-shrink: 0;
   }
   .preview {
     border-left: 0;

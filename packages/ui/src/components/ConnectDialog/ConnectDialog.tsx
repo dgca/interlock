@@ -10,6 +10,7 @@ import {
   ModalFooter,
   LoadingSkeleton,
   Button,
+  ActionError,
 } from '../../design-system';
 
 import { useEffect, useState } from 'react';
@@ -230,7 +231,7 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
         {config ? (
           <pre>{snippet}</pre>
         ) : !error ? (
-          <Box bg="var(--canvas)" p={12} my="md" style={{ borderRadius: 5 }}>
+          <Box bg="var(--canvas)" p={12} my="md" bdrs="sm">
             <LoadingSkeleton label="Loading configuration…" />
           </Box>
         ) : null}
@@ -257,11 +258,7 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
           complete its assignments. Your harness controls tool approval and
           agent capabilities.
         </p>
-        {error && (
-          <p className="error-text" role="alert">
-            {error}
-          </p>
-        )}
+        <ActionError message={error} />
       </ModalBody>
       <ModalFooter>
         <Button onClick={onClose}>Close</Button>

@@ -148,12 +148,14 @@ export function RunListBoard({
   onOpen,
   onTabChange,
   retry,
+  onClearFilters,
 }: {
   page: Page;
   preview?: BoardPreview;
   onOpen: (id: string, executionId?: string) => void;
   onTabChange: (tab: RunTab) => void;
   retry: () => void;
+  onClearFilters?: () => void;
 }) {
   // Keep every run in the selected active page visible. The bounded attention
   // preview also includes terminal runs still waiting for recovery confirmation.
@@ -195,7 +197,9 @@ export function RunListBoard({
           </Text>
         ) : !attention.length ? (
           <Text size="sm" c="dimmed">
-            No runs need your attention.
+            {onClearFilters
+              ? 'No matching runs need your attention.'
+              : 'No runs need your attention.'}
           </Text>
         ) : null}
         {attention.length > 0 && page.counts.attention > attention.length && (
@@ -213,8 +217,20 @@ export function RunListBoard({
           <Text size="sm" c="dimmed">
             {page.total
               ? 'No other active runs on this page.'
-              : 'No active runs.'}
+              : onClearFilters
+                ? 'No active runs match these tags.'
+                : 'No active runs.'}
           </Text>
+        )}
+        {!page.total && onClearFilters && (
+          <>
+            <Text size="sm" c="dimmed">
+              Change or clear the tag filters to see other runs.
+            </Text>
+            <Button variant="ghost" onClick={onClearFilters}>
+              Clear filters
+            </Button>
+          </>
         )}
       </BoardColumn>
       <BoardColumn
@@ -231,7 +247,9 @@ export function RunListBoard({
           </Text>
         ) : !completed.length ? (
           <Text size="sm" c="dimmed">
-            No completed runs yet.
+            {onClearFilters
+              ? 'No completed runs match these tags.'
+              : 'No completed runs yet.'}
           </Text>
         ) : null}
         <Button variant="ghost" onClick={() => onTabChange('history')}>

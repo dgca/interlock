@@ -41,7 +41,7 @@ The application mockups now use 52 direct instances of library masters, includin
 
 Screen-derived appearances are the baseline. New checkbox/radio/switch treatments, menus, notifications, generic confirmation and list patterns, workflow-card and timeline specimens, and newly drawn interaction states are proposals. Their boards identify this status. Do not treat every specimen as approved merely because it appears in the library.
 
-The inventory records required variants separately from drawn coverage. Specialist editors, import and connection flows, recovery/permission/question flows, report and usage layouts, policy forms, secret replacement, and bulk cleanup remain discoverable with source owners. They need dedicated v2 coverage before their migration. A generic field or modal is not a complete design for those flows.
+The inventory records required variants separately from drawn coverage. Specialist editors, import and connection flows, recovery/permission/question flows, report and usage layouts, policy forms, secret replacement, and bulk cleanup remain discoverable with source owners. When extending the approved shared styling to these flows, preserve their existing structure and behavior. Consequential new layouts need separate design review. A generic field or modal is not a complete specification for those flows.
 
 A Pen component does not imply a new React wrapper. Keep Mantine styling direct when possible, preserve existing shared modules, and retain feature-specific contracts for graph geometry, validation, ordered references, secrets, and execution behavior.
 
@@ -53,4 +53,4 @@ A Pen component does not imply a new React wrapper. Keep Mantine styling direct 
 - Replaced 104 structural frame-edge strokes with solid divider layers and verified that existing child bounds stayed unchanged. Resolved divider instances use the shared color and integer coordinates on their thickness axis.
 - Static desktop specimens do not verify keyboard behavior, focus trapping/return, portal placement, responsive layouts, or every long-content state. Existing runtime semantics remain authoritative.
 
-No application source was changed by this design-system work.
+The original Pen library work changed no application source. The implementation now uses `packages/ui/src/design-system` for shared visual components and retains application compositions in `components`. Pen coverage labels describe the static reference, not completion of runtime verification.

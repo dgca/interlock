@@ -114,7 +114,7 @@ export function RunGraph({
       >
         <RestoreHandleBounds />
         <Background color="var(--canvas-dot)" gap={22} />
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false} className={styles.controls} />
       </ReactFlow>
       <CanvasZoomBox box={boxZoom.box} />
     </div>

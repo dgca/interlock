@@ -155,3 +155,15 @@
     transition: none;
   }
 }
+
+.alertContent {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.divider {
+  border-color: var(--border);
+}
+
+.alertMessage {
+  color: inherit;
+}

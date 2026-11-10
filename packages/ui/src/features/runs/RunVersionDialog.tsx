@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 
 import type { RunVersionPolicy } from '@interlock/core';
 
+import styles from './RunForms.module.css';
 import { api, errorMessage } from '../../lib/api';
 
 type VersionState = Awaited<ReturnType<typeof api.runs.versionPolicy.query>>;
@@ -149,7 +150,7 @@ export function RunVersionDialog({
               </Stack>
               {active && (
                 <>
-                  <Divider />
+                  <Divider className={styles.divider} />
                   <Stack gap="sm">
                     <NativeSelect
                       label="Move to a published version"
@@ -263,7 +264,7 @@ export function RunVersionDialog({
                   </Stack>
                 </>
               )}
-              <Divider />
+              <Divider className={styles.divider} />
               <Stack gap="sm">
                 <Text fw={500} size="sm">
                   Version changes · {data.history.total}

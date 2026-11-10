@@ -38,7 +38,6 @@ export function AgentHandoff({
       title="Waiting for an agent"
       color="blue"
       role="status"
-      styles={{ wrapper: { minWidth: 0 }, body: { minWidth: 0 } }}
     >
       <p>
         Interlock has prepared an assignment. Ask your connected agent to

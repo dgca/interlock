@@ -1,5 +1,5 @@
 {
-  "scope": "Current working-tree UI source; v2 target is not implemented",
+  "scope": "Current UI source ownership and required variants; Pen maturity labels describe visual-reference coverage, not implementation status",
   "sourceManifest": "ui-source-inventory.json",
   "families": [
     {
@@ -558,7 +558,7 @@
       "family": "Layout and scrolling foundations",
       "implementation": "CSS + Mantine layout helpers",
       "owners": [
-        "packages/ui/src/components/PageLayout/WorkspacePage.module.css",
+        "packages/ui/src/design-system/PageLayout/WorkspacePage.module.css",
         "packages/ui/src/features/runs/RunInspector.tsx"
       ],
       "variants": "Spacing, grid, scroll container, sticky chrome, focus visibility",
@@ -1112,12 +1112,13 @@
       "id": "run-card",
       "group": "Product patterns",
       "family": "Run board card",
-      "implementation": "V2 design candidate; current global list uses rows",
+      "implementation": "Existing feature composition with Board and List presentations",
       "owners": [
         "packages/ui/src/features/runs/RunList.tsx",
+        "packages/ui/src/features/runs/RunListBoard.tsx",
         "packages/ui/src/features/runs/RunListSkeleton.tsx"
       ],
-      "variants": "Attention/running/completed, progress, metadata, action; new composition candidate",
+      "variants": "Attention/active/completed, bounded previews, metadata, recovery actions, list fallback; no inferred progress ratio",
       "board": "Product",
       "penStatus": "base-with-partial-state-coverage",
       "penComponents": [

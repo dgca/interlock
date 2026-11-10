@@ -15,6 +15,7 @@ import { Bot, Copy } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
 import type { WorkRequest } from '@interlock/core';
 import { manualClaims } from './manualClaims';
+import styles from './RunForms.module.css';
 export function WorkPanel({
   work,
   onRefresh,
@@ -86,7 +87,7 @@ export function WorkPanel({
     }
   };
   return (
-    <section className="work-panel">
+    <section className={`work-panel ${styles.workPanel}`}>
       <div className="section-heading">
         <Bot size={17} />
         <h3>Agent assignment</h3>
@@ -125,7 +126,7 @@ export function WorkPanel({
         <ManagedExecutionPanel work={work} onRefresh={onRefresh} />
       )}
       {work.resourceBlocked && (
-        <ul style={{ overflowWrap: 'anywhere' }}>
+        <ul>
           {work.resourceBlocked.owners.map((owner) => (
             <li key={owner.name}>
               <code>{owner.name}</code> ·{' '}
@@ -139,7 +140,7 @@ export function WorkPanel({
       )}
       {uncertain.length > 0 && !managedRecovery && (
         <div>
-          <p style={{ overflowWrap: 'anywhere' }}>
+          <p>
             Attempt {uncertain[0].attempt} ended, but these resources remain
             reserved: {uncertain.map((r) => r.name).join(', ')}.
           </p>
@@ -152,7 +153,7 @@ export function WorkPanel({
         </div>
       )}
       {work.hold && !managedRecovery && (
-        <div style={{ overflowWrap: 'anywhere' }}>
+        <div>
           <p>
             <strong>{work.hold.category.replaceAll('_', ' ')}</strong> · held
             since {new Date(work.hold.heldAt).toLocaleString()}
@@ -164,7 +165,7 @@ export function WorkPanel({
         </div>
       )}
       {work.holdHistory && work.holdHistory.total > 0 && (
-        <details style={{ overflowWrap: 'anywhere' }}>
+        <details>
           <summary>External holds · {work.holdHistory.total}</summary>
           <p className="hint">
             Wall time: {(work.holdHistory.wallMs / 1000).toFixed(1)}s · Declared
@@ -326,7 +327,7 @@ export function WorkPanel({
           </p>
         )}
       {claim && work.status === 'claimed' && (
-        <>
+        <div className={styles.manualForm}>
           <p className="hint">
             You can navigate within Interlock while keeping this claim.
             Reloading or closing this page loses the token; the lease remains
@@ -336,7 +337,7 @@ export function WorkPanel({
             mb="md"
             label="Result JSON"
             ref={resultInput}
-            styles={{ input: { fontFamily: 'var(--mono)' } }}
+            classNames={{ input: styles.monoInput }}
             rows={8}
             value={output}
             onChange={(e) => {
@@ -399,7 +400,7 @@ export function WorkPanel({
               Submit result
             </Button>
           </div>
-        </>
+        </div>
       )}
       <ActionError message={error} />
     </section>
