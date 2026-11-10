@@ -8,6 +8,7 @@ import {
   validateDefinition,
   type Json,
   type Run,
+  type WorkRequest,
 } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
@@ -527,8 +528,7 @@ it('validates the joined contract without replaying successful branches on retry
   expect(engine.available(run.id)).toEqual([]);
 });
 
-it('preserves detached work inside a branch when a sibling fails', () => {
-  const engine = setup();
+function withDetachedBranch(engine: Engine) {
   const called = engine.create(
     'Detached child',
     '',
@@ -561,7 +561,13 @@ it('preserves detached work inside a branch when a sibling fails', () => {
     parallelId: 'parallel',
     parallelBranchId: 'r0',
   });
-  const parent = engine.start(publish(engine, d), {}).run;
+  return { definition: d, childWorkflowId: called.id };
+}
+
+it('preserves detached work inside a branch when a sibling fails', () => {
+  const engine = setup();
+  const { definition, childWorkflowId } = withDetachedBranch(engine);
+  const parent = engine.start(publish(engine, definition), {}).run;
   const detached = engine
     .available(parent.id)
     .find((w) => w.nodeId === 'detached-work')!;
@@ -575,8 +581,80 @@ it('preserves detached work inside a branch when a sibling fails', () => {
   engine.retry(parent.id);
   submit(engine, parent.id, 'r1', 'recovered');
   expect(engine.inspect(parent.id).run.output).toEqual({
-    spec: { runId: detached.runId, workflowId: called.id, version: 1 },
+    spec: { runId: detached.runId, workflowId: childWorkflowId, version: 1 },
     code: 'recovered',
   });
   expect(engine.available(parent.id).map((w) => w.id)).toEqual([detached.id]);
+});
+
+it('resumes at the next step when a sibling fails after a detached dispatch', () => {
+  const engine = setup();
+  const { definition, childWorkflowId } = withDetachedBranch(engine);
+  definition.nodes.push(
+    nodeSchema.parse({
+      id: 'follow',
+      label: 'After dispatch',
+      kind: 'agent',
+      prompt: 'Continue with the detached run reference.',
+      parallelId: 'parallel',
+      parallelBranchId: 'r0',
+    }),
+  );
+  Object.assign(
+    definition.edges.find((edge) => edge.id === 'join-r0')!,
+    { target: 'follow', targetHandle: 'default' },
+  );
+  definition.edges.push({
+    id: 'follow-join',
+    source: 'follow',
+    target: 'parallel',
+    port: 'default',
+    targetHandle: 'join',
+  });
+  const workflow = publish(engine, definition);
+  const put = engine.store.put.bind(engine.store);
+  const spy = vi
+    .spyOn(engine.store, 'put')
+    .mockImplementation((table, value) => {
+      if (table === 'work' && (value as WorkRequest).nodeId === 'r1') {
+        spy.mockRestore();
+        throw new Error('Sibling assignment could not be saved');
+      }
+      return put(table, value);
+    });
+
+  const parent = engine.start(workflow, { commit: 'candidate' }).run;
+  expect(parent.status).toBe('failed');
+  expect(parent.error).toContain('Sibling assignment could not be saved');
+  const branch = engine.run(parent.executions.at(-1)!.childRunIds[0]);
+  expect(branch).toMatchObject({ status: 'cancelled', cursor: 'follow' });
+  const dispatch = branch.executions[0];
+  expect(branch.executions).toHaveLength(1);
+  expect(dispatch).toMatchObject({ nodeId: 'r0', status: 'completed' });
+  expect(dispatch.childRunIds).toHaveLength(1);
+  const detachedId = dispatch.childRunIds[0];
+  const reference = {
+    runId: detachedId,
+    workflowId: childWorkflowId,
+    version: 1,
+  };
+
+  engine.retry(parent.id);
+  submit(engine, parent.id, 'r1', 'recovered');
+  const follow = claim(engine, parent.id, 'follow');
+  expect(follow.input).toEqual(reference);
+  engine.submit(follow.id, follow.token!, 'continued');
+  expect(engine.run(branch.id).executions[0]).toEqual(dispatch);
+  expect(engine.run(parent.id)).toMatchObject({
+    status: 'completed',
+    output: { spec: 'continued', code: 'recovered' },
+    parallelSteps: 4,
+  });
+  expect(
+    engine.store
+      .runTrees(new Set([branch.id]))
+      .filter((run) => run.parentMode === 'detached')
+      .map((run) => run.id),
+  ).toEqual([detachedId]);
+  expect(engine.run(detachedId).status).toBe('waiting');
 });

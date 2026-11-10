@@ -4553,30 +4553,30 @@ export class Engine {
       this.save(run);
       return;
     }
-    if (!run.parallelBranch || execution.nodeId === run.cursor)
+    // Cancellation can land between steps. Keep the completed execution and
+    // its forwarded value so the next step starts at the persisted cursor.
+    if (execution.nodeId === run.cursor && execution.status !== 'completed') {
       run.value = Object.hasOwn(execution, 'originalInput')
         ? execution.originalInput!
         : execution.input;
-    if (
-      execution.nodeId === run.cursor &&
-      (execution.kind === 'script' || execution.kind === 'wait')
-    )
-      run.nextScriptAttempt = (execution.attempt ?? 1) + 1;
-    // Only dispatched child runs have progress to retain. Initialization
-    // failures must resolve bindings and validate input again on retry.
-    if (
-      (execution.kind === 'batch' ||
-        execution.kind === 'workflow' ||
-        execution.kind === 'parallel') &&
-      execution.childRunIds.length > 0
-    ) {
-      execution.status = 'waiting';
-      execution.error = undefined;
-      execution.completedAt = undefined;
-      execution.retryChildRunIds = execution.childRunIds.filter((id) => {
-        const child = this.run(id);
-        return child.status === 'failed' || child.status === 'cancelled';
-      });
+      if (execution.kind === 'script' || execution.kind === 'wait')
+        run.nextScriptAttempt = (execution.attempt ?? 1) + 1;
+      // Only dispatched child runs have progress to retain. Initialization
+      // failures must resolve bindings and validate input again on retry.
+      if (
+        (execution.kind === 'batch' ||
+          execution.kind === 'workflow' ||
+          execution.kind === 'parallel') &&
+        execution.childRunIds.length > 0
+      ) {
+        execution.status = 'waiting';
+        execution.error = undefined;
+        execution.completedAt = undefined;
+        execution.retryChildRunIds = execution.childRunIds.filter((id) => {
+          const child = this.run(id);
+          return child.status === 'failed' || child.status === 'cancelled';
+        });
+      }
     }
     this.save(run);
     this.event(run, 'run.retried', 'Explicit retry requested');
