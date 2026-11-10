@@ -62,3 +62,17 @@ Revision commit `ff42deedc0cf278234f67304f45fac5382aa9f54`. The previous review 
 `revision-tests.log` records 76 passing tests in eight files: Parallel, both Parallel transports, admission, external input, versioning and its transports, run start transports, and general transport discovery. The general transport tests retained 66 tools and 298,195 B of definitions on HTTP and stdio. `revision-build.log`, `revision-format.log`, and `revision-site.log` passed. Proof files are in the directory above.
 
 The browser journey, CLI example, package smoke, and full suite evidence remain at `02a370c9753d3724ce5aad99936b32e669904801`. The revision did not change the UI, CLI, package layout, or MCP definitions. The new runtime behavior is exercised by the revision tests; the retained checks establish the original authoring journey, packaging, and broader compatibility at their recorded commit.
+
+## Authoring transport revision
+
+Revision commit `37a398c74611e0f4021fb89260cc21c7740bced6` follows the focused review of `c4b21d5c73b22580c8b4789a4023b4532fadc446`.
+
+| Finding | Correction and proof |
+| --- | --- |
+| `fc39f58-literal-contract` (AC3, AC4, AC13) | Validate authoring JSON without substituting the parsed copy, which omitted nested literal keys. MCP, shared validation, atomic edits, and import preview preserve the supplied JSON for downstream checks. The independent `review-atomic-contract-probe.log` shows the former behavior on HTTP and stdio. The transport regression now preserves the invalid draft for editing, reports actionable diagnostics for candidate and stored draft, and blocks publication on both transports. Replacing the declaration with `patternProperties` allows publication and retains the literal key in the actual joined output. |
+| `c4b21d5-admission-docs` (AC8, AC16) | The start-admission reference and architecture explain that Parallel branches share their parent's admission. Checked against the excluded-stage test and the earlier review's separate dependency probe. Related usage docs describe branch ancestry, input, captures, holds and shared steps. |
+| `c4b21d5-spec-control-label` (AC10, AC16) | The approved UI proposal now names **Add node** for the existing toolbar action, matching the editor and the browser evidence. The behavior and approval stay the same. |
+
+`revision2-targeted.log` records 71 passing tests across Parallel transports, shared validation transport, atomic editing, and general discovery. Both transports retained 66 tools and advertised 297,761 B of definitions. Editing and preflight still accept candidate JSON for diagnostics; no new MCP tools or response fields were added. `revision2-build.log`, `revision2-format-final.log`, `revision2-package.log`, and `revision2-site-final.log` passed, including 585 checked local references and bundled HTTP and stdio smoke coverage. The real browser and CLI example evidence remains at `02a370c9753d3724ce5aad99936b32e669904801`; the revision does not change the editor controls, inspector or CLI commands.
+
+`pnpm test --maxWorkers=4` passed all 186 files and 2,178 tests. See `revision2-full-tests.log`. This repeated the broader checks because the fix touches the shared authoring path.
