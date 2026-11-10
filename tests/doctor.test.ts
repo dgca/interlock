@@ -566,39 +566,43 @@ describe('doctor health and readiness check', () => {
   });
 
   describe('workflow & dependency integrity checks', () => {
-    it('detects missing variables referenced by published workflows', async () => {
-      const { engine, store } = createEnv();
-      const savedVar = engine.variables.mutate({
-        action: 'create',
-        name: 'TEMPORARY_KEY',
-        value: 'initial_val',
-        kind: 'config',
-      }) as { id: string; revision: number };
-      const def: WorkflowDefinition = blankDefinition();
-      def.nodes[1] = nodeSchema.parse({
-        id: 'agent',
-        kind: 'script',
-        label: 'Script',
-        command: 'return input;',
-        environment: [{ name: 'TEMPORARY_KEY', variableId: savedVar.id }],
-      });
-      const wf = engine.create('Production Pipeline', '', def);
-      engine.publish(wf.id);
+    it.each([false, true])(
+      'detects missing variables referenced by published workflows when archived=%s',
+      async (archived) => {
+        const { engine, store } = createEnv();
+        const savedVar = engine.variables.mutate({
+          action: 'create',
+          name: 'TEMPORARY_KEY',
+          value: 'initial_val',
+          kind: 'config',
+        }) as { id: string; revision: number };
+        const def: WorkflowDefinition = blankDefinition();
+        def.nodes[1] = nodeSchema.parse({
+          id: 'agent',
+          kind: 'script',
+          label: 'Script',
+          command: 'return input;',
+          environment: [{ name: 'TEMPORARY_KEY', variableId: savedVar.id }],
+        });
+        const wf = engine.create('Production Pipeline', '', def);
+        engine.publish(wf.id);
 
-      // Delete the variable after publishing to simulate a broken dependency
-      store.remove('variables', savedVar.id);
+        // Delete the variable after publishing to simulate a broken dependency
+        store.remove('variables', savedVar.id);
+        engine.update(wf.id, { archived });
 
-      const report = await engine.doctor();
-      expect(report.status).toBe('fail');
-      const varCheck = report.checks.find((c) =>
-        c.name.includes('Missing variable'),
-      );
-      expect(varCheck).toBeDefined();
-      expect(varCheck!.status).toBe('fail');
-      expect(varCheck!.message).toContain(
-        `references missing variable "${savedVar.id}"`,
-      );
-    });
+        const report = await engine.doctor();
+        expect(report.status).toBe('fail');
+        const varCheck = report.checks.find((c) =>
+          c.name.includes('Missing variable'),
+        );
+        expect(varCheck).toBeDefined();
+        expect(varCheck!.status).toBe('fail');
+        expect(varCheck!.message).toContain(
+          `references missing variable "${savedVar.id}"`,
+        );
+      },
+    );
 
     it('detects disabled variables referenced by published workflows', async () => {
       const { engine } = createEnv();
@@ -698,8 +702,8 @@ describe('doctor health and readiness check', () => {
       ).toEqual([]);
     });
 
-    it('surfaces workflows with unpublished draft edits', async () => {
-      const { engine } = createEnv();
+    it('warns about unpublished drafts only while their workflows are active, including after restoration', async () => {
+      const { engine } = createEnv(true);
       const wf = engine.create('Draft Edited Workflow');
       engine.publish(wf.id);
 
@@ -720,6 +724,25 @@ describe('doctor health and readiness check', () => {
       expect(draftCheck!.message).toContain(
         'has unpublished draft modifications',
       );
+
+      engine.update(wf.id, { archived: true });
+      const archived = await engine.doctor();
+      expect(archived.checks.filter((c) => c.category === 'workflows')).toEqual(
+        [
+          expect.objectContaining({
+            name: 'Workflow dependencies',
+            status: 'ok',
+          }),
+        ],
+      );
+      expect(archived.summary.warn).toBe(report.summary.warn - 1);
+      expect(archived.status).toBe('ok');
+
+      engine.update(wf.id, { archived: false });
+      const restored = await engine.doctor();
+      expect(restored.checks).toContainEqual(draftCheck);
+      expect(restored.summary.warn).toBe(report.summary.warn);
+      expect(restored.status).toBe('warn');
     });
   });
 

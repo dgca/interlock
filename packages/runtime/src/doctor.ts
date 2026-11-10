@@ -711,8 +711,8 @@ export async function runDoctor(
         }
       }
 
-      // Check unpublished drafts
-      if (workflow.latestVersion) {
+      // Check unpublished drafts of active workflows
+      if (!workflow.archived && workflow.latestVersion) {
         const latest = engine.store.getVersion(
           workflow.id,
           workflow.latestVersion,

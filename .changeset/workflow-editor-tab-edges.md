@@ -11,3 +11,5 @@ Remove variable enable/disable controls and the empty Danger zone from the edito
 List detected harness configurations first and sort each detection group alphabetically, keeping row positions steady when enabling or disabling a configuration.
 
 Align harness execution-default fields, add spacing below concurrency, move model refresh beneath its input, and remove generic configuration guidance.
+
+Skip unpublished-draft diagnostics for archived workflows while retaining published-dependency and execution-blocker checks across the UI, CLI, and MCP.
