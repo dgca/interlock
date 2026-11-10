@@ -1,16 +1,48 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { STARTED_RUN_SCHEMA, type WorkflowNode } from '@interlock/core';
+import {
+  blankDefinition,
+  STARTED_RUN_SCHEMA,
+  type Workflow,
+  type WorkflowNode,
+  type WorkflowVersion,
+} from '@interlock/core';
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
 import { workflowCall } from './fixtures/detached';
+const versions = vi.hoisted(() => vi.fn());
+vi.mock('../packages/ui/src/lib/api', () => ({
+  api: {
+    workflows: { versions: { query: versions } },
+    [Symbol.for('trpc_untypedClient')]: {
+      query: (_path: string, input: unknown) => versions(input),
+    },
+  },
+  errorMessage: (error: Error) => error.message,
+}));
 vi.mock('../packages/ui/src/design-system/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', {}, children),
 }));
 let container: HTMLDivElement, root: Root;
+const published = (
+  version: number,
+  outputSchema: WorkflowVersion['definition']['outputSchema'],
+  workflowId = 'child',
+): WorkflowVersion => ({
+  workflowId,
+  version,
+  definition: { ...blankDefinition(), outputSchema },
+  createdAt: '2026-11-09T00:00:00.000Z',
+});
 beforeEach(() => {
+  versions
+    .mockReset()
+    .mockResolvedValue([
+      published(1, { type: 'string' }),
+      published(2, { type: 'number' }),
+    ]);
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -39,9 +71,11 @@ async function render(
   batchId?: string,
   onFailure?: 'route' | 'fail',
   resultSettings: Pick<WorkflowNode, 'routing' | 'outputBindings'> = {},
+  version: number | null = 1,
 ) {
   const definition = workflowCall('child', mode);
   const node = definition.nodes[1];
+  if (node.kind === 'workflow') node.version = version;
   node.batchId = batchId;
   Object.assign(node, resultSettings);
   if (node.kind === 'workflow') node.onFailure = onFailure;
@@ -67,7 +101,23 @@ async function render(
           description: '',
           definition,
           node,
-          workflows: [],
+          workflows: ['child', 'other-child'].map(
+            (id) =>
+              ({
+                id,
+                name: 'Child',
+                description: '',
+                archived: false,
+                latestVersion: 2,
+                draftRevision: 1,
+                createdAt: '2026-11-09T00:00:00.000Z',
+                updatedAt: '2026-11-09T00:00:00.000Z',
+                draft: {
+                  ...blankDefinition(),
+                  outputSchema: { type: 'boolean' },
+                },
+              }) satisfies Workflow,
+          ),
           onClose: vi.fn(),
           onApply,
         }),
@@ -90,6 +140,20 @@ async function apply() {
       .click(),
   );
 }
+async function pin(value: string) {
+  const label = Array.from(container.querySelectorAll('label')).find(
+    (label) => label.textContent === 'Pinned version',
+  )!;
+  const input = document.getElementById(label.htmlFor) as HTMLInputElement;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
 it('preserves omitted mode and restores the wait contract when toggling before Apply', async () => {
   const { onApply } = await render();
   expect(
@@ -118,7 +182,7 @@ it('saves detached mode with the fixed contract and explains Batch dispatch conc
     outputSchema: STARTED_RUN_SCHEMA,
   });
 });
-it('keeps saved detached mode selected and starts with Any when switching back', async () => {
+it('restores the pinned published output when reopening detached mode, ignoring newer versions and draft edits', async () => {
   const { onApply } = await render('detached');
   expect(
     container.querySelector<HTMLInputElement>('input[value="detached"]')!
@@ -126,7 +190,126 @@ it('keeps saved detached mode selected and starts with Any when switching back',
   ).toBe(true);
   await choose('wait');
   await apply();
+  expect(versions).toHaveBeenCalledWith({ id: 'child' });
+  expect(onApply.mock.calls[0][0].definition.nodes[1].outputSchema).toEqual({
+    type: 'string',
+  });
+});
+
+it('waits for the pinned contract before allowing a detached node to switch to wait', async () => {
+  let resolve!: (value: WorkflowVersion[]) => void;
+  versions.mockReturnValue(
+    new Promise<WorkflowVersion[]>((done) => {
+      resolve = done;
+    }),
+  );
+  const { onApply } = await render('detached');
+  const wait = () =>
+    container.querySelector<HTMLInputElement>('input[value="wait"]')!;
+  expect(wait().disabled).toBe(true);
+  expect(container.textContent).toContain('Loading output contract');
+  await act(async () => resolve([published(1, { type: 'string' })]));
+  expect(wait().disabled).toBe(false);
+  await choose('wait');
+  await apply();
+  expect(onApply.mock.calls[0][0].definition.nodes[1].outputSchema).toEqual({
+    type: 'string',
+  });
+});
+
+it('starts with Any for an unpublished target and does not fetch versions', async () => {
+  const { onApply } = await render('detached', undefined, undefined, {}, null);
+  expect(container.textContent).toContain('No published version is selected');
+  await choose('wait');
+  await apply();
+  expect(versions).not.toHaveBeenCalled();
   expect(onApply.mock.calls[0][0].definition.nodes[1].outputSchema).toEqual({});
+});
+
+it('explains a missing pinned version without substituting another contract', async () => {
+  versions.mockResolvedValue([published(2, { type: 'number' })]);
+  const { onApply } = await render('detached');
+  expect(container.textContent).toContain('Pinned version 1 is unavailable');
+  await choose('wait');
+  await apply();
+  expect(onApply.mock.calls[0][0].definition.nodes[1].outputSchema).toEqual({});
+});
+
+it('keeps detached mode on a failed read and allows retrying the pinned contract', async () => {
+  versions.mockRejectedValueOnce(new Error('Offline'));
+  const { onApply } = await render('detached');
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+    'Offline',
+  );
+  expect(
+    container.querySelector<HTMLInputElement>('input[value="wait"]')!.disabled,
+  ).toBe(true);
+  await act(async () =>
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Retry output contract')!
+      .click(),
+  );
+  await choose('wait');
+  await apply();
+  expect(onApply.mock.calls[0][0].definition.nodes[1].outputSchema).toEqual({
+    type: 'string',
+  });
+});
+
+it('allows switching to Any after clearing a pin whose contract could not be loaded', async () => {
+  versions.mockRejectedValueOnce(new Error('Offline'));
+  const { onApply } = await render('detached');
+  await pin('');
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(
+    container.querySelector<HTMLInputElement>('input[value="wait"]')!.disabled,
+  ).toBe(false);
+  await choose('wait');
+  await apply();
+  expect(onApply.mock.calls[0][0].definition.nodes[1]).toMatchObject({
+    version: null,
+    outputSchema: {},
+  });
+});
+
+it('loads the newly selected pin instead of restoring a remembered contract for another version', async () => {
+  const { onApply } = await render();
+  await choose('detached');
+  await pin('2');
+  await choose('wait');
+  await apply();
+  expect(onApply.mock.calls[0][0].definition.nodes[1]).toMatchObject({
+    version: 2,
+    outputSchema: { type: 'number' },
+  });
+});
+
+it('ignores an old target read that finishes after the workflow reference changes', async () => {
+  let resolve!: (value: WorkflowVersion[]) => void;
+  versions.mockImplementation(({ id }) =>
+    id === 'child'
+      ? new Promise<WorkflowVersion[]>((done) => {
+          resolve = done;
+        })
+      : Promise.resolve([published(2, { type: 'boolean' }, 'other-child')]),
+  );
+  const { onApply } = await render('detached');
+  const label = Array.from(container.querySelectorAll('label')).find(
+    (label) => label.textContent === 'Referenced workflow',
+  )!;
+  const select = document.getElementById(label.htmlFor) as HTMLSelectElement;
+  await act(async () => {
+    select.value = 'other-child';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await act(async () => resolve([published(1, { type: 'string' })]));
+  await choose('wait');
+  await apply();
+  expect(onApply.mock.calls[0][0].definition.nodes[1]).toMatchObject({
+    workflowId: 'other-child',
+    version: 2,
+    outputSchema: { type: 'boolean' },
+  });
 });
 
 it('removes failure routing and its edge when switching to detached mode', async () => {

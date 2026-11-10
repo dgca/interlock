@@ -19,7 +19,7 @@ Below the workflow and version controls, show an **Execution** radio group:
 
 Wait for result is the default. Show a **Start and continue** label on detached canvas nodes so their behavior is visible without opening settings. Keep the ordinary In and Out connections.
 
-In detached mode, the Output section shows a read-only **Started run** contract containing `runId`, `workflowId`, and `version`. Switching modes changes the output shape. Show that consequence beside the mode control. Preserve the previous wait-mode output contract while toggling within the dialog. Applying detached mode stores the intrinsic run-reference contract; switching back after saving starts from an unrestricted output contract, which the user can edit.
+In detached mode, the Output section shows a read-only **Started run** contract containing `runId`, `workflowId`, and `version`. Switching modes changes the output shape. Show that consequence beside the mode control. Preserve the previous wait-mode output contract while toggling within the dialog for the same workflow reference and pinned version. Applying detached mode stores the intrinsic run-reference contract. Switching back after reopening restores the pinned published version's output contract. An unpublished or unavailable version starts with unrestricted output, with guidance to edit the contract.
 
 ## Dispatch and output
 

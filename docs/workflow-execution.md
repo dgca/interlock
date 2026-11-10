@@ -82,7 +82,7 @@ Start and continue returns the new run's identity:
 }
 ```
 
-This output confirms dispatch, not completion. It contains no live status or eventual result. The Output section shows a read-only **Started run** contract. Changing execution mode changes what downstream steps receive. The editor preserves the previous wait-mode contract when toggling before Apply changes. After saving detached mode, switching back starts with an unrestricted output contract.
+This output confirms dispatch, not completion. It contains no live status or eventual result. The Output section shows a read-only **Started run** contract. Changing execution mode changes what downstream steps receive. The editor preserves the previous wait-mode contract when toggling before Apply changes, while the workflow reference and pinned version stay the same. After reopening a saved detached node, switching back restores the output contract from that pinned published version. If no version is selected or retained, the editor explains that waiting starts with Any output. A failed contract read leaves the mode unchanged and offers Retry.
 
 Raw and API definitions may omit `outputSchema` or use `{}` to select the intrinsic contract. An explicit override must match this contract; conflicting overrides block publication:
 
