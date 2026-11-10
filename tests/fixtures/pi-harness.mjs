@@ -30,6 +30,7 @@ const sessionId = flag(
 );
 let model = { provider: 'fixture', id: 'model', name: 'Fixture Model' },
   thinkingLevel = 'off';
+let awaitingSteer = false;
 const response = (message, data) =>
   send({
     type: 'response',
@@ -80,6 +81,16 @@ async function run(message) {
         },
       });
       send({ type: 'agent_settled', aborted: false });
+      return;
+    }
+    if (message.message.includes('TRANSCRIPT_STEER')) {
+      awaitingSteer = true;
+      send({
+        type: 'tool_execution_start',
+        toolName: 'bash',
+        toolCallId: 'checks',
+        args: { command: 'pnpm test' },
+      });
       return;
     }
     const blocked = await handlers.tool_call(
@@ -144,6 +155,29 @@ async function run(message) {
         : JSON.stringify({ result: { ok: !blocked?.block } }),
       message.message.includes('PROVIDER_ERROR') ? 'error' : 'stop',
     );
+    send({ type: 'agent_settled', aborted: false });
+  } else if (message.type === 'steer' && awaitingSteer) {
+    awaitingSteer = false;
+    response(message, { disposition: 'queued' });
+    send({
+      type: 'tool_execution_end',
+      toolName: 'bash',
+      toolCallId: 'checks',
+      result: { content: [{ type: 'text', text: 'Checks passed' }] },
+    });
+    send({
+      type: 'message_end',
+      message: {
+        id: 'answer',
+        role: 'assistant',
+        provider: model.provider,
+        model: model.id,
+        stopReason: 'stop',
+        content: [
+          { type: 'text', text: JSON.stringify({ result: { ok: true } }) },
+        ],
+      },
+    });
     send({ type: 'agent_settled', aborted: false });
   } else
     send({

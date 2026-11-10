@@ -28,6 +28,7 @@ import { api, errorMessage } from '../../lib/api';
 import styles from './ManagedExecutionPanel.module.css';
 import { permissionLabels } from './permissions';
 import { ModelPicker } from './ModelPicker';
+import { ManagedTranscript } from './ManagedTranscript';
 
 type Inspection = Awaited<ReturnType<typeof api.executors.inspect.query>>;
 const stateLabels = {
@@ -407,33 +408,35 @@ function Execution({
       )}
       {['starting', 'running', 'needs_human', 'needs_model'].includes(
         record.state,
-      ) && (
-        <section
-          className={styles.liveTailSection}
-          aria-label="Live progress tail"
-        >
-          <div className={styles.liveTailHeader}>
-            <h4>Live progress</h4>
-            {record.logCount > 0 && (
-              <span className={styles.logCountBadge}>
-                {record.logs.length} / {record.logCount} updates
-              </span>
+      ) &&
+        (record.logCount > 0 || !record.transcriptCapture) && (
+          <section
+            className={styles.liveTailSection}
+            aria-label="Live progress tail"
+          >
+            <div className={styles.liveTailHeader}>
+              <h4>Live progress</h4>
+              {record.logCount > 0 && (
+                <span className={styles.logCountBadge}>
+                  {record.logs.length} / {record.logCount} updates
+                </span>
+              )}
+            </div>
+            {record.logs.length > 0 ? (
+              <ol className={styles.liveLogs} tabIndex={0} aria-live="polite">
+                {record.logs.map((log, i) => (
+                  <li key={i}>
+                    <time>{new Date(log.at).toLocaleTimeString()}</time>
+                    <span>{log.message}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className={styles.liveEmpty}>Waiting for progress updates…</p>
             )}
-          </div>
-          {record.logs.length > 0 ? (
-            <ol className={styles.liveLogs} tabIndex={0} aria-live="polite">
-              {record.logs.map((log, i) => (
-                <li key={i}>
-                  <time>{new Date(log.at).toLocaleTimeString()}</time>
-                  <span>{log.message}</span>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className={styles.liveEmpty}>Waiting for progress updates…</p>
-          )}
-        </section>
-      )}
+          </section>
+        )}
+      <ManagedTranscript current={record} history={inspection?.history ?? []} />
       <details className={styles.details}>
         <summary>
           Execution details

@@ -1,0 +1,82 @@
+.section {
+  margin-top: 20px;
+  min-width: 0;
+}
+.section > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding-block: 12px;
+}
+.reader {
+  min-width: 0;
+}
+.metadata,
+.retention {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.retention {
+  margin-top: 16px;
+}
+.notice {
+  color: var(--attention-text);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.error {
+  color: var(--error-copy);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.navigation {
+  margin-block: 12px;
+}
+.entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.entries > li {
+  border-top: 1px solid var(--border);
+  padding-block: 14px;
+  min-width: 0;
+}
+.entryHeading {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+}
+.entryHeading time {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.entries pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.65;
+  max-height: 360px;
+  overflow: auto;
+}
+.entries summary {
+  cursor: pointer;
+  margin-top: 8px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.composer {
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--form);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.composer > :last-child {
+  margin-top: 12px;
+}

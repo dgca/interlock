@@ -288,6 +288,52 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 17,
+    up(db) {
+      db.exec(`
+        CREATE TABLE transcript_executions (
+          execution_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, capability TEXT NOT NULL,
+          ended_at INTEGER, omitted INTEGER NOT NULL DEFAULT 0, reason TEXT,
+          receipts_pruned INTEGER NOT NULL DEFAULT 0,
+          retained_entries INTEGER NOT NULL DEFAULT 0, retained_bytes INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX transcript_run ON transcript_executions(run_id);
+        CREATE INDEX transcript_ended ON transcript_executions(ended_at);
+        CREATE TABLE transcript_entries (
+          sequence INTEGER PRIMARY KEY AUTOINCREMENT, execution_id TEXT NOT NULL,
+          entry_key TEXT, value TEXT NOT NULL, bytes INTEGER NOT NULL,
+          UNIQUE(execution_id, entry_key)
+        );
+        CREATE INDEX transcript_page ON transcript_entries(execution_id, sequence);
+        CREATE TABLE transcript_receipts (
+          execution_id TEXT NOT NULL, request_id TEXT NOT NULL,
+          hash TEXT NOT NULL, value TEXT NOT NULL, bytes INTEGER NOT NULL,
+          PRIMARY KEY(execution_id, request_id)
+        );
+        CREATE TABLE transcript_size (id INTEGER PRIMARY KEY CHECK(id = 1), bytes INTEGER NOT NULL);
+        INSERT INTO transcript_size VALUES (1, 0);
+        CREATE TRIGGER transcript_entry_insert AFTER INSERT ON transcript_entries BEGIN
+          UPDATE transcript_executions SET retained_entries = retained_entries + 1, retained_bytes = retained_bytes + NEW.bytes WHERE execution_id = NEW.execution_id;
+          UPDATE transcript_size SET bytes = bytes + NEW.bytes WHERE id = 1; END;
+        CREATE TRIGGER transcript_entry_delete AFTER DELETE ON transcript_entries BEGIN
+          UPDATE transcript_executions SET retained_entries = retained_entries - 1, retained_bytes = retained_bytes - OLD.bytes WHERE execution_id = OLD.execution_id;
+          UPDATE transcript_size SET bytes = bytes - OLD.bytes WHERE id = 1; END;
+        CREATE TRIGGER transcript_receipt_insert AFTER INSERT ON transcript_receipts BEGIN
+          UPDATE transcript_size SET bytes = bytes + NEW.bytes WHERE id = 1; END;
+        CREATE TRIGGER transcript_receipt_update AFTER UPDATE ON transcript_receipts BEGIN
+          UPDATE transcript_size SET bytes = bytes + NEW.bytes - OLD.bytes WHERE id = 1; END;
+        CREATE TRIGGER transcript_receipt_delete AFTER DELETE ON transcript_receipts BEGIN
+          UPDATE transcript_size SET bytes = bytes - OLD.bytes WHERE id = 1; END;
+        CREATE TRIGGER transcript_execution_delete AFTER DELETE ON transcript_executions BEGIN
+          DELETE FROM transcript_entries WHERE execution_id = OLD.execution_id;
+          DELETE FROM transcript_receipts WHERE execution_id = OLD.execution_id; END;
+        CREATE TRIGGER transcript_managed_delete AFTER DELETE ON documents
+          WHEN OLD.collection = 'managedExecutions' BEGIN
+          DELETE FROM transcript_executions WHERE execution_id = OLD.id; END;
+      `);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

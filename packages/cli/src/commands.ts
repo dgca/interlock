@@ -172,10 +172,12 @@ export async function runCommand(argv: string[]) {
       return client.stalls.manage.mutate(
         args.length ? await parse(args[0]) : { action: 'settings' },
       );
-    case 'executors':
+    case 'executors': {
+      const request = args.length ? await parse(args[0]) : { action: 'list' };
       return client.executors.manage.mutate(
-        args.length ? await parse(args[0]) : { action: 'list' },
+        request.action === 'message' ? { ...request, source: 'cli' } : request,
       );
+    }
     case 'simulation':
       if (args.length !== 1) throw new Error('Usage: simulation <json|@file>');
       return client.testbench.simulation.mutate(await parse(args[0]));
@@ -625,7 +627,7 @@ export async function runCommand(argv: string[]) {
           'triggers <read|manage> <json|@file> (schedule/event configuration; paged search/status filters and scoped counts; mutations use expectedRevision; create defaults disabled, enabled:true opts in; imports disabled; schedules alias retained)',
           'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value; write-only Secret creation/replacement through stdin)',
           'stalls [json|@file] (settings by default; configure with expectedRevision/policy, inspect with runId/offset/limit)',
-          'executors [json|@file] (list by default; settings/save_settings for shared concurrency, save local profiles with optional concurrency, discover models/efforts, inspect work, respond, retry_model after a model refusal, stop or reconcile an interrupted execution)',
+          'executors [json|@file] (list by default; settings/save_settings, save profiles, models, inspect work, transcript by executionId with before/after paging, message with executionId/requestId/message, receipt with executionId/requestId, respond, retry_model, stop, reconcile)',
           'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
           'workflow <id>',
           'update <workflow-id> <json|@file> (metadata or draft replacement; layout:"tidy" arranges with Dagre, "preserve" keeps saved positions; draft/layout requests require draftRevision; layout-only changes preserve it)',
