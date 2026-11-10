@@ -867,3 +867,40 @@ it('does not turn a completed archived delegated session into an interruption on
   await e.executors.stop();
   expect(e.executors.inspect(work.id).items[0].state).toBe('completed');
 });
+
+it.each(['direct', 'launcher'] as const)(
+  'accepts a successful %s command that does not consume its large stdin payload',
+  async (mode) => {
+    const e = create();
+    const command = `printf '{"output":{"ok":true},"sessionId":"no-stdin-session"}'`;
+    const profile = e.executors.saveProfile({
+      id: 'no-stdin-' + mode,
+      harness: 'custom',
+      name: 'No stdin ' + mode,
+      enabled: true,
+      expectedRevision: 0,
+      mode,
+      transport: 'subprocess',
+      ...(mode === 'direct'
+        ? { turnCommand: command }
+        : { launchCommand: command }),
+    });
+    if (mode === 'direct') e.executors.start(nativeAdapters);
+    const w = workflow(e, profile.id);
+    const run = e.start(w.id, { input: 'x'.repeat(1_000_000) }).run;
+    if (mode === 'direct') {
+      await vi.waitFor(() => expect(e.run(run.id).status).toBe('completed'));
+      expect(e.run(run.id).output).toEqual({ ok: true });
+    } else {
+      const work = e.available(run.id)[0];
+      const session = await (e.executors as any).launchCustom(
+        work,
+        profile,
+        process.cwd(),
+        'logical-session',
+      );
+      expect(session.sessionId).toBe('no-stdin-session');
+      expect((e.executors as any).claimTickets.get(work.id)).toBeDefined();
+    }
+  },
+);

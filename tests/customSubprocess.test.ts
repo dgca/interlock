@@ -48,7 +48,7 @@ it('handles a broken stdin pipe without crashing the server process', async () =
   const probe = join(cwd, 'probe.mts');
   writeFileSync(
     probe,
-    `import { executeSubprocessTurn } from ${JSON.stringify(resolve('packages/runtime/src/executors/custom.ts'))};\ntry { await executeSubprocessTurn({ command:'exit 1', cwd:${JSON.stringify(cwd)}, payload:{input:'x'.repeat(1000000)}, tokens:{}, signal:new AbortController().signal }); process.exitCode=2; } catch { console.log('turn rejected safely'); }`,
+    `import { executeSubprocessTurn } from ${JSON.stringify(resolve('packages/runtime/src/executors/custom.ts'))};\ntry { await executeSubprocessTurn({ command:'exit 1', cwd:${JSON.stringify(cwd)}, payload:{input:'x'.repeat(1000000)}, tokens:{}, signal:new AbortController().signal }); process.exitCode=2; } catch (error) { if (!/exit code 1/.test(error.message)) process.exitCode=3; console.log('turn rejected safely'); }`,
   );
   const result = await promisify(execFile)(
     process.execPath,
@@ -152,4 +152,15 @@ it('marks uncertain cleanup as non-retryable even when the original error looks 
     errorClass: 'permanent',
     retryable: false,
   });
+});
+
+it('accepts a successful result when the command closes stdin without reading its payload', async () => {
+  const result = await executeSubprocessTurn({
+    command: `printf '{"output":{"ok":true}}'`,
+    cwd: directory(),
+    payload: { input: 'x'.repeat(1_000_000) },
+    tokens: {},
+    signal: new AbortController().signal,
+  });
+  expect(result.output).toEqual({ ok: true });
 });

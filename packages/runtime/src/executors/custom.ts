@@ -97,8 +97,11 @@ export async function executeCustomCommand(input: {
         input.onProgress?.(text);
       });
       child.on('error', reject);
-      // EPIPE is emitted by stdin, not by the ChildProcess, when the command exits early.
-      child.stdin.on('error', reject);
+      // A command may finish successfully without consuming stdin. Drain its
+      // output and let the exit status decide; other stream errors still fail.
+      child.stdin.on('error', (error: NodeJS.ErrnoException) => {
+        if (error.code !== 'EPIPE') reject(error);
+      });
       child.on('close', (code) => {
         code === 0
           ? resolve(stdout.trim())
