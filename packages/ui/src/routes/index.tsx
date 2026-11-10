@@ -187,13 +187,14 @@ function PromptRoute() {
 }
 
 function LibraryRoute() {
-  const { workflows, act, loaded } = useOutletContext<AppContext>();
+  const { workflows, act, loaded, onSaved } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   if (!loaded) return <Loading subject="workflows" />;
   return (
     <Suspense fallback={<RouteSkeleton subject="workflows" />}>
       <WorkflowLibrary
         workflows={workflows}
+        onSaved={onSaved}
         act={act}
         onOpen={(id) => void navigate(paths.workflow(id))}
       />

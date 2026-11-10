@@ -6,15 +6,21 @@ import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { routes } from '../packages/ui/src/routes';
+import { blankDefinition, type Workflow } from '@interlock/core';
 import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
 
+let libraryClient: ReturnType<typeof useQueryClient>;
 beforeAll(async () => {
+  await import('../packages/ui/src/features/workflows/WorkflowLibrary');
   await import('../packages/ui/src/features/runs/RunList');
   await import('../packages/ui/src/features/diagnostics/Diagnostics');
 });
 
 const queries = vi.hoisted(() => ({
   workflows: vi.fn(),
+  createWorkflow: vi.fn(),
+  cloneWorkflow: vi.fn(),
+  realLibrary: false,
   summaries: vi.fn(),
   attention: vi.fn(),
   doctor: vi.fn(),
@@ -52,7 +58,11 @@ vi.mock('../packages/ui/src/lib/api', async () => {
       connection: {
         query: () => Promise.resolve({ engineUrl: 'http://127.0.0.1:4310' }),
       },
-      workflows: { list: { query: queries.workflows } },
+      workflows: {
+        list: { query: queries.workflows },
+        create: { mutate: queries.createWorkflow },
+        clone: { mutate: queries.cloneWorkflow },
+      },
       runs: {
         summaries: { query: queries.summaries },
         attention: { query: queries.attention },
@@ -62,26 +72,38 @@ vi.mock('../packages/ui/src/lib/api', async () => {
     errorMessage: (error: Error) => error.message,
   };
 });
-vi.mock('../packages/ui/src/features/workflows/WorkflowLibrary', () => ({
-  WorkflowLibrary: ({ onOpen }: any) => {
-    const client = useQueryClient();
-    return h(
-      'div',
-      {},
-      h('button', { onClick: () => onOpen('w1') }, 'Open workflow'),
-      h(
-        'button',
-        {
-          onClick: () =>
-            void client.refetchQueries({
-              queryKey: trpc.workflows.list.queryKey(),
-            }),
-        },
-        'Refresh library',
-      ),
-    );
+vi.mock(
+  '../packages/ui/src/features/workflows/WorkflowLibrary',
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import('../packages/ui/src/features/workflows/WorkflowLibrary')
+      >();
+    return {
+      WorkflowLibrary: (props: any) => {
+        const client = useQueryClient();
+        libraryClient = client;
+        if (queries.realLibrary) return h(actual.WorkflowLibrary, props);
+        const { onOpen } = props;
+        return h(
+          'div',
+          {},
+          h('button', { onClick: () => onOpen('w1') }, 'Open workflow'),
+          h(
+            'button',
+            {
+              onClick: () =>
+                void client.refetchQueries({
+                  queryKey: trpc.workflows.list.queryKey(),
+                }),
+            },
+            'Refresh library',
+          ),
+        );
+      },
+    };
   },
-}));
+);
 vi.mock('../packages/ui/src/features/executors/Harnesses', () => ({
   Harnesses: ({ onDirty }: any) =>
     h(
@@ -158,6 +180,7 @@ beforeEach(() => {
     },
   );
   vi.clearAllMocks();
+  queries.realLibrary = false;
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -866,3 +889,102 @@ it('returns to cached Runs immediately while its revisit request is pending', as
   await act(async () => finish(nextPage));
   expect(container.querySelector('button.run-row')).toBeNull();
 });
+
+it.each([
+  { operation: 'create', priorRead: false },
+  { operation: 'clone', priorRead: false },
+  { operation: 'create', priorRead: true },
+  { operation: 'clone', priorRead: true },
+] as const)(
+  'opens a library $operation without a not-found flash with delayed refresh and prior read $priorRead',
+  async ({ operation, priorRead }) => {
+    queries.realLibrary = true;
+    const original: Workflow = {
+      id: 'original',
+      name: 'Original workflow',
+      description: '',
+      archived: false,
+      ownerWorkflowId: null,
+      draft: blankDefinition(),
+      draftRevision: 1,
+      latestVersion: 0,
+      createdAt: '2026-11-09T00:00:00Z',
+      updatedAt: '2026-11-09T00:00:00Z',
+    };
+    const created = { ...original, id: 'new-workflow', name: 'New workflow' };
+    queries.workflows.mockResolvedValue([original]);
+    queries.createWorkflow.mockResolvedValue(created);
+    queries.cloneWorkflow.mockResolvedValue(created);
+    await mount('/workflows');
+    let finishOld: (() => void) | undefined;
+    let finishRefresh!: () => void;
+    if (priorRead) {
+      queries.workflows.mockImplementationOnce(
+        () =>
+          new Promise<Workflow[]>((resolve) => {
+            finishOld = () => resolve([original]);
+          }),
+      );
+      await act(async () => {
+        void libraryClient.refetchQueries(trpc.workflows.list.queryFilter());
+      });
+      // Another acknowledged write during that read must also survive cancellation.
+      libraryClient.setQueryData(trpc.workflows.list.queryKey(), (all = []) =>
+        all.map((workflow) =>
+          workflow.id === original.id
+            ? { ...workflow, description: 'Newer acknowledged description' }
+            : workflow,
+        ),
+      );
+    }
+    queries.workflows.mockImplementation(
+      () =>
+        new Promise<Workflow[]>((resolve) => {
+          finishRefresh = () => resolve([original, created]);
+        }),
+    );
+    const seen: string[] = [];
+    const observer = new MutationObserver(() =>
+      seen.push(container.textContent ?? ''),
+    );
+    observer.observe(container, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    try {
+      if (operation === 'create') await click('New workflow');
+      else {
+        await act(async () =>
+          document
+            .querySelector<HTMLButtonElement>(
+              'button[aria-label="Actions for Original workflow"]',
+            )!
+            .click(),
+        );
+        await click('Clone');
+      }
+      expect(window.location.pathname).toBe('/workflows/new-workflow');
+      expect(container.textContent).toContain('Editor new-workflow');
+      expect(seen.some((text) => text.includes('Workflow not found'))).toBe(
+        false,
+      );
+      if (finishOld) {
+        await act(async () => finishOld!());
+        expect(container.textContent).toContain('Editor new-workflow');
+        expect(
+          libraryClient
+            .getQueryData(trpc.workflows.list.queryKey())
+            ?.find((workflow) => workflow.id === original.id)?.description,
+        ).toBe('Newer acknowledged description');
+      }
+      expect(seen.some((text) => text.includes('Workflow not found'))).toBe(
+        false,
+      );
+      await act(async () => finishRefresh());
+      expect(container.textContent).toContain('Editor new-workflow');
+    } finally {
+      observer.disconnect();
+    }
+  },
+);

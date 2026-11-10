@@ -2,6 +2,7 @@
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
+import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
@@ -89,8 +90,19 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   rpc.profiles.mockResolvedValue([
-    { id: 'codex', name: 'Codex', permissions: 'full-access', enabled: true },
     {
+      ...harnessProfile(),
+      model: undefined,
+      effort: undefined,
+      id: 'codex',
+      name: 'Codex',
+      permissions: 'full-access',
+      enabled: true,
+    },
+    {
+      ...harnessProfile(),
+      model: undefined,
+      effort: undefined,
       id: 'claude-code',
       name: 'Claude Code',
       permissions: 'read-only',
@@ -900,4 +912,100 @@ it('orders detected harnesses first and each group by saved name across enable/r
     'detected-a',
     'tie-a',
   ]);
+});
+
+it('shares cached harness reads across selector remounts and retains them after a background error', async () => {
+  let visible = true;
+  let client!: ReturnType<typeof useQueryClient>;
+  const change = vi.fn();
+  function Selectors() {
+    client = useQueryClient();
+    return visible
+      ? h(ExecutorSelect, {
+          value: 'codex',
+          onChange: change,
+          onPermissionsChange: vi.fn(),
+        })
+      : null;
+  }
+  const render = () => root.render(h(DesignSystemProvider, {}, h(Selectors)));
+  await act(async () => render());
+  expect(container.textContent).toContain('Full access · inherited from Codex');
+  visible = false;
+  await act(async () => render());
+  let failProfiles!: (error: Error) => void;
+  let failSettings!: (error: Error) => void;
+  rpc.profiles.mockReturnValueOnce(
+    new Promise((_resolve, reject) => {
+      failProfiles = reject;
+    }),
+  );
+  rpc.settings.mockReturnValueOnce(
+    new Promise((_resolve, reject) => {
+      failSettings = reject;
+    }),
+  );
+  visible = true;
+  await act(async () => render());
+  expect(container.textContent).toContain('Full access · inherited from Codex');
+  expect(container.textContent).toContain('Up to 3 Agent assignments');
+  expect(container.querySelector('select')!.value).toBe('codex');
+  expect(change).not.toHaveBeenCalled();
+  await act(async () => {
+    failProfiles(new Error('Profiles offline'));
+    failSettings(new Error('Settings offline'));
+  });
+  expect(container.textContent).toContain('Profiles offline');
+  expect(container.textContent).toContain(
+    'Shared assignment limit could not be loaded.',
+  );
+  expect(container.textContent).toContain('Full access · inherited from Codex');
+  expect(container.querySelector('select')!.value).toBe('codex');
+  expect(client.getQueryData(trpc.executors.profiles.queryKey())).toHaveLength(
+    2,
+  );
+  expect(change).not.toHaveBeenCalled();
+});
+
+it('gates selector reads and refreshes inherited settings without replacing a local permission override', async () => {
+  let enabled = false;
+  let workflowSettings = false;
+  let client!: ReturnType<typeof useQueryClient>;
+  function Selector() {
+    client = useQueryClient();
+    const [permissions, setPermissions] = useState<ExecutorPermissionMode>();
+    return h(ExecutorSelect, {
+      value: 'codex',
+      onChange: vi.fn(),
+      enabled,
+      workflowPermissions: permissions,
+      onPermissionsChange: workflowSettings ? setPermissions : undefined,
+    });
+  }
+  rpc.profiles.mockClear();
+  rpc.settings.mockClear();
+  const render = () => root.render(h(DesignSystemProvider, {}, h(Selector)));
+  await act(async () => render());
+  expect(rpc.profiles).not.toHaveBeenCalled();
+  expect(rpc.settings).not.toHaveBeenCalled();
+  enabled = true;
+  await act(async () => render());
+  expect(rpc.profiles).toHaveBeenCalledTimes(1);
+  expect(rpc.settings).not.toHaveBeenCalled();
+  workflowSettings = true;
+  await act(async () => render());
+  expect(rpc.settings).toHaveBeenCalledTimes(1);
+  const permissions = container.querySelectorAll('select')[1];
+  await act(async () => {
+    permissions.value = 'read-only';
+    permissions.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  rpc.profiles.mockResolvedValue([
+    { ...harnessProfile(), permissions: 'standard' },
+  ]);
+  await act(async () => {
+    await client.invalidateQueries(trpc.executors.profiles.pathFilter());
+  });
+  expect(permissions.value).toBe('read-only');
+  expect(container.textContent).toContain('Read only · workflow override');
 });

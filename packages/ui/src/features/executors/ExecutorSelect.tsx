@@ -1,8 +1,7 @@
 import { NativeSelect } from '../../design-system';
 
-import { useEffect, useState } from 'react';
-
-import { api, errorMessage } from '../../lib/api';
+import { errorMessage } from '../../lib/api';
+import { trpc, useQuery } from '../../lib/query';
 import { paths } from '../../routes/paths';
 import type { ExecutorPermissionMode } from '@interlock/core';
 import { ModelSettings } from './ModelSettings';
@@ -43,40 +42,21 @@ export function ExecutorSelect({
   onNodeModelChange?: (value: string | undefined) => void;
   onNodeEffortChange?: (value: string | null | undefined) => void;
 }) {
-  const [profiles, setProfiles] =
-    useState<Awaited<ReturnType<typeof api.executors.profiles.query>>>();
-  const [error, setError] = useState('');
-  const [concurrency, setConcurrency] = useState<number | null>();
-  const [concurrencyError, setConcurrencyError] = useState('');
   const workflowSettings = !!(onPermissionsChange || onModelChange);
-  useEffect(() => {
-    if (!enabled) return;
-    let alive = true;
-    if (workflowSettings)
-      void api.executors.settings
-        .query()
-        .then((settings) => {
-          if (alive) {
-            setConcurrency(settings.concurrency);
-            setConcurrencyError('');
-          }
-        })
-        .catch(() => {
-          if (alive)
-            setConcurrencyError('Shared assignment limit could not be loaded.');
-        });
-    void api.executors.profiles
-      .query()
-      .then((p) => {
-        if (alive) setProfiles(p);
-      })
-      .catch((e) => {
-        if (alive) setError(errorMessage(e));
-      });
-    return () => {
-      alive = false;
-    };
-  }, [enabled, workflowSettings]);
+  const profilesQuery = useQuery({
+    ...trpc.executors.profiles.queryOptions(),
+    enabled,
+  });
+  const settingsQuery = useQuery({
+    ...trpc.executors.settings.queryOptions(),
+    enabled: enabled && workflowSettings,
+  });
+  const profiles = profilesQuery.data;
+  const error = profilesQuery.error ? errorMessage(profilesQuery.error) : '';
+  const concurrency = settingsQuery.data?.concurrency;
+  const concurrencyError = settingsQuery.error
+    ? 'Shared assignment limit could not be loaded.'
+    : '';
   const selected = value === undefined ? inherit : value;
   const profile = profiles?.find((p) => p.id === selected);
   const effective = workflowPermissions ?? profile?.permissions;
