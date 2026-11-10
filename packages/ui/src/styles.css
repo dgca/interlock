@@ -156,23 +156,6 @@ summary {
 .content-page > .muted {
   margin-bottom: 35px;
 }
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed var(--border-strong);
-  border-radius: 9px;
-  min-height: 330px;
-  color: var(--muted);
-}
-.empty h2 {
-  font-size: 15px;
-}
-.empty p {
-  font-size: 12px;
-  color: var(--muted);
-}
 .work-panel {
   border-top: 1px solid var(--border);
   padding-top: 20px;
