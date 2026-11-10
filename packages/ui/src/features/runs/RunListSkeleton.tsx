@@ -26,13 +26,7 @@ export function RunListSkeleton({ embedded = false }: { embedded?: boolean }) {
       <Placeholder h={40} w={130} />
     </>
   );
-  const actions =
-    mode === 'list' && tab === 'history' ? (
-      <>
-        <Placeholder h={40} w={150} />
-        <Placeholder h={40} w={150} />
-      </>
-    ) : undefined;
+  const actions = <Placeholder h={40} w={110} />;
   return (
     <section className={workspacePage.page} aria-busy="true">
       {!embedded && (
@@ -52,7 +46,10 @@ export function RunListSkeleton({ embedded = false }: { embedded?: boolean }) {
           }
         />
       ) : embedded ? (
-        <PageToolbar>{controls}</PageToolbar>
+        <PageToolbar>
+          {controls}
+          {actions}
+        </PageToolbar>
       ) : null}
       <div className={workspacePage.content}>
         {mode === 'overview' ? <RunBoardSkeleton /> : <RunRowsSkeleton />}

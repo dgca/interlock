@@ -9,6 +9,7 @@ import { RunListSkeleton } from '../packages/ui/src/features/runs/RunListSkeleto
 import { MemoryRouter } from 'react-router';
 
 const query = vi.hoisted(() => vi.fn());
+const retentionSettings = vi.hoisted(() => vi.fn());
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
     triggers: {
@@ -16,7 +17,15 @@ vi.mock('../packages/ui/src/lib/api', () => ({
         query: () => Promise.resolve({ items: [], total: 0, nextOffset: null }),
       },
     },
-    runs: { summaries: { query } },
+    runs: {
+      summaries: { query },
+      retentionSettings: { query: retentionSettings },
+      retentionStatus: {
+        query: async () => ({
+          storage: { databaseBytes: 0, reusableBytes: 0 },
+        }),
+      },
+    },
   },
   errorMessage: (error: Error) => error.message,
 }));
@@ -974,3 +983,162 @@ it('keeps automation attention visible in Overview even when exact tags match no
     container.remove();
   }
 });
+
+it('offers one History menu across List tabs and Overview in global and workflow scopes, and hides it without act', async () => {
+  query.mockImplementation(() => new Promise(() => {}));
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    for (const workflowId of [undefined, 'selected']) {
+      for (const [mode, tab] of [
+        ['list', 'active'],
+        ['list', 'attention'],
+        ['list', 'history'],
+        ['overview', 'history'],
+      ] as const) {
+        await act(async () =>
+          root.render(
+            h(
+              DesignSystemProvider,
+              { env: 'test' },
+              h(RunList, {
+                tick: 0,
+                offset: 0,
+                onOffsetChange: vi.fn(),
+                workflows: [],
+                tab,
+                mode,
+                workflowId,
+                act: vi.fn(),
+                onTabChange: vi.fn(),
+                onOpen: vi.fn(),
+              }),
+            ),
+          ),
+        );
+        const triggers = [
+          ...container.querySelectorAll<HTMLButtonElement>('button'),
+        ].filter((button) => button.getAttribute('aria-haspopup') === 'menu');
+        expect(triggers).toHaveLength(1);
+        expect(triggers[0].textContent).toBe('History');
+        await act(async () => triggers[0].click());
+        expect(
+          [...document.querySelectorAll('[role="menuitem"]')].map(
+            (item) => item.textContent,
+          ),
+        ).toEqual(['Retention settings', 'Clean up history']);
+        await act(async () =>
+          document
+            .querySelector<HTMLElement>('[role="menu"]')!
+            .dispatchEvent(
+              new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+            ),
+        );
+      }
+    }
+    await act(async () =>
+      root.render(
+        h(
+          DesignSystemProvider,
+          { env: 'test' },
+          h(RunList, {
+            tick: 0,
+            offset: 0,
+            onOffsetChange: vi.fn(),
+            workflows: [],
+            tab: 'history',
+            mode: 'overview',
+            onTabChange: vi.fn(),
+            onOpen: vi.fn(),
+          }),
+        ),
+      ),
+    );
+    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
+it.each(['Retention settings', 'Clean up history'])(
+  'opens %s from a focused menu item and returns focus to History after closing',
+  async (label) => {
+    query.mockImplementation(() => new Promise(() => {}));
+    retentionSettings.mockResolvedValue({
+      scope: 'workflow',
+      revision: 0,
+      policy: null,
+      effectivePolicy: null,
+      inherited: false,
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      await act(async () =>
+        root.render(
+          h(
+            DesignSystemProvider,
+            { env: 'test' },
+            h(RunList, {
+              tick: 0,
+              offset: 0,
+              onOffsetChange: vi.fn(),
+              workflows: [{ id: 'selected', name: 'Selected workflow' }],
+              tab: 'active',
+              mode: 'overview',
+              workflowId: 'selected',
+              act: vi.fn(),
+              onTabChange: vi.fn(),
+              onOpen: vi.fn(),
+            }),
+          ),
+        ),
+      );
+      const trigger = container.querySelector<HTMLButtonElement>(
+        '[aria-haspopup="menu"]',
+      )!;
+      await act(async () => {
+        trigger.focus();
+        trigger.click();
+      });
+      const item = [
+        ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+      ].find((item) => item.textContent === label)!;
+      await act(async () => {
+        item.focus();
+        item.click();
+      });
+      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      if (label === 'Retention settings')
+        expect(retentionSettings).toHaveBeenLastCalledWith({
+          workflowId: 'selected',
+        });
+      else
+        expect(
+          document.querySelector<HTMLInputElement>(
+            'input[aria-label="Root workflow"]',
+          )?.disabled ??
+            document.querySelector<HTMLInputElement>(
+              'input[value="Selected workflow"]',
+            )?.disabled,
+        ).toBe(true);
+      const close = document.querySelector<HTMLButtonElement>(
+        'button[aria-label="Close dialog"]',
+      )!;
+      await act(async () => {
+        close.focus();
+        close.click();
+        await new Promise(requestAnimationFrame);
+      });
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      await act(async () => new Promise(requestAnimationFrame));
+      expect(document.activeElement).toBe(trigger);
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  },
+);

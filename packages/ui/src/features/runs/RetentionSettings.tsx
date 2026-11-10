@@ -329,9 +329,11 @@ export function RetentionSettings({
 export function RetentionSettingsDialog({
   workflowId,
   onClose,
+  returnFocusTo,
 }: {
   workflowId?: string;
   onClose: () => void;
+  returnFocusTo?: () => HTMLElement | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -349,6 +351,7 @@ export function RetentionSettingsDialog({
       }
       size={640}
       busy={busy}
+      returnFocusTo={returnFocusTo}
       onClose={close}
     >
       <ModalBody>

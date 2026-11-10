@@ -2,6 +2,7 @@ import {
   Alert,
   Button,
   Group,
+  Menu,
   SegmentedControl,
   Tabs,
   Text,
@@ -24,7 +25,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
 import { RetentionSettingsDialog } from './RetentionSettings';
 import type { Action } from '../../lib/useActionFeedback';
-import { ChevronRight, Activity } from 'lucide-react';
+import { ChevronDown, ChevronRight, Activity } from 'lucide-react';
 import { ComparisonContext } from './ComparisonContext';
 import { api, errorMessage } from '../../lib/api';
 import { RunListBoard, type BoardPreview } from './RunListBoard';
@@ -64,6 +65,7 @@ export function RunList({
   onTagsChange?: (tags?: Record<string, string>) => void;
 }) {
   const tagFilterId = useId();
+  const historyTrigger = useRef<HTMLButtonElement>(null);
   const [localTags, setLocalTags] = useState(tags);
   const selectedTags = onTagsChange ? tags : localTags;
   const tagsKey = JSON.stringify(selectedTags ?? {});
@@ -208,17 +210,29 @@ export function RunList({
   const lastPage = scoped?.tab === queryTab ? scoped.page : undefined;
   const page = lastPage?.offset === queryOffset ? lastPage : undefined;
   const counts = scoped?.page.counts;
-  const historyActions =
-    selectedMode === 'list' && tab === 'history' && act ? (
-      <>
-        <Button variant="secondary" onClick={() => setRetention(true)}>
+  const historyActions = act ? (
+    <Menu
+      position="bottom-end"
+      withinPortal
+      returnFocus={!retention && !cleanup}
+    >
+      <Menu.Target>
+        <Button
+          ref={historyTrigger}
+          variant="secondary"
+          rightSection={<ChevronDown size={16} aria-hidden="true" />}
+        >
+          History
+        </Button>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Item onClick={() => setRetention(true)}>
           Retention settings
-        </Button>
-        <Button variant="secondary" onClick={() => setCleanup(true)}>
-          Clean up history
-        </Button>
-      </>
-    ) : null;
+        </Menu.Item>
+        <Menu.Item onClick={() => setCleanup(true)}>Clean up history</Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
+  ) : null;
   const controls = (
     <>
       <SegmentedControl
@@ -479,7 +493,12 @@ export function RunList({
         </Tabs>
       ) : (
         <div className={classes.sections}>
-          {workflowId && <PageToolbar>{controls}</PageToolbar>}
+          {workflowId && (
+            <PageToolbar>
+              {controls}
+              {historyActions}
+            </PageToolbar>
+          )}
           <AppliedRunTagFilters
             filterId={tagFilterId}
             value={selectedTags}
@@ -492,6 +511,7 @@ export function RunList({
         <RetentionSettingsDialog
           key={workflowId ?? 'library'}
           workflowId={workflowId}
+          returnFocusTo={() => historyTrigger.current}
           onClose={() => setRetention(false)}
         />
       )}
@@ -503,6 +523,7 @@ export function RunList({
             label: workflow.name,
           }))}
           act={act}
+          returnFocusTo={() => historyTrigger.current}
           onClose={() => setCleanup(false)}
         />
       )}
