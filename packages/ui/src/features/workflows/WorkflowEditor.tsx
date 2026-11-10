@@ -1236,10 +1236,7 @@ export function WorkflowEditor({
           act={act}
           returnFocusTo={() => workflowActions.current}
           onClose={() => setDeleting(false)}
-          onDeleted={() => {
-            layout.forget();
-            onDeleted();
-          }}
+          onDeleted={onDeleted}
         />
       )}
       {editing && (

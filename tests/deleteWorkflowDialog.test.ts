@@ -3,6 +3,7 @@ import { act, createElement as h } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DeleteWorkflowDialog } from '../packages/ui/src/features/workflows/DeleteWorkflowDialog';
+import { QueryProvider, createQueryClient } from '../packages/ui/src/lib/query';
 const remove = vi.hoisted(() => vi.fn());
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: { workflows: { delete: { mutate: remove } } },
@@ -26,17 +27,20 @@ beforeEach(async () => {
   root = createRoot(container);
   await act(async () =>
     root.render(
-      h(DeleteWorkflowDialog, {
-        workflow: { id: 'workflow', name: 'My workflow' },
-        onClose: close,
-        onDeleted: deleted,
-        act: async (fn, _success, onError) => {
-          try {
-            await fn();
-          } catch (error) {
-            onError?.((error as Error).message);
-          }
-        },
+      h(QueryProvider, {
+        client: createQueryClient(),
+        children: h(DeleteWorkflowDialog, {
+          workflow: { id: 'workflow', name: 'My workflow' },
+          onClose: close,
+          onDeleted: deleted,
+          act: async (fn, _success, onError) => {
+            try {
+              await fn();
+            } catch (error) {
+              onError?.((error as Error).message);
+            }
+          },
+        }),
       }),
     ),
   );

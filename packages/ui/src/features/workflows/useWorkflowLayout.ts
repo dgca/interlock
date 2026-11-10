@@ -318,7 +318,6 @@ export function useWorkflowLayout(workflow: LayoutWorkflow) {
     update: (positions: WorkflowPositions) => session.update(positions),
     flush: session.flush,
     retry: session.retry,
-    forget: session.forget,
     receive: (next: LayoutWorkflow) => session.receive(next),
     apply: (definition: WorkflowDefinition) =>
       applyWorkflowPositions(definition, session.state.positions),
@@ -329,4 +328,8 @@ export function usePendingWorkflowLayouts() {
   const client = useQueryClient();
   const registry = useMemo(() => registryFor(client), [client]);
   return useSyncExternalStore(registry.subscribe, registry.snapshot);
+}
+
+export function forgetWorkflowLayout(client: Client, workflowId: string) {
+  registries.get(client)?.sessions.get(workflowId)?.forget();
 }

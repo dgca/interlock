@@ -15,6 +15,7 @@ import { batchDefinition, nestedBatches } from './fixtures/batch';
 import parallelEdges from './fixtures/parallelEdges.json';
 import { WorkflowEditor } from '../packages/ui/src/features/workflows/WorkflowEditor';
 import { WorkflowLayoutNotice } from '../packages/ui/src/features/workflows/WorkflowLayoutNotice';
+import { DeleteWorkflowDialog } from '../packages/ui/src/features/workflows/DeleteWorkflowDialog';
 
 const canvas = vi.hoisted(() => ({ props: undefined as any }));
 const rawEditor = vi.hoisted(() => ({ props: undefined as any }));
@@ -191,7 +192,7 @@ const runAction = async (fn: () => Promise<unknown>) => {
 let section: 'editor' | 'runs';
 const deleted = vi.fn();
 let strict = false;
-const render = async (visible = true) => {
+const render = async (visible = true, deletingOutside = false) => {
   const app = h(
     DesignSystemProvider,
     { env: 'test' },
@@ -210,7 +211,14 @@ const render = async (visible = true) => {
           onDirty,
           act: runAction,
         })
-      : null,
+      : deletingOutside
+        ? h(DeleteWorkflowDialog, {
+            workflow,
+            onClose: vi.fn(),
+            onDeleted: deleted,
+            act: runAction,
+          })
+        : null,
     h(WorkflowLayoutNotice, {
       currentWorkflowId: visible ? workflow.id : undefined,
       onOpen: opened,
@@ -1674,6 +1682,38 @@ it.each(['pending', 'failed'])(
     await render();
     await click(`Move ${workflow.draft.nodes[0].id}`);
     await click('Delete workflow');
+    await click('Delete');
+    expect(deleted).toHaveBeenCalledOnce();
+    await render(false);
+    if (state === 'pending')
+      await act(async () => fail(new Error('Workflow not found')));
+    expect(container.textContent).not.toContain('layout');
+    const unload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(false);
+  },
+);
+
+it.each(['pending', 'failed'])(
+  'clears a %s layout save when the shared deletion dialog deletes after leaving the editor',
+  async (state) => {
+    let fail!: (error: Error) => void;
+    if (state === 'pending')
+      rpc.saveLayout.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            fail = reject;
+          }),
+      );
+    else rpc.saveLayout.mockRejectedValueOnce(new Error('Offline'));
+    await render();
+    await click(`Move ${workflow.draft.nodes[0].id}`);
+    await render(false, true);
+    expect(container.textContent).toContain(
+      state === 'pending'
+        ? 'Saving layout for Original'
+        : 'Layout for Original could not be saved',
+    );
     await click('Delete');
     expect(deleted).toHaveBeenCalledOnce();
     await render(false);
