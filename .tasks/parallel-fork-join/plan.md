@@ -76,3 +76,13 @@ Revision commit `37a398c74611e0f4021fb89260cc21c7740bced6` follows the focused r
 `revision2-targeted.log` records 71 passing tests across Parallel transports, shared validation transport, atomic editing, and general discovery. Both transports retained 66 tools and advertised 297,761 B of definitions. Editing and preflight still accept candidate JSON for diagnostics; no new MCP tools or response fields were added. `revision2-build.log`, `revision2-format-final.log`, `revision2-package.log`, and `revision2-site-final.log` passed, including 585 checked local references and bundled HTTP and stdio smoke coverage. The real browser and CLI example evidence remains at `02a370c9753d3724ce5aad99936b32e669904801`; the revision does not change the editor controls, inspector or CLI commands.
 
 `pnpm test --maxWorkers=4` passed all 186 files and 2,178 tests. See `revision2-full-tests.log`. This repeated the broader checks because the fix touches the shared authoring path.
+
+## Retry between steps
+
+Revision commit `2333412ae7ae598858531c095bdbed482878746e` addresses `fd4820e-retry-after-completed-workflow` (AC7–AC9). The previous full review covered `fd4820eecab6b87b8bf123a0c79e095156280a0e` and verified the earlier authoring and admission findings were resolved.
+
+A transient sibling assignment write failure cancels an unfinished branch in the same pass, after that branch has dispatched detached work and before its follow-up Agent starts. The regression first failed because retry produced no follow-up assignment (`revision3-regression-before.log`). With the fix it starts the next Agent with the exact forwarded run reference, retains the completed execution unchanged and the original detached run still waiting, and joins after the follow-up and sibling finish. The group charges four actual branch step starts. See `revision3-regression-after.log` and `revision3-repro-after.log` for the regression and the review probe.
+
+Build, formatting and packaged CLI/UI/HTTP/stdio smoke passed (`revision3-build.log`, `revision3-format.log`, and `revision3-package.log`). Browser controls, CLI commands, MCP definitions, and docs did not change in this revision; their evidence retains the original commits recorded above.
+
+The full suite passed all 186 files and 2,179 tests (`revision3-full-tests.log`), including ordinary Workflow, Batch, failure routes, cancellation, background Script retry, versioning, and Parallel on HTTP and stdio. Both transports still advertised 66 tools and 297,761 B of definitions.
