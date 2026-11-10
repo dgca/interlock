@@ -29,7 +29,7 @@ Headings and descriptions always stack vertically. Navigation contains GitHub an
 
 Solid backgrounds distinguish structure, forms, and inset code. Buttons and workflow nodes retain their gradient elevation. The hero and closing use `#1A1A1A`, main content `#151515`, inset canvases `#121212`, and form cards `#212121`. Dividers are `#333333` and extend to the edges of their containers.
 
-The implemented hero extends this direction with a static, mostly gray gradient sweep, restrained blue and orchid accents, and fine monochrome grain. A precomposed PNG background combines the curves, fade, and non-repeating grain before export, with dithering applied before final color quantization. CSS selects standard or Retina resolution. Regenerate both assets with `node scripts/generate-marketing-hero.mjs`. The headline scales to 80px on desktop and 44px on mobile. The same background extends behind the transparent navigation, with the hero reserving space for its height. The workflow preview uses a `0px 5px 25px rgba(0, 0, 0, 0.3)` outer shadow. The hero caption is "Illustrative workflow"; the diagram omits the separate loop annotation. Other text, workflow animation, and node-canvas dots are preserved. The rest of the page retains the approved Grid treatments.
+The implemented hero extends this direction with a static, mostly gray gradient sweep, restrained blue and orchid accents, and fine monochrome grain. A precomposed PNG background combines the curves, fade, and non-repeating grain before export, with dithering applied before final color quantization. CSS selects standard or Retina resolution. Regenerate both assets with `node scripts/generate-marketing-hero.mjs`. The headline scales to 80px on desktop and 44px on mobile. The same background extends behind the transparent navigation, with the hero reserving space for its height. The workflow preview uses a `0px 5px 25px rgba(0, 0, 0, 0.3)` outer shadow. The hero has no separate caption, and the diagram omits the separate loop annotation. Its Example marker and accessible graph description retain the illustrative context. Other text, workflow animation, and node-canvas dots are preserved. The rest of the page retains the approved Grid treatments.
 
 ## Figures
 
@@ -47,9 +47,9 @@ The closing heading is **Free, local, and open source**. All text below it uses 
 
 > Interlock runs on your machine. Your workflows and run history are stored locally, under your control.
 >
-> Use it to make the world a better place.
+> If you run into any problems, [open an issue on GitHub](https://github.com/dgca/interlock/issues/new).
 
-There are no links, actions, install commands, or separate license line in this section. The desktop bottom spacing is 87px, balanced with 88px above the heading. This wording does not claim that chosen model providers receive no task data.
+The second paragraph links to GitHub's new-issue form. There are no install commands or separate license line in this section. The desktop bottom spacing is 87px, balanced with 88px above the heading. This wording does not claim that chosen model providers receive no task data.
 
 The footer retains the logo and Interlock name, followed by:
 
