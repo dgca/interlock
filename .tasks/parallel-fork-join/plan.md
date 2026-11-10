@@ -33,4 +33,18 @@ Delivery checks that the reviewed candidate is still HEAD and the accepted artif
 
 ## Evidence
 
-Record commands, observable results, proof locations, and any gaps here during the build. Verification has not started.
+Implementation commit `02a370c9753d3724ce5aad99936b32e669904801`. The evidence commit adds this section only. Logs and browser artifacts are outside the worktree at `/tmp/interlock-parallel-fork-join-proof/`. Checks used temporary databases and deterministic assignments.
+
+| Criteria | Observed result |
+| --- | --- |
+| AC1–AC6 | `tests/parallel.test.ts` published and ran two separately configured reviewers. Both assignments were available before either returned. Out-of-order results, null, and literal special keys joined correctly. The selected conditional edge returned once. A second visit received fresh input, identities, and provenance. Invalid scope, keys, cycles and missing starts rejected publication while drafts saved. |
+| AC7–AC9 | The same suite exhausted the shared limit without additional work. It retained successful branches and accounting after file-backed restart, cancelled unfinished siblings, rejected stale results, blocked retry until revoked work was confirmed stopped, preserved detached descendants, and honored lifecycle budgets and admission. The injected parent-link write failure left no orphan run. The joined contract rejected invalid output without replaying successful branches on retry. |
+| AC10–AC12 | `final-authoring.log` records the actual editor journey at the implementation commit. It checked Tab focus, add/remove focus, duplicate keys, a long key at 430px, both Join connections, cross-branch rejection, collapse/expand, tidy, save/reload, named publication preview, and run start. `final-undo.log` verifies group and member deletion with Undo/Redo. `elk-layout.log` verifies alternate layout preserves the publishable graph. |
+| AC10–AC12 | `final-both-branches.yml`, `final-run-inspection.log`, and `final-joined-run.yml` show two available reviewers, a waiting parent after one result, the correct branch link and return to its parent visit, and both named outputs after completion. `final-narrow-settings.png` and `final-narrow-branches.png` show the affected narrow controls and status rows. `final-joined-output.json` records the expected JSON. |
+| AC13 | `tests/parallelTransport.test.ts` exercised create, revision-protected edit, validate, publish, start, briefing, claim/submit, fail/retry and result on HTTP and stdio. Both discovered 66 tools and 298,195 B of definitions in the main transport test, below the existing 300,000 B cap. Kept validation's permissive candidate input so malformed drafts still receive diagnostics. Reviewed the affected authoring, execution, inspection, retry, version and simulation guidance. |
+| AC14–AC16 | The Parallel simulation fixture rejected before creating live work, and supported simulations retained their existing coverage. `cli-example.log` shows the documented import, publish, start and run example returned `{"count":2,"hasTests":true}`. Export preserved branch IDs and keys, dry-run import accepted it, and the all-nodes demo imported and published without executing. Checked the README, related execution/binding/limit docs, CLI help, and pending patch changeset. |
+
+- `pnpm test --maxWorkers=4`: 186 files and 2,176 tests passed. See `full-tests.log`.
+- `pnpm build`, `pnpm format:check`, and `pnpm test:package`: passed. See `build.log`, `format.log`, and `package.log`.
+- `pnpm site:build`: passed. See `site.log`, including 585 checked local references.
+- The browser scenario uses deterministic test results and demonstrates eligibility and joining. It does not measure model latency or provider capacity.
