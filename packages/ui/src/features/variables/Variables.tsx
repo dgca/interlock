@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Group,
+  Menu,
   SegmentedControl,
   Stack,
   Text,
@@ -24,7 +25,14 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
 import { flushSync } from 'react-dom';
 
-import { ArrowRight, ChevronRight, Plus, Search } from 'lucide-react';
+import {
+  ArrowRight,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import type { AppContext } from '../../App';
 import {
   variableRequirementSchema,
@@ -319,6 +327,7 @@ function VariableEditor({ id }: { id: string }) {
   const valueInput = useRef<HTMLTextAreaElement>(null);
   const nameInput = useRef<HTMLInputElement>(null);
   const replaceButton = useRef<HTMLButtonElement>(null);
+  const actionsTrigger = useRef<HTMLButtonElement>(null);
   const returnToValue = useRef(false);
   const nameValidation = variableRequirementSchema.shape.name.safeParse(name);
   const nameError = nameValidation.success
@@ -585,6 +594,35 @@ function VariableEditor({ id }: { id: string }) {
             <Button disabled={busy || (!creating && !dirty)} onClick={discard}>
               {creating ? 'Cancel' : 'Discard changes'}
             </Button>
+            {!creating && saved && (
+              <Menu
+                position="bottom-end"
+                width={180}
+                withinPortal
+                returnFocus={confirmation !== 'delete'}
+              >
+                <Menu.Target>
+                  <Button
+                    variant="secondary"
+                    ref={actionsTrigger}
+                    rightSection={<ChevronDown size={16} aria-hidden="true" />}
+                    disabled={busy}
+                  >
+                    Actions
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Item
+                    color="red"
+                    leftSection={<Trash2 size={14} />}
+                    disabled={dirty || busy}
+                    onClick={() => setConfirmation('delete')}
+                  >
+                    Delete variable
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
+            )}
             <Button
               variant="primary"
               disabled={busy || !dirty || !name.trim()}
@@ -957,13 +995,6 @@ function VariableEditor({ id }: { id: string }) {
                         >
                           {saved.enabled ? 'Disable use' : 'Enable use'}
                         </Button>
-                        <Button
-                          variant="danger"
-                          disabled={dirty || busy}
-                          onClick={() => setConfirmation('delete')}
-                        >
-                          Delete variable
-                        </Button>
                       </Group>
                     </details>
                     <details>
@@ -1004,6 +1035,9 @@ function VariableEditor({ id }: { id: string }) {
                   : 'Enable use'
           }
           busy={busy}
+          returnFocusTo={
+            confirmation === 'delete' ? () => actionsTrigger.current : undefined
+          }
           onClose={() => {
             if (!busy) {
               setConfirmation(undefined);

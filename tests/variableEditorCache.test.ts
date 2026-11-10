@@ -27,7 +27,7 @@ function Context() {
     },
   });
 }
-async function show(visible = true) {
+async function show(visible = true, id = 'v') {
   await act(async () =>
     root.render(
       h(
@@ -36,7 +36,7 @@ async function show(visible = true) {
         visible
           ? h(
               MemoryRouter,
-              { initialEntries: ['/variables/v'] },
+              { initialEntries: [`/variables/${id}`] },
               h(
                 Routes,
                 {},
@@ -89,32 +89,36 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+function savedVariable(kind: 'secret' | 'config' = 'secret', references = 0) {
+  return {
+    id: 'v',
+    name: 'saved_variable',
+    description: 'Saved description',
+    kind,
+    enabled: true,
+    revision: 1,
+    valueRevision: 1,
+    availability: 'ready',
+    createdAt: '2026-11-09T12:00:00Z',
+    updatedAt: '2026-11-09T12:00:00Z',
+    dependencies: {
+      items: [],
+      total: references,
+      offset: 0,
+      limit: 25,
+      truncated: false,
+      activeRunCount: 0,
+      runningComparisonCount: 0,
+    },
+    bindings: { items: [], total: 0, truncated: false },
+    storage: {},
+  };
+}
+
 it.each(['secret', 'config'] as const)(
   'reuses saved %s metadata on return while keeping unsaved edits out of the cache',
   async (kind) => {
-    const saved = {
-      id: 'v',
-      name: 'saved_variable',
-      description: 'Saved description',
-      kind,
-      enabled: true,
-      revision: 1,
-      valueRevision: 1,
-      availability: 'ready',
-      createdAt: '2026-11-09T12:00:00Z',
-      updatedAt: '2026-11-09T12:00:00Z',
-      dependencies: {
-        items: [],
-        total: 0,
-        offset: 0,
-        limit: 25,
-        truncated: false,
-        activeRunCount: 0,
-        runningComparisonCount: 0,
-      },
-      bindings: { items: [], total: 0, truncated: false },
-      storage: {},
-    };
+    const saved = savedVariable(kind);
     read.mockImplementation(async ({ action }) =>
       action === 'inspect' ? saved : { id: 'v', value: 'Saved config value' },
     );
@@ -154,3 +158,78 @@ it.each(['secret', 'config'] as const)(
       ).toBe(true);
   },
 );
+
+it.each([0, 1])(
+  'keeps variable deletion in the header Actions menu with references: %s',
+  async (references) => {
+    read.mockResolvedValue(savedVariable('secret', references));
+    await show();
+    const actions = [
+      ...container.querySelectorAll<HTMLButtonElement>('header button'),
+    ].find((button) => button.textContent === 'Actions')!;
+    expect(actions.getAttribute('aria-haspopup')).toBe('menu');
+    expect(
+      [...container.querySelectorAll('header button')]
+        .map((button) => button.textContent)
+        .filter(Boolean),
+    ).toEqual(['Discard changes', 'Actions', 'Save changes']);
+    const danger = [...container.querySelectorAll('details')].find(
+      (details) =>
+        details.querySelector('summary')?.textContent === 'Danger zone',
+    )!;
+    expect(danger.textContent).toContain('Disable use');
+    expect(danger.textContent).not.toContain('Delete variable');
+    await act(async () => {
+      actions.focus();
+      actions.click();
+    });
+    const remove =
+      document.querySelector<HTMLButtonElement>('[role=menuitem]')!;
+    expect(remove.textContent).toBe('Delete variable');
+    expect(remove.disabled).toBe(false);
+    await act(async () => {
+      remove.focus();
+      remove.click();
+    });
+    const dialog = document.querySelector<HTMLElement>('[role=dialog]')!;
+    const confirm = [
+      ...dialog.querySelectorAll<HTMLButtonElement>('button'),
+    ].find((button) => button.textContent === 'Delete variable')!;
+    expect(confirm.disabled).toBe(references > 0);
+    expect(dialog.textContent).toContain(
+      references
+        ? 'This variable is still referenced.'
+        : 'Delete this variable and its protected value revisions?',
+    );
+    await act(async () => {
+      const cancel = [
+        ...dialog.querySelectorAll<HTMLButtonElement>('button'),
+      ].find((button) => button.textContent === 'Cancel')!;
+      cancel.focus();
+      cancel.click();
+      await new Promise(requestAnimationFrame);
+    });
+    await act(async () => new Promise(requestAnimationFrame));
+    expect(document.activeElement).toBe(actions);
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )!.set!.call(field('Name'), 'local_edit');
+      field('Name').dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => actions.click());
+    expect(
+      document.querySelector<HTMLButtonElement>('[role=menuitem]')!.disabled,
+    ).toBe(true);
+  },
+);
+
+it('omits variable Actions while creating a new variable', async () => {
+  await show(true, 'new');
+  expect(container.querySelector('header')!.textContent).toContain('Create');
+  expect(container.querySelector('header')!.textContent).not.toContain(
+    'Actions',
+  );
+  expect(read).not.toHaveBeenCalled();
+});
