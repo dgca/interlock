@@ -25,6 +25,7 @@ import { trpc, useQuery, useQueryClient, refreshQueries } from './lib/query';
 import { subscribeToEngineEvents } from './lib/engineEvents';
 import type { Action } from './lib/useActionFeedback';
 import { aiSettingsTab } from './features/executors/aiSettingsNavigation';
+import { WorkflowLayoutNotice } from './features/workflows/WorkflowLayoutNotice';
 
 export type AppContext = {
   workflows: Workflow[];
@@ -293,6 +294,10 @@ export function App() {
               {feedback.message}
             </Notification>
           )}
+          <WorkflowLayoutNotice
+            currentWorkflowId={workflowMatch?.params.workflowId}
+            onOpen={(id) => void navigate(paths.workflow(id))}
+          />
           <Outlet context={context} />
         </main>
         {blocker.state === 'blocked' && (

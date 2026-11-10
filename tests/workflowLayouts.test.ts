@@ -6,6 +6,7 @@ import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import {
   blankDefinition,
+  nodeSchema,
   sameWorkflowContent,
   workflowPositionsSchema,
   type WorkflowPositions,
@@ -195,6 +196,55 @@ it('saves content without replacing a newer layout, and seeds new nodes separate
   ).toEqual(initial.draft.nodes[0].position);
   expect(saved.draftMatchesLatest).toBe(false);
 });
+
+it.each(['update', 'edit'] as const)(
+  'preserves already-autosaved positions for unpublished nodes during content %s',
+  async (operation) => {
+    const { engine, api } = setup();
+    const workflow = engine.create('Unsaved node layout');
+    const rawNode = {
+      id: 'unpublished-node',
+      kind: 'script' as const,
+      label: 'Unpublished script',
+      language: 'javascript' as const,
+      command: 'return input;',
+      position: { x: 100, y: 100 },
+    };
+    const node = nodeSchema.parse(rawNode);
+    const candidate = structuredClone(workflow.draft);
+    candidate.nodes.push(node);
+    await api.workflows.saveLayout({
+      id: workflow.id,
+      expectedRevision: 0,
+      positions: { [node.id]: { x: 500, y: 500 } },
+    });
+    if (operation === 'update') {
+      await api.workflows.update({
+        id: workflow.id,
+        draftRevision: workflow.draftRevision,
+        draft: candidate,
+        layout: 'preserve',
+      });
+    } else {
+      const result = await api.workflows.edit({
+        id: workflow.id,
+        draftRevision: workflow.draftRevision,
+        edits: [{ op: 'add_node', node: rawNode }],
+        layout: 'preserve',
+      });
+      expect(result.applied).toBe(true);
+    }
+    const saved = await api.workflows.get({ id: workflow.id });
+    expect(
+      saved.draft.nodes.find((entry) => entry.id === node.id)!.position,
+    ).toEqual({
+      x: 500,
+      y: 500,
+    });
+    expect(saved.layoutRevision).toBe(1);
+    expect(saved.draftRevision).toBe(workflow.draftRevision + 1);
+  },
+);
 
 it('ignores only direct node positions when comparing content and keeps publication explicit', async () => {
   const { engine, store, api } = setup();

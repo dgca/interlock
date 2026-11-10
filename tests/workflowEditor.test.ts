@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, createElement as h } from 'react';
+import { act, createElement as h, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
@@ -14,6 +14,7 @@ import {
 import { batchDefinition, nestedBatches } from './fixtures/batch';
 import parallelEdges from './fixtures/parallelEdges.json';
 import { WorkflowEditor } from '../packages/ui/src/features/workflows/WorkflowEditor';
+import { WorkflowLayoutNotice } from '../packages/ui/src/features/workflows/WorkflowLayoutNotice';
 
 const canvas = vi.hoisted(() => ({ props: undefined as any }));
 const rawEditor = vi.hoisted(() => ({ props: undefined as any }));
@@ -189,32 +190,35 @@ const runAction = async (fn: () => Promise<unknown>) => {
 };
 let section: 'editor' | 'runs';
 const deleted = vi.fn();
+let strict = false;
 const render = async (visible = true) => {
-  await act(async () =>
-    root.render(
-      h(
-        DesignSystemProvider,
-        { env: 'test' },
-        visible
-          ? h(WorkflowEditor, {
-              workflow,
-              section,
-              onDeleted: deleted,
-              runsView: h('p', {}, 'Workflow runs'),
-              workflows: [workflow],
-              onBack: vi.fn(),
-              onOpenWorkflow: opened,
-              onReport: reportOpened,
-              onRun: vi.fn(),
-              onSaved: saved,
-              onDirty,
-              act: runAction,
-            })
-          : null,
-      ),
-    ),
+  const app = h(
+    DesignSystemProvider,
+    { env: 'test' },
+    visible
+      ? h(WorkflowEditor, {
+          workflow,
+          section,
+          onDeleted: deleted,
+          runsView: h('p', {}, 'Workflow runs'),
+          workflows: [workflow],
+          onBack: vi.fn(),
+          onOpenWorkflow: opened,
+          onReport: reportOpened,
+          onRun: vi.fn(),
+          onSaved: saved,
+          onDirty,
+          act: runAction,
+        })
+      : null,
+    h(WorkflowLayoutNotice, {
+      currentWorkflowId: visible ? workflow.id : undefined,
+      onOpen: opened,
+    }),
   );
+  await act(async () => root.render(strict ? h(StrictMode, {}, app) : app));
 };
+
 const button = (name: string) =>
   Array.from(document.querySelectorAll('button')).find(
     (b) => (b.getAttribute('aria-label') ?? b.textContent) === name,
@@ -259,6 +263,7 @@ beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   vi.clearAllMocks();
   section = 'editor';
+  strict = false;
   rawEditor.props = undefined;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -1425,7 +1430,8 @@ it('retains a failed layout patch and retries against the latest layout without 
   expect(rpc.update).not.toHaveBeenCalled();
 });
 
-it('keeps a pending layout through leaving and reopening while discarded content stays unsaved', async () => {
+it('keeps a pending layout through StrictMode leaving and reopening while discarded content stays unsaved', async () => {
+  strict = true;
   let finish!: () => void;
   rpc.saveLayout.mockImplementationOnce(
     (input) =>
@@ -1583,3 +1589,99 @@ it('does not save stale Raw positions while editing content after a remote layou
   expect(canvas.props.nodes[0].position).toEqual({ x: 777, y: 888 });
   expect(rpc.saveLayout).not.toHaveBeenCalled();
 });
+
+it('drains an ELK-style microtask position update arriving as the previous layout write settles', async () => {
+  const id = workflow.draft.nodes[0].id;
+  rpc.saveLayout.mockImplementationOnce((input) => {
+    layoutPositions = { ...layoutPositions, ...input.positions };
+    layoutRevision++;
+    const result = {
+      id: workflow.id,
+      revision: layoutRevision,
+      positions: layoutPositions,
+    };
+    return Promise.resolve(result).then((acknowledged) => {
+      queueMicrotask(() =>
+        queueMicrotask(() =>
+          canvas.props.onNodesChange([
+            { type: 'position', id, position: { x: 600, y: 650 } },
+          ]),
+        ),
+      );
+      return acknowledged;
+    });
+  });
+  await render();
+  await click(`Move ${id}`);
+  expect(rpc.saveLayout).toHaveBeenCalledTimes(2);
+  expect(rpc.saveLayout).toHaveBeenLastCalledWith({
+    id: workflow.id,
+    expectedRevision: 1,
+    positions: { [id]: { x: 600, y: 650 } },
+  });
+  expect(layoutPositions[id]).toEqual({ x: 600, y: 650 });
+  expect(container.textContent).not.toContain('Saving layout');
+  expect(button('Save draft').disabled).toBe(true);
+});
+
+it('shows pending and failed layout saves off-route and retains unload protection until retry succeeds', async () => {
+  let fail!: (error: Error) => void;
+  rpc.saveLayout.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+  );
+  await render();
+  const id = workflow.draft.nodes[0].id;
+  await click(`Move ${id}`);
+  await render(false);
+  expect(container.textContent).toContain('Saving layout for Original');
+  const pendingUnload = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(pendingUnload);
+  expect(pendingUnload.defaultPrevented).toBe(true);
+  await act(async () => fail(new Error('Offline')));
+  expect(container.textContent).toContain(
+    'Layout for Original could not be saved. Offline',
+  );
+  expect(container.querySelector('[role=alert]')).not.toBeNull();
+  const failedUnload = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(failedUnload);
+  expect(failedUnload.defaultPrevented).toBe(true);
+  await click('Open workflow');
+  expect(opened).toHaveBeenCalledWith(workflow.id);
+  await click('Retry layout save');
+  expect(container.textContent).not.toContain('could not be saved');
+  expect(layoutPositions[id]).toEqual({ x: 200, y: 250 });
+  const savedUnload = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(savedUnload);
+  expect(savedUnload.defaultPrevented).toBe(false);
+  expect(rpc.update).not.toHaveBeenCalled();
+});
+
+it.each(['pending', 'failed'])(
+  'forgets a %s layout save after explicit workflow deletion, including late rejection',
+  async (state) => {
+    let fail!: (error: Error) => void;
+    if (state === 'pending')
+      rpc.saveLayout.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            fail = reject;
+          }),
+      );
+    else rpc.saveLayout.mockRejectedValueOnce(new Error('Offline'));
+    await render();
+    await click(`Move ${workflow.draft.nodes[0].id}`);
+    await click('Delete workflow');
+    await click('Delete');
+    expect(deleted).toHaveBeenCalledOnce();
+    await render(false);
+    if (state === 'pending')
+      await act(async () => fail(new Error('Workflow not found')));
+    expect(container.textContent).not.toContain('layout');
+    const unload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(false);
+  },
+);

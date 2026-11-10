@@ -780,13 +780,16 @@ export class Engine {
         contentChanged = !sameWorkflowContent(w.draft, next);
         const positions = workflowPositions(next);
         const before = workflowPositions(w.draft);
+        const savedPositions = readWorkflowLayout(this.store, id).positions;
         persistWorkflowPositions(
           this.store,
           id,
           patch.layout === 'preserve'
             ? Object.fromEntries(
                 Object.entries(positions).filter(
-                  ([nodeId]) => !Object.hasOwn(before, nodeId),
+                  ([nodeId]) =>
+                    !Object.hasOwn(before, nodeId) &&
+                    !Object.hasOwn(savedPositions, nodeId),
                 ),
               )
             : !contentChanged || patch.layout === 'tidy'
@@ -966,15 +969,18 @@ export class Engine {
       const changes = draftChanges(displayedDraft, result.definition);
       const changed = !sameWorkflowContent(w.draft, result.definition);
       const beforePositions = workflowPositions(displayedDraft);
+      const savedPositions = readWorkflowLayout(this.store, id).positions;
       persistWorkflowPositions(
         this.store,
         id,
         Object.fromEntries(
           Object.entries(workflowPositions(result.definition)).filter(
             ([nodeId, position]) =>
-              !Object.hasOwn(beforePositions, nodeId) ||
-              (layout !== 'preserve' &&
-                !isDeepStrictEqual(beforePositions[nodeId], position)),
+              layout === 'preserve'
+                ? !Object.hasOwn(beforePositions, nodeId) &&
+                  !Object.hasOwn(savedPositions, nodeId)
+                : !Object.hasOwn(beforePositions, nodeId) ||
+                  !isDeepStrictEqual(beforePositions[nodeId], position),
           ),
         ),
       );

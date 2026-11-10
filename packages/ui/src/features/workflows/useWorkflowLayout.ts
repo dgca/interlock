@@ -24,7 +24,67 @@ const equal = (a: { x: number; y: number }, b?: { x: number; y: number }) =>
 
 // A route may unmount while a write is pending. Keep that write and any later
 // queued positions together until acknowledged, or until the editor can retry.
-const sessions = new WeakMap<Client, Map<string, LayoutSession>>();
+type Notice = {
+  id: string;
+  name: string;
+  saving: boolean;
+  error: string;
+  retry: () => Promise<void>;
+};
+type Registry = {
+  sessions: Map<string, LayoutSession>;
+  snapshot: () => Notice[];
+  subscribe: (listener: () => void) => () => void;
+  publish: () => void;
+};
+const registries = new WeakMap<Client, Registry>();
+function registryFor(client: Client): Registry {
+  let existing = registries.get(client);
+  if (existing) return existing;
+  const sessions = new Map<string, LayoutSession>();
+  const listeners = new Set<() => void>();
+  let notices: Notice[] = [];
+  let guarded = false;
+  const beforeUnload = (event: BeforeUnloadEvent) => {
+    event.preventDefault();
+    event.returnValue = '';
+  };
+  const registry: Registry = {
+    sessions,
+    snapshot: () => notices,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      registry.publish();
+      return () => {
+        listeners.delete(listener);
+        queueMicrotask(() => registry.publish());
+      };
+    },
+    publish: () => {
+      notices = [...sessions.values()]
+        .filter((session) => session.unsaved)
+        .map((session) => ({
+          id: session.id,
+          name: session.name,
+          saving: session.state.saving,
+          error: session.state.error,
+          retry: session.retry,
+        }));
+      const shouldGuard =
+        Boolean(notices.length) &&
+        (listeners.size > 0 ||
+          [...sessions.values()].some((session) => session.observed));
+      if (shouldGuard !== guarded) {
+        guarded = shouldGuard;
+        if (guarded) window.addEventListener('beforeunload', beforeUnload);
+        else window.removeEventListener('beforeunload', beforeUnload);
+      }
+      listeners.forEach((listener) => listener());
+    },
+  };
+  registries.set(client, registry);
+  return registry;
+}
 
 class LayoutSession {
   state: State;
@@ -32,14 +92,16 @@ class LayoutSession {
   private pending: WorkflowPositions = {};
   private writing?: Promise<void>;
   private deferred?: LayoutWorkflow;
+  private forgotten = false;
   private listeners = new Set<() => void>();
 
   constructor(
     private client: Client,
-    private workflowId: string,
+    readonly id: string,
     workflow: LayoutWorkflow,
-    private release: () => void,
+    private registry: Registry,
   ) {
+    this.name = workflow.name;
     this.acknowledged = workflowPositions(workflow.draft);
     this.state = {
       revision: workflow.layoutRevision ?? 0,
@@ -49,28 +111,54 @@ class LayoutSession {
     };
   }
 
+  name: string;
+  get observed() {
+    return this.listeners.size > 0;
+  }
+  get unsaved() {
+    return (
+      !this.forgotten &&
+      (this.state.saving ||
+        Boolean(this.state.error) ||
+        Boolean(Object.keys(this.pending).length))
+    );
+  }
   snapshot = () => this.state;
   subscribe = (listener: () => void) => {
+    if (!this.forgotten) this.registry.sessions.set(this.id, this);
     this.listeners.add(listener);
+    this.registry.publish();
     return () => {
       this.listeners.delete(listener);
       this.cleanup();
     };
   };
   private cleanup() {
-    if (
-      !this.listeners.size &&
-      !this.writing &&
-      !Object.keys(this.pending).length
-    )
-      this.release();
+    queueMicrotask(() => {
+      this.registry.publish();
+      if (
+        !this.listeners.size &&
+        !this.writing &&
+        !Object.keys(this.pending).length &&
+        this.registry.sessions.get(this.id) === this
+      ) {
+        this.registry.sessions.delete(this.id);
+        this.registry.publish();
+      }
+    });
   }
   private publish(next: Partial<State>) {
     this.state = { ...this.state, ...next };
+    this.registry.publish();
     this.listeners.forEach((listener) => listener());
   }
 
   receive(workflow: LayoutWorkflow) {
+    if (this.forgotten) return;
+    if (workflow.name !== this.name) {
+      this.name = workflow.name;
+      this.registry.publish();
+    }
     const revision = workflow.layoutRevision ?? 0;
     const incoming = workflowPositions(workflow.draft);
     if (this.writing && revision > this.state.revision) {
@@ -98,6 +186,7 @@ class LayoutSession {
   }
 
   update(positions: WorkflowPositions) {
+    if (this.forgotten) return;
     const changed = Object.fromEntries(
       Object.entries(positions).filter(
         ([id, position]) =>
@@ -122,7 +211,7 @@ class LayoutSession {
         typeof value !== 'object' ||
         !('draft' in value) ||
         !('id' in value) ||
-        value.id !== this.workflowId
+        value.id !== this.id
       )
         return value;
       const workflow = value as LayoutWorkflow;
@@ -142,54 +231,58 @@ class LayoutSession {
       );
   }
 
-  flush = async (): Promise<void> => {
+  flush = (): Promise<void> => {
+    if (this.forgotten) return Promise.resolve();
     if (this.writing) return this.writing;
-    if (this.state.error) throw new Error(this.state.error);
-    if (!Object.keys(this.pending).length) return;
-    this.publish({ saving: true });
-    const writing = (async () => {
-      while (Object.keys(this.pending).length) {
-        const positions = this.pending;
-        this.pending = {};
-        try {
-          const result = await api.workflows.saveLayout.mutate({
-            id: this.workflowId,
-            expectedRevision: this.state.revision,
-            positions,
-          });
-          this.acknowledged = result.positions;
-          this.publish({
-            revision: result.revision,
-            positions: merge(result.positions, this.pending),
-          });
-          this.cache();
-        } catch (error) {
-          this.pending = merge(positions, this.pending);
-          this.publish({ error: errorMessage(error) });
-          throw error;
+    if (this.state.error) return Promise.reject(new Error(this.state.error));
+    if (!Object.keys(this.pending).length) return Promise.resolve();
+    const writing = Promise.resolve().then(async () => {
+      try {
+        while (Object.keys(this.pending).length) {
+          const positions = this.pending;
+          this.pending = {};
+          try {
+            const result = await api.workflows.saveLayout.mutate({
+              id: this.id,
+              expectedRevision: this.state.revision,
+              positions,
+            });
+            if (this.forgotten) return;
+            this.acknowledged = result.positions;
+            this.publish({
+              revision: result.revision,
+              positions: merge(result.positions, this.pending),
+            });
+            this.cache();
+          } catch (error) {
+            if (this.forgotten) return;
+            this.pending = merge(positions, this.pending);
+            this.publish({ error: errorMessage(error) });
+            throw error;
+          }
         }
+      } finally {
+        this.writing = undefined;
+        if (this.deferred) {
+          const deferred = this.deferred;
+          this.deferred = undefined;
+          this.receive(deferred);
+        }
+        this.publish({ saving: false });
+        this.cleanup();
       }
-    })();
+    });
     this.writing = writing;
-    try {
-      await writing;
-    } finally {
-      this.writing = undefined;
-      if (this.deferred) {
-        const deferred = this.deferred;
-        this.deferred = undefined;
-        this.receive(deferred);
-      }
-      this.publish({ saving: false });
-      this.cleanup();
-    }
+    this.publish({ saving: true });
+    return writing;
   };
 
   retry = async () => {
+    if (this.forgotten) return;
     if (this.writing) return this.writing;
     this.publish({ saving: true });
     try {
-      const workflow = await api.workflows.get.query({ id: this.workflowId });
+      const workflow = await api.workflows.get.query({ id: this.id });
       this.receive(workflow);
       this.publish({ error: '', saving: false });
       await this.flush();
@@ -197,19 +290,24 @@ class LayoutSession {
       this.publish({ error: errorMessage(error), saving: false });
     }
   };
+  forget = () => {
+    this.forgotten = true;
+    this.pending = {};
+    this.publish({ saving: false, error: '' });
+    if (this.registry.sessions.get(this.id) === this)
+      this.registry.sessions.delete(this.id);
+    this.registry.publish();
+  };
 }
 
 export function useWorkflowLayout(workflow: LayoutWorkflow) {
   const client = useQueryClient();
   const session = useMemo(() => {
-    let layouts = sessions.get(client);
-    if (!layouts) sessions.set(client, (layouts = new Map()));
-    let current = layouts.get(workflow.id);
+    const registry = registryFor(client);
+    let current = registry.sessions.get(workflow.id);
     if (!current) {
-      current = new LayoutSession(client, workflow.id, workflow, () => {
-        if (layouts.get(workflow.id) === current) layouts.delete(workflow.id);
-      });
-      layouts.set(workflow.id, current);
+      current = new LayoutSession(client, workflow.id, workflow, registry);
+      registry.sessions.set(workflow.id, current);
     }
     return current;
   }, [client, workflow.id]);
@@ -220,8 +318,15 @@ export function useWorkflowLayout(workflow: LayoutWorkflow) {
     update: (positions: WorkflowPositions) => session.update(positions),
     flush: session.flush,
     retry: session.retry,
+    forget: session.forget,
     receive: (next: LayoutWorkflow) => session.receive(next),
     apply: (definition: WorkflowDefinition) =>
       applyWorkflowPositions(definition, session.state.positions),
   };
+}
+
+export function usePendingWorkflowLayouts() {
+  const client = useQueryClient();
+  const registry = useMemo(() => registryFor(client), [client]);
+  return useSyncExternalStore(registry.subscribe, registry.snapshot);
 }
