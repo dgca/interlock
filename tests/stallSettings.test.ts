@@ -2,19 +2,22 @@
 import { act, createElement as h } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { StallSettings } from '../packages/ui/src/features/executors/StallSettings';
 
 const mocks = vi.hoisted(() => ({ settings: vi.fn(), configure: vi.fn() }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    stalls: {
-      settings: { query: mocks.settings },
-      configure: { mutate: mocks.configure },
-    },
-  },
-  errorMessage: (error: Error) => error.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      stalls: {
+        settings: { query: mocks.settings },
+        configure: { mutate: mocks.configure },
+      },
+    }),
+    errorMessage: (error: Error) => error.message,
+  };
+});
 let root: ReturnType<typeof createRoot>, container: HTMLDivElement;
 beforeEach(() => {
   vi.clearAllMocks();

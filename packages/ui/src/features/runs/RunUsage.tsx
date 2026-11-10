@@ -11,11 +11,11 @@ import {
 import { useEffect, useState } from 'react';
 
 import type { UsageMetric } from '@interlock/core';
-import { api, errorMessage } from '../../lib/api';
+import { errorMessage } from '../../lib/api';
+import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
 
 import styles from './RunUsage.module.css';
 
-type Report = Awaited<ReturnType<typeof api.runs.usage.query>>;
 export function usageMetricText(metric: UsageMetric, scale = 1) {
   if (metric.overflow) return 'Too large to total';
   if (metric.value === null) return 'Unknown';
@@ -30,39 +30,21 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
   const [offset, setOffset] = useState(0);
   const [groupBy, setGroupBy] = useState<'node' | 'attempt'>('node');
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [data, setData] = useState<Report>();
-  const [error, setError] = useState('');
   useEffect(() => {
     setOffset(0);
-  }, [id, includeDescendants, groupBy]);
-  useEffect(() => {
-    let active = true;
-    setError('');
-    api.runs.usage
-      .query({
-        runId: id,
-        includeDescendants,
-        offset,
-        limit: 20,
-        groupBy,
-      })
-      .then((value) => {
-        if (active) setData(value);
-      })
-      .catch((reason) => {
-        if (active) setError(errorMessage(reason));
-      });
-    return () => {
-      active = false;
-    };
-  }, [id, tick, includeDescendants, offset, groupBy]);
-  const report =
-    data?.runId === id &&
-    data.includeDescendants === includeDescendants &&
-    data.groupBy === groupBy &&
-    data.offset === offset
-      ? data
-      : undefined;
+  }, [id]);
+  const result = useQuery(
+    trpc.runs.usage.queryOptions({
+      runId: id,
+      includeDescendants,
+      offset,
+      limit: 20,
+      groupBy,
+    }),
+  );
+  useRefreshOnTick(tick, result.refetch, true, result.isFetching);
+  const report = result.data;
+  const error = result.error ? errorMessage(result.error) : '';
   const totals = report?.totals;
   return (
     <section className={styles.panel} aria-label="Reported usage">
@@ -75,17 +57,19 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
             size="xs"
             label="Include child runs, including detached"
             checked={includeDescendants}
-            onChange={(event) =>
-              setIncludeDescendants(event.currentTarget.checked)
-            }
+            onChange={(event) => {
+              setOffset(0);
+              setIncludeDescendants(event.currentTarget.checked);
+            }}
           />
         </Group>
-        {error ? (
+        {error && (
           <Text size="sm" c="red">
             {error}
           </Text>
-        ) : !totals ? (
-          <LoadingSkeleton label="Loading usage…" />
+        )}
+        {!totals ? (
+          !error && <LoadingSkeleton label="Loading usage…" />
         ) : (
           <>
             <Group gap="lg">
@@ -133,9 +117,10 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
                     { value: 'node', label: 'Node' },
                     { value: 'attempt', label: 'Claim attempt' },
                   ]}
-                  onChange={(event) =>
-                    setGroupBy(event.currentTarget.value as 'node' | 'attempt')
-                  }
+                  onChange={(event) => {
+                    setOffset(0);
+                    setGroupBy(event.currentTarget.value as 'node' | 'attempt');
+                  }}
                   mt="xs"
                   mb="xs"
                 />

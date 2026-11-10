@@ -16,6 +16,7 @@ import {
 } from '@interlock/core';
 
 import { api, errorMessage } from '../../lib/api';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
 import { DurationInput } from '../workflows/DurationInput';
 import styles from './StallSettings.module.css';
 
@@ -241,28 +242,42 @@ export function StallSettings({
   onDirty?: (dirty: boolean) => void;
   showHeading?: boolean;
 }) {
-  const [saved, setSaved] =
-    useState<Awaited<ReturnType<typeof api.stalls.settings.query>>>();
-  const [policy, setPolicy] = useState<StallPolicy>({});
-  const [error, setError] = useState('');
+  const queryClient = useQueryClient();
+  const settingsQuery = useQuery(trpc.stalls.settings.queryOptions());
+  const [saved, setSaved] = useState(settingsQuery.data);
+  const [policy, setPolicy] = useState<StallPolicy>(
+    settingsQuery.data?.policy ?? {},
+  );
+  const [actionError, setError] = useState('');
+  const error =
+    actionError ||
+    (settingsQuery.error ? errorMessage(settingsQuery.error) : '');
   const [busy, setBusy] = useState(false);
   const [loadGeneration, setLoadGeneration] = useState(0);
   const dirty =
     !!saved && JSON.stringify(saved.policy) !== JSON.stringify(policy);
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
   useEffect(() => () => onDirty?.(false), [onDirty]);
-  const load = () => {
+  const load = async () => {
     setError('');
-    void api.stalls.settings
-      .query()
-      .then((s) => {
-        setSaved(s);
-        setPolicy(s.policy);
+    try {
+      const { data } = await settingsQuery.refetch({ throwOnError: true });
+      if (data) {
+        setSaved(data);
+        setPolicy(data.policy);
         setLoadGeneration((generation) => generation + 1);
-      })
-      .catch((e) => setError(errorMessage(e)));
+      }
+    } catch (e) {
+      setError(errorMessage(e));
+    }
   };
-  useEffect(load, []);
+  useEffect(() => {
+    const next = settingsQuery.data;
+    if (!next || next === saved || dirty || busy) return;
+    setSaved(next);
+    setPolicy(next.policy);
+    setLoadGeneration((generation) => generation + 1);
+  }, [settingsQuery.data, saved, dirty, busy]);
   return (
     <section aria-label="Library stall settings">
       {saved ? (
@@ -276,6 +291,10 @@ export function StallSettings({
                 expectedRevision: saved.revision,
                 policy: stallPolicySchema.parse(policy),
               });
+              await queryClient.cancelQueries(
+                trpc.stalls.settings.queryFilter(),
+              );
+              queryClient.setQueryData(trpc.stalls.settings.queryKey(), result);
               setSaved(result);
               setPolicy(result.policy);
             } catch (e) {

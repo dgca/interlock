@@ -2,17 +2,20 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { RunList } from '../packages/ui/src/features/runs/RunList';
 const rpc = vi.hoisted(() => ({ attention: vi.fn(), summaries: vi.fn() }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    triggers: { attention: { query: rpc.attention } },
-    runs: { summaries: { query: rpc.summaries } },
-  },
-  errorMessage: (e: Error) => e.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      triggers: { attention: { query: rpc.attention } },
+      runs: { summaries: { query: rpc.summaries } },
+    }),
+    errorMessage: (e: Error) => e.message,
+  };
+});
 let root: Root, container: HTMLDivElement;
 beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;

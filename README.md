@@ -19,7 +19,7 @@ Open [http://127.0.0.1:4310](http://127.0.0.1:4310) in your browser. The package
 
 You can also start Interlock with `npx -y @type_of/interlock@latest` without a global installation. Both startup methods use the same HTTP MCP connection flow.
 
-Workflow editors and run inspectors have bookmarkable URLs. Reloading restores the workflow or run, and browser Back and Forward follow your navigation. Each workflow has **Editor** and **Runs** tabs. The workflow Runs tab and its Active or History filter survive reload. Switching between Editor and Runs retains local edits. Unsaved draft edits still require saving; navigation asks before discarding them.
+Workflow editors and run inspectors have bookmarkable URLs. Reloading restores the workflow or run, and browser Back and Forward follow your navigation. Returning to a visited page reuses its loaded data immediately and refreshes it in the background. Each workflow has **Editor** and **Runs** tabs. The workflow Runs tab and its Active or History filter survive reload. Switching between Editor and Runs retains local edits. Unsaved draft edits still require saving; navigation asks before discarding them.
 
 Keep the terminal running while you use Interlock. Closing the browser does not stop the engine. Press Ctrl+C in the terminal to stop it.
 

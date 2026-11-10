@@ -14,7 +14,7 @@ import {
   workspacePage,
 } from '../../design-system';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 
 import {
   Clock,
@@ -25,11 +25,9 @@ import {
   UserCheck,
   AlertCircle,
 } from 'lucide-react';
-import type {
-  WorkflowReport,
-  ElapsedDistributionMetric,
-} from '@interlock/core';
+import type { ElapsedDistributionMetric } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
+import { trpc, useQuery } from '../../lib/query';
 
 import { ReportLoadingContent } from './ReportSkeleton';
 import styles from './WorkflowReportView.module.css';
@@ -51,14 +49,11 @@ export function WorkflowReportView({
   workflowId?: string;
   onBack?: () => void;
 }) {
-  const [report, setReport] = useState<WorkflowReport | null>(null);
   const [timeBasis, setTimeBasis] = useState<'wall' | 'activeMs' | 'pausedMs'>(
     'wall',
   );
   const metric = (value?: ElapsedDistributionMetric) =>
     timeBasis === 'wall' ? value : value?.[timeBasis];
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(
     initialWorkflowId ?? null,
@@ -66,60 +61,37 @@ export function WorkflowReportView({
   const [timePreset, setTimePreset] = useState<TimePreset>('7d');
   const [tags, setTags] = useState<Record<string, string>>();
   const tagFilterId = useId();
-  const requestSequence = useRef(0);
-  const [workflowsList, setWorkflowsList] = useState<
-    { value: string; label: string }[]
-  >([]);
-
-  // Load available workflows for filter dropdown
-  useEffect(() => {
-    api.workflows.list
-      .query()
-      .then((items) => {
-        setWorkflowsList(
-          items.map((w: any) => ({
-            value: w.id,
-            label: w.name || w.id,
-          })),
-        );
-      })
-      .catch(() => {});
-  }, []);
-
-  const fetchReport = useCallback(async () => {
-    const request = ++requestSequence.current;
-    setLoading(true);
-    setReport(null);
-    setError(null);
-
-    let since: string | undefined;
-    const now = new Date();
-    if (timePreset === '24h') {
-      since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-    } else if (timePreset === '7d') {
-      since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    } else if (timePreset === '30d') {
-      since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    }
-
-    try {
-      const result = await api.report.summary.query({
-        workflowId: selectedWorkflowId || undefined,
-        since,
-        limit: 1000,
-        ...(tags !== undefined ? { tags } : {}),
-      });
-      if (request === requestSequence.current) setReport(result);
-    } catch (err) {
-      if (request === requestSequence.current) setError(errorMessage(err));
-    } finally {
-      if (request === requestSequence.current) setLoading(false);
-    }
-  }, [selectedWorkflowId, timePreset, tags]);
-
-  useEffect(() => {
-    void fetchReport();
-  }, [fetchReport]);
+  const workflowsQuery = useQuery(trpc.workflows.list.queryOptions());
+  const workflowsList = (workflowsQuery.data ?? []).map((workflow) => ({
+    value: workflow.id,
+    label: workflow.name || workflow.id,
+  }));
+  const input = {
+    workflowId: selectedWorkflowId || undefined,
+    limit: 1000,
+    ...(tags !== undefined ? { tags } : {}),
+  };
+  const reportQuery = useQuery({
+    ...trpc.report.summary.queryOptions(input),
+    // Relative windows identify a view; calculate the actual boundary on each
+    // fetch so remounts reuse cached data without freezing the report window.
+    queryKey: [
+      trpc.report.summary.queryKey(input)[0],
+      { input: { ...input, timePreset }, type: 'query' },
+    ],
+    queryFn: () => {
+      const duration = { '24h': 86400000, '7d': 604800000, '30d': 2592000000 };
+      const since =
+        timePreset === 'all'
+          ? undefined
+          : new Date(Date.now() - duration[timePreset]).toISOString();
+      return api.report.summary.query({ ...input, since });
+    },
+  });
+  const report = reportQuery.data;
+  const loading = reportQuery.isFetching;
+  const error = reportQuery.error ? errorMessage(reportQuery.error) : null;
+  const fetchReport = () => reportQuery.refetch({ cancelRefetch: false });
 
   const summary = report?.summary;
   const claims = report?.claims;

@@ -14,6 +14,7 @@ import { useEffect, useId, useState } from 'react';
 import { executorSettingsSchema } from '@interlock/core';
 
 import { api, errorMessage } from '../../lib/api';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
 import styles from './Harnesses.module.css';
 
 export function ExecutionSettings({
@@ -24,19 +25,30 @@ export function ExecutionSettings({
   const inputId = useId();
   const [stallDirty, setStallDirty] = useState(false);
   const [retentionDirty, setRetentionDirty] = useState(false);
-  const [settings, setSettings] =
-    useState<Awaited<ReturnType<typeof api.executors.settings.query>>>();
-  const [value, setValue] = useState<string | number>(3);
-  const [mode, setMode] = useState('limited');
+  const queryClient = useQueryClient();
+  const settingsQuery = useQuery(trpc.executors.settings.queryOptions());
+  const [settings, setSettings] = useState(settingsQuery.data);
+  const [value, setValue] = useState<string | number>(
+    settingsQuery.data?.concurrency ?? 3,
+  );
+  const [mode, setMode] = useState(
+    settingsQuery.data?.concurrency === null ? 'unlimited' : 'limited',
+  );
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [actionError, setError] = useState('');
+  const error =
+    actionError ||
+    (settingsQuery.error ? errorMessage(settingsQuery.error) : '');
   const [saved, setSaved] = useState(false);
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const next = await api.executors.settings.query();
+      const { data: next } = await settingsQuery.refetch({
+        throwOnError: true,
+      });
+      if (!next) return;
       setSettings(next);
       setMode(next.concurrency === null ? 'unlimited' : 'limited');
       setValue(next.concurrency ?? 3);
@@ -47,14 +59,18 @@ export function ExecutionSettings({
       setLoading(false);
     }
   };
-  useEffect(() => {
-    void load();
-  }, []);
   const valid =
     mode === 'unlimited' ||
     (typeof value === 'number' && Number.isSafeInteger(value) && value >= 1);
   const concurrency = mode === 'unlimited' ? null : value;
   const dirty = !!settings && concurrency !== settings.concurrency;
+  useEffect(() => {
+    const next = settingsQuery.data;
+    if (!next || dirty || busy) return;
+    setSettings(next);
+    setMode(next.concurrency === null ? 'unlimited' : 'limited');
+    setValue(next.concurrency ?? 3);
+  }, [settingsQuery.data, dirty, busy]);
   useEffect(
     () => onDirty?.(dirty || stallDirty || retentionDirty),
     [dirty, stallDirty, retentionDirty, onDirty],
@@ -89,7 +105,16 @@ export function ExecutionSettings({
                     expectedRevision: settings.revision,
                   }),
                 );
+                await queryClient.cancelQueries(
+                  trpc.executors.settings.queryFilter(),
+                );
+                queryClient.setQueryData(
+                  trpc.executors.settings.queryKey(),
+                  next,
+                );
                 setSettings(next);
+                setMode(next.concurrency === null ? 'unlimited' : 'limited');
+                setValue(next.concurrency ?? 3);
                 setSaved(true);
               } catch (e) {
                 setError(errorMessage(e));

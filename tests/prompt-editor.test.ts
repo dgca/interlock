@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { nodeSchema, type SavedPrompt } from '@interlock/core';
@@ -14,16 +14,19 @@ const queries = vi.hoisted(() => ({
   update: vi.fn(),
   delete: vi.fn(),
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    prompts: {
-      get: { query: queries.get },
-      update: { mutate: queries.update },
-      delete: { mutate: queries.delete },
-    },
-  },
-  errorMessage: (error: Error) => error.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      prompts: {
+        get: { query: queries.get },
+        update: { mutate: queries.update },
+        delete: { mutate: queries.delete },
+      },
+    }),
+    errorMessage: (error: Error) => error.message,
+  };
+});
 let root: Root;
 let container: HTMLDivElement;
 const scrollIntoView = HTMLElement.prototype.scrollIntoView;

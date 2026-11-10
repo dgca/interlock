@@ -40,3 +40,4 @@ export function createClient(url = 'http://127.0.0.1:4310') {
 }
 
 export { TRPCClientError } from '@trpc/client';
+export type { AppRouter } from '@interlock/server';

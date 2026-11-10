@@ -34,8 +34,9 @@ import {
   ListTableSkeleton,
 } from '../../components/ListTable/ListTable';
 import { api, errorMessage } from '../../lib/api';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
 import { ModelSettings } from './ModelSettings';
-import { readModelAlias, readModelAliases } from './modelAliasApi';
+import { readModelAlias } from './modelAliasApi';
 
 import styles from './ModelAliases.module.css';
 
@@ -54,11 +55,22 @@ export function ModelAliases({
   profiles: Profile[] | undefined;
   onDirty?: (dirty: boolean) => void;
 }) {
-  const [page, setPage] =
-    useState<Awaited<ReturnType<typeof readModelAliases>>>();
   const [offset, setOffset] = useState(0);
-  const [error, setError] = useState('');
-  const [reload, setReload] = useState(0);
+  const queryClient = useQueryClient();
+  const pageQuery = useQuery({
+    ...trpc.modelAliases.read.queryOptions({
+      action: 'list',
+      offset,
+      limit: 10,
+    }),
+    select: (result) => {
+      if (!('items' in result))
+        throw new Error('Could not read model aliases.');
+      return result;
+    },
+  });
+  const page = pageQuery.data;
+  const error = pageQuery.error ? errorMessage(pageQuery.error) : '';
   const [editing, setEditing] = useState<SavedModelAlias | null>();
   const [opening, setOpening] = useState(false);
   const [editorDirty, setEditorDirty] = useState(false);
@@ -77,26 +89,8 @@ export function ModelAliases({
   const editor = useRef<HTMLDivElement>(null);
   const request = useRef(0);
   useEffect(() => {
-    let current = true;
-    setPage(undefined);
-    setError('');
-    void readModelAliases({ offset, limit: 10 }).then(
-      (next) => {
-        if (!current) return;
-        if (offset > 0 && offset >= next.total) {
-          setOffset(0);
-          return;
-        }
-        setPage(next);
-      },
-      (error) => {
-        if (current) setError(errorMessage(error));
-      },
-    );
-    return () => {
-      current = false;
-    };
-  }, [offset, reload]);
+    if (page && offset > 0 && offset >= page.total) setOffset(0);
+  }, [page, offset]);
   useEffect(() => {
     if (editing !== undefined)
       editor.current?.scrollIntoView({ block: 'nearest' });
@@ -128,7 +122,7 @@ export function ModelAliases({
     }
   };
   const changed = () => {
-    setReload((n) => n + 1);
+    void queryClient.invalidateQueries(trpc.modelAliases.pathFilter());
     close();
   };
   return (
@@ -158,7 +152,7 @@ export function ModelAliases({
             <ActionIcon
               variant="subtle"
               aria-label="Refresh aliases"
-              onClick={() => setReload((n) => n + 1)}
+              onClick={() => void pageQuery.refetch()}
             >
               <RefreshCw size={16} />
             </ActionIcon>
@@ -189,24 +183,27 @@ export function ModelAliases({
             </p>
           )}
           <ActionError message={loadError} />
-          {error ? (
+          {error && (
             <div className={styles.error}>
               <ActionError message={error} />
-              <Button onClick={() => setReload((n) => n + 1)}>
+              <Button onClick={() => void pageQuery.refetch()}>
                 Retry loading aliases
               </Button>
             </div>
-          ) : !page ? (
-            <ListTableSkeleton
-              columns={columns}
+          )}
+          {!page ? (
+            !error && (
+              <ListTableSkeleton
+                columns={columns}
 
-              label="Loading model aliases…"
-            >
-              <span>—</span>
-              <span>—</span>
-              <span>—</span>
-              <span />
-            </ListTableSkeleton>
+                label="Loading model aliases…"
+              >
+                <span>—</span>
+                <span>—</span>
+                <span>—</span>
+                <span />
+              </ListTableSkeleton>
+            )
           ) : page.items.length ? (
             <>
               <ListTable columns={columns}>

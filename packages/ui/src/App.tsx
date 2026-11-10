@@ -16,11 +16,12 @@ import { Check, AlertCircle } from 'lucide-react';
 import { Outlet, useBlocker, useMatch, useNavigate } from 'react-router';
 import { paths } from './routes/paths';
 import { useActionFeedback } from './lib/useActionFeedback';
-import type { RunAttention, Workflow, SavedPrompt } from '@interlock/core';
+import type { Workflow, SavedPrompt } from '@interlock/core';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { RunDialog } from './features/runs/RunDialog';
 import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
-import { api, errorMessage } from './lib/api';
+import { errorMessage } from './lib/api';
+import { trpc, useQuery, useQueryClient, refreshQueries } from './lib/query';
 import { subscribeToEngineEvents } from './lib/engineEvents';
 import type { Action } from './lib/useActionFeedback';
 import { aiSettingsTab } from './features/executors/aiSettingsNavigation';
@@ -68,26 +69,43 @@ export function App() {
               : runMatch
                 ? 'runs'
                 : 'workflows';
-  const [scheduleAttentionCount, setScheduleAttentionCount] = useState(0);
+  const queryClient = useQueryClient();
+  const workflowsQuery = useQuery(trpc.workflows.list.queryOptions());
+  const promptsQuery = useQuery(trpc.prompts.list.queryOptions());
+  const attentionQuery = useQuery(trpc.runs.attention.queryOptions());
+  const scheduleQuery = useQuery(
+    trpc.triggers.attention.queryOptions({ limit: 1 }),
+  );
+  const connectionQuery = useQuery({
+    ...trpc.connection.queryOptions(),
+    meta: { engineRefresh: false },
+  });
+  const workflows = workflowsQuery.data ?? [];
+  const prompts = promptsQuery.data ?? [];
+  const attention = attentionQuery.data ?? [];
+  const scheduleAttentionCount = scheduleQuery.data?.total ?? 0;
+  const loaded = [
+    workflowsQuery,
+    promptsQuery,
+    attentionQuery,
+    scheduleQuery,
+  ].every((query) => query.data !== undefined);
+  const readError = [
+    workflowsQuery,
+    promptsQuery,
+    attentionQuery,
+    scheduleQuery,
+  ].find((query) => query.error)?.error;
+  const engineHost = connectionQuery.data
+    ? new URL(connectionQuery.data.engineUrl).host
+    : undefined;
   const [editorDirty, setEditorDirty] = useState(false);
   const [scheduleDirty, setScheduleDirty] = useState(false);
   const [schedulePending, setSchedulePending] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [engineHost, setEngineHost] = useState<string>();
-  useEffect(() => {
-    let active = true;
-    void api.connection
-      .query()
-      .then((config) => {
-        if (active) setEngineHost(new URL(config.engineUrl).host);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
   const [loadError, setLoadError] = useState('');
+  const effectiveLoadError =
+    loadError || (readError ? errorMessage(readError) : '');
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       (editorDirty &&
@@ -98,27 +116,27 @@ export function App() {
         (currentLocation.pathname !== nextLocation.pathname ||
           currentLocation.search !== nextLocation.search)),
   );
-  const [workflows, setWorkflows] = useState<Workflow[]>([]),
-    [prompts, setPrompts] = useState<SavedPrompt[]>([]),
-    [attention, setAttention] = useState<RunAttention[]>([]),
-    [connected, setConnected] = useState(false),
+  const [connected, setConnected] = useState(false),
     [tick, setTick] = useState(0),
     [runDialog, setRunDialog] = useState<Workflow>();
+  useEffect(() => {
+    if (readError) setConnected(false);
+    else if (loaded && !loadError) setConnected(true);
+  }, [loaded, readError, loadError]);
   const refresh = useCallback(async () => {
-    const [w, p, a, schedules] = await Promise.all([
-      api.workflows.list.query(),
-      api.prompts.list.query(),
-      api.runs.attention.query(),
-      api.triggers.attention.query({ limit: 1 }),
-    ]);
-    setWorkflows(w);
-    setPrompts(p);
-    setAttention(a);
-    setScheduleAttentionCount(schedules.total);
+    await refreshQueries(queryClient);
+    const workspaceError = [
+      trpc.workflows.list.queryKey(),
+      trpc.prompts.list.queryKey(),
+      trpc.runs.attention.queryKey(),
+      trpc.triggers.attention.queryKey({ limit: 1 }),
+    ]
+      .map((key) => queryClient.getQueryState(key)?.error)
+      .find(Boolean);
+    if (workspaceError) throw workspaceError;
     setConnected(true);
-    setLoaded(true);
     setLoadError('');
-  }, []);
+  }, [queryClient]);
   const retryLoad = useCallback(async () => {
     try {
       await refresh();
@@ -176,7 +194,7 @@ export function App() {
       resetPolling();
       update();
     };
-    onVisibility();
+    resetPolling();
     const stopEvents = subscribeToEngineEvents({
       onChange: schedule,
       onConnect: () => {
@@ -211,7 +229,7 @@ export function App() {
     workflows,
     prompts,
     loaded,
-    loadError,
+    loadError: effectiveLoadError,
     retryLoad,
     tick,
     act,
@@ -219,10 +237,12 @@ export function App() {
     onScheduleDirty: setScheduleDirty,
     onSchedulePending: setSchedulePending,
     onSaved: (w) =>
-      setWorkflows((all) =>
+      queryClient.setQueryData(trpc.workflows.list.queryKey(), (all = []) =>
         all.some((old) => old.id === w.id)
-          ? all.map((old) => (old.id === w.id ? w : old))
-          : [...all, w],
+          ? all.map((old) =>
+              old.id === w.id ? { draftMatchesLatest: null, ...w } : old,
+            )
+          : [...all, { draftMatchesLatest: null, ...w }],
       ),
     onRun: setRunDialog,
     onConnect: features.connectAgent ? () => setConnectDialog(true) : undefined,
@@ -235,11 +255,11 @@ export function App() {
           page={page}
           attentionCount={attention.length + scheduleAttentionCount}
           connected={connected}
-          connectionError={!!loadError}
+          connectionError={!!effectiveLoadError}
           engineHost={engineHost}
         />
         <main className="main">
-          {loaded && loadError && (
+          {loaded && effectiveLoadError && (
             <Group className="engine-warning" justify="space-between" gap="xs">
               <Text size="sm" role="status">
                 Could not refresh workspace data. Open views may be out of date.
@@ -312,6 +332,7 @@ export function App() {
             workflow={runDialog}
             onClose={() => setRunDialog(undefined)}
             onStarted={(id) => {
+              void refreshQueries(queryClient);
               success('Workflow run started.');
               openRun(id);
             }}

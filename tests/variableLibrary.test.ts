@@ -2,14 +2,17 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { VariableLibrary } from '../packages/ui/src/features/variables/Variables';
 const rpc = vi.hoisted(() => ({ read: vi.fn() }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: { variables: { read: { query: rpc.read } } },
-  errorMessage: (error: Error) => error.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({ variables: { read: { query: rpc.read } } }),
+    errorMessage: (error: Error) => error.message,
+  };
+});
 const listing = (names: string[]) => ({
   items: names.map((name) => ({
     id: name,
@@ -115,4 +118,26 @@ it('keeps results tied to their search through loading, failure, and retry', asy
   });
   expect(container.textContent).toContain('new_variable');
   expect(container.textContent).not.toContain('Search failed');
+});
+
+it('restores cached variables immediately on return and retains them on a background failure', async () => {
+  await render();
+  expect(container.textContent).toContain('original_variable');
+  await act(async () =>
+    root.render(h(DesignSystemProvider, {}, h('p', null, 'Other page'))),
+  );
+  let reject!: (error: Error) => void;
+  rpc.read.mockImplementationOnce(
+    () =>
+      new Promise((_, fail) => {
+        reject = fail;
+      }),
+  );
+  await render();
+  expect(container.textContent).toContain('original_variable');
+  expect(container.textContent).not.toContain('Loading variables');
+  await act(async () => reject(new Error('Background refresh unavailable')));
+  expect(container.textContent).toContain('original_variable');
+  expect(container.textContent).toContain('Variables may be out of date');
+  expect(container.textContent).toContain('Background refresh unavailable');
 });

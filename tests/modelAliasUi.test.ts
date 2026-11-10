@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import type { SavedModelAlias } from '@interlock/core';
 import { ModelAliases } from '../packages/ui/src/features/executors/ModelAliases';
@@ -12,13 +12,19 @@ const rpc = vi.hoisted(() => ({
   mutate: vi.fn(),
   models: vi.fn(),
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    modelAliases: { read: { query: rpc.read }, mutate: { mutate: rpc.mutate } },
-    executors: { models: { query: rpc.models } },
-  },
-  errorMessage: (error: Error) => error.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      modelAliases: {
+        read: { query: rpc.read },
+        mutate: { mutate: rpc.mutate },
+      },
+      executors: { models: { query: rpc.models } },
+    }),
+    errorMessage: (error: Error) => error.message,
+  };
+});
 vi.mock('../packages/ui/src/design-system/Modal/Modal', () => ({
   Modal: ({ title, children }: any) =>
     h('section', { role: 'dialog', 'aria-label': title }, children),
@@ -400,4 +406,18 @@ it('selects a long literal model ID without sending it as an alias search', asyn
   await click(option);
   expect(changed).toHaveBeenCalledWith(literal);
   expect(container.textContent).not.toContain('could not be loaded');
+});
+
+it('retains cached aliases with refresh feedback after a background read fails', async () => {
+  await renderSection();
+  expect(container.textContent).toContain('reviewer');
+  rpc.read.mockRejectedValueOnce(new Error('Alias refresh failed'));
+  await click(
+    document.querySelector<HTMLElement>('[aria-label="Refresh aliases"]')!,
+  );
+  expect(container.textContent).toContain('Alias refresh failed');
+  expect(container.textContent).toContain('reviewer');
+  expect(
+    document.querySelector('[aria-label="Edit alias reviewer"]'),
+  ).not.toBeNull();
 });

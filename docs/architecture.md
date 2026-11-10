@@ -421,6 +421,10 @@ The shared workflow card clamps descriptions to four rendered lines and detects 
 
 Single-workflow initial data loading and lazy editor loading share the title-row and attached-tab presentation. The remaining canvas uses a centered spinner rather than graph-node skeletons.
 
+Frontend page reads use TanStack Query through tRPC's official options proxy in `packages/ui/src/lib/query.tsx`. One app-level `QueryProvider` owns an in-memory cache. Exact procedure inputs identify records, filters, and pages; the report additionally keys its relative time preset and calculates date bounds when fetching. Returning to a cached query renders its last successful data immediately while it revalidates. Queries without data retain the existing loading view. Failed background reads retain data and expose refresh errors. Inactive entries expire after ten minutes; no query data is persisted to browser storage.
+
+Mutations acknowledge saved data in the relevant query before invalidating affected collections. App-level actions and engine events also invalidate inactive entries and refresh observed page reads. An event arriving during an in-flight read queues a follow-up so a pre-event snapshot cannot remain current. Literal metadata keys, including `__proto__`, remain distinct in cache keys and cached JSON responses. Draft form state stays local; background reads must not replace unsaved edits. Config-value caches include the saved value revision; Secret payloads remain write-only. Live model probes, destructive previews, validation, and other explicit one-off reads remain imperative where caching would change their behavior. Diagnostics opts out of engine-event refresh, and live verification always requires an explicit action.
+
 Interlock tabs on the same origin share a browser event stream. One tab holds
 the stream and broadcasts change notices and heartbeats to the others.
 Visible tabs refresh after run and work changes. They use a five-second

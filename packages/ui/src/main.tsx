@@ -9,6 +9,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router';
 import { routes } from './routes';
 import { resolveUiFeatures, UiFeaturesContext } from './lib/uiFeatures';
 import { removeLegacyManualClaims } from './features/runs/manualClaims';
+import { QueryProvider } from './lib/query';
 
 removeLegacyManualClaims();
 
@@ -20,10 +21,12 @@ const features = resolveUiFeatures(
 const router = createBrowserRouter(routes);
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <DesignSystemProvider>
-      <UiFeaturesContext.Provider value={features}>
-        <RouterProvider router={router} />
-      </UiFeaturesContext.Provider>
-    </DesignSystemProvider>
+    <QueryProvider>
+      <DesignSystemProvider>
+        <UiFeaturesContext.Provider value={features}>
+          <RouterProvider router={router} />
+        </UiFeaturesContext.Provider>
+      </DesignSystemProvider>
+    </QueryProvider>
   </StrictMode>,
 );
