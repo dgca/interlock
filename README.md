@@ -188,7 +188,7 @@ In Agent settings, enable **Route on unclaimed timeout** and set **If unclaimed 
 
 For a three-day reminder loop, route Timeout to a Script that sends the reminder and returns the original input fields with an incremented reminder count. Use a Condition to exit after the desired number or route back to the Agent. Fetch returns its HTTP response, so a Fetch-based reminder path must restore the request fields and counter before returning to the Agent. Each visit consumes a step; elapsed waiting time does not. See [timer configuration and execution rules](docs/timers.md).
 
-Use a [Parallel group](docs/parallel.md) to run different named paths from the same input. Join returns all successful branch results by name. Retry a failed group from its parent run to keep successful branches.
+Use a [Parallel group](docs/parallel.md) to run different named paths from the same input. Join returns results by name after every branch succeeds. Retry a failed group from its parent run to keep successful branches.
 
 Workflow-level routes can loop back to an upstream node other than Entry. The same run re-executes that node, bounded by `maxSteps`. Batch item paths must be acyclic and reach their owning Batch's End handle.
 

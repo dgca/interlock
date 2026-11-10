@@ -62,7 +62,7 @@ import {
 export * from './nodeData.js';
 import {
   assertContract,
-  assertExternalInputContract,
+  assertOwnPropertyContract,
   resolveBindingFields,
   matchRouting,
   type PathBinding,
@@ -1974,7 +1974,9 @@ export class Engine {
     const timeout = port === 'timeout' && hasTimeoutRoute(node);
     if (!timeout) {
       const assertOutput =
-        node.kind === 'input' ? assertExternalInputContract : assertContract;
+        node.kind === 'input' || node.kind === 'parallel'
+          ? assertOwnPropertyContract
+          : assertContract;
       assertOutput(
         node.kind === 'workflow' && node.mode === 'detached'
           ? STARTED_RUN_SCHEMA
@@ -2199,11 +2201,9 @@ export class Engine {
         }
         if (node.kind === 'entry')
           assertContract(definition.inputSchema, run.input, 'Workflow input');
-        assertContract(
-          node.inputSchema,
-          execution.input,
-          `${node.label} input`,
-        );
+        const assertInput =
+          node.kind === 'parallel' ? assertOwnPropertyContract : assertContract;
+        assertInput(node.inputSchema, execution.input, `${node.label} input`);
         if (
           (node.kind === 'script' ||
             node.kind === 'fetch' ||

@@ -1,7 +1,7 @@
 import {
   ExternalInputConflict,
   InterlockError,
-  assertExternalInputContract,
+  assertOwnPropertyContract,
   externalInputMutationSchema,
   externalInputStatusSchema,
   type ExternalInputMutation,
@@ -159,7 +159,7 @@ export class ExternalInputs {
       request.expectedRevision !== revision
     )
       throw new ExternalInputConflict('External-input revision conflict');
-    assertExternalInputContract(
+    assertOwnPropertyContract(
       this.engine.node(run, execution).outputSchema,
       request.value,
       'Submitted value',

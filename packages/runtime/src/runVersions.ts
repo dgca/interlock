@@ -1,6 +1,7 @@
 import {
   InterlockError,
   assertContract,
+  assertOwnPropertyContract,
   promptIds,
   runVersionReadSchema,
   runVersionPreviewSchema,
@@ -162,7 +163,11 @@ export class RunVersions {
         }
         try {
           const input = this.hooks.input(run, target.definition);
-          assertContract(node.inputSchema, input, 'Target node input');
+          const assertInput =
+            node.kind === 'parallel'
+              ? assertOwnPropertyContract
+              : assertContract;
+          assertInput(node.inputSchema, input, 'Target node input');
           if (node.kind === 'entry')
             assertContract(
               target.definition.inputSchema,

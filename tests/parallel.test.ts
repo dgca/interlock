@@ -78,6 +78,44 @@ it('dispatches distinct reviewers before either finishes and joins literal keys 
   expect(finished.parallelSteps).toBe(2);
 });
 
+it('rejects unsafe literal-key contracts and enforces the pattern on joined results', () => {
+  const engine = setup();
+  const definition = parallelDefinition({ keys: ['__proto__', 'code'] });
+  const group = definition.nodes.find((node) => node.kind === 'parallel')!;
+  group.outputSchema = JSON.parse(
+    '{"properties":{"__proto__":{"type":"string"}}}',
+  );
+  const unsafe = engine.create('Unsafe joined contract', '', definition);
+  expect(() => engine.publish(unsafe.id)).toThrow(
+    /Use patternProperties with "\^__proto__\$"/,
+  );
+
+  group.outputSchema = {
+    type: 'object',
+    required: ['__proto__', 'code'],
+    properties: { code: { type: 'boolean' } },
+    patternProperties: { '^__proto__$': { type: 'string' } },
+    additionalProperties: false,
+  };
+  const workflow = publish(engine, definition);
+  const rejected = engine.start(workflow, null).run;
+  submit(engine, rejected.id, 'r0', 42);
+  submit(engine, rejected.id, 'r1', true);
+  expect(engine.run(rejected.id)).toMatchObject({
+    status: 'failed',
+    error: expect.stringMatching(/Reviews output.*__proto__/),
+  });
+  expect(engine.run(rejected.id).output).toBeUndefined();
+
+  const accepted = engine.start(workflow, null).run;
+  submit(engine, accepted.id, 'r0', 'reviewed');
+  submit(engine, accepted.id, 'r1', true);
+  expect(engine.run(accepted.id).status).toBe('completed');
+  expect(engine.run(accepted.id).output).toEqual(
+    JSON.parse('{"__proto__":"reviewed","code":true}'),
+  );
+});
+
 it('saves incomplete drafts while rejecting branch crossings, cycles, bad keys and binding leaks at publication', () => {
   const engine = setup();
   const valid = parallelDefinition();
@@ -369,6 +407,22 @@ it('shares parent admission while honoring an aggregate claim budget', () => {
     code: 'code',
   });
   expect(engine.available(secondRun.id)).toHaveLength(2);
+});
+
+it('does not count active Parallel branches when their parent stage is excluded from admission', () => {
+  const engine = setup();
+  const definition = parallelDefinition();
+  definition.maxActiveRuns = 1;
+  definition.excludeStages = ['Review'];
+  definition.nodes.find((node) => node.kind === 'parallel')!.stage = 'Review';
+  const workflow = publish(engine, definition);
+
+  const first = engine.start(workflow, null).run;
+  expect(engine.inspect(first.id).run.stage).toBe('Review');
+  expect(engine.available(first.id)).toHaveLength(2);
+  const second = engine.start(workflow, null).run;
+  expect(second.status).toBe('waiting');
+  expect(engine.available(second.id)).toHaveLength(2);
 });
 
 it('keeps branch history local while retaining the original workflow input', () => {

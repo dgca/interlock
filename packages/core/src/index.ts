@@ -949,12 +949,12 @@ export class ResultRejection extends InterlockError {
   }
 }
 const ajv = new Ajv({ allErrors: true, strict: false });
-const externalInputContracts = new Ajv({
+const ownPropertyContracts = new Ajv({
   allErrors: true,
   strict: false,
   ownProperties: true,
 });
-const propertiesKeyword = externalInputContracts.getKeyword('properties');
+const propertiesKeyword = ownPropertyContracts.getKeyword('properties');
 if (
   !propertiesKeyword ||
   propertiesKeyword === true ||
@@ -963,23 +963,21 @@ if (
   throw new Error('AJV properties validator is unavailable');
 const generateProperties = propertiesKeyword.code;
 // Fail closed when AJV would skip this name, including inside resolved refs.
-externalInputContracts.removeKeyword('properties').addKeyword({
+ownPropertyContracts.removeKeyword('properties').addKeyword({
   ...propertiesKeyword,
   code(context, ruleType) {
     if (Object.hasOwn(context.schema, '__proto__'))
       throw new InterlockError(
-        'Use patternProperties with "^__proto__$" to constrain the "__proto__" field in a submitted value',
+        'Use patternProperties with "^__proto__$" to constrain the "__proto__" field',
       );
     generateProperties(context, ruleType);
   },
 });
 
-function compileExternalInputContract(schema: Record<string, unknown>) {
+function compileOwnPropertyContract(schema: Record<string, unknown>) {
   if (schema.$async === true)
-    throw new InterlockError(
-      'Submitted-value contracts must validate synchronously',
-    );
-  return externalInputContracts.compile(schema);
+    throw new InterlockError('This contract must validate synchronously');
+  return ownPropertyContracts.compile(schema);
 }
 
 export function validateContractSchema(schema: Record<string, unknown>) {
@@ -993,12 +991,12 @@ export function assertContract(
 ) {
   assertContractValue(ajv.compile(schema), value, label);
 }
-export function assertExternalInputContract(
+export function assertOwnPropertyContract(
   schema: Record<string, unknown>,
   value: Json,
   label: string,
 ) {
-  assertContractValue(compileExternalInputContract(schema), value, label);
+  assertContractValue(compileOwnPropertyContract(schema), value, label);
 }
 function assertContractValue(
   validate: ValidateFunction,
@@ -1159,8 +1157,10 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
   ajv.compile(d.inputSchema);
   ajv.compile(d.outputSchema);
   for (const node of d.nodes) {
-    ajv.compile(node.inputSchema);
-    if (node.kind === 'input') compileExternalInputContract(node.outputSchema);
+    if (node.kind === 'parallel') compileOwnPropertyContract(node.inputSchema);
+    else ajv.compile(node.inputSchema);
+    if (node.kind === 'input' || node.kind === 'parallel')
+      compileOwnPropertyContract(node.outputSchema);
     else ajv.compile(node.outputSchema);
   }
   for (const edge of d.edges) {

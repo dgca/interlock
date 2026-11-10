@@ -4,12 +4,14 @@ Use a **Parallel** group when several paths can start from the same input and th
 
 ## Add a Parallel group
 
-1. In the workflow editor, choose **Add step**, then **Parallel**.
+1. In the workflow editor, choose **Add node**, then **Parallel**.
 2. Name each branch. The names become keys in the joined result. Set **Branches at a time** to bound active paths.
 3. Add steps from each named branch. The first step connects to its start. Connect every terminal route in the branch to **Join**.
 4. Connect the incoming step to **In**. Connect **Out** to the next step. Save the draft and publish when all paths are connected.
 
 For example, send a change to independent specification and code reviewers. Name the branches `specReview` and `codeReview`. Configure each reviewer separately. After both succeed, the continuation receives `{"specReview":{...},"codeReview":{...}}`. A group output contract checks this whole object. Each branch step still checks its own contracts.
+
+To constrain the literal key `__proto__` in a group contract, use the pattern `^__proto__$` in `patternProperties`.
 
 Published groups have 2–50 branches. Result keys are nonblank, unique, and at most 64 characters. Concurrency accepts 1–50 and defaults to 5. The executor's capacity and existing claim gates still apply. An outer loop can revisit a group. Each visit receives its own input and joins only that visit's results.
 
