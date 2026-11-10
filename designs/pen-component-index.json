@@ -1,0 +1,316 @@
+{
+  "penRoot": "r93lT",
+  "penFile": "../interlock-design-directions.pen",
+  "boards": {
+    "foundations": "aS9ja",
+    "actions": "yI89a",
+    "fields": "ao4U0",
+    "selection": "HXkhB",
+    "navigation": "Q572yF",
+    "feedback": "D498d",
+    "compositions": "mqoKN",
+    "product": "q5g1i",
+    "inventoryPrimitives": "qDeLu",
+    "inventoryPatterns": "yGlKF",
+    "inventorySpecialists": "UvuPr",
+    "dialogs": "R93g55"
+  },
+  "masters": [
+    {
+      "key": "buttonPrimary",
+      "id": "b8S3J",
+      "name": "Button / Primary"
+    },
+    {
+      "key": "buttonNeutral",
+      "id": "q82D5",
+      "name": "Button / Neutral"
+    },
+    {
+      "key": "buttonGhost",
+      "id": "CStim",
+      "name": "Button / Ghost"
+    },
+    {
+      "key": "buttonDanger",
+      "id": "B20C5g",
+      "name": "Button / Danger"
+    },
+    {
+      "key": "buttonIcon",
+      "id": "RxBru",
+      "name": "Button / Icon"
+    },
+    {
+      "key": "link",
+      "id": "X96Xo5",
+      "name": "Link / Inline"
+    },
+    {
+      "key": "input",
+      "id": "ZJw4M",
+      "name": "Input / Base control"
+    },
+    {
+      "key": "field",
+      "id": "tPttK",
+      "name": "Field / Labeled"
+    },
+    {
+      "key": "textarea",
+      "id": "bZQ82",
+      "name": "Input / Textarea"
+    },
+    {
+      "key": "picker",
+      "id": "eTRNj",
+      "name": "Picker / Open dropdown"
+    },
+    {
+      "key": "duration",
+      "id": "s4gNuz",
+      "name": "Field / Duration"
+    },
+    {
+      "key": "segmented",
+      "id": "CS3Nz",
+      "name": "Segmented / Text"
+    },
+    {
+      "key": "segmentedIcon",
+      "id": "ZeWvB",
+      "name": "Segmented / Icon"
+    },
+    {
+      "key": "checkbox",
+      "id": "NbHoS",
+      "name": "Control / Checkbox"
+    },
+    {
+      "key": "radio",
+      "id": "Rjen4",
+      "name": "Control / Radio"
+    },
+    {
+      "key": "switch",
+      "id": "gK5O5",
+      "name": "Control / Switch"
+    },
+    {
+      "key": "token",
+      "id": "bFoBB",
+      "name": "Token / Removable"
+    },
+    {
+      "key": "multi",
+      "id": "gLwnc",
+      "name": "Input / Multiple values"
+    },
+    {
+      "key": "tab",
+      "id": "uqBLX",
+      "name": "Tab / Attached item"
+    },
+    {
+      "key": "tabs",
+      "id": "m8jB2",
+      "name": "Tabs / Attached strip"
+    },
+    {
+      "key": "sidebar",
+      "id": "eDebj",
+      "name": "Navigation / Main sidebar"
+    },
+    {
+      "key": "navItem",
+      "id": "V8USgx",
+      "name": "Navigation / Item"
+    },
+    {
+      "key": "menuItem",
+      "id": "yCeLo",
+      "name": "Menu / Item"
+    },
+    {
+      "key": "menu",
+      "id": "Ji6NS",
+      "name": "Menu / Dropdown"
+    },
+    {
+      "key": "badge",
+      "id": "WgvjZ",
+      "name": "Badge / Status"
+    },
+    {
+      "key": "count",
+      "id": "BNhsD",
+      "name": "Badge / Count"
+    },
+    {
+      "key": "alert",
+      "id": "fNVg6",
+      "name": "Alert / Inline"
+    },
+    {
+      "key": "notification",
+      "id": "Wv4uQ",
+      "name": "Notification / Result"
+    },
+    {
+      "key": "inlineError",
+      "id": "r5gStE",
+      "name": "Feedback / Field error"
+    },
+    {
+      "key": "empty",
+      "id": "KNQID",
+      "name": "State / Empty results"
+    },
+    {
+      "key": "skeleton",
+      "id": "v4wbG",
+      "name": "Skeleton / List row"
+    },
+    {
+      "key": "loader",
+      "id": "mmrNW",
+      "name": "Loader / Inline"
+    },
+    {
+      "key": "progress",
+      "id": "mZ9Xu",
+      "name": "Progress / Determinate"
+    },
+    {
+      "key": "code",
+      "id": "C9lXsm",
+      "name": "Code / Read-only block"
+    },
+    {
+      "key": "header",
+      "id": "lwSph",
+      "name": "Page / Header"
+    },
+    {
+      "key": "headerTabs",
+      "id": "UAlMe",
+      "name": "Page / Header with tabs"
+    },
+    {
+      "key": "toolbar",
+      "id": "p90dF",
+      "name": "Page / Toolbar"
+    },
+    {
+      "key": "formActions",
+      "id": "s0dHn",
+      "name": "Form / Action row"
+    },
+    {
+      "key": "form",
+      "id": "rsNhE",
+      "name": "Form / Solid container"
+    },
+    {
+      "key": "disclosure",
+      "id": "jXu5H",
+      "name": "Disclosure / Row"
+    },
+    {
+      "key": "modal",
+      "id": "iIwT1",
+      "name": "Modal / Form shell"
+    },
+    {
+      "key": "confirmation",
+      "id": "kz47f",
+      "name": "Confirmation / Delete workflow"
+    },
+    {
+      "key": "listRow",
+      "id": "M2QrR",
+      "name": "List / Row"
+    },
+    {
+      "key": "pagination",
+      "id": "PPB8w",
+      "name": "List / Pagination"
+    },
+    {
+      "key": "keyValue",
+      "id": "SH6lR",
+      "name": "Editor / Key-value row"
+    },
+    {
+      "key": "orderedRow",
+      "id": "pl6TW",
+      "name": "Editor / Ordered reference row"
+    },
+    {
+      "key": "nodeModal",
+      "id": "cVPwf",
+      "name": "Modal / Node settings"
+    },
+    {
+      "key": "workflowCard",
+      "id": "u5hBMG",
+      "name": "Card / Workflow"
+    },
+    {
+      "key": "runCard",
+      "id": "kVQCh",
+      "name": "Card / Run attention"
+    },
+    {
+      "key": "node",
+      "id": "s0ruw",
+      "name": "Graph / Agent node"
+    },
+    {
+      "key": "nodeSelected",
+      "id": "mmyEK",
+      "name": "Graph / Selected agent node"
+    },
+    {
+      "key": "routingNode",
+      "id": "cX3SD",
+      "name": "Graph / Routing node"
+    },
+    {
+      "key": "canvasControls",
+      "id": "Pinxq",
+      "name": "Canvas / Flat controls"
+    },
+    {
+      "key": "canvasToolbar",
+      "id": "B5e2K",
+      "name": "Canvas / Authoring toolbar"
+    },
+    {
+      "key": "minimap",
+      "id": "suftm",
+      "name": "Canvas / Minimap"
+    },
+    {
+      "key": "timeline",
+      "id": "USe7N",
+      "name": "Run / Timeline item"
+    },
+    {
+      "key": "divider",
+      "id": "mc49Z",
+      "name": "Divider / Horizontal"
+    }
+  ],
+  "screenInstances": {
+    "YsC4K": 6,
+    "DBUrn": 11,
+    "a5Faf": 13,
+    "OjVfh": 7,
+    "hOYNx": 7,
+    "Fkso2": 8
+  },
+  "reviewStatus": "Screen-derived default treatments plus clearly labeled proposed specimens. Not a production implementation.",
+  "sizing": "Master geometry uses explicit numeric dimensions for reliable Pen rendering. Shared master instances propagate geometry; named size variables document the scale.",
+  "countNote": "57 cataloged UI masters; existing approved and preserved logo symbols are excluded from this count."
+}
