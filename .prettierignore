@@ -4,3 +4,6 @@ dist
 .interlock
 .impeccable/
 .tasks/
+.site-build/
+website/.docusaurus/
+website/build/

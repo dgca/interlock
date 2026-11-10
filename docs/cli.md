@@ -1,0 +1,85 @@
+---
+title: CLI reference
+description: Common commands for the local engine, workflows, runs, and diagnostics.
+---
+
+# CLI reference
+
+Workflow and run inspection commands print JSON. `doctor` and `report` default to readable text.
+
+## Start the engine
+
+```sh
+interlock [--port 4310] [--workdir PATH] [--db PATH]
+```
+
+The defaults are port `4310`, your current directory for script execution, and `~/.interlock/interlock.db` for storage. `INTERLOCK_WORKDIR` and `INTERLOCK_DB` provide defaults for their flags. Explicit flags take precedence.
+
+`INTERLOCK_URL` selects another engine for client commands:
+
+```sh
+INTERLOCK_URL=http://127.0.0.1:4400 interlock workflows
+```
+
+| Command               | Purpose                                |
+| --------------------- | -------------------------------------- |
+| `interlock --help`    | Server options and command groups      |
+| `interlock commands`  | Complete argument syntax               |
+| `interlock --version` | Installed version                      |
+| `interlock mcp`       | Stdio MCP bridge to the running engine |
+
+## Workflows
+
+| Command                           | Purpose                                |
+| --------------------------------- | -------------------------------------- |
+| `interlock workflows`             | List the library                       |
+| `interlock workflow WORKFLOW_ID`  | Inspect a workflow and its draft       |
+| `interlock starters`              | List bundled starters                  |
+| `interlock import-starter sdlc`   | Add or find the SDLC starter copy      |
+| `interlock import @workflow.json` | Import a definition or portable bundle |
+| `interlock publish WORKFLOW_ID`   | Publish a new version                  |
+| `interlock export WORKFLOW_ID`    | Print a portable bundle                |
+
+Standalone workflow imports create drafts. Starter imports create published copies. Neither starts work automatically.
+
+## Start and inspect runs
+
+JSON arguments accept inline values or `@filename`. Match the workflow's input contract:
+
+```sh
+interlock start WORKFLOW_ID '{"request":"Review the setup instructions"}'
+interlock start WORKFLOW_ID @input.json
+```
+
+Append a version number to select a publication, for example `interlock start WORKFLOW_ID @input.json 2`. Otherwise, start uses the latest published version.
+
+| Command                                            | Purpose                               |
+| -------------------------------------------------- | ------------------------------------- |
+| `interlock runs --workflow WORKFLOW_ID --limit 20` | List recent workflow runs             |
+| `interlock run RUN_ID`                             | Inspect execution state and results   |
+| `interlock work RUN_ID --summary`                  | Inspect available Agent assignments   |
+| `interlock usage RUN_ID`                           | Inspect reported token usage and cost |
+
+Use IDs returned by commands. Starting a connected-agent run makes assignments available without launching an agent. See [Run agents](agents.md).
+
+## Manage a run
+
+| Command                                                   | Purpose                   |
+| --------------------------------------------------------- | ------------------------- |
+| `interlock retry RUN_ID`                                  | Retry failed work         |
+| `interlock cancel RUN_ID`                                 | Cancel a run              |
+| `interlock cancel-tree RUN_ID --preview`                  | Preview tree cancellation |
+| `interlock cancel-tree RUN_ID --reason "Stopped by user"` | Cancel a run tree         |
+
+Tree cancellation excludes detached descendants unless you add `--include-detached`. Inspect external effects and any stop-reconciliation requirements before retrying.
+
+## Diagnose and report
+
+| Command                                   | Purpose                              |
+| ----------------------------------------- | ------------------------------------ |
+| `interlock doctor`                        | Read-only readiness checks           |
+| `interlock doctor --json`                 | Machine-readable checks              |
+| `interlock report --workflow WORKFLOW_ID` | Workflow performance and cost report |
+| `interlock report --json`                 | Machine-readable report              |
+
+`doctor` exits with code `1` for a failure and `0` for passing checks or warnings. Add `--live` only when you want enabled-harness model connectivity checks; those make model requests.

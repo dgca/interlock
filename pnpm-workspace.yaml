@@ -1,5 +1,10 @@
 packages:
   - .
   - packages/*
+  - website
 allowBuilds:
+  core-js: false
   esbuild: true
+overrides:
+  # hast-util-raw 9.2 uses tokenizer APIs absent from parse5 8.0.
+  'hast-util-raw>parse5': ^8.1.1

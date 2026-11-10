@@ -25,7 +25,7 @@ The current editable source is `interlock-design-directions.pen`, under **Interl
 
 This Persuade page extends the approved Interlock Grid application language. Keep the direct writing, dark solid backgrounds, IBM Plex Sans and Mono, blue and orchid logo, selective elevation, and full-width 1px dividers. The application reference is [packages/ui/DESIGN.md](../packages/ui/DESIGN.md), with component guidance in [design-system.md](design-system.md).
 
-Headings and descriptions always stack vertically. Navigation contains GitHub and an Install jump link. The hero has no duplicate actions. Install is the first content section. Preserve the approved copy in the Pen layers.
+Headings and descriptions always stack vertically. Navigation contains Docs, GitHub, and an Install jump link. Docs opens the documentation site at `/interlock/docs/`. The hero has no duplicate actions. Install is the first content section. Preserve the approved copy in the Pen layers.
 
 Solid backgrounds distinguish structure, forms, and inset code. Buttons and workflow nodes retain their gradient elevation. The hero and closing use `#1A1A1A`, main content `#151515`, inset canvases `#121212`, and form cards `#212121`. Dividers are `#333333` and extend to the edges of their containers.
 
