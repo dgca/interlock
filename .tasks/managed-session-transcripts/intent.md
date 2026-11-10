@@ -50,4 +50,4 @@ Operators can inspect supported managed conversations, identify capture gaps, an
 
 ## Questions
 
-No unresolved intent questions. The specification must define the retention policy, capacity behavior, and per-harness delivery semantics before implementation. The assistant's earlier size and age defaults remain proposals rather than human decisions.
+No unresolved intent questions. The specification owns the retention policy, capacity behavior, and per-harness delivery semantics. See its D1 decision for the user's approved disk policy.

@@ -8,6 +8,8 @@
   "taskDir": ".tasks/managed-session-transcripts",
   "branch": "codex/managed-session-transcripts",
   "baseCommit": "23af254fef0a91cba169c29dcf7bdbeee3265ef3",
+  "waitingNodeId": "specGate",
+  "waitingWorkId": "fd1d92a3-66b1-4041-92d0-348724bc046d",
   "reviewPolicy": "auto",
   "createPr": false
 }
