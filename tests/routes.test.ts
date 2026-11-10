@@ -9,6 +9,7 @@ import { routes } from '../packages/ui/src/routes';
 import { blankDefinition, type Workflow } from '@interlock/core';
 import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
 
+let libraryClient: ReturnType<typeof useQueryClient>;
 beforeAll(async () => {
   await import('../packages/ui/src/features/workflows/WorkflowLibrary');
   await import('../packages/ui/src/features/runs/RunList');
@@ -80,9 +81,10 @@ vi.mock(
       >();
     return {
       WorkflowLibrary: (props: any) => {
+        const client = useQueryClient();
+        libraryClient = client;
         if (queries.realLibrary) return h(actual.WorkflowLibrary, props);
         const { onOpen } = props;
-        const client = useQueryClient();
         return h(
           'div',
           {},
@@ -888,9 +890,14 @@ it('returns to cached Runs immediately while its revisit request is pending', as
   expect(container.querySelector('button.run-row')).toBeNull();
 });
 
-it.each(['create', 'clone'] as const)(
-  'opens a library %s without a not-found flash while the collection refresh is delayed',
-  async (operation) => {
+it.each([
+  { operation: 'create', priorRead: false },
+  { operation: 'clone', priorRead: false },
+  { operation: 'create', priorRead: true },
+  { operation: 'clone', priorRead: true },
+] as const)(
+  'opens a library $operation without a not-found flash with delayed refresh and prior read $priorRead',
+  async ({ operation, priorRead }) => {
     queries.realLibrary = true;
     const original: Workflow = {
       id: 'original',
@@ -909,7 +916,27 @@ it.each(['create', 'clone'] as const)(
     queries.createWorkflow.mockResolvedValue(created);
     queries.cloneWorkflow.mockResolvedValue(created);
     await mount('/workflows');
+    let finishOld: (() => void) | undefined;
     let finishRefresh!: () => void;
+    if (priorRead) {
+      queries.workflows.mockImplementationOnce(
+        () =>
+          new Promise<Workflow[]>((resolve) => {
+            finishOld = () => resolve([original]);
+          }),
+      );
+      await act(async () => {
+        void libraryClient.refetchQueries(trpc.workflows.list.queryFilter());
+      });
+      // Another acknowledged write during that read must also survive cancellation.
+      libraryClient.setQueryData(trpc.workflows.list.queryKey(), (all = []) =>
+        all.map((workflow) =>
+          workflow.id === original.id
+            ? { ...workflow, description: 'Newer acknowledged description' }
+            : workflow,
+        ),
+      );
+    }
     queries.workflows.mockImplementation(
       () =>
         new Promise<Workflow[]>((resolve) => {
@@ -939,6 +966,18 @@ it.each(['create', 'clone'] as const)(
       }
       expect(window.location.pathname).toBe('/workflows/new-workflow');
       expect(container.textContent).toContain('Editor new-workflow');
+      expect(seen.some((text) => text.includes('Workflow not found'))).toBe(
+        false,
+      );
+      if (finishOld) {
+        await act(async () => finishOld!());
+        expect(container.textContent).toContain('Editor new-workflow');
+        expect(
+          libraryClient
+            .getQueryData(trpc.workflows.list.queryKey())
+            ?.find((workflow) => workflow.id === original.id)?.description,
+        ).toBe('Newer acknowledged description');
+      }
       expect(seen.some((text) => text.includes('Workflow not found'))).toBe(
         false,
       );
