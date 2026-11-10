@@ -145,7 +145,7 @@ async function render(path = '/automations/new?type=schedule&workflow=w') {
     root.render(
       h(
         DesignSystemProvider,
-        {},
+        { env: 'test' },
         h(
           MemoryRouter,
           { initialEntries: [path] },
@@ -384,17 +384,18 @@ it('keeps the editor usable when an incomplete timezone has existing preview tim
     'true',
   );
 });
-it('retains a successful enable acknowledgment when its follow-up read fails', async () => {
+it('retains the saved enabled state and refresh error without an enable-success banner', async () => {
   await render('/automations/t');
   rpc.manage.mockResolvedValueOnce({
     applied: true,
     trigger: { ...trigger(), enabled: true, revision: 5 },
   });
   rpc.inspect.mockRejectedValueOnce(new Error('Read failed after write'));
-  await act(async () => button('Enable automation').click());
-  expect(document.body.textContent).toContain('Automation enabled.');
+  await act(async () => field('Enabled').click());
+  expect(document.body.textContent).not.toContain('Automation enabled.');
   expect(document.body.textContent).toContain('Read failed after write');
-  expect(button('Disable').disabled).toBe(true);
+  expect(field('Enabled').checked).toBe(true);
+  expect(field('Enabled').disabled).toBe(true);
   expect(rpc.manage).toHaveBeenCalledTimes(1);
   await act(async () => button('Reload automation').click());
   expect(rpc.manage).toHaveBeenCalledTimes(1);
@@ -635,4 +636,162 @@ it('shows an automatically paused schedule without claiming it listens for event
   await render('/automations');
   expect(document.body.textContent).toContain('Automatically paused');
   expect(document.body.textContent).not.toContain('Listening for events');
+});
+
+it('keeps the Enabled switch at the saved value while enabling and after rejection', async () => {
+  let reject!: (error: Error) => void;
+  rpc.manage.mockImplementationOnce(
+    () =>
+      new Promise((_, fail) => {
+        reject = fail;
+      }),
+  );
+  await render('/automations/t');
+  expect(field('Enabled').checked).toBe(false);
+  expect(document.querySelector('header [role=status]')?.textContent).toBe(
+    'Every 5 minutes · Repository review',
+  );
+  await act(async () => field('Enabled').click());
+  expect(field('Enabled').checked).toBe(false);
+  expect(field('Enabled').disabled).toBe(true);
+  await act(async () => field('Enabled').click());
+  expect(rpc.manage).toHaveBeenCalledTimes(1);
+  expect(rpc.manage).toHaveBeenCalledWith({
+    action: 'enable',
+    id: 't',
+    expectedRevision: 4,
+  });
+  await act(async () => reject(new Error('Revision changed')));
+  expect(field('Enabled').checked).toBe(false);
+  expect(field('Enabled').disabled).toBe(false);
+  expect(document.body.textContent).toContain('Revision changed');
+  const saved = { ...trigger(), enabled: true, revision: 5 };
+  rpc.manage.mockResolvedValueOnce({ applied: true, trigger: saved });
+  rpc.inspect.mockResolvedValueOnce(inspection(saved));
+  await act(async () => field('Enabled').click());
+  expect(field('Enabled').checked).toBe(true);
+  expect(document.body.textContent).not.toContain('Automation enabled.');
+  expect(document.body.textContent).not.toContain('Revision changed');
+});
+
+it('confirms switch-off even when the workflow cannot be enabled, and preserves state on cancel or failure', async () => {
+  rpc.inspect.mockResolvedValue(
+    inspection({ ...trigger(), enabled: true, canEnable: false }),
+  );
+  await render('/automations/t');
+  const toggle = field('Enabled');
+  expect(toggle.disabled).toBe(false);
+  await act(async () => {
+    toggle.focus();
+    toggle.click();
+  });
+  expect(toggle.checked).toBe(true);
+  expect(document.querySelector('[role=dialog]')?.textContent).toContain(
+    'Existing active and queued runs continue.',
+  );
+  expect(rpc.manage).not.toHaveBeenCalled();
+  await act(async () => {
+    button('Cancel').focus();
+    button('Cancel').click();
+    await new Promise(requestAnimationFrame);
+  });
+  await act(async () => new Promise(requestAnimationFrame));
+  expect(document.activeElement).toBe(toggle);
+  expect(toggle.checked).toBe(true);
+  await act(async () => toggle.click());
+  rpc.manage.mockRejectedValueOnce(new Error('Could not disable'));
+  await act(async () => button('Disable automation').click());
+  expect(toggle.checked).toBe(true);
+  expect(document.querySelector('[role=dialog]')?.textContent).toContain(
+    'Could not disable',
+  );
+  rpc.manage.mockResolvedValueOnce({
+    applied: true,
+    trigger: { ...trigger(), canEnable: false, revision: 5 },
+  });
+  rpc.inspect.mockResolvedValue(
+    inspection({ ...trigger(), canEnable: false, revision: 5 }),
+  );
+  await act(async () => button('Disable automation').click());
+  expect(field('Enabled').checked).toBe(false);
+  expect(field('Enabled').disabled).toBe(true);
+  expect(document.querySelector('[role=dialog]')).toBeNull();
+  expect(document.body.textContent).toContain(
+    'Automation disabled. Existing runs continue.',
+  );
+});
+
+it('keeps an auto-paused automation enabled and resumes through its warning action', async () => {
+  rpc.inspect.mockResolvedValue(
+    inspection({
+      ...trigger(),
+      enabled: true,
+      autoPaused: { at: workflow.createdAt, reason: 'Failures' },
+    } as any),
+  );
+  await render('/automations/t');
+  expect(field('Enabled').checked).toBe(true);
+  expect(document.querySelector('header [role=status]')?.textContent).toBe(
+    'Auto-paused · Every 5 minutes · Repository review',
+  );
+  const saved = { ...trigger(), enabled: true, revision: 5 };
+  rpc.manage.mockResolvedValueOnce({
+    applied: true,
+    trigger: { ...saved, autoPaused: null },
+  });
+  rpc.inspect.mockResolvedValue(inspection(saved));
+  await act(async () => {
+    const resume = button('Resume automation');
+    resume.focus();
+    resume.click();
+  });
+  expect(rpc.manage).toHaveBeenCalledWith({
+    action: 'enable',
+    id: 't',
+    expectedRevision: 4,
+  });
+  expect(field('Enabled').checked).toBe(true);
+  expect(document.body.textContent).not.toContain('Resume automation');
+  expect(document.body.textContent).not.toContain('Automation enabled.');
+  expect(document.activeElement).toBe(field('Enabled'));
+});
+
+it('opens deletion from the Actions button and returns focus there on cancel', async () => {
+  await render('/automations/t');
+  const actions = button('Actions');
+  await act(async () => {
+    actions.focus();
+    actions.click();
+  });
+  const item = document.querySelector<HTMLElement>('[role=menuitem]')!;
+  expect(item.textContent).toBe('Delete automation');
+  await act(async () => {
+    item.focus();
+    item.click();
+  });
+  expect(document.querySelector('[role=dialog]')?.textContent).toContain(
+    'Delete automation?',
+  );
+  await act(async () => {
+    button('Cancel').focus();
+    button('Cancel').click();
+    await new Promise(requestAnimationFrame);
+  });
+  await act(async () => new Promise(requestAnimationFrame));
+  expect(document.activeElement).toBe(actions);
+  expect(rpc.manage).not.toHaveBeenCalled();
+});
+
+it('does not label disabled automation as auto-paused when old pause metadata remains', async () => {
+  rpc.inspect.mockResolvedValue(
+    inspection({
+      ...trigger(),
+      autoPaused: { at: workflow.createdAt, reason: 'Failures' },
+    } as any),
+  );
+  await render('/automations/t');
+  expect(field('Enabled').checked).toBe(false);
+  expect(document.querySelector('header [role=status]')?.textContent).toBe(
+    'Every 5 minutes · Repository review',
+  );
 });
