@@ -6,74 +6,21 @@
   overflow: hidden;
   container: workflow-editor / inline-size;
 }
-.header {
-  min-height: 72px;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  padding: 10px 21px;
-  gap: 12px;
-  background: var(--surface);
-}
-.title {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  flex: 1;
-}
-.title > span {
-  font-size: 8px;
-  letter-spacing: 1.5px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.title strong {
-  font-size: 14px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.header > button {
-  flex-shrink: 0;
-}
 .headerActions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.editor[data-compact] .header {
-  padding-inline: 12px;
-  gap: 8px;
-}
-.editor[data-compact] .headerActions {
-  gap: 5px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 .editor[data-icon-only] .headerAction {
-  width: 30px;
+  width: var(--control-height);
   padding-inline: 0;
 }
 .editor[data-icon-only] .headerAction :global(.mantine-Button-label) > span {
   display: none;
 }
-.draftStatus {
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--muted);
-}
 .draftStatus[data-dirty] {
-  color: var(--mantine-color-yellow-3);
-}
-.saved {
-  font-size: 9px;
-  color: var(--muted);
-  margin-right: 10px;
-  flex-shrink: 0;
+  color: var(--attention-text);
 }
 .body {
   display: flex;
@@ -81,20 +28,15 @@
   min-height: 0;
 }
 .sections {
+  --tab-surface: var(--workspace);
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   min-width: 0;
 }
-.subnav {
-  flex-shrink: 0;
-  padding: 10px 21px 0;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-}
-.subnav::before {
-  border: 0;
+.sections[data-canvas-section] {
+  --tab-surface: var(--canvas);
 }
 .runsView {
   flex: 1;
@@ -117,7 +59,7 @@
 }
 .rawActions > span {
   margin-right: auto;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 .canvasWrap {
@@ -132,19 +74,10 @@
   left: 20px;
   top: 20px;
   display: flex;
-  gap: 5px;
+  gap: 12px;
   align-items: center;
-  padding: 5px;
-  background: var(--toolbar);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  box-shadow: 0 4px 20px #0003;
-}
-.viewToggle {
-  display: flex;
-  gap: 3px;
-  border-right: 1px solid var(--border);
-  padding-right: 5px;
+  max-width: calc(100% - 40px);
+  flex-wrap: wrap;
 }
 .canvasWrap[data-raw-view] {
   display: flex;
@@ -179,7 +112,7 @@
   flex-shrink: 0;
 }
 .rawError {
-  color: #e89481;
+  color: var(--error-copy);
 }
 .rawError pre {
   margin: 4px 0 0;
@@ -187,7 +120,7 @@
   background: none;
 }
 .rawWarning {
-  color: #e3c47f;
+  color: var(--attention-text);
 }
 .canvasFooter {
   position: absolute;
@@ -200,7 +133,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 14px;
-  font-size: 9px;
+  font-size: 12px;
   color: var(--muted);
   pointer-events: none;
 }
@@ -212,19 +145,19 @@
   height: 100%;
   min-height: 116px;
   padding: 12px 18px;
-  background: var(--surface-raised);
+  background: var(--gradient-node);
   border: 1px solid var(--border-strong);
   border-radius: 9px;
-  box-shadow: 0 5px 15px #0003;
+  box-shadow: var(--shadow-node);
   position: relative;
 }
 .nodeSelected,
 .edgeEndpoint > .node,
 .edgeEndpoint > .batchGroup {
   border-color: var(--accent);
-  box-shadow:
-    0 0 0 2px var(--focus-ring),
-    0 5px 15px #0003;
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  box-shadow: var(--shadow-node);
 }
 .edgeDimmed {
   opacity: 0.3;
@@ -233,8 +166,8 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 8px;
-  letter-spacing: 1px;
+  font-size: 10px;
+  font-weight: 500;
   color: var(--muted);
   margin-bottom: 8px;
 }
@@ -272,8 +205,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
-  font-weight: 550;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text);
 }
 .nodeMetadata {
@@ -285,8 +218,8 @@
 }
 .nodeMetadata small {
   display: block;
-  font-size: 9px;
-  color: var(--muted);
+  font-size: 10px;
+  color: var(--text-secondary);
   line-height: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -303,10 +236,10 @@
   background: var(--accent);
 }
 .nodeHeading i.waiting {
-  background: #e3c47f;
+  background: var(--attention-text);
 }
 .nodeHeading i.failed {
-  background: #e89481;
+  background: var(--error-copy);
 }
 @container workflow-editor (max-width: 700px) {
   .canvasToolbar {
@@ -315,9 +248,6 @@
     width: max-content;
     max-width: calc(100% - 20px);
     flex-wrap: wrap;
-  }
-  .canvasToolbar button {
-    font-size: 10px;
   }
   .canvasWrap[data-raw-view] .canvasToolbar {
     margin-inline: 12px;
@@ -344,7 +274,8 @@
   padding: 0;
   border: 1px solid var(--accent);
   border-radius: 6px;
-  background: var(--surface-raised);
+  background: var(--gradient-neutral);
+  box-shadow: var(--shadow-neutral);
   color: var(--accent-text);
   cursor: pointer;
 }
@@ -373,7 +304,7 @@
   border: 1px solid var(--accent-border);
   border-radius: 12px;
   background: var(--canvas);
-  box-shadow: inset 0 0 0 4px var(--accent-soft);
+  box-shadow: var(--shadow-node);
 }
 .batchHeader {
   height: 62px;
@@ -383,7 +314,7 @@
   padding: 12px 22px;
   border-bottom: 1px solid var(--border);
   color: var(--accent-text);
-  background: var(--surface);
+  background: var(--gradient-node);
   border-radius: 12px 12px 0 0;
   cursor: grab;
 }
@@ -468,10 +399,10 @@
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 .run_waiting {
-  border-color: #e3c47f;
+  border-color: var(--attention-text);
 }
 .run_failed {
-  border-color: #e89481;
+  border-color: var(--error-copy);
 }
 .run_cancelled {
   opacity: 0.65;
@@ -500,10 +431,10 @@
   color: var(--accent-text);
 }
 .run_waiting .runProgress {
-  color: #e3c47f;
+  color: var(--attention-text);
 }
 .run_failed .runProgress {
-  color: #e89481;
+  color: var(--error-copy);
 }
 .runNodeStatus {
   position: absolute;
@@ -523,15 +454,6 @@
   .spinning {
     animation: none;
   }
-}
-
-.ownerLink {
-  background: none;
-  border: 0;
-  color: var(--accent);
-  cursor: pointer;
-  font: inherit;
-  padding: 0;
 }
 
 .nodeContractRow {
@@ -588,12 +510,4 @@
 }
 .bindingSources span {
   color: var(--muted);
-}
-
-.editor[data-compact] .header {
-  flex-wrap: wrap;
-}
-.editor[data-compact] .headerActions {
-  width: 100%;
-  justify-content: flex-end;
 }

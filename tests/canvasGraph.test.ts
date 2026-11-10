@@ -208,7 +208,7 @@ it('keeps selected-edge emphasis ahead of hover and ignores stale hover IDs', ()
     'highlighted',
   );
 });
-it('colors only exception edges until they are selected', () => {
+it('keeps execution-edge colors shared across routing and selection', () => {
   const definition = definitionSchema.parse({
     nodes: [
       nodeSchema.parse({
@@ -238,9 +238,9 @@ it('colors only exception edges until they are selected', () => {
   expect(
     graph.edges.find((edge) => edge.id === 'false')?.style,
   ).toBeUndefined();
-  expect(graph.edges.find((edge) => edge.id === 'timeout')?.style).toEqual({
-    stroke: 'var(--edge-exception)',
-  });
+  expect(
+    graph.edges.find((edge) => edge.id === 'timeout')?.style,
+  ).toBeUndefined();
   const selected = canvasGraph(definition, {
     selectedEdges: new Set(['timeout']),
   });

@@ -21,7 +21,7 @@
 }
 .field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr) var(--control-height);
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--border);
@@ -40,8 +40,6 @@
 }
 .remove {
   margin-top: 27px;
-  padding: 0;
-  width: 32px;
 }
 @media (max-width: 650px) {
   .nameAndSource {
@@ -52,4 +50,9 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
   }
+}
+
+.valueSource {
+  display: flex;
+  width: fit-content;
 }

@@ -19,7 +19,7 @@
 }
 .case {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr) var(--control-height);
   gap: 12px;
   align-items: start;
   padding: 12px 0 16px;
@@ -27,8 +27,6 @@
 }
 .remove {
   margin-top: 27px;
-  padding: 0;
-  width: 32px;
 }
 .caseFields {
   display: grid;

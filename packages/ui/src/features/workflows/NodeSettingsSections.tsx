@@ -1,3 +1,4 @@
+import { Button } from '../../design-system';
 import {
   createContext,
   useContext,
@@ -69,15 +70,17 @@ export function NodeSettingsSections({
         <div className={styles.sidebar}>
           <nav aria-label="Node settings" className={styles.navigation}>
             {sections.map(({ name, label, Icon }) => (
-              <button
+              <Button
                 key={name}
-                type="button"
+                variant="ghost"
+                justify="flex-start"
+                className={styles.navigationItem}
                 aria-current={active === name ? 'page' : undefined}
                 onClick={() => onChange(name)}
               >
                 <Icon size={16} />
                 {label}
-              </button>
+              </Button>
             ))}
           </nav>
         </div>

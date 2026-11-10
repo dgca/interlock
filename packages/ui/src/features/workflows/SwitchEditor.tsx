@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   NativeSelect,
   TextInput,
   Textarea,
@@ -163,8 +164,8 @@ export function SwitchEditor({
                 }
               />
             </div>
-            <Button
-              variant="ghost"
+            <ActionIcon
+              variant="subtle"
               className={styles.remove}
               aria-label={`Remove case ${index + 1}`}
               title={`Remove case ${index + 1}`}
@@ -174,7 +175,7 @@ export function SwitchEditor({
               }}
             >
               <Trash2 size={14} />
-            </Button>
+            </ActionIcon>
           </section>
         ))}
         <div>

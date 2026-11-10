@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Checkbox,
   Input,
   SegmentedControl,
@@ -87,11 +88,7 @@ function Fields({
               />
               <Input.Wrapper label="Value source">
                 <SegmentedControl
-                  style={{
-                    display: 'flex',
-                    width: 'fit-content',
-                    minHeight: 36,
-                  }}
+                  className={styles.valueSource}
                   aria-label={`${label} value source ${index + 1}`}
                   value={field.value.kind}
                   onChange={(kind) =>
@@ -198,8 +195,8 @@ function Fields({
               />
             )}
           </div>
-          <Button
-            variant="ghost"
+          <ActionIcon
+            variant="subtle"
             className={styles.remove}
             aria-label={`Remove ${label.toLowerCase()} ${index + 1}`}
             title={`Remove ${label.toLowerCase()} ${index + 1}`}
@@ -209,7 +206,7 @@ function Fields({
             }}
           >
             <Trash2 size={14} />
-          </Button>
+          </ActionIcon>
         </div>
       ))}
     </section>
