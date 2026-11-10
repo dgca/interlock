@@ -1,6 +1,6 @@
 {
   "scope": "UI source inventory; not a runtime or accessibility audit. Refreshed during the v2 migration.",
-  "tsxFileCount": 100,
+  "tsxFileCount": 101,
   "tsxFiles": [
     {
       "file": "packages/ui/src/App.tsx",
@@ -32,6 +32,7 @@
         "RunDialog",
         "Sidebar",
         "Text",
+        "WorkflowLayoutNotice",
         "div",
         "main"
       ],
@@ -2690,6 +2691,14 @@
       "nativePatterns": {
         "pre": 1
       }
+    },
+    {
+      "file": "packages/ui/src/features/workflows/WorkflowLayoutNotice.tsx",
+      "exports": ["WorkflowLayoutNotice"],
+      "mantineImports": [],
+      "designSystemImports": [["Button", "Group", "Text"]],
+      "jsxElements": ["Button", "Group", "Text"],
+      "nativePatterns": {}
     },
     {
       "file": "packages/ui/src/features/workflows/WorkflowLibrary.tsx",

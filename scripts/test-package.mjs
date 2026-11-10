@@ -496,7 +496,9 @@ try {
       },
     ),
   );
-  assert.equal(cliTidy.draftRevision, workflow.draftRevision + 1);
+  assert.equal(cliTidy.draftRevision, workflow.draftRevision);
+  assert.deepEqual(cliTidy.draft, workflow.draft);
+  assert.equal(cliTidy.latestVersion, workflow.latestVersion);
   const cliEdit = JSON.parse(
     execFileSync(
       bin,

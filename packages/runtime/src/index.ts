@@ -44,6 +44,17 @@ import { isDeepStrictEqual } from 'node:util';
 import { Store } from '@interlock/storage';
 import { tidyWorkflow } from '@interlock/core/layout';
 import {
+  applyWorkflowPositions,
+  sameWorkflowContent,
+  workflowPositions,
+  type WorkflowPositions,
+} from '@interlock/core';
+import {
+  persistWorkflowPositions,
+  readWorkflowLayout,
+  saveWorkflowLayout,
+} from './workflowLayouts.js';
+import {
   calculateVisitCount,
   buildExecutionProvenance,
   buildRunExecutionProvenanceFile,
@@ -649,12 +660,22 @@ export class Engine {
   }
   describeWorkflow(workflow: Workflow) {
     const latest = this.store.getVersion(workflow.id, workflow.latestVersion);
+    const layout = readWorkflowLayout(this.store, workflow.id);
     return {
       ...workflow,
+      draft: applyWorkflowPositions(workflow.draft, layout.positions),
+      layoutRevision: layout.revision,
       draftMatchesLatest: latest
-        ? isDeepStrictEqual(workflow.draft, latest.definition)
+        ? sameWorkflowContent(workflow.draft, latest.definition)
         : null,
     };
+  }
+  saveLayout(input: {
+    id: string;
+    expectedRevision: number;
+    positions: WorkflowPositions;
+  }) {
+    return saveWorkflowLayout(this.store, input);
   }
   authoringSummary(workflow: Workflow) {
     const { id, draftRevision, latestVersion, draftMatchesLatest, archived } =
@@ -683,6 +704,7 @@ export class Engine {
     const parsed = definitionSchema.parse(definition);
     if (layout === undefined) return parsed;
     draftLayoutSchema.parse(layout);
+    if (layout === 'preserve') return parsed;
     return definitionSchema.parse(tidyWorkflow(parsed));
   }
   create(
@@ -740,16 +762,58 @@ export class Engine {
         throw new InterlockError(
           'Draft changed elsewhere. Reload before saving.',
         );
+      const metadataChanged =
+        (patch.name !== undefined && patch.name !== w.name) ||
+        (patch.description !== undefined &&
+          patch.description !== w.description) ||
+        (patch.archived !== undefined && patch.archived !== w.archived);
       if (patch.name !== undefined) w.name = patch.name;
       if (patch.description !== undefined) w.description = patch.description;
       if (patch.archived !== undefined) w.archived = patch.archived;
+      let contentChanged = false;
       if (patch.draft || patch.layout !== undefined) {
-        w.draft = this.arrangeDraft(patch.draft ?? w.draft, patch.layout);
-        validateWorkflowReferences(w.id, w.draft, this.store.workflows());
-        w.draftRevision++;
+        const next = this.arrangeDraft(
+          patch.draft ?? this.describeWorkflow(w).draft,
+          patch.layout,
+        );
+        validateWorkflowReferences(w.id, next, this.store.workflows());
+        contentChanged = !sameWorkflowContent(w.draft, next);
+        const positions = workflowPositions(next);
+        const before = workflowPositions(w.draft);
+        const savedPositions = readWorkflowLayout(this.store, id).positions;
+        persistWorkflowPositions(
+          this.store,
+          id,
+          patch.layout === 'preserve'
+            ? Object.fromEntries(
+                Object.entries(positions).filter(
+                  ([nodeId]) =>
+                    !Object.hasOwn(before, nodeId) &&
+                    !Object.hasOwn(savedPositions, nodeId),
+                ),
+              )
+            : !contentChanged || patch.layout === 'tidy'
+              ? positions
+              : Object.fromEntries(
+                  Object.entries(positions).filter(
+                    ([nodeId, position]) =>
+                      !Object.hasOwn(before, nodeId) ||
+                      !isDeepStrictEqual(before[nodeId], position),
+                  ),
+                ),
+        );
+        if (contentChanged) {
+          w.draft =
+            patch.layout === 'preserve'
+              ? applyWorkflowPositions(next, before)
+              : next;
+          w.draftRevision++;
+        }
       }
-      w.updatedAt = now();
-      this.store.put('workflows', w);
+      if (metadataChanged || contentChanged) {
+        w.updatedAt = now();
+        this.store.put('workflows', w);
+      }
       return w;
     });
   }
@@ -843,6 +907,7 @@ export class Engine {
   ) {
     return this.store.transaction(() => {
       const w = this.workflow(id);
+      const displayedDraft = this.describeWorkflow(w).draft;
       const before =
         diagnosticsMode === 'summary' ? this.validateDraft(id).diagnostics : [];
       const project = (diagnostics: DraftDiagnostic[]) =>
@@ -866,7 +931,7 @@ export class Engine {
             message: 'Draft changed elsewhere. Reload before editing.',
           },
         ]);
-      const result = applyWorkflowEdits(w.draft, edits);
+      const result = applyWorkflowEdits(displayedDraft, edits);
       if (!result.definition) return failure(result.diagnostics);
       this.addReferenceDiagnostics(id, result.definition, result.diagnostics);
       const validation = result;
@@ -901,13 +966,32 @@ export class Engine {
         return failure(validation.diagnostics);
       }
       result.definition = this.arrangeDraft(result.definition, layout);
-      const changes = draftChanges(w.draft, result.definition);
-      const changed =
-        changes.settings.length > 0 ||
-        Object.values(changes.nodes).some((ids) => ids.length > 0) ||
-        Object.values(changes.edges).some((ids) => ids.length > 0);
+      const changes = draftChanges(displayedDraft, result.definition);
+      const changed = !sameWorkflowContent(w.draft, result.definition);
+      const beforePositions = workflowPositions(displayedDraft);
+      const savedPositions = readWorkflowLayout(this.store, id).positions;
+      persistWorkflowPositions(
+        this.store,
+        id,
+        Object.fromEntries(
+          Object.entries(workflowPositions(result.definition)).filter(
+            ([nodeId, position]) =>
+              layout === 'preserve'
+                ? !Object.hasOwn(beforePositions, nodeId) &&
+                  !Object.hasOwn(savedPositions, nodeId)
+                : !Object.hasOwn(beforePositions, nodeId) ||
+                  !isDeepStrictEqual(beforePositions[nodeId], position),
+          ),
+        ),
+      );
       if (changed) {
-        w.draft = result.definition;
+        w.draft =
+          layout === 'preserve'
+            ? applyWorkflowPositions(
+                result.definition,
+                workflowPositions(w.draft),
+              )
+            : result.definition;
         w.draftRevision++;
         w.updatedAt = now();
         this.store.put('workflows', w);
@@ -1139,6 +1223,7 @@ export class Engine {
         this.store.deleteEventHistory(trigger.id);
       }
       this.retention.deleteWorkflow(id);
+      this.store.remove('workflowLayouts', id);
       this.store.remove('workflows', id);
       return { id };
     });
@@ -1151,7 +1236,11 @@ export class Engine {
       throw new InterlockError(
         'Cloning a workflow with children is not available yet.',
       );
-    return this.create(`${w.name} copy`, w.description, w.draft);
+    return this.create(
+      `${w.name} copy`,
+      w.description,
+      this.describeWorkflow(w).draft,
+    );
   }
   publish(id: string | string[], cascade = false) {
     const targetIds = Array.isArray(id) ? id : [id];
@@ -1209,7 +1298,7 @@ export class Engine {
       for (const workflowId of ordered) {
         const w = this.workflow(workflowId);
         if (!targetIds.includes(workflowId)) {
-          if (!isDeepStrictEqual(w.draft, definitions.get(workflowId)))
+          if (!sameWorkflowContent(w.draft, definitions.get(workflowId)!))
             throw new InterlockError(
               `Cannot cascade: "${w.name}" has unpublished definition edits. Publish or discard them first.`,
             );
@@ -1234,7 +1323,7 @@ export class Engine {
   }
   private publishVersion(id: string) {
     const w = this.workflow(id);
-    const definition = validateDefinition(w.draft);
+    const definition = validateDefinition(this.describeWorkflow(w).draft);
     for (const reference of variableReferences(definition))
       this.variables.get(reference);
     this.prompts.capture(definition);

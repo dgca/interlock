@@ -121,10 +121,7 @@ export function PublishReviewDialog({
     !editorChanged &&
     compareWorkflow(draft, baseline?.definition);
   const count = diff
-    ? diff.nodes.length +
-      diff.routes.length +
-      diff.workflow.length +
-      diff.layout.length
+    ? diff.nodes.length + diff.routes.length + diff.workflow.length
     : 0;
 
   return (
@@ -164,9 +161,6 @@ export function PublishReviewDialog({
                 <span>{changeCount(diff.nodes.length, 'node')}</span>
                 <span>{changeCount(diff.routes.length, 'route')}</span>
                 <span>{changeCount(diff.workflow.length, 'workflow')}</span>
-                {diff.layout.length > 0 && (
-                  <span>{changeCount(diff.layout.length, 'layout')}</span>
-                )}
               </div>
               {count === 0 && (
                 <p className={styles.empty}>
@@ -180,7 +174,6 @@ export function PublishReviewDialog({
                   title="Workflow contracts and settings"
                   items={diff.workflow}
                 />
-                <ChangeGroup title="Layout" items={diff.layout} />
               </div>
             </>
           )}

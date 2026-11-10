@@ -5,6 +5,7 @@ import {
   promptIds,
   blankDefinition,
   samePromptContent,
+  withoutWorkflowPositions,
   type PromptSnapshot,
 } from '@interlock/core';
 import {
@@ -180,13 +181,13 @@ function combineBundles(
             name: previous.name,
             description: previous.description,
             owner: previous.ownerWorkflowId,
-            draft: previous.draft,
+            draft: withoutWorkflowPositions(previous.draft),
           },
           {
             name: entry.name,
             description: entry.description,
             owner: entry.ownerWorkflowId,
-            draft: entry.draft,
+            draft: withoutWorkflowPositions(entry.draft),
           },
         )
       )

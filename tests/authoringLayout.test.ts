@@ -69,9 +69,9 @@ it.each(['create', 'update', 'edit'])(
           layout: 'tidy',
         });
         expect(result.applied).toBe(true);
-        saved = engine.workflow(original.id);
+        saved = engine.describeWorkflow(engine.workflow(original.id));
       }
-      expect(saved.draftRevision).toBe(original.draftRevision + 1);
+      expect(saved.draftRevision).toBe(original.draftRevision);
     }
     expect(saved.draft).toEqual(tidyWorkflow(definition));
     expect(semantics(saved.draft)).toEqual(semantics(definition));
@@ -124,19 +124,23 @@ it('preserves supplied positions when omitted and never changes published versio
   const version = store.getVersion(w.id, 1);
   const run = engine.start(w.id, {}).run;
   const originalRun = engine.inspect(run.id);
-  const updated = engine.update(w.id, {
-    draftRevision: w.draftRevision,
-    layout: 'tidy',
-  });
-  expect(updated.draftRevision).toBe(w.draftRevision + 1);
+  const updated = engine.describeWorkflow(
+    engine.update(w.id, {
+      draftRevision: w.draftRevision,
+      layout: 'tidy',
+    }),
+  );
+  expect(updated.draftRevision).toBe(w.draftRevision);
   expect(updated.draft).toEqual(tidyWorkflow(d));
   expect(store.getVersion(w.id, 1)).toEqual(version);
   expect(engine.inspect(run.id)).toEqual(originalRun);
   const replacement = stacked();
-  const exact = engine.update(w.id, {
-    draftRevision: updated.draftRevision,
-    draft: replacement,
-  });
+  const exact = engine.describeWorkflow(
+    engine.update(w.id, {
+      draftRevision: updated.draftRevision,
+      draft: replacement,
+    }),
+  );
   expect(exact.draft).toEqual(replacement);
 });
 
@@ -172,7 +176,7 @@ it('requires a current revision for layout-only updates and rejects stale writes
     layout: 'tidy',
     draftRevision: w.draftRevision,
   });
-  expect(good.draftRevision).toBe(w.draftRevision + 1);
+  expect(good.draftRevision).toBe(w.draftRevision);
 });
 
 it('combines edits and layout in one revision and reports every moved node, with idempotent no-ops', () => {
@@ -272,7 +276,7 @@ it('rolls back edits, positions and metadata after an injected persistence failu
   expect(
     engine.update(w.id, { draftRevision: w.draftRevision, layout: 'tidy' })
       .draftRevision,
-  ).toBe(w.draftRevision + 1);
+  ).toBe(w.draftRevision);
 });
 
 it('validates layout requests and keeps authoring-summary defaults compact', async () => {

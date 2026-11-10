@@ -2,7 +2,7 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { blankDefinition, type Workflow } from '@interlock/core';
 import { WorkflowLibrary } from '../packages/ui/src/features/workflows/WorkflowLibrary';

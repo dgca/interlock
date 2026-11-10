@@ -25,6 +25,7 @@ import { trpc, useQuery, useQueryClient, refreshQueries } from './lib/query';
 import { subscribeToEngineEvents } from './lib/engineEvents';
 import type { Action } from './lib/useActionFeedback';
 import { aiSettingsTab } from './features/executors/aiSettingsNavigation';
+import { WorkflowLayoutNotice } from './features/workflows/WorkflowLayoutNotice';
 
 export type AppContext = {
   workflows: Workflow[];
@@ -240,9 +241,11 @@ export function App() {
       queryClient.setQueryData(trpc.workflows.list.queryKey(), (all = []) =>
         all.some((old) => old.id === w.id)
           ? all.map((old) =>
-              old.id === w.id ? { draftMatchesLatest: null, ...w } : old,
+              old.id === w.id
+                ? { ...old, draftMatchesLatest: null, ...w }
+                : old,
             )
-          : [...all, { draftMatchesLatest: null, ...w }],
+          : [...all, { draftMatchesLatest: null, layoutRevision: 0, ...w }],
       ),
     onRun: setRunDialog,
     onConnect: features.connectAgent ? () => setConnectDialog(true) : undefined,
@@ -291,6 +294,10 @@ export function App() {
               {feedback.message}
             </Notification>
           )}
+          <WorkflowLayoutNotice
+            currentWorkflowId={workflowMatch?.params.workflowId}
+            onOpen={(id) => void navigate(paths.workflow(id))}
+          />
           <Outlet context={context} />
         </main>
         {blocker.state === 'blocked' && (

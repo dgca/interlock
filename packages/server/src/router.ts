@@ -42,6 +42,7 @@ import {
   modelSelectionSchema,
   assignmentSizeQuerySchema,
   definitionSchema,
+  workflowLayoutInputSchema,
   draftLayoutSchema,
   workflowEditsSchema,
   jsonSchema,
@@ -476,6 +477,9 @@ export const appRouter = t.router({
       .query(({ ctx, input }) =>
         ctx.engine.describeWorkflow(ctx.engine.workflow(input.id)),
       ),
+    saveLayout: p
+      .input(workflowLayoutInputSchema)
+      .mutation(({ ctx, input }) => ctx.engine.saveLayout(input)),
     createSummary: p
       .input(createWorkflowInput)
       .mutation(({ ctx, input }) =>
@@ -504,20 +508,26 @@ export const appRouter = t.router({
     create: p
       .input(createWorkflowInput)
       .mutation(({ ctx, input }) =>
-        ctx.engine.create(
-          input.name,
-          input.description,
-          input.definition,
-          input.ownerWorkflowId,
-          input.layout,
+        ctx.engine.describeWorkflow(
+          ctx.engine.create(
+            input.name,
+            input.description,
+            input.definition,
+            input.ownerWorkflowId,
+            input.layout,
+          ),
         ),
       ),
     previewOwnership: p
       .input(ownershipPreviewSchema)
       .query(({ ctx, input }) => ctx.engine.ownership.preview(input)),
-    setOwner: p
-      .input(ownershipChangeSchema)
-      .mutation(({ ctx, input }) => ctx.engine.ownership.set(input)),
+    setOwner: p.input(ownershipChangeSchema).mutation(({ ctx, input }) => {
+      const result = ctx.engine.ownership.set(input);
+      return {
+        ...result,
+        workflow: ctx.engine.describeWorkflow(result.workflow),
+      };
+    }),
     edit: p
       .input(
         z
@@ -562,7 +572,13 @@ export const appRouter = t.router({
           nodeId: z.string().optional(),
         }),
       )
-      .mutation(({ ctx, input }) => ctx.engine.createChild(input)),
+      .mutation(({ ctx, input }) => {
+        const result = ctx.engine.createChild(input);
+        return {
+          parent: ctx.engine.describeWorkflow(result.parent),
+          child: ctx.engine.describeWorkflow(result.child),
+        };
+      }),
     useChildVersion: p
       .input(
         z.object({
@@ -573,18 +589,28 @@ export const appRouter = t.router({
           draftRevision: z.number().int(),
         }),
       )
-      .mutation(({ ctx, input }) => ctx.engine.useChildVersion(input)),
+      .mutation(({ ctx, input }) =>
+        ctx.engine.describeWorkflow(ctx.engine.useChildVersion(input)),
+      ),
     update: p
       .input(updateWorkflowInput)
-      .mutation(({ ctx, input }) => ctx.engine.update(input.id, input)),
+      .mutation(({ ctx, input }) =>
+        ctx.engine.describeWorkflow(ctx.engine.update(input.id, input)),
+      ),
     delete: p
       .input(id)
       .mutation(({ ctx, input }) => ctx.engine.deleteWorkflow(input.id)),
-    clone: p.input(id).mutation(({ ctx, input }) => ctx.engine.clone(input.id)),
+    clone: p
+      .input(id)
+      .mutation(({ ctx, input }) =>
+        ctx.engine.describeWorkflow(ctx.engine.clone(input.id)),
+      ),
     publish: p
       .input(id.extend({ cascade: z.boolean().optional() }))
       .mutation(({ ctx, input }) =>
-        ctx.engine.publish(input.id, input.cascade),
+        ctx.engine.describeWorkflow(
+          ctx.engine.publish(input.id, input.cascade),
+        ),
       ),
     versions: p.input(id).query(({ ctx, input }) => {
       const w = ctx.engine.workflow(input.id);
