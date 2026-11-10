@@ -2,6 +2,8 @@
 
 Interlock is a local workflow editor and engine for AI agents. Define a procedure once, combine agent assignments with HTTP requests and JavaScript or Bash steps, and inspect each run in your browser.
 
+Read the [documentation](https://dgca.github.io/interlock/docs/) for installation, workflow concepts, agent setup, and troubleshooting.
+
 Build workflows visually or edit their JSON definitions. Interlock validates inputs and results, runs scripts, and stores progress in SQLite. A connected agent can handle assignments through the Model Context Protocol (MCP), or Interlock can launch a configured Claude Code, Codex, or Pi harness automatically.
 
 Workflow `maxActiveRuns` and stage exclusions can queue starts until capacity is available. Starts also support dependencies, priority, and atomic active-task policies. See [start admission](docs/idempotent-run-starts.md). Optional node stages and shared run waiting/actor fields support board projections and diagnostics. Add a readable title to external task correlation when starting a run. See [run projections](docs/agent-workflows.md#project-run-stages-and-waiting).
@@ -358,6 +360,8 @@ pnpm test:package
 The build includes TypeScript checks. Tests cover workflow contracts, runtime behavior, and MCP over HTTP and stdio. The package test installs a local tarball into a temporary prefix and checks global and npx startup, the CLI, UI, both MCP transports, JavaScript execution, and claims across a restart. It does not publish anything.
 
 ## Project documentation
+
+Browse the [documentation site](https://dgca.github.io/interlock/docs/) or start with [Installation](docs/installation.md). The site publishes a small set of introductory guides. Detailed technical references remain in the repository.
 
 - [Domain language](CONTEXT.md)
 - [Architecture and execution semantics](docs/architecture.md)

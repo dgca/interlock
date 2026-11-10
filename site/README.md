@@ -1,6 +1,8 @@
 # Interlock marketing page
 
-`index.html` is the static homepage. GitHub Pages deploys `site/` when that folder changes on `main`. `v2.html` preserves the earlier Pokémon demo page.
+`index.html` is the static homepage. `v2.html` preserves the earlier Pokémon demo page. The Docusaurus project in `website/` publishes the repository's Markdown documentation under `/interlock/docs/`.
+
+GitHub Pages builds and deploys the marketing page and documentation together when their sources change on `main`. The generated `.site-build/` directory is the deployment artifact. Do not commit generated files.
 
 The homepage reuses the approved logo and IBM Plex font assets from the application design system. Font licensing is in `fonts/OFL.txt`.
 
@@ -8,13 +10,31 @@ The homepage follows [the marketing design guide](../designs/marketing-homepage.
 
 ## Preview locally
 
-From the repository root, run:
+To preview the complete website at its production paths, run these commands from the repository root:
 
 ```sh
-python3 -m http.server 8765 --bind 127.0.0.1 --directory site
+pnpm install
+pnpm site:build
+pnpm site:preview
 ```
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765).
+Open the [marketing page](http://127.0.0.1:8765/interlock/) or [documentation](http://127.0.0.1:8765/interlock/docs/). Rebuild after editing to refresh this preview. For live documentation editing, run `pnpm docs:dev` and open the URL printed by Docusaurus.
+
+`pnpm site:build` checks documentation links and anchors, builds the local search index, and checks local links and assets across the combined output. `pnpm site:check` repeats the combined-output checks without rebuilding.
+
+For a marketing-only preview, run `python3 -m http.server 8765 --bind 127.0.0.1 --directory site`. The Docs link requires the complete build.
+
+## Edit the documentation
+
+Edit the public guides in `docs/`. The sidebar in `website/sidebars.mjs` defines the complete set of published pages. Only those pages enter the build and search index. New Markdown files are not published automatically.
+
+Keep public guides short and focused on product use. Connection guides include practical setup, and the final CLI reference includes command syntax. Add a page only when it answers a user question the existing guides cannot cover. Architecture, full protocol details, contributor instructions, experiments, and research remain repository documentation.
+
+Use relative Markdown links between published guides. Keep public guides self-contained rather than sending readers into technical references. Use explicit GitHub URLs if a source link is needed. Each published page has an edit link to its Markdown source. Search runs in the visitor's browser and needs no external service or credentials. The search index is generated during production builds, so test search in the complete preview.
+
+The docs reuse the marketing site's font files and a copy of `site/interlock-logo.svg`. When changing the logo, also update `website/static/img/interlock-logo.svg`; the website check verifies that the copies match. Keep the font license in `site/fonts/OFL.txt`.
+
+Framework decisions and source references are in [the docs-site research note](../docs/research/docs-site-framework-2026-11-10.md). Visual decisions are in [the documentation design guide](../designs/documentation.md).
 
 ## Check the homepage
 
