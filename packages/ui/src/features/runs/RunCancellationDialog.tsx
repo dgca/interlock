@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
 
 import { api, errorMessage } from '../../lib/api';
+import { trpc, useQueryClient } from '../../lib/query';
 import styles from './RunCancellationDialog.module.css';
 
 type Preview = Awaited<ReturnType<typeof api.runs.previewCancellation.query>>;
@@ -33,6 +34,7 @@ export function RunCancellationDialog({
   onCancelled: () => void;
   onOpen: (id: string) => void;
 }) {
+  const queryClient = useQueryClient();
   const [includeDetached, setIncludeDetached] = useState(false);
   const [reason, setReason] = useState('');
   const [preview, setPreview] = useState<Preview>();
@@ -92,6 +94,13 @@ export function RunCancellationDialog({
         includeDetached,
         reason: reason.trim(),
       });
+      // Supersede reads that could have captured the tree before cancellation.
+      await Promise.all([
+        queryClient.cancelQueries(trpc.runs.pathFilter()),
+        queryClient.cancelQueries(trpc.work.pathFilter()),
+      ]);
+      void queryClient.invalidateQueries(trpc.runs.pathFilter());
+      void queryClient.invalidateQueries(trpc.work.pathFilter());
       onCancelled();
       onClose();
     } catch (failure) {

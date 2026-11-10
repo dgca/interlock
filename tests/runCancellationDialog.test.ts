@@ -7,6 +7,12 @@ import { blankDefinition } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { workflowCall } from './fixtures/detached';
+import {
+  QueryProvider,
+  createQueryClient,
+  trpc,
+  useQuery,
+} from '../packages/ui/src/lib/query';
 import { RunCancellationDialog } from '../packages/ui/src/features/runs/RunCancellationDialog';
 
 const calls = vi.hoisted(() => ({ preview: vi.fn(), cancel: vi.fn() }));
@@ -19,6 +25,8 @@ vi.mock('../packages/ui/src/lib/api', () => ({
   },
   errorMessage: (error: Error) => error.message,
 }));
+let client: ReturnType<typeof createQueryClient>;
+let childRead: (() => Promise<string>) | undefined;
 let root: Root,
   container: HTMLDivElement,
   engine: Engine,
@@ -29,6 +37,8 @@ const closed = vi.fn(),
   opened = vi.fn();
 
 beforeEach(() => {
+  client = createQueryClient();
+  childRead = undefined;
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   Object.defineProperty(document, 'fonts', {
     configurable: true,
@@ -72,23 +82,36 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  client.clear();
   engine.stop();
   engine.store.close();
   vi.unstubAllGlobals();
 });
+function ChildRead() {
+  useQuery({
+    queryKey: [...trpc.runs.get.queryKey({ id: childId })],
+    queryFn: () => childRead!(),
+    enabled: Boolean(childRead),
+  });
+  return null;
+}
 async function render() {
   await act(async () =>
     root.render(
-      h(
-        DesignSystemProvider,
-        {},
-        h(RunCancellationDialog, {
-          runId,
-          onClose: closed,
-          onCancelled: changed,
-          onOpen: opened,
-        }),
-      ),
+      h(QueryProvider, {
+        client,
+        children: h(
+          DesignSystemProvider,
+          {},
+          h(ChildRead),
+          h(RunCancellationDialog, {
+            runId,
+            onClose: closed,
+            onCancelled: changed,
+            onOpen: opened,
+          }),
+        ),
+      }),
     ),
   );
 }
@@ -260,4 +283,52 @@ it('returns to an existing page when the live selection shrinks below the reques
   expect(dialog().textContent).toContain('1 active run will be cancelled.');
   expect(dialog().querySelectorAll('li')).toHaveLength(1);
   expect(calls.cancel).not.toHaveBeenCalled();
+});
+
+it('invalidates inactive run lists, attention, child details and work immediately after cancellation', async () => {
+  const keys = [
+    trpc.runs.summaries.queryKey({ tab: 'active' }),
+    trpc.runs.attention.queryKey(),
+    trpc.runs.get.queryKey({ id: childId }),
+    trpc.work.list.queryKey({ runId: childId }),
+  ];
+  for (const key of keys)
+    client.setQueryData<unknown>(key, 'before cancellation');
+  const unrelated = trpc.executors.profiles.queryKey();
+  client.setQueryData<unknown>(unrelated, []);
+  changed.mockImplementation(() => {
+    for (const key of keys)
+      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+  });
+  await render();
+  await toggleDetached();
+  await reason('Stop tree');
+  calls.cancel.mockRejectedValueOnce(new Error('Write failed'));
+  await click('Cancel run tree');
+  for (const key of keys)
+    expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+  await click('Reload affected runs');
+  await click('Cancel run tree');
+  expect(changed).toHaveBeenCalledOnce();
+  expect(client.getQueryState(unrelated)?.isInvalidated).toBe(false);
+});
+
+it('supersedes an initial pre-cancellation read so it cannot restore stale child data', async () => {
+  let stale!: (value: string) => void;
+  let reads = 0;
+  const key = [...trpc.runs.get.queryKey({ id: childId })];
+  childRead = () =>
+    ++reads === 1
+      ? new Promise<string>((resolve) => {
+          stale = resolve;
+        })
+      : Promise.resolve(engine.run(childId).status);
+  await render();
+  await toggleDetached();
+  await reason('Stop tree');
+  await click('Cancel run tree');
+  expect(reads).toBe(2);
+  expect(client.getQueryData(key)).toBe('cancelled');
+  await act(async () => stale('waiting'));
+  expect(client.getQueryData(key)).toBe('cancelled');
 });
