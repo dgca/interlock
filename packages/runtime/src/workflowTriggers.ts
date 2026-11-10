@@ -4,6 +4,7 @@ import {
   InterlockError,
   scheduleMutationSchema,
   scheduleReadSchema,
+  replaceTriggerConfig,
   nextScheduleSlot,
   latestScheduleSlot,
   scheduleInput,
@@ -300,7 +301,7 @@ export class WorkflowTriggers {
         this.store.put('workflowTriggers', trigger);
         return { applied: true, trigger };
       }
-      const trigger = this.get(q.id);
+      let trigger = this.get(q.id);
       if (trigger.revision !== q.expectedRevision)
         throw new InterlockError(
           'Trigger revision conflict; retain edits and reload the current trigger before reconciling',
@@ -321,8 +322,7 @@ export class WorkflowTriggers {
           trigger.kind === 'schedule' &&
           q.config.kind === 'schedule' &&
           !isDeepStrictEqual(trigger.timing, q.config.timing);
-        delete trigger.tags;
-        Object.assign(trigger, q.config);
+        trigger = replaceTriggerConfig(trigger, q.config);
         if (changed && trigger.kind === 'schedule') {
           trigger.anchorAt = at;
           trigger.nextFireAt = nextScheduleSlot(trigger.timing, at);

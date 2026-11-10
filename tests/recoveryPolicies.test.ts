@@ -11,6 +11,7 @@ import {
 import {
   HarnessResultError,
   HarnessModelError,
+  HarnessCleanupError,
   classifyHarnessError,
 } from '../packages/runtime/src/executors/contracts';
 
@@ -543,4 +544,30 @@ describe('Pause Duration Exclusion', () => {
     const events = inspection.items[0].recoveryEvents ?? [];
     expect(events.some((ev) => ev.action === 'escalate')).toBe(true);
   });
+});
+
+it('holds uncertain process cleanup instead of retrying or releasing model-refusal resources', async () => {
+  const e = create();
+  profile(e, 'codex', {
+    transientRetry: { maxRetries: 2, windowMs: 30000, initialBackoffMs: 0 },
+  });
+  let attempts = 0;
+  e.executors.start([
+    adapter('codex', async () => {
+      attempts++;
+      throw new HarnessCleanupError('Subprocess stop could not be confirmed', {
+        cause: new Error('model_not_found timed out'),
+      });
+    }),
+  ]);
+  const w = workflow(e, 'codex');
+  start(e, w.id, {});
+  await vi.waitFor(() => expect(e.store.work()[0]?.status).toBe('held'));
+  const work = e.store.work()[0];
+  expect(e.executors.inspect(work.id).items[0].state).toBe('interrupted');
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(attempts).toBe(1);
+  expect(e.executors.inspect(work.id).items[0].recoveryEvents ?? []).toEqual(
+    [],
+  );
 });
