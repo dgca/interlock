@@ -1,6 +1,6 @@
 {
   "scope": "UI source inventory; not a runtime or accessibility audit. Refreshed during the v2 migration.",
-  "tsxFileCount": 99,
+  "tsxFileCount": 100,
   "tsxFiles": [
     {
       "file": "packages/ui/src/App.tsx",
@@ -2434,6 +2434,14 @@
       }
     },
     {
+      "file": "packages/ui/src/features/workflows/RestoreHandleBounds.tsx",
+      "exports": ["RestoreHandleBounds"],
+      "mantineImports": [],
+      "designSystemImports": [],
+      "jsxElements": [],
+      "nativePatterns": {}
+    },
+    {
       "file": "packages/ui/src/features/workflows/ResultRulesEditor.tsx",
       "exports": ["ResultRulesEditor"],
       "mantineImports": [],
@@ -2687,6 +2695,7 @@
         "PublishReviewDialog",
         "ReactFlow",
         "Redo2",
+        "RestoreHandleBounds",
         "Save",
         "SegmentedControl",
         "Settings2",

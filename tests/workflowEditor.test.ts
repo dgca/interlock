@@ -79,6 +79,9 @@ vi.mock('../packages/ui/src/features/workflows/workflowLayoutElk', () => ({
 vi.mock('../packages/ui/src/features/workflows/FlowNode', () => ({
   FlowNode: () => null,
 }));
+vi.mock('../packages/ui/src/features/workflows/RestoreHandleBounds', () => ({
+  RestoreHandleBounds: () => null,
+}));
 vi.mock('../packages/ui/src/features/workflows/SettingsDialog', () => ({
   SettingsDialog: ({
     onApply,

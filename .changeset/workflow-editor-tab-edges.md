@@ -1,0 +1,5 @@
+---
+'@type_of/interlock': patch
+---
+
+Restore workflow connections after switching from Runs or Child workflows back to Editor, while preserving canvas position, selection, and unsaved edits.

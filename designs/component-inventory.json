@@ -1137,7 +1137,8 @@
       "implementation": "Existing feature custom React Flow",
       "owners": [
         "packages/ui/src/features/workflows/FlowNode.tsx",
-        "packages/ui/src/features/workflows/canvasGraph.ts"
+        "packages/ui/src/features/workflows/canvasGraph.ts",
+        "packages/ui/src/features/workflows/RestoreHandleBounds.tsx"
       ],
       "variants": "Side-only handles, named outputs, selected/connected/dimmed, floating edit; Batch variant",
       "board": "Product",
