@@ -124,7 +124,7 @@ Select **Review & publish** when the draft is ready. The review compares the cur
 
 Use **Undo** and **Redo** beside **Save draft** to reverse or restore up to 50 editor actions. The shortcuts are Ctrl/Command+Z and Ctrl/Command+Shift+Z; text fields keep their own typing undo. A drag, group move, deletion, connection change, or settings application counts as one action. Saving preserves history. Leaving the workflow, reloading the page, or loading an external draft clears it. Undo changes the editable draft, never a published version.
 
-In Raw, **Save** beneath the code editor writes the workflow draft and records one history action. **Discard** restores the definition from when you entered Raw or last saved successfully, preserving earlier visual edits. Save or discard raw changes before returning to **Visual** or using workflow Undo and Redo. Failed saves retain your raw text.
+In Raw, edits stay local until **Save** beneath the code editor. Save writes content changes to the workflow draft, saves changed node positions independently, and records one history action. Position-only saves do not advance the draft revision or publish a version. **Discard** restores the definition from when you entered Raw or last saved successfully, preserving earlier visual edits and separately saved positions. Save or discard raw changes before returning to **Visual** or using workflow Undo and Redo. Failed saves retain your raw text.
 
 The workflow editor and run inspector share navigation controls. Scroll to pan, pinch or hold Command/Control and scroll to zoom, and hold Space while dragging or drag with the middle mouse button to pan. Run graphs remain read-only; click a node to inspect its execution.
 

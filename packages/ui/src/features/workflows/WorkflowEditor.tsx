@@ -145,7 +145,6 @@ export function WorkflowEditor({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const layout = useWorkflowLayout(workflow);
   const dragging = useRef<WorkflowDefinition | undefined>(undefined);
-  const lastRawDefinition = useRef<WorkflowDefinition | undefined>(undefined);
   const history = useWorkflowHistory({
     draft: applyWorkflowPositions(workflow.draft, layout.positions),
     name: workflow.name,
@@ -223,11 +222,18 @@ export function WorkflowEditor({
     () => (view === 'raw' ? parseRawDefinition(raw) : undefined),
     [view, raw],
   );
+  const rawBaselineDefinition = useMemo(
+    () => parseRawDefinition(rawBaseline).definition,
+    [rawBaseline],
+  );
   const rawEdited =
     view === 'raw' &&
     raw !== rawBaseline &&
     (!rawResult?.definition ||
-      !sameWorkflowContent(rawResult.definition, draft));
+      !rawBaselineDefinition ||
+      !sameWorkflowContent(rawResult.definition, rawBaselineDefinition) ||
+      Object.keys(changedPositions(rawBaselineDefinition, rawResult.definition))
+        .length > 0);
   const rawInvalid = Boolean(rawResult?.error);
   const effectiveDraft = rawResult?.definition ?? draft;
   const canTidy = Boolean(
@@ -275,7 +281,6 @@ export function WorkflowEditor({
     if (next === 'visual' && rawResult?.definition)
       setDraft(layout.apply(rawResult.definition));
     if (next === 'raw') {
-      lastRawDefinition.current = draft;
       const text = JSON.stringify(draft, null, 2);
       setRaw(text);
       setRawBaseline(text);
@@ -289,10 +294,11 @@ export function WorkflowEditor({
       description: workflow.description,
     }),
   );
-  const dirty =
+  const contentDirty =
     rawInvalid ||
     serializeContentSnapshot({ draft: effectiveDraft, name, description }) !==
       saved;
+  const dirty = contentDirty || rawEdited;
   const remoteSnapshot = serializeContentSnapshot({
     draft: workflow.draft,
     name: workflow.name,
@@ -308,7 +314,6 @@ export function WorkflowEditor({
       description: workflow.description,
     });
     const next = layout.apply(workflow.draft);
-    lastRawDefinition.current = next;
     setRaw(JSON.stringify(next, null, 2));
     setRawBaseline(JSON.stringify(next, null, 2));
     setRevision(workflow.draftRevision);
@@ -356,7 +361,6 @@ export function WorkflowEditor({
     latestDraft.current = target.draft;
     history[direction]();
     layout.update(changedPositions(before, target.draft));
-    lastRawDefinition.current = target.draft;
     setRaw(JSON.stringify(target.draft, null, 2));
     setRawBaseline(JSON.stringify(target.draft, null, 2));
     setSelected(new Set());
@@ -440,32 +444,43 @@ export function WorkflowEditor({
       invalid.reportValidity();
       throw new Error('Fix invalid fields before saving.');
     }
-    const w = await api.workflows.update.mutate({
-      id: workflow.id,
-      name,
-      description,
-      draft: effectiveDraft,
-      draftRevision: revision,
-      layout: 'preserve',
-    });
-    layout.receive(w);
-    setRevision(w.draftRevision);
+    let w = workflow;
+    if (contentDirty) {
+      w = await api.workflows.update.mutate({
+        id: workflow.id,
+        name,
+        description,
+        draft: effectiveDraft,
+        draftRevision: revision,
+        layout: 'preserve',
+      });
+      layout.receive(w);
+      setRevision(w.draftRevision);
+      setSaved(
+        serializeContentSnapshot({
+          draft: w.draft,
+          name: w.name,
+          description: w.description,
+        }),
+      );
+      onSaved(w);
+    }
     if (view === 'raw') {
-      const next = layout.apply(w.draft);
+      const positions = rawBaselineDefinition
+        ? changedPositions(rawBaselineDefinition, effectiveDraft)
+        : {};
+      const next = applyWorkflowPositions(
+        layout.apply(contentDirty ? w.draft : effectiveDraft),
+        positions,
+      );
       history.change((current) => ({ ...current, draft: next }));
+      layout.update(positions);
+      await layout.flush();
       setRawBaseline(JSON.stringify(next, null, 2));
       setRaw((current) =>
         current === raw ? JSON.stringify(next, null, 2) : current,
       );
     }
-    setSaved(
-      serializeContentSnapshot({
-        draft: w.draft,
-        name: w.name,
-        description: w.description,
-      }),
-    );
-    onSaved(w);
     return w;
   };
   const createChild = async (
@@ -899,21 +914,7 @@ export function WorkflowEditor({
                   label="Workflow JSON"
                   language="json"
                   value={raw}
-                  onChange={(text) => {
-                    setRaw(text);
-                    const parsed = parseRawDefinition(text);
-                    if (parsed.definition) {
-                      const positions = changedPositions(
-                        lastRawDefinition.current ?? latestDraft.current,
-                        parsed.definition,
-                      );
-                      lastRawDefinition.current = parsed.definition;
-                      setDraft(
-                        applyWorkflowPositions(latestDraft.current, positions),
-                      );
-                      layout.update(positions);
-                    }
-                  }}
+                  onChange={setRaw}
                   fullHeight
                 />
                 <div className={styles.rawActions}>
@@ -931,9 +932,6 @@ export function WorkflowEditor({
                       const text = baseline
                         ? JSON.stringify(layout.apply(baseline), null, 2)
                         : rawBaseline;
-                      lastRawDefinition.current = baseline
-                        ? layout.apply(baseline)
-                        : undefined;
                       setRaw(text);
                       setRawBaseline(text);
                     }}
