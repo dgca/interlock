@@ -704,7 +704,11 @@ export function NodeInspector({
         )}
         {node.kind === 'workflow' && (
           <NodeSection name="work">
-            <WorkflowModeEditor key={node.id} node={node} onChange={onChange} />
+            <WorkflowModeEditor
+              key={`${node.id}:${node.workflowId}:${node.version}`}
+              node={node}
+              onChange={onChange}
+            />
           </NodeSection>
         )}
         {node.kind === 'batch' && (
