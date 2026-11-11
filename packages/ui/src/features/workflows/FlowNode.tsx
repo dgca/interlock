@@ -36,12 +36,8 @@ import {
 import styles from './WorkflowEditor.module.css';
 import { formatDuration } from './DurationInput';
 import { conditionColors } from './conditionColors';
-import {
-  NODE_SIZE,
-  PARALLEL_INSET,
-  outputPortTop,
-  type ParallelLane,
-} from '@interlock/core/layout';
+import { outputPortTop, type ParallelLane } from '@interlock/core/layout';
+import { parallelEndHandle } from './parallelReturns';
 export type CanvasNode = Node<{
   node: WorkflowNode;
   status?: string;
@@ -68,7 +64,7 @@ export type CanvasNode = Node<{
   /** `source:<port>` / `target:<handle>` keys of ports whose edge is selected or highlighted. */
   activePorts?: string[];
   connectionPorts?: string[];
-  parallelLanes?: ParallelLane[];
+  parallelLanes?: (ParallelLane & { startTop: number; endTop: number })[];
 }>;
 const icons = {
   entry: ArrowUpFromLine,
@@ -192,7 +188,7 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
   const lanes = data.parallelLanes ?? [];
   const portsKey = JSON.stringify([
     outgoingPorts(n),
-    lanes.map((lane) => lane.contentTop),
+    lanes.map(({ startTop, endTop }) => [startTop, endTop]),
   ]);
   useEffect(() => {
     updateNodeInternals(n.id);
@@ -367,7 +363,6 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
               const label = key.trim() || `Branch ${index + 1}`;
               const lane = lanes[index];
               if (!lane || data.collapsed) return null;
-              const top = lane.contentTop + NODE_SIZE.height / 2;
               const port = parallelBranchPort(id);
               return (
                 <div key={id}>
@@ -392,6 +387,12 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
                       )}
                     </div>
                   </div>
+                  <span
+                    className={styles.batchStart}
+                    style={{ top: lane.startTop - 36 }}
+                  >
+                    Start
+                  </span>
                   <Handle
                     type="source"
                     position={Position.Right}
@@ -401,10 +402,24 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
                       targets.has(`source:${port}`) || undefined
                     }
                     style={{
-                      left: PARALLEL_INSET.left - 37,
+                      left: 32,
                       right: 'auto',
-                      top,
+                      top: lane.startTop,
                     }}
+                  />
+                  <span
+                    className={styles.batchEnd}
+                    style={{ top: lane.endTop - 36 }}
+                  >
+                    End
+                  </span>
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={parallelEndHandle(id)}
+                    aria-label={`End ${label}`}
+                    isConnectable={false}
+                    style={{ left: 'auto', right: 32, top: lane.endTop }}
                   />
                 </div>
               );

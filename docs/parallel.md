@@ -29,7 +29,7 @@ Parallel branch steps count toward the owning workflow run's `maxSteps`. The gro
 
 ## Author through CLI or MCP
 
-A definition uses `kind: "parallel"` with `branches: [{id, key}]` and optional `concurrency`. Give each member the owning `parallelId` and its `parallelBranchId`. Use a source port `branch:<id>` to start each path. Return a path to its group with `targetHandle: "join"`. The visual editor saves these return edges automatically and hides them on the canvas. The group's `complete` port forwards the collected object. Renaming a result key leaves the branch ID and edges intact.
+A definition uses `kind: "parallel"` with `branches: [{id, key}]` and optional `concurrency`. Give each member the owning `parallelId` and its `parallelBranchId`. Use a source port `branch:<id>` to start each path. Return a path to its group with `targetHandle: "join"`. The visual editor saves these returns automatically and displays each one at its lane's **End** dot. The group's `complete` port forwards the collected object. Renaming a result key leaves the branch ID and edges intact.
 
 A branch can read its own completed node output or execution provenance. To share earlier parent values, pass them through the group's input. The parent's continuation can read the whole joined object. See [step data](node-data.md).
 

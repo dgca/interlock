@@ -100,11 +100,22 @@ it('saves implicit success returns without concealing unconnected timeout routes
   expect(parallelTail(draft, 'parallel', 'r0')).toBeUndefined();
   expect(parallelTail(draft, 'parallel', 'r1')?.port).toBe('default');
   expect(withParallelReturns(draft)).toBe(draft);
+  const graph = canvasGraph(draft);
+  expect(graph.edges.find((edge) => edge.id === specReturn.id)).toMatchObject({
+    targetHandle: 'parallel-end:r0',
+    hidden: false,
+    selectable: false,
+  });
+  expect(graph.edges.find((edge) => edge.source === 'r1')).toMatchObject({
+    targetHandle: 'parallel-end:r1',
+    hidden: false,
+  });
   expect(
-    canvasGraph(draft)
-      .edges.filter((edge) => !edge.hidden)
-      .map((edge) => edge.id),
-  ).toEqual(definition.edges.map((edge) => edge.id));
+    canvasGraph(draft, { collapsed: new Set(['parallel']) }).edges.find(
+      (edge) => edge.id === specReturn.id,
+    )?.hidden,
+  ).toBe(true);
+  expect(specReturn.targetHandle).toBe('join');
 });
 
 it('shows the successor input contract on continuing Exits', () => {

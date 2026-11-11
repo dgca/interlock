@@ -8,7 +8,7 @@ import { bindingNodeIds } from './inputBindings.js';
 export const NODE_SIZE = { width: 220, height: 116 };
 export const BATCH_SIZE = { width: 520, height: 340 };
 export const BATCH_INSET = { left: 130, top: 160, right: 120, bottom: 60 };
-export const PARALLEL_INSET = { ...BATCH_INSET, left: 110, right: 40 };
+export const PARALLEL_INSET = { ...BATCH_INSET, left: 110, right: 110 };
 export const PARALLEL_LANE_TOP = 92;
 export const PARALLEL_LANE_HEADER = 42;
 export const PARALLEL_LANE_MIN_HEIGHT = 196;

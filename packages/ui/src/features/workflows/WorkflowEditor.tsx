@@ -1213,8 +1213,12 @@ export function WorkflowEditor({
                           target: e.target,
                           port: (e.sourceHandle ??
                             'default') as WorkflowEdge['port'],
-                          targetHandle: (e.targetHandle ??
-                            'default') as WorkflowEdge['targetHandle'],
+                          targetHandle: e.targetHandle?.startsWith(
+                            'parallel-end:',
+                          )
+                            ? 'join'
+                            : ((e.targetHandle ??
+                                'default') as WorkflowEdge['targetHandle']),
                         })),
                       }),
                     );

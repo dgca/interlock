@@ -393,8 +393,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 36px;
-  padding-block-start: 6px;
+  min-height: 40px;
+  padding-block-start: 10px;
   padding-inline: 16px;
   color: var(--text);
   font-size: 12px;
@@ -410,6 +410,9 @@
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+}
+:global(.react-flow__edge).automaticReturn {
+  pointer-events: none;
 }
 :global(.react-flow__handle[data-connect-target]) {
   outline: 2px solid var(--accent-text);

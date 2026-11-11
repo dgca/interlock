@@ -5,6 +5,9 @@ import {
   type WorkflowDefinition,
 } from '@interlock/core';
 
+export const parallelEndHandle = (branchId: string) =>
+  `parallel-end:${branchId}`;
+
 /** In the visual editor, a lane's open success ports return to its group. */
 export function withParallelReturns(
   definition: WorkflowDefinition,
