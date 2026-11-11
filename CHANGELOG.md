@@ -1,5 +1,15 @@
 # @type_of/interlock
 
+## 0.2.15
+
+### Patch Changes
+
+- 23af254: Add a documentation site with local search and concise guides to installation, workflows, agent connections, automation, run inspection, reports, testing, and troubleshooting. Include MCP and harness setup guides and a CLI reference. Keep detailed technical references in the repository.
+- 14e1f6f: Inspect durable managed session transcripts and send guidance to supported active harnesses from the run inspector, CLI, or MCP. Keep transcript history navigation visible while scrolling. Switch between Conversation and Details to read messages or inspect session information, prompts, and execution data. Align other node inspectors with consistent headers, contained data and activity, and child-run navigation. Bound transcript storage with per-entry and execution limits, a 256 MiB library budget, automatic pruning and expiry, and visible capture gaps. Record message delivery receipts to prevent duplicate sends after lost responses or restarts.
+- 2445032: Remove the marketing hero caption and link the closing copy to GitHub issue reporting.
+- 9ff0a16: Update the marketing homepage for managed agents, automations, and run reports, with a textured hero, responsive workflow figures, and a pausable Build → Review animation.
+- 02a370c: Add Parallel groups for running different workflow paths together and joining their named results. Edit each path in its own named lane and inspect it in the parent run. Retry failed groups without repeating successful work.
+
 ## 0.2.14
 
 ### Patch Changes

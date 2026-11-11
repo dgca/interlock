@@ -53,7 +53,7 @@
     "vitest": "^3.2.4",
     "zod": "^4.6.7"
   },
-  "version": "0.2.14",
+  "version": "0.2.15",
   "license": "MIT",
   "description": "Local workflow engine and visual editor for agent harnesses",
   "bin": {
