@@ -25,11 +25,27 @@ export class WorkflowBoards {
 
   list() {
     const workflows = this.store.workflows();
-    return this.store.list<WorkflowBoard>(collection).map((board) => ({
+    const boards = this.store.list<WorkflowBoard>(collection);
+    if (!boards.length) return [];
+    const boardByWorkflow = new Map(
+      workflows.map((workflow) => [workflow.id, workflow.boardId]),
+    );
+    const requests = this.requests.byCard();
+    const counts = new Map<string, number>();
+    for (const card of this.store.attentionAncestors(
+      new Set(requests.keys()),
+    )) {
+      const boardId = boardByWorkflow.get(card.workflowId);
+      const count = requests.get(card.id)?.length;
+      if (boardId && count)
+        counts.set(boardId, (counts.get(boardId) ?? 0) + count);
+    }
+    return boards.map((board) => ({
       ...board,
       workflowIds: workflows
         .filter((workflow) => workflow.boardId === board.id)
         .map((workflow) => workflow.id),
+      attentionCount: counts.get(board.id) ?? 0,
     }));
   }
 

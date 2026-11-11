@@ -6,7 +6,14 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router';
-import { ArrowUpRight, Plus, Settings2 } from 'lucide-react';
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Columns3,
+  Plus,
+  Search,
+  Settings2,
+} from 'lucide-react';
 import {
   boardStatusSchema,
   runDisplayTitle,
@@ -40,6 +47,7 @@ type BoardData = Awaited<ReturnType<typeof api.boards.get.query>>;
 type ColumnData = BoardData['columns'][number];
 type Card = ColumnData['cards'][number];
 const pageSize = 30;
+const workflowNames = new Intl.ListFormat('en');
 const statusLabels: Record<BoardStatus, string> = {
   all: 'All',
   attention: 'Needs attention',
@@ -70,6 +78,8 @@ export function BoardLibrary() {
           <TextInput
             aria-label="Search boards"
             placeholder="Search boards"
+            className={classes.librarySearch}
+            leftSection={<Search size={16} aria-hidden="true" />}
             value={search}
             onChange={(event) => setSearch(event.currentTarget.value)}
           />
@@ -88,26 +98,43 @@ export function BoardLibrary() {
             {search ? 'No boards match your search.' : 'No boards yet.'}
           </Text>
         )}
-        <div className={classes.library}>
-          {visible?.map((board) => (
-            <section className={classes.libraryCard} key={board.id}>
-              <h2>{board.name}</h2>
-              <Text size="sm" c="dimmed">
-                {board.workflowIds
-                  .map((id) => byId.get(id))
-                  .filter(Boolean)
-                  .join(', ') || 'No workflows assigned'}
-              </Text>
-              <Button
-                component={Link}
-                to={paths.board(board.id)}
-                variant="ghost"
-              >
-                Open board <ArrowUpRight size={15} />
-              </Button>
-            </section>
-          ))}
-        </div>
+        {!!visible?.length && (
+          <ul className={classes.library} role="list">
+            {visible.map((board) => (
+              <li className={classes.libraryRow} key={board.id}>
+                <div className={classes.libraryIcon} aria-hidden="true">
+                  <Columns3 size={18} />
+                </div>
+                <div className={classes.libraryDetails}>
+                  <h2>{board.name}</h2>
+                  <Text size="sm" c="dimmed">
+                    {workflowNames.format(
+                      board.workflowIds
+                        .map((id) => byId.get(id))
+                        .filter((name) => name !== undefined),
+                    ) || 'No workflows assigned'}
+                  </Text>
+                </div>
+                <div className={classes.libraryActions}>
+                  {board.attentionCount > 0 && (
+                    <Badge variant="light" color="yellow" radius="sm" size="lg">
+                      {board.attentionCount}{' '}
+                      {board.attentionCount === 1 ? 'request' : 'requests'}
+                    </Badge>
+                  )}
+                  <Button
+                    component={Link}
+                    to={paths.board(board.id)}
+                    variant="secondary"
+                    aria-label={`Open board: ${board.name}`}
+                  >
+                    <ArrowRight size={16} aria-hidden="true" /> Open board
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

@@ -278,6 +278,7 @@ it('retains captured content and held answers across restart and requires explic
 it('keeps exact parallel requests separate while work progresses and rejects racing answers', async () => {
   const engine = open();
   const board = createBoard(engine);
+  const emptyBoard = createBoard(engine, 'Operations');
   const definition = parallelDefinition({
     keys: ['plan', 'rollout', 'work'],
     concurrency: 3,
@@ -370,6 +371,12 @@ it('keeps exact parallel requests separate while work progresses and rejects rac
   expect(card).toMatchObject({ id: root.id, attentionCount: 2, request: plan });
   expect(card.actor).toBe('agent');
   const api = appRouter.createCaller({ engine });
+  expect(await api.boards.list()).toEqual(
+    expect.arrayContaining([
+      { ...board, revision: 2, workflowIds: [workflow.id], attentionCount: 2 },
+      { ...emptyBoard, workflowIds: [], attentionCount: 0 },
+    ]),
+  );
   const requestChanges = {
     ...approve(plan, 'first'),
     value: { choice: 'change', comment: 'Add rollback details' },
@@ -390,6 +397,9 @@ it('keeps exact parallel requests separate while work progresses and rejects rac
   expect(engine.requests.current().map((item) => item.target)).toEqual([
     rollout,
   ]);
+  expect(await api.boards.list()).toContainEqual(
+    expect.objectContaining({ id: board.id, attentionCount: 1 }),
+  );
   expect(engine.requests.get(plan)).toMatchObject({
     state: 'accepted',
     value: requestChanges.value,
@@ -417,6 +427,9 @@ it('keeps exact parallel requests separate while work progresses and rejects rac
     source: 'mcp',
   });
   expect(engine.run(root.id).status).toBe('completed');
+  expect(await api.boards.list()).toContainEqual(
+    expect.objectContaining({ id: board.id, attentionCount: 0 }),
+  );
   expect(
     read(engine, board.id, { status: 'attention' }).columns.every(
       (column) => !column.total,

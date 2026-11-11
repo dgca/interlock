@@ -11,6 +11,8 @@ Membership applies to existing and future runs as soon as you save. It is indepe
 
 ## Find work and answer a request
 
+The **Boards** page lists each board's assigned workflows and shows a badge when it has unresolved requests. Search by board name and select **Open board** to see its runs.
+
 Filter the board by workflow or **Status**. **Needs attention** counts unresolved requests in the selected workflow scope. A card can match this filter while another branch progresses. Use **Runs → Needs attention** to find requests across the library and review automation alerts.
 
 Open an attention card to review its oldest unresolved request. Use the request selector to switch between requests from the same run. Read the question and any captured evidence before answering. Use **Open run** to inspect the exact step in the run inspector.
