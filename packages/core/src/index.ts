@@ -399,6 +399,12 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
       .describe(
         'Local executor profile override. Omit to inherit the workflow default; null keeps connected-agent execution.',
       ),
+    executorMode: z
+      .enum(['harness', 'preset'])
+      .optional()
+      .describe(
+        'Harness makes executor authoritative and model literal. Preset uses model as a local alias reference. Omit to preserve legacy alias routing.',
+      ),
     model: executorModelSchema
       .optional()
       .describe(
@@ -865,6 +871,7 @@ export interface WorkRequest {
   idleNudge?: { attempt: number; activityAt: string; at: string };
   executor?: string;
   executorPermissions?: import('./executors.js').ExecutorPermissionMode;
+  executorPermissionsSource?: import('./executors.js').ManagedExecution['permissionSource'];
   modelAliasSelection?: import('./modelAliases.js').ModelAliasSelection;
   executorModel?: string;
   executorModelSource?: 'node' | 'workflow';
@@ -1136,6 +1143,17 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
     if (node.kind === 'exit' && node.continueAsNew && node.batchId)
       throw new InterlockError('Continue as new is unavailable inside a Batch');
     if (node.kind !== 'agent') continue;
+    if (node.executorMode === 'harness' && !node.executor)
+      throw new InterlockError(
+        `${node.label}: select an executor for harness mode`,
+      );
+    if (
+      node.executorMode === 'preset' &&
+      (!node.model || node.executor !== undefined)
+    )
+      throw new InterlockError(
+        `${node.label}: preset mode requires a model alias and no executor override`,
+      );
     const problems = resultRuleProblems(
       node.resultRules,
       node.inputSchema,

@@ -22,6 +22,8 @@ export function ModelSettings({
   canResetEffort = true,
   modelHint,
   allowAliases = false,
+  alwaysShowEffort = false,
+  effortLabel = 'Thinking effort',
 }: {
   label: string;
   defaultLabel: string;
@@ -38,6 +40,8 @@ export function ModelSettings({
   canResetEffort?: boolean;
   modelHint?: string;
   allowAliases?: boolean;
+  alwaysShowEffort?: boolean;
+  effortLabel?: string;
 }) {
   const [catalog, setCatalog] = useState<ExecutorModels>();
   const [alias, setAlias] = useState<SavedModelAlias | null>();
@@ -75,19 +79,20 @@ export function ModelSettings({
       />
       {alias ? (
         <p className="hint">
-          {model ? 'Uses' : 'Inherits'} model alias {alias.name}. Its candidates
-          can choose their own harness and thinking effort.
+          {model ? 'Uses' : 'Inherits'} agent preset {alias.name}. Its
+          candidates can choose their own harness and thinking effort.
         </p>
       ) : (
         modelHint && <p className="hint">{modelHint}</p>
       )}
       {(!alias || effort !== undefined) &&
-        (effectiveModel ||
+        (alwaysShowEffort ||
+          effectiveModel ||
           effort !== undefined ||
           inheritedEffort !== undefined) && (
           <NativeSelect
             mt="md"
-            label="Thinking effort"
+            label={effortLabel}
             inputWrapperOrder={['label', 'input', 'description', 'error']}
             disabled={disabled}
             value={current}
@@ -132,7 +137,7 @@ export function ModelSettings({
             }
             description={
               alias
-                ? 'Alias candidate effort settings take precedence over this override.'
+                ? 'Preset candidate effort settings take precedence over this override.'
                 : !effectiveModel
                   ? 'Choose a model to discover its supported effort levels.'
                   : !profileId

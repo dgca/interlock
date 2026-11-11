@@ -1,6 +1,6 @@
 export const aiSettingsTabs = [
   { value: 'harnesses', label: 'Harnesses' },
-  { value: 'model-aliases', label: 'Model aliases' },
+  { value: 'model-aliases', label: 'Agent presets' },
   { value: 'execution', label: 'Execution settings' },
 ] as const;
 

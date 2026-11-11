@@ -1,0 +1,710 @@
+import {
+  ActionIcon,
+  NativeSelect,
+  TextInput,
+  Textarea,
+  Button,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ActionError,
+  EmptyState,
+} from '../../design-system';
+
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+
+import { ArrowDown, ArrowUp, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import {
+  modelAliasNameSchema,
+  supportsPresetPermissions,
+  type ExecutorPermissionMode,
+  type ModelAliasCandidate,
+  type SavedModelAlias,
+} from '@interlock/core';
+
+import {
+  ListTable,
+  ListTableRow,
+  ListTableSkeleton,
+} from '../../components/ListTable/ListTable';
+import { api, errorMessage } from '../../lib/api';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
+import { ModelSettings } from './ModelSettings';
+import { readModelAlias } from './modelAliasApi';
+
+import {
+  harnessLabel,
+  isPrimaryHarness,
+  type HarnessProfile as Profile,
+} from './harnessProfiles';
+import { permissionLabels, permissionOptions } from './permissions';
+import styles from './AgentPresets.module.css';
+
+const columns = [
+  { label: 'Preset', width: 'minmax(150px, 1fr)' },
+  { label: 'Primary choice', width: 'minmax(180px, 1.5fr)' },
+  { label: 'Fallbacks', width: '100px' },
+  { label: '', width: '80px' },
+];
+
+export function AgentPresets({
+  profiles,
+  onDirty,
+}: {
+  profiles: Profile[] | undefined;
+  onDirty?: (dirty: boolean) => void;
+}) {
+  const [offset, setOffset] = useState(0);
+  const queryClient = useQueryClient();
+  const pageQuery = useQuery({
+    ...trpc.modelAliases.read.queryOptions({
+      action: 'list',
+      offset,
+      limit: 10,
+    }),
+    select: (result) => {
+      if (!('items' in result))
+        throw new Error('Could not read agent presets.');
+      return result;
+    },
+  });
+  const page = pageQuery.data;
+  const error = pageQuery.error ? errorMessage(pageQuery.error) : '';
+  const [editing, setEditing] = useState<SavedModelAlias | null>();
+  const [opening, setOpening] = useState(false);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [editorBusy, setEditorBusy] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const trackDirty = useCallback(
+    (dirty: boolean) => {
+      setEditorDirty(dirty);
+      onDirty?.(dirty);
+    },
+    [onDirty],
+  );
+  const [notice, setNotice] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const trigger = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (page && offset > 0 && offset >= page.total) setOffset(0);
+  }, [page, offset]);
+  const close = () => {
+    setEditing(undefined);
+    setConfirmClose(false);
+  };
+  const open = async (id?: string) => {
+    trigger.current = document.activeElement as HTMLElement | null;
+    setNotice('');
+    setLoadError('');
+    if (!id) {
+      setEditing(null);
+      return;
+    }
+    setOpening(true);
+    try {
+      setEditing(await readModelAlias(id));
+    } catch (error) {
+      setLoadError(errorMessage(error));
+    } finally {
+      setOpening(false);
+    }
+  };
+  const changed = () => {
+    void queryClient.invalidateQueries(trpc.modelAliases.pathFilter());
+    close();
+  };
+  const dismiss = () => {
+    if (editorBusy) return;
+    if (editorDirty) setConfirmClose(true);
+    else close();
+  };
+  return (
+    <section
+      id="model-aliases"
+      className={styles.section}
+      aria-labelledby="agent-presets-title"
+    >
+      <div className={styles.heading}>
+        <h2 id="agent-presets-title">Agent presets</h2>
+        <div className={styles.headingActions}>
+          <ActionIcon
+            variant="subtle"
+            aria-label="Refresh presets"
+            onClick={() => void pageQuery.refetch()}
+          >
+            <RefreshCw size={16} />
+          </ActionIcon>
+          <Button
+            variant="primary"
+            aria-label="New preset"
+            disabled={opening}
+            onClick={() => void open()}
+          >
+            <Plus size={14} />
+            New preset
+          </Button>
+        </div>
+      </div>
+      <div>
+        {notice && (
+          <p role="status" className={styles.notice}>
+            {notice}
+          </p>
+        )}
+        <ActionError message={loadError} />
+        {error && (
+          <div className={styles.error}>
+            <ActionError message={error} />
+            <Button onClick={() => void pageQuery.refetch()}>
+              Retry loading presets
+            </Button>
+          </div>
+        )}
+        {!page ? (
+          !error && (
+            <ListTableSkeleton
+              columns={columns}
+
+              label="Loading agent presets…"
+            >
+              <span>—</span>
+              <span>—</span>
+              <span>—</span>
+              <span />
+            </ListTableSkeleton>
+          )
+        ) : page.items.length ? (
+          <>
+            <ListTable columns={columns}>
+              {page.items.map((alias) => {
+                const first = alias.candidates[0];
+                const profile = profiles?.find(
+                  (profile) => profile.id === first?.profileId,
+                );
+                return (
+                  <ListTableRow key={alias.id} className={styles.aliasRow}>
+                    <span className={styles.identity}>
+                      <strong>{alias.name}</strong>
+                      {alias.description && <span>{alias.description}</span>}
+                    </span>
+                    <span className={styles.identity}>
+                      <span>{first?.model ?? 'No model configured'}</span>
+                      <span>
+                        {first?.profileId
+                          ? profile
+                            ? harnessLabel(profile)
+                            : 'Missing harness'
+                          : 'Workflow harness'}
+                        {profile?.enabled === false ? ' · disabled' : ''}
+                        {first?.effort ? ` · ${first.effort} effort` : ''}
+                        {alias.permissions
+                          ? ` · ${permissionLabels[alias.permissions]}`
+                          : ''}
+                      </span>
+                    </span>
+                    <span>
+                      {Math.max(0, alias.candidates.length - 1)}
+                      <span className={styles.compactLabel}>
+                        {' '}
+                        fallback{alias.candidates.length === 2 ? '' : 's'}
+                      </span>
+                    </span>
+                    <span className={styles.rowActions}>
+                      <Button
+                        variant="ghost"
+                        disabled={opening || editing !== undefined}
+                        onClick={() => void open(alias.id)}
+                        aria-label={`Edit preset ${alias.name}`}
+                      >
+                        Edit
+                      </Button>
+                    </span>
+                  </ListTableRow>
+                );
+              })}
+            </ListTable>
+            <div className={styles.pagination}>
+              <span>
+                {page.total} preset{page.total === 1 ? '' : 's'}
+              </span>
+              <Button
+                disabled={offset === 0}
+                onClick={() => setOffset((n) => Math.max(0, n - 10))}
+              >
+                Previous
+              </Button>
+              <Button
+                disabled={!page.truncated}
+                onClick={() => setOffset((n) => n + 10)}
+              >
+                Next
+              </Button>
+            </div>
+          </>
+        ) : (
+          <EmptyState title="No agent presets yet" />
+        )}
+      </div>
+      {editing !== undefined && (
+        <Modal
+          title={editing ? 'Edit preset' : 'New preset'}
+          size={670}
+          busy={editorBusy}
+          onClose={dismiss}
+          returnFocusTo={() => trigger.current}
+        >
+          <PresetEditor
+            key={editing?.id ?? 'new'}
+            alias={editing}
+            profiles={profiles}
+            onDirty={trackDirty}
+            onBusy={setEditorBusy}
+            onCancel={dismiss}
+            onReload={setEditing}
+            onSaved={(name, deleted) => {
+              changed();
+              setNotice(
+                deleted
+                  ? `Preset ${name} deleted. Existing runs keep their captured settings.`
+                  : `Preset ${name} saved.`,
+              );
+            }}
+          />
+        </Modal>
+      )}
+      {confirmClose && (
+        <Modal
+          title="Discard unsaved preset changes?"
+          onClose={() => setConfirmClose(false)}
+        >
+          <ModalBody>
+            Your changes to this preset have not been saved.
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={() => setConfirmClose(false)}>Keep editing</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setConfirmClose(false);
+                close();
+              }}
+            >
+              Discard changes
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
+    </section>
+  );
+}
+
+function PresetEditor({
+  alias,
+  profiles,
+  onDirty,
+  onBusy,
+  onCancel,
+  onReload,
+  onSaved,
+}: {
+  alias: SavedModelAlias | null;
+  profiles: Profile[] | undefined;
+  onDirty?: (dirty: boolean) => void;
+  onBusy?: (busy: boolean) => void;
+  onCancel: () => void;
+  onReload: (alias: SavedModelAlias) => void;
+  onSaved: (name: string, deleted?: boolean) => void;
+}) {
+  const [name, setName] = useState(alias?.name ?? '');
+  const [description, setDescription] = useState(alias?.description ?? '');
+  const [permissions, setPermissions] = useState(alias?.permissions);
+  const [candidates, setCandidates] = useState(() =>
+    (alias?.candidates ?? [{ model: '' }]).map((candidate) => ({
+      key: crypto.randomUUID(),
+      ...candidate,
+    })),
+  );
+  const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
+  const [error, setError] = useState('');
+  const [confirmation, setConfirmation] = useState<'delete' | 'reload'>();
+  const nameInput = useRef<HTMLInputElement>(null);
+  const current = {
+    name,
+    description,
+    permissions,
+    candidates: candidates.map(({ key: _key, ...candidate }) => candidate),
+  };
+  const initial = {
+    name: alias?.name ?? '',
+    description: alias?.description ?? '',
+    permissions: alias?.permissions,
+    candidates: alias?.candidates ?? [{ model: '' }],
+  };
+  const dirty = JSON.stringify(current) !== JSON.stringify(initial);
+  const baseline = useRef(alias);
+  useEffect(() => {
+    if (baseline.current !== alias) {
+      baseline.current = alias;
+      setName(alias?.name ?? '');
+      setDescription(alias?.description ?? '');
+      setPermissions(alias?.permissions);
+      setCandidates(
+        (alias?.candidates ?? [{ model: '' }]).map((candidate) => ({
+          key: crypto.randomUUID(),
+          ...candidate,
+        })),
+      );
+      setError('');
+    }
+  }, [alias]);
+  useEffect(() => onBusy?.(busy), [busy, onBusy]);
+  useEffect(() => () => onBusy?.(false), [onBusy]);
+  useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
+  useEffect(() => () => onDirty?.(false), [onDirty]);
+  useEffect(() => {
+    nameInput.current?.focus();
+  }, []);
+  const update = (key: string, value: Partial<ModelAliasCandidate>) =>
+    setCandidates((list) =>
+      list.map((candidate) =>
+        candidate.key === key ? { ...candidate, ...value } : candidate,
+      ),
+    );
+  const move = (index: number, offset: number) =>
+    setCandidates((list) => {
+      const next = [...list];
+      [next[index], next[index + offset]] = [next[index + offset], next[index]];
+      return next;
+    });
+  const run = async (operation: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      await operation();
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  };
+  return (
+    <form
+      className={styles.editor}
+      onSubmit={(event) => {
+        event.preventDefault();
+        const parsed = modelAliasNameSchema.safeParse(name);
+        if (!parsed.success) {
+          setError(
+            'Start with a letter or number. Use letters, numbers, spaces, dots, underscores, or hyphens.',
+          );
+          nameInput.current?.focus();
+          return;
+        }
+        if (candidates.some((candidate) => !candidate.model.trim())) {
+          setError('Choose a model for each choice.');
+          return;
+        }
+        if (
+          candidates.some(
+            (candidate, index) =>
+              !candidate.profileId &&
+              (!alias || index >= alias.candidates.length),
+          )
+        ) {
+          setError('Choose a harness for each new choice.');
+          return;
+        }
+        void run(async () => {
+          await api.modelAliases.mutate.mutate(
+            alias
+              ? {
+                  action: 'update',
+                  id: alias.id,
+                  expectedRevision: alias.revision,
+                  ...current,
+                  permissions: permissions ?? null,
+                  name: parsed.data,
+                }
+              : { action: 'create', ...current, name: parsed.data },
+          );
+          onSaved(parsed.data);
+        });
+      }}
+    >
+      <ModalBody>
+        <div className={styles.metadata}>
+          <TextInput
+            ref={nameInput}
+            data-autofocus
+            label="Name"
+            required
+            maxLength={120}
+            value={name}
+            disabled={busy}
+            placeholder="Deep review"
+            onChange={(event) => setName(event.currentTarget.value)}
+          />
+          <Textarea
+            label="Description"
+            maxLength={2000}
+            value={description}
+            disabled={busy}
+            rows={2}
+            onChange={(event) => setDescription(event.currentTarget.value)}
+          />
+          <NativeSelect
+            label="Permissions"
+            description="Each choice uses its harness permissions unless the workflow or this preset sets a mode. If both do, the more restrictive mode applies."
+            value={permissions ?? ''}
+            disabled={busy}
+            onChange={(event) =>
+              setPermissions(
+                (event.currentTarget.value || undefined) as
+                  ExecutorPermissionMode | undefined,
+              )
+            }
+            data={[
+              { value: '', label: 'Use harness default' },
+              ...permissionOptions,
+            ]}
+          />
+        </div>
+        {alias && name.trim().toLowerCase() !== alias.name.toLowerCase() && (
+          <p className={styles.intro}>
+            Workflows that reference this preset by name may need updating after
+            a rename. Selections in Executor use its stable ID.
+          </p>
+        )}
+        <div className={styles.candidateIntro}>
+          <h3>Primary and fallbacks</h3>
+          <p>
+            Interlock uses the first available choice that supports the
+            requested permissions. Fallbacks do not retry a failed assignment.
+          </p>
+        </div>
+        {candidates.map((candidate, index) => {
+          const profile = profiles?.find(
+            (profile) => profile.id === candidate.profileId,
+          );
+          return (
+            <Fragment key={candidate.key}>
+              {index > 0 && (
+                <div className={styles.candidateDivider} aria-hidden="true" />
+              )}
+              <fieldset
+                key={candidate.key}
+                className={styles.candidate}
+                disabled={busy}
+              >
+                <legend>
+                  {index === 0 ? 'Primary choice' : `Fallback ${index}`}
+                </legend>
+                <div className={styles.candidateActions}>
+                  <ActionIcon
+                    variant="subtle"
+                    aria-label={`Move choice ${index + 1} up`}
+                    disabled={busy || index === 0}
+                    onClick={() => move(index, -1)}
+                  >
+                    <ArrowUp size={16} />
+                  </ActionIcon>
+                  <ActionIcon
+                    variant="subtle"
+                    aria-label={`Move choice ${index + 1} down`}
+                    disabled={busy || index === candidates.length - 1}
+                    onClick={() => move(index, 1)}
+                  >
+                    <ArrowDown size={16} />
+                  </ActionIcon>
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    aria-label={`Remove choice ${index + 1}`}
+                    disabled={busy || candidates.length === 1}
+                    onClick={() =>
+                      setCandidates((list) =>
+                        list.filter((item) => item.key !== candidate.key),
+                      )
+                    }
+                  >
+                    <Trash2 size={16} />
+                  </ActionIcon>
+                </div>
+                <div className={styles.fields}>
+                  <div>
+                    <NativeSelect
+                      label={
+                        index === 0
+                          ? 'Harness'
+                          : `Harness for fallback ${index}`
+                      }
+                      value={candidate.profileId ?? ''}
+                      disabled={busy || !profiles}
+                      onChange={(event) =>
+                        update(candidate.key, {
+                          profileId: event.currentTarget.value || undefined,
+                        })
+                      }
+                      data={[
+                        {
+                          value: '',
+                          label:
+                            alias && !candidate.profileId
+                              ? 'Use workflow harness'
+                              : 'Choose a harness',
+                          disabled: !!candidate.profileId,
+                        },
+                        ...(profiles ?? [])
+                          .filter(
+                            (profile) =>
+                              isPrimaryHarness(profile) ||
+                              profile.id === candidate.profileId,
+                          )
+                          .map((profile) => ({
+                            value: profile.id,
+                            label: `${harnessLabel(profile)}${!supportsPresetPermissions(profile, permissions) ? ' · cannot enforce permissions' : profile.enabled ? '' : ' · disabled'}`,
+                            disabled:
+                              profile.id !== candidate.profileId &&
+                              !supportsPresetPermissions(profile, permissions),
+                          })),
+                        ...(candidate.profileId && !profile
+                          ? [
+                              {
+                                value: candidate.profileId,
+                                label: `${candidate.profileId} · missing`,
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
+                    {!profiles && (
+                      <p className={styles.intro}>Loading harnesses…</p>
+                    )}
+                  </div>
+                  <ModelSettings
+                    label={
+                      index === 0 ? 'Model' : `Model for fallback ${index}`
+                    }
+                    effortLabel={
+                      index === 0
+                        ? 'Thinking effort'
+                        : `Thinking effort for fallback ${index}`
+                    }
+                    alwaysShowEffort
+                    defaultLabel="Choose a model"
+                    effortDefaultLabel="Inherit workflow or harness effort"
+                    profileId={profile?.id}
+                    model={candidate.model || undefined}
+                    effort={candidate.effort}
+                    onModelChange={(model) =>
+                      update(candidate.key, { model: model ?? '' })
+                    }
+                    onEffortChange={(effort) =>
+                      update(candidate.key, { effort })
+                    }
+                    disabled={busy}
+                  />
+                </div>
+              </fieldset>
+            </Fragment>
+          );
+        })}
+        <Button
+          aria-label="Add fallback"
+          disabled={busy || candidates.length >= 32}
+          onClick={() =>
+            setCandidates((list) => [
+              ...list,
+              { key: crypto.randomUUID(), model: '' },
+            ])
+          }
+        >
+          <Plus size={14} />
+          Add fallback
+        </Button>
+        <ActionError message={error} />
+        {error && alias && (
+          <Button disabled={busy} onClick={() => setConfirmation('reload')}>
+            Reload saved preset
+          </Button>
+        )}
+      </ModalBody>
+      <ModalFooter
+        aside={
+          alias && (
+            <Button
+              variant="danger"
+              aria-label="Delete preset"
+              disabled={busy}
+              onClick={() => setConfirmation('delete')}
+            >
+              <Trash2 size={14} />
+              Delete preset
+            </Button>
+          )
+        }
+      >
+        <Button disabled={busy} onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant="primary" type="submit" disabled={busy || !dirty}>
+          {busy ? 'Saving…' : alias ? 'Save changes' : 'Create preset'}
+        </Button>
+      </ModalFooter>
+      {confirmation && alias && (
+        <Modal
+          title={
+            confirmation === 'delete'
+              ? `Delete ${alias.name}?`
+              : 'Reload saved preset?'
+          }
+          busy={busy}
+          onClose={() => setConfirmation(undefined)}
+        >
+          <ModalBody>
+            <p>
+              {confirmation === 'delete'
+                ? 'New runs referencing this preset will be blocked until its requirement is configured again. Existing runs keep their captured configuration.'
+                : 'Discard these edits and load the current saved configuration.'}
+            </p>
+            <ActionError message={error} />
+          </ModalBody>
+          <ModalFooter>
+            <Button disabled={busy} onClick={() => setConfirmation(undefined)}>
+              Cancel
+            </Button>
+            <Button
+              variant={confirmation === 'delete' ? 'danger' : 'primary'}
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  if (confirmation === 'delete') {
+                    await api.modelAliases.mutate.mutate({
+                      action: 'delete',
+                      id: alias.id,
+                      expectedRevision: alias.revision,
+                    });
+                    onSaved(alias.name, true);
+                  } else {
+                    onReload(await readModelAlias(alias.id));
+                    setConfirmation(undefined);
+                  }
+                })
+              }
+            >
+              {busy
+                ? 'Working…'
+                : confirmation === 'delete'
+                  ? 'Delete preset'
+                  : 'Reload'}
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
+    </form>
+  );
+}

@@ -104,6 +104,7 @@ beforeEach(() => {
       model: undefined,
       effort: undefined,
       id: 'claude-code',
+      harness: 'claude-code',
       name: 'Claude Code',
       permissions: 'read-only',
       enabled: true,
@@ -200,7 +201,7 @@ afterEach(async () => {
 it('refreshes models for the draft harness paths without submitting or replacing its selected model', async () => {
   rpc.profiles.mockResolvedValue([harnessProfile()]);
   await act(async () => root.render(h(DesignSystemProvider, {}, h(Harnesses))));
-  await act(async () => button('Configure').click());
+  await act(async () => button('Edit defaults').click());
   const trigger = container.querySelector<HTMLButtonElement>(
     'button[aria-haspopup="listbox"]',
   )!;
@@ -228,7 +229,7 @@ it('refreshes models for the draft harness paths without submitting or replacing
   await act(async () => button('Refresh models').click());
   expect(container.querySelector('[role="alert"]')).toBeNull();
   expect(trigger.textContent).toContain('custom-model');
-  expect(button('Save configuration').disabled).toBe(true);
+  expect(button('Save defaults').disabled).toBe(true);
   expect(rpc.manage).not.toHaveBeenCalled();
 });
 const harnessProfile = () => ({
@@ -327,7 +328,7 @@ it('loads saved Unlimited and explains it in workflow settings', async () => {
   expect(container.textContent).toContain('No shared assignment limit');
   expect(container.textContent).not.toContain('Up to null');
 });
-it('shows Pi installation guidance and allows adding a Pi configuration', async () => {
+it('shows setup guidance for missing Pi and opens the custom integration form directly', async () => {
   rpc.profiles.mockResolvedValue([
     {
       ...harnessProfile(),
@@ -338,66 +339,43 @@ it('shows Pi installation guidance and allows adding a Pi configuration', async 
     },
   ]);
   await act(async () => root.render(h(DesignSystemProvider, {}, h(Harnesses))));
-  expect(
-    container.querySelector<HTMLAnchorElement>('a[href="https://pi.dev/"]'),
-  ).not.toBeNull();
-  await act(async () => button('Add configuration').click());
-  const form = container.querySelector<HTMLFormElement>(
-    'form[aria-label="Add harness configuration"]',
-  )!;
-  const select = form.querySelector('select')!;
-  expect([...select.options].map((o) => o.value)).toContain('pi');
-  await act(async () => {
-    select.value = 'pi';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    setInput(form.querySelector<HTMLInputElement>('input')!, 'Pi review');
-  });
-  rpc.manage.mockResolvedValue({});
-  await act(async () =>
-    form.dispatchEvent(
-      new Event('submit', { bubbles: true, cancelable: true }),
-    ),
+  expect(container.querySelector('a[href="https://pi.dev/"]')).not.toBeNull();
+  expect(container.querySelector('[aria-label="Enable Pi"]')).toBeNull();
+  await act(async () => button('Add integration').click());
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    'New custom harness',
   );
-  expect(rpc.manage).toHaveBeenCalledWith({
-    action: 'save',
-    profile: {
-      id: expect.stringMatching(/^pi-/),
-      harness: 'pi',
-      name: 'Pi review',
-      enabled: false,
-      expectedRevision: 0,
-    },
-  });
+  expect(rpc.manage).not.toHaveBeenCalled();
 });
 it('preserves open configuration edits across refresh and reloads only on explicit recovery', async () => {
   const original = harnessProfile();
   rpc.profiles.mockResolvedValue([original]);
   await act(async () => root.render(h(DesignSystemProvider, {}, h(Harnesses))));
-  await act(async () => button('Configure').click());
+  await act(async () => button('Edit defaults').click());
   const input = container.querySelector<HTMLInputElement>(
-    'input[maxlength="120"]',
+    'input[placeholder="Use Interlock’s working directory"]',
   )!;
-  await act(async () => setInput(input, 'Unsaved name'));
+  await act(async () => setInput(input, '/unsaved'));
   expect(container.querySelector('#execution-settings')).toBeNull();
   expect(container.querySelector('a[href*="tab=execution"]')?.textContent).toBe(
     'Execution settings',
   );
   expect(container.querySelector('#harnesses')).not.toBeNull();
-  expect(input.value).toBe('Unsaved name');
-  const updated = { ...original, revision: 1, name: 'Updated elsewhere' };
+  expect(input.value).toBe('/unsaved');
+  const updated = { ...original, revision: 1, cwd: '/updated' };
   rpc.profiles.mockResolvedValue([updated]);
   rpc.manage.mockImplementation(async (q) => {
     if (q.action === 'list') return [updated];
     throw new Error('Harness configuration changed. Reload before saving.');
   });
   await act(async () => button('Check installations').click());
-  expect(input.value).toBe('Unsaved name');
-  await act(async () => button('Save configuration').click());
+  expect(input.value).toBe('/unsaved');
+  await act(async () => button('Save defaults').click());
   expect(container.textContent).toContain('Harness configuration changed');
-  expect(input.value).toBe('Unsaved name');
-  await act(async () => button('Reload configuration').click());
-  expect(input.value).toBe('Updated elsewhere');
-  expect(button('Save configuration').disabled).toBe(true);
+  expect(input.value).toBe('/unsaved');
+  await act(async () => button('Reload defaults').click());
+  expect(input.value).toBe('/updated');
+  expect(button('Save defaults').disabled).toBe(true);
 });
 
 it('opens the requested AI task and maps legacy execution anchors before rendering', async () => {
@@ -468,20 +446,20 @@ it('locks a pending save and preserves model, paths, capabilities and permission
   const original = harnessProfile();
   rpc.profiles.mockResolvedValue([original]);
   await act(async () => root.render(h(DesignSystemProvider, {}, h(Harnesses))));
-  await act(async () => button('Configure').click());
+  await act(async () => button('Edit defaults').click());
   const input = container.querySelector<HTMLInputElement>(
-    'input[maxlength="120"]',
+    'input[placeholder="Use Interlock’s working directory"]',
   )!;
-  await act(async () => setInput(input, 'Renamed configuration'));
+  await act(async () => setInput(input, '/renamed'));
   let resolve!: (profile: unknown) => void;
   rpc.manage.mockReturnValue(
     new Promise((r) => {
       resolve = r;
     }),
   );
-  await act(async () => button('Save configuration').click());
+  await act(async () => button('Save defaults').click());
   expect(input.disabled).toBe(true);
-  expect(button('Cancel editing').disabled).toBe(true);
+  expect(button('Close defaults').disabled).toBe(true);
   expect(button('Refresh models').disabled).toBe(true);
   expect(
     container.querySelector<HTMLButtonElement>(
@@ -493,34 +471,38 @@ it('locks a pending save and preserves model, paths, capabilities and permission
     profile: {
       id: 'codex',
       harness: 'codex',
-      name: 'Renamed configuration',
+      name: 'Codex',
       enabled: false,
       expectedRevision: 0,
       model: 'custom-model',
-      cwd: '/project',
+      cwd: '/renamed',
       command: '/installed/codex',
       permissions: 'standard',
       tools: ['git'],
       skills: ['review'],
     },
   });
-  const updated = { ...original, name: 'Renamed configuration', revision: 1 };
+  const updated = { ...original, cwd: '/renamed', revision: 1 };
   rpc.profiles.mockResolvedValue([updated]);
   await act(async () => resolve(updated));
-  expect(button('Configure')).toBeDefined();
-  await act(async () => button('Configure').click());
+  expect(button('Edit defaults')).toBeDefined();
+  await act(async () => button('Edit defaults').click());
   await act(async () =>
     setInput(
-      container.querySelector<HTMLInputElement>('input[maxlength="120"]')!,
-      'Discard this',
+      container.querySelector<HTMLInputElement>(
+        'input[placeholder="Use Interlock’s working directory"]',
+      )!,
+      '/discard',
     ),
   );
-  await act(async () => button('Cancel editing').click());
-  expect(document.activeElement).toBe(button('Configure'));
-  await act(async () => button('Configure').click());
+  await act(async () => button('Close defaults').click());
+  expect(document.activeElement).toBe(button('Edit defaults'));
+  await act(async () => button('Edit defaults').click());
   expect(
-    container.querySelector<HTMLInputElement>('input[maxlength="120"]')!.value,
-  ).toBe('Renamed configuration');
+    container.querySelector<HTMLInputElement>(
+      'input[placeholder="Use Interlock’s working directory"]',
+    )!.value,
+  ).toBe('/renamed');
 });
 it('offers recovery instead of an endless loading skeleton after a failed harness lookup', async () => {
   rpc.profiles.mockRejectedValueOnce(new Error('Harness lookup failed'));
@@ -531,7 +513,7 @@ it('offers recovery instead of an endless loading skeleton after a failed harnes
   ).toBeNull();
   rpc.profiles.mockResolvedValue([harnessProfile()]);
   await act(async () => button('Retry loading harnesses').click());
-  expect(button('Configure')).toBeDefined();
+  expect(button('Edit defaults')).toBeDefined();
 });
 function Controls() {
   const [permissions, setPermissions] = useState<ExecutorPermissionMode>();
@@ -687,65 +669,51 @@ it('hides managed model controls for connected nodes and removes manual capabili
   expect(container.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
   rpc.profiles.mockResolvedValue([harnessProfile()]);
   await act(async () => root.render(h(DesignSystemProvider, {}, h(Harnesses))));
-  await act(async () => button('Configure').click());
+  await act(async () => button('Edit defaults').click());
   expect(container.textContent).not.toContain('Available tools');
   expect(container.textContent).not.toContain('Available skills');
 });
 
-it('switches node model controls and advisory tiers without losing either setting', async () => {
-  let saved: WorkflowNode;
-  function Editor() {
-    const [node, setNode] = useState(() =>
-      nodeSchema.parse({
-        id: 'agent',
-        kind: 'agent',
-        label: 'Agent',
-        prompt: 'Work',
-        executor: 'codex',
-        model: 'native-model',
-        effort: 'high',
-        context: { tier: 'fast' },
-      }),
-    );
-    saved = node;
-    return h(NodeInspector, {
-      node,
-      workflows: [],
-      section: 'execution',
-      onChange: setNode,
-    });
-  }
-  await act(async () => root.render(h(DesignSystemProvider, {}, h(Editor))));
-  const field = (label: string) =>
-    [...container.querySelectorAll<HTMLSelectElement>('select')].find(
-      (el) =>
-        container.querySelector(`label[for="${el.id}"]`)?.textContent === label,
-    )!;
-  expect(field('Model tier')).toBeUndefined();
-  expect(container.textContent).toContain('node override');
-  await act(async () => {
-    field('Executor').value = '__manual';
-    field('Executor').dispatchEvent(new Event('change', { bubbles: true }));
-  });
-  expect(field('Model tier').value).toBe('fast');
-  expect(container.querySelector('button[aria-haspopup="listbox"]')).toBeNull();
-  expect(saved!).toMatchObject({
+it('keeps existing node execution settings until an executor is deliberately changed', async () => {
+  const node = nodeSchema.parse({
+    id: 'agent',
+    kind: 'agent',
+    label: 'Agent',
+    prompt: 'Work',
+    executor: 'codex',
     model: 'native-model',
     effort: 'high',
     context: { tier: 'fast' },
   });
-  await act(async () => {
-    field('Executor').value = 'codex';
-    field('Executor').dispatchEvent(new Event('change', { bubbles: true }));
-  });
-  expect(field('Model tier')).toBeUndefined();
-  expect(saved!).toMatchObject({
-    model: 'native-model',
-    effort: 'high',
-    context: { tier: 'fast' },
-  });
+  const onChange = vi.fn();
+  await act(async () =>
+    root.render(
+      h(
+        DesignSystemProvider,
+        {},
+        h(NodeInspector, {
+          node,
+          workflows: [],
+          section: 'execution',
+          onChange,
+        }),
+      ),
+    ),
+  );
+  const label = [...container.querySelectorAll('label')].find(
+    (label) => label.textContent === 'Executor',
+  )!;
+  await vi.waitFor(() =>
+    expect(
+      (document.getElementById(label.htmlFor) as HTMLInputElement).value,
+    ).toBe('Codex'),
+  );
+  expect(
+    container.querySelector('button[aria-haspopup="listbox"]')?.textContent,
+  ).toContain('Native Model');
+  expect(container.textContent).not.toContain('Model tier');
+  expect(onChange).not.toHaveBeenCalled();
 });
-
 it('keeps cached harness rows visible when returning while their background read is pending', async () => {
   rpc.profiles.mockResolvedValue([harnessProfile()]);
   const renderHarnesses = (visible: boolean) =>
@@ -753,11 +721,11 @@ it('keeps cached harness rows visible when returning while their background read
       root.render(h(DesignSystemProvider, {}, visible ? h(Harnesses) : null));
     });
   await renderHarnesses(true);
-  expect(button('Configure')).toBeTruthy();
+  expect(button('Edit defaults')).toBeTruthy();
   await renderHarnesses(false);
   rpc.profiles.mockImplementationOnce(() => new Promise(() => {}));
   await renderHarnesses(true);
-  expect(button('Configure')).toBeTruthy();
+  expect(button('Edit defaults')).toBeTruthy();
   expect(
     container.querySelector('[aria-label="Loading harnesses"]'),
   ).toBeNull();
@@ -770,76 +738,63 @@ it('updates an unedited open harness from refreshed data without marking it dirt
   await act(async () =>
     root.render(h(DesignSystemProvider, {}, h(Harnesses, { onDirty }))),
   );
-  await act(async () => button('Configure').click());
+  await act(async () => button('Edit defaults').click());
   const input = container.querySelector<HTMLInputElement>(
-    'input[maxlength="120"]',
+    'input[placeholder="Use Interlock’s working directory"]',
   )!;
   const updated = {
     ...original,
     revision: original.revision + 1,
-    name: 'Updated elsewhere',
+    cwd: '/updated',
   };
   rpc.profiles.mockResolvedValue([updated]);
   rpc.manage.mockResolvedValue([]);
   await act(async () => button('Check installations').click());
-  expect(input.value).toBe('Updated elsewhere');
+  expect(input.value).toBe('/updated');
   expect(onDirty).toHaveBeenLastCalledWith(false);
-  await act(async () => setInput(input, 'Local edit'));
+  await act(async () => setInput(input, '/local-edit'));
   rpc.manage.mockImplementation(async (q) => {
     if (q.action === 'save') throw new Error('Save blocked for this check');
     return [];
   });
-  await act(async () => button('Save configuration').click());
+  await act(async () => button('Save defaults').click());
   expect(rpc.manage).toHaveBeenLastCalledWith(
     expect.objectContaining({
       profile: expect.objectContaining({
         expectedRevision: updated.revision,
-        name: 'Local edit',
+        cwd: '/local-edit',
       }),
     }),
   );
 });
 
-it('orders detected harnesses first and each group by saved name across enable/refetch without remounting open drafts', async () => {
+it('shows canonical built-ins and one row per custom integration without losing an open draft on refetch', async () => {
   const base = harnessProfile();
-  const missing = { status: 'missing', message: 'Not installed' };
-  const source = Object.freeze([
+  const source = [
     {
       ...base,
-      id: 'missing-z',
-      name: 'Zulu missing',
+      id: 'legacy-codex',
+      name: 'Old review configuration',
       enabled: true,
-      detection: missing,
     },
-    { ...base, id: 'detected-z', name: 'Zulu detected', enabled: false },
-    { ...base, id: 'tie-b', name: 'twin', enabled: true },
     {
       ...base,
-      id: 'missing-a',
-      name: 'alpha missing',
-      enabled: false,
-      detection: missing,
+      id: 'pi',
+      harness: 'pi',
+      name: 'Pi',
+      detection: { status: 'missing' },
     },
-    { ...base, id: 'detected-a', name: 'Alpha detected', enabled: true },
-    { ...base, id: 'tie-a', name: 'Twin', enabled: false },
-  ]);
-  let response = source;
-  rpc.profiles.mockReset().mockImplementation(async () => response);
-  rpc.manage.mockImplementation(async (request) => {
-    expect(request.action).toBe('save');
-    response = Object.freeze(
-      [...source].reverse().map((profile) =>
-        profile.id === request.profile.id
-          ? {
-              ...profile,
-              enabled: request.profile.enabled,
-              revision: profile.revision + 1,
-            }
-          : profile,
-      ),
-    );
-    return {};
-  });
+    {
+      ...base,
+      id: 'team',
+      harness: 'custom',
+      name: 'Team service',
+      mode: 'direct',
+      transport: 'http',
+    },
+    { ...base, name: 'Renamed Codex' },
+  ];
+  rpc.profiles.mockReset().mockResolvedValue(source);
   const onDirty = vi.fn();
   await act(async () =>
     root.render(h(DesignSystemProvider, {}, h(Harnesses, { onDirty }))),
@@ -848,72 +803,33 @@ it('orders detected harnesses first and each group by saved name across enable/r
     [
       ...container.querySelectorAll('#harnesses > div > section[aria-label]'),
     ].map((section) => section.getAttribute('aria-label'));
-  const expected = [
-    'Alpha detected',
-    'Twin',
-    'twin',
-    'Zulu detected',
-    'alpha missing',
-    'Zulu missing',
-  ];
-  expect(names()).toEqual(expected);
-  expect(source.map((profile) => profile.id)).toEqual([
-    'missing-z',
-    'detected-z',
-    'tie-b',
-    'missing-a',
-    'detected-a',
-    'tie-a',
-  ]);
-  const alpha = container.querySelector<HTMLElement>(
-    'section[aria-label="Alpha detected"]',
+  expect(names()).toEqual(['Codex', 'Team service', 'Pi']);
+  const codex = container.querySelector<HTMLElement>(
+    'section[aria-label="Codex"]',
   )!;
-  const configure = alpha.querySelector<HTMLButtonElement>(
-    'button[aria-controls]',
+  await act(async () =>
+    codex.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click(),
+  );
+  const draft = codex.querySelector<HTMLInputElement>(
+    'input[placeholder="Use Interlock’s working directory"]',
   )!;
-  await act(async () => configure.click());
-  const draft = alpha.querySelector<HTMLInputElement>(
-    'input[maxlength="120"]',
-  )!;
-  await act(async () => setInput(draft, 'ZZZ unsaved draft'));
+  await act(async () => setInput(draft, '/unsaved'));
   expect(onDirty).toHaveBeenLastCalledWith(true);
+  rpc.manage.mockResolvedValue({});
+  rpc.profiles.mockResolvedValue([...source].reverse());
   const toggle = container.querySelector<HTMLInputElement>(
-    'input[aria-label="Enable Zulu detected"]',
+    'input[aria-label="Enable Team service"]',
   )!;
-  await act(async () => {
-    toggle.focus();
-    toggle.click();
-  });
+  await act(async () => toggle.click());
   expect(rpc.manage).toHaveBeenCalledWith(
     expect.objectContaining({
       action: 'save',
-      profile: expect.objectContaining({
-        id: 'detected-z',
-        enabled: true,
-        expectedRevision: base.revision,
-      }),
+      profile: expect.objectContaining({ id: 'team', enabled: true }),
     }),
   );
-  expect(rpc.profiles).toHaveBeenCalledTimes(2);
-  expect(names()).toEqual(expected);
-  expect(
-    container.querySelector('input[aria-label="Enable Zulu detected"]'),
-  ).toBe(toggle);
-  expect(toggle.checked).toBe(true);
-  expect(alpha.querySelector('input[maxlength="120"]')).toBe(draft);
-  expect(configure.getAttribute('aria-expanded')).toBe('true');
-  expect(draft.value).toBe('ZZZ unsaved draft');
-  expect(onDirty).toHaveBeenLastCalledWith(true);
-  expect(source.map((profile) => profile.id)).toEqual([
-    'missing-z',
-    'detected-z',
-    'tie-b',
-    'missing-a',
-    'detected-a',
-    'tie-a',
-  ]);
+  expect(names()).toEqual(['Codex', 'Team service', 'Pi']);
+  expect(draft.value).toBe('/unsaved');
 });
-
 it('shares cached harness reads across selector remounts and retains them after a background error', async () => {
   let visible = true;
   let client!: ReturnType<typeof useQueryClient>;

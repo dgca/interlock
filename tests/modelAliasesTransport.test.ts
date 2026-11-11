@@ -43,7 +43,11 @@ it.each(['http', 'stdio'])(
       const tools = (await client.listTools()).tools;
       const exportTool = tools.find((t) => t.name === 'export_workflow');
       expect(exportTool?.description).toContain('Format 6');
-      expect(tools.some((t) => t.name === 'manage_model_aliases')).toBe(true);
+      const presetTool = tools.find(
+        (tool) => tool.name === 'manage_model_aliases',
+      );
+      expect(presetTool?.description).toContain('Agent presets');
+      expect(JSON.stringify(presetTool?.inputSchema)).toContain('permissions');
 
       const call = async (
         name: string,
@@ -140,6 +144,51 @@ it.each(['http', 'stdio'])(
         },
       });
       expect(updated.revision).toBe(2);
+
+      engine.executors.saveProfile({
+        id: 'codex',
+        harness: 'codex',
+        name: 'Codex',
+        enabled: true,
+        expectedRevision: 0,
+      });
+      const preset = await call('manage_model_aliases', {
+        request: {
+          action: 'create',
+          name: 'Deep review',
+          permissions: 'read-only',
+          candidates: [{ model: 'review-model', profileId: 'codex' }],
+        },
+      });
+      const presetDefinition = blankDefinition();
+      const presetNode = presetDefinition.nodes.find(
+        (node) => node.kind === 'agent',
+      )!;
+      presetNode.executorMode = 'preset';
+      presetNode.model = preset.id;
+      const presetWorkflow = await call('create_workflow', {
+        name: 'Preset workflow',
+        definition: presetDefinition,
+      });
+      await call('publish_workflow', { id: presetWorkflow.id });
+      const presetRun = await call('start_run', {
+        workflowId: presetWorkflow.id,
+        input: {},
+      });
+      expect(engine.store.work('available', presetRun.runId)[0]).toMatchObject({
+        executor: 'codex',
+        executorModel: 'review-model',
+        executorPermissions: 'read-only',
+      });
+      const cleared = await call('manage_model_aliases', {
+        request: {
+          action: 'update',
+          id: preset.id,
+          expectedRevision: 1,
+          permissions: null,
+        },
+      });
+      expect(cleared).not.toHaveProperty('permissions');
 
       // Delete alias
       const deleted = await call('manage_model_aliases', {

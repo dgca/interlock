@@ -5,6 +5,10 @@ import {
   modelAliasMutationSchema,
   modelAliasReadSchema,
   modelReferences,
+  firstEligiblePresetChoice,
+  presetPermissions,
+  type ExecutorProfile,
+  type ExecutorPermissionMode,
   type SavedModelAlias,
   type ModelAliasCandidate,
   type ExpandedModelCandidate,
@@ -120,7 +124,12 @@ export class ModelAliases {
     const q = modelAliasMutationSchema.parse(input);
     return this.store.transaction(() => {
       if (q.action === 'create') {
-        return this.create(q.name, q.description ?? '', q.candidates);
+        return this.create(
+          q.name,
+          q.description ?? '',
+          q.candidates,
+          q.permissions,
+        );
       }
       const existing = this.get(q.id);
       if (!existing) {
@@ -145,6 +154,9 @@ export class ModelAliases {
       }
       if (q.description !== undefined) existing.description = q.description;
       if (q.candidates !== undefined) existing.candidates = q.candidates;
+      if (q.permissions === null) delete existing.permissions;
+      else if (q.permissions !== undefined)
+        existing.permissions = q.permissions;
       existing.revision++;
       existing.updatedAt = stamp();
       this.store.put('modelAliases', existing);
@@ -179,6 +191,7 @@ export class ModelAliases {
     name: string,
     description: string,
     candidates: ModelAliasCandidate[],
+    permissions?: ExecutorPermissionMode,
   ): SavedModelAlias {
     this.checkName(name);
     const time = stamp();
@@ -187,6 +200,7 @@ export class ModelAliases {
       name,
       description,
       candidates,
+      ...(permissions ? { permissions } : {}),
       revision: 1,
       createdAt: time,
       updatedAt: time,
@@ -199,6 +213,10 @@ export class ModelAliases {
   capture(
     definition: WorkflowDefinition,
     inheritedCaptures?: ModelAliasCapture[],
+    availableProfile = (id: string) => {
+      const profile = this.store.get<ExecutorProfile>('executorProfiles', id);
+      return profile?.enabled ? profile : undefined;
+    },
   ): ModelAliasCapture[] {
     const refs = modelReferences(definition);
     const captures: ModelAliasCapture[] = [];
@@ -231,6 +249,7 @@ export class ModelAliases {
           name: alias.name,
           revision: alias.revision,
           candidates: alias.candidates,
+          ...(alias.permissions ? { permissions: alias.permissions } : {}),
         });
         seen.add(ref);
       }
@@ -238,17 +257,31 @@ export class ModelAliases {
     if (inheritedCaptures === undefined)
       for (const node of definition.nodes) {
         if (node.kind !== 'agent' || node.executor === null) continue;
+        if (node.executorMode === 'harness') continue;
         const model = node.model ?? definition.agentModel;
-        const pool = model ? [model] : [];
-        const aliases = pool.map((reference) =>
-          this.resolveCandidates(captures, reference),
-        );
-        if (!aliases.some((candidates) => candidates !== null)) continue;
-        const candidates = pool.flatMap(
-          (reference, index) => aliases[index] ?? [{ model: reference }],
-        );
+        const alias = model ? this.capturedAlias(captures, model) : undefined;
+        if (node.executorMode === 'preset' || alias?.permissions) {
+          const permissions = presetPermissions(
+            alias?.permissions,
+            definition.agentPermissions,
+          );
+          if (
+            !alias ||
+            !firstEligiblePresetChoice(
+              alias.candidates,
+              node.executor ?? definition.executor,
+              availableProfile,
+              permissions,
+            )
+          )
+            throw new InterlockError(
+              `Agent preset for "${node.label}" has no eligible harness. Check its choices and permissions before starting a new run.`,
+            );
+          continue;
+        }
         if (
-          !candidates.some(
+          alias &&
+          !alias.candidates.some(
             (candidate) =>
               !candidate.profileId ||
               this.store.get<{ enabled: boolean }>(
@@ -264,20 +297,22 @@ export class ModelAliases {
     return captures;
   }
 
+  capturedAlias(captures: ModelAliasCapture[], reference: string) {
+    const name = reference.toLowerCase();
+    return captures.find(
+      (c) =>
+        c.name.toLowerCase() === name ||
+        c.reference?.toLowerCase() === name ||
+        c.aliasId === reference,
+    );
+  }
+
   resolveCandidates(
     captures: ModelAliasCapture[] | undefined,
     modelOrAlias: string,
   ): ModelAliasCandidate[] | null {
-    if (captures) {
-      const captured = captures.find(
-        (c) =>
-          c.name.toLowerCase() === modelOrAlias.toLowerCase() ||
-          c.reference?.toLowerCase() === modelOrAlias.toLowerCase() ||
-          c.aliasId === modelOrAlias,
-      );
-      if (captured) return captured.candidates;
-      return null;
-    }
+    if (captures)
+      return this.capturedAlias(captures, modelOrAlias)?.candidates ?? null;
     const live = this.get(modelOrAlias);
     if (live) return live.candidates;
     return null;

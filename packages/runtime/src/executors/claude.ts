@@ -12,10 +12,15 @@ import {
   type HarnessAdapter,
   type HarnessRun,
 } from './contracts.js';
-import { detectExecutable, spawnManagedProcess } from './process.js';
+import {
+  detectExecutable,
+  findExecutable,
+  spawnManagedProcess,
+} from './process.js';
 
 export const claudeAdapter: HarnessAdapter = {
   id: 'claude-code',
+  available: (override) => !!findExecutable('claude', override),
   detect: (override) => detectExecutable('claude', override),
   async models(input) {
     const abortController = new AbortController();

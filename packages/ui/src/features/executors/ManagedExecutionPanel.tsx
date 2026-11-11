@@ -536,7 +536,7 @@ function Execution({
                 <dd>
                   {permissionLabels[record.profile.permissions] ?? 'Standard'}
                   {record.permissionSource
-                    ? ` · ${record.permissionSource === 'workflow' ? 'workflow override' : 'harness default'}`
+                    ? ` · ${record.permissionSource === 'preset' ? 'agent preset' : record.permissionSource === 'workflow' ? 'workflow override' : 'harness default'}`
                     : ''}
                 </dd>
                 <dt>Directory</dt>

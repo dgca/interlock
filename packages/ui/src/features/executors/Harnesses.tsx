@@ -30,24 +30,15 @@ import { trpc, useQuery } from '../../lib/query';
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import { HarnessRowsSkeleton, harnessColumns } from './HarnessListSkeleton';
 import styles from './Harnesses.module.css';
-import {
-  permissionOptions,
-  permissionDescriptions,
-  permissionLabels,
-} from './permissions';
+import { permissionOptions, permissionDescriptions } from './permissions';
 import { ModelSettings } from './ModelSettings';
 import { ExecutionSettings } from './ExecutionSettings';
 import { CustomProfileDialog } from './CustomProfileDialog';
-import { ModelAliases } from './ModelAliases';
+import { AgentPresets } from './AgentPresets';
+import { harnessLabel, isPrimaryHarness } from './harnessProfiles';
 import { PageTabs } from '../../components/PageLayout/PageLayout';
 import { aiSettingsTab, aiSettingsTabs } from './aiSettingsNavigation';
 
-const harnessNames: Record<string, string> = {
-  'claude-code': 'Claude Code',
-  codex: 'Codex',
-  pi: 'Pi',
-  custom: 'Custom Harness',
-};
 const harnessSetup: Record<string, string> = {
   'claude-code': 'https://code.claude.com/docs/en/setup',
   codex: 'https://developers.openai.com/codex/cli/',
@@ -90,10 +81,6 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     (dirty: boolean) => trackDirty('limit', dirty),
     [trackDirty],
   );
-  const newDirty = useCallback(
-    (dirty: boolean) => trackDirty('new', dirty),
-    [trackDirty],
-  );
   const request = useRef(0);
   const profilesQuery = useQuery(trpc.executors.profiles.queryOptions());
   const profiles = profilesQuery.data;
@@ -101,13 +88,11 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   const error =
     checkError ||
     (profilesQuery.error ? errorMessage(profilesQuery.error) : '');
-  const [checking, setChecking] = useState(false),
-    [adding, setAdding] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   const [customModalOpen, setCustomModalOpen] = useState(false);
   const [customModalProfile, setCustomModalProfile] =
     useState<ExecutorProfile | null>(null);
-  const [customModalInitialName, setCustomModalInitialName] = useState('');
   const addButton = useRef<HTMLButtonElement>(null);
   const customTrigger = useRef<HTMLElement | null>(null);
 
@@ -126,9 +111,6 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
       if (request.current === current) setChecking(false);
     }
   };
-  useEffect(() => {
-    if (activeTab !== 'harnesses') setAdding(false);
-  }, [activeTab]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       const target = document.getElementById(location.hash.slice(1));
@@ -176,14 +158,16 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                   </Button>
                   <Button
                     ref={addButton}
+                    aria-label="Add integration"
                     variant="primary"
-                    disabled={adding}
                     onClick={() => {
-                      setAdding(true);
+                      customTrigger.current = addButton.current;
+                      setCustomModalProfile(null);
+                      setCustomModalOpen(true);
                     }}
                   >
                     <Plus size={14} />
-                    Add configuration
+                    Add integration
                   </Button>
                 </>
               </div>
@@ -192,14 +176,19 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
               !error && <HarnessRowsSkeleton />
             ) : (
               <ListTable columns={harnessColumns}>
-                {[...profiles]
+                {profiles
+                  .filter(isPrimaryHarness)
                   .sort(
                     (a, b) =>
                       Number(b.detection.status === 'detected') -
                         Number(a.detection.status === 'detected') ||
-                      a.name.localeCompare(b.name, undefined, {
-                        sensitivity: 'base',
-                      }) ||
+                      harnessLabel(a).localeCompare(
+                        harnessLabel(b),
+                        undefined,
+                        {
+                          sensitivity: 'base',
+                        },
+                      ) ||
                       a.id.localeCompare(b.id),
                   )
                   .map((p) => (
@@ -212,7 +201,6 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                         customTrigger.current =
                           document.activeElement as HTMLElement;
                         setCustomModalProfile(prof);
-                        setCustomModalInitialName(prof.name);
                         setCustomModalOpen(true);
                       }}
                     />
@@ -225,30 +213,10 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                 checked when the harness runs.
               </p>
             </div>
-            {adding && (
-              <NewProfile
-                onDirty={newDirty}
-                onCancel={() => {
-                  setAdding(false);
-                  requestAnimationFrame(() => addButton.current?.focus());
-                }}
-                onOpenCustom={(initialName) => {
-                  customTrigger.current = addButton.current;
-                  setAdding(false);
-                  setCustomModalProfile(null);
-                  setCustomModalInitialName(initialName);
-                  setCustomModalOpen(true);
-                }}
-                onSave={async () => {
-                  setAdding(false);
-                  await refresh();
-                }}
-              />
-            )}
           </section>
         )}
         {activeTab === 'model-aliases' && (
-          <ModelAliases profiles={profiles} onDirty={aliasDirty} />
+          <AgentPresets profiles={profiles} onDirty={aliasDirty} />
         )}
         {activeTab === 'execution' && (
           <section
@@ -269,7 +237,7 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
         opened={customModalOpen}
         onClose={() => setCustomModalOpen(false)}
         profile={customModalProfile}
-        initialName={customModalInitialName}
+        initialName={customModalProfile?.name ?? ''}
         isNew={!customModalProfile}
         returnFocusTo={() =>
           customTrigger.current?.isConnected
@@ -315,7 +283,7 @@ function ProfileRow({
   useEffect(() => {
     if (wasOpen.current && !open)
       row.current
-        ?.querySelector<HTMLButtonElement>('button[aria-controls]')
+        ?.querySelector<HTMLButtonElement>('button[aria-expanded]')
         ?.focus();
     wasOpen.current = open;
   }, [open]);
@@ -370,9 +338,10 @@ function ProfileRow({
       setBusy(false);
     }
   };
+  const label = harnessLabel(profile);
   const detected = profile.detection.status === 'detected';
   return (
-    <section ref={row} aria-label={profile.name}>
+    <section ref={row} aria-label={label}>
       <ListTableRow className={styles.rowHeading}>
         <div className={styles.profileIdentity}>
           {profile.harness === 'custom' ? (
@@ -381,40 +350,15 @@ function ProfileRow({
             <Terminal size={21} className={styles.icon} />
           )}
           <div className={styles.identity}>
-            <h2>{profile.name}</h2>
-            {profile.harness === 'custom' ? (
-              <p
-                title={
-                  profile.mode === 'launcher'
-                    ? `Delegated Launcher (${profile.transport})`
-                    : `Direct Turn (${profile.transport})`
-                }
-              >
-                {profile.mode === 'launcher'
-                  ? `${profile.transport === 'http' ? 'HTTP POST ' + (profile.launchUrl ?? '') : 'Subprocess CLI · Launch: ' + (profile.launchCommand || 'custom')}${profile.timeoutSeconds ? ` · Timeout: ${profile.timeoutSeconds}s` : ''} · ${permissionLabels[profile.permissions] ?? profile.permissions} permissions`
-                  : `${profile.transport === 'http' ? 'HTTP Service · ' + (profile.turnUrl ?? '') : 'Subprocess CLI · Turn: ' + (profile.turnCommand || profile.command || 'custom')}${profile.timeoutSeconds ? ` · Timeout: ${profile.timeoutSeconds}s` : ''} · ${permissionLabels[profile.permissions] ?? profile.permissions} permissions`}
-              </p>
-            ) : !open ? (
-              <p
-                title={`${profile.model ?? 'CLI default'}${profile.effort ? ` · ${profile.effort} effort` : ''} · ${permissionLabels[profile.permissions]} permissions`}
-              >
-                {profile.name !== harnessNames[profile.harness] &&
-                  `${harnessNames[profile.harness]} · `}
-                {profile.model ?? 'CLI default'}
-                {profile.effort ? ` · ${profile.effort} effort` : ''} ·{' '}
-                {permissionLabels[profile.permissions]} permissions
-              </p>
-            ) : profile.name !== harnessNames[profile.harness] ? (
-              <p>{harnessNames[profile.harness]}</p>
-            ) : null}
+            <h2>{label}</h2>
+            <p>
+              {profile.harness === 'custom'
+                ? `Custom integration · ${profile.mode === 'launcher' ? 'Delegated launcher' : 'Direct turn'}${profile.transport === 'http' ? ' over HTTP' : ' over subprocess'}`
+                : 'Local executable'}
+            </p>
           </div>
         </div>
         <span className={styles.installation}>
-          {profile.harness === 'custom' && (
-            <Badge variant="light" color="violet" tt="none">
-              custom: {profile.mode ?? 'direct'}
-            </Badge>
-          )}
           <Badge variant="light" color={detected ? 'blue' : 'gray'} tt="none">
             {detected
               ? profile.harness === 'custom'
@@ -426,45 +370,43 @@ function ProfileRow({
           </Badge>
         </span>
         <span className={styles.enabledControl}>
-          <Switch
-            checked={profile.enabled}
-            disabled={busy || open || (!profile.enabled && !detected)}
-            aria-label={`Enable ${profile.name}`}
-            label={profile.enabled ? 'Enabled' : 'Disabled'}
-            onChange={(e) =>
-              void save({
-                ...configuration(profile),
-                enabled: e.currentTarget.checked,
-              })
-            }
-          />
+          {detected ? (
+            <Switch
+              checked={profile.enabled}
+              disabled={busy || open}
+              aria-label={`Enable ${label}`}
+              label={profile.enabled ? 'Enabled' : 'Disabled'}
+              onChange={(e) =>
+                void save({
+                  ...configuration(profile),
+                  enabled: e.currentTarget.checked,
+                })
+              }
+            />
+          ) : (
+            <span className="hint">
+              {profile.enabled ? 'Unavailable' : 'Disabled'}
+            </span>
+          )}
         </span>
         <span className={styles.configureControl}>
           <Button
             variant="ghost"
-            aria-expanded={profile.harness === 'custom' ? undefined : open}
-            aria-controls={profile.harness === 'custom' ? undefined : editorId}
-            aria-haspopup={profile.harness === 'custom' ? 'dialog' : undefined}
+            aria-expanded={open}
+            aria-controls={open ? editorId : undefined}
+            aria-label={`${open ? 'Close defaults for' : 'Edit defaults for'} ${label}`}
             disabled={busy}
             onClick={() => {
-              if (profile.harness === 'custom') {
-                onConfigureCustom(configuration(profile));
-              } else {
-                if (open) cancel();
-                else {
-                  setDraft(configuration(profile));
-                  setError('');
-                  setOpen(true);
-                }
+              if (open) cancel();
+              else {
+                setDraft(configuration(profile));
+                setError('');
+                setOpen(true);
               }
             }}
           >
-            {open ? (
-              <ChevronUp size={14} />
-            ) : profile.harness === 'custom' ? null : (
-              <ChevronDown size={14} />
-            )}
-            {open ? 'Cancel editing' : 'Configure'}
+            {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {open ? 'Close defaults' : 'Edit defaults'}
           </Button>
         </span>
       </ListTableRow>
@@ -493,118 +435,120 @@ function ProfileRow({
           }}
         >
           <div className={styles.fields}>
-            <TextInput
-              label="Configuration name"
-              required
+            <ModelSettings
               disabled={busy}
-              maxLength={120}
-              value={draft.name}
-              onChange={(e) =>
-                setDraft({ ...draft, name: e.currentTarget.value })
-              }
+              label="Default model"
+              defaultLabel="Use CLI default"
+              profileId={profile.id}
+              paths={{ command: draft.command, cwd: draft.cwd }}
+              model={draft.model}
+              effort={draft.effort}
+              effortDefaultLabel="Use native default"
+              canResetEffort={false}
+              alwaysShowEffort
+              onModelChange={(model) => setDraft({ ...draft, model })}
+              onEffortChange={(effort) => setDraft({ ...draft, effort })}
             />
-            <TextInput
-              label="Working directory"
-              description="The folder this agent starts in. Leave blank to use Interlock’s working directory."
+            <NativeSelect
+              label="Default permissions"
+              disabled={busy}
               inputWrapperOrder={['label', 'input', 'description', 'error']}
-              placeholder="Use Interlock’s working directory"
-              disabled={busy}
-              maxLength={4096}
-              value={draft.cwd ?? ''}
-              onChange={(e) =>
-                setDraft({ ...draft, cwd: e.currentTarget.value || undefined })
+              description={
+                draft.harness === 'pi' && draft.permissions === 'standard'
+                  ? 'Allow read tools; ask before commands, file changes, and other tools.'
+                  : permissionDescriptions[draft.permissions]
               }
-            />
-          </div>
-          <fieldset className={styles.fieldGroup} disabled={busy}>
-            <legend>Execution defaults</legend>
-            <NumberInput
-              label="Concurrent assignments"
-              description="Leave blank for no profile limit. The shared limit still applies."
-              min={1}
-              max={Number.MAX_SAFE_INTEGER}
-              allowDecimal={false}
-              value={draft.concurrency ?? ''}
-              onChange={(value) =>
+              value={draft.permissions}
+              onChange={(e) =>
                 setDraft({
                   ...draft,
-                  concurrency: value === '' ? undefined : Number(value),
+                  permissions: e.currentTarget
+                    .value as ExecutorProfile['permissions'],
                 })
               }
+              data={permissionOptions}
             />
-            <div className={styles.fields}>
-              <ModelSettings
-                disabled={busy}
-                label="Default model"
-                defaultLabel="Use CLI default"
-                profileId={profile.id}
-                paths={{ command: draft.command, cwd: draft.cwd }}
-                model={draft.model}
-                effort={draft.effort}
-                effortDefaultLabel="Use native default"
-                canResetEffort={false}
-                onModelChange={(model) => setDraft({ ...draft, model })}
-                onEffortChange={(effort) => setDraft({ ...draft, effort })}
-              />
-              <NativeSelect
-                label="Default permissions"
-                disabled={busy}
-                inputWrapperOrder={['label', 'input', 'description', 'error']}
-                description={
-                  draft.harness === 'pi' && draft.permissions === 'standard'
-                    ? 'Allow read tools; ask before commands, file changes, and other tools.'
-                    : permissionDescriptions[draft.permissions]
-                }
-                value={draft.permissions}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    permissions: e.currentTarget
-                      .value as ExecutorProfile['permissions'],
-                  })
-                }
-                data={permissionOptions}
-              />
-            </div>
-            {draft.permissions === 'read-only' && (
-              <p className={styles.note}>
-                Read-only restrictions do not sandbox project startup hooks.
-              </p>
-            )}
-          </fieldset>
-          <details className={styles.advanced}>
-            <summary>Advanced settings</summary>
-            <div className={styles.fields}>
-              <TextInput
-                label="Executable path"
-                disabled={busy}
-                maxLength={4096}
-                description={
-                  profile.detection.version
-                    ? `Detected version: ${profile.detection.version}`
-                    : 'Leave blank to find the harness on PATH.'
-                }
-                inputWrapperOrder={['label', 'input', 'description', 'error']}
-                placeholder={
-                  profile.detection.command ?? 'Auto-detect from PATH'
-                }
-                value={draft.command ?? ''}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    command: e.currentTarget.value || undefined,
-                  })
-                }
-              />
-              <TextInput
-                label="Configuration ID"
-                description="Stable reference used by workflows and MCP."
-                inputWrapperOrder={['label', 'input', 'description', 'error']}
-                value={profile.id}
-                readOnly
-              />
-            </div>
-          </details>
+          </div>
+          {draft.permissions === 'read-only' && (
+            <p className={styles.note}>
+              Read-only restrictions do not sandbox project startup hooks.
+            </p>
+          )}
+          {draft.harness === 'custom' ? (
+            <Button
+              mt="md"
+              disabled={busy || changed}
+              aria-haspopup="dialog"
+              onClick={() => onConfigureCustom(configuration(profile))}
+            >
+              Edit integration
+            </Button>
+          ) : (
+            <details className={styles.advanced}>
+              <summary>Advanced settings</summary>
+              <div className={styles.fields}>
+                <TextInput
+                  label="Working directory"
+                  description="The folder this agent starts in. Leave blank to use Interlock’s working directory."
+                  inputWrapperOrder={['label', 'input', 'description', 'error']}
+                  placeholder="Use Interlock’s working directory"
+                  disabled={busy}
+                  maxLength={4096}
+                  value={draft.cwd ?? ''}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      cwd: e.currentTarget.value || undefined,
+                    })
+                  }
+                />
+
+                <NumberInput
+                  label="Concurrent assignments"
+                  description="Leave blank for no profile limit. The shared limit still applies."
+                  min={1}
+                  max={Number.MAX_SAFE_INTEGER}
+                  allowDecimal={false}
+                  value={draft.concurrency ?? ''}
+                  onChange={(value) =>
+                    setDraft({
+                      ...draft,
+                      concurrency: value === '' ? undefined : Number(value),
+                    })
+                  }
+                />
+
+                <TextInput
+                  label="Executable path"
+                  disabled={busy}
+                  maxLength={4096}
+                  description={
+                    profile.detection.version
+                      ? `Detected version: ${profile.detection.version}`
+                      : 'Leave blank to find the harness on PATH.'
+                  }
+                  inputWrapperOrder={['label', 'input', 'description', 'error']}
+                  placeholder={
+                    profile.detection.command ?? 'Auto-detect from PATH'
+                  }
+                  value={draft.command ?? ''}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      command: e.currentTarget.value || undefined,
+                    })
+                  }
+                />
+                <TextInput
+                  label="Configuration ID"
+                  description="Stable reference used by workflows and MCP."
+                  inputWrapperOrder={['label', 'input', 'description', 'error']}
+                  value={profile.id}
+                  readOnly
+                />
+              </div>
+            </details>
+          )}
           {error && (
             <div className={styles.errorRow}>
               <p role="alert" className={styles.error}>
@@ -615,7 +559,7 @@ function ProfileRow({
                 disabled={busy}
                 onClick={() => void reload()}
               >
-                Reload configuration
+                Reload defaults
               </Button>
             </div>
           )}
@@ -624,105 +568,11 @@ function ProfileRow({
               Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={busy || !changed}>
-              {busy ? 'Saving…' : 'Save configuration'}
+              {busy ? 'Saving…' : 'Save defaults'}
             </Button>
           </div>
         </form>
       )}
     </section>
-  );
-}
-function NewProfile({
-  onSave,
-  onCancel,
-  onDirty,
-  onOpenCustom,
-}: {
-  onDirty: (dirty: boolean) => void;
-  onSave: () => Promise<void>;
-  onCancel: () => void;
-  onOpenCustom: (initialName: string) => void;
-}) {
-  const [name, setName] = useState(''),
-    [harness, setHarness] = useState<ExecutorProfile['harness']>('codex'),
-    [error, setError] = useState(''),
-    [busy, setBusy] = useState(false);
-  const dirty = name.length > 0 || harness !== 'codex';
-  useEffect(() => onDirty(dirty), [dirty, onDirty]);
-  useEffect(() => () => onDirty(false), [onDirty]);
-  return (
-    <form
-      aria-label="Add harness configuration"
-      className={`${workspacePage.card} ${styles.newProfile}`}
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (harness === 'custom') {
-          onOpenCustom(name);
-          return;
-        }
-        setBusy(true);
-        setError('');
-        try {
-          const id = `${harness}-${crypto.randomUUID().slice(0, 8)}`;
-          await api.executors.manage.mutate({
-            action: 'save',
-            profile: { id, harness, name, enabled: false, expectedRevision: 0 },
-          });
-          await onSave();
-        } catch (e) {
-          setError(errorMessage(e));
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      <h2>Add configuration</h2>
-      <div className={styles.fields}>
-        <TextInput
-          label="Name"
-          autoFocus
-          disabled={busy}
-          value={name}
-          required
-          maxLength={120}
-          onChange={(e) => setName(e.currentTarget.value)}
-        />
-        <NativeSelect
-          label="Harness"
-          disabled={busy}
-          value={harness}
-          onChange={(e) => setHarness(e.currentTarget.value as typeof harness)}
-          data={[
-            { value: 'claude-code', label: 'Claude Code' },
-            { value: 'codex', label: 'Codex' },
-            { value: 'pi', label: 'Pi' },
-            { value: 'custom', label: 'Custom harness' },
-          ]}
-        />
-      </div>
-      {error && <ActionError message={error} className={styles.error} />}
-      <div className={styles.formActions}>
-        <Button onClick={onCancel} disabled={busy}>
-          Cancel
-        </Button>
-        {harness === 'custom' ? (
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => onOpenCustom(name)}
-          >
-            Continue with Custom Setup…
-          </Button>
-        ) : (
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={busy || !name.trim()}
-          >
-            {busy ? 'Adding…' : 'Add configuration'}
-          </Button>
-        )}
-      </div>
-    </form>
   );
 }

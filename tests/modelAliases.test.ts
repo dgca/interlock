@@ -554,3 +554,123 @@ it('keeps an empty captured alias from becoming a literal native-model request d
     { model: 'native-model' },
   ]);
 });
+
+it('keeps legacy alias-first routing while an explicit harness ignores an inherited preset', () => {
+  const { engine } = setup();
+  engine.executors.saveProfile({
+    id: 'legacy-codex',
+    name: 'Legacy Codex',
+    harness: 'codex',
+    enabled: true,
+    expectedRevision: 0,
+  });
+  engine.modelAliases.mutate({
+    action: 'create',
+    name: 'Review default',
+    candidates: [
+      { profileId: 'legacy-codex', model: 'review-model', effort: 'high' },
+    ],
+  });
+  const definition = blankDefinition();
+  definition.executor = 'legacy-codex';
+  definition.agentModel = 'Review default';
+  definition.agentEffort = 'high';
+  const node = definition.nodes.find((item) => item.kind === 'agent')!;
+  node.executor = 'claude-code';
+  const assigned = (d: WorkflowDefinition) =>
+    engine.store.work(
+      'available',
+      engine.start(publish(engine, d), {}).run.id,
+    )[0];
+
+  expect(assigned(definition)).toMatchObject({
+    executor: 'legacy-codex',
+    executorModel: 'review-model',
+    executorEffort: 'high',
+  });
+  node.executorMode = 'harness';
+  const direct = assigned(definition);
+  expect(direct.executor).toBe('claude-code');
+  expect(direct).not.toHaveProperty('executorModel');
+  expect(direct).not.toHaveProperty('executorEffort');
+  expect(direct).not.toHaveProperty('modelAliasSelection');
+
+  node.executor = 'legacy-codex';
+  definition.agentModel = 'workflow-model';
+  expect(assigned(definition)).toMatchObject({
+    executor: 'legacy-codex',
+    executorModel: 'workflow-model',
+    executorEffort: 'high',
+    executorModelSource: 'workflow',
+  });
+  node.model = 'Review default';
+  node.effort = null;
+  expect(assigned(definition)).toMatchObject({
+    executor: 'legacy-codex',
+    executorModel: 'Review default',
+    executorEffort: null,
+    executorModelSource: 'node',
+    executorEffortSource: 'node',
+  });
+});
+
+it('uses the first enabled preset choice that can enforce workflow and preset permissions', () => {
+  const { engine } = setup();
+  for (const [id, harness, enabled] of [
+    ['claude-code', 'claude-code', false],
+    ['integration', 'custom', true],
+    ['codex', 'codex', true],
+    ['pi', 'pi', true],
+  ] as const)
+    engine.executors.saveProfile({
+      id,
+      name: id,
+      harness,
+      enabled,
+      expectedRevision: 0,
+    });
+  const candidates = [
+    { profileId: 'claude-code', model: 'primary' },
+    { profileId: 'integration', model: 'unsafe-fallback' },
+    { profileId: 'codex', model: 'first-eligible', effort: 'high' },
+    { profileId: 'pi', model: 'second-eligible' },
+  ];
+  const preset = engine.modelAliases.mutate({
+    action: 'create',
+    name: 'Deep review',
+    permissions: 'standard',
+    candidates,
+  });
+  const definition = aliasWorkflow(preset.id);
+  definition.agentPermissions = 'read-only';
+  const node = definition.nodes.find((item) => item.kind === 'agent')!;
+  node.executorMode = 'preset';
+  node.effort = null;
+  const workflow = publish(engine, definition);
+  const { run } = engine.start(workflow, {});
+  const assignment = engine.store.work('available', run.id)[0];
+  expect(assignment).toMatchObject({
+    executor: 'codex',
+    executorModel: 'first-eligible',
+    executorEffort: null,
+    executorPermissions: 'read-only',
+    executorPermissionsSource: 'workflow',
+    modelAliasSelection: { aliasId: preset.id, candidateIndex: 2, revision: 1 },
+  });
+  engine.modelAliases.mutate({
+    action: 'update',
+    id: preset.id,
+    expectedRevision: 1,
+    permissions: null,
+    candidates: [
+      { profileId: 'integration', model: 'cannot-enforce-workflow' },
+    ],
+  });
+  expect(() => engine.start(workflow, {})).toThrow(/no eligible harness/i);
+  expect(engine.store.work('available', run.id)[0]).toEqual(assignment);
+  expect(engine.run(run.id).modelAliasCaptures?.[0]).toMatchObject({
+    permissions: 'standard',
+    candidates,
+    revision: 1,
+  });
+});

@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import type { SavedModelAlias } from '@interlock/core';
-import { ModelAliases } from '../packages/ui/src/features/executors/ModelAliases';
+import { AgentPresets } from '../packages/ui/src/features/executors/AgentPresets';
 import { ModelSettings } from '../packages/ui/src/features/executors/ModelSettings';
 
 const rpc = vi.hoisted(() => ({
@@ -29,7 +29,15 @@ vi.mock('../packages/ui/src/design-system/Modal/Modal', () => ({
   Modal: ({ title, children }: any) =>
     h('section', { role: 'dialog', 'aria-label': title }, children),
 }));
-const profiles = [{ id: 'codex', name: 'Codex', enabled: true }] as any;
+const profiles = [
+  {
+    id: 'codex',
+    harness: 'codex',
+    name: 'Codex',
+    enabled: true,
+    detection: { status: 'detected' },
+  },
+] as any;
 let root: Root, container: HTMLDivElement, records: SavedModelAlias[];
 const fixture = (): SavedModelAlias => ({
   id: 'alias-reviewer',
@@ -128,7 +136,7 @@ async function settle() {
 async function renderSection(onDirty = vi.fn()) {
   await act(async () =>
     root.render(
-      h(DesignSystemProvider, {}, h(ModelAliases, { profiles, onDirty })),
+      h(DesignSystemProvider, {}, h(AgentPresets, { profiles, onDirty })),
     ),
   );
   await settle();
@@ -166,7 +174,9 @@ async function fill(
 }
 async function edit() {
   await click(
-    container.querySelector<HTMLElement>('[aria-label="Edit alias reviewer"]')!,
+    container.querySelector<HTMLElement>(
+      '[aria-label="Edit preset reviewer"]',
+    )!,
   );
 }
 
@@ -176,9 +186,9 @@ it('edits ordered candidates with the inspected revision and preserves effort/pr
   await click(
     container.querySelector<HTMLElement>('[aria-label="Move choice 2 up"]')!,
   );
-  await fill(labelled('Alias name') as HTMLInputElement, 'reviewer-next');
+  await fill(labelled('Name') as HTMLInputElement, 'reviewer-next');
   expect(onDirty).toHaveBeenLastCalledWith(true);
-  await click(button('Save alias'));
+  await click(button('Save changes'));
   expect(rpc.mutate).toHaveBeenCalledWith(
     expect.objectContaining({
       action: 'update',
@@ -192,25 +202,25 @@ it('edits ordered candidates with the inspected revision and preserves effort/pr
     }),
   );
   expect(container.querySelector('form')).toBeNull();
-  expect(container.textContent).toContain('Alias reviewer-next saved.');
+  expect(container.textContent).toContain('Preset reviewer-next saved.');
   expect(onDirty).toHaveBeenLastCalledWith(false);
 });
 
 it('creates an alias using a concrete model picker and cancels another draft without writes', async () => {
   await renderSection();
-  await click(button('New alias'));
-  await fill(labelled('Alias name') as HTMLInputElement, 'builder');
-  const select = labelled('Harness for choice 1') as HTMLSelectElement;
+  await click(button('New preset'));
+  await fill(labelled('Name') as HTMLInputElement, 'builder');
+  const select = labelled('Harness') as HTMLSelectElement;
   await act(async () => {
     select.value = 'codex';
     select.dispatchEvent(new Event('change', { bubbles: true }));
   });
-  await click(labelled('Model for choice 1'));
+  await click(labelled('Model'));
   const option = [
     ...document.querySelectorAll<HTMLElement>('[role="option"]'),
   ].find((option) => option.textContent?.startsWith('Native Model'))!;
   await click(option);
-  await click(button('Save alias'));
+  await click(button('Create preset'));
   expect(rpc.mutate).toHaveBeenCalledWith(
     expect.objectContaining({
       action: 'create',
@@ -218,8 +228,8 @@ it('creates an alias using a concrete model picker and cancels another draft wit
       candidates: [{ model: 'native-model', profileId: 'codex' }],
     }),
   );
-  await click(button('New alias'));
-  await fill(labelled('Alias name') as HTMLInputElement, 'discarded');
+  await click(button('New preset'));
+  await fill(labelled('Name') as HTMLInputElement, 'discarded');
   await click(button('Cancel'));
   expect(rpc.mutate).toHaveBeenCalledTimes(1);
 });
@@ -228,18 +238,18 @@ it('focuses alias editing and protects dirty Back navigation without losing cand
   await renderSection();
   await edit();
   expect(
-    document.querySelector('button[aria-label="Edit alias reviewer"]'),
-  ).toBeNull();
-  await fill(labelled('Alias name') as HTMLInputElement, 'unsaved');
-  await click(button('Back to model aliases'));
+    document.querySelector('[role="dialog"][aria-label="Edit preset"]'),
+  ).toBeTruthy();
+  await fill(labelled('Name') as HTMLInputElement, 'unsaved');
+  await click(button('Cancel'));
   expect(
     document.querySelector(
-      '[role="dialog"][aria-label="Discard unsaved alias changes?"]',
+      '[role="dialog"][aria-label="Discard unsaved preset changes?"]',
     ),
   ).toBeTruthy();
   await click(button('Keep editing'));
-  expect((labelled('Alias name') as HTMLInputElement).value).toBe('unsaved');
-  await click(button('Back to model aliases'));
+  expect((labelled('Name') as HTMLInputElement).value).toBe('unsaved');
+  await click(button('Cancel'));
   await click(button('Discard changes'));
   expect(document.querySelector('form')).toBeNull();
   expect(rpc.mutate).not.toHaveBeenCalled();
@@ -248,18 +258,20 @@ it('focuses alias editing and protects dirty Back navigation without losing cand
 it('keeps edits on conflicts and explicitly reloads the saved revision before another save', async () => {
   await renderSection();
   await edit();
-  await fill(labelled('Alias name') as HTMLInputElement, 'unsaved');
+  await fill(labelled('Name') as HTMLInputElement, 'unsaved');
   rpc.mutate.mockRejectedValueOnce(
     new Error('Model alias changed elsewhere. Reload before saving.'),
   );
-  await click(button('Save alias'));
-  expect((labelled('Alias name') as HTMLInputElement).value).toBe('unsaved');
+  await click(button('Save changes'));
+  expect((labelled('Name') as HTMLInputElement).value).toBe('unsaved');
   records[0] = { ...fixture(), revision: 5, description: 'Changed elsewhere' };
-  await click(button('Reload saved alias'));
-  await click(button('Reload', document.querySelector('[role="dialog"]')!));
-  expect((labelled('Alias name') as HTMLInputElement).value).toBe('reviewer');
-  await fill(labelled('Alias name') as HTMLInputElement, 'reviewer-reloaded');
-  await click(button('Save alias'));
+  await click(button('Reload saved preset'));
+  await click(
+    button('Reload', [...document.querySelectorAll('[role="dialog"]')].at(-1)!),
+  );
+  expect((labelled('Name') as HTMLInputElement).value).toBe('reviewer');
+  await fill(labelled('Name') as HTMLInputElement, 'reviewer-reloaded');
+  await click(button('Save changes'));
   expect(rpc.mutate).toHaveBeenLastCalledWith(
     expect.objectContaining({
       expectedRevision: 5,
@@ -271,19 +283,19 @@ it('keeps edits on conflicts and explicitly reloads the saved revision before an
 it('confirms deletion with the current revision and explains future-run impact', async () => {
   await renderSection();
   await edit();
-  await click(button('Delete alias'));
-  const dialog = document.querySelector('[role="dialog"]')!;
+  await click(button('Delete preset'));
+  const dialog = [...document.querySelectorAll('[role="dialog"]')].at(-1)!;
   expect(dialog.textContent).toContain(
-    'New runs referencing this alias will be blocked',
+    'New runs referencing this preset will be blocked',
   );
   expect(rpc.mutate).not.toHaveBeenCalled();
-  await click(button('Delete alias', dialog));
+  await click(button('Delete preset', dialog));
   expect(rpc.mutate).toHaveBeenCalledWith({
     action: 'delete',
     id: 'alias-reviewer',
     expectedRevision: 4,
   });
-  expect(container.textContent).toContain('No model aliases yet');
+  expect(container.textContent).toContain('No agent presets yet');
 });
 
 it('pages bounded results and recovers from a list failure', async () => {
@@ -294,7 +306,7 @@ it('pages bounded results and recovers from a list failure', async () => {
   }));
   rpc.read.mockRejectedValueOnce(new Error('Temporarily unavailable'));
   await renderSection();
-  await click(button('Retry loading aliases'));
+  await click(button('Retry loading presets'));
   expect(container.textContent).toContain('role-0');
   expect(container.textContent).not.toContain('role-11');
   await click(button('Next'));
@@ -328,13 +340,13 @@ it('selects stable alias IDs and leaves thinking effort to candidate settings', 
   await act(async () => root.render(h(DesignSystemProvider, {}, h(Picker))));
   await settle();
   await click(labelled('Model'));
-  expect(document.body.textContent).toContain('Model aliases');
+  expect(document.body.textContent).toContain('Agent presets');
   const option = [
     ...document.querySelectorAll<HTMLElement>('[role="option"]'),
   ].find((option) => option.textContent?.startsWith('reviewer'))!;
   await click(option);
   expect(changed).toHaveBeenCalledWith('alias-reviewer');
-  expect(labelled('Model').textContent).toContain('reviewer · model alias');
+  expect(labelled('Model').textContent).toContain('reviewer · agent preset');
   expect(container.textContent).not.toContain('alias-reviewer');
   expect(container.textContent).not.toContain('Thinking effort');
   expect(container.textContent).toContain(
@@ -364,7 +376,7 @@ it('preserves explicit effort overrides on an alias without claiming they are un
   );
   await settle();
   expect(container.textContent).toContain(
-    'Alias candidate effort settings take precedence',
+    'Preset candidate effort settings take precedence',
   );
   expect(container.textContent).not.toContain('unavailable');
   expect((labelled('Thinking effort') as HTMLSelectElement).value).toBe('high');
@@ -413,11 +425,11 @@ it('retains cached aliases with refresh feedback after a background read fails',
   expect(container.textContent).toContain('reviewer');
   rpc.read.mockRejectedValueOnce(new Error('Alias refresh failed'));
   await click(
-    document.querySelector<HTMLElement>('[aria-label="Refresh aliases"]')!,
+    document.querySelector<HTMLElement>('[aria-label="Refresh presets"]')!,
   );
   expect(container.textContent).toContain('Alias refresh failed');
   expect(container.textContent).toContain('reviewer');
   expect(
-    document.querySelector('[aria-label="Edit alias reviewer"]'),
+    document.querySelector('[aria-label="Edit preset reviewer"]'),
   ).not.toBeNull();
 });

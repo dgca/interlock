@@ -4,6 +4,11 @@ import { errorMessage } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
 import { paths } from '../../routes/paths';
 import type { ExecutorPermissionMode } from '@interlock/core';
+import {
+  harnessLabel,
+  isAvailableHarness,
+  isPrimaryHarness,
+} from './harnessProfiles';
 import { ModelSettings } from './ModelSettings';
 import {
   permissionLabels,
@@ -88,23 +93,28 @@ export function ExecutorSelect({
         <option value="__manual">
           {workflowSettings ? 'No default harness' : 'Connected agent'}
         </option>
-        {profiles?.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-            {!p.enabled ? ' · disabled' : ''}
-          </option>
-        ))}
+        {profiles
+          ?.filter(
+            (p) =>
+              p.id === value || (isPrimaryHarness(p) && isAvailableHarness(p)),
+          )
+          .map((p) => (
+            <option key={p.id} value={p.id}>
+              {harnessLabel(p)}
+              {!p.enabled ? ' · disabled' : ''}
+            </option>
+          ))}
         {value && !profiles?.some((p) => p.id === value) && (
           <option value={value}>{value} · not configured</option>
         )}
       </NativeSelect>
       <p className="hint">
         {value
-          ? 'Default harness for managed work. A model alias can select a different harness.'
+          ? 'Default harness for managed work. A agent preset can select a different harness.'
           : inherit !== undefined && value === undefined
-            ? 'Uses the workflow’s harness and model defaults. A model alias can select a different harness.'
+            ? 'Uses the workflow’s harness and model defaults. A agent preset can select a different harness.'
             : workflowSettings
-              ? 'A model alias can select a harness. Otherwise, a connected agent picks up the assignment.'
+              ? 'A agent preset can select a harness. Otherwise, a connected agent picks up the assignment.'
               : 'An agent connected through MCP picks up the assignment.'}{' '}
         <a
           href={`${paths.harnesses}#harnesses`}

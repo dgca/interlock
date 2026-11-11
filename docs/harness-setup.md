@@ -9,11 +9,9 @@ A harness configuration lets Interlock launch assignments through installed Clau
 
 ## Configure automatic execution
 
-Open **AI Settings → Harnesses**. Choose **Configure** on a detected configuration, or **Add configuration** for another one. Detection checks the executable and its version; it does not verify authentication or model access.
+Open **AI Settings → Harnesses**. Choose **Edit defaults** to expand a harness row. Set the default model, thinking effort, and permissions. In **Advanced settings**, set the working directory or executable path if needed. Save the defaults, then enable the harness once it is detected. Detection checks the executable and its version. Authentication and model access are checked when the harness runs.
 
-Set the working directory for the project and choose a default model, or retain **Use CLI default**. Select **Read only**, **Standard**, or **Full access** permissions as appropriate. Full access allows file changes and commands without routine approval stops. Save and enable the configuration. New configurations start disabled.
-
-In the workflow's settings, select the configuration as **Default Agent executor**. An individual Agent step can inherit that choice or use another executor. Save the draft and publish before starting a new run.
+Choose the harness in **Workflow settings → Default Agent executor** or in an Agent node's **Execution → Executor**. Use **Add integration** for a custom harness. For reusable model settings or ordered fallbacks, [create an Agent preset](managed-executors.md#model-aliases). Save the draft and publish before starting a new run.
 
 ## Follow the work
 

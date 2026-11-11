@@ -223,7 +223,7 @@ export function ModelPicker({
             }}
           >
             {value && alias
-              ? `${alias.name} · model alias`
+              ? `${alias.name} · agent preset`
               : (selected?.name ?? value ?? defaultLabel)}
           </InputBase>
         </Combobox.Target>
@@ -258,7 +258,7 @@ export function ModelPicker({
                 </Combobox.Option>
               )}
             {allowAliases && (
-              <Combobox.Group label="Model aliases">
+              <Combobox.Group label="Agent presets">
                 {aliasChoices.map((item) => (
                   <Combobox.Option key={item.id} value={`alias:${item.id}`}>
                     <Text size="sm">{item.name}</Text>
@@ -298,7 +298,7 @@ export function ModelPicker({
                 </Combobox.Option>
               )}
             {allowAliases && !aliases && !aliasError && (
-              <Combobox.Empty>Loading model aliases…</Combobox.Empty>
+              <Combobox.Empty>Loading agent presets…</Combobox.Empty>
             )}
             {aliases?.truncated && (
               <Combobox.Empty>
@@ -333,7 +333,7 @@ export function ModelPicker({
       )}
       {allowAliases && (aliasError || referenceError) && (
         <Text size="xs" c="red" role="alert">
-          Model aliases could not be loaded. {aliasError || referenceError}{' '}
+          Agent presets could not be loaded. {aliasError || referenceError}{' '}
           <Button variant="ghost" onClick={() => setAliasReload((n) => n + 1)}>
             Retry aliases
           </Button>

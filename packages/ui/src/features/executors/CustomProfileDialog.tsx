@@ -237,6 +237,8 @@ export function CustomProfileDialog({
         mode,
         transport,
         permissions,
+        model: profile?.model,
+        effort: profile?.effort,
         ...(concurrency === '' ? {} : { concurrency: Number(concurrency) }),
         ...(timeoutSeconds !== ''
           ? { timeoutSeconds: Number(timeoutSeconds) }
@@ -384,25 +386,29 @@ export function CustomProfileDialog({
                   }
                   placeholder="Optional (e.g. 120)"
                 />
-                <NativeSelect
-                  label="Default Permissions"
-                  value={permissions}
-                  onChange={(e) => setPermissions(e.currentTarget.value as any)}
-                  data={[
-                    {
-                      label: 'Standard (Interlock tool approval policy)',
-                      value: 'standard',
-                    },
-                    {
-                      label: 'Read-only (deny file/env mutations)',
-                      value: 'read-only',
-                    },
-                    {
-                      label: 'Full Access (autonomous mode)',
-                      value: 'full-access',
-                    },
-                  ]}
-                />
+                {isNew && (
+                  <NativeSelect
+                    label="Default Permissions"
+                    value={permissions}
+                    onChange={(e) =>
+                      setPermissions(e.currentTarget.value as any)
+                    }
+                    data={[
+                      {
+                        label: 'Standard (Interlock tool approval policy)',
+                        value: 'standard',
+                      },
+                      {
+                        label: 'Read-only (deny file/env mutations)',
+                        value: 'read-only',
+                      },
+                      {
+                        label: 'Full Access (autonomous mode)',
+                        value: 'full-access',
+                      },
+                    ]}
+                  />
+                )}
               </div>
 
               <KeyValueEditor

@@ -51,6 +51,7 @@ type ManagedAssignment = Pick<
   | 'executorModelSource'
   | 'executorEffort'
   | 'executorPermissions'
+  | 'executorPermissionsSource'
 > & {
   context: Pick<WorkRequest['context'], 'continuityGroup' | 'tools' | 'skills'>;
   trialEnvironment?: { id: string };
@@ -116,7 +117,7 @@ interface Session {
   id: string;
   runId: string;
   profile: ExecutorProfile;
-  permissionSource?: 'workflow' | 'harness';
+  permissionSource?: ManagedExecution['permissionSource'];
   modelSource?: ManagedExecution['modelSource'];
   effortSource?: ManagedExecution['effortSource'];
   command: string;
@@ -244,6 +245,20 @@ export class ExecutorManager {
       ...defaults.filter((d) => !stored.some((p) => p.id === d.id)),
       ...stored,
     ];
+  }
+  availableProfile(profile: ExecutorProfile | undefined) {
+    if (!profile?.enabled) return;
+    if (!this.running) return profile;
+    const adapter = this.adapters.get(profile.harness);
+    if (!adapter || adapter.available?.(profile.command) === false) return;
+    const checked = this.detections.get(this.detectionKey(profile));
+    if (
+      checked &&
+      Date.now() - checked.at < 30000 &&
+      checked.result.status !== 'detected'
+    )
+      return;
+    return profile;
   }
   settings() {
     const stored = this.engine.store.get<{
@@ -486,8 +501,11 @@ export class ExecutorManager {
       this.modelRequests.delete(key);
     }
   }
+  private detectionKey(profile: ExecutorProfile) {
+    return `${profile.id}:${profile.revision}:${profile.command ?? ''}`;
+  }
   private async detect(profile: ExecutorProfile, refresh = false) {
-    const key = `${profile.id}:${profile.revision}:${profile.command ?? ''}`;
+    const key = this.detectionKey(profile);
     const cached = this.detections.get(key);
     if (!refresh && cached && Date.now() - cached.at < 30000)
       return cached.result;
@@ -703,6 +721,12 @@ export class ExecutorManager {
     };
   }
   private continuityProblem(work: ManagedAssignment, session: Session) {
+    if (
+      work.executorPermissionsSource !== undefined &&
+      work.executorPermissions !== undefined &&
+      work.executorPermissions !== session.profile.permissions
+    )
+      return 'This continuity group already uses different permissions. Use the same permissions or a separate continuity group.';
     if (
       work.executorModel !== undefined &&
       (session.requestedModel !== undefined ||
@@ -1189,7 +1213,14 @@ export class ExecutorManager {
           try {
             this.pendingLaunches.set(offered.id, configured.id);
             try {
-              await this.launchCustom(offered, configured, cwd, logicalSession);
+              await this.launchCustom(
+                offered,
+                offered.executorPermissionsSource !== undefined
+                  ? this.assignmentProfile(offered, configured)
+                  : configured,
+                cwd,
+                logicalSession,
+              );
             } finally {
               this.pendingLaunches.delete(offered.id);
             }
@@ -1255,6 +1286,7 @@ export class ExecutorManager {
         const permissionSource =
           priorSession?.permissionSource ??
           previous?.permissionSource ??
+          offered.executorPermissionsSource ??
           (offered.executorPermissions
             ? ('workflow' as const)
             : ('harness' as const));
@@ -1546,7 +1578,7 @@ export class ExecutorManager {
       attempt: work.attempt,
       state: 'starting',
       profile,
-      permissionSource: 'harness',
+      permissionSource: work.executorPermissionsSource ?? 'harness',
       command: profile.launchCommand || profile.command || 'launch',
       cwd,
       sessionId: logicalSession,
