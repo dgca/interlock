@@ -21,7 +21,7 @@ Saved prompt sections precede the node's task instructions. The existing Context
 
 Editing a saved prompt changes the guidance used by future runs of workflows that capture current revisions. Publish-pinned versions keep their selected revisions. Published definitions keep the same prompt IDs.
 
-Each workflow run captures current content when it starts, or the selected published revisions when prompt pinning is enabled. Later Agent steps, loops, Batch items, claim recovery, retries, and server restart keep that content. A Workflow node starts a separate run that captures current instructions at its own startup, subject to its published prompt pins. A parent and child can use different revisions if a prompt changes between their start times. Detached workflows follow the same rule.
+Each workflow invocation captures current content when it starts, or the selected published revisions when prompt pinning is enabled. Later Agent steps, loops, claim recovery, retries, and server restart keep that content. Batch items and Parallel branches inherit it. A Workflow node starts a separate run that captures current instructions at its own startup, subject to its published prompt pins. A parent and child can use different revisions if a prompt changes between their start times. Detached workflows follow the same rule.
 
 ### Opt-in prompt pinning at publish
 

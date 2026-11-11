@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   definitionSchema,
-  jsonSchema,
+  authoringJsonSchema,
   nodeSchema,
   type WorkflowDefinition,
 } from './index.js';
@@ -17,19 +17,25 @@ export interface DraftChanges {
   settings: string[];
 }
 const fields = {
-  set: z.record(z.lazy(() => jsonSchema)).default({}),
+  set: z.record(z.lazy(() => authoringJsonSchema)).default({}),
   unset: z.array(z.string().min(1)).default([]),
 };
 export const workflowEditSchema = z.discriminatedUnion('op', [
   z
-    .object({ op: z.literal('add_node'), node: z.lazy(() => jsonSchema) })
+    .object({
+      op: z.literal('add_node'),
+      node: z.lazy(() => authoringJsonSchema),
+    })
     .strict(),
   z
     .object({ op: z.literal('update_node'), id: z.string().min(1), ...fields })
     .strict(),
   z.object({ op: z.literal('remove_node'), id: z.string().min(1) }).strict(),
   z
-    .object({ op: z.literal('add_edge'), edge: z.lazy(() => jsonSchema) })
+    .object({
+      op: z.literal('add_edge'),
+      edge: z.lazy(() => authoringJsonSchema),
+    })
     .strict(),
   z
     .object({ op: z.literal('update_edge'), id: z.string().min(1), ...fields })
@@ -38,7 +44,7 @@ export const workflowEditSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('update_settings'), ...fields }).strict(),
 ]);
 export const workflowEditsSchema = z
-  .array(z.lazy(() => jsonSchema))
+  .array(z.lazy(() => authoringJsonSchema))
   .max(100)
   .describe(
     'Ordered list, at most 100 edits. Each edit has op: add_node with node; update_node with id, set and optional unset; remove_node with id; add_edge with edge; update_edge with id, set and optional unset; remove_edge with id; or update_settings with set and optional unset. Updates replace named fields shallowly. IDs and node kinds cannot change. Settings include cwd, pinPromptsAtPublish, unclaimedStallMs, claimedIdleStallMs, humanWaitStallMs, runStallMs, idleRecovery, inputSchema, outputSchema, maxSteps, maxActiveRuns, excludeStages, executor, agentPermissions, agentModel, agentEffort, continueOnMissingResult, transientRetry, sessionNameTemplate. Agent model/effort override workflow defaults. agentModel/agentEffort set workflow defaults; omission inherits harness settings. Null effort uses native defaults. executor is a local profile reference. agentPermissions overrides managed Agent defaults with read-only, standard or full-access; unset inherits each harness default. Unknown fields reject the indexed operation. Node/edge objects use the workflow definition format. Added scripts default to JavaScript; existing omitted language retains Bash.',
@@ -196,7 +202,10 @@ export function applyWorkflowEdits(
           while (size !== removed.size) {
             size = removed.size;
             for (const node of definition.nodes)
-              if (node.batchId && removed.has(node.batchId))
+              if (
+                (node.batchId && removed.has(node.batchId)) ||
+                (node.parallelId && removed.has(node.parallelId))
+              )
                 removed.add(node.id);
           }
           definition.nodes = definition.nodes.filter((n) => !removed.has(n.id));

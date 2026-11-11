@@ -29,7 +29,13 @@ export function reduceCrossings(
   for (const edge of edges) {
     const source = index.get(edge.source),
       target = index.get(edge.target);
-    if (!source || !target || edge.targetHandle === 'end') continue;
+    if (
+      !source ||
+      !target ||
+      edge.targetHandle === 'end' ||
+      edge.targetHandle === 'join'
+    )
+      continue;
     if (source.position.x + size(source).width >= target.position.x) continue;
     routes.push({ source, target, port: edge.port });
   }
@@ -46,7 +52,9 @@ export function reduceCrossings(
         x2: target.position.x,
         y2:
           target.position.y +
-          (target.kind === 'batch' ? 32 : size(target).height / 2),
+          (target.kind === 'batch' || target.kind === 'parallel'
+            ? 32
+            : size(target).height / 2),
       };
     });
   // Only edge pairs incident to the swapped nodes can change their crossing count.

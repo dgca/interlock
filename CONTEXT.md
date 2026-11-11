@@ -14,7 +14,7 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Draft**: An editable workflow definition that has not been published as a version.
 
-**Run**: One execution of a published workflow or a Batch item path with its own inputs and progress.
+**Run**: One execution of a published workflow, Batch item path, or Parallel branch with its own inputs and progress.
 
 **Detached run**: A workflow execution that continues independently after its initiating run finishes, fails, or is cancelled. It retains its parent link for inspection.
 
@@ -45,6 +45,12 @@ Interlock defines repeatable procedures that agents and people can execute and i
 **Batch**: A step that repeats an item path for each value in a list and sends the ordered results to its continuation after all items finish.
 
 **Item path**: The connected work inside a Batch group, from Start to End. Each item follows this path independently and supplies its output through End.
+
+**Parallel group**: A step that starts named paths from the same input and sends their collected results to its continuation once they all succeed.
+
+**Parallel branch**: One named path in a Parallel group, with its own execution history and one result.
+
+**Join**: The boundary where a Parallel group collects the results of its branches for one visit. The group forwards an object keyed by branch name.
 
 **Node execution**: One invocation of a node within a run, recording the published version that governed it.
 

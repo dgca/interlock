@@ -160,7 +160,7 @@ Existing workflows can be adopted, reparented or released through MCP while pres
 
 ### Follow an execution
 
-Open **Runs** to find active executions and past results. The live view shows step states and Batch item counts. Select a Batch child step, then an item, to inspect that item's input, output, and errors.
+Open **Runs** to find active executions and past results. The live view shows step states and progress for Batch items and Parallel paths. Select a Parallel step in the timeline to expand its paths and inspect their steps in place.
 
 Starting a workflow with connected-agent execution does not launch an agent. When an assignment is ready, select **Copy instructions for agent** and paste the instructions into a connected agent conversation. The instructions resume the existing execution. **Waiting for an agent** means work is available; **Agent working** means an executor has claimed it.
 
@@ -188,9 +188,11 @@ In Agent settings, enable **Route on unclaimed timeout** and set **If unclaimed 
 
 For a three-day reminder loop, route Timeout to a Script that sends the reminder and returns the original input fields with an incremented reminder count. Use a Condition to exit after the desired number or route back to the Agent. Fetch returns its HTTP response, so a Fetch-based reminder path must restore the request fields and counter before returning to the Agent. Each visit consumes a step; elapsed waiting time does not. See [timer configuration and execution rules](docs/timers.md).
 
+Use a [Parallel group](docs/parallel.md) to run different named paths from the same input. Join returns results by name after every branch succeeds. Retry a failed group from its parent run to keep successful branches.
+
 Workflow-level routes can loop back to an upstream node other than Entry. The same run re-executes that node, bounded by `maxSteps`. Batch item paths must be acyclic and reach their owning Batch's End handle.
 
-`maxSteps` allows 2 through 1000 steps per run and defaults to 100. Entry, Exit, and every node visit count, including explicit retries that create a new execution. A Batch counts once in its parent; each item has its own budget. For example, 200 items with three steps each fit a three-step item budget, with a separate three-step parent path of Entry → Batch → Exit. The independent Batch `maxItems` limit defaults to 200.
+`maxSteps` allows 2 through 1000 steps per run and defaults to 100. Entry, Exit, and every node visit count, including explicit retries that create a new execution. A Parallel group and its branch steps share the parent limit. A Batch counts once in its parent; each item has its own budget. For example, 200 items with three steps each fit a three-step item budget, with a separate three-step parent path of Entry → Batch → Exit. The independent Batch `maxItems` limit defaults to 200.
 
 Run versions stay pinned by default. Opt into [compatible version upgrades](docs/workflow-execution.md#move-a-run-to-a-newer-version) to apply new publications before new steps. Explicit moves preview compatibility blockers and retain timestamped reasons; captured assignments finish under their original definition.
 

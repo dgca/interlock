@@ -2,7 +2,7 @@
 
 Set `context.continuityGroup` on Agent nodes that should use the same executor session, such as specification, planning, and implementation. Use `context.mode: "current"` (the default). A fresh-context node cannot belong to a group: the editor can save that draft, but publication rejects it. Leave fresh reviewers outside the author group.
 
-A group belongs to one exact run ID. Its binding survives phases, loop visits, claim failures, lease expiry, explicit failed-step retry, and server restart. Separate root runs, invoked workflows, detached runs, and each Batch item have independent groups, even when their group names match. No child inherits a parent's session. A harness can explicitly declare the same identity elsewhere, but Interlock never chooses or copies it across runs.
+A group belongs to one exact run ID. Its binding survives phases, loop visits, claim failures, lease expiry, explicit failed-step retry, and server restart. Separate root runs, invoked workflows, detached runs, Batch items, and Parallel branches have independent groups, even when their group names match. No child inherits a parent's session. A harness can explicitly declare the same identity elsewhere, but Interlock never chooses or copies it across runs.
 
 Group names are trimmed, case-sensitive strings of 1–128 characters. Executor and session IDs are trimmed, case-sensitive opaque strings of 1–200 characters. Use stable harness identities, not claim tokens or secrets. The worker ID identifies the claimant; changing it does not replace the session.
 

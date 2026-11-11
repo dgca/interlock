@@ -19,6 +19,7 @@ import { Download, Plus, Trash2 } from 'lucide-react';
 import {
   nodeSchema,
   outgoingPorts,
+  parallelBranchPort,
   type Workflow,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -35,8 +36,14 @@ import { NodeInspector } from './NodeInspector';
 import { nodeDescriptions } from './nodeDescriptions';
 import type { NodeSectionName } from './NodeSettingsSections';
 import { api, download } from '../../lib/api';
-import { newNodePosition, separateNodes } from '@interlock/core/layout';
+import {
+  CANVAS_GAP,
+  canvasGeometry,
+  newNodePosition,
+  separateNodes,
+} from '@interlock/core/layout';
 import styles from './SettingsDialog.module.css';
+import { parallelTail, withParallelReturns } from './parallelReturns';
 
 export type Settings = {
   name: string;
@@ -47,6 +54,7 @@ export function SettingsDialog({
   node,
   creating = false,
   parentBatchId,
+  parentParallel,
   name,
   description,
   definition,
@@ -73,6 +81,7 @@ export function SettingsDialog({
   node?: WorkflowNode;
   creating?: boolean;
   parentBatchId?: string;
+  parentParallel?: { parallelId: string; parallelBranchId: string };
   workflows: Workflow[];
   prompts?: import('@interlock/core').SavedPrompt[];
   onClose: () => void;
@@ -82,6 +91,15 @@ export function SettingsDialog({
   const [settings, setSettings] = useState(() =>
     structuredClone({ name, description, definition }),
   );
+  const parallelGroup =
+    parentParallel &&
+    definition.nodes.find((n) => n.id === parentParallel.parallelId);
+  const pathName =
+    parallelGroup?.kind === 'parallel'
+      ? parallelGroup.branches.find(
+          (path) => path.id === parentParallel?.parallelBranchId,
+        )?.key
+      : undefined;
   const [newNodeId] = useState(() => crypto.randomUUID());
   const [nodeDraft, setNodeDraft] = useState(() =>
     node
@@ -91,6 +109,7 @@ export function SettingsDialog({
             id: newNodeId,
             kind: 'agent',
             batchId: parentBatchId,
+            ...parentParallel,
             label: 'New agent',
             prompt: 'Describe the assignment.',
           })
@@ -113,12 +132,22 @@ export function SettingsDialog({
           id: newNodeId,
           kind,
           batchId: parentBatchId,
+          ...parentParallel,
           label:
             kind === 'switch'
               ? 'New branch'
               : kind === 'batch'
                 ? 'Batch'
-                : `New ${kind}`,
+                : kind === 'parallel'
+                  ? 'Parallel'
+                  : `New ${kind}`,
+          branches:
+            kind === 'parallel'
+              ? [
+                  { id: crypto.randomUUID(), key: 'branch-1' },
+                  { id: crypto.randomUUID(), key: 'branch-2' },
+                ]
+              : undefined,
           prompt: 'Describe the assignment.',
           url: '',
           language: 'javascript',
@@ -190,24 +219,65 @@ export function SettingsDialog({
         }
         if (creating)
           parsed.position = newNodePosition(settings.definition, parsed);
+        const current =
+          creating && parentParallel
+            ? withParallelReturns(settings.definition)
+            : settings.definition;
+        const tail =
+          creating && parentParallel
+            ? parallelTail(
+                current,
+                parentParallel.parallelId,
+                parentParallel.parallelBranchId,
+              )
+            : undefined;
+        if (tail) {
+          const geometry = canvasGeometry(current);
+          const source = geometry.index.get(tail.source)!;
+          const origin = geometry.position(source);
+          parsed.position = {
+            x: Math.max(
+              parsed.position.x,
+              origin.x + geometry.size(source).width + CANVAS_GAP,
+            ),
+            y: origin.y,
+          };
+        }
+        const start =
+          parsed.parallelId && parsed.parallelBranchId
+            ? {
+                source: parsed.parallelId,
+                port: parallelBranchPort(parsed.parallelBranchId),
+              }
+            : parsed.batchId
+              ? { source: parsed.batchId, port: 'item' }
+              : undefined;
         const nextDefinition = {
-          ...settings.definition,
-          edges:
-            creating &&
-            parsed.batchId &&
-            !settings.definition.edges.some(
-              (e) => e.source === parsed.batchId && e.port === 'item',
-            )
+          ...current,
+          edges: tail
+            ? current.edges.map((edge) =>
+                edge.id === tail.id
+                  ? {
+                      ...edge,
+                      target: parsed.id,
+                      targetHandle: 'default' as const,
+                    }
+                  : edge,
+              )
+            : creating &&
+                start &&
+                !current.edges.some(
+                  (e) => e.source === start.source && e.port === start.port,
+                )
               ? [
-                  ...settings.definition.edges,
+                  ...current.edges,
                   {
                     id: crypto.randomUUID(),
-                    source: parsed.batchId,
-                    port: 'item' as const,
+                    ...start,
                     target: parsed.id,
                   },
                 ]
-              : settings.definition.edges.filter(
+              : current.edges.filter(
                   (e) =>
                     e.source !== parsed.id ||
                     !node ||
@@ -220,9 +290,12 @@ export function SettingsDialog({
                 n.id === parsed.id ? parsed : n,
               ),
         };
+        const withReturns = parsed.parallelId
+          ? withParallelReturns(nextDefinition)
+          : nextDefinition;
         const next = {
           ...settings,
-          definition: creating ? separateNodes(nextDefinition) : nextDefinition,
+          definition: creating ? separateNodes(withReturns) : withReturns,
         };
         if (
           creating &&
@@ -253,7 +326,7 @@ export function SettingsDialog({
         ) : creating ? (
           <span className={styles.title}>
             <Plus size={18} aria-hidden="true" />
-            Add node
+            {pathName ? `Add node to ${pathName}` : 'Add node'}
           </span>
         ) : nodeDraft ? (
           nodeDraft.label
@@ -303,7 +376,10 @@ export function SettingsDialog({
                       <option value="input">External input</option>
                       <option value="switch">Branch</option>
                       <option value="workflow">Workflow</option>
-                      <option value="batch">Batch</option>
+                      {!parentParallel && <option value="batch">Batch</option>}
+                      {!parentParallel && !parentBatchId && (
+                        <option value="parallel">Parallel</option>
+                      )}
                     </NativeSelect>
                     {nodeDraft && (
                       <p className="hint">{nodeDescriptions[nodeDraft.kind]}</p>
@@ -454,7 +530,7 @@ export function SettingsDialog({
                     <TextInput
                       mb="md"
                       label="Maximum steps per run"
-                      description="Each Batch item has its own budget. Waiting uses one step, regardless of duration. Entry, Exit, and repeated visits count too."
+                      description="Parallel branch steps share this limit. Each Batch item has its own limit. Entry, Exit, and repeated visits count; waiting adds no steps."
                       type="number"
                       min={2}
                       max={1000}

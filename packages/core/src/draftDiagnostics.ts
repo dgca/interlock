@@ -20,6 +20,7 @@ import {
   type WorkflowNode,
 } from './index.js';
 import { structuralEqual } from './jsonEquality.js';
+import { sameExecutionScope, validateParallelScopes } from './parallel.js';
 export interface DraftDiagnostic {
   severity: 'error' | 'warning';
   category: 'save' | 'publication' | 'contract';
@@ -190,7 +191,9 @@ export function diagnoseDraft(input: unknown): {
       add(
         'incomplete_routes',
         `nodes.${i}`,
-        `Expected outgoing routes: ${ports.join(', ') || 'none'}.`,
+        n.kind === 'parallel'
+          ? 'Connect every branch start and Out exactly once.'
+          : `Expected outgoing routes: ${ports.join(', ') || 'none'}.`,
         { nodeId: n.id },
       );
     for (const [field, binding] of [
@@ -228,7 +231,7 @@ export function diagnoseDraft(input: unknown): {
             `${binding.source === 'execution' ? 'Execution' : 'Node'} binding requires an existing non-Entry/Exit node.`,
             { nodeId: n.id },
           );
-        else if (source.batchId !== n.batchId)
+        else if (!sameExecutionScope(source, n))
           add(
             'binding_scope',
             path,
@@ -253,6 +256,18 @@ export function diagnoseDraft(input: unknown): {
     add(
       'batch_scope',
       i >= 0 ? `nodes.${i}.batchId` : 'nodes',
+      message,
+      i >= 0 ? { nodeId: d.nodes[i].id } : {},
+    );
+  }
+  try {
+    validateParallelScopes(d);
+  } catch (error) {
+    const message = (error as Error).message;
+    const i = d.nodes.findIndex((n) => message.startsWith(`${n.label}:`));
+    add(
+      'parallel_scope',
+      i >= 0 ? `nodes.${i}` : 'nodes',
       message,
       i >= 0 ? { nodeId: d.nodes[i].id } : {},
     );
@@ -396,7 +411,10 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
     });
   const incoming = (node: WorkflowNode): Shape => {
     const edges = d.edges.filter(
-      (e) => e.target === node.id && e.targetHandle !== 'end',
+      (e) =>
+        e.target === node.id &&
+        e.targetHandle !== 'end' &&
+        e.targetHandle !== 'join',
     );
     const candidates = edges.map((e) => {
       const source = nodes.get(e.source);
@@ -426,14 +444,18 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
       const source = nodes.get(binding.nodeId);
       if (
         !source ||
-        source.batchId !== node.batchId ||
+        !sameExecutionScope(source, node) ||
         source.kind === 'entry' ||
         source.kind === 'exit'
       )
         return unknownShape();
       // Failed operations are not eligible for earlier-node output bindings.
       const candidates = (
-        hasFailureRoute(source) ? ['default'] : outgoingPorts(source)
+        source.kind === 'parallel'
+          ? ['complete']
+          : hasFailureRoute(source)
+            ? ['default']
+            : outgoingPorts(source)
       ).map((port) => output(source, port));
       const first = candidates[0];
       return first &&
@@ -447,7 +469,7 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
       const source = nodes.get(binding.nodeId);
       if (
         !source ||
-        source.batchId !== node.batchId ||
+        !sameExecutionScope(source, node) ||
         source.kind === 'entry' ||
         source.kind === 'exit'
       )
@@ -529,6 +551,8 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
       result = shape(failureRouteContract(node.kind));
     else if (hasTimeoutRoute(node) && port === 'timeout')
       result = resolved(node);
+    else if (node.kind === 'parallel' && port.startsWith('branch:'))
+      result = resolved(node);
     else if (node.kind === 'batch' && port === 'item') {
       const list = atPath(resolved(node), node.itemsPath);
       result =
@@ -557,6 +581,7 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
     else if (Object.keys(node.outputSchema).length)
       result = shape(node.outputSchema);
     else if (node.kind === 'batch') result = shape({ type: 'array' });
+    else if (node.kind === 'parallel') result = shape({ type: 'object' });
     else result = unknownShape();
     visiting.delete(key);
     cache.set(key, result);
@@ -692,7 +717,10 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
       compare(resolved(node), node.inputSchema, node, `${base}.inputSchema`);
     } else {
       const incomingEdges = d.edges.filter(
-        (e) => e.target === node.id && e.targetHandle !== 'end',
+        (e) =>
+          e.target === node.id &&
+          e.targetHandle !== 'end' &&
+          e.targetHandle !== 'join',
       );
       if (incomingEdges.length > 1 && incoming(node).state === 'unknown')
         warn(

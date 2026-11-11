@@ -9,6 +9,7 @@ These files are explicit imports. New libraries start empty; bundled SDLC and ev
 | [local-git-trial.json](local-git-trial.json) | Local Git trial example      | Reviewed local Script for independent comparison workspaces. See [managed Git trials](../docs/local-git-trials.md).                       |
 | [evaluate.json](evaluate.json)               | Evaluate workflow comparison | Grade retained artifacts using a fixed rubric and record resumable receipts. See [workflow evaluation](../docs/workflow-evaluation.md).   |
 | [improve.json](improve.json)                 | Improve one workflow prompt  | One bounded experiment and adoption proposal, with a pinned owned evaluator. See [workflow improvement](../docs/workflow-improvement.md). |
+| [parallel-checks.json](parallel-checks.json) | Parallel checks (demo)       | Count checks and look for a test check in parallel. See [Parallel groups](../docs/parallel.md).                                           |
 
 ## Import from GitHub
 
@@ -23,8 +24,8 @@ Importing does not start a run. The demo imports as a draft with a published own
 
 ## Inspect the demo
 
-The demo covers Entry, Exit, Agent, Script, Fetch, Wait, Condition, Switch, Workflow, and Batch. It includes JavaScript and Bash scripts, duration and timestamp waits, a polling check with a timeout, an unclaimed Agent timeout, and both Workflow execution modes. Contracts and earlier-node bindings populate the editors with representative settings.
+The demo covers Entry, Exit, Agent, Script, Fetch, Wait, Condition, Switch, Workflow, Batch, and Parallel. It includes JavaScript and Bash scripts, duration and timestamp waits, a polling check with a timeout, an unclaimed Agent timeout, and both Workflow execution modes. Contracts and earlier-node bindings populate the editors with representative settings.
 
-Viewing editors requires no execution. If you choose to publish and run the demo, `{}` is a sample input. It fetches `https://example.com/`, formats fictional crew badges, and offers an agent a briefing assignment. An automatic briefing is used if nobody claims it within 15 seconds. Claiming stops that timeout. No files are written by the example scripts.
+Viewing editors requires no execution. If you choose to publish and run the demo, `{}` is a sample input. It fetches `https://example.com/`, formats and checks fictional crew badges, and offers an agent a briefing assignment. An automatic briefing is used if nobody claims it within 15 seconds. Claiming stops that timeout. No files are written by the example scripts.
 
 When node types or editor modes change, update this demo in the same file and check its coverage against `nodeSchema` in `packages/core/src/index.ts`. Keep its owned helper and Workflow pins in the bundle.

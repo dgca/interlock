@@ -31,7 +31,7 @@ A deliberate new attempt uses a new key. The default active-task policy allows c
 
 ## Queue starts until capacity is available
 
-A workflow definition can set `maxActiveRuns` to a positive whole number and `excludeStages` to at most 100 stage names. Each queued run uses its captured published settings. Active, admitted runs of the same workflow count across versions, except Batch item runs and runs currently in an excluded projected stage. Invoked workflows, comparison roots, and continue-as-new successors have their own admission. Batch items share their parent slot.
+A workflow definition can set `maxActiveRuns` to a positive whole number and `excludeStages` to at most 100 stage names. Each queued run uses its captured published settings. Active, admitted runs of the same workflow count across versions, except runs in an excluded projected stage. Batch items and Parallel branches share their parent run's slot and do not count separately. Invoked workflows, comparison roots, and continue-as-new successors have their own admission.
 
 A start beyond capacity is accepted with status `queued`. Its captures, startup budget, and receipt persist before any node executes. Full inspection exposes `admission`, including `queuedAt`, `priority`, one-based `position`, pinned dependency references, and bounded `blockers`. Summary and briefing `waiting.kind` is `admission_queue`; `waiting.detail` includes position, priority, and blockers. Queued runs appear in Active, can be cancelled, and cannot be claimed before promotion. Use the existing run ID and change cursor to wait for admission.
 
@@ -113,7 +113,7 @@ The task filter requires its exact system and ID, without the URL. Existing stat
 
 Optional `tags` stores non-secret `Record<string, string>` metadata separately from workflow input. It accepts at most 16 entries. Keys contain 1 through 64 characters, and values contain 0 through 64 characters. Keys and values are exact and case-sensitive, without trimming. Empty values are valid. Tags participate in the start fingerprint, including the distinction between omitted tags and an explicit empty object. Property order does not affect identity.
 
-Runs capture tags when created. An active-task `reuse` result keeps the existing run's tags. Retrying a step preserves them. Workflow invocations, detached children, Batch items, and continue-as-new successors inherit the initiating run's tags. They do not change task ownership or acquire a start request key. Event handlers use their trigger's configured tags; source tags remain available in the event input.
+Runs capture tags when created. An active-task `reuse` result keeps the existing run's tags. Retrying a step preserves them. Workflow invocations, detached children, Batch items, Parallel branches, and continue-as-new successors inherit the initiating run's tags. They do not change task ownership or acquire a start request key. Event handlers use their trigger's configured tags; source tags remain available in the event input.
 
 MCP `list_runs`, shared `runs.find`, and the paginated `runs.summaries` query accept `tags` with the same bounds. Every supplied pair must match. Missing keys and different values do not match; an empty filter imposes no restriction. SQLite indexes tag key/value pairs before applying ordering and pagination. Tags appear on run summaries, full inspection, compact mutations, and briefing run metadata. The Runs UI provides the same exact-pair filter.
 

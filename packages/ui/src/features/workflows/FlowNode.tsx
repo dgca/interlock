@@ -22,10 +22,12 @@ import {
   Clock,
   Inbox,
   CircleMinus,
+  Plus,
 } from 'lucide-react';
 import {
   nodeKindLabel,
   outgoingPorts,
+  parallelBranchPort,
   hasFailureRoute,
   hasTimeoutRoute,
   STARTED_RUN_SCHEMA,
@@ -34,7 +36,8 @@ import {
 import styles from './WorkflowEditor.module.css';
 import { formatDuration } from './DurationInput';
 import { conditionColors } from './conditionColors';
-import { outputPortTop } from '@interlock/core/layout';
+import { outputPortTop, type ParallelLane } from '@interlock/core/layout';
+import { parallelEndHandle } from './parallelReturns';
 export type CanvasNode = Node<{
   node: WorkflowNode;
   status?: string;
@@ -55,10 +58,13 @@ export type CanvasNode = Node<{
   targetName?: string;
   ownedTarget?: boolean;
   onAdd?: () => void;
+  onAddBranch?: (branchId: string) => void;
   onToggle?: () => void;
   collapsed?: boolean;
   /** `source:<port>` / `target:<handle>` keys of ports whose edge is selected or highlighted. */
   activePorts?: string[];
+  connectionPorts?: string[];
+  parallelLanes?: (ParallelLane & { startTop: number; endTop: number })[];
 }>;
 const icons = {
   entry: ArrowUpFromLine,
@@ -71,6 +77,7 @@ const icons = {
   condition: Split,
   switch: Split,
   batch: Layers,
+  parallel: Split,
   workflow: Workflow,
 };
 function contractLabel(schema: WorkflowNode['inputSchema']): string {
@@ -89,6 +96,7 @@ function contractLabel(schema: WorkflowNode['inputSchema']): string {
 }
 
 const ActivePorts = createContext<ReadonlySet<string>>(new Set());
+const ConnectionPorts = createContext<ReadonlySet<string>>(new Set());
 function Port({
   id,
   type,
@@ -104,6 +112,7 @@ function Port({
 }) {
   // The port whose edge is selected or highlighted lights up with it.
   const active = useContext(ActivePorts).has(`${type}:${id}`);
+  const connectable = useContext(ConnectionPorts).has(`${type}:${id}`);
   return (
     <>
       <Handle
@@ -111,6 +120,7 @@ function Port({
         position={type === 'target' ? Position.Left : Position.Right}
         id={id}
         aria-label={label}
+        data-connect-target={connectable || undefined}
         style={{
           top,
           backgroundColor: color,
@@ -137,9 +147,15 @@ export function FlowNode(props: NodeProps<CanvasNode>) {
     () => new Set(props.data.activePorts ?? []),
     [props.data.activePorts],
   );
+  const targets = useMemo(
+    () => new Set(props.data.connectionPorts ?? []),
+    [props.data.connectionPorts],
+  );
   return (
     <ActivePorts.Provider value={active}>
-      <FlowNodeBody {...props} />
+      <ConnectionPorts.Provider value={targets}>
+        <FlowNodeBody {...props} />
+      </ConnectionPorts.Provider>
     </ActivePorts.Provider>
   );
 }
@@ -168,10 +184,15 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
   const n = data.node,
     Icon = icons[n.kind];
   const updateNodeInternals = useUpdateNodeInternals();
-  const portsKey = JSON.stringify(outgoingPorts(n));
+  const targets = useContext(ConnectionPorts);
+  const lanes = data.parallelLanes ?? [];
+  const portsKey = JSON.stringify([
+    outgoingPorts(n),
+    lanes.map(({ startTop, endTop }) => [startTop, endTop]),
+  ]);
   useEffect(() => {
     updateNodeInternals(n.id);
-  }, [n.id, portsKey, updateNodeInternals]);
+  }, [n.id, portsKey, data.collapsed, updateNodeInternals]);
   const boundary = data.boundarySchema ?? {};
   const inputSchema = n.inputSchema.type
     ? n.inputSchema
@@ -190,7 +211,7 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
           ? boundary
           : n.kind === 'batch'
             ? { type: 'array' }
-            : n.kind === 'fetch'
+            : n.kind === 'fetch' || n.kind === 'parallel'
               ? { type: 'object' }
               : n.kind === 'condition' ||
                   n.kind === 'switch' ||
@@ -279,14 +300,32 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
       )}
     </div>
   );
-  if (n.kind === 'batch')
+  if (n.kind === 'batch' || n.kind === 'parallel')
     return (
       <div
-        className={`${styles.batchGroup} ${progressClass} ${selected ? styles.nodeSelected : ''}`}
+        className={`${styles.batchGroup} ${n.kind === 'parallel' ? styles.parallelGroup : ''} ${progressClass} ${selected ? styles.nodeSelected : ''}`}
       >
-        <div className={`${styles.batchHeader} batch-drag`}>
-          <Layers size={17} />
-          <strong>{n.label}</strong>
+        <div
+          className={`${styles.batchHeader} ${n.kind === 'parallel' ? styles.parallelHeader : ''} batch-drag`}
+        >
+          <Icon size={17} />
+          {n.kind === 'parallel' ? (
+            <div className={styles.parallelTitle}>
+              <strong>{n.label}</strong>
+              <div className={styles.parallelSummary}>
+                {progress}
+                <small>
+                  {n.branches.length} branches
+                  {n.concurrency < n.branches.length
+                    ? ` · Up to ${n.concurrency} at once`
+                    : ''}
+                </small>
+                <small>{contracts}</small>
+              </div>
+            </div>
+          ) : (
+            <strong>{n.label}</strong>
+          )}
           {data.status && <span>{data.status}</span>}
           {data.onEdit && (
             <button className="nodrag nopan" onClick={data.onEdit}>
@@ -299,49 +338,125 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
             </button>
           )}
         </div>
-        <div className={styles.batchSummary}>
-          <div className={styles.nodeMetadata}>
-            {progress}
-            <small>
-              Each item runs independently · Up to {n.concurrency} at once
-            </small>
-            <small>{contracts}</small>
+        {n.kind === 'batch' && (
+          <div className={styles.batchSummary}>
+            <div className={styles.nodeMetadata}>
+              {progress}
+              <small>
+                Each item runs independently · Up to {n.concurrency} at once
+              </small>
+              <small>{contracts}</small>
+            </div>
+            {n.kind === 'batch' && data.onAdd && !data.collapsed && (
+              <button className="nodrag nopan" onClick={data.onAdd}>
+                Add step
+              </button>
+            )}
           </div>
-          {data.onAdd && !data.collapsed && (
-            <button className="nodrag nopan" onClick={data.onAdd}>
-              Add step
-            </button>
-          )}
-        </div>
+        )}
         {bindings}
-        {!data.collapsed && <span className={styles.batchStart}>Start</span>}
         <Port type="target" id="default" label="In" top={32} />
         <Port type="source" id="complete" label="Out" top={32} />
-        <Handle
-          type="source"
-          position={Position.Right}
-          id="item"
-          style={{
-            left: 32,
-            right: 'auto',
-            top: 218,
-            visibility: data.collapsed ? 'hidden' : 'visible',
-          }}
-          aria-label="Start"
-        />
-        {!data.collapsed && <span className={styles.batchEnd}>End</span>}
-        <Handle
-          type="target"
-          position={Position.Left}
-          id="end"
-          aria-label="End"
-          style={{
-            left: 'auto',
-            right: 32,
-            top: 218,
-            visibility: data.collapsed ? 'hidden' : 'visible',
-          }}
-        />
+        {n.kind === 'parallel' ? (
+          <>
+            {n.branches.map(({ id, key }, index) => {
+              const label = key.trim() || `Branch ${index + 1}`;
+              const lane = lanes[index];
+              if (!lane || data.collapsed) return null;
+              const port = parallelBranchPort(id);
+              return (
+                <div key={id}>
+                  <div
+                    className={styles.parallelLane}
+                    style={{ top: lane.top, height: lane.bottom - lane.top }}
+                    data-parallel-lane={id}
+                  >
+                    <div className={styles.parallelLaneHeader}>
+                      <strong title={label}>{label}</strong>
+                      {data.onAddBranch && (
+                        <button
+                          type="button"
+                          className="nodrag nopan"
+                          aria-label={`Add node to ${label}`}
+                          onDoubleClick={(event) => event.stopPropagation()}
+                          onClick={() => data.onAddBranch?.(id)}
+                        >
+                          <Plus size={12} aria-hidden="true" />
+                          Add node
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <span
+                    className={styles.batchStart}
+                    style={{ top: lane.startTop - 36 }}
+                  >
+                    Start
+                  </span>
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={port}
+                    aria-label={`Start ${label}`}
+                    data-connect-target={
+                      targets.has(`source:${port}`) || undefined
+                    }
+                    style={{
+                      left: 32,
+                      right: 'auto',
+                      top: lane.startTop,
+                    }}
+                  />
+                  <span
+                    className={styles.batchEnd}
+                    style={{ top: lane.endTop - 36 }}
+                  >
+                    End
+                  </span>
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={parallelEndHandle(id)}
+                    aria-label={`End ${label}`}
+                    isConnectable={false}
+                    style={{ left: 'auto', right: 32, top: lane.endTop }}
+                  />
+                </div>
+              );
+            })}
+          </>
+        ) : (
+          <>
+            {!data.collapsed && (
+              <span className={styles.batchStart}>Start</span>
+            )}
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="item"
+              style={{
+                left: 32,
+                right: 'auto',
+                top: 218,
+                visibility: data.collapsed ? 'hidden' : 'visible',
+              }}
+              aria-label="Start"
+            />
+            {!data.collapsed && <span className={styles.batchEnd}>End</span>}
+            <Handle
+              type="target"
+              position={Position.Left}
+              id="end"
+              aria-label="End"
+              style={{
+                left: 'auto',
+                right: 32,
+                top: 218,
+                visibility: data.collapsed ? 'hidden' : 'visible',
+              }}
+            />
+          </>
+        )}
       </div>
     );
   return (

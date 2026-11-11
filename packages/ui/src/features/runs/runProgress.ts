@@ -52,6 +52,7 @@ export function runProgress(
   definition: WorkflowDefinition | null,
   descendants: Run[],
   work: VisibleWork[],
+  parallelVisit?: NodeExecution,
 ) {
   const runs = new Map([run, ...descendants].map((value) => [value.id, value]));
   const stateOf = (owner: Run, execution?: NodeExecution): ProgressState => {
@@ -112,7 +113,22 @@ export function runProgress(
       })
       .join(' · ');
   const scopeCache = new Map<string, Run[]>();
+  const parallelExecution = (nodeId: string) =>
+    parallelVisit?.nodeId === nodeId ? parallelVisit : latest(run, nodeId);
   const scopes = (node: WorkflowNode): Run[] => {
+    if (node.parallelId) {
+      const matches = (candidate: Run) =>
+        candidate.parallelBranch?.nodeId === node.parallelId &&
+        candidate.parallelBranch?.id === node.parallelBranchId;
+      if (matches(run)) return [run];
+      return (parallelExecution(node.parallelId)?.childRunIds ?? []).flatMap(
+        (id) => {
+          const child = runs.get(id);
+          return child && matches(child) ? [child] : [];
+        },
+      );
+    }
+    if (run.parallelBranch) return [];
     if (node.batchId === run.batchNodeId) return [run];
     if (!node.batchId) return [];
     if (scopeCache.has(node.batchId)) return scopeCache.get(node.batchId)!;
@@ -130,7 +146,10 @@ export function runProgress(
   const nodes: Record<string, NodeProgress> = {};
   for (const node of definition?.nodes ?? []) {
     const items = scopes(node).map((owner, index) => {
-      const execution = latest(owner, node.id);
+      const execution =
+        node.kind === 'parallel' && owner.id === run.id
+          ? parallelExecution(node.id)
+          : latest(owner, node.id);
       return {
         run: owner,
         execution,
@@ -185,21 +204,33 @@ export function runProgress(
       items[0]?.execution?.port === 'timeout'
     )
       label = 'Timed out';
-    if (node.kind === 'batch' && items.some((item) => item.execution)) {
+    if (
+      (node.kind === 'batch' || node.kind === 'parallel') &&
+      items.some((item) => item.execution)
+    ) {
       const childStates: ProgressState[] = [];
       total = 0;
       let validInput = false;
       for (const item of items) {
         if (!item.execution) continue;
-        let selected;
-        try {
-          selected = readPath(item.execution.input, node.itemsPath);
-        } catch {
-          continue;
+        let size: number;
+        if (node.kind === 'parallel')
+          size =
+            item.execution.status === 'completed'
+              ? item.execution.childRunIds.length
+              : node.branches.length;
+        else {
+          let selected;
+          try {
+            selected = readPath(item.execution.input, node.itemsPath);
+          } catch {
+            continue;
+          }
+          if (!Array.isArray(selected)) continue;
+          size = selected.length;
         }
-        if (!Array.isArray(selected)) continue;
         validInput = true;
-        total += selected.length;
+        total += size;
         for (const id of item.execution.childRunIds) {
           const child = runs.get(id);
           if (child)
@@ -305,7 +336,7 @@ export function runProgress(
     detail:
       run.status === 'failed'
         ? run.error?.split('\n', 1)[0]?.slice(0, 240)
-        : current?.kind === 'batch'
+        : current?.kind === 'batch' || current?.kind === 'parallel'
           ? currentProgress?.label
           : current?.kind === 'wait' &&
               current.status === 'waiting' &&

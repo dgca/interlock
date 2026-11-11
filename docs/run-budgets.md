@@ -26,11 +26,11 @@ Choose at least one limit. Each maximum and warning threshold is a nonnegative s
 
 `scope` is required:
 
-| Scope       | Assignments counted and gated                                                                 |
-| ----------- | --------------------------------------------------------------------------------------------- |
-| `run`       | This run and its continue-as-new chain members                                                |
-| `lifecycle` | Chain members and ordinary descendants, including Batch items; stop at detached relationships |
-| `tree`      | Chain members and all descendants, including detached runs and their descendants              |
+| Scope       | Assignments counted and gated                                                                                       |
+| ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| `run`       | This run and its continue-as-new chain members                                                                      |
+| `lifecycle` | Chain members and ordinary descendants, including Batch items and Parallel branches; stop at detached relationships |
+| `tree`      | Chain members and all descendants, including detached runs and their descendants                                    |
 
 For [continue-as-new chains](continue-as-new.md), every scope includes the complete chain containing its anchor run. Policies installed on later members count earlier retained claims too. Successors never receive a fresh allowance.
 

@@ -13,8 +13,11 @@ import {
   BATCH_INSET,
   BATCH_SIZE,
   CANVAS_GAP,
+  PARALLEL_INSET,
+  parallelSize,
   bindingsHeight,
   canvasGeometry,
+  separateNodes,
 } from '@interlock/core/layout';
 
 const layered = {
@@ -52,14 +55,20 @@ export function elkGraph(definition: WorkflowDefinition): ElkNode {
       to = index.get(edge.target);
     if (!from || !to || from === to) continue;
     const container =
-      to.kind === 'batch' && parents.get(from.id) === to.id
-        ? edge.targetHandle === 'end'
+      (to.kind === 'batch' || to.kind === 'parallel') &&
+      parents.get(from.id) === to.id
+        ? edge.targetHandle === (to.kind === 'batch' ? 'end' : 'join')
           ? to.id
           : undefined
-        : from.kind === 'batch' && parents.get(to.id) === from.id
-          ? edge.port === 'item'
-            ? from.id
-            : undefined
+        : (from.kind === 'batch' || from.kind === 'parallel') &&
+            parents.get(to.id) === from.id
+          ? from.kind === 'batch'
+            ? edge.port === 'item'
+              ? from.id
+              : undefined
+            : edge.port.startsWith('branch:')
+              ? from.id
+              : undefined
           : parents.get(from.id) === parents.get(to.id)
             ? (parents.get(from.id) ?? rootScope)
             : undefined;
@@ -69,7 +78,13 @@ export function elkGraph(definition: WorkflowDefinition): ElkNode {
       id: JSON.stringify(['edge', edge.id]),
       sources: [source(from, edge.port)],
       targets: [
-        portId(to.id, 'target', edge.targetHandle === 'end' ? 'end' : 'in'),
+        portId(
+          to.id,
+          'target',
+          edge.targetHandle === 'end' || edge.targetHandle === 'join'
+            ? edge.targetHandle
+            : 'in',
+        ),
       ],
     });
     edges.set(container, list);
@@ -79,17 +94,26 @@ export function elkGraph(definition: WorkflowDefinition): ElkNode {
     const west =
       node.kind === 'batch'
         ? ['in', 'item']
-        : node.kind === 'entry'
-          ? []
-          : ['in'];
-    const east = node.kind === 'batch' ? ['complete', 'end'] : outputs(node);
+        : node.kind === 'parallel'
+          ? ['in', ...outputs(node).filter((port) => port !== 'complete')]
+          : node.kind === 'entry'
+            ? []
+            : ['in'];
+    const east =
+      node.kind === 'batch'
+        ? ['complete', 'end']
+        : node.kind === 'parallel'
+          ? ['complete', 'join']
+          : outputs(node);
     const port = (name: string, side: string, index: number): ElkPort => ({
       id: portId(
         node.id,
         (
           node.kind === 'batch'
             ? name === 'item' || name === 'complete'
-            : side === 'EAST'
+            : node.kind === 'parallel'
+              ? name === 'complete' || name.startsWith('branch:')
+              : side === 'EAST'
         )
           ? 'source'
           : 'target',
@@ -111,16 +135,22 @@ export function elkGraph(definition: WorkflowDefinition): ElkNode {
           ports: ports(node),
           layoutOptions: { 'elk.portConstraints': 'FIXED_ORDER' },
         };
-        if (node.kind !== 'batch') return { ...result, ...size(node) };
+        if (node.kind !== 'batch' && node.kind !== 'parallel')
+          return { ...result, ...size(node) };
         const bindings = bindingsHeight(node);
+        const inset = node.kind === 'parallel' ? PARALLEL_INSET : BATCH_INSET;
+        const minimum =
+          node.kind === 'parallel'
+            ? parallelSize(node.branches.length)
+            : BATCH_SIZE;
         return {
           ...result,
           layoutOptions: {
             ...result.layoutOptions,
             ...layered,
-            'elk.padding': `[top=${BATCH_INSET.top},left=${BATCH_INSET.left},bottom=${BATCH_INSET.bottom + bindings},right=${BATCH_INSET.right}]`,
+            'elk.padding': `[top=${inset.top},left=${inset.left},bottom=${inset.bottom + bindings},right=${inset.right}]`,
             'elk.nodeSize.constraints': 'MINIMUM_SIZE',
-            'elk.nodeSize.minimum': `(${BATCH_SIZE.width},${BATCH_SIZE.height + bindings})`,
+            'elk.nodeSize.minimum': `(${minimum.width},${minimum.height + bindings})`,
           },
           children: children(node.id),
           edges: edges.get(node.id) ?? [],
@@ -168,5 +198,7 @@ export async function tidyWorkflowElk(
     }
   };
   place(laid);
-  return result;
+  return result.nodes.some((node) => node.kind === 'parallel')
+    ? separateNodes(result)
+    : result;
 }

@@ -44,6 +44,7 @@ import {
   modelSelectionSchema,
   assignmentSizeQuerySchema,
   definitionSchema,
+  authoringJsonSchema,
   workflowLayoutInputSchema,
   draftLayoutSchema,
   workflowEditsSchema,
@@ -363,7 +364,7 @@ export const appRouter = t.router({
       )
       .mutation(({ ctx, input }) => importStarter(ctx.engine, input)),
     previewImport: p
-      .input(z.object({ document: jsonSchema }))
+      .input(z.object({ document: authoringJsonSchema }))
       .query(({ ctx, input }) => {
         const doc = parseImportDocument(input.document);
         if (doc.kind === 'legacy')
@@ -560,7 +561,10 @@ export const appRouter = t.router({
     validate: p
       .input(
         z
-          .object({ id: z.string(), definition: jsonSchema.optional() })
+          .object({
+            id: z.string(),
+            definition: authoringJsonSchema.optional(),
+          })
           .strict(),
       )
       .query(({ ctx, input }) =>

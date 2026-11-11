@@ -1,4 +1,5 @@
 import {
+  parallelBranchPort,
   type WorkflowDefinition,
   type WorkflowEdge,
   type WorkflowNode,
@@ -8,10 +9,17 @@ import type { Edge } from '@xyflow/react';
 import type { CanvasNode } from './FlowNode';
 import type { LoopEdgeData } from './LoopEdge';
 import type { OrthoEdgeData } from './OrthoEdge';
-import { CANVAS_GAP, canvasGeometry } from '@interlock/core/layout';
+import {
+  CANVAS_GAP,
+  NODE_SIZE,
+  PARALLEL_INSET,
+  PARALLEL_LANE_PADDING,
+  canvasGeometry,
+} from '@interlock/core/layout';
 import { bindingNodeIds, bindingNodes } from './inputBindings';
 import { outputPortTop } from '@interlock/core/layout';
 import styles from './WorkflowEditor.module.css';
+import { parallelEndHandle } from './parallelReturns';
 
 type Options = {
   workflows?: Workflow[];
@@ -22,6 +30,8 @@ type Options = {
   hovered?: string;
   onEdit?: (node: WorkflowNode) => void;
   onAdd?: (batchId: string) => void;
+  onAddBranch?: (parallelId: string, branchId: string) => void;
+  connectionPorts?: Map<string, string[]>;
   onToggle?: (batchId: string) => void;
   onFocusNode?: (nodeId: string) => void;
   status?: (nodeId: string) => string | undefined;
@@ -32,7 +42,7 @@ export function canvasGraph(
   definition: WorkflowDefinition,
   options: Options = {},
 ): { nodes: CanvasNode[]; edges: Edge[] } {
-  const { index, parents, size } = canvasGeometry(
+  const { index, parents, size, position, lanes, laneFor } = canvasGeometry(
     definition,
     options.collapsed,
   );
@@ -55,13 +65,23 @@ export function canvasGraph(
   };
   definition.nodes.forEach(add);
   const hiddenIds = new Set(ordered.filter(hidden).map((node) => node.id));
+  const returnHandle = (edge: WorkflowEdge) => {
+    if (edge.targetHandle !== 'join') return;
+    const source = index.get(edge.source);
+    const lane = source && source.parallelId === edge.target && laneFor(source);
+    return lane ? parallelEndHandle(lane.id) : undefined;
+  };
   const hiddenEdge = (edge: WorkflowDefinition['edges'][number]) =>
+    (edge.targetHandle === 'join' && !returnHandle(edge)) ||
     hiddenIds.has(edge.source) ||
     hiddenIds.has(edge.target) ||
     (index.get(edge.source)?.kind === 'batch' &&
       edge.port === 'item' &&
       Boolean(options.collapsed?.has(edge.source))) ||
-    (edge.targetHandle === 'end' &&
+    (index.get(edge.source)?.kind === 'parallel' &&
+      edge.port !== 'complete' &&
+      Boolean(options.collapsed?.has(edge.source))) ||
+    ((edge.targetHandle === 'end' || edge.targetHandle === 'join') &&
       Boolean(options.collapsed?.has(edge.target)));
   const selectedVisibleEdges = definition.edges.filter(
     (edge) =>
@@ -126,11 +146,27 @@ export function canvasGraph(
   const nodes: CanvasNode[] = ordered.map((node) => ({
     id: node.id,
     type: 'workflow',
-    position: node.position,
+    position: position(node),
     parentId: parents.get(node.id),
-    // Add step assigns membership; dragging across a border never changes it.
-    extent: parents.get(node.id) ? 'parent' : undefined,
-    dragHandle: node.kind === 'batch' ? '.batch-drag' : undefined,
+    extent: (() => {
+      const lane = laneFor(node);
+      const parent = parents.get(node.id);
+      return lane && parent !== undefined
+        ? [
+            [PARALLEL_INSET.left, lane.contentTop],
+            [
+              size(index.get(parent)!).width - PARALLEL_INSET.right,
+              lane.bottom - PARALLEL_LANE_PADDING,
+            ],
+          ]
+        : parent
+          ? 'parent'
+          : undefined;
+    })(),
+    dragHandle:
+      node.kind === 'batch' || node.kind === 'parallel'
+        ? '.batch-drag'
+        : undefined,
     ...size(node),
     style: size(node),
     hidden: hiddenIds.has(node.id),
@@ -151,6 +187,8 @@ export function canvasGraph(
     data: {
       node,
       activePorts: [...(activePorts.get(node.id) ?? [])],
+      connectionPorts: options.connectionPorts?.get(node.id),
+      parallelLanes: node.kind === 'parallel' ? lanePorts(node) : undefined,
       bindingSources: bindingNodeIds(node).map((id) => {
         const source = bindingNodes(node, definition.nodes).find(
           (candidate) => candidate.id === id,
@@ -192,18 +230,55 @@ export function canvasGraph(
       onEdit:
         options.onEdit &&
         (node.kind === 'batch' ||
+          node.kind === 'parallel' ||
           !(options.selected instanceof Set && options.selected.size > 1))
           ? () => options.onEdit!(node)
           : undefined,
       onAdd: options.onAdd ? () => options.onAdd!(node.id) : undefined,
+      onAddBranch: options.onAddBranch
+        ? (branchId) => options.onAddBranch!(node.id, branchId)
+        : undefined,
       onToggle: options.onToggle ? () => options.onToggle!(node.id) : undefined,
     },
   }));
+  function lanePorts(group: WorkflowNode) {
+    const starts = definition.edges.filter((edge) => edge.source === group.id);
+    const returns = definition.edges.filter(
+      (edge) => edge.target === group.id && edge.targetHandle === 'join',
+    );
+    return lanes(group).map((lane) => {
+      const start = starts.find(
+        (edge) => edge.port === parallelBranchPort(lane.id),
+      );
+      const first = start && index.get(start.target);
+      const fallback = lane.contentTop + NODE_SIZE.height / 2;
+      const startTop =
+        first && laneFor(first) === lane
+          ? position(first).y + size(first).height / 2
+          : fallback;
+      const returnTops = returns.flatMap((edge) => {
+        const source = index.get(edge.source);
+        if (!source || laneFor(source) !== lane) return [];
+        const top = outputPortTop(source, edge.port);
+        return [
+          position(source).y +
+            (typeof top === 'number'
+              ? top
+              : (size(source).height * parseFloat(top)) / 100),
+        ];
+      });
+      const endTop = returnTops.length
+        ? (Math.min(...returnTops) + Math.max(...returnTops)) / 2
+        : startTop;
+      return { ...lane, startTop, endTop };
+    });
+  }
   // Batch members store positions relative to their group.
   const absolute = (node: WorkflowNode): { x: number; y: number } => {
     const parent = parents.get(node.id);
     const origin = parent ? absolute(index.get(parent)!) : { x: 0, y: 0 };
-    return { x: origin.x + node.position.x, y: origin.y + node.position.y };
+    const placed = position(node);
+    return { x: origin.x + placed.x, y: origin.y + placed.y };
   };
   // Route loops around the cards between their endpoints, on whichever side
   // already carries fewer loops over that span (ties go below). Overlapping
@@ -219,6 +294,7 @@ export function canvasGraph(
     };
   };
   const backward = (edge: WorkflowEdge) => {
+    if (edge.targetHandle === 'join') return false;
     const source = index.get(edge.source),
       target = index.get(edge.target);
     return Boolean(
@@ -341,7 +417,10 @@ export function canvasGraph(
     );
   };
   const targetY = (node: WorkflowNode) =>
-    box(node).top + (node.kind === 'batch' ? 32 : size(node).height / 2);
+    box(node).top +
+    (node.kind === 'batch' || node.kind === 'parallel'
+      ? 32
+      : size(node).height / 2);
   type Point = { x: number; y: number };
   const hits = (points: Point[], skip: Set<string>) => {
     const hit = new Set<WorkflowNode>();
@@ -399,6 +478,7 @@ export function canvasGraph(
       hiddenEdge(edge) ||
       lane.has(edge.id) ||
       edge.targetHandle === 'end' ||
+      edge.targetHandle === 'join' ||
       parents.get(source.id) ||
       parents.get(target.id)
     )
@@ -524,24 +604,38 @@ export function canvasGraph(
   for (const [id, route] of routes) ortho.set(id, { points: corners(route) });
   return {
     nodes,
-    edges: definition.edges.map((edge) => ({
-      ...edge,
-      type: lane.has(edge.id)
-        ? 'loop'
-        : ortho.has(edge.id)
-          ? 'ortho'
-          : undefined,
-      data: lane.get(edge.id) ?? ortho.get(edge.id),
-      selected: selectedIds.has(edge.id),
-      sourceHandle: edge.port,
-      targetHandle: edge.targetHandle ?? 'default',
-      className: endpoints
+    edges: definition.edges.map((edge) => {
+      const laneEnd = returnHandle(edge);
+      const edgeClass = endpoints
         ? selectedIds.has(edge.id)
           ? undefined
           : 'edge-dimmed'
-        : emphasis(edge.id, linkedEdges),
-      hidden: hiddenEdge(edge),
-    })),
+        : emphasis(edge.id, linkedEdges);
+      return {
+        ...edge,
+        type: lane.has(edge.id)
+          ? 'loop'
+          : ortho.has(edge.id)
+            ? 'ortho'
+            : undefined,
+        data: lane.get(edge.id) ?? ortho.get(edge.id),
+        selected: selectedIds.has(edge.id),
+        sourceHandle: edge.port,
+        targetHandle: laneEnd ?? edge.targetHandle ?? 'default',
+        className: laneEnd
+          ? [edgeClass, styles.automaticReturn].filter(Boolean).join(' ')
+          : edgeClass,
+        ...(laneEnd
+          ? {
+              selectable: false,
+              deletable: false,
+              focusable: false,
+              interactionWidth: 0,
+            }
+          : {}),
+        hidden: hiddenEdge(edge),
+      };
+    }),
   };
 }
 
@@ -554,7 +648,11 @@ export function withoutNodes(
   while (changed) {
     changed = false;
     for (const node of definition.nodes)
-      if (node.batchId && removed.has(node.batchId) && !removed.has(node.id)) {
+      if (
+        ((node.batchId && removed.has(node.batchId)) ||
+          (node.parallelId && removed.has(node.parallelId))) &&
+        !removed.has(node.id)
+      ) {
         removed.add(node.id);
         changed = true;
       }

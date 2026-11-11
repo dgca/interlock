@@ -187,3 +187,9 @@ Discovery follows the selected run's descendants and forward continue-as-new lin
 Cancellation state, claim invalidation, hold closure, usage endings, reasons, and lifecycle events commit in one transaction. A failed write rolls back the whole action. After commit, Interlock requests native process stops and aborts local operations through their existing execution paths. Cancelled timers and Batch parents create no later work. Lifecycle handlers retain their own normal trigger behavior.
 
 A successful cancellation response confirms logical cancellation, not external quiescence. Revoked claims and operations that may still be active retain uncertain ownership. Confirmed completion or exact-attempt stopped reconciliation releases that ownership. Inspect background Scripts with `manage_script`, managed sessions with `manage_executors`, and uncertain owners with `manage_work_resources` before releasing them. See [resource recovery](work-resources.md#reconcile-an-uncertain-stop) and [quiescent teardown](events.md#quiescent-teardown).
+
+## Run and recover a Parallel group
+
+A [Parallel group](parallel.md) starts named branch runs and waits for all results. Each branch is an ordinary descendant for inspection, lifecycle budgets, and cancellation. Detached calls inside a branch remain independent. The group receives their immediate run references.
+
+Retry the failed parent run to preserve completed branches. Reconcile any revoked claim or uncertain operation before retry. Branch work charges the same workflow step limit as its parent; retries do not reset it. Select a specific group execution to see only that visit's branch runs.

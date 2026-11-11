@@ -648,6 +648,7 @@ export class Store {
       | 'input'
       | 'parentRunId'
       | 'batchNodeId'
+      | 'parallelBranch'
       | 'comparison'
       | 'chain'
       | 'startRequestId'
@@ -682,6 +683,7 @@ export class Store {
         input,
         parentRunId,
         batchNodeId,
+        parallelBranch,
         comparison,
       } = run;
       result.push({
@@ -697,6 +699,7 @@ export class Store {
         input,
         parentRunId,
         batchNodeId,
+        ...(parallelBranch ? { parallelBranch } : {}),
         ...(comparison ? { comparison } : {}),
         ...(run.startRequestId !== undefined
           ? { startRequestId: run.startRequestId }

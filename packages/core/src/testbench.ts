@@ -410,6 +410,10 @@ export function assertionProblems(
       return [
         `Assertion ${index}: Batch-member checkpoints are unsupported; select a root-scope node`,
       ];
+    if (node.parallelId)
+      return [
+        `Assertion ${index}: Parallel branch checkpoints are unsupported; select the group or a root-scope node`,
+      ];
     if (
       a.kind === 'route' &&
       !definition.edges.some(

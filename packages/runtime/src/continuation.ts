@@ -250,6 +250,7 @@ export class Continuation {
                               : execution?.kind === 'wait'
                                 ? 'wait'
                                 : execution?.kind === 'batch' ||
+                                    execution?.kind === 'parallel' ||
                                     execution?.kind === 'workflow'
                                   ? 'children'
                                   : 'executing';
@@ -288,33 +289,36 @@ export class Continuation {
           check: execution?.check,
         };
       });
-    const batches = state.executions
-      .filter((e) => e.kind === 'batch')
-      .map((e) => {
-        const run = byId.get(e.runId)!;
-        const definition = this.store.getVersion(
-          run.workflowId,
-          run.version,
-        )?.definition;
-        const node = definition?.nodes.find((n) => n.id === e.nodeId);
-        const total =
-          node?.kind === 'batch'
-            ? this.store.batchSize(run.id, e.id, node.itemsPath)
-            : null;
-        const children = e.childRunIds
-          .map((child) => byId.get(child))
-          .filter((child) => child !== undefined);
-        return {
-          ...reference(run.id, e.id),
-          nodeId: e.nodeId,
-          status: e.status,
-          total,
-          dispatched: children.length,
-          queued: total === null ? null : Math.max(0, total - e.nextItem),
-          definitionAvailable: Boolean(definition),
-          progress: counts(children.map((child) => child.status)),
-        };
-      });
+    const groups = (kind: 'batch' | 'parallel') =>
+      state.executions
+        .filter((e) => e.kind === kind)
+        .map((e) => {
+          const run = byId.get(e.runId)!;
+          const definition = this.store.getVersion(
+            run.workflowId,
+            e.version ?? run.version,
+          )?.definition;
+          const node = definition?.nodes.find((n) => n.id === e.nodeId);
+          const total =
+            node?.kind === 'batch'
+              ? this.store.batchSize(run.id, e.id, node.itemsPath)
+              : node?.kind === 'parallel'
+                ? node.branches.length
+                : null;
+          const children = e.childRunIds
+            .map((child) => byId.get(child))
+            .filter((child) => child !== undefined);
+          return {
+            ...reference(run.id, e.id),
+            nodeId: e.nodeId,
+            status: e.status,
+            total,
+            dispatched: children.length,
+            queued: total === null ? null : Math.max(0, total - e.nextItem),
+            definitionAvailable: Boolean(definition),
+            progress: counts(children.map((child) => child.status)),
+          };
+        });
     const summaries = state.runs.map((run) => ({
       ...run,
       ...projectRun(this.store, run.id, state),
@@ -487,7 +491,8 @@ export class Continuation {
           })),
         limit,
       ),
-      batches: bounded(batches, limit),
+      batches: bounded(groups('batch'), limit),
+      parallels: bounded(groups('parallel'), limit),
       deadlines: bounded(deadlines, limit),
       nextDeadline: deadlines[0] ?? null,
       recentResults: bounded(results, limit),

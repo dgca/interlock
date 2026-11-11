@@ -146,16 +146,34 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
   },
 }));
 vi.mock('../packages/ui/src/features/runs/RunInspector', () => ({
-  RunInspector: ({ id, onOpen, onBack }: any) =>
+  RunInspector: ({
+    id,
+    onOpen,
+    onBack,
+    initialExecutionId,
+    returnLabel,
+  }: any) =>
     h(
       'section',
       {},
       `Run ${id}`,
+      initialExecutionId && `Selected ${initialExecutionId}`,
       h('button', { onClick: () => onOpen('child') }, 'Child run'),
       h(
         'button',
+        {
+          onClick: () =>
+            onOpen('child', 'child-step', {
+              executionId: 'path-step',
+              label: 'Run check',
+            }),
+        },
+        'Invoke workflow',
+      ),
+      h(
+        'button',
         { onClick: () => onBack(id === 'r1' ? 'completed' : 'waiting') },
-        'Back to runs',
+        returnLabel ?? 'Back to runs',
       ),
     ),
 }));
@@ -374,6 +392,31 @@ it('restores run history and nested run links, including browser Back', async ()
   expect(window.location.search).toBe('?tab=history');
   await click('Active 0');
   expect(window.location.search).toBe('');
+});
+
+it('returns from an invoked workflow to the exact step that opened it', async () => {
+  await mount('/runs/r1?tab=history');
+  await click('Invoke workflow');
+  expect(window.location.pathname).toBe('/runs/child');
+  expect(container.textContent).toContain('Selected child-step');
+  await act(async () => {
+    const popped = new Promise<void>((resolve) =>
+      window.addEventListener('popstate', () => resolve(), { once: true }),
+    );
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Back to Run check')!
+      .click();
+    await popped;
+  });
+  expect(window.location.pathname).toBe('/runs/r1');
+  expect(container.textContent).toContain('Selected path-step');
+  expect(new URLSearchParams(window.location.search).get('tab')).toBe(
+    'history',
+  );
+  await traverse('forward');
+  expect(container.textContent).toContain('Selected child-step');
+  await traverse('back');
+  expect(container.textContent).toContain('Selected path-step');
 });
 
 it('keeps a deep link while data loads and shows missing resources without redirecting', async () => {

@@ -22,6 +22,7 @@ import {
   type NodeSectionName,
 } from './NodeSettingsSections';
 import { BranchEditor } from './BranchEditor';
+import { ParallelBranchesEditor } from './ParallelBranchesEditor';
 import { NodeResultEditor } from './NodeResultEditor';
 
 import {
@@ -157,6 +158,7 @@ export function NodeInspector({
       wait: 'Wait',
       input: 'External input',
       batch: 'Batch',
+      parallel: 'Parallel',
       entry: 'Entry',
       exit: 'Exit',
     } as const
@@ -707,6 +709,15 @@ export function NodeInspector({
             <WorkflowModeEditor
               key={`${node.id}:${node.workflowId}:${node.version}`}
               node={node}
+              onChange={onChange}
+            />
+          </NodeSection>
+        )}
+        {node.kind === 'parallel' && (
+          <NodeSection name="work">
+            <ParallelBranchesEditor
+              node={node}
+              definition={definition}
               onChange={onChange}
             />
           </NodeSection>

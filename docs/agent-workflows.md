@@ -4,7 +4,7 @@
 
 Nodes can set optional `stage` text, trimmed to 1–200 characters. Use the node editor's Stage field or the same field in definitions and `edit_workflow` node updates. This changes reporting, not routing.
 
-All run summaries, full run/descendant inspection, briefings, compact start/submission responses, and new event snapshots expose `stage`, `waiting`, and `actor`. Stage is the deepest active label across waited children and Batch items; detached children stay independent. Equal depths use latest execution start, then ascending run/node IDs. An unlabeled child falls back to its labeled active ancestor. Terminal runs return null stage and waiting, and engine actor.
+All run summaries, full run/descendant inspection, briefings, compact start/submission responses, and new event snapshots expose `stage`, `waiting`, and `actor`. Stage is the deepest active label across waited children, Batch items, and Parallel branches; detached children stay independent. Equal depths use latest execution start, then ascending run/node IDs. An unlabeled child falls back to its labeled active ancestor. Terminal runs return null stage and waiting, and engine actor.
 
 `waiting` is null during execution, or `{kind, detail, since}`. Detail identifies the run, node, execution, and assignment when present. `since` uses a persisted execution, assignment, hold or budget timestamp; reads and restart do not reset it. Resource waits use assignment creation as their available persisted anchor.
 
@@ -111,7 +111,7 @@ Summary responses contain:
 | `next`, `nextDeadline` | Suggested action and earliest active deadline, or null. Use a briefing for blockers and failure details.                                                                                                                               |
 | `nextCall`             | Suggested read-only MCP call as `{tool, arguments}`, or null when `next` is `claim_work`.                                                                                                                                              |
 
-At startup, `runId` is the new run. After submission, it is the outermost ordinary ancestor of `workRunId`, stopping at the nearest detached boundary. Completing a waited child or Batch item can therefore return work unlocked in its parent or siblings. Detached submissions continue their independent lifecycle. `rootRunId` in work items describes ancestry, not a cancellation boundary.
+At startup, `runId` is the new run. After submission, it is the outermost ordinary ancestor of `workRunId`, stopping at the nearest detached boundary. Completing a waited child, Batch item, or Parallel branch can therefore return work unlocked in its parent or siblings. Detached submissions continue their independent lifecycle. `rootRunId` in work items describes ancestry, not a cancellation boundary.
 
 Use `wait_for_run_change` with `id` equal to the returned `runId` and the returned `cursor`. Status, available work, guidance and cursor come from one post-mutation snapshot. Empty `nextWork.items` does not prove completion. A completed parent may still have detached work; inspect `runStatus` and each item's `lifecycleRunId` before continuing independent work.
 
@@ -198,7 +198,7 @@ For new graphs or structural changes, add top-level `layout: "tidy"` to `create_
 
 `set` replaces the entire named field, including nested objects such as `context` or `inputBindings`. `unset` is an array of field names. A field cannot appear in both. Unsetting a required field fails unless the definition schema supplies a default. Unsetting an absent field also fails. Unknown operation, node, edge, or settings fields fail instead of disappearing. JSON Schema contract contents remain unrestricted. Existing scripts with omitted language retain Bash; explicitly unsetting language restores legacy Bash behavior. Defaulted fields, such as maxSteps, reset to their schema default when unset.
 
-Removing a node preserves bindings in surviving nodes. Those bindings become publication blockers until explicitly repaired. Removing or renaming a source port preserves its edges, so reconnect or remove them in the same edit list, or save and repair the incomplete draft later. Batch membership remains explicit through `batchId`; existing publication scope checks apply. Workflow ownership is not editable through draft edits; use the [dedicated ownership operation](#change-workflow-ownership). Saved references still obey owned-child rules.
+Removing a node preserves bindings in surviving nodes. Those bindings become publication blockers until explicitly repaired. Removing or renaming a source port preserves its edges, so reconnect or remove them in the same edit list, or save and repair the incomplete draft later. Batch membership uses `batchId`. Parallel membership uses `parallelId` and `parallelBranchId`. Publication checks each scope. Workflow ownership is not editable through draft edits; use the [dedicated ownership operation](#change-workflow-ownership). Saved references still obey owned-child rules.
 
 The result contains `applied`, `draftRevision`, `changes`, and `diagnostics`. `changes.nodes` and `changes.edges` each contain added, updated, and removed IDs; `changes.settings` lists changed fields. Content changes increment the draft revision once. Position-only changes save layout separately. Empty or equivalent edits preserve both revision and timestamp. Equality ignores object key order. Rejected edits return `applied: false`, the current revision, empty changes, and diagnostics. Invalid edits identify their zero-based `operationIndex`. A stale revision has code `stale_revision`; reload before retrying.
 
@@ -240,6 +240,7 @@ The response contains these fields:
 | `blockers`                  | `external_hold`, `budget_blocked`, `available_work`, `claimed_work`, `wait`, `external_input`, `children`, `executing`, or `failure`, with run/execution/work references. Wait blockers include `resumeAt`; polling also includes `nextCheckAt`, optional `timeoutAt`, and `check` metadata (`count`, `at`, optional `error`) without output. External input blockers include `waitingSince`, `revision`, and optional `heldByRunId` under `externalInput`. |
 | `failures`                  | Currently failed run references and errors. Collected Batch item failures and handled Workflow child failures can appear while their parent remains waiting or completes.                                                                                                                                                                                                                                                                                   |
 | `batches`                   | Per-execution total, dispatched and queued item counts, plus dispatched item status counts. Terminal status distinguishes undispatched items from work still pending.                                                                                                                                                                                                                                                                                       |
+| `parallels`                 | Per-execution total, dispatched and queued branch counts, plus status counts. Descendant run references identify `parallelBranch` and `parentExecutionId`.                                                                                                                                                                                                                                                                                                  |
 | `deadlines`, `nextDeadline` | Sorted active deadlines: `wait` for duration/timestamp Waits, `poll_check` for the next probe, `poll_timeout` for the polling deadline, `unclaimed`, and `claim_lease`. Earliest deadline or null.                                                                                                                                                                                                                                                          |
 | `recentResults`             | Recent completed execution references, labels, kinds, selected ports, timestamps, and output availability. No result values.                                                                                                                                                                                                                                                                                                                                |
 | `next`                      | Suggested action: `claim_work`, `adjust_budget`, `inspect_hold`, `wait_for_worker`, `wait_for_change`, `inspect_failure`, or `inspect_result`. Inspect requested status and lifecycle IDs before acting on independent work.                                                                                                                                                                                                                                |
@@ -319,7 +320,7 @@ Pass `leaseSeconds: 300` explicitly when a renewal should grant five minutes reg
 
 MCP `list_runs` and the shared API `runs.find` return summaries in descending creation order. The default limit is 50, with a maximum of 1000. Equal timestamps use descending insertion order.
 
-Available filters include `requestId`, `externalTask:{system,id}`, `workflowId`, `status`, `rootOnly`, `chainRootRunId`, `tags`, and `inputMatch: {path, equals}`. Optional `startRequestId`, `externalTask`, and `tags` appear in summaries and inspection. Status accepts `queued`, `running`, `waiting`, `completed`, `failed`, or `cancelled`. `rootOnly` defaults to false, which includes nested Workflow and Batch item runs. A summary includes IDs, workflow name, version, status, timestamps, cursor, input, `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, `rootWorkflowId`, and `batchNodeId`. Root IDs follow the same rules as work summaries. Use `get_run` for execution details.
+Available filters include `requestId`, `externalTask:{system,id}`, `workflowId`, `status`, `rootOnly`, `chainRootRunId`, `tags`, and `inputMatch: {path, equals}`. Optional `startRequestId`, `externalTask`, and `tags` appear in summaries and inspection. Status accepts `queued`, `running`, `waiting`, `completed`, `failed`, or `cancelled`. `rootOnly` defaults to false, which includes nested Workflow, Batch item, and Parallel branch runs. A summary includes IDs, workflow name, version, status, timestamps, cursor, input, `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, `rootWorkflowId`, and the owning group reference for a Batch item (`batchNodeId`) or Parallel branch (`parallelBranch`). Root IDs follow the same rules as work summaries. Use `get_run` for execution details.
 
 Paths use dot-separated object keys or array indices. A blank path selects the complete input. Equality compares JSON structure, including object values independently of key order. Missing paths do not match, even when `equals` is null. Workflow, status, and creation ordering have database indexes. Tag filters use indexed exact key/value pairs and require every supplied pair. See [tag bounds and inheritance](idempotent-run-starts.md#tag-and-filter-runs). Arbitrary input-path matching scans the selected candidates until the limit is reached.
 
@@ -341,14 +342,14 @@ Set Agent `resources` to up to eight existing value bindings, each resolving to 
 
 Optional `inputBindings` constructs a replacement input object before the node's input contract is checked. Each output field selects a `source` and a dot-separated `path`. Omitted or blank paths select the entire source. A missing path fails unless the binding supplies a path default. Omitting `inputBindings` retains the previous node's complete output as input. An explicit empty binding object produces an empty object.
 
-| Source      | Value                                                                              |
-| ----------- | ---------------------------------------------------------------------------------- |
-| `input`     | Previous node output before these bindings                                         |
-| `runInput`  | Original input of the enclosing workflow invocation, skipping Batch item ancestors |
-| `rootInput` | Original input of the outermost run                                                |
-| `itemInput` | Original input of the current Batch item run, available only inside a Batch        |
-| `node`      | Latest completed output of `nodeId` in the current run                             |
-| `execution` | Engine-verified execution provenance of `nodeId` in the current run                |
+| Source      | Value                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------- |
+| `input`     | Previous node output before these bindings                                                              |
+| `runInput`  | Original input of the enclosing workflow invocation, skipping Batch item and Parallel branch containers |
+| `rootInput` | Original input of the outermost run                                                                     |
+| `itemInput` | Original input of the current Batch item run, available only inside a Batch                             |
+| `node`      | Latest completed output of `nodeId` in the current run                                                  |
+| `execution` | Engine-verified execution provenance of `nodeId` in the current run                                     |
 
 For example, an Agent may return a proposed action while the following Script reads `dryRun` from the original workflow input:
 
@@ -362,7 +363,7 @@ For example, an Agent may return a proposed action while the following Script re
 }
 ```
 
-The Agent's result cannot replace `runInput`, `rootInput`, or `itemInput`. Those values come from persisted run records. A referenced Workflow creates a new `runInput` scope; nested Batches retain their enclosing workflow scope. Resolved node inputs are persisted for inspection. Retries resolve bindings from the same original run inputs and the failed step's incoming value. Entry and Exit cannot use bindings.
+The Agent's result cannot replace `runInput`, `rootInput`, or `itemInput`. Those values come from persisted run records. A referenced Workflow creates a new `runInput` scope; Batch items and Parallel branches retain their enclosing workflow scope. Resolved node inputs are persisted for inspection. Retries resolve bindings from the same original run inputs and the failed step's incoming value. Entry and Exit cannot use bindings.
 
 Use `source: "node"` to retain an earlier result across intervening steps, such as a child workflow that returns only a posting receipt:
 
@@ -376,7 +377,7 @@ Use `source: "node"` to retain an earlier result across intervening steps, such 
 }
 ```
 
-Node bindings read persisted executions of the current run. Inside a Batch, they read only the current item's executions, including inside nested Batches. Unlike `runInput`, they do not walk up to the enclosing workflow. A parent cannot address nodes inside a referenced workflow, and sibling items cannot read each other's results. Publication requires an existing node in the same Batch group or main workflow scope, excluding Entry and Exit. Drafts may retain unresolved references.
+Node bindings read persisted executions of the current run. Inside a Batch, they read only the current item's executions, including inside nested Batches. Unlike `runInput`, they do not walk up to the enclosing workflow. A parent cannot address nodes inside a referenced workflow, and sibling items or Parallel branches cannot read each other's results. Branches read earlier outputs within their own invocation. Pass earlier parent values through the group's input. Publication requires an existing node in the same Batch group, Parallel branch, or main workflow scope, excluding Entry and Exit. Drafts may retain unresolved references.
 
 In a workflow loop, the latest completed visit wins. Failed, cancelled, waiting, and running executions are ignored. Retries resolve from the same persisted execution history and incoming value. Resolved inputs remain visible in execution history.
 
@@ -484,7 +485,7 @@ MCP `update_workflow` accepts `archived: true` or `false`. CLI provides `archive
 
 `list_workflows` includes archived workflows by default. Pass `includeArchived: false` to hide archived workflows and children of archived owners. The owner filter remains independent.
 
-MCP `delete_workflow` and `interlock delete ID --yes` permanently remove the workflow and its published versions, every run of that workflow, and all descendants of those runs. Descendants include Batch item runs and waited or detached Workflow runs, even when they execute another workflow. Their assignments and events are removed too; other workflow records and published versions remain.
+MCP `delete_workflow` and `interlock delete ID --yes` permanently remove the workflow and its published versions, every run of that workflow, and all descendants of those runs. Descendants include Batch items, Parallel branches, and waited or detached Workflow runs, even when they execute another workflow. Their assignments and events are removed too; other workflow records and published versions remain.
 
 If a run of the workflow has a parent run from another workflow, deletion is blocked. This includes invocation directly, inside a Batch, or in detached mode. Nothing is removed: ancestor runs, child runs, assignments, and events remain intact. External draft or published references, owned children, and active affected runs also block deletion, including active detached descendants of completed parents. Archive is available when references or run ancestry prevent deletion.
 

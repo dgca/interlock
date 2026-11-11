@@ -1,3 +1,4 @@
+import { parallelBranchPort } from './parallel.js';
 import type {
   WorkflowDefinition,
   WorkflowEdge,
@@ -128,9 +129,17 @@ export function compareWorkflow(
       continue;
     const edge = after ?? before!;
     const source = newNodes.get(edge.source) ?? oldNodes.get(edge.source);
+    const port =
+      source?.kind === 'parallel'
+        ? edge.port === 'complete'
+          ? 'Out'
+          : source.branches.find(
+              ({ id }) => parallelBranchPort(id) === edge.port,
+            )?.key || 'Branch start'
+        : edge.port;
     routes.push({
       id: key,
-      title: `${source?.label ?? edge.source} · ${edge.port}`,
+      title: `${source?.label ?? edge.source} · ${port}`,
       kind: !before ? 'added' : !after ? 'removed' : 'changed',
       details: [
         {

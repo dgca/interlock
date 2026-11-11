@@ -9,6 +9,9 @@ import type { Store } from '@interlock/storage';
 import { fingerprint } from './versionIdentity.js';
 import { projectRun } from './runProjection.js';
 
+const isGroupedChild = (run: Pick<Run, 'batchNodeId' | 'parallelBranch'>) =>
+  Boolean(run.batchNodeId || run.parallelBranch);
+
 /** Durable start gating. All mutations run inside the engine's transaction. */
 export class RunAdmission {
   constructor(private store: Store) {}
@@ -19,7 +22,7 @@ export class RunAdmission {
     options: RunStartOptions = {},
   ) {
     if (
-      run.batchNodeId ||
+      isGroupedChild(run) ||
       (!definition.maxActiveRuns &&
         !options.after?.length &&
         !(run.schedule?.waitForPrevious && run.schedule.previousRunIds.length))
@@ -76,7 +79,7 @@ export class RunAdmission {
               rootOnly: false,
               limit: 1000,
             })
-            .filter((r) => r.id !== run.id && !r.batchNodeId);
+            .filter((r) => r.id !== run.id && !isGroupedChild(r));
           dependency.runId =
             'requestId' in ref
               ? (this.store.get<RunStartReceipt>(
@@ -118,7 +121,7 @@ export class RunAdmission {
         const count = active.filter(
           (candidate) =>
             candidate.workflowId === run.workflowId &&
-            !candidate.batchNodeId &&
+            !isGroupedChild(candidate) &&
             ['running', 'waiting'].includes(candidate.status) &&
             !(definition.excludeStages ?? []).includes(
               projectRun(this.store, candidate.id).stage ?? '',

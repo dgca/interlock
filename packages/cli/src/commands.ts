@@ -643,7 +643,7 @@ export async function runCommand(argv: string[]) {
           'work-resources <json|@file> (inspect by workId or runId+executionId; release exact uncertain attempt after stop confirmation)',
           'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--tag KEY=VALUE ...] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
           'runs [--tag KEY=VALUE ...] [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
-          'run <id>',
+          'run <id> (inspect the run, including Parallel branch runs linked to each group execution)',
           'run-version <json|@file> (action: read with runId/offset/limit; policy with expectedRevision and pinned|latest-compatible; preview with newer version and optional recapturePrompts; apply requires the exact preview confirmation and reason)',
           'run-history <json|@file> (action: settings/configure/status for opt-in retention; configure requires expectedRevision, policy thresholds or null to disable or inherit for workflow overrides; preview with workflowId/before/rootRunIds and offset/limit; delete requires roots with preview confirmations and acknowledgeHistoryLoss:true; workflows and published versions remain)',
           'context-group <run-id> <group> [options-json|@file] (binding and history; offset, limit)',
@@ -669,7 +669,7 @@ export async function runCommand(argv: string[]) {
           'script <json|@file> (action: inspect/stop/reconcile; exact runId and executionId; reconciliation requires stopped:true and reason)',
           'cancel-tree <run-id> [--include-detached] [--preview [--offset N] | --reason TEXT] [--limit N] (preview or atomically cancel descendant tree)',
           'cancel <run-id> [--chain] (stop the latest successor from any chain member; detached descendants remain independent)',
-          'retry <run-id>',
+          'retry <run-id> (retry a failed Parallel group from its parent; successful branches remain)',
         ],
       };
   }
