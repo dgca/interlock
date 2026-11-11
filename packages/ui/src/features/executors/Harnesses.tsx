@@ -119,7 +119,7 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     return () => cancelAnimationFrame(frame);
   }, [location]);
   return (
-    <section className={workspacePage.page}>
+    <section className={`${workspacePage.page} ${styles.aiPage}`}>
       <PageHeader title="AI Settings" />
       <PageTabs
         label="AI settings sections"
@@ -434,8 +434,9 @@ function ProfileRow({
             void save(draft);
           }}
         >
-          <div className={styles.fields}>
+          <div className={styles.defaultsFields}>
             <ModelSettings
+              compact
               disabled={busy}
               label="Default model"
               defaultLabel="Use CLI default"
@@ -508,6 +509,7 @@ function ProfileRow({
                 <NumberInput
                   label="Concurrent assignments"
                   description="Leave blank for no profile limit. The shared limit still applies."
+                  inputWrapperOrder={['label', 'input', 'description', 'error']}
                   min={1}
                   max={Number.MAX_SAFE_INTEGER}
                   allowDecimal={false}

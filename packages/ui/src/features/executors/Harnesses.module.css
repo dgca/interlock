@@ -126,14 +126,19 @@
   background: var(--form);
   border-top: 1px solid var(--border);
 }
-.fields {
+.fields,
+.defaultsFields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
 }
+.defaultsFields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
 .advanced {
-  margin-top: 28px;
-  padding-top: 20px;
+  margin-top: 16px;
 }
 .advanced summary {
   cursor: pointer;
@@ -235,7 +240,8 @@
     grid-column: 1 / -1;
     justify-self: end;
   }
-  .fields {
+  .fields,
+  .defaultsFields {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -294,5 +300,11 @@
 @media (max-width: 800px) {
   .sectionHeading {
     flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .aiPage {
+    --workspace-tab-padding: 8px;
   }
 }

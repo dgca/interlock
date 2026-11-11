@@ -469,7 +469,7 @@ export function SettingsDialog({
                     <Textarea
                       mb="md"
                       label="Description"
-                      rows={4}
+                      rows={2}
                       value={settings.description}
                       onChange={(e) =>
                         setSettings((s) => ({

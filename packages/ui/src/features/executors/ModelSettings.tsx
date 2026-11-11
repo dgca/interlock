@@ -1,4 +1,4 @@
-import { NativeSelect } from '../../design-system';
+import { Input, NativeSelect } from '../../design-system';
 
 import { useState } from 'react';
 
@@ -68,37 +68,38 @@ export function ModelSettings({
         ? '__native'
         : '__inherit'
       : effort;
+  const modelDescription = alias
+    ? `${model ? 'Uses' : 'Inherits'} agent preset ${alias.name}. Its candidates can choose their own harness and thinking effort.`
+    : (modelHint ??
+      (showInheritedModel && !model && inheritedModel
+        ? `Inherited model: ${catalog?.models.find((item) => item.id === inheritedModel)?.name ?? inheritedModel}`
+        : undefined));
   return (
     <div style={compact ? { display: 'contents' } : undefined}>
-      <ModelPicker
-        label={label}
-        inlineRefresh={compact}
-        defaultLabel={defaultLabel}
-        value={model}
-        onChange={onModelChange}
-        profileId={profileId}
-        paths={paths}
-        disabled={disabled}
-        onCatalog={setCatalog}
-        loadCapabilities={!!effectiveModel}
-        allowAliases={allowAliases}
-        referenceMode={referenceMode}
-        inheritedValue={inheritedModel}
-        onAlias={setAlias}
-      />
-      {alias ? (
-        <p className="hint">
-          {model ? 'Uses' : 'Inherits'} agent preset {alias.name}. Its
-          candidates can choose their own harness and thinking effort.
-        </p>
-      ) : (
-        (modelHint || (showInheritedModel && !model && inheritedModel)) && (
-          <p className="hint">
-            {modelHint ??
-              `Inherited model: ${catalog?.models.find((item) => item.id === inheritedModel)?.name ?? inheritedModel}`}
-          </p>
-        )
-      )}
+      <div style={{ minWidth: 0 }}>
+        <ModelPicker
+          label={label}
+          inlineRefresh={compact}
+          defaultLabel={defaultLabel}
+          value={model}
+          onChange={onModelChange}
+          profileId={profileId}
+          paths={paths}
+          disabled={disabled}
+          onCatalog={setCatalog}
+          loadCapabilities={!!effectiveModel}
+          allowAliases={allowAliases}
+          referenceMode={referenceMode}
+          inheritedValue={inheritedModel}
+          onAlias={setAlias}
+        />
+        {modelDescription &&
+          (compact ? (
+            <Input.Description mt={4}>{modelDescription}</Input.Description>
+          ) : (
+            <p className="hint">{modelDescription}</p>
+          ))}
+      </div>
       {(!alias || effort !== undefined) &&
         (alwaysShowEffort ||
           effectiveModel ||
@@ -151,7 +152,9 @@ export function ModelSettings({
             }
             description={
               compact
-                ? undefined
+                ? effort === undefined && inheritedEffort
+                  ? `Inherited effort: ${inheritedEffort}`
+                  : undefined
                 : alias
                   ? 'Preset candidate effort settings take precedence over this override.'
                   : !effectiveModel

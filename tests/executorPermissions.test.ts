@@ -188,7 +188,7 @@ it('loads a workflow model picker on demand and lets it return to the harness de
     option!.click();
   };
   await act(async () => choose('Native Model'));
-  expect(container.textContent).toContain('native-model · workflow override');
+  expect(trigger.textContent).toContain('Native Model');
   await act(async () => trigger.click());
   await act(async () => choose('Use harness default'));
   expect(container.textContent).toContain('CLI default · inherited from Codex');
@@ -211,22 +211,36 @@ it('refreshes models for the draft harness paths without submitting or replacing
       rejectRefresh = reject;
     }),
   );
-  await act(async () => button('Refresh models').click());
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Refresh models"]')!
+      .click(),
+  );
   expect(rpc.models).toHaveBeenLastCalledWith({
     profileId: 'codex',
     paths: { command: '/installed/codex', cwd: '/project' },
     refresh: true,
   });
-  expect(button('Refresh models').disabled).toBe(true);
+  expect(
+    container.querySelector<HTMLButtonElement>('[aria-label="Refresh models"]')!
+      .disabled,
+  ).toBe(true);
   expect(trigger.textContent).toContain('custom-model');
   expect(rpc.manage).not.toHaveBeenCalled();
   await act(async () => rejectRefresh(new Error('Discovery unavailable')));
   expect(container.querySelector('[role="alert"]')?.textContent).toContain(
     'Discovery unavailable',
   );
-  expect(button('Refresh models').disabled).toBe(false);
+  expect(
+    container.querySelector<HTMLButtonElement>('[aria-label="Refresh models"]')!
+      .disabled,
+  ).toBe(false);
   expect(trigger.textContent).toContain('custom-model');
-  await act(async () => button('Refresh models').click());
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Refresh models"]')!
+      .click(),
+  );
   expect(container.querySelector('[role="alert"]')).toBeNull();
   expect(trigger.textContent).toContain('custom-model');
   expect(button('Save defaults').disabled).toBe(true);
@@ -343,7 +357,7 @@ it('shows setup guidance for missing Pi and opens the custom integration form di
   expect(container.querySelector('[aria-label="Enable Pi"]')).toBeNull();
   await act(async () => button('Add integration').click());
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-    'New custom harness',
+    'Add integration',
   );
   expect(rpc.manage).not.toHaveBeenCalled();
 });
@@ -460,7 +474,10 @@ it('locks a pending save and preserves model, paths, capabilities and permission
   await act(async () => button('Save defaults').click());
   expect(input.disabled).toBe(true);
   expect(button('Close defaults').disabled).toBe(true);
-  expect(button('Refresh models').disabled).toBe(true);
+  expect(
+    container.querySelector<HTMLButtonElement>('[aria-label="Refresh models"]')!
+      .disabled,
+  ).toBe(true);
   expect(
     container.querySelector<HTMLButtonElement>(
       'button[aria-haspopup="listbox"]',

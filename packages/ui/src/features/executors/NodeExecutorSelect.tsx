@@ -1,4 +1,10 @@
-import { defaultOptionsFilter, Select, Stack, Text } from '../../design-system';
+import {
+  defaultOptionsFilter,
+  Select,
+  SimpleGrid,
+  Stack,
+  Text,
+} from '../../design-system';
 import {
   firstEligiblePresetChoice,
   inheritsWorkflowHarnessSettings,
@@ -350,44 +356,47 @@ export function NodeExecutorSelect({
       ) : (
         <>
           {showModels && (
-            <ModelSettings
-              key={selectedProfile.id}
-              label="Model"
-              defaultLabel={
-                inheritSettings && workflowModel && !workflowUsesPreset
-                  ? 'Use workflow default'
-                  : 'Use harness default'
-              }
-              effortDefaultLabel={
-                inheritSettings && definition?.agentEffort !== undefined
-                  ? 'Use workflow default'
-                  : 'Use harness default'
-              }
-              profileId={selectedProfile.id}
-              model={node.model}
-              effort={node.effort}
-              inheritedModel={inheritedModel}
-              inheritedEffort={inheritedEffort}
-              onModelChange={(model) => {
-                if (legacy && node.executor) {
-                  onChange({
-                    model,
-                    executorMode: 'harness',
-                    ...(node.effort === undefined &&
-                    !inheritsWorkflowHarnessSettings(
-                      node.executor,
-                      workflowExecutor,
-                      workflowUsesPreset,
-                    )
-                      ? { effort: definition?.agentEffort }
-                      : {}),
-                  });
-                } else onChange({ model });
-              }}
-              showInheritedModel
-              onEffortChange={(effort) => onChange({ effort })}
-              alwaysShowEffort
-            />
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+              <ModelSettings
+                key={selectedProfile.id}
+                label="Model"
+                compact
+                defaultLabel={
+                  inheritSettings && workflowModel && !workflowUsesPreset
+                    ? 'Use workflow default'
+                    : 'Use harness default'
+                }
+                effortDefaultLabel={
+                  inheritSettings && definition?.agentEffort !== undefined
+                    ? 'Use workflow default'
+                    : 'Use harness default'
+                }
+                profileId={selectedProfile.id}
+                model={node.model}
+                effort={node.effort}
+                inheritedModel={inheritedModel}
+                inheritedEffort={inheritedEffort}
+                onModelChange={(model) => {
+                  if (legacy && node.executor) {
+                    onChange({
+                      model,
+                      executorMode: 'harness',
+                      ...(node.effort === undefined &&
+                      !inheritsWorkflowHarnessSettings(
+                        node.executor,
+                        workflowExecutor,
+                        workflowUsesPreset,
+                      )
+                        ? { effort: definition?.agentEffort }
+                        : {}),
+                    });
+                  } else onChange({ model });
+                }}
+                showInheritedModel
+                onEffortChange={(effort) => onChange({ effort })}
+                alwaysShowEffort
+              />
+            </SimpleGrid>
           )}
           {effectiveChoice && effectivePreset && (
             <Text size="xs" c="dimmed">

@@ -43,7 +43,7 @@ export function HarnessRowsSkeleton() {
 export function HarnessLibrarySkeleton() {
   const tab = aiSettingsTab(useLocation());
   return (
-    <section className={workspacePage.page}>
+    <section className={`${workspacePage.page} ${styles.aiPage}`}>
       <PageHeader title="AI Settings" />
       <PageTabsSkeleton items={aiSettingsTabs} value={tab} showCounts={false} />
       <div className={workspacePage.content}>

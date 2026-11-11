@@ -1,4 +1,4 @@
-import { NativeSelect } from '../../design-system';
+import { NativeSelect, SimpleGrid, Stack } from '../../design-system';
 
 import { errorMessage } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
@@ -71,126 +71,130 @@ export function ExecutorSelect({
   const profile = profiles?.find((p) => p.id === selected);
   const effective = workflowPermissions ?? profile?.permissions;
   return (
-    <div style={{ marginBottom: 20 }}>
-      <NativeSelect
-        label={inherit !== undefined ? 'Executor' : 'Default Agent executor'}
-        value={
-          value ??
-          (inherit !== undefined && value === undefined
-            ? '__inherit'
-            : '__manual')
-        }
-        onChange={(e) =>
-          onChange(
-            e.currentTarget.value === '__inherit'
-              ? undefined
-              : e.currentTarget.value === '__manual'
-                ? null
-                : e.currentTarget.value,
-          )
-        }
+    <Stack gap="sm" mb="md">
+      <SimpleGrid
+        cols={{ base: 1, sm: onPermissionsChange ? 2 : 1 }}
+        spacing="sm"
       >
-        {inherit !== undefined && (
-          <option value="__inherit">
-            Workflow default · {inherit || 'No default harness'}
-          </option>
-        )}
-        <option value="__manual">
-          {workflowSettings ? 'No default harness' : 'Connected agent'}
-        </option>
-        {profiles
-          ?.filter(
-            (p) =>
-              p.id === value || (isPrimaryHarness(p) && isAvailableHarness(p)),
-          )
-          .map((p) => (
-            <option key={p.id} value={p.id}>
-              {harnessLabel(p)}
-              {!p.enabled ? ' · disabled' : ''}
-            </option>
-          ))}
-        {value && !profiles?.some((p) => p.id === value) && (
-          <option value={value}>{value} · not configured</option>
-        )}
-      </NativeSelect>
-      <p className="hint">
-        {value
-          ? 'Default harness for managed work. A preset can select a different harness for nodes that inherit it.'
-          : inherit !== undefined && value === undefined
-            ? 'Uses the workflow’s harness and model defaults. An agent preset can select a different harness.'
-            : workflowSettings
-              ? 'An agent preset can select a harness. Otherwise, a connected agent picks up the assignment.'
-              : 'An agent connected through MCP picks up the assignment.'}{' '}
-        <a
-          href={`${paths.harnesses}#harnesses`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Manage harnesses
-        </a>
-      </p>
-      {workflowSettings && (concurrency !== undefined || concurrencyError) && (
-        <p className="hint">
-          {concurrencyError ||
-            (concurrency === null
-              ? 'No shared assignment limit. Interlock starts every ready assignment; workflow requirements and resource coordination still apply.'
-              : `Up to ${concurrency} Agent assignments at once across all harnesses and workflows.`)}{' '}
-          <a
-            href={`${paths.harnesses}#concurrency`}
-            target="_blank"
-            rel="noreferrer"
+        <div>
+          <NativeSelect
+            label={
+              inherit !== undefined ? 'Executor' : 'Default Agent executor'
+            }
+            value={
+              value ??
+              (inherit !== undefined && value === undefined
+                ? '__inherit'
+                : '__manual')
+            }
+            onChange={(e) =>
+              onChange(
+                e.currentTarget.value === '__inherit'
+                  ? undefined
+                  : e.currentTarget.value === '__manual'
+                    ? null
+                    : e.currentTarget.value,
+              )
+            }
           >
-            Manage shared limit
-          </a>
-        </p>
-      )}
-      {onPermissionsChange && (
-        <NativeSelect
-          mt="md"
-          label="Agent permissions"
-          value={workflowPermissions ?? '__default'}
-          onChange={(e) =>
-            onPermissionsChange(
-              e.currentTarget.value === '__default'
-                ? undefined
-                : (e.currentTarget.value as ExecutorPermissionMode),
-            )
-          }
-          data={[
-            { value: '__default', label: 'Use harness default' },
-            ...permissionOptions,
-          ]}
-        />
-      )}
-      {(selected || onPermissionsChange) && (
-        <p className="hint">
-          {effective ? (
-            <>
-              {permissionLabels[effective]} ·{' '}
-              {workflowPermissions
-                ? 'workflow override'
-                : `inherited from ${profile?.name ?? selected}`}
-              . {permissionDescriptions[effective]}
-            </>
-          ) : (
-            'Each managed Agent uses its selected harness’s default permissions.'
-          )}
-          {onPermissionsChange &&
-            !selected &&
-            ' Connected agents keep their own permissions.'}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="hint">
-          Harness settings could not be loaded. {error}
-        </p>
-      )}
+            {inherit !== undefined && (
+              <option value="__inherit">
+                Workflow default · {inherit || 'No default harness'}
+              </option>
+            )}
+            <option value="__manual">
+              {workflowSettings ? 'No default harness' : 'Connected agent'}
+            </option>
+            {profiles
+              ?.filter(
+                (p) =>
+                  p.id === value ||
+                  (isPrimaryHarness(p) && isAvailableHarness(p)),
+              )
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {harnessLabel(p)}
+                  {!p.enabled ? ' · disabled' : ''}
+                </option>
+              ))}
+            {value && !profiles?.some((p) => p.id === value) && (
+              <option value={value}>{value} · not configured</option>
+            )}
+          </NativeSelect>
+          <p className="hint">
+            {value
+              ? 'An Agent preset can select a different harness.'
+              : inherit !== undefined && value === undefined
+                ? 'Uses the workflow’s harness and model defaults. An agent preset can select a different harness.'
+                : workflowSettings
+                  ? 'An agent preset can select a harness. Otherwise, a connected agent picks up the assignment.'
+                  : 'An agent connected through MCP picks up the assignment.'}{' '}
+            <a
+              href={`${paths.harnesses}#harnesses`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Manage harnesses
+            </a>
+          </p>
+        </div>
+        {(selected || onPermissionsChange) && (
+          <div>
+            {onPermissionsChange && (
+              <NativeSelect
+                label="Agent permissions"
+                value={workflowPermissions ?? '__default'}
+                onChange={(e) =>
+                  onPermissionsChange(
+                    e.currentTarget.value === '__default'
+                      ? undefined
+                      : (e.currentTarget.value as ExecutorPermissionMode),
+                  )
+                }
+                data={[
+                  { value: '__default', label: 'Use harness default' },
+                  ...permissionOptions,
+                ]}
+              />
+            )}
+            {(selected || onPermissionsChange) && (
+              <p className="hint">
+                {effective ? (
+                  <>
+                    {permissionLabels[effective]} ·{' '}
+                    {workflowPermissions
+                      ? 'workflow override'
+                      : `inherited from ${profile?.name ?? selected}`}
+                    . {permissionDescriptions[effective]}
+                  </>
+                ) : (
+                  'Each managed Agent uses its selected harness’s default permissions.'
+                )}
+                {onPermissionsChange &&
+                  !selected &&
+                  ' Connected agents keep their own permissions.'}
+              </p>
+            )}
+          </div>
+        )}
+      </SimpleGrid>
       {(onModelChange || (value !== null && onNodeModelChange)) && (
-        <div style={{ marginTop: 20 }}>
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
           <ModelSettings
             allowAliases
+            compact
             referenceMode={workflowModelMode}
-            modelHint={`${nodeModel && onNodeModelChange ? `${nodeModel} · node override.` : workflowModel ? `${workflowModel} · ${onNodeModelChange ? 'inherited from workflow' : 'workflow override'}.` : profile ? `${profile.model ?? 'CLI default'} · inherited from ${profile.name}.` : 'Each managed Agent uses its selected harness’s default model.'}${onModelChange ? ' Agent nodes can override the model and thinking effort. Connected agents keep their own settings.' : ''}`}
+            modelHint={
+              onNodeModelChange
+                ? nodeModel
+                  ? `${nodeModel} · node override.`
+                  : workflowModel
+                    ? `${workflowModel} · inherited from workflow.`
+                    : undefined
+                : !workflowModel && profile
+                  ? `${profile.model ?? 'CLI default'} · inherited from ${harnessLabel(profile)}.`
+                  : undefined
+            }
             label={onNodeModelChange ? 'Model' : 'Agent model'}
             defaultLabel={
               onNodeModelChange ? 'Use workflow default' : 'Use harness default'
@@ -214,8 +218,28 @@ export function ExecutorSelect({
             onModelChange={onNodeModelChange ?? onModelChange!}
             onEffortChange={onNodeEffortChange ?? onEffortChange ?? (() => {})}
           />
-        </div>
+        </SimpleGrid>
       )}
-    </div>
+      {workflowSettings && (concurrency !== undefined || concurrencyError) && (
+        <p className="hint">
+          {concurrencyError ||
+            (concurrency === null
+              ? 'No shared assignment limit. Interlock starts every ready assignment; workflow requirements and resource coordination still apply.'
+              : `Up to ${concurrency} Agent assignments at once across all harnesses and workflows.`)}{' '}
+          <a
+            href={`${paths.harnesses}#concurrency`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Manage shared limit
+          </a>
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="hint">
+          Harness settings could not be loaded. {error}
+        </p>
+      )}
+    </Stack>
   );
 }

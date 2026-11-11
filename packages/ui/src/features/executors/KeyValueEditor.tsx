@@ -7,6 +7,8 @@ import styles from './CustomProfileDialog.module.css';
 
 export interface KeyValueEditorProps {
   label: string;
+  addLabel: string;
+  hideLabel?: boolean;
   values: Record<string, string>;
   onChange: (values: Record<string, string>) => void;
   keyPlaceholder?: string;
@@ -16,6 +18,8 @@ export interface KeyValueEditorProps {
 
 export function KeyValueEditor({
   label,
+  addLabel,
+  hideLabel = false,
   values,
   onChange,
   keyPlaceholder = 'VARIABLE_NAME',
@@ -82,13 +86,13 @@ export function KeyValueEditor({
   return (
     <div className={styles.keyValueContainer}>
       <div className={styles.keyValueHeader}>
-        <span className={styles.fieldLabel}>{label}</span>
+        {!hideLabel && <span className={styles.fieldLabel}>{label}</span>}
         <Button
           variant="ghost"
           leftSection={<Plus size={12} />}
           onClick={handleAdd}
         >
-          Add variable
+          {addLabel}
         </Button>
       </div>
 
@@ -97,12 +101,14 @@ export function KeyValueEditor({
           {entries.map(([key, val], idx) => (
             <div key={idx} className={styles.keyValueRow}>
               <TextInput
+                aria-label={`${label} key ${idx + 1}`}
                 placeholder={keyPlaceholder}
                 value={key}
                 onChange={(e) => handleKeyChange(idx, e.currentTarget.value)}
                 className={styles.keyInput}
               />
               <TextInput
+                aria-label={`${label} value ${idx + 1}`}
                 placeholder={valuePlaceholder}
                 value={val}
                 onChange={(e) => handleValueChange(idx, e.currentTarget.value)}
