@@ -165,6 +165,7 @@ export function compareWorkflow(
     ['executor', 'Default Agent executor'],
     ['agentPermissions', 'Agent permissions'],
     ['agentModel', 'Agent model'],
+    ['agentModelMode', 'Agent model selection'],
     ['agentEffort', 'Agent thinking effort'],
     ['cwd', 'Working directory'],
     ['continueOnMissingResult', 'Missing result continuation'],

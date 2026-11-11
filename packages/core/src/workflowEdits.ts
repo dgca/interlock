@@ -47,7 +47,7 @@ export const workflowEditsSchema = z
   .array(z.lazy(() => authoringJsonSchema))
   .max(100)
   .describe(
-    'Ordered list, at most 100 edits. Each edit has op: add_node with node; update_node with id, set and optional unset; remove_node with id; add_edge with edge; update_edge with id, set and optional unset; remove_edge with id; or update_settings with set and optional unset. Updates replace named fields shallowly. IDs and node kinds cannot change. Settings include cwd, pinPromptsAtPublish, unclaimedStallMs, claimedIdleStallMs, humanWaitStallMs, runStallMs, idleRecovery, inputSchema, outputSchema, maxSteps, maxActiveRuns, excludeStages, executor, agentPermissions, agentModel, agentEffort, continueOnMissingResult, transientRetry, sessionNameTemplate. Agent model/effort override workflow defaults. agentModel/agentEffort set workflow defaults; omission inherits harness settings. Null effort uses native defaults. executor is a local profile reference. agentPermissions overrides managed Agent defaults with read-only, standard or full-access; unset inherits each harness default. Unknown fields reject the indexed operation. Node/edge objects use the workflow definition format. Added scripts default to JavaScript; existing omitted language retains Bash.',
+    'Ordered list, at most 100 edits. Each edit has op: add_node with node; update_node with id, set and optional unset; remove_node with id; add_edge with edge; update_edge with id, set and optional unset; remove_edge with id; or update_settings with set and optional unset. Updates replace named fields shallowly. IDs and node kinds cannot change. Settings include cwd, pinPromptsAtPublish, unclaimedStallMs, claimedIdleStallMs, humanWaitStallMs, runStallMs, idleRecovery, inputSchema, outputSchema, maxSteps, maxActiveRuns, excludeStages, executor, agentPermissions, agentModel, agentModelMode, agentEffort, continueOnMissingResult, transientRetry, sessionNameTemplate. Omitted managed overrides inherit. Null effort uses native defaults. executor is a local profile reference. agentPermissions overrides managed Agent defaults with read-only, standard or full-access; unset inherits each harness default. Unknown fields reject the indexed operation. Node/edge objects use the workflow definition format. Added scripts default to JavaScript; existing omitted language retains Bash.',
   );
 function parseStrict<S extends z.ZodTypeAny>(
   schema: S,
@@ -113,6 +113,7 @@ export function draftChanges(
       'executor',
       'agentPermissions',
       'agentModel',
+      'agentModelMode',
       'agentEffort',
       'continueOnMissingResult',
       'transientRetry',
@@ -252,6 +253,9 @@ export function applyWorkflowEdits(
           ...(definition.agentModel
             ? { agentModel: definition.agentModel }
             : {}),
+          ...(definition.agentModelMode
+            ? { agentModelMode: definition.agentModelMode }
+            : {}),
           ...(definition.agentPermissions
             ? { agentPermissions: definition.agentPermissions }
             : {}),
@@ -282,6 +286,7 @@ export function applyWorkflowEdits(
             executor: true,
             agentPermissions: true,
             agentModel: true,
+            agentModelMode: true,
             agentEffort: true,
             continueOnMissingResult: true,
             transientRetry: true,
@@ -306,7 +311,13 @@ export function applyWorkflowEdits(
         delete definition.excludeStages;
         delete definition.executor;
         delete definition.agentPermissions;
+        if (
+          edit.unset?.includes('agentModel') &&
+          !Object.hasOwn(edit.set ?? {}, 'agentModelMode')
+        )
+          delete nextSettings.agentModelMode;
         delete definition.agentModel;
+        delete definition.agentModelMode;
         delete definition.agentEffort;
         delete definition.continueOnMissingResult;
         delete definition.transientRetry;
