@@ -122,24 +122,6 @@
   font-family: var(--mantine-font-family-monospace, monospace);
 }
 
-/* Token Chips */
-.tokenChips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-top: 4px;
-}
-
-.tokenChipsLabel {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.tokenChip {
-  font-family: var(--mono);
-}
-
 /* Roots List */
 .rootsList {
   display: flex;

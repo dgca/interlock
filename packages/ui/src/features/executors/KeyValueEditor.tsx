@@ -1,7 +1,5 @@
 import { Button, TextInput } from '../../design-system';
 
-import { useState } from 'react';
-
 import { Plus, Trash2 } from 'lucide-react';
 import styles from './CustomProfileDialog.module.css';
 
@@ -13,7 +11,6 @@ export interface KeyValueEditorProps {
   onChange: (values: Record<string, string>) => void;
   keyPlaceholder?: string;
   valuePlaceholder?: string;
-  tokens?: string[];
 }
 
 export function KeyValueEditor({
@@ -24,15 +21,8 @@ export function KeyValueEditor({
   onChange,
   keyPlaceholder = 'VARIABLE_NAME',
   valuePlaceholder = 'value',
-  tokens = [
-    '$INTERLOCK_WORK_ID',
-    '$INTERLOCK_RUN_ID',
-    '$INTERLOCK_CWD',
-    '$INTERLOCK_CLAIM_TOKEN',
-  ],
 }: KeyValueEditorProps) {
   const entries = Object.entries(values);
-  const [activeInputIndex, setActiveInputIndex] = useState<number | null>(null);
 
   const handleKeyChange = (index: number, newKey: string) => {
     const newEntries = [...entries];
@@ -70,19 +60,6 @@ export function KeyValueEditor({
     onChange(result);
   };
 
-  const insertToken = (token: string) => {
-    if (activeInputIndex !== null && activeInputIndex < entries.length) {
-      const currentVal = entries[activeInputIndex][1];
-      handleValueChange(activeInputIndex, currentVal + token);
-    } else if (entries.length > 0) {
-      const lastIndex = entries.length - 1;
-      const currentVal = entries[lastIndex][1];
-      handleValueChange(lastIndex, currentVal + token);
-    } else {
-      onChange({ ...values, NEW_VAR: token });
-    }
-  };
-
   return (
     <div className={styles.keyValueContainer}>
       <div className={styles.keyValueHeader}>
@@ -112,7 +89,6 @@ export function KeyValueEditor({
                 placeholder={valuePlaceholder}
                 value={val}
                 onChange={(e) => handleValueChange(idx, e.currentTarget.value)}
-                onFocus={() => setActiveInputIndex(idx)}
                 className={styles.valueInput}
               />
               <Button
@@ -124,23 +100,6 @@ export function KeyValueEditor({
                 <Trash2 size={13} />
               </Button>
             </div>
-          ))}
-        </div>
-      )}
-
-      {tokens && tokens.length > 0 && (
-        <div className={styles.tokenChips}>
-          <span className={styles.tokenChipsLabel}>Template tokens:</span>
-          {tokens.map((tok) => (
-            <Button
-              variant="ghost"
-              key={tok}
-              className={styles.tokenChip}
-              onClick={() => insertToken(tok)}
-              title={`Insert ${tok}`}
-            >
-              {tok}
-            </Button>
           ))}
         </div>
       )}

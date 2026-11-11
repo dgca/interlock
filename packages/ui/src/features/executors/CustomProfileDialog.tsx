@@ -308,7 +308,6 @@ export function CustomProfileDialog({
       url: [archiveUrl, setArchiveUrl],
     },
   ] as const;
-  const tokens = ['$INTERLOCK_WORK_ID', '$INTERLOCK_RUN_ID', '$INTERLOCK_CWD'];
   const descriptionOrder = ['label', 'input', 'description', 'error'] as const;
   return (
     <Modal
@@ -415,11 +414,6 @@ export function CustomProfileDialog({
                       onChange={setHeaders}
                       keyPlaceholder="Authorization"
                       valuePlaceholder="Bearer token"
-                      tokens={[
-                        '$INTERLOCK_WORK_ID',
-                        '$INTERLOCK_RUN_ID',
-                        '$INTERLOCK_CLAIM_TOKEN',
-                      ]}
                     />
                   </div>
                 </details>
@@ -480,12 +474,6 @@ export function CustomProfileDialog({
                     addLabel="Add variable"
                     values={env}
                     onChange={setEnv}
-                    tokens={[
-                      ...tokens,
-                      direct
-                        ? '$INTERLOCK_CLAIM_TOKEN'
-                        : '$INTERLOCK_CLAIM_TICKET',
-                    ]}
                   />
                   <TextInput
                     label="Working directory"
