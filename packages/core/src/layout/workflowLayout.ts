@@ -3,8 +3,12 @@ import type { WorkflowDefinition, WorkflowNode } from '../index.js';
 import {
   BATCH_INSET,
   PARALLEL_INSET,
-  parallelBranchTop,
-  NODE_SIZE,
+  PARALLEL_LANE_TOP,
+  PARALLEL_LANE_HEADER,
+  PARALLEL_LANE_MIN_HEIGHT,
+  PARALLEL_LANE_PADDING,
+  bindingsHeight,
+  placeParallelMembers,
   CANVAS_GAP,
   canvasGeometry,
 } from './canvasGeometry.js';
@@ -29,11 +33,14 @@ export function tidyWorkflow(
     for (const node of members) {
       if (node.kind === 'batch') arrange(node.id);
       if (node.kind === 'parallel') {
-        let top = PARALLEL_INSET.top;
+        let top =
+          PARALLEL_LANE_TOP + PARALLEL_LANE_HEADER + bindingsHeight(node);
         for (const branch of node.branches)
           top = Math.max(
-            top + 196,
-            arrange(node.id, branch.id, top) + CANVAS_GAP,
+            top + PARALLEL_LANE_MIN_HEIGHT,
+            arrange(node.id, branch.id, top) +
+              PARALLEL_LANE_PADDING +
+              PARALLEL_LANE_HEADER,
           );
       }
     }
@@ -94,23 +101,20 @@ export function newNodePosition(
   });
   const parentId = geometry.parents.get(node.id);
   const owner = parentId ? geometry.index.get(parentId) : undefined;
+  const current = canvasGeometry(definition);
   const siblings = definition.nodes.filter(
-    (n) => geometry.parents.get(n.id) === parentId,
+    (n) =>
+      geometry.parents.get(n.id) === parentId &&
+      (owner?.kind !== 'parallel' ||
+        n.parallelBranchId === node.parallelBranchId),
   );
   const position =
     owner?.kind === 'parallel'
       ? {
           x: PARALLEL_INSET.left,
           y:
-            parallelBranchTop(
-              Math.max(
-                0,
-                owner.branches.findIndex(
-                  ({ id }) => id === node.parallelBranchId,
-                ),
-              ),
-            ) -
-            NODE_SIZE.height / 2,
+            current.lanes(owner).find(({ id }) => id === node.parallelBranchId)
+              ?.contentTop ?? PARALLEL_INSET.top,
         }
       : parentId
         ? { x: BATCH_INSET.left, y: BATCH_INSET.top }
@@ -120,16 +124,19 @@ export function newNodePosition(
   do {
     collision = siblings.find((other) => {
       const bounds = geometry.size(other);
+      const placed = current.position(other);
       return (
-        position.x < other.position.x + bounds.width + CANVAS_GAP &&
-        position.x + dimensions.width + CANVAS_GAP > other.position.x &&
-        position.y < other.position.y + bounds.height + CANVAS_GAP &&
-        position.y + dimensions.height + CANVAS_GAP > other.position.y
+        position.x < placed.x + bounds.width + CANVAS_GAP &&
+        position.x + dimensions.width + CANVAS_GAP > placed.x &&
+        position.y < placed.y + bounds.height + CANVAS_GAP &&
+        position.y + dimensions.height + CANVAS_GAP > placed.y
       );
     });
     if (collision)
       position.x =
-        collision.position.x + geometry.size(collision).width + CANVAS_GAP;
+        current.position(collision).x +
+        geometry.size(collision).width +
+        CANVAS_GAP;
   } while (collision);
   return position;
 }
@@ -138,13 +145,13 @@ export function newNodePosition(
 export function separateNodes(
   definition: WorkflowDefinition,
 ): WorkflowDefinition {
-  const result = structuredClone(definition);
+  const result = placeParallelMembers(structuredClone(definition));
   const { parents } = canvasGeometry(result);
   const separate = (parentId?: string) => {
     const members = result.nodes.filter((n) => parents.get(n.id) === parentId);
     for (const node of members)
       if (node.kind === 'batch' || node.kind === 'parallel') separate(node.id);
-    const { size } = canvasGeometry(result);
+    const { size, laneFor } = canvasGeometry(result);
     members.sort(
       (a, b) => a.position.x - b.position.x || a.position.y - b.position.y,
     );
@@ -153,6 +160,9 @@ export function separateNodes(
       let collision: WorkflowNode | undefined;
       do {
         collision = placed.find((other) => {
+          const lane = laneFor(node);
+          const otherLane = laneFor(other);
+          if (lane && otherLane && lane.id !== otherLane.id) return false;
           const a = size(node),
             b = size(other);
           return (

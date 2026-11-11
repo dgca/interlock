@@ -6,7 +6,7 @@ Use a **Parallel** group when several paths can start from the same input and th
 
 1. In the workflow editor, choose **Add node**, then **Parallel**.
 2. Name each branch. The names become keys in the joined result. Set **Branches at a time** to bound active paths.
-3. Add steps from each named branch. The first step connects to its start. Connect every terminal route in the branch to **Join**.
+3. Choose **Add node** in a lane header. The editor connects the first node to the lane's start and appends new nodes when the lane has one ordinary end. For other layouts, connect the steps within the lane. Unconnected success outputs return automatically. Connect any configured failure or timeout routes within the lane.
 4. Connect the incoming step to **In**. Connect **Out** to the next step. Save the draft and publish when all paths are connected.
 
 For example, send a change to independent specification and code reviewers. Name the branches `specReview` and `codeReview`. Configure each reviewer separately. After both succeed, the continuation receives `{"specReview":{...},"codeReview":{...}}`. A group output contract checks this whole object. Each branch step still checks its own contracts.
@@ -29,7 +29,7 @@ Parallel branch steps count toward the owning workflow run's `maxSteps`. The gro
 
 ## Author through CLI or MCP
 
-A definition uses `kind: "parallel"` with `branches: [{id, key}]` and optional `concurrency`. Give each member the owning `parallelId` and its `parallelBranchId`. Use a source port `branch:<id>` to start each path. Return a path to its group with `targetHandle: "join"`. The group's `complete` port forwards the collected object. Renaming a result key leaves the branch ID and edges intact.
+A definition uses `kind: "parallel"` with `branches: [{id, key}]` and optional `concurrency`. Give each member the owning `parallelId` and its `parallelBranchId`. Use a source port `branch:<id>` to start each path. Return a path to its group with `targetHandle: "join"`. The visual editor saves these return edges automatically and hides them on the canvas. The group's `complete` port forwards the collected object. Renaming a result key leaves the branch ID and edges intact.
 
 A branch can read its own completed node output or execution provenance. To share earlier parent values, pass them through the group's input. The parent's continuation can read the whole joined object. See [step data](node-data.md).
 

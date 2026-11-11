@@ -8,7 +8,12 @@ import type { Edge } from '@xyflow/react';
 import type { CanvasNode } from './FlowNode';
 import type { LoopEdgeData } from './LoopEdge';
 import type { OrthoEdgeData } from './OrthoEdge';
-import { CANVAS_GAP, canvasGeometry } from '@interlock/core/layout';
+import {
+  CANVAS_GAP,
+  PARALLEL_INSET,
+  PARALLEL_LANE_PADDING,
+  canvasGeometry,
+} from '@interlock/core/layout';
 import { bindingNodeIds, bindingNodes } from './inputBindings';
 import { outputPortTop } from '@interlock/core/layout';
 import styles from './WorkflowEditor.module.css';
@@ -23,6 +28,7 @@ type Options = {
   onEdit?: (node: WorkflowNode) => void;
   onAdd?: (batchId: string) => void;
   onAddBranch?: (parallelId: string, branchId: string) => void;
+  connectionPorts?: Map<string, string[]>;
   onToggle?: (batchId: string) => void;
   onFocusNode?: (nodeId: string) => void;
   status?: (nodeId: string) => string | undefined;
@@ -33,7 +39,7 @@ export function canvasGraph(
   definition: WorkflowDefinition,
   options: Options = {},
 ): { nodes: CanvasNode[]; edges: Edge[] } {
-  const { index, parents, size } = canvasGeometry(
+  const { index, parents, size, position, lanes, laneFor } = canvasGeometry(
     definition,
     options.collapsed,
   );
@@ -57,6 +63,7 @@ export function canvasGraph(
   definition.nodes.forEach(add);
   const hiddenIds = new Set(ordered.filter(hidden).map((node) => node.id));
   const hiddenEdge = (edge: WorkflowDefinition['edges'][number]) =>
+    edge.targetHandle === 'join' ||
     hiddenIds.has(edge.source) ||
     hiddenIds.has(edge.target) ||
     (index.get(edge.source)?.kind === 'batch' &&
@@ -65,7 +72,7 @@ export function canvasGraph(
     (index.get(edge.source)?.kind === 'parallel' &&
       edge.port !== 'complete' &&
       Boolean(options.collapsed?.has(edge.source))) ||
-    ((edge.targetHandle === 'end' || edge.targetHandle === 'join') &&
+    (edge.targetHandle === 'end' &&
       Boolean(options.collapsed?.has(edge.target)));
   const selectedVisibleEdges = definition.edges.filter(
     (edge) =>
@@ -130,10 +137,23 @@ export function canvasGraph(
   const nodes: CanvasNode[] = ordered.map((node) => ({
     id: node.id,
     type: 'workflow',
-    position: node.position,
+    position: position(node),
     parentId: parents.get(node.id),
-    // Add step assigns membership; dragging across a border never changes it.
-    extent: parents.get(node.id) ? 'parent' : undefined,
+    extent: (() => {
+      const lane = laneFor(node);
+      const parent = parents.get(node.id);
+      return lane && parent !== undefined
+        ? [
+            [PARALLEL_INSET.left, lane.contentTop],
+            [
+              size(index.get(parent)!).width - PARALLEL_INSET.right,
+              lane.bottom - PARALLEL_LANE_PADDING,
+            ],
+          ]
+        : parent
+          ? 'parent'
+          : undefined;
+    })(),
     dragHandle:
       node.kind === 'batch' || node.kind === 'parallel'
         ? '.batch-drag'
@@ -158,6 +178,8 @@ export function canvasGraph(
     data: {
       node,
       activePorts: [...(activePorts.get(node.id) ?? [])],
+      connectionPorts: options.connectionPorts?.get(node.id),
+      parallelLanes: node.kind === 'parallel' ? lanes(node) : undefined,
       bindingSources: bindingNodeIds(node).map((id) => {
         const source = bindingNodes(node, definition.nodes).find(
           (candidate) => candidate.id === id,
@@ -214,7 +236,8 @@ export function canvasGraph(
   const absolute = (node: WorkflowNode): { x: number; y: number } => {
     const parent = parents.get(node.id);
     const origin = parent ? absolute(index.get(parent)!) : { x: 0, y: 0 };
-    return { x: origin.x + node.position.x, y: origin.y + node.position.y };
+    const placed = position(node);
+    return { x: origin.x + placed.x, y: origin.y + placed.y };
   };
   // Route loops around the cards between their endpoints, on whichever side
   // already carries fewer loops over that span (ties go below). Overlapping

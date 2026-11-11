@@ -17,6 +17,7 @@ import {
   parallelSize,
   bindingsHeight,
   canvasGeometry,
+  separateNodes,
 } from '@interlock/core/layout';
 
 const layered = {
@@ -197,5 +198,7 @@ export async function tidyWorkflowElk(
     }
   };
   place(laid);
-  return result;
+  return result.nodes.some((node) => node.kind === 'parallel')
+    ? separateNodes(result)
+    : result;
 }

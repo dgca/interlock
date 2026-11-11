@@ -358,21 +358,75 @@
   font-size: 10px;
   color: var(--accent-text);
 }
-.parallelStart {
-  position: absolute;
-  left: 22px;
-  display: grid;
-  justify-items: start;
-  gap: 6px;
-  width: 102px;
-  color: var(--accent-text);
-  font-size: 12px;
+.parallelGroup {
+  background: var(--workspace);
 }
-.parallelStart strong {
-  max-width: 100%;
+.parallelHeader {
+  height: 92px;
+  border-bottom: 0;
+}
+.parallelTitle {
+  flex: 1;
+  min-width: 0;
+}
+.parallelTitle > strong {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.parallelSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.parallelLane {
+  position: absolute;
+  inset-inline: 0;
+  border-top: 1px solid var(--border);
+}
+.parallelLaneHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 36px;
+  padding-inline: 16px;
+  color: var(--text);
+  font-size: 12px;
+}
+.parallelLaneHeader strong {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.parallelLaneHeader button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+:global(.react-flow__handle[data-connect-target]) {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 3px;
+  opacity: 1;
+}
+.wiring :global(.react-flow__edge),
+.wiring :global(.react-flow__edge-interaction) {
+  pointer-events: none;
+}
+.connectionHint {
+  max-width: min(440px, 85%);
+  padding: 8px 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
 }
 .portInput,
 .portOutput {

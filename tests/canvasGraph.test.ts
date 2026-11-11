@@ -1,10 +1,25 @@
 import { expect, it } from 'vitest';
-import { definitionSchema, nodeSchema } from '@interlock/core';
+import {
+  definitionSchema,
+  nodeSchema,
+  validateDefinition,
+} from '@interlock/core';
+import {
+  canvasGeometry,
+  newNodePosition,
+  tidyWorkflow,
+} from '@interlock/core/layout';
+import { tidyWorkflowElk } from '../packages/ui/src/features/workflows/workflowLayoutElk';
+import {
+  parallelTail,
+  withParallelReturns,
+} from '../packages/ui/src/features/workflows/parallelReturns';
 import {
   canvasGraph,
   withoutNodes,
 } from '../packages/ui/src/features/workflows/canvasGraph';
 import { nestedBatches, batchDefinition } from './fixtures/batch';
+import { parallelDefinition } from './fixtures/parallel';
 
 function placedNode(id: string, x: number, y: number) {
   return nodeSchema.parse({
@@ -16,6 +31,81 @@ function placedNode(id: string, x: number, y: number) {
     position: { x, y },
   });
 }
+
+it('keeps Parallel members in named lanes across legacy positions, add, and both layouts', async () => {
+  const definition = parallelDefinition();
+  definition.nodes.find((n) => n.id === 'r0')!.position = { x: 172, y: 400 };
+  definition.nodes.find((n) => n.id === 'r1')!.position = { x: 172, y: 180 };
+  const original = structuredClone(definition);
+  const newMember = nodeSchema.parse({
+    ...placedNode('new-spec-step', 0, 0),
+    parallelId: 'parallel',
+    parallelBranchId: 'r0',
+  });
+  const position = newNodePosition(definition, newMember);
+  const graph = canvasGraph(definition);
+  const spec = graph.nodes.find((node) => node.id === 'r0')!;
+  expect(position.y).toBe((spec.extent as number[][])[0][1]);
+  expect(definition).toEqual(original);
+
+  for (const layout of [
+    definition,
+    tidyWorkflow(definition),
+    await tidyWorkflowElk(definition),
+  ]) {
+    expect(layout.edges).toEqual(original.edges);
+    expect(() => validateDefinition(layout)).not.toThrow();
+    const geometry = canvasGeometry(layout);
+    const group = geometry.index.get('parallel')!;
+    const lanes = geometry.lanes(group);
+    expect(lanes.map(({ id }) => id)).toEqual(['r0', 'r1']);
+    expect(lanes[0].bottom).toBeLessThanOrEqual(lanes[1].top);
+    for (const lane of lanes) {
+      const member = geometry.index.get(lane.id)!;
+      const projected = geometry.position(member);
+      expect(projected.y).toBeGreaterThanOrEqual(lane.contentTop);
+      expect(projected.y + geometry.size(member).height).toBeLessThan(
+        lane.bottom,
+      );
+      const rendered = canvasGraph(layout).nodes.find(
+        (node) => node.id === member.id,
+      )!;
+      expect(rendered.position).toEqual(projected);
+      expect((rendered.extent as number[][])[0][1]).toBe(lane.contentTop);
+    }
+  }
+});
+
+it('saves implicit success returns without concealing unconnected timeout routes', () => {
+  const definition = parallelDefinition();
+  Object.assign(
+    definition.nodes.find((node) => node.id === 'r0')!,
+    {
+      unclaimedTimeoutMs: 10_000,
+    },
+  );
+  definition.edges = definition.edges.filter(
+    (edge) => edge.targetHandle !== 'join',
+  );
+  const draft = withParallelReturns(definition);
+  const specReturn = draft.edges.find((edge) => edge.source === 'r0')!;
+  expect(specReturn).toMatchObject({
+    port: 'default',
+    target: 'parallel',
+    targetHandle: 'join',
+  });
+  expect(
+    draft.edges.some((edge) => edge.source === 'r0' && edge.port === 'timeout'),
+  ).toBe(false);
+  expect(parallelTail(draft, 'parallel', 'r0')).toBeUndefined();
+  expect(parallelTail(draft, 'parallel', 'r1')?.port).toBe('default');
+  expect(withParallelReturns(draft)).toBe(draft);
+  expect(
+    canvasGraph(draft)
+      .edges.filter((edge) => !edge.hidden)
+      .map((edge) => edge.id),
+  ).toEqual(definition.edges.map((edge) => edge.id));
+});
 
 it('shows the successor input contract on continuing Exits', () => {
   const d = batchDefinition();

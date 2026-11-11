@@ -25,9 +25,14 @@ import {
   Background,
   Controls,
   MiniMap,
+  Panel,
   applyNodeChanges,
   applyEdgeChanges,
+  useStoreApi,
   type Connection,
+  type OnConnectStart,
+  type OnConnectStartParams,
+  type OnConnectEnd,
   type ReactFlowInstance,
 } from '@xyflow/react';
 import {
@@ -47,6 +52,7 @@ import {
   applyWorkflowPositions,
   sameWorkflowContent,
   parallelConnectionError,
+  outgoingPorts,
   type Workflow,
   type WorkflowNode,
   type WorkflowEdge,
@@ -71,17 +77,74 @@ import { useWorkflowLayout } from './useWorkflowLayout';
 import { useBoxZoom } from './useBoxZoom';
 import { canvasNavigation, CanvasZoomBox } from './CanvasNavigation';
 import navigationStyles from './CanvasNavigation.module.css';
-import { tidyWorkflow } from '@interlock/core/layout';
+import { placeParallelMembers, tidyWorkflow } from '@interlock/core/layout';
 import { tidyWorkflowElk } from './workflowLayoutElk';
 import { TidyControl } from './TidyControl';
 import { api } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
+import { withParallelReturns } from './parallelReturns';
 // Keep the workflow toolbar and lower canvas controls outside fitted node bounds.
 const editorFitView = {
   padding: { top: '82px', right: '24px', bottom: '162px', left: '24px' },
 } as const;
 const nodeTypes = { workflow: FlowNode };
 const edgeTypes = { loop: LoopEdge, ortho: OrthoEdge };
+
+function validConnection(index: Map<string, WorkflowNode>, c: Connection) {
+  const source = index.get(c.source);
+  const target = index.get(c.target);
+  return Boolean(
+    source &&
+    source.kind !== 'exit' &&
+    target &&
+    target.kind !== 'entry' &&
+    !parallelConnectionError(
+      source,
+      target,
+      c.sourceHandle ?? 'default',
+      c.targetHandle as WorkflowEdge['targetHandle'],
+    ) &&
+    !(
+      source.kind === 'batch' &&
+      c.sourceHandle === 'item' &&
+      c.targetHandle === 'end'
+    ) &&
+    (c.targetHandle !== 'end' || target.kind === 'batch') &&
+    (source.kind === 'batch' && c.sourceHandle === 'item'
+      ? source.id
+      : source.batchId) ===
+      (c.targetHandle === 'end' ? target.id : target.batchId),
+  );
+}
+
+function wireBetween(
+  start: OnConnectStartParams,
+  nodeId: string,
+  handleId: string,
+): Connection {
+  return start.handleType === 'source'
+    ? {
+        source: start.nodeId!,
+        sourceHandle: start.handleId,
+        target: nodeId,
+        targetHandle: handleId,
+      }
+    : {
+        source: nodeId,
+        sourceHandle: handleId,
+        target: start.nodeId!,
+        targetHandle: start.handleId,
+      };
+}
+
+function ResetClickConnection({ request }: { request: number }) {
+  const store = useStoreApi();
+  useEffect(() => {
+    if (request) store.setState({ connectionClickStartHandle: null });
+  }, [request, store]);
+  return null;
+}
+
 export function WorkflowEditor({
   workflow,
   workflows,
@@ -144,6 +207,10 @@ export function WorkflowEditor({
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set());
   const [hovered, setHovered] = useState<string>();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const wireStart = useRef<OnConnectStartParams | undefined>(undefined);
+  const [wire, setWire] = useState<OnConnectStartParams>();
+  const [wireMessage, setWireMessage] = useState<string>();
+  const [wireReset, setWireReset] = useState(0);
   const layout = useWorkflowLayout(workflow);
   const dragging = useRef<WorkflowDefinition | undefined>(undefined);
   const history = useWorkflowHistory({
@@ -152,6 +219,10 @@ export function WorkflowEditor({
     description: workflow.description,
   });
   const { draft, name, description } = history.present;
+  const nodeIndex = useMemo(
+    () => new Map(draft.nodes.map((node) => [node.id, node])),
+    [draft.nodes],
+  );
   useEffect(() => {
     if (!fitAfterTidy.current) return;
     fitAfterTidy.current = false;
@@ -306,6 +377,60 @@ export function WorkflowEditor({
     name: workflow.name,
     description: workflow.description,
   });
+  const startWire: OnConnectStart = (_, start) => {
+    if (!start.nodeId) return;
+    wireStart.current = start;
+    setWire(start);
+    setWireMessage(undefined);
+  };
+  const endWire: OnConnectEnd = (event, state) => {
+    const start = wireStart.current;
+    wireStart.current = undefined;
+    setWire(undefined);
+    if (!start?.nodeId || state.isValid) return;
+    const handle =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>('.react-flow__handle')
+        : null;
+    const nodeId = state.toHandle?.nodeId ?? handle?.dataset.nodeid;
+    const handleId = state.toHandle?.id ?? handle?.dataset.handleid;
+    if (!nodeId || !handleId) return;
+    const targetIsSource = state.toHandle
+      ? state.toHandle.type === 'source'
+      : handle?.classList.contains('source');
+    if (targetIsSource === (start.handleType === 'source')) return;
+    const c = wireBetween(start, nodeId, handleId);
+    const source = nodeIndex.get(c.source);
+    const target = nodeIndex.get(c.target);
+    if (!source || !target) return;
+    const problem = parallelConnectionError(
+      source,
+      target,
+      c.sourceHandle ?? 'default',
+      c.targetHandle as WorkflowEdge['targetHandle'],
+    );
+    if (!problem) return;
+    const pathName = (node: WorkflowNode) => {
+      const group = node.parallelId
+        ? nodeIndex.get(node.parallelId)
+        : undefined;
+      return group?.kind === 'parallel'
+        ? group.branches.find((branch) => branch.id === node.parallelBranchId)
+            ?.key
+        : undefined;
+    };
+    const fromPath = pathName(source),
+      toPath = pathName(target);
+    setWireMessage(
+      fromPath && toPath && source.parallelId === target.parallelId
+        ? `${target.label} is in ${toPath}. Connect within ${fromPath}.`
+        : fromPath
+          ? `Connect ${source.label} to another node in ${fromPath}.`
+          : toPath
+            ? `${target.label} is in ${toPath}. Connect from that lane's start or another node in it.`
+            : problem,
+    );
+  };
   const remoteChanged =
     workflow.draftRevision > revision ||
     (workflow.draftRevision === revision && remoteSnapshot !== saved);
@@ -395,50 +520,74 @@ export function WorkflowEditor({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   });
-  const { nodes, edges } = useMemo(
-    () =>
-      canvasGraph(draft, {
-        collapsed,
-        selected,
-        selectedEdges,
-        hovered,
-        onEdit: (node) => setEditing({ node }),
-        onFocusNode: (id) => {
-          setSelected(new Set([id]));
-          setSelectedEdges(new Set());
-          void flowRef.current?.fitView({
-            nodes: [{ id }],
-            padding: 0.5,
-            maxZoom: 1,
-            duration: 180,
-          });
-        },
-        onOpenWorkflow,
-        workflows,
-        onAdd: (batchId) => setEditing({ creating: true, batchId }),
-        onAddBranch: (parallelId, parallelBranchId) =>
-          setEditing({
-            creating: true,
-            parallel: { parallelId, parallelBranchId },
-          }),
-        onToggle: (id) =>
-          setCollapsed((current) => {
-            const next = new Set(current);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-          }),
-      }),
-    [
-      draft,
+  const { nodes, edges } = useMemo(() => {
+    const connectionPorts = new Map<string, string[]>();
+    const origin = wire?.nodeId ? nodeIndex.get(wire.nodeId) : undefined;
+    if (
+      wire &&
+      origin &&
+      (origin.parallelId ||
+        (origin.kind === 'parallel' && wire.handleId?.startsWith('branch:')))
+    ) {
+      for (const node of draft.nodes) {
+        const type = wire.handleType === 'source' ? 'target' : 'source';
+        const ports = type === 'source' ? outgoingPorts(node) : ['default'];
+        const allowed = ports.filter(
+          (id) =>
+            node.id !== origin.id &&
+            validConnection(nodeIndex, wireBetween(wire, node.id, id)),
+        );
+        if (allowed.length)
+          connectionPorts.set(
+            node.id,
+            allowed.map((id) => `${type}:${id}`),
+          );
+      }
+    }
+    return canvasGraph(draft, {
+      collapsed,
       selected,
       selectedEdges,
       hovered,
-      collapsed,
-      workflows,
+      onEdit: (node) => setEditing({ node }),
+      onFocusNode: (id) => {
+        setSelected(new Set([id]));
+        setSelectedEdges(new Set());
+        void flowRef.current?.fitView({
+          nodes: [{ id }],
+          padding: 0.5,
+          maxZoom: 1,
+          duration: 180,
+        });
+      },
       onOpenWorkflow,
-    ],
-  );
+      workflows,
+      onAdd: (batchId) => setEditing({ creating: true, batchId }),
+      onAddBranch: (parallelId, parallelBranchId) =>
+        setEditing({
+          creating: true,
+          parallel: { parallelId, parallelBranchId },
+        }),
+      connectionPorts,
+      onToggle: (id) =>
+        setCollapsed((current) => {
+          const next = new Set(current);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        }),
+    });
+  }, [
+    draft,
+    selected,
+    selectedEdges,
+    hovered,
+    collapsed,
+    workflows,
+    onOpenWorkflow,
+    wire,
+    nodeIndex,
+  ]);
   const save = async () => {
     if (rawInvalid) throw new Error('Fix the raw JSON before saving.');
     await layout.flush();
@@ -562,25 +711,28 @@ export function WorkflowEditor({
     }
   };
   const connect = (c: Connection) =>
-    setDraft((d) => ({
-      ...d,
-      edges: [
-        ...d.edges.filter(
-          (e) =>
-            !(
-              e.source === c.source && e.port === (c.sourceHandle ?? 'default')
-            ),
-        ),
-        {
-          id: crypto.randomUUID(),
-          source: c.source,
-          target: c.target,
-          port: (c.sourceHandle ?? 'default') as WorkflowEdge['port'],
-          targetHandle: (c.targetHandle ??
-            'default') as WorkflowEdge['targetHandle'],
-        },
-      ],
-    }));
+    setDraft((d) =>
+      withParallelReturns({
+        ...d,
+        edges: [
+          ...d.edges.filter(
+            (e) =>
+              !(
+                e.source === c.source &&
+                e.port === (c.sourceHandle ?? 'default')
+              ),
+          ),
+          {
+            id: crypto.randomUUID(),
+            source: c.source,
+            target: c.target,
+            port: (c.sourceHandle ?? 'default') as WorkflowEdge['port'],
+            targetHandle: (c.targetHandle ??
+              'default') as WorkflowEdge['targetHandle'],
+          },
+        ],
+      }),
+    );
   return (
     <div
       ref={editorRootRef}
@@ -960,6 +1112,7 @@ export function WorkflowEditor({
             ) : (
               <>
                 <ReactFlow
+                  className={wire ? styles.wiring : undefined}
                   onInit={(instance) => {
                     flowRef.current = instance;
                     boxZoom.onInit(instance);
@@ -984,10 +1137,10 @@ export function WorkflowEditor({
                     const edgeIds = new Set(deletingEdges.map((e) => e.id));
                     setDraft((d) => {
                       const retained = withoutNodes(d, nodeIds);
-                      return {
+                      return withParallelReturns({
                         ...retained,
                         edges: retained.edges.filter((e) => !edgeIds.has(e.id)),
-                      };
+                      });
                     });
                     setSelected(new Set());
                     setSelectedEdges(new Set());
@@ -1013,14 +1166,20 @@ export function WorkflowEditor({
                       return;
                     setDraft((d) => {
                       const retained = withoutNodes(
-                        d,
+                        changes.some(
+                          (change) =>
+                            change.type === 'position' &&
+                            nodeIndex.get(change.id)?.parallelId,
+                        )
+                          ? placeParallelMembers(d)
+                          : d,
                         new Set(
                           changes
                             .filter((c) => c.type === 'remove')
                             .map((c) => c.id),
                         ),
                       );
-                      return {
+                      const updated = {
                         ...retained,
                         nodes: retained.nodes.map((n) => {
                           const change = changes.find(
@@ -1031,6 +1190,9 @@ export function WorkflowEditor({
                             : n;
                         }),
                       };
+                      return changes.some((change) => change.type === 'remove')
+                        ? withParallelReturns(updated)
+                        : updated;
                     });
                   }}
                   onEdgesChange={(changes) => {
@@ -1039,50 +1201,36 @@ export function WorkflowEditor({
                       new Set(next.filter((e) => e.selected).map((e) => e.id)),
                     );
                     if (changes.every((c) => c.type === 'select')) return;
-                    setDraft((d) => ({
-                      ...d,
-                      edges: applyEdgeChanges(
-                        changes,
-                        canvasGraph(d).edges,
-                      ).map((e) => ({
-                        id: e.id,
-                        source: e.source,
-                        target: e.target,
-                        port: (e.sourceHandle ??
-                          'default') as WorkflowEdge['port'],
-                        targetHandle: (e.targetHandle ??
-                          'default') as WorkflowEdge['targetHandle'],
-                      })),
-                    }));
-                  }}
-                  onConnect={connect}
-                  isValidConnection={(c) => {
-                    const source = draft.nodes.find((n) => n.id === c.source);
-                    const target = draft.nodes.find((n) => n.id === c.target);
-                    return Boolean(
-                      source &&
-                      source.kind !== 'exit' &&
-                      target &&
-                      target.kind !== 'entry' &&
-                      !parallelConnectionError(
-                        source,
-                        target,
-                        c.sourceHandle ?? 'default',
-                        (c.targetHandle ??
-                          'default') as WorkflowEdge['targetHandle'],
-                      ) &&
-                      !(
-                        source.kind === 'batch' &&
-                        c.sourceHandle === 'item' &&
-                        c.targetHandle === 'end'
-                      ) &&
-                      (c.targetHandle !== 'end' || target.kind === 'batch') &&
-                      (source.kind === 'batch' && c.sourceHandle === 'item'
-                        ? source.id
-                        : source.batchId) ===
-                        (c.targetHandle === 'end' ? target.id : target.batchId),
+                    setDraft((d) =>
+                      withParallelReturns({
+                        ...d,
+                        edges: applyEdgeChanges(
+                          changes,
+                          canvasGraph(d).edges,
+                        ).map((e) => ({
+                          id: e.id,
+                          source: e.source,
+                          target: e.target,
+                          port: (e.sourceHandle ??
+                            'default') as WorkflowEdge['port'],
+                          targetHandle: (e.targetHandle ??
+                            'default') as WorkflowEdge['targetHandle'],
+                        })),
+                      }),
                     );
                   }}
+                  onConnect={connect}
+                  onConnectStart={startWire}
+                  onClickConnectStart={startWire}
+                  onConnectEnd={endWire}
+                  onClickConnectEnd={endWire}
+                  isValidConnection={(c) =>
+                    validConnection(nodeIndex, {
+                      ...c,
+                      sourceHandle: c.sourceHandle ?? null,
+                      targetHandle: c.targetHandle ?? null,
+                    })
+                  }
                   onNodeDoubleClick={(_, n) => {
                     if (boxZoom.active) return;
                     setSelected(new Set([n.id]));
@@ -1096,7 +1244,15 @@ export function WorkflowEditor({
                   nodesConnectable={!boxZoom.active}
                   elementsSelectable={!boxZoom.active}
                   elevateEdgesOnSelect
-                  onPaneClick={() => setSelected(new Set())}
+                  onPaneClick={() => {
+                    setSelected(new Set());
+                    setWireMessage(undefined);
+                    if (wireStart.current) {
+                      wireStart.current = undefined;
+                      setWire(undefined);
+                      setWireReset((value) => value + 1);
+                    }
+                  }}
                   onNodeMouseEnter={(_, n) => setHovered(n.id)}
                   onNodeMouseLeave={(_, n) =>
                     setHovered((current) =>
@@ -1109,7 +1265,19 @@ export function WorkflowEditor({
                   }
                 >
                   <RestoreHandleBounds active={section === 'editor'} />
+                  {wireReset > 0 && (
+                    <ResetClickConnection request={wireReset} />
+                  )}
                   <Background color="var(--canvas-dot)" gap={22} size={1} />
+                  {wireMessage && (
+                    <Panel
+                      position="bottom-center"
+                      className={styles.connectionHint}
+                      role="status"
+                    >
+                      {wireMessage}
+                    </Panel>
+                  )}
                   <Controls
                     showInteractive={false}
                     className={navigationStyles.controls}
@@ -1265,13 +1433,24 @@ export function WorkflowEditor({
           workflowId={workflow.id}
           canExport={true}
           returnFocusTo={() => {
-            const id = editing.node?.id;
+            const id = editing.node?.id ?? editing.parallel?.parallelId;
             if (!id) return editing.creating ? null : workflowActions.current;
             const card = Array.from(
               editorRef.current?.querySelectorAll<HTMLElement>(
                 '.react-flow__node[data-id]',
               ) ?? [],
             ).find((element) => element.dataset.id === id);
+            if (editing.parallel) {
+              const lane = Array.from(
+                card?.querySelectorAll<HTMLElement>('[data-parallel-lane]') ??
+                  [],
+              ).find(
+                (element) =>
+                  element.dataset.parallelLane ===
+                  editing.parallel?.parallelBranchId,
+              );
+              return lane?.querySelector('button') ?? card ?? null;
+            }
             return (
               card?.querySelector<HTMLElement>(
                 'button[aria-label^="Edit "], button.nodrag',
@@ -1311,7 +1490,9 @@ export function WorkflowEditor({
             editing.node && !['entry', 'exit'].includes(editing.node.kind)
               ? () => {
                   const id = editing.node!.id;
-                  setDraft((d) => withoutNodes(d, new Set([id])));
+                  setDraft((d) =>
+                    withParallelReturns(withoutNodes(d, new Set([id]))),
+                  );
                   setSelected(new Set());
                   setEditing(undefined);
                 }

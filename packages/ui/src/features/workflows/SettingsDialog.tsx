@@ -36,8 +36,14 @@ import { NodeInspector } from './NodeInspector';
 import { nodeDescriptions } from './nodeDescriptions';
 import type { NodeSectionName } from './NodeSettingsSections';
 import { api, download } from '../../lib/api';
-import { newNodePosition, separateNodes } from '@interlock/core/layout';
+import {
+  CANVAS_GAP,
+  canvasGeometry,
+  newNodePosition,
+  separateNodes,
+} from '@interlock/core/layout';
 import styles from './SettingsDialog.module.css';
+import { parallelTail, withParallelReturns } from './parallelReturns';
 
 export type Settings = {
   name: string;
@@ -85,6 +91,15 @@ export function SettingsDialog({
   const [settings, setSettings] = useState(() =>
     structuredClone({ name, description, definition }),
   );
+  const parallelGroup =
+    parentParallel &&
+    definition.nodes.find((n) => n.id === parentParallel.parallelId);
+  const pathName =
+    parallelGroup?.kind === 'parallel'
+      ? parallelGroup.branches.find(
+          (path) => path.id === parentParallel?.parallelBranchId,
+        )?.key
+      : undefined;
   const [newNodeId] = useState(() => crypto.randomUUID());
   const [nodeDraft, setNodeDraft] = useState(() =>
     node
@@ -204,6 +219,30 @@ export function SettingsDialog({
         }
         if (creating)
           parsed.position = newNodePosition(settings.definition, parsed);
+        const current =
+          creating && parentParallel
+            ? withParallelReturns(settings.definition)
+            : settings.definition;
+        const tail =
+          creating && parentParallel
+            ? parallelTail(
+                current,
+                parentParallel.parallelId,
+                parentParallel.parallelBranchId,
+              )
+            : undefined;
+        if (tail) {
+          const geometry = canvasGeometry(current);
+          const source = geometry.index.get(tail.source)!;
+          const origin = geometry.position(source);
+          parsed.position = {
+            x: Math.max(
+              parsed.position.x,
+              origin.x + geometry.size(source).width + CANVAS_GAP,
+            ),
+            y: origin.y,
+          };
+        }
         const start =
           parsed.parallelId && parsed.parallelBranchId
             ? {
@@ -214,22 +253,31 @@ export function SettingsDialog({
               ? { source: parsed.batchId, port: 'item' }
               : undefined;
         const nextDefinition = {
-          ...settings.definition,
-          edges:
-            creating &&
-            start &&
-            !settings.definition.edges.some(
-              (e) => e.source === start.source && e.port === start.port,
-            )
+          ...current,
+          edges: tail
+            ? current.edges.map((edge) =>
+                edge.id === tail.id
+                  ? {
+                      ...edge,
+                      target: parsed.id,
+                      targetHandle: 'default' as const,
+                    }
+                  : edge,
+              )
+            : creating &&
+                start &&
+                !current.edges.some(
+                  (e) => e.source === start.source && e.port === start.port,
+                )
               ? [
-                  ...settings.definition.edges,
+                  ...current.edges,
                   {
                     id: crypto.randomUUID(),
                     ...start,
                     target: parsed.id,
                   },
                 ]
-              : settings.definition.edges.filter(
+              : current.edges.filter(
                   (e) =>
                     e.source !== parsed.id ||
                     !node ||
@@ -242,9 +290,12 @@ export function SettingsDialog({
                 n.id === parsed.id ? parsed : n,
               ),
         };
+        const withReturns = parsed.parallelId
+          ? withParallelReturns(nextDefinition)
+          : nextDefinition;
         const next = {
           ...settings,
-          definition: creating ? separateNodes(nextDefinition) : nextDefinition,
+          definition: creating ? separateNodes(withReturns) : withReturns,
         };
         if (
           creating &&
@@ -275,7 +326,7 @@ export function SettingsDialog({
         ) : creating ? (
           <span className={styles.title}>
             <Plus size={18} aria-hidden="true" />
-            Add node
+            {pathName ? `Add node to ${pathName}` : 'Add node'}
           </span>
         ) : nodeDraft ? (
           nodeDraft.label
