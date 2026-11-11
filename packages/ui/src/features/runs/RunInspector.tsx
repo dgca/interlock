@@ -14,11 +14,24 @@ import {
 import { formatDuration } from '../workflows/DurationInput';
 import { PauseBanner } from '../pauses/PauseControls';
 
-import { nodeKindLabel, type RunStatus } from '@interlock/core';
+import {
+  nodeKindLabel,
+  type NodeExecution,
+  type Run,
+  type RunStatus,
+} from '@interlock/core';
 import type { Action } from '../../lib/useActionFeedback';
 import { useEffect, useRef, useState } from 'react';
 import { needsManagedAttention } from '../executors/managedStatus';
-import { ArrowUpRight, RotateCcw, Square, Download } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  ChevronDown,
+  ChevronRight,
+  RotateCcw,
+  Square,
+  Download,
+} from 'lucide-react';
 
 import { api, download, errorMessage } from '../../lib/api';
 import { trpc, useQuery, useQueryClient } from '../../lib/query';
@@ -45,6 +58,55 @@ const stallLabels = {
   humanWaitStallMs: 'External input stall',
   runStallMs: 'Run transition stall',
 };
+type RunReturn = { executionId: string; label: string };
+
+function TimelineStep({
+  step,
+  owner,
+  index,
+  expanded,
+  selected,
+  running,
+  onSelect,
+}: {
+  step: NodeExecution;
+  owner: Run;
+  index?: number;
+  expanded?: boolean;
+  selected: boolean;
+  running: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      aria-expanded={expanded}
+      aria-controls={expanded ? `paths-${step.id}` : undefined}
+      className={`${styles.step} ${index === undefined ? styles.pathStep : ''} ${selected ? styles.selected : ''}`}
+    >
+      {index !== undefined && (
+        <span className={styles.index}>
+          {String(index + 1).padStart(2, '0')}
+        </span>
+      )}
+      {expanded === true && <ChevronDown size={14} aria-hidden="true" />}
+      {expanded === false && <ChevronRight size={14} aria-hidden="true" />}
+      <div className={styles.stepContent}>
+        <strong>{step.label}</strong>
+        <small>
+          {nodeKindLabel(step.kind)} · v{step.version ?? owner.version} ·{' '}
+          {new Date(step.startedAt).toLocaleTimeString()}
+        </small>
+      </div>
+      <StatusBadge
+        status={step.status === 'waiting' && running ? 'running' : step.status}
+      />
+    </button>
+  );
+}
+
 export function RunInspector({
   id,
   tick,
@@ -53,12 +115,14 @@ export function RunInspector({
   act,
   onConnect,
   initialExecutionId,
+  returnLabel,
 }: {
   id: string;
   tick: number;
   onBack: (status: RunStatus) => void;
-  onOpen: (id: string, executionId?: string) => void;
+  onOpen: (id: string, executionId?: string, returnTo?: RunReturn) => void;
   initialExecutionId?: string;
+  returnLabel?: string;
   act: Action;
   onConnect?: () => void;
 }) {
@@ -131,6 +195,8 @@ export function RunInspector({
     runId?: string;
     executionId?: string;
   }>();
+  const [collapsedParallelVisit, setCollapsedParallelVisit] =
+    useState<string>();
   useEffect(() => {
     if (!focusReview.current) return;
     focusReview.current = false;
@@ -197,6 +263,7 @@ export function RunInspector({
   const select = (target: NonNullable<typeof selected>, focus = false) => {
     focusReview.current =
       focus || window.matchMedia?.('(max-width: 1100px)').matches;
+    setCollapsedParallelVisit(undefined);
     setSelected(target);
   };
   const retry = async () => {
@@ -223,6 +290,9 @@ export function RunInspector({
   const descendants = data.descendants ?? [];
   const allWork = data.descendantWork ?? work;
   const runIndex = new Map([run, ...descendants].map((r) => [r.id, r]));
+  const childWorkflows = children.filter(
+    (child) => !child.parallelBranch && !child.batchNodeId,
+  );
   const attention = allWork.filter(
     (w) =>
       needsManagedAttention(w) && !detachedBoundary(w.runId, run.id, runIndex),
@@ -232,9 +302,50 @@ export function RunInspector({
       r.parentMode === 'detached' &&
       ['queued', 'running', 'waiting'].includes(r.status),
   );
-  const requestedExecution =
-    !selected && run.executions.find((e) => e.id === initialExecutionId);
+  const requestedOwner =
+    !selected && initialExecutionId
+      ? [run, ...children.filter((child) => child.parallelBranch)].find(
+          (candidate) =>
+            candidate.executions.some((e) => e.id === initialExecutionId),
+        )
+      : undefined;
+  const requestedExecution = requestedOwner?.executions.find(
+    (e) => e.id === initialExecutionId,
+  );
+  const nodeId =
+    selected?.nodeId ??
+    requestedExecution?.nodeId ??
+    run.executions.at(-1)?.nodeId;
+  const node = definition?.nodes.find((node) => node.id === nodeId);
+  const owner = selected?.runId
+    ? runIndex.get(selected.runId)
+    : requestedOwner
+      ? (runIndex.get(requestedOwner.id) ?? requestedOwner)
+      : (node?.batchId && node.batchId !== run.batchNodeId) ||
+          (node?.parallelId &&
+            (node.parallelId !== run.parallelBranch?.nodeId ||
+              node.parallelBranchId !== run.parallelBranch?.id))
+        ? undefined
+        : run;
+  const execution = selected?.executionId
+    ? owner?.executions.find((e) => e.id === selected.executionId)
+    : (requestedExecution ??
+      owner?.executions.findLast((e) => e.nodeId === nodeId));
+  const pathOwner =
+    owner?.parallelBranch && owner.parentRunId === run.id ? owner : undefined;
+  const parallelVisit = pathOwner
+    ? run.executions.find((e) => e.id === pathOwner.parentExecutionId)
+    : execution?.kind === 'parallel'
+      ? execution
+      : undefined;
   const progress = runProgress(run, definition, descendants, allWork);
+  const graphProgress =
+    parallelVisit &&
+    run.executions.findLast((step) => step.nodeId === parallelVisit.nodeId)
+      ?.id !== parallelVisit.id
+      ? runProgress(run, definition, descendants, allWork, parallelVisit).nodes
+      : progress.nodes;
+  const nodeProgress = nodeId ? graphProgress[nodeId] : undefined;
   const projection = runProjectionLabels(run);
   const attentionStatus =
     attention.length && ['queued', 'running', 'waiting'].includes(run.status)
@@ -252,28 +363,6 @@ export function RunInspector({
   ]
     .filter(Boolean)
     .join(' · ');
-  const nodeId =
-    selected?.nodeId ??
-    (requestedExecution ? requestedExecution.nodeId : undefined) ??
-    run.executions.at(-1)?.nodeId;
-  const node = definition?.nodes.find((node) => node.id === nodeId);
-  const nodeProgress = nodeId ? progress.nodes[nodeId] : undefined;
-  const owner = selected?.runId
-    ? [run, ...descendants].find((owner) => owner.id === selected.runId)
-    : (node?.batchId && node.batchId !== run.batchNodeId) ||
-        (node?.parallelId &&
-          (node.parallelId !== run.parallelBranch?.nodeId ||
-            node.parallelBranchId !== run.parallelBranch?.id))
-      ? undefined
-      : run;
-  const execution = selected?.executionId
-    ? owner?.executions.find(
-        (execution) => execution.id === selected.executionId,
-      )
-    : requestedExecution ||
-      owner?.executions
-        .filter((execution) => execution.nodeId === nodeId)
-        .at(-1);
   const waitingForInput =
     execution?.kind === 'input' && execution.status === 'waiting';
   const progressLabel =
@@ -300,6 +389,30 @@ export function RunInspector({
       (holdScope?.id === run.id && data.externalInputHeldByRunId),
     );
   const selectedWork = allWork.filter((w) => w.executionId === execution?.id);
+  const selectExecution = (
+    step: NodeExecution,
+    stepOwner: Run = run,
+    focus = false,
+  ) =>
+    select(
+      { nodeId: step.nodeId, runId: stepOwner.id, executionId: step.id },
+      focus,
+    );
+  const openWorkflow = (child: Run, executionId?: string) => {
+    const parent = child.parentRunId && runIndex.get(child.parentRunId);
+    const caller =
+      parent &&
+      (parent.id === run.id ||
+        (parent.parallelBranch && parent.parentRunId === run.id))
+        ? parent.executions.find((step) => step.childRunIds.includes(child.id))
+        : undefined;
+    if (caller)
+      onOpen(child.id, executionId, {
+        executionId: caller.id,
+        label: caller.label,
+      });
+    else onOpen(child.id, executionId);
+  };
   const assignmentScope = (w: (typeof allWork)[number]) => {
     if (w.runId === run.id) return undefined;
     const item = progress.nodes[w.nodeId]?.items.find(
@@ -315,8 +428,13 @@ export function RunInspector({
   };
   const reviewWork = (w: (typeof allWork)[number]) => {
     const owner = runIndex.get(w.runId);
-    if (owner && owner.id !== run.id && !owner.batchNodeId) {
-      onOpen(owner.id, w.executionId);
+    if (
+      owner &&
+      owner.id !== run.id &&
+      !owner.batchNodeId &&
+      !owner.parallelBranch
+    ) {
+      openWorkflow(owner, w.executionId);
       return;
     }
     // Choosing a request moves focus to its details after the menu releases its trap.
@@ -337,38 +455,56 @@ export function RunInspector({
           return child ? [child] : [];
         })
       : [];
-  const branchRows =
-    execution?.kind === 'parallel'
-      ? [
-          ...execution.childRunIds.flatMap((id) => {
-            const child = runIndex.get(id);
-            return child?.parallelBranch
-              ? [
-                  {
-                    id: child.parallelBranch.id,
-                    key: child.parallelBranch.key,
-                    run: child,
-                  },
-                ]
-              : [];
-          }),
-          ...(node?.kind === 'parallel' &&
-          execution.status !== 'completed' &&
-          (execution.version ?? run.version) === run.version
-            ? node.branches
-                .slice(execution.nextItem)
-                .map((branch) => ({ ...branch, run: undefined }))
-            : []),
-        ]
-      : [];
+  const group = definition?.nodes.find(
+    (candidate) =>
+      candidate.kind === 'parallel' && candidate.id === parallelVisit?.nodeId,
+  );
+  const pathRows = parallelVisit
+    ? [
+        ...parallelVisit.childRunIds.flatMap((id) => {
+          const child = runIndex.get(id);
+          return child?.parallelBranch
+            ? [
+                {
+                  id: child.parallelBranch.id,
+                  key: child.parallelBranch.key,
+                  run: child,
+                },
+              ]
+            : [];
+        }),
+        ...(group?.kind === 'parallel' &&
+        parallelVisit.status !== 'completed' &&
+        (parallelVisit.version ?? run.version) === run.version
+          ? group.branches
+              .slice(parallelVisit.nextItem)
+              .map((branch) => ({ ...branch, run: undefined }))
+          : []),
+      ]
+    : [];
+  const pathStatus = (child?: Run) =>
+    child
+      ? (progress.runStates[child.id] ?? child.status)
+      : parallelVisit?.status === 'failed' ||
+          parallelVisit?.status === 'cancelled'
+        ? 'not started'
+        : 'queued';
+  const parallelParent = run.parallelBranch ? run.parentRunId : undefined;
   return (
     <div
       className={`${styles.page} ${!definition ? styles.withoutDefinition : ''} ${run.comparison ? styles.comparison : ''}`}
     >
       <PageHeader
         title={run.workflowName}
-        onBack={() => onBack(run.status)}
-        backLabel="Back to runs"
+        onBack={() =>
+          !returnLabel && parallelParent
+            ? onOpen(parallelParent, run.parentExecutionId)
+            : onBack(run.status)
+        }
+        backLabel={
+          returnLabel ??
+          (parallelParent ? 'Back to Parallel group' : 'Back to runs')
+        }
         subtitle={
           <div className={styles.metadata}>
             <span>Version {run.version}</span>
@@ -424,7 +560,7 @@ export function RunInspector({
                 <ArrowUpRight />
               </Button>
             )}
-            {run.parentRunId && (
+            {run.parentRunId && !returnLabel && !parallelParent && (
               <Button
                 onClick={() => onOpen(run.parentRunId!, run.parentExecutionId)}
               >
@@ -592,7 +728,7 @@ export function RunInspector({
           </p>
           <div className="actions">
             {independent.map((child) => (
-              <Button key={child.id} onClick={() => onOpen(child.id)}>
+              <Button key={child.id} onClick={() => openWorkflow(child)}>
                 {child.workflowName} · {child.id.slice(0, 8)}
               </Button>
             ))}
@@ -615,11 +751,28 @@ export function RunInspector({
           className={styles.detail}
         >
           <div className="inspector-heading">
-            <h2>{node?.label ?? execution?.label ?? 'Workflow input'}</h2>
-            {selectedWork[0] && assignmentScope(selectedWork[0]) && (
-              <p className={styles.stepScope}>
-                {assignmentScope(selectedWork[0])}
-              </p>
+            <h2>{execution?.label ?? node?.label ?? 'Workflow input'}</h2>
+            {pathOwner && parallelVisit ? (
+              <div className={styles.pathScope}>
+                <button
+                  type="button"
+                  className={styles.pathBack}
+                  aria-label={`Back to ${parallelVisit.label}`}
+                  onClick={() => selectExecution(parallelVisit, run, true)}
+                >
+                  <ArrowLeft size={14} />
+                  {parallelVisit.label}
+                </button>
+                <span aria-hidden="true">/</span>
+                <span>{pathOwner.parallelBranch?.key}</span>
+              </div>
+            ) : (
+              selectedWork[0] &&
+              assignmentScope(selectedWork[0]) && (
+                <p className={styles.stepScope}>
+                  {assignmentScope(selectedWork[0])}
+                </p>
+              )
             )}
           </div>
           <div className="inspector-fields">
@@ -690,55 +843,45 @@ export function RunInspector({
                 ))}
               </section>
             )}
-            {branchRows.length > 0 && (
-              <section aria-label="Parallel branches">
-                <h3>Branches</h3>
-                <p className={styles.progressLabel}>
-                  {
-                    branchRows.filter(
-                      (branch) => branch.run?.status === 'completed',
-                    ).length
-                  }{' '}
-                  of {branchRows.length} finished
-                </p>
-                {branchRows.map(({ id, key, run: child }) =>
-                  child ? (
+            {execution?.kind === 'parallel' && pathRows.length > 0 && (
+              <section aria-label="Parallel paths">
+                <h3>Paths</h3>
+                {pathRows.map(({ id, key, run: child }) => {
+                  const step = child?.executions.at(-1);
+                  return step && child ? (
                     <button
                       key={id}
+                      type="button"
                       className={styles.child}
-                      onClick={() => onOpen(child.id)}
+                      onClick={() => selectExecution(step, child, true)}
                     >
                       <span className={styles.branchName}>{key}</span>
-                      <StatusBadge
-                        status={progress.runStates[child.id] ?? child.status}
-                      />
-                      <ArrowUpRight size={14} />
+                      <StatusBadge status={pathStatus(child)} />
+                      <ChevronRight size={14} />
                     </button>
                   ) : (
                     <div key={id} className={styles.branchPending}>
                       <span className={styles.branchName}>{key}</span>
-                      <StatusBadge
-                        status={
-                          execution?.status === 'failed' ||
-                          execution?.status === 'cancelled'
-                            ? 'not started'
-                            : 'queued'
-                        }
-                      />
+                      <StatusBadge status={pathStatus(child)} />
                     </div>
-                  ),
-                )}
+                  );
+                })}
               </section>
             )}
             {execution?.kind === 'workflow' &&
               execution.childRunIds.map((childId) => {
                 const child = runIndex.get(childId);
-                return child?.parentMode === 'detached' ? (
+                return child &&
+                  (child.parentMode === 'detached' || pathOwner) ? (
                   <section key={child.id}>
-                    <h3>Started run</h3>
+                    <h3>
+                      {child.parentMode === 'detached'
+                        ? 'Started run'
+                        : 'Invoked workflow'}
+                    </h3>
                     <button
                       className={styles.child}
-                      onClick={() => onOpen(child.id)}
+                      onClick={() => openWorkflow(child)}
                     >
                       <span>
                         {child.workflowName}
@@ -752,9 +895,9 @@ export function RunInspector({
                   </section>
                 ) : null;
               })}
-            {owner && owner.id !== run.id && (
+            {owner?.batchNodeId && owner.id !== run.id && (
               <Button onClick={() => onOpen(owner.id, execution?.id)}>
-                {owner.parallelBranch ? 'Open branch run' : 'Open item run'}
+                Open item run
               </Button>
             )}
             {selected && !execution && (
@@ -877,7 +1020,12 @@ export function RunInspector({
                   </p>
                 ))}
             {execution?.error && (
-              <details>
+              <details
+                key={execution.id}
+                open={
+                  pathOwner && execution.status === 'failed' ? true : undefined
+                }
+              >
                 <summary>Error details</summary>
                 <pre className={styles.errorDetails}>{execution.error}</pre>
               </details>
@@ -930,14 +1078,18 @@ export function RunInspector({
               <RunGraph
                 key={run.id}
                 definition={definition}
-                progress={progress.nodes}
+                progress={graphProgress}
                 selected={nodeId}
                 onSelect={(nodeId) => {
+                  if (parallelVisit?.nodeId === nodeId) {
+                    selectExecution(parallelVisit);
+                    return;
+                  }
                   const member = definition.nodes.find(
                     (node) => node.id === nodeId,
                   );
                   const branch = member?.parallelId
-                    ? progress.nodes[nodeId]?.items[0]
+                    ? graphProgress[nodeId]?.items[0]
                     : undefined;
                   select({
                     nodeId,
@@ -972,47 +1124,74 @@ export function RunInspector({
                   <pre className={styles.errorDetails}>{run.error}</pre>
                 </details>
               )}
-            {run.executions.map((e, i) => (
-              <button
-                key={e.id}
-                onClick={() =>
-                  select({
-                    nodeId: e.nodeId,
-                    runId: run.id,
-                    executionId: e.id,
-                  })
-                }
-                aria-pressed={execution?.id === e.id}
-                className={`${styles.step} ${execution?.id === e.id ? styles.selected : ''}`}
-              >
-                <span className={styles.index}>
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <div className={styles.stepContent}>
-                  <strong>{e.label}</strong>
-                  <small>
-                    {nodeKindLabel(e.kind)} · v{e.version ?? run.version} ·{' '}
-                    {new Date(e.startedAt).toLocaleTimeString()}
-                  </small>
+            {run.executions.map((e, i) => {
+              const expanded =
+                e.kind === 'parallel' &&
+                parallelVisit?.id === e.id &&
+                collapsedParallelVisit !== e.id &&
+                pathRows.length > 0;
+              return (
+                <div key={e.id}>
+                  <TimelineStep
+                    step={e}
+                    owner={run}
+                    index={i}
+                    expanded={e.kind === 'parallel' ? expanded : undefined}
+                    selected={execution?.id === e.id}
+                    running={
+                      graphProgress[e.nodeId]?.items[0]?.execution?.id ===
+                        e.id && graphProgress[e.nodeId]?.state === 'running'
+                    }
+                    onSelect={() => {
+                      selectExecution(e);
+                      if (expanded && execution?.id === e.id)
+                        setCollapsedParallelVisit(e.id);
+                    }}
+                  />
+                  {expanded && (
+                    <div
+                      className={styles.parallelHistory}
+                      id={`paths-${e.id}`}
+                    >
+                      {pathRows.map(({ id, key, run: child }) => (
+                        <section
+                          key={id}
+                          aria-label={key}
+                          className={styles.pathHistory}
+                        >
+                          <div className={styles.pathHeading}>
+                            <h4>{key}</h4>
+                            <StatusBadge status={pathStatus(child)} />
+                          </div>
+                          {child?.executions.map((step) => (
+                            <TimelineStep
+                              key={step.id}
+                              step={step}
+                              owner={child}
+                              selected={execution?.id === step.id}
+                              running={
+                                graphProgress[step.nodeId]?.items[0]?.execution
+                                  ?.id === step.id &&
+                                graphProgress[step.nodeId]?.state === 'running'
+                              }
+                              onSelect={() => selectExecution(step, child)}
+                            />
+                          ))}
+                        </section>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <StatusBadge
-                  status={
-                    e.status === 'waiting' &&
-                    progress.nodes[e.nodeId]?.state === 'running'
-                      ? 'running'
-                      : e.status
-                  }
-                />
-              </button>
-            ))}
-            {children.length > 0 && (
+              );
+            })}
+            {childWorkflows.length > 0 && (
               <>
                 <h3 className={styles.childTitle}>Child runs</h3>
-                {children.map((child) => (
+                {childWorkflows.map((child) => (
                   <button
                     key={child.id}
                     className={styles.child}
-                    onClick={() => onOpen(child.id)}
+                    onClick={() => openWorkflow(child)}
                   >
                     <span>
                       {child.workflowName}

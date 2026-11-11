@@ -52,6 +52,7 @@ export function runProgress(
   definition: WorkflowDefinition | null,
   descendants: Run[],
   work: VisibleWork[],
+  parallelVisit?: NodeExecution,
 ) {
   const runs = new Map([run, ...descendants].map((value) => [value.id, value]));
   const stateOf = (owner: Run, execution?: NodeExecution): ProgressState => {
@@ -112,16 +113,20 @@ export function runProgress(
       })
       .join(' · ');
   const scopeCache = new Map<string, Run[]>();
+  const parallelExecution = (nodeId: string) =>
+    parallelVisit?.nodeId === nodeId ? parallelVisit : latest(run, nodeId);
   const scopes = (node: WorkflowNode): Run[] => {
     if (node.parallelId) {
       const matches = (candidate: Run) =>
         candidate.parallelBranch?.nodeId === node.parallelId &&
         candidate.parallelBranch?.id === node.parallelBranchId;
       if (matches(run)) return [run];
-      return (latest(run, node.parallelId)?.childRunIds ?? []).flatMap((id) => {
-        const child = runs.get(id);
-        return child && matches(child) ? [child] : [];
-      });
+      return (parallelExecution(node.parallelId)?.childRunIds ?? []).flatMap(
+        (id) => {
+          const child = runs.get(id);
+          return child && matches(child) ? [child] : [];
+        },
+      );
     }
     if (run.parallelBranch) return [];
     if (node.batchId === run.batchNodeId) return [run];
@@ -141,7 +146,10 @@ export function runProgress(
   const nodes: Record<string, NodeProgress> = {};
   for (const node of definition?.nodes ?? []) {
     const items = scopes(node).map((owner, index) => {
-      const execution = latest(owner, node.id);
+      const execution =
+        node.kind === 'parallel' && owner.id === run.id
+          ? parallelExecution(node.id)
+          : latest(owner, node.id);
       return {
         run: owner,
         execution,

@@ -152,6 +152,62 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.parallelHistory {
+  margin-inline-start: clamp(12px, 3vw, 36px);
+  padding-inline-start: 12px;
+  border-inline-start: 1px solid var(--border);
+}
+.pathHistory {
+  padding-block: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.pathHeading,
+.pathScope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pathHeading {
+  justify-content: space-between;
+  padding: 4px 12px;
+}
+.pathHeading h4 {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.pathStep {
+  min-height: 48px;
+  padding: 8px 12px;
+  border-bottom: 0;
+}
+.pathScope {
+  flex-wrap: wrap;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.pathBack {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--text);
+  cursor: pointer;
+  text-align: start;
+}
+.pathBack:hover {
+  text-decoration: underline;
+}
+.pathBack:focus-visible {
+  outline: 2px solid var(--field-focus);
+  outline-offset: 2px;
+}
 .events {
   margin: 25px 0;
 }

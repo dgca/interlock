@@ -8,6 +8,7 @@ import { Store } from '@interlock/storage';
 import { batchDefinition } from './fixtures/batch';
 import { blankDefinition, nodeSchema } from '@interlock/core';
 import { workflowCall } from './fixtures/detached';
+import { parallelDefinition } from './fixtures/parallel';
 import { AgentHandoff } from '../packages/ui/src/features/runs/AgentHandoff';
 import { RunInspector } from '../packages/ui/src/features/runs/RunInspector';
 const graph = vi.hoisted(() => ({ props: undefined as any }));
@@ -431,9 +432,101 @@ it('opens an invoked workflow for its own pending request instead of selecting a
     expect(onOpen).toHaveBeenCalledWith(
       assignment.runId,
       assignment.executionId,
+      {
+        executionId: detail.run.executions.at(-1).id,
+        label: 'Start investigation',
+      },
     );
     engine.stop();
   } finally {
+    store.close();
+  }
+});
+
+it('inspects a Parallel path and its attempts within the selected visit', async () => {
+  const store = new Store(':memory:');
+  const engine = new Engine(store, process.cwd());
+  try {
+    const definition = parallelDefinition();
+    definition.nodes.push(
+      nodeSchema.parse({
+        id: 'round',
+        kind: 'switch',
+        label: 'Next round',
+        path: 'code',
+        cases: [{ port: 'again', equals: 1 }],
+        default: 'done',
+      }),
+    );
+    definition.edges.find((e) => e.id === 'out')!.target = 'round';
+    definition.edges.push(
+      { id: 'again', source: 'round', port: 'again', target: 'parallel' },
+      { id: 'done', source: 'round', port: 'done', target: 'exit' },
+    );
+    const workflow = engine.create('Reviews', '', definition);
+    engine.publish(workflow.id);
+    const run = engine.start(workflow.id, {}).run;
+    const claim = (nodeId: string) =>
+      engine.claim(
+        engine.available(run.id).find((work) => work.nodeId === nodeId)!.id,
+        {
+          workerId: 'inspector-test',
+          freshContext: false,
+          tools: [],
+          skills: [],
+        },
+      );
+    const submit = (nodeId: string, output: string | number) => {
+      const work = claim(nodeId);
+      engine.submit(work.id, work.token!, output);
+    };
+    submit('r0', 'first result');
+    submit('r1', 1);
+    const failed = claim('r0');
+    engine.reportFailure(failed.id, failed.token!, 'Second visit needs retry');
+    engine.retry(run.id);
+    submit('r0', 'second result');
+    submit('r1', 2);
+    detail = engine.inspect(run.id);
+    rpc.work.mockResolvedValue([]);
+    await render(0, run.id);
+    expect(container.textContent).not.toContain('Child runs');
+    const visits = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]'),
+    ).filter((button) => button.textContent?.includes('ReviewsParallel'));
+    expect(visits).toHaveLength(2);
+    await act(async () => visits[0].click());
+    await act(async () => graph.props.onSelect('r0'));
+    expect(
+      container.querySelector('aside [data-json-label="Output"]')?.textContent,
+    ).toBe('"first result"');
+    expect(visits[0].getAttribute('aria-expanded')).toBe('true');
+    expect(visits[1].getAttribute('aria-expanded')).toBe('false');
+    expect(onOpen).not.toHaveBeenCalled();
+
+    await act(async () => visits[1].click());
+    const path = container.querySelector('section[aria-label="spec"]')!;
+    const attempts = path.querySelectorAll<HTMLButtonElement>('button');
+    expect(attempts).toHaveLength(2);
+    expect(attempts[0].textContent).toContain('failed');
+    await act(async () => attempts[0].click());
+    expect(
+      container.querySelector('aside details[open] pre')?.textContent,
+    ).toContain('Second visit needs retry');
+    expect(attempts[0].getAttribute('aria-pressed')).toBe('true');
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="Back to Reviews"]',
+        )!
+        .click(),
+    );
+    expect(
+      container.querySelector('aside [data-json-label="Output"]')?.textContent,
+    ).toBe('{"spec":"second result","code":2}');
+    expect(document.activeElement).toBe(container.querySelector('aside'));
+  } finally {
+    engine.stop();
     store.close();
   }
 });

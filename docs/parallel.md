@@ -19,7 +19,9 @@ Parallel groups belong at main workflow scope. Batch and Parallel groups cannot 
 
 ## Inspect and retry
 
-Select the Parallel execution in the run timeline. The branch list shows each named result's status and opens its own run. Select an earlier group execution to inspect that visit. Unstarted branches stay visible if the group fails.
+Select a Parallel execution in the timeline to expand its named paths and see their statuses. Select a step on the canvas or in the expanded timeline to inspect its input, output, and attempts in the parent run. Use the group link in the details pane to return to the joined output. Select an earlier group execution to inspect that visit. Unstarted paths stay visible if the group fails.
+
+If a path step invokes another workflow, open that workflow from the step details. The back button returns to the exact step that opened it.
 
 When a branch fails, the group fails and cancels unfinished waited branches. Retry the failed parent run to keep successful results and resume the remaining paths. If Interlock cannot confirm old work stopped, inspect and reconcile the exact attempt first. See [exclusive step resources](work-resources.md) and [workflow execution](workflow-execution.md).
 

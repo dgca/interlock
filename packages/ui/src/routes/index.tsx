@@ -419,6 +419,9 @@ function RunRoute() {
   const { runId } = useParams();
   const { tick, act, onConnect } = useOutletContext<AppContext>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnLabel = (location.state as { returnLabel?: string } | null)
+    ?.returnLabel;
   const [search] = useSearchParams();
   const workflowId = search.get('workflow') || undefined;
   const returnTab = parseRunTab(search.get('tab'));
@@ -427,6 +430,8 @@ function RunRoute() {
     : undefined;
   const offset = runOffset(search.get('offset'));
   const tags = runTagFilter(search.get('tags'));
+  const runPath = (id: string, executionId?: string) =>
+    paths.run(id, workflowId, returnTab, executionId, offset, tags, returnMode);
   return (
     <Suspense fallback={<RouteLoading label="Loading run…" />}>
       <RunInspector
@@ -436,20 +441,25 @@ function RunRoute() {
         act={act}
         onConnect={onConnect}
         initialExecutionId={search.get('execution') ?? undefined}
-        onOpen={(id, executionId) =>
-          void navigate(
-            paths.run(
-              id,
-              workflowId,
-              returnTab,
-              executionId,
-              offset,
-              tags,
-              returnMode,
-            ),
-          )
-        }
+        returnLabel={returnLabel}
+        onOpen={async (id, executionId, source) => {
+          if (source)
+            await navigate(runPath(runId!, source.executionId), {
+              replace: true,
+              state: location.state,
+              preventScrollReset: true,
+            });
+          await navigate(runPath(id, executionId), {
+            state: source
+              ? { returnLabel: `Back to ${source.label}` }
+              : undefined,
+          });
+        }}
         onBack={(status) => {
+          if (returnLabel) {
+            void navigate(-1);
+            return;
+          }
           const tab =
             returnMode !== undefined || returnTab === 'attention'
               ? returnTab
