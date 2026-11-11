@@ -47,6 +47,18 @@ const columns = [
   { label: '', width: '80px' },
 ];
 
+function presetHarnessLabel(
+  profile: Profile,
+  permissions?: ExecutorPermissionMode,
+) {
+  const label = harnessLabel(profile);
+  if (!profile.enabled) return `${label} · disabled`;
+  if (profile.detection.status !== 'detected') return `${label} · unavailable`;
+  if (!supportsPresetPermissions(profile, permissions))
+    return `${label} · cannot enforce permissions`;
+  return label;
+}
+
 export function AgentPresets({
   profiles,
   onDirty,
@@ -192,10 +204,9 @@ export function AgentPresets({
                       <span>
                         {first?.profileId
                           ? profile
-                            ? harnessLabel(profile)
+                            ? presetHarnessLabel(profile, alias.permissions)
                             : 'Missing harness'
                           : 'Workflow harness'}
-                        {profile?.enabled === false ? ' · disabled' : ''}
                         {first?.effort ? ` · ${first.effort} effort` : ''}
                         {alias.permissions
                           ? ` · ${permissionLabels[alias.permissions]}`
@@ -568,7 +579,7 @@ function PresetEditor({
                         )
                         .map((profile) => ({
                           value: profile.id,
-                          label: `${harnessLabel(profile)}${!supportsPresetPermissions(profile, permissions) ? ' · cannot enforce permissions' : profile.enabled ? '' : ' · disabled'}`,
+                          label: presetHarnessLabel(profile, permissions),
                           disabled:
                             profile.id !== candidate.profileId &&
                             !supportsPresetPermissions(profile, permissions),

@@ -133,10 +133,14 @@ async function settle() {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
 }
-async function renderSection(onDirty = vi.fn()) {
+async function renderSection(onDirty = vi.fn(), harnesses = profiles) {
   await act(async () =>
     root.render(
-      h(DesignSystemProvider, {}, h(AgentPresets, { profiles, onDirty })),
+      h(
+        DesignSystemProvider,
+        {},
+        h(AgentPresets, { profiles: harnesses, onDirty }),
+      ),
     ),
   );
   await settle();
@@ -232,6 +236,19 @@ it('creates an alias using a concrete model picker and cancels another draft wit
   await fill(labelled('Name') as HTMLInputElement, 'discarded');
   await click(button('Cancel'));
   expect(rpc.mutate).toHaveBeenCalledTimes(1);
+});
+
+it('labels unavailable harnesses in saved presets and keeps the choice editable', async () => {
+  await renderSection(vi.fn(), [
+    { ...profiles[0], detection: { status: 'unavailable' } },
+  ]);
+  expect(container.textContent).toContain('Codex · unavailable');
+  await edit();
+  const harness = labelled('Harness') as HTMLSelectElement;
+  expect(harness.selectedOptions[0].textContent).toBe('Codex · unavailable');
+  expect(harness.selectedOptions[0].disabled).toBe(false);
+  expect(harness.disabled).toBe(false);
+  expect(rpc.mutate).not.toHaveBeenCalled();
 });
 
 it('focuses alias editing and protects dirty Back navigation without losing candidate state', async () => {
