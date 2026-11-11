@@ -20,6 +20,8 @@ Schedule inputs use exact contract property keys even when the form displays a f
 
 Interlock events watch one workflow, optionally its owned children, or any workflow. Choose completed, failed, cancelled, needs-attention, or stalled transitions. Terminal events can wait until source work has stopped. The target receives a compact event object rather than manually entered schedule inputs. See [event input](events.md#event-input-and-causal-chains) for fields and exclusions.
 
+Set **Run title** to give each run started by the automation a title in Boards and Runs. The shared API and MCP trigger config use `runTitle`.
+
 ## Inspect and change
 
 **Activity** shows scheduled occurrences or deliveries and their admission outcomes. Started or queued does not mean a run completed successfully. Open the linked run for its result. **Settings** shows saved configuration. **Edit** changes a schedule or workflow-handler event, preserving advanced settings not exposed by the form.

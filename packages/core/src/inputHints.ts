@@ -10,6 +10,7 @@ import {
 import type { Contract } from './contracts.js';
 import { STARTED_RUN_SCHEMA } from './workflowMode.js';
 import { sameExecutionScope } from './parallel.js';
+import { humanAnswerContract } from './humanInput.js';
 
 export type InputHint = {
   schema: Contract;
@@ -193,6 +194,8 @@ export function nodeInputHint(
     }
     if (source.kind === 'workflow' && source.mode === 'detached')
       return STARTED_RUN_SCHEMA;
+    if (source.kind === 'input' && source.humanInput)
+      return humanAnswerContract(source.humanInput.answer);
     if (source.outputBindings) {
       const key = `output:${source.id}`;
       if (visiting.has(key)) return {};

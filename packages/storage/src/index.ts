@@ -1,4 +1,10 @@
-import { attentionWork, attentionAncestors } from './runAttention.js';
+import {
+  attentionWork,
+  attentionAncestors,
+  waitingHumanInputs,
+  uncertainResourceAttempts,
+  uncertainBackgroundSteps,
+} from './runAttention.js';
 import { ProtectedValues } from './protectedValues.js';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
@@ -14,6 +20,7 @@ import {
 import { migrate, type MigrationResult } from './migrations.js';
 import { continuationState } from './continuation.js';
 import { runSummaries } from './runSummaries.js';
+import { boardRuns, referencedBoardColumns } from './workflowBoards.js';
 import { Transcripts } from './transcripts.js';
 import { runsForReport } from './report.js';
 export { runsForReport } from './report.js';
@@ -32,6 +39,7 @@ import type {
   WorkRequest,
   Workflow,
   WorkflowVersion,
+  WorkflowBoard,
   RunEvent,
   SavedPrompt,
   DeletedWorkflowVersion,
@@ -108,6 +116,15 @@ export class Store {
   }
   attentionAncestors(ids: Set<string>) {
     return attentionAncestors(this.db, ids);
+  }
+  waitingHumanInputs() {
+    return waitingHumanInputs(this.db);
+  }
+  uncertainResourceAttempts() {
+    return uncertainResourceAttempts(this.db);
+  }
+  uncertainBackgroundSteps() {
+    return uncertainBackgroundSteps(this.db);
   }
   historyRuns() {
     return historyRuns(this.db);
@@ -446,6 +463,17 @@ export class Store {
   }
   runSummaries(query: RunSummaryQuery, attentionIds: string[]) {
     return runSummaries(this.db, query, attentionIds);
+  }
+  referencedBoardColumns(ids: string[]) {
+    return referencedBoardColumns(this.db, ids);
+  }
+  boardRuns(
+    board: WorkflowBoard,
+    attentionIds: string[],
+    since: string,
+    workflowId?: string,
+  ) {
+    return boardRuns(this.db, board, attentionIds, since, workflowId);
   }
   runsForReport(filter: ReportFilter): Run[] {
     return runsForReport(this.db, filter);

@@ -463,6 +463,16 @@ export function AutomationEditor({
                     patch({ name: event.currentTarget.value })
                   }
                 />
+                <TextInput
+                  mt="md"
+                  label="Run title"
+                  maxLength={200}
+                  value={config.runTitle ?? ''}
+                  error={issues.runTitle}
+                  onChange={(event) =>
+                    patch({ runTitle: event.currentTarget.value || undefined })
+                  }
+                />
                 <section className={workspacePage.section}>
                   <h2>When</h2>
                   <div className={classes.fields}>

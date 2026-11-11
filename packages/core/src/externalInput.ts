@@ -62,5 +62,6 @@ export type ExternalInputMetadata = {
   revision: number;
   submittedAt?: string;
   acceptedAt?: string;
+  source?: import('./humanInput.js').HumanAnswerSource;
 };
 export type ExternalInputHold = { revision: number; heldAt?: string };

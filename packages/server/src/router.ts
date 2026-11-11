@@ -36,6 +36,12 @@ import { developmentConnection, type ConnectionConfig } from './connection.js';
 import {
   externalInputMutationSchema,
   externalInputStatusSchema,
+  boardMembershipSchema,
+  boardQuerySchema,
+  saveBoardSchema,
+  humanResponseSchema,
+  requestListSchema,
+  requestTargetSchema,
   simulationRequestSchema,
   workHoldRequestSchema,
   contextGroupQuerySchema,
@@ -136,6 +142,20 @@ const p = t.procedure.use(async ({ next }) => {
   }
 });
 const id = z.object({ id: z.string() });
+function inputMutation<T>(action: () => T) {
+  try {
+    return action();
+  } catch (error) {
+    if (error instanceof InterlockError)
+      throw new TRPCError({
+        code:
+          error instanceof ExternalInputConflict ? 'CONFLICT' : 'BAD_REQUEST',
+        message: error.message,
+        cause: error,
+      });
+    throw error;
+  }
+}
 const createWorkflowInput = z.object({
   layout: draftLayoutSchema.optional(),
   name: z.string().trim().min(1).max(120),
@@ -345,6 +365,43 @@ export const appRouter = t.router({
     delete: p
       .input(id)
       .mutation(({ ctx, input }) => ctx.engine.prompts.delete(input.id)),
+  }),
+  boards: t.router({
+    list: p.query(({ ctx }) => ctx.engine.boards.list()),
+    get: p
+      .input(boardQuerySchema)
+      .query(({ ctx, input }) => ctx.engine.boards.read(input)),
+    settings: p
+      .input(id)
+      .query(({ ctx, input }) => ctx.engine.boards.settings(input.id)),
+    save: p
+      .input(saveBoardSchema)
+      .mutation(({ ctx, input }) => ctx.engine.boards.save(input)),
+    assign: p
+      .input(boardMembershipSchema)
+      .mutation(({ ctx, input }) =>
+        ctx.engine.describeWorkflow(ctx.engine.boards.assign(input)),
+      ),
+  }),
+  requests: t.router({
+    list: p
+      .input(requestListSchema.default({}))
+      .query(({ ctx, input }) => ctx.engine.requests.list(input)),
+    get: p
+      .input(requestTargetSchema)
+      .query(({ ctx, input }) => ctx.engine.requests.get(input)),
+    answer: p
+      .input(
+        z.object({
+          request: humanResponseSchema,
+          source: z.enum(['ui', 'mcp']).default('ui'),
+        }),
+      )
+      .mutation(({ ctx, input }) =>
+        inputMutation(() =>
+          ctx.engine.externalInputs.answer(input.request, input.source),
+        ),
+      ),
   }),
   workflows: t.router({
     starters: p.query(({ ctx }) => listStarters(ctx.engine)),
@@ -644,22 +701,9 @@ export const appRouter = t.router({
       .query(({ ctx, input }) => ctx.engine.externalInputs.status(input)),
     externalInput: p
       .input(externalInputMutationSchema)
-      .mutation(({ ctx, input }) => {
-        try {
-          return ctx.engine.externalInputs.mutate(input);
-        } catch (error) {
-          if (error instanceof InterlockError)
-            throw new TRPCError({
-              code:
-                error instanceof ExternalInputConflict
-                  ? 'CONFLICT'
-                  : 'BAD_REQUEST',
-              message: error.message,
-              cause: error,
-            });
-          throw error;
-        }
-      }),
+      .mutation(({ ctx, input }) =>
+        inputMutation(() => ctx.engine.externalInputs.mutate(input)),
+      ),
     retentionSettings: p
       .input(retentionScopeSchema.default({}))
       .query(({ ctx, input }) => ctx.engine.retention.settings(input)),
@@ -712,6 +756,7 @@ export const appRouter = t.router({
           {
             requestId: input.requestId,
             externalTask: input.externalTask,
+            title: input.title,
             tags: input.tags,
             priority: input.priority,
             after: input.after,
@@ -752,8 +797,11 @@ export const appRouter = t.router({
     summaries: p
       .input(runSummaryQuerySchema.default({}))
       .query(({ ctx, input }) => {
+        const requests = ctx.engine.requests.byCard();
         const attention = new Map(
-          ctx.engine.runAttention().map((entry) => [entry.runId, entry]),
+          ctx.engine
+            .runAttention([...requests.values()].flat())
+            .map((entry) => [entry.runId, entry]),
         );
         const page = ctx.engine.store.runSummaries(input, [
           ...attention.keys(),
@@ -769,6 +817,8 @@ export const appRouter = t.router({
             ...run,
             ...ctx.engine.projectRun(run.id),
             attention: attention.get(run.id),
+            request: requests.get(run.id)?.[0]?.target,
+            attentionCount: requests.get(run.id)?.length,
           })),
         };
       }),
@@ -783,6 +833,7 @@ export const appRouter = t.router({
         {
           requestId: input.requestId,
           externalTask: input.externalTask,
+          title: input.title,
           tags: input.tags,
           priority: input.priority,
           after: input.after,

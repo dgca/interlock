@@ -844,3 +844,17 @@ it('filters before paging, counts within search scope, and keeps list activity c
     caller.triggers.list({ status: 'unknown' } as any),
   ).rejects.toThrow();
 });
+
+it('records a configured automation run title in run summaries', () => {
+  const engine = setup();
+  const w = workflow(engine);
+  create(engine, w.id, { runTitle: 'Scheduled heartbeat' });
+  at(engine, 30_000);
+  const runs = engine.store.runSummaries(
+    { workflowId: w.id, offset: 0, limit: 20 },
+    [],
+  );
+  expect(runs.items).toMatchObject([
+    { title: 'Scheduled heartbeat', workflowName: 'Heartbeat' },
+  ]);
+});

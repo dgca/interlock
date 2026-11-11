@@ -73,6 +73,7 @@ export function runSummaries(
     SELECT r.id,
       json_extract(r.value, '$.workflowId') AS workflowId,
       json_extract(r.value, '$.workflowName') AS workflowName,
+      json_extract(r.value, '$.title') AS title,
       json_extract(r.value, '$.version') AS version,
       json_extract(r.value, '$.status') AS status,
       json_extract(r.value, '$.createdAt') AS createdAt,
@@ -131,6 +132,7 @@ export function runSummaries(
       externalTask,
       tags,
       startRequestId,
+      title,
       waitReason,
       ...row
     }) => ({
@@ -149,6 +151,7 @@ export function runSummaries(
         : { externalTask: JSON.parse(externalTask) }),
       ...(tags === null ? {} : { tags: JSON.parse(tags) }),
       ...(startRequestId === null ? {} : { startRequestId }),
+      ...(title === null ? {} : { title }),
     }),
   );
   const total = query.tab ? counts[query.tab] : counts.active + counts.history;

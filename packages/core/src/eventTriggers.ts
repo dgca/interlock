@@ -1,4 +1,5 @@
 import { runTagsSchema } from './runTags.js';
+import { runTitleSchema } from './runStarts.js';
 import { z } from 'zod';
 import type { ExternalTask } from './runStarts.js';
 import type { RunWaiting } from './runProjection.js';
@@ -34,6 +35,7 @@ export const eventConfigSchema = z
     kind: z.literal('event'),
     name: z.string().trim().min(1).max(120),
     tags: runTagsSchema.optional(),
+    runTitle: runTitleSchema.optional(),
     events: z.array(lifecycleEventKindSchema).min(1).max(5),
     scope: eventScopeSchema,
     action: eventActionSchema.optional(),

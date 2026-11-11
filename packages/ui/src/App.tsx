@@ -47,6 +47,8 @@ export function App() {
   const navigate = useNavigate();
   const workflowMatch = useMatch('/workflows/:workflowId');
   const runMatch = useMatch('/runs/*');
+  const boardMatch = useMatch('/boards/*');
+  const requestMatch = useMatch('/runs/request');
   const automationMatch = useMatch('/automations/*');
   const promptMatch = useMatch('/prompts/*');
   const variableMatch = useMatch('/variables/*');
@@ -55,25 +57,29 @@ export function App() {
   const libraryReportMatch = useMatch('/report');
   const workflowReportMatch = useMatch('/workflows/:workflowId/report');
   const reportMatch = libraryReportMatch || workflowReportMatch;
-  const page = automationMatch
-    ? 'automations'
-    : diagnosticsMatch
-      ? 'diagnostics'
-      : reportMatch
-        ? 'report'
-        : harnessMatch
-          ? 'harnesses'
-          : variableMatch
-            ? 'variables'
-            : promptMatch
-              ? 'prompts'
-              : runMatch
-                ? 'runs'
-                : 'workflows';
+  const page = boardMatch
+    ? 'boards'
+    : automationMatch
+      ? 'automations'
+      : diagnosticsMatch
+        ? 'diagnostics'
+        : reportMatch
+          ? 'report'
+          : harnessMatch
+            ? 'harnesses'
+            : variableMatch
+              ? 'variables'
+              : promptMatch
+                ? 'prompts'
+                : runMatch
+                  ? 'runs'
+                  : 'workflows';
   const queryClient = useQueryClient();
   const workflowsQuery = useQuery(trpc.workflows.list.queryOptions());
   const promptsQuery = useQuery(trpc.prompts.list.queryOptions());
-  const attentionQuery = useQuery(trpc.runs.attention.queryOptions());
+  const attentionQuery = useQuery(
+    trpc.requests.list.queryOptions({ limit: 1 }),
+  );
   const scheduleQuery = useQuery(
     trpc.triggers.attention.queryOptions({ limit: 1 }),
   );
@@ -83,7 +89,7 @@ export function App() {
   });
   const workflows = workflowsQuery.data ?? [];
   const prompts = promptsQuery.data ?? [];
-  const attention = attentionQuery.data ?? [];
+  const attentionCount = attentionQuery.data?.total ?? 0;
   const scheduleAttentionCount = scheduleQuery.data?.total ?? 0;
   const loaded = [
     workflowsQuery,
@@ -129,7 +135,7 @@ export function App() {
     const workspaceError = [
       trpc.workflows.list.queryKey(),
       trpc.prompts.list.queryKey(),
-      trpc.runs.attention.queryKey(),
+      trpc.requests.list.queryKey({ limit: 1 }),
       trpc.triggers.attention.queryKey({ limit: 1 }),
     ]
       .map((key) => queryClient.getQueryState(key)?.error)
@@ -244,7 +250,7 @@ export function App() {
         all.some((old) => old.id === w.id)
           ? all.map((old) =>
               old.id === w.id
-                ? { ...old, draftMatchesLatest: null, ...w }
+                ? { ...old, draftMatchesLatest: null, ...w, boardId: w.boardId }
                 : old,
             )
           : [...all, { draftMatchesLatest: null, layoutRevision: 0, ...w }],
@@ -257,9 +263,10 @@ export function App() {
     <PauseProvider tick={tick}>
       <div className="app">
         <Sidebar
+          compactAt960={Boolean(boardMatch || requestMatch)}
           onConnect={context.onConnect}
           page={page}
-          attentionCount={attention.length + scheduleAttentionCount}
+          attentionCount={attentionCount + scheduleAttentionCount}
           connected={connected}
           connectionError={!!effectiveLoadError}
           engineHost={engineHost}

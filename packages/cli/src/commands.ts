@@ -51,6 +51,7 @@ function parseSummaryArgs(args: string[], withBudget = false) {
         '--budget',
         '--request-id',
         '--external-task',
+        '--title',
         '--priority',
         '--after',
         '--on-active-external-task',
@@ -79,6 +80,7 @@ function parseSummaryArgs(args: string[], withBudget = false) {
             budget: { type: 'string' as const },
             'request-id': { type: 'string' as const },
             'external-task': { type: 'string' as const },
+            title: { type: 'string' as const },
             priority: { type: 'string' as const },
             after: { type: 'string' as const },
             'on-active-external-task': { type: 'string' as const },
@@ -306,9 +308,10 @@ export async function runCommand(argv: string[]) {
       const { values, positionals } = parseSummaryArgs(args, true);
       if (positionals.length < 2 || positionals.length > 3)
         throw new Error(
-          'Usage: start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--tag KEY=VALUE ...] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
+          'Usage: start <workflow-id> <json|@file> [version] [--title TEXT] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--tag KEY=VALUE ...] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
         );
       const input = {
+        title: typeof values.title === 'string' ? values.title : undefined,
         tags: parseTags(Array.isArray(values.tag) ? values.tag : undefined),
         versionPolicy:
           values['version-policy'] === undefined
@@ -641,7 +644,7 @@ export async function runCommand(argv: string[]) {
           'export <id>',
           'publish <id> [--cascade]',
           'work-resources <json|@file> (inspect by workId or runId+executionId; release exact uncertain attempt after stop confirmation)',
-          'start <workflow-id> <json|@file> [version] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--tag KEY=VALUE ...] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
+          'start <workflow-id> <json|@file> [version] [--title TEXT] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--tag KEY=VALUE ...] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
           'runs [--tag KEY=VALUE ...] [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
           'run <id> (inspect the run, including Parallel branch runs linked to each group execution)',
           'run-version <json|@file> (action: read with runId/offset/limit; policy with expectedRevision and pinned|latest-compatible; preview with newer version and optional recapturePrompts; apply requires the exact preview confirmation and reason)',

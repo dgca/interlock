@@ -10,6 +10,7 @@ import {
   Stethoscope,
   BarChart2,
   Zap,
+  Columns3,
 } from 'lucide-react';
 import { VERSION } from '../../../../core/src/version';
 import { Link } from 'react-router';
@@ -22,10 +23,12 @@ export function Sidebar({
   connectionError,
   engineHost,
   onConnect,
+  compactAt960,
 }: {
   page:
     | 'workflows'
     | 'runs'
+    | 'boards'
     | 'automations'
     | 'report'
     | 'prompts'
@@ -37,9 +40,10 @@ export function Sidebar({
   connectionError: boolean;
   engineHost?: string;
   onConnect?: () => void;
+  compactAt960?: boolean;
 }) {
   return (
-    <aside className={styles.sidebar}>
+    <aside className={styles.sidebar} data-compact={compactAt960 || undefined}>
       <div className={styles.brand}>
         <img src="/interlock-logo.svg" width={32} height={32} alt="" />
         Interlock<span className={styles.version}>v{VERSION}</span>
@@ -54,6 +58,7 @@ export function Sidebar({
               to: paths.workflows,
             },
             { id: 'runs', label: 'Runs', Icon: Activity, to: paths.runs() },
+            { id: 'boards', label: 'Boards', Icon: Columns3, to: paths.boards },
             {
               id: 'automations',
               label: 'Automations',
@@ -90,6 +95,7 @@ export function Sidebar({
             key={id}
             className={page === id ? styles.active : ''}
             to={to}
+            title={compactAt960 ? label : undefined}
             aria-current={page === id ? 'page' : undefined}
             aria-label={
               id === 'runs' && attentionCount

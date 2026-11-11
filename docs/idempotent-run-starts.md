@@ -77,7 +77,7 @@ The receipt fingerprint includes:
 - Workflow ID and original JSON input, with object key order ignored.
 - Requested version intent. An omitted version means "select latest for this new start" and remains distinct from an explicit version number.
 - The parsed optional budget, tags, and external task metadata. Supplied `tags: {}` remains distinct from omitted tags.
-- Supplied `priority`, `after`, `onActiveExternalTask`, and `versionPolicy` options. Omitted options remain distinct from explicit values.
+- Supplied `title`, `priority`, `after`, `onActiveExternalTask`, and `versionPolicy` options. Omitted options remain distinct from explicit values.
 
 If the original request omitted `version`, repeating it still returns the original run after newer versions are published. Replacing that omission with its resolved version number is a conflicting request. Current prompt edits and library archive state do not change an accepted start's identity or its captured prompt content.
 
@@ -138,7 +138,7 @@ Direct database edits that remove both run and receipt, restoring a backup from 
 Save non-secret task metadata in `task.json` and, if needed, a policy in `budget.json`:
 
 ```sh
-interlock start WORKFLOW_ID '{"task":"Review issue 181"}' --request-id github:dgca/interlock:181:attempt-1 --external-task @task.json --budget @budget.json --tag repo=dgca/interlock --tag batch=factory-7 --summary
+interlock start WORKFLOW_ID '{"task":"Review issue 181"}' --title "Review issue 181" --request-id github:dgca/interlock:181:attempt-1 --external-task @task.json --budget @budget.json --tag repo=dgca/interlock --tag batch=factory-7 --summary
 interlock runs --request-id github:dgca/interlock:181:attempt-1
 interlock runs --tag repo=dgca/interlock --tag batch=factory-7
 interlock report --tag repo=dgca/interlock --tag batch=factory-7
@@ -147,6 +147,6 @@ interlock runs --external-task '{"system":"github","id":"dgca/interlock#181"}' -
 
 Inline JSON and `@file` work for task metadata and budgets. Repeat `--tag KEY=VALUE` for each tag on starts, run queries, or performance reports. Values can contain `=` and can be empty; duplicate keys reject. Omit `--summary` for full inspection; it does not change request identity. The optional positional version retains its existing meaning.
 
-Shared `runs.start` and `runs.startSummary` accept `requestId`, `externalTask`, `tags`, `priority`, `after`, and `onActiveExternalTask` beside their existing fields. Direct Engine callers can supply `{requestId, externalTask, tags, priority, after, onActiveExternalTask}` as the final optional options argument after `budget`, preserving existing positional calls. Shared and MCP result references, cancellation, claims, budgets, ordinary/detached lifecycles and explicit retries keep their existing rules.
+Shared `runs.start` and `runs.startSummary` accept `requestId`, `externalTask`, `title`, `tags`, `priority`, `after`, and `onActiveExternalTask` beside their existing fields. Direct Engine callers can supply `{requestId, externalTask, title, tags, priority, after, onActiveExternalTask}` as the final optional options argument after `budget`, preserving existing positional calls. Shared and MCP result references, cancellation, claims, budgets, ordinary/detached lifecycles and explicit retries keep their existing rules.
 
 Schedule fires use the same atomic RunStarts receipts with `schedule:<triggerId>:<slotIso>` and captured input/published version. Overlap queue waits for prior schedule runs to become terminal even on failure; public `after` dependencies retain success-only behavior. See [workflow schedules](schedules.md).

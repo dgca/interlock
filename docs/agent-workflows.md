@@ -58,7 +58,16 @@ HTTP and stdio tool discovery includes object-root output schemas for these auth
 
 ## Respond to an external-input wait
 
-An `external_input` blocker identifies the exact run and execution waiting for an external answer. Use MCP `external_input` for status, submission, and explicit revision acceptance. Use the receipt to recover after an uncertain response. See [Wait for an external answer](external-input.md).
+An `external_input` blocker identifies the exact run and execution waiting for an external answer. When `externalInput.humanRequest` is true, use `workflow_requests` for the person's question and answer. Use MCP `external_input` for status, submission, and explicit revision acceptance. Use the receipt to recover after an uncertain response. See [Wait for an external answer](external-input.md).
+
+## Answer a workflow request
+
+1. Call `workflow_requests` with `request.action: "list"`. Scope the search with `runId` or `boardId` when you have one. The response gives the exact unresolved count and a `nextOffset` for another page. The default page has 25 items and the maximum is 100.
+2. Call `workflow_requests` with `action: "get"` and the item's `target`. Present the question, relevant evidence, and supported actions to the person.
+3. For Human input, call `workflow_requests` with `action: "answer"`, the same `target`, the current `expectedRevision`, and a caller-generated `submissionId`. Send a string for a text answer. For single choice, send `{"choice":"approve"}` using the configured value and include `comment` if the choice requires it.
+4. Read the receipt. If delivery is uncertain, read the request again or replay the same submission ID and value. If a hold saved the answer without accepting it, wait for release and call `action: "accept"` with the saved revision.
+
+For managed-agent questions or permissions, use `manage_executors` with the request ID and managed execution ID returned by discovery. The detail shows whether to respond, select a model, or reconcile a stopped attempt. For a resource or Script recovery, use `manage_work_resources` or `manage_script` with the exact target. Use the run and execution IDs to inspect a stall. See [Use Workflow Boards](workflow-boards.md).
 
 ## Discover schemas and assignments
 

@@ -1,5 +1,7 @@
 # Wait for an external answer
 
+Use **Human input** when a person needs a question, evidence, and answer controls. It shares External input's durable waits, receipts, and acceptance holds. Use `workflow_requests` to discover and answer Human input through MCP. Use `external_input` to manage run-scoped acceptance holds for either kind of input. See [Use Workflow Boards](workflow-boards.md).
+
 An **External input** node pauses a running workflow until a caller submits and accepts a JSON value. Use it for an approval or answer from an issue tracker, chat, or another system. The integration verifies who sent the answer and calls Interlock.
 
 ## Add the node

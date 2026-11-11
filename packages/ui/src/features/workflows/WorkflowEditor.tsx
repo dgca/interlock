@@ -1435,6 +1435,7 @@ export function WorkflowEditor({
           definition={draft}
           workflows={workflows}
           workflowId={workflow.id}
+          onBoardSaved={onSaved}
           canExport={true}
           returnFocusTo={() => {
             const id = editing.node?.id ?? editing.parallel?.parallelId;

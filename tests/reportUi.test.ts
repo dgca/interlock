@@ -23,7 +23,7 @@ vi.mock('../packages/ui/src/lib/api', async () => {
         list: { query: async () => [{ id: 'w1', name: 'Tagged work' }] },
       },
       prompts: { list: { query: async () => [] } },
-      runs: { attention: { query: async () => [] } },
+      requests: { list: { query: async () => ({ items: [], total: 0 }) } },
       triggers: { attention: { query: async () => ({ items: [], total: 0 }) } },
       pauses: { list: { query: async () => ({ items: [], total: 0 }) } },
       report: { summary: { query } },

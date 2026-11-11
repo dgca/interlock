@@ -8,6 +8,7 @@ import { RunTags } from './RunTags';
 import { attentionText, waitReasonText, type RunTab } from './runAttention';
 import { runProjectionText } from './runProjectionText';
 import classes from './RunList.module.css';
+import { runDisplayTitle, type RequestTarget } from '@interlock/core';
 
 type Page = Awaited<ReturnType<typeof api.runs.summaries.query>>;
 type RunItem = Page['items'][number];
@@ -21,9 +22,11 @@ export type BoardPreview = {
 function RunCard({
   run,
   onOpen,
+  onRequest,
 }: {
   run: RunItem;
   onOpen: (id: string, executionId?: string) => void;
+  onRequest?: (target: RequestTarget) => void;
 }) {
   const attention = run.attention;
   const reason = run.actor
@@ -40,9 +43,11 @@ function RunCard({
       className={`run-row ${classes.runCard}`}
       data-attention={!!attention || undefined}
       onClick={() =>
-        attention
-          ? onOpen(attention.target.runId, attention.target.executionId)
-          : onOpen(run.id)
+        run.request && onRequest
+          ? onRequest(run.request)
+          : attention
+            ? onOpen(attention.target.runId, attention.target.executionId)
+            : onOpen(run.id)
       }
     >
       <span className={classes.cardBody}>
@@ -52,7 +57,10 @@ function RunCard({
           </span>
           <span>v{run.version}</span>
         </span>
-        <strong className={classes.cardTitle}>{run.workflowName}</strong>
+        <strong className={classes.cardTitle}>{runDisplayTitle(run)}</strong>
+        {(run.title || run.externalTask?.title) && (
+          <span className={classes.cardNote}>{run.workflowName}</span>
+        )}
         <span className={classes.cardStatuses}>
           {attention ? (
             attention.reasons.map((reason) => (
@@ -146,6 +154,7 @@ export function RunListBoard({
   page,
   preview,
   onOpen,
+  onRequest,
   onTabChange,
   retry,
   onClearFilters,
@@ -153,6 +162,7 @@ export function RunListBoard({
   page: Page;
   preview?: BoardPreview;
   onOpen: (id: string, executionId?: string) => void;
+  onRequest?: (target: RequestTarget) => void;
   onTabChange: (tab: RunTab) => void;
   retry: () => void;
   onClearFilters?: () => void;
@@ -170,7 +180,9 @@ export function RunListBoard({
   const completed =
     preview?.completed?.items.filter((run) => run.status === 'completed') ?? [];
   const cards = (items: RunItem[]) =>
-    items.map((run) => <RunCard key={run.id} run={run} onOpen={onOpen} />);
+    items.map((run) => (
+      <RunCard key={run.id} run={run} onOpen={onOpen} onRequest={onRequest} />
+    ));
   const previewError = (message: string) => (
     <div role="alert">
       <Text c="red" size="sm">

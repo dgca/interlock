@@ -2,10 +2,13 @@ import {
   ExternalInputConflict,
   InterlockError,
   assertOwnPropertyContract,
+  assertHumanAnswer,
   externalInputMutationSchema,
   externalInputStatusSchema,
   type ExternalInputMutation,
   type ExternalInputStatusQuery,
+  type HumanAnswerSource,
+  type HumanResponse,
   type Json,
   type NodeExecution,
   type Run,
@@ -39,6 +42,7 @@ export class ExternalInputs {
       event(run: Run, type: string, message: string): void;
       pump(): void;
       assertUnpaused(run: Run): void;
+      paused(run: Run): boolean;
     },
   ) {}
 
@@ -100,9 +104,58 @@ export class ExternalInputs {
           request.expectedRevision,
         );
       const execution = this.execution(run, request.executionId);
-      if (request.action === 'submit')
+      if (request.action === 'submit') {
+        if (execution.humanInput)
+          throw new InterlockError(
+            'Use the Human input answer operation for this request',
+          );
         return this.submit(run, execution, request);
+      }
       const accepted = this.accept(run, execution, request.expectedRevision);
+      advanced = accepted.advanced;
+      return accepted.receipt;
+    });
+    if (advanced) this.engine.pump();
+    return result;
+  }
+
+  answer(input: HumanResponse, source: HumanAnswerSource) {
+    let advanced = false;
+    const result = this.store.transaction(() => {
+      const { runId, executionId } = input.target;
+      const run = this.engine.run(runId);
+      const execution = this.execution(run, executionId);
+      if (!execution.humanInput)
+        throw new InterlockError('Human input request not found');
+      if (input.action === 'answer') {
+        const alreadySubmitted = Boolean(execution.externalInput?.submittedAt);
+        const receipt = this.submit(
+          run,
+          execution,
+          {
+            action: 'submit',
+            runId,
+            executionId,
+            requestId: input.submissionId,
+            expectedRevision: input.expectedRevision,
+            value: input.value,
+          },
+          source,
+        );
+        if (execution.externalInput?.acceptedAt)
+          return { ...receipt, acceptedAt: execution.externalInput.acceptedAt };
+        if (
+          this.engine.paused(run) ||
+          this.store.externalInputHoldOwner(run.id)
+        )
+          return receipt;
+        // A retry of an answer saved under a hold only returns its original receipt.
+        if (alreadySubmitted) return receipt;
+        const accepted = this.accept(run, execution, receipt.revision);
+        advanced = accepted.advanced;
+        return accepted.receipt;
+      }
+      const accepted = this.accept(run, execution, input.expectedRevision);
       advanced = accepted.advanced;
       return accepted.receipt;
     });
@@ -140,6 +193,7 @@ export class ExternalInputs {
     run: Run,
     execution: NodeExecution,
     request: Extract<ExternalInputMutation, { action: 'submit' }>,
+    source?: HumanAnswerSource,
   ) {
     const id = fingerprint([run.id, execution.id, request.requestId]);
     const valueHash = fingerprint(request.value);
@@ -159,11 +213,16 @@ export class ExternalInputs {
       request.expectedRevision !== revision
     )
       throw new ExternalInputConflict('External-input revision conflict');
-    assertOwnPropertyContract(
-      this.engine.node(run, execution).outputSchema,
-      request.value,
-      'Submitted value',
-    );
+    if (execution.humanInput) {
+      if (revision > 0)
+        throw new ExternalInputConflict('This answer is already saved');
+      assertHumanAnswer(execution.humanInput.answer, request.value);
+    } else
+      assertOwnPropertyContract(
+        this.engine.node(run, execution).outputSchema,
+        request.value,
+        'Submitted value',
+      );
     const receipt = {
       runId: run.id,
       executionId: execution.id,
@@ -179,6 +238,7 @@ export class ExternalInputs {
     execution.externalInput = {
       revision: receipt.revision,
       submittedAt: receipt.submittedAt,
+      ...(source ? { source } : {}),
     };
     this.engine.save(run);
     this.engine.event(

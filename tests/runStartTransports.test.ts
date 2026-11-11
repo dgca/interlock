@@ -59,7 +59,7 @@ it.each(['http', 'stdio'])(
     try {
       await client.connect(transport);
       const tools = (await client.listTools()).tools;
-      expect(tools).toHaveLength(66);
+      expect(tools).toHaveLength(67);
       if (discovery) expect(tools).toEqual(discovery);
       else {
         discovery = tools;
@@ -81,6 +81,7 @@ it.each(['http', 'stdio'])(
           workflowId: w.id,
           input: { secret: 'private-start-input' },
           requestId: 'request-' + mode,
+          title: 'Review issue 181',
           externalTask: task,
           budget,
         };
@@ -99,6 +100,7 @@ it.each(['http', 'stdio'])(
       expect(full.run.id).toBe(id);
       expect(full.run.version).toBe(1);
       expect(full.run.externalTask).toEqual(task);
+      expect(full.run.title).toBe(q.title);
       expect(JSON.stringify(store.runs())).toBe(before);
       const api = createClient(url);
       expect((await api.runs.start.mutate(q as any)).run.id).toBe(id);
@@ -109,6 +111,8 @@ it.each(['http', 'stdio'])(
         'start',
         w.id,
         JSON.stringify(q.input),
+        '--title',
+        q.title,
         '--summary',
         '--request-id',
         q.requestId,
@@ -118,6 +122,7 @@ it.each(['http', 'stdio'])(
         '@' + join(root, 'budget.json'),
       ]);
       expect(cli.runId).toBe(id);
+      expect(cli.title).toBe(q.title);
       const matches = await call('list_runs', {
         requestId: q.requestId,
         externalTask: { system: task.system, id: task.id },

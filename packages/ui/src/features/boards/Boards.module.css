@@ -1,0 +1,232 @@
+.content {
+  overflow: auto;
+  padding: 24px var(--workspace-padding);
+}
+.librarySearch {
+  width: 232px;
+}
+.library {
+  container-type: inline-size;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.libraryRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 19px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.libraryIcon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+  color: var(--running-text);
+}
+.libraryDetails {
+  overflow-wrap: anywhere;
+}
+.libraryDetails h2 {
+  margin: 0 0 2px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.libraryActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 16px;
+}
+@container (max-width: 520px) {
+  .libraryRow {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+    padding-inline: 0;
+  }
+  .libraryActions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}
+.card {
+  position: relative;
+  background: var(--gradient-card);
+  box-shadow: var(--shadow-card);
+  border-radius: 12px;
+  padding: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.card h3 {
+  margin: 0;
+  font-weight: 600;
+  font-size: 15px;
+}
+.card:has(.cardAction:hover) {
+  background: var(--surface-hover);
+  outline: 1px solid var(--input-border);
+}
+.card .cardAction {
+  position: static;
+  font-weight: 600;
+}
+.cardAction::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+}
+.cardAction:focus-visible {
+  outline: none;
+}
+.cardAction:focus-visible::after {
+  outline: 2px solid var(--field-focus);
+  outline-offset: 2px;
+}
+.card a:not(.cardAction) {
+  position: relative;
+  z-index: 1;
+}
+.card a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  height: auto;
+  min-height: 28px;
+  padding-inline: 0;
+  text-underline-offset: 3px;
+  white-space: normal;
+}
+.card a svg {
+  flex-shrink: 0;
+}
+.reason {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-color: var(--border) var(--workspace);
+  padding: 16px var(--workspace-padding) 24px;
+}
+.scroller:focus-visible {
+  outline: 2px solid var(--field-focus);
+  outline-offset: -3px;
+}
+.columns {
+  display: grid;
+  grid-auto-columns: minmax(280px, 1fr);
+  grid-auto-flow: column;
+  gap: 12px;
+  min-height: 100%;
+}
+.column {
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--inset);
+  min-width: 0;
+}
+.columnHeading {
+  padding: 2px 4px 10px;
+}
+.columnHeading h2 {
+  font-size: 15px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.empty {
+  padding: 16px var(--workspace-padding) 0;
+}
+.form {
+  max-width: 700px;
+  padding: 24px;
+  background: var(--form);
+  box-shadow: var(--shadow-card);
+  border-radius: 12px;
+}
+.form h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.columnEdit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.requestScroll {
+  overflow: auto;
+  flex: 1;
+  padding: 24px var(--workspace-padding);
+}
+.requestBody {
+  max-width: 920px;
+  margin-inline: auto;
+}
+.requestNav {
+  margin-bottom: 12px;
+}
+.requestCard {
+  padding: clamp(16px, 3vw, 30px);
+  border-radius: 12px;
+  background: var(--form);
+  box-shadow: var(--shadow-card);
+  overflow-wrap: anywhere;
+}
+.requestCard h2 {
+  font-size: clamp(18px, 2.5vw, 28px);
+  margin: 0;
+  line-height: 1.25;
+  text-wrap: balance;
+  outline: none;
+}
+.reviewText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+  max-width: 76ch;
+  margin: 0;
+}
+.evidence {
+  padding: 16px;
+  border-radius: 6px;
+  background: var(--inset);
+}
+.evidence h3 {
+  font-size: 15px;
+  margin: 0;
+}
+.evidenceHeader {
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.evidenceScroll {
+  max-height: min(40vh, 420px);
+  overflow: auto;
+  scrollbar-color: var(--border) var(--inset);
+}
+.receipt {
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: var(--inset);
+  margin: 0;
+}
+.boardPage[hidden] {
+  display: none;
+}

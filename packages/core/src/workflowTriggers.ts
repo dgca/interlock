@@ -1,4 +1,5 @@
 import { runTagsSchema } from './runTags.js';
+import { runTitleSchema } from './runStarts.js';
 import { z } from 'zod';
 import { eventConfigSchema, type EventConfig } from './eventTriggers.js';
 import { CronExpressionParser } from 'cron-parser';
@@ -103,6 +104,7 @@ export const scheduleConfigSchema = z
     kind: z.literal('schedule').default('schedule'),
     name: z.string().trim().min(1).max(120),
     tags: runTagsSchema.optional(),
+    runTitle: runTitleSchema.optional(),
     timing: scheduleTimingSchema,
     input: z.lazy(() => jsonSchema).default({}),
     bindings: scheduleBindingsSchema.default({}),

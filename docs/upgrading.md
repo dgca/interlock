@@ -59,6 +59,8 @@ database before building the index. Run records and execution history stay in
 their original format. Index creation needs additional disk space and may take
 longer on larger histories.
 
+Database schema 18 adds indexes for open Human input requests, uncertain background steps, and board stage entries. Startup backs up the database before creating the indexes. The migration preserves existing definitions, run history, and integration-owned External input waits.
+
 ## Upgrading unreleased development databases
 
 Schema 15 removes inbound webhook triggers, outbound webhook event actions, and
