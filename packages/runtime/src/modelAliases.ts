@@ -35,6 +35,7 @@ export class ModelAliases {
   usesReference(definition: WorkflowDefinition, ref: string) {
     if (ref !== definition.agentModel) return true;
     const agents = definition.nodes.filter((node) => node.kind === 'agent');
+    if (!agents.some((node) => node.executor !== null)) return false;
     if (!agents.some((node) => node.executorMode)) return true;
     return agents.some(
       (node) =>

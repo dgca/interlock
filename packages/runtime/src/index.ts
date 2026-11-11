@@ -336,9 +336,10 @@ export class Engine {
             run.ignoredWorkflowModelAlias !== ref;
           if (
             explicitPresets.has(ref) ||
-            (this.modelAliases.usesReference(definition, ref) &&
-              !originalLiteral &&
-              this.modelAliases.requirement(ref))
+            (!originalLiteral &&
+              this.modelAliases.requirement(ref) &&
+              (run.ignoredWorkflowModelAlias !== ref ||
+                this.modelAliases.usesReference(definition, ref)))
           )
             throw new InterlockError(
               `Model alias capture ${ref} is missing. Start a new run to capture it.`,
@@ -1529,7 +1530,9 @@ export class Engine {
       ...(() => {
         const parent =
           continuedFrom ??
-          (sameWorkflowChild && parentRunId ? this.run(parentRunId) : undefined);
+          (sameWorkflowChild && parentRunId
+            ? this.run(parentRunId)
+            : undefined);
         const captures = this.options.substituteOperation
           ? []
           : this.modelAliases.capture(
@@ -2989,7 +2992,8 @@ export class Engine {
           : this.modelAliases.get(workflowRef)));
     const preset =
       !this.options.substituteOperation &&
-      (node.executorMode === 'preset' || alias?.permissions !== undefined);
+      (node.executorMode === 'preset' ||
+        (captures !== undefined && alias?.permissions !== undefined));
     const profiles = this.executors.profiles();
     let executor = node.executor ?? definition.executor;
     let model = target;

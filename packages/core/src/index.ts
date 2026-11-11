@@ -399,12 +399,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
       .describe(
         'Local executor profile override. Omit to inherit the workflow default; null keeps connected-agent execution.',
       ),
-    executorMode: z
-      .enum(['harness', 'preset'])
-      .optional()
-      .describe(
-        'Harness makes executor authoritative and model literal. Preset uses model as a local alias reference. Omit to preserve legacy alias routing.',
-      ),
+    executorMode: z.enum(['harness', 'preset']).optional(),
     model: executorModelSchema
       .optional()
       .describe(

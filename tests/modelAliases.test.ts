@@ -758,3 +758,25 @@ it.each([false, true])(
     await engine.executors.stop();
   },
 );
+
+it('allows connected-only work when the unused workflow preset was deleted', () => {
+  const { engine } = setup();
+  const preset = engine.modelAliases.mutate({
+    action: 'create',
+    name: 'Unused preset',
+    candidates: [{ profileId: 'codex', model: 'old-model' }],
+  });
+  const definition = blankDefinition();
+  definition.agentModel = preset.id;
+  definition.nodes.find((node) => node.kind === 'agent')!.executor = null;
+  const workflow = publish(engine, definition);
+  engine.modelAliases.mutate({
+    action: 'delete',
+    id: preset.id,
+    expectedRevision: 1,
+  });
+  const run = engine.start(workflow, {}).run;
+  expect(engine.store.work('available', run.id)[0]).not.toHaveProperty(
+    'executor',
+  );
+});

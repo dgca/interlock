@@ -388,22 +388,23 @@ export function CustomProfileDialog({
                 />
                 {isNew && (
                   <NativeSelect
-                    label="Default Permissions"
+                    label="Default permissions"
+                    description="Interlock sends this mode to the integration. The integration is responsible for enforcing it."
                     value={permissions}
                     onChange={(e) =>
                       setPermissions(e.currentTarget.value as any)
                     }
                     data={[
                       {
-                        label: 'Standard (Interlock tool approval policy)',
+                        label: 'Standard',
                         value: 'standard',
                       },
                       {
-                        label: 'Read-only (deny file/env mutations)',
+                        label: 'Read only',
                         value: 'read-only',
                       },
                       {
-                        label: 'Full Access (autonomous mode)',
+                        label: 'Full access',
                         value: 'full-access',
                       },
                     ]}

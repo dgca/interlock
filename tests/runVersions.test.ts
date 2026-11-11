@@ -1157,9 +1157,9 @@ it('checks the full nested Batch ancestry even when the next node and immediate 
 it('does not move a run from a literal model to an uncaptured explicit preset', () => {
   const e = setup();
   const d = definition();
-  const next = d.nodes.find(
-    (node) => node.kind === 'agent' && node.id === 'next',
-  )!;
+  const next = d.nodes
+    .filter((node) => node.kind === 'agent')
+    .find((node) => node.id === 'next')!;
   next.model = 'Deep review';
   const id = publish(e, d);
   const run = e.start(id, {}).run;
@@ -1169,9 +1169,9 @@ it('does not move a run from a literal model to an uncaptured explicit preset', 
     candidates: [{ profileId: 'codex', model: 'review-model' }],
   });
   newer(e, id, (draft) => {
-    const target = draft.nodes.find(
-      (node) => node.kind === 'agent' && node.id === 'next',
-    )!;
+    const target = draft.nodes
+      .filter((node) => node.kind === 'agent')
+      .find((node) => node.id === 'next')!;
     target.executorMode = 'preset';
   });
   boundary(e, run.id);
@@ -1180,5 +1180,31 @@ it('does not move a run from a literal model to an uncaptured explicit preset', 
     blockers: expect.arrayContaining([
       expect.stringMatching(/capture Deep review is missing/i),
     ]),
+  });
+});
+
+it('does not reinterpret a newly introduced workflow preset as a literal model on an active run', () => {
+  const e = setup();
+  const d = definition();
+  for (const node of d.nodes) {
+    if (node.kind !== 'agent') continue;
+    node.executor = 'codex';
+    node.executorMode = 'harness';
+  }
+  d.executor = 'codex';
+  const id = publish(e, d);
+  const run = e.start(id, {}).run;
+  const preset = e.modelAliases.mutate({
+    action: 'create',
+    name: 'New workflow default',
+    candidates: [{ profileId: 'codex', model: 'review-model' }],
+  });
+  newer(e, id, (draft) => {
+    draft.agentModel = preset.id;
+  });
+  boundary(e, run.id);
+  expect(e.runVersions.preview({ runId: run.id, version: 2 })).toMatchObject({
+    canApply: false,
+    blockers: expect.arrayContaining([expect.stringContaining(preset.id)]),
   });
 });
