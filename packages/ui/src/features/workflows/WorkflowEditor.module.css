@@ -394,6 +394,7 @@
   justify-content: space-between;
   gap: 10px;
   min-height: 36px;
+  padding-block-start: 6px;
   padding-inline: 16px;
   color: var(--text);
   font-size: 12px;
