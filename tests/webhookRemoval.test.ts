@@ -59,7 +59,7 @@ it('upgrades the published 0.2.13 database unchanged and executes both published
     const e = engine(file);
     expect(e.store.migration).toMatchObject({
       from: 7,
-      to: 16,
+      to: 17,
       backup: expect.any(String),
     });
     expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -168,7 +168,7 @@ it.each([12, 13, 14])(
       const upgrade = migrate(db, file);
       expect(upgrade).toMatchObject({
         from: version,
-        to: 16,
+        to: 17,
         backup: expect.any(String),
       });
       expect(
@@ -181,7 +181,7 @@ it.each([12, 13, 14])(
           )
           .all(),
       ).toEqual([]);
-      expect(migrate(db, file)).toEqual({ from: 16, to: 16 });
+      expect(migrate(db, file)).toEqual({ from: 17, to: 17 });
     } finally {
       db.close();
     }

@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import { ManagedTranscripts } from './transcripts.js';
 import { isAbsolute } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -29,6 +30,11 @@ import {
   type WorkflowDefinition,
   type PauseHold,
   type UsageAttempt,
+  transcriptQuerySchema,
+  executorMessageSchema,
+  messageReceiptQuerySchema,
+  type TranscriptPage,
+  type MessageReceipt,
 } from '@interlock/core';
 import type { Engine, Worker } from '../index.js';
 import { validateDirectoryContainment } from '../workingDirectory.js';
@@ -53,11 +59,13 @@ import {
   HarnessResultError,
   HarnessCleanupError,
   HarnessModelError,
+  HarnessRequestError,
   classifyHarnessError,
   isModelRefusal,
   type HarnessAdapter,
   type HarnessRequest,
   type HarnessResult,
+  assignmentPrompt,
 } from './contracts.js';
 import {
   buildTokenMap,
@@ -134,11 +142,13 @@ interface Job {
       reject: (error: Error) => void;
     }
   >;
+  sendMessage?: (message: string) => Promise<void>;
   done?: Promise<void>;
 }
 
 /** Queue and claim lifecycle are shared; adapters own native session protocols. */
 export class ExecutorManager {
+  private transcripts: ManagedTranscripts;
   private adapters = new Map<string, HarnessAdapter>();
   private jobs = new Map<string, Job>();
   private catalogs = new Map<string, { at: number; result: ExecutorModels }>();
@@ -180,10 +190,24 @@ export class ExecutorManager {
   constructor(
     private engine: Engine,
     private defaultCwd: string,
-  ) {}
+  ) {
+    this.transcripts = new ManagedTranscripts(engine);
+  }
   async manage(input: unknown) {
     const q = executorOperationSchema.parse(input);
     switch (q.action) {
+      case 'transcript': {
+        const { action: _action, ...query } = q;
+        return this.transcript(query);
+      }
+      case 'message': {
+        const { action: _action, ...query } = q;
+        return this.message(query);
+      }
+      case 'receipt': {
+        const { action: _action, ...query } = q;
+        return this.messageReceipt(query);
+      }
       case 'settings':
         return this.settings();
       case 'save_settings': {
@@ -482,6 +506,12 @@ export class ExecutorManager {
     this.running = true;
     this.stopped = false;
     this.adapters = new Map(adapters.map((a) => [a.id, a]));
+    try {
+      this.engine.store.transcripts.recover();
+    } catch {
+      /* Capture never prevents startup. */
+    }
+    this.transcripts.tick();
     // No process surviving a server loss is assumed to have stopped or completed.
     for (const record of this.engine.store.list<ManagedExecution>(
       attemptsCollection,
@@ -493,6 +523,7 @@ export class ExecutorManager {
         );
     this.unsubscribe = this.engine.store.subscribe(() => this.schedule());
     this.interval = setInterval(() => {
+      this.transcripts.tick();
       this.checkJobs();
       this.schedule();
     }, 1000);
@@ -771,6 +802,13 @@ export class ExecutorManager {
       state: 'completed',
       endedAt: now(),
     });
+    this.transcripts.finish({ ...pending, endedAt: now() });
+    this.transcripts.register(record);
+    this.transcripts.capture(
+      record,
+      { kind: 'user', text: assignmentPrompt(work) },
+      [work.token ?? '', ticket.ticket],
+    );
     this.engine.store.put(attemptsCollection, record);
     work.managedExecution = {
       profileId: record.profile.id,
@@ -788,6 +826,7 @@ export class ExecutorManager {
       record.workId,
     );
     this.engine.store.put(attemptsCollection, record);
+    this.transcripts.finish(record);
     const work = this.engine.store.get<WorkRequest>('work', record.workId);
     if (work && work.attempt === record.attempt)
       this.engine.store.put('work', {
@@ -809,6 +848,11 @@ export class ExecutorManager {
     this.engine.store.touchRun(record.runId);
   }
   private log(record: ManagedExecution, message: string) {
+    const current = this.engine.store.get<WorkRequest>('work', record.workId);
+    this.transcripts.capture(record, { kind: 'status', text: message }, [
+      current?.token ?? '',
+      this.launchedWork.get(record.workId)?.claimTicket ?? '',
+    ]);
     record.logCount++;
     const cleanMessage = sanitizeMessage(message).slice(0, 1000);
     record.logs = [...record.logs, { at: now(), message: cleanMessage }].slice(
@@ -903,8 +947,176 @@ export class ExecutorManager {
         resumeCommand: r.resumeCommand,
         deepLink: r.deepLink,
         recoveryEvents: r.recoveryEvents,
+        transcriptCapture: r.transcriptCapture,
       })),
     };
+  }
+  private execution(id: string) {
+    const record = this.engine.store.get<ManagedExecution>(
+      attemptsCollection,
+      id,
+    );
+    if (!record) throw new InterlockError('Managed execution not found');
+    return record;
+  }
+  private channel(record: ManagedExecution) {
+    const work = this.engine.store.get<WorkRequest>('work', record.workId);
+    if (
+      this.stopped ||
+      !active(record) ||
+      record.endedAt ||
+      work?.status !== 'claimed' ||
+      work.attempt !== record.attempt ||
+      !work.token ||
+      Date.parse(work.leaseUntil ?? '') <= Date.now()
+    )
+      return undefined;
+    const job = this.jobs.get(record.workId);
+    if (
+      job?.record.id === record.id &&
+      !job.abort.signal.aborted &&
+      work.token === job.work.token
+    )
+      return job.sendMessage;
+    const launcher = this.launchedWork.get(record.workId);
+    if (
+      launcher &&
+      (launcher.profile.messageCommand || launcher.profile.messageUrl) &&
+      launcher.status !== 'ended'
+    )
+      return (message: string) => this.sendLauncherMessage(launcher, message);
+    return undefined;
+  }
+  transcript(input: unknown): TranscriptPage {
+    const q = transcriptQuerySchema.parse(input),
+      record = this.execution(q.executionId);
+    return {
+      ...this.engine.store.transcripts.page(q),
+      messageAvailable: !!this.channel(record),
+      messageReason: this.channel(record)
+        ? undefined
+        : 'No supported live message channel for this execution',
+      ...(record.transcriptError ? { reason: record.transcriptError } : {}),
+    };
+  }
+  messageReceipt(input: unknown) {
+    const q = messageReceiptQuerySchema.parse(input);
+    const record = this.execution(q.executionId);
+    return {
+      receiptsPruned: this.engine.store.transcripts.receiptsPruned(
+        q.executionId,
+      ),
+      canSend: !!this.channel(record),
+      receipt:
+        this.engine.store.transcripts.receipt(q.executionId, q.requestId)
+          ?.receipt ?? null,
+    };
+  }
+  async message(input: unknown): Promise<MessageReceipt> {
+    const q = executorMessageSchema.parse(input);
+    const record = this.execution(q.executionId);
+    const currentWork = this.engine.store.get<WorkRequest>(
+      'work',
+      record.workId,
+    );
+    if (
+      !this.transcripts.safeMetadata(
+        record,
+        [q.operator, q.requestId],
+        [
+          currentWork?.token ?? '',
+          this.launchedWork.get(record.workId)?.claimTicket ?? '',
+        ],
+      )
+    )
+      throw new InterlockError(
+        'Message not sent: request ID or operator label contains protected data, or its protection is unavailable. Choose safe metadata.',
+      );
+    const hash = createHash('sha256')
+      .update(JSON.stringify([q.message, q.operator]))
+      .digest('hex');
+    const existing = this.engine.store.transcripts.receipt(
+      record.id,
+      q.requestId,
+    );
+    if (existing) {
+      if (existing.hash !== hash)
+        throw new InterlockError(
+          'Message request ID already has different content',
+        );
+      return existing.receipt;
+    }
+    const send = this.channel(record);
+    if (!send)
+      throw new InterlockError(
+        'Message not sent: execution has no supported active message channel',
+      );
+    this.transcripts.register(record);
+    const receipt: MessageReceipt = {
+      executionId: record.id,
+      requestId: q.requestId,
+      status: 'pending',
+      operator: q.operator,
+      source: q.source,
+      at: now(),
+      updatedAt: now(),
+    };
+    this.engine.store.transcripts.begin(receipt, hash);
+    const work = this.engine.store.get<WorkRequest>('work', record.workId);
+    this.transcripts.capture(
+      record,
+      { kind: 'operator', text: q.message, key: `operator:${q.requestId}` },
+      [
+        work?.token ?? '',
+        this.launchedWork.get(record.workId)?.claimTicket ?? '',
+      ],
+    );
+    try {
+      // No await separates the final ownership check from dispatch.
+      if (!this.channel(this.execution(record.id))) {
+        receipt.status = 'failed';
+        receipt.reason = 'Execution ended before message dispatch';
+      } else {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([
+            send(q.message),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(
+                () => reject(new Error('Delivery timeout')),
+                10000,
+              );
+            }),
+          ]);
+          receipt.status = 'accepted';
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+    } catch (error) {
+      receipt.status =
+        error instanceof HarnessRequestError ? 'failed' : 'unknown';
+      receipt.reason =
+        receipt.status === 'failed'
+          ? 'Harness rejected the message before delivery'
+          : 'Delivery could not be confirmed; this request will not be resent';
+    }
+    receipt.updatedAt = now();
+    // A failed receipt write leaves durable pending, never permission to resend.
+    this.engine.store.transcripts.settle(receipt);
+    this.engine.store.put('events', {
+      id: randomUUID(),
+      runId: record.runId,
+      type: 'managed.message',
+      at: now(),
+      message: `Operator message ${receipt.status}`,
+      executionId: record.id,
+      requestId: q.requestId,
+      source: q.source,
+      operator: q.operator,
+    });
+    this.engine.store.touchRun(record.runId);
+    return receipt;
   }
   private async scan() {
     if (this.scanning || this.stopped) return;
@@ -1727,7 +1939,14 @@ export class ExecutorManager {
       this.launcherCommands.get(session.workId) ??
       new Map<string, Promise<string>>();
     const pending = commands.get(operation);
-    if (pending) return pending;
+    if (pending)
+      return operation === 'message'
+        ? Promise.reject(
+            new HarnessRequestError(
+              'A launcher message is already being delivered',
+            ),
+          )
+        : pending;
     const command = (async () => {
       try {
         return await this.runCustomCommand(input);
@@ -2086,6 +2305,7 @@ export class ExecutorManager {
 
   private async execute(job: Job, adapter: HarnessAdapter, session: Session) {
     const r = job.record;
+    this.transcripts.register(r);
     const { continueOnMissingResult, transientRetry } =
       this.resolveRecoveryPolicies(job.work, r.profile);
 
@@ -2102,6 +2322,11 @@ export class ExecutorManager {
             try {
               r.state = 'running';
               this.write(r);
+              this.transcripts.capture(
+                r,
+                { kind: 'user', text: assignmentPrompt(currentWork) },
+                [job.work.token ?? ''],
+              );
               const sessionName = this.resolveSessionName(
                 currentWork,
                 r.profile,
@@ -2114,6 +2339,13 @@ export class ExecutorManager {
                 sessionName,
                 work: currentWork,
                 signal: job.abort.signal,
+                onTranscript: (event) => {
+                  if (!job.abort.signal.aborted && !this.stopped)
+                    this.transcripts.capture(r, event, [job.work.token ?? '']);
+                },
+                onMessageChannel: (send) => {
+                  job.sendMessage = send;
+                },
                 onSession: (id, model) => {
                   if (job.abort.signal.aborted || this.stopped) return;
                   session.nativeId = id;
@@ -2175,6 +2407,7 @@ export class ExecutorManager {
                 },
                 request: (request) => this.request(job, request),
               });
+              job.sendMessage = undefined;
               if (turnResult?.resumeCommand) {
                 session.resumeCommand = turnResult.resumeCommand;
                 r.resumeCommand = turnResult.resumeCommand;
@@ -2385,6 +2618,7 @@ export class ExecutorManager {
         }
       }
     } finally {
+      job.sendMessage = undefined;
       for (const answer of job.answers.values())
         answer.reject(new Error('Execution ended'));
       this.jobs.delete(job.work.id);
@@ -2785,6 +3019,10 @@ export class ExecutorManager {
     return { applied: true };
   }
   assertDelete(runIds: Set<string>) {
+    if (this.engine.store.transcripts.hasPending(runIds))
+      throw new InterlockError(
+        'Managed messages are pending; wait for delivery to settle before deleting history.',
+      );
     if (
       this.engine.store
         .forRuns<ManagedExecution>(attemptsCollection, runIds)

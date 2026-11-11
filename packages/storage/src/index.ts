@@ -14,6 +14,7 @@ import {
 import { migrate, type MigrationResult } from './migrations.js';
 import { continuationState } from './continuation.js';
 import { runSummaries } from './runSummaries.js';
+import { Transcripts } from './transcripts.js';
 import { runsForReport } from './report.js';
 export { runsForReport } from './report.js';
 export type { HistoryRun } from './history.js';
@@ -40,6 +41,7 @@ import type {
 
 /** One service owns the database. Each runtime operation commits as one transaction. */
 export class Store {
+  readonly transcripts: Transcripts;
   readonly protectedValues: ProtectedValues;
   private db: DatabaseSync;
   private transactionDepth = 0;
@@ -164,7 +166,11 @@ export class Store {
       const journalMode = this.db.prepare('PRAGMA journal_mode = WAL;').get();
       if (journalMode?.journal_mode === 'wal') {
         this.db.exec('PRAGMA synchronous = NORMAL;');
+        this.db.exec('PRAGMA journal_size_limit = 16777216;');
       }
+      this.transcripts = new Transcripts(this.db, path, (fn) =>
+        this.transaction(fn),
+      );
     } catch (error) {
       this.db.close();
       throw error;

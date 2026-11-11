@@ -26,6 +26,7 @@ async function diagnostics() {
 if (flag('--model') === 'diagnostic-flood') await diagnostics();
 let waiting = false,
   model = 'test-model';
+let awaitingGuidance = false;
 const end = (allowed) => {
   if (model === 'wait') return;
   if (model === 'model-refusal' || model === 'late-model-refusal') {
@@ -192,6 +193,21 @@ for await (const line of createInterface({ input: process.stdin })) {
         id: message.id,
         result: { turn: { id: 'turn', status: 'inProgress' } },
       });
+      if (model === 'transcript-steer') {
+        send({
+          method: 'item/started',
+          params: {
+            threadId: session,
+            turnId: 'turn',
+            item: {
+              id: 'checks',
+              type: 'commandExecution',
+              command: 'pnpm test',
+            },
+          },
+        });
+        continue;
+      }
       if (model === 'model-refusal') {
         end(false);
         continue;
@@ -273,6 +289,30 @@ for await (const line of createInterface({ input: process.stdin })) {
         params: { turn: { id: 'turn', status: 'interrupted' } },
       });
     }
+    if (message.method === 'turn/steer') {
+      if (
+        message.params.expectedTurnId !== 'turn' ||
+        message.params.threadId !== session
+      )
+        throw Error('Incorrect steering identity');
+      send({ id: message.id, result: { turnId: 'turn' } });
+      send({
+        method: 'item/completed',
+        params: {
+          threadId: session,
+          turnId: 'turn',
+          item: {
+            id: 'checks',
+            type: 'commandExecution',
+            command: 'pnpm test',
+            aggregatedOutput: 'Checks passed',
+            exitCode: 0,
+            status: 'completed',
+          },
+        },
+      });
+      end(true);
+    }
   } else {
     if (message.type === 'control_request')
       send({
@@ -299,6 +339,38 @@ for await (const line of createInterface({ input: process.stdin })) {
         },
       });
     if (message.type === 'user') {
+      if (awaitingGuidance) {
+        awaitingGuidance = false;
+        send({
+          type: 'user',
+          uuid: randomUUID(),
+          session_id: session,
+          parent_tool_use_id: null,
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'checks',
+                content: 'Checks passed',
+              },
+            ],
+          },
+        });
+        send({
+          type: 'assistant',
+          uuid: randomUUID(),
+          session_id: session,
+          parent_tool_use_id: null,
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Using your guidance.' }],
+          },
+        });
+        model = 'test-model';
+        end(true);
+        continue;
+      }
       if (process.argv.includes('--strict-mcp-config'))
         throw Error('Discovery must not send a user message');
       model = flag('--model') ?? model;
@@ -315,6 +387,27 @@ for await (const line of createInterface({ input: process.stdin })) {
         apiKeySource: 'none',
         permissionMode: 'default',
       });
+      if (model === 'transcript-message') {
+        awaitingGuidance = true;
+        send({
+          type: 'assistant',
+          uuid: randomUUID(),
+          session_id: session,
+          parent_tool_use_id: null,
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool_use',
+                id: 'checks',
+                name: 'Bash',
+                input: { command: 'pnpm test' },
+              },
+            ],
+          },
+        });
+        continue;
+      }
       if (model === 'model-refusal') {
         end(false);
         continue;

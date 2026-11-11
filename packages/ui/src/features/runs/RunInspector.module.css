@@ -238,24 +238,22 @@
 .detail :global(.work-panel) > :global(.section-heading) {
   margin-bottom: 16px;
 }
-.errorDetails {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 .detail:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 .stepData {
   margin-top: 24px;
-  border-top: 1px solid var(--border);
-  padding-top: 16px;
 }
-.stepData summary {
+.stepData > summary {
   cursor: pointer;
-  color: var(--muted);
-  font-size: 13px;
-  margin-bottom: 16px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  padding-block: 8px;
+}
+.stepData[open] > summary {
+  margin-bottom: 8px;
 }
 .stepData summary:focus-visible {
   outline: 2px solid var(--accent);
@@ -338,4 +336,137 @@
 }
 .events > div > span {
   overflow-wrap: anywhere;
+}
+
+.managedDetail {
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+  overflow: hidden;
+}
+.managedDetail :global(.inspector-heading) {
+  flex-shrink: 0;
+}
+.managedDetail :global(.inspector-fields) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+@media (max-width: 1100px) {
+  .managedDetail {
+    height: 760px;
+    max-height: calc(100dvh - 160px);
+    min-height: 560px;
+  }
+}
+
+.detail :global(.inspector-heading) h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.stepMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.detail :global(.inspector-fields) > section > h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 24px 0 12px;
+}
+.detail :global(.inspector-fields) > section:first-child > h3 {
+  margin-top: 0;
+}
+.dataContainer,
+.statePanel,
+.linkedRuns,
+.errorPanel {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--canvas);
+  overflow-wrap: anywhere;
+}
+.dataContainer,
+.statePanel,
+.errorPanel {
+  padding: 16px;
+}
+.dataContainer > :last-child,
+.statePanel > :last-child {
+  margin-bottom: 0;
+}
+.statePanel {
+  margin: 16px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.statePanel > :first-child {
+  margin-top: 0;
+}
+.statePanel summary,
+.errorPanel summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+.statePanel summary:focus-visible,
+.errorPanel summary:focus-visible {
+  outline: 2px solid var(--field-focus);
+  outline-offset: 4px;
+}
+.linkedRuns {
+  overflow: hidden;
+}
+.linkedRuns > :last-child {
+  border-bottom: 0;
+}
+.linkedRuns > p {
+  margin: 0;
+  padding: 16px;
+}
+.linkedRuns .child {
+  min-height: 56px;
+  padding: 12px 16px;
+}
+.errorPanel {
+  margin-block: 16px;
+  border-color: var(--error-border);
+}
+.errorPanel summary {
+  color: var(--error-copy);
+}
+.errorDetails {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-bottom: 0;
+  font: 12px/1.65 var(--mono);
+  max-height: 320px;
+  overflow: auto;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.detail :global(.inspector-fields) > .stepData:first-child,
+.detail :global(.inspector-fields) > .statePanel:first-child,
+.detail :global(.inspector-fields) > .errorPanel:first-child {
+  margin-top: 0;
+}
+
+.linkedRuns .child > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.linkedRuns .child :global(.mantine-Badge-root),
+.linkedRuns .child > svg {
+  flex-shrink: 0;
+}
+.statePanel strong {
+  color: var(--text);
 }

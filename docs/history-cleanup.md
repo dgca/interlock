@@ -1,6 +1,6 @@
 # Clean up run history
 
-Remove selected run trees without deleting their workflows or published versions. Cleanup is permanent. You can select trees manually or enable an automatic retention policy. It removes run values, executions, assignments, events, usage attempts, budgets, holds, context history, and settled managed execution/session records. It does not delete local harness profiles, native harness session files, backups or trial files.
+Remove selected run trees without deleting their workflows or published versions. Cleanup is permanent. You can select trees manually or enable an automatic retention policy. It removes run values, executions, assignments, events, usage attempts, budgets, holds, context history, settled managed execution/session records, and their transcripts and message receipts. Pending operator delivery blocks deletion until it settles. It does not delete local harness profiles, native harness session files, backups or trial files. Transcript content also has independent [age and capacity limits](managed-executors.md#transcripts-and-operator-messages), even when run-history retention is disabled.
 
 ## Use the browser
 
