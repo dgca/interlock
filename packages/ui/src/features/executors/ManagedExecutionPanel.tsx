@@ -5,9 +5,10 @@ import {
   Skeleton,
   Textarea,
   Button,
+  SegmentedControl,
 } from '../../design-system';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
   ArrowUpRight,
@@ -28,6 +29,10 @@ import { api, errorMessage } from '../../lib/api';
 import styles from './ManagedExecutionPanel.module.css';
 import { permissionLabels } from './permissions';
 import { ModelPicker } from './ModelPicker';
+import {
+  ManagedTranscript,
+  TranscriptRecordingDetails,
+} from './ManagedTranscript';
 
 type Inspection = Awaited<ReturnType<typeof api.executors.inspect.query>>;
 const stateLabels = {
@@ -43,9 +48,11 @@ const stateLabels = {
 export function ManagedExecutionPanel({
   work,
   onRefresh,
+  children,
 }: {
   work: Omit<WorkRequest, 'token'>;
   onRefresh: () => void;
+  children?: ReactNode;
 }) {
   // A new attempt must never inherit a previous attempt's confirmation or feedback.
   return (
@@ -53,19 +60,24 @@ export function ManagedExecutionPanel({
       key={`${work.id}:${work.attempt}`}
       work={work}
       onRefresh={onRefresh}
+      children={children}
     />
   );
 }
 function Execution({
   work,
   onRefresh,
+  children,
 }: {
   work: Omit<WorkRequest, 'token'>;
   onRefresh: () => void;
+  children?: ReactNode;
 }) {
   const generation = useRef(0);
   const inFlight = useRef(false);
   const [inspection, setInspection] = useState<Inspection>();
+  const [view, setView] = useState('conversation');
+  const [selectedAttempt, setSelectedAttempt] = useState<string>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string>();
   const [copiedResume, setCopiedResume] = useState(false);
@@ -102,6 +114,7 @@ function Execution({
     };
   }, [work, reload]);
   const record = inspection?.items[0];
+  useEffect(() => setSelectedAttempt(record?.id), [record?.id]);
   const perform = async (
     key: string,
     fn: () => Promise<unknown>,
@@ -166,407 +179,500 @@ function Execution({
     (r) => r.state === 'pending' && !answered.includes(r.id),
   );
   const active = ['starting', 'running', 'needs_human'].includes(record.state);
+  const viewed =
+    inspection?.history.find((attempt) => attempt.id === selectedAttempt) ??
+    record;
+  const viewingCurrent = viewed.id === record.id;
   return (
     <div className={styles.panel}>
       <div className={styles.heading}>
         <div>
-          <strong>{record.profile.name}</strong>
-          <span>Attempt {record.attempt}</span>
+          <strong>
+            {viewingCurrent ? record.profile.name : 'Recorded session'}
+          </strong>
         </div>
         <Badge
           tt="none"
           variant="light"
           color={
-            ['needs_human', 'interrupted', 'needs_model'].includes(record.state)
+            ['needs_human', 'interrupted', 'needs_model'].includes(viewed.state)
               ? 'yellow'
-              : record.state === 'completed'
+              : viewed.state === 'completed'
                 ? 'green'
                 : 'gray'
           }
         >
-          {record.state === 'needs_model' && work.status !== 'held'
+          {viewingCurrent &&
+          record.state === 'needs_model' &&
+          work.status !== 'held'
             ? 'Attempt ended'
-            : record.state === 'needs_human' &&
+            : viewingCurrent &&
+                record.state === 'needs_human' &&
                 !pending.length &&
                 answered.length
               ? 'Response sent'
-              : stateLabels[record.state]}
+              : stateLabels[viewed.state]}
         </Badge>
-      </div>
-      <div role="status" aria-live="polite" className={styles.feedback}>
-        {feedback && (
-          <p>
-            <Check size={16} aria-hidden="true" />
-            {feedback}
-          </p>
-        )}
-      </div>
-      {pending.map((request) => (
-        <Request
-          key={request.id}
-          request={request}
-          busy={!!busy}
-          sending={busy === request.id}
-          onAnswer={(answer) =>
-            perform(
-              request.id,
-              () =>
-                api.executors.manage.mutate({
-                  action: 'respond',
-                  executionId: record.id,
-                  requestId: request.id,
-                  answer,
-                }),
-              request.kind === 'permission'
-                ? answer.allow
-                  ? 'Allowed once. The agent can continue with this action.'
-                  : 'Denied. The agent will receive your decision.'
-                : 'Answers sent. The agent can continue.',
-              request.id,
-            )
-          }
-        />
-      ))}
-      {record.state === 'needs_model' && work.status === 'held' && (
-        <section
-          className={styles.recovery}
-          aria-labelledby={`model-${record.id}`}
-        >
-          <div className={styles.noticeTitle}>
-            <RotateCcw size={19} aria-hidden="true" />
-            <h3 id={`model-${record.id}`}>Choose a replacement model</h3>
-          </div>
-          <p className={styles.explanation}>
-            {record.profile.model ?? 'CLI default'}: {record.error}
-          </p>
-          <ModelPicker
-            label="Replacement model"
-            defaultLabel="Choose a model"
-            value={model}
-            onChange={setModel}
-            profileId={record.profile.id}
-            paths={{ command: record.command, cwd: record.cwd }}
-            disabled={!!busy}
-          />
-          <p className={styles.explanation}>
-            Retry this assignment with native thinking defaults. Published
-            workflow and harness defaults stay unchanged.
-            {work.context.continuityGroup &&
-              ' Later assignments in this continuity group use the selected model.'}
-          </p>
-          <Button
-            variant="primary"
-            disabled={!model || !!busy || modelRetryRecorded}
-            aria-busy={busy === 'retry_model'}
-            onClick={() =>
-              void perform(
-                'retry_model',
-                async () => {
-                  const result = await api.executors.manage.mutate({
-                    action: 'retry_model',
-                    executionId: record.id,
-                    model: model!,
-                  });
-                  setModelRetryRecorded(true);
-                  return result;
-                },
-                'Replacement recorded. The assignment is queued for a new attempt.',
-              )
-            }
-          >
-            {busy === 'retry_model' ? 'Queuing…' : 'Retry with selected model'}
-          </Button>
-        </section>
-      )}
-      {record.state === 'interrupted' && (
-        <section
-          className={styles.recovery}
-          aria-labelledby={`recovery-${record.id}`}
-        >
-          <div className={styles.noticeTitle}>
-            <RotateCcw size={19} aria-hidden="true" />
-            <h3 id={`recovery-${record.id}`}>
-              {work.status === 'held'
-                ? 'Check before retrying'
-                : 'Check the stopped agent'}
-            </h3>
-          </div>
-          <p>
-            {work.status === 'held'
-              ? 'This attempt was interrupted. Interlock is holding its work to avoid starting it twice.'
-              : 'This attempt was interrupted. Check its session before releasing its resource reservations.'}
-          </p>
-          <ol>
-            <li>
-              Check the agent session and any commands it started. Stop anything
-              still running.
-            </li>
-            <li>
-              Review files and other changes it may have made. Retrying can
-              repeat those changes.
-            </li>
-          </ol>
-          <details className={styles.details}>
-            <summary>How to check this session</summary>
-            <p className={styles.explanation}>
-              Use your terminal or system process monitor to check the agent and
-              commands started in this directory. A missing session alone does
-              not prove its commands stopped.
-            </p>
-            <dl>
-              <dt>Directory</dt>
-              <dd>{record.cwd}</dd>
-              <dt>Session</dt>
-              <dd>{record.sessionId ?? 'No session ID was reported'}</dd>
-              <dt>Stopped because</dt>
-              <dd>{record.error ?? 'The previous attempt was interrupted.'}</dd>
-            </dl>
-          </details>
-          <div className={styles.confirmation}>
-            <Checkbox
-              checked={confirmed}
-              disabled={!!busy}
-              onChange={(e) => setConfirmed(e.currentTarget.checked)}
-              label="I've checked that this agent and its commands have stopped"
-            />
-            <p>
-              {work.status === 'held'
-                ? 'Retry starts a new attempt and releases this attempt’s resource reservations. The agent may ask for approval again.'
-                : 'Confirmation releases this attempt’s resource reservations. It does not restart the run.'}
-            </p>
+        {active && viewingCurrent && (
+          <div className={styles.stop}>
             <Button
-              variant="primary"
-              disabled={!confirmed || !!busy}
-              aria-busy={busy === 'reconcile'}
+              variant="danger"
+              disabled={!!busy}
+              aria-busy={busy === 'stop'}
               onClick={() =>
                 void perform(
-                  'reconcile',
+                  'stop',
                   () =>
                     api.executors.manage.mutate({
-                      action: 'reconcile',
+                      action: 'stop',
                       executionId: record.id,
-                      confirmStopped: true,
                     }),
-                  work.status === 'held'
-                    ? 'Recovery confirmed. The assignment is queued for a new attempt.'
-                    : 'Recovery confirmed. Resource reservations released.',
+                  'Stop requested. Check that the agent and its commands have stopped before retrying.',
                 )
               }
             >
-              {busy === 'reconcile'
-                ? 'Confirming…'
-                : work.status === 'held'
-                  ? 'Retry assignment'
-                  : 'Confirm stopped'}
+              <Square size={14} aria-hidden="true" />
+              {busy === 'stop' ? 'Stopping…' : 'Stop agent'}
             </Button>
           </div>
-        </section>
-      )}
-      {record.error &&
-        record.state !== 'interrupted' &&
-        !(record.state === 'needs_model' && work.status === 'held') && (
-          <p className={styles.reason}>{record.error}</p>
         )}
-      {record.sessionId && (
-        <div className={styles.sessionVisibilityBar}>
-          <div className={styles.sessionMeta}>
-            <span className={styles.sessionLabel}>Session</span>
-            <span className={styles.sessionId}>{record.sessionId}</span>
-            {record.sessionName && (
-              <span className={styles.sessionName} title="Session name">
-                {record.sessionName}
-              </span>
-            )}
-          </div>
-          <div className={styles.sessionActions}>
-            {record.resumeCommand && (
-              <Button
-                variant="ghost"
-                onClick={() => handleCopyResume(record.resumeCommand!)}
-                title={record.resumeCommand}
-              >
-                {copiedResume ? <Check size={12} /> : <Copy size={12} />}
-                {copiedResume ? 'Copied' : 'Copy resume command'}
-              </Button>
-            )}
-            {record.deepLink && (
-              <Button
-                component="a"
-                variant="ghost"
-                href={record.deepLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={record.deepLink}
-              >
-                Open in harness
-                <ArrowUpRight size={14} />
-              </Button>
-            )}
-          </div>
+      </div>
+      <div className={styles.attemptRow}>
+        <NativeSelect
+          aria-label="Execution attempt"
+          value={selectedAttempt ?? record.id}
+          onChange={(event) => setSelectedAttempt(event.currentTarget.value)}
+          data={[record, ...(inspection?.history ?? [])].map((attempt) => ({
+            value: attempt.id,
+            label: `Attempt ${attempt.attempt}${attempt.id === record.id ? ' · current' : ' · ' + (stateLabels[attempt.state as keyof typeof stateLabels] ?? attempt.state)}`,
+          }))}
+        />
+      </div>
+      <div className={styles.attention}>
+        <div role="status" aria-live="polite" className={styles.feedback}>
+          {feedback && (
+            <p>
+              <Check size={16} aria-hidden="true" />
+              {feedback}
+            </p>
+          )}
         </div>
-      )}
-      {['starting', 'running', 'needs_human', 'needs_model'].includes(
-        record.state,
-      ) && (
-        <section
-          className={styles.liveTailSection}
-          aria-label="Live progress tail"
-        >
-          <div className={styles.liveTailHeader}>
-            <h4>Live progress</h4>
-            {record.logCount > 0 && (
-              <span className={styles.logCountBadge}>
-                {record.logs.length} / {record.logCount} updates
-              </span>
-            )}
-          </div>
-          {record.logs.length > 0 ? (
-            <ol className={styles.liveLogs} tabIndex={0} aria-live="polite">
-              {record.logs.map((log, i) => (
-                <li key={i}>
-                  <time>{new Date(log.at).toLocaleTimeString()}</time>
-                  <span>{log.message}</span>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className={styles.liveEmpty}>Waiting for progress updates…</p>
-          )}
-        </section>
-      )}
-      <details className={styles.details}>
-        <summary>
-          Execution details
-          {record.logCount
-            ? ` · ${record.logCount} ${record.logCount === 1 ? 'update' : 'updates'}`
-            : ''}
-        </summary>
-        <dl>
-          <dt>Harness</dt>
-          <dd>{record.profile.harness}</dd>
-          <dt>Permissions</dt>
-          <dd>
-            {permissionLabels[record.profile.permissions] ?? 'Standard'}
-            {record.permissionSource
-              ? ` · ${record.permissionSource === 'workflow' ? 'workflow override' : 'harness default'}`
-              : ''}
-          </dd>
-          <dt>Directory</dt>
-          <dd>{record.cwd}</dd>
-          <dt>Executable</dt>
-          <dd>{record.command}</dd>
-          {record.profile.model && (
-            <>
-              <dt>Model</dt>
-              <dd>
-                {record.profile.model}
-                {record.modelSource
-                  ? ` · ${record.modelSource === 'recovery' ? 'selected for recovery' : record.modelSource === 'node' ? 'node override' : record.modelSource === 'workflow' ? 'workflow override' : record.modelSource === 'harness' ? 'harness default' : 'CLI default'}`
-                  : ''}
-              </dd>
-            </>
-          )}
-          <dt>Thinking effort</dt>
-          <dd>
-            {record.profile.effort ?? 'Native default'}
-            {record.effortSource
-              ? ` · ${record.effortSource === 'recovery' ? 'reset for recovery' : record.effortSource === 'node' ? 'node override' : record.effortSource === 'workflow' ? 'workflow override' : record.effortSource === 'harness' ? 'harness default' : 'native default'}`
-              : ''}
-          </dd>
-          {record.sessionId && (
-            <>
-              <dt>Session</dt>
-              <dd>{record.sessionId}</dd>
-            </>
-          )}
-          {record.sessionName && (
-            <>
-              <dt>Session name</dt>
-              <dd>{record.sessionName}</dd>
-            </>
-          )}
-          {record.resumeCommand && (
-            <>
-              <dt>Resume command</dt>
-              <dd className={styles.codeWrap}>{record.resumeCommand}</dd>
-            </>
-          )}
-          {record.deepLink && (
-            <>
-              <dt>Deep link</dt>
-              <dd>
-                <a
-                  href={record.deepLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {record.deepLink}
-                </a>
-              </dd>
-            </>
-          )}
-        </dl>
-        {record.logs.length > 0 && (
-          <ol className={styles.logs}>
-            {record.logs.map((log, i) => (
-              <li key={i}>
-                <time>{new Date(log.at).toLocaleTimeString()}</time>
-                {log.message}
-              </li>
-            ))}
-          </ol>
+        {!viewingCurrent && pending.length > 0 && (
+          <p className={styles.explanation}>
+            The current attempt is waiting for your response below.
+          </p>
         )}
-        <p className="hint">
-          Recent progress only. Full conversations stay in the harness.{' '}
-          {inspection && inspection.total > 1
-            ? `${inspection.total} attempts recorded.`
-            : ''}
-        </p>
-        {record.requests.some((r) => r.state !== 'pending') && (
-          <div className={styles.decisions}>
-            <h4>Recent requests</h4>
-            {record.requests
-              .filter((r) => r.state !== 'pending')
-              .map((r) => (
-                <p key={r.id}>
-                  <strong>{r.title}</strong>
-                  <span>
-                    {r.state === 'cancelled'
-                      ? 'Cancelled'
-                      : r.kind === 'permission'
-                        ? r.answer?.allow
-                          ? 'Allowed once'
-                          : 'Denied'
-                        : 'Answered'}
-                  </span>
-                </p>
-              ))}
-          </div>
-        )}
-      </details>
-      {active && (
-        <div className={styles.stop}>
-          <Button
-            variant="danger"
-            disabled={!!busy}
-            aria-busy={busy === 'stop'}
-            onClick={() =>
-              void perform(
-                'stop',
+        {pending.map((request) => (
+          <Request
+            key={request.id}
+            request={request}
+            busy={!!busy}
+            sending={busy === request.id}
+            onAnswer={(answer) =>
+              perform(
+                request.id,
                 () =>
                   api.executors.manage.mutate({
-                    action: 'stop',
+                    action: 'respond',
                     executionId: record.id,
+                    requestId: request.id,
+                    answer,
                   }),
-                'Stop requested. Check that the agent and its commands have stopped before retrying.',
+                request.kind === 'permission'
+                  ? answer.allow
+                    ? 'Allowed once. The agent can continue with this action.'
+                    : 'Denied. The agent will receive your decision.'
+                  : 'Answers sent. The agent can continue.',
+                request.id,
               )
             }
+          />
+        ))}
+        {record.state === 'needs_model' && work.status === 'held' && (
+          <section
+            className={styles.recovery}
+            aria-labelledby={`model-${record.id}`}
           >
-            <Square size={14} aria-hidden="true" />
-            {busy === 'stop' ? 'Stopping…' : 'Stop agent'}
-          </Button>
-        </div>
-      )}
+            <div className={styles.noticeTitle}>
+              <RotateCcw size={19} aria-hidden="true" />
+              <h3 id={`model-${record.id}`}>Choose a replacement model</h3>
+            </div>
+            <p className={styles.explanation}>
+              {record.profile.model ?? 'CLI default'}: {record.error}
+            </p>
+            <ModelPicker
+              label="Replacement model"
+              defaultLabel="Choose a model"
+              value={model}
+              onChange={setModel}
+              profileId={record.profile.id}
+              paths={{ command: record.command, cwd: record.cwd }}
+              disabled={!!busy}
+            />
+            <p className={styles.explanation}>
+              Retry this assignment with native thinking defaults. Published
+              workflow and harness defaults stay unchanged.
+              {work.context.continuityGroup &&
+                ' Later assignments in this continuity group use the selected model.'}
+            </p>
+            <Button
+              variant="primary"
+              disabled={!model || !!busy || modelRetryRecorded}
+              aria-busy={busy === 'retry_model'}
+              onClick={() =>
+                void perform(
+                  'retry_model',
+                  async () => {
+                    const result = await api.executors.manage.mutate({
+                      action: 'retry_model',
+                      executionId: record.id,
+                      model: model!,
+                    });
+                    setModelRetryRecorded(true);
+                    return result;
+                  },
+                  'Replacement recorded. The assignment is queued for a new attempt.',
+                )
+              }
+            >
+              {busy === 'retry_model'
+                ? 'Queuing…'
+                : 'Retry with selected model'}
+            </Button>
+          </section>
+        )}
+        {record.state === 'interrupted' && (
+          <section
+            className={styles.recovery}
+            aria-labelledby={`recovery-${record.id}`}
+          >
+            <div className={styles.noticeTitle}>
+              <RotateCcw size={19} aria-hidden="true" />
+              <h3 id={`recovery-${record.id}`}>
+                {work.status === 'held'
+                  ? 'Check before retrying'
+                  : 'Check the stopped agent'}
+              </h3>
+            </div>
+            <p>
+              {work.status === 'held'
+                ? 'This attempt was interrupted. Interlock is holding its work to avoid starting it twice.'
+                : 'This attempt was interrupted. Check its session before releasing its resource reservations.'}
+            </p>
+            <ol>
+              <li>
+                Check the agent session and any commands it started. Stop
+                anything still running.
+              </li>
+              <li>
+                Review files and other changes it may have made. Retrying can
+                repeat those changes.
+              </li>
+            </ol>
+            <details className={styles.details}>
+              <summary>How to check this session</summary>
+              <p className={styles.explanation}>
+                Use your terminal or system process monitor to check the agent
+                and commands started in this directory. A missing session alone
+                does not prove its commands stopped.
+              </p>
+              <dl>
+                <dt>Directory</dt>
+                <dd>{record.cwd}</dd>
+                <dt>Session</dt>
+                <dd>{record.sessionId ?? 'No session ID was reported'}</dd>
+                <dt>Stopped because</dt>
+                <dd>
+                  {record.error ?? 'The previous attempt was interrupted.'}
+                </dd>
+              </dl>
+            </details>
+            <div className={styles.confirmation}>
+              <Checkbox
+                checked={confirmed}
+                disabled={!!busy}
+                onChange={(e) => setConfirmed(e.currentTarget.checked)}
+                label="I've checked that this agent and its commands have stopped"
+              />
+              <p>
+                {work.status === 'held'
+                  ? 'Retry starts a new attempt and releases this attempt’s resource reservations. The agent may ask for approval again.'
+                  : 'Confirmation releases this attempt’s resource reservations. It does not restart the run.'}
+              </p>
+              <Button
+                variant="primary"
+                disabled={!confirmed || !!busy}
+                aria-busy={busy === 'reconcile'}
+                onClick={() =>
+                  void perform(
+                    'reconcile',
+                    () =>
+                      api.executors.manage.mutate({
+                        action: 'reconcile',
+                        executionId: record.id,
+                        confirmStopped: true,
+                      }),
+                    work.status === 'held'
+                      ? 'Recovery confirmed. The assignment is queued for a new attempt.'
+                      : 'Recovery confirmed. Resource reservations released.',
+                  )
+                }
+              >
+                {busy === 'reconcile'
+                  ? 'Confirming…'
+                  : work.status === 'held'
+                    ? 'Retry assignment'
+                    : 'Confirm stopped'}
+              </Button>
+            </div>
+          </section>
+        )}
+        {record.error &&
+          record.state !== 'interrupted' &&
+          !(record.state === 'needs_model' && work.status === 'held') && (
+            <p className={styles.reason}>{record.error}</p>
+          )}
+      </div>
+      <div className={styles.views}>
+        <SegmentedControl
+          aria-label="Agent execution view"
+          value={view}
+          onChange={setView}
+          data={[
+            { value: 'conversation', label: 'Conversation' },
+            { value: 'details', label: 'Details' },
+          ]}
+          fullWidth
+        />
+        <section
+          className={styles.viewPanel}
+          hidden={view !== 'conversation'}
+          aria-label="Conversation"
+        >
+          <ManagedTranscript
+            key={selectedAttempt ?? record.id}
+            executionId={selectedAttempt ?? record.id}
+            current={!selectedAttempt || selectedAttempt === record.id}
+            opened={view === 'conversation'}
+          />
+        </section>
+        <section
+          hidden={view !== 'details'}
+          aria-label="Execution details"
+          className={`${styles.viewPanel} ${styles.detailBody}`}
+        >
+          {(viewed.resumeCommand || viewed.deepLink) && (
+            <div className={styles.sessionVisibilityBar}>
+              <div className={styles.sessionActions}>
+                {viewed.resumeCommand && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleCopyResume(viewed.resumeCommand!)}
+                    title={viewed.resumeCommand}
+                  >
+                    {copiedResume ? <Check size={12} /> : <Copy size={12} />}
+                    {copiedResume ? 'Copied' : 'Copy resume command'}
+                  </Button>
+                )}
+                {viewed.deepLink && (
+                  <Button
+                    component="a"
+                    variant="ghost"
+                    href={viewed.deepLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={viewed.deepLink}
+                  >
+                    Open in harness
+                    <ArrowUpRight size={14} />
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+          {viewingCurrent &&
+            ['starting', 'running', 'needs_human', 'needs_model'].includes(
+              record.state,
+            ) &&
+            (record.logCount > 0 || !record.transcriptCapture) && (
+              <section
+                className={styles.liveTailSection}
+                aria-label="Live progress tail"
+              >
+                <div className={styles.liveTailHeader}>
+                  <h4>Live progress</h4>
+                  {record.logCount > 0 && (
+                    <span className={styles.logCountBadge}>
+                      {record.logs.length} / {record.logCount} updates
+                    </span>
+                  )}
+                </div>
+                {record.logs.length > 0 ? (
+                  <ol
+                    className={styles.liveLogs}
+                    tabIndex={0}
+                    aria-live="polite"
+                  >
+                    {record.logs.map((log, i) => (
+                      <li key={i}>
+                        <time>{new Date(log.at).toLocaleTimeString()}</time>
+                        <span>{log.message}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className={styles.liveEmpty}>
+                    Waiting for progress updates…
+                  </p>
+                )}
+              </section>
+            )}
+          {viewingCurrent ? (
+            <section className={styles.details} aria-label="Execution settings">
+              <dl>
+                <dt>Harness</dt>
+                <dd>{record.profile.harness}</dd>
+                <dt>Permissions</dt>
+                <dd>
+                  {permissionLabels[record.profile.permissions] ?? 'Standard'}
+                  {record.permissionSource
+                    ? ` · ${record.permissionSource === 'workflow' ? 'workflow override' : 'harness default'}`
+                    : ''}
+                </dd>
+                <dt>Directory</dt>
+                <dd>{record.cwd}</dd>
+                <dt>Executable</dt>
+                <dd>{record.command}</dd>
+                {record.profile.model && (
+                  <>
+                    <dt>Model</dt>
+                    <dd>
+                      {record.profile.model}
+                      {record.modelSource
+                        ? ` · ${record.modelSource === 'recovery' ? 'selected for recovery' : record.modelSource === 'node' ? 'node override' : record.modelSource === 'workflow' ? 'workflow override' : record.modelSource === 'harness' ? 'harness default' : 'CLI default'}`
+                        : ''}
+                    </dd>
+                  </>
+                )}
+                <dt>Thinking effort</dt>
+                <dd>
+                  {record.profile.effort ?? 'Native default'}
+                  {record.effortSource
+                    ? ` · ${record.effortSource === 'recovery' ? 'reset for recovery' : record.effortSource === 'node' ? 'node override' : record.effortSource === 'workflow' ? 'workflow override' : record.effortSource === 'harness' ? 'harness default' : 'native default'}`
+                    : ''}
+                </dd>
+                {record.sessionId && (
+                  <>
+                    <dt>Session</dt>
+                    <dd>{record.sessionId}</dd>
+                  </>
+                )}
+                {record.sessionName && (
+                  <>
+                    <dt>Session name</dt>
+                    <dd>{record.sessionName}</dd>
+                  </>
+                )}
+                {viewed.resumeCommand && (
+                  <>
+                    <dt>Resume command</dt>
+                    <dd className={styles.codeWrap}>{viewed.resumeCommand}</dd>
+                  </>
+                )}
+                {viewed.deepLink && (
+                  <>
+                    <dt>Deep link</dt>
+                    <dd>
+                      <a
+                        href={viewed.deepLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {viewed.deepLink}
+                      </a>
+                    </dd>
+                  </>
+                )}
+              </dl>
+              {record.logs.length > 0 && (
+                <ol className={styles.logs}>
+                  {record.logs.map((log, i) => (
+                    <li key={i}>
+                      <time>{new Date(log.at).toLocaleTimeString()}</time>
+                      {log.message}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              <p className="hint">
+                {record.logCount > 0 ? 'Recent progress updates. ' : ''}
+                {inspection && inspection.total > 1
+                  ? `${inspection.total} attempts recorded.`
+                  : ''}
+              </p>
+              {record.requests.some((r) => r.state !== 'pending') && (
+                <div className={styles.decisions}>
+                  <h4>Recent requests</h4>
+                  {record.requests
+                    .filter((r) => r.state !== 'pending')
+                    .map((r) => (
+                      <p key={r.id}>
+                        <strong>{r.title}</strong>
+                        <span>
+                          {r.state === 'cancelled'
+                            ? 'Cancelled'
+                            : r.kind === 'permission'
+                              ? r.answer?.allow
+                                ? 'Allowed once'
+                                : 'Denied'
+                              : 'Answered'}
+                        </span>
+                      </p>
+                    ))}
+                </div>
+              )}
+            </section>
+          ) : (
+            <section
+              className={styles.details}
+              aria-label="Historical execution details"
+            >
+              <dl>
+                {viewed.sessionId && (
+                  <>
+                    <dt>Session</dt>
+                    <dd>{viewed.sessionId}</dd>
+                  </>
+                )}
+                {viewed.sessionName && (
+                  <>
+                    <dt>Session name</dt>
+                    <dd>{viewed.sessionName}</dd>
+                  </>
+                )}
+                {viewed.startedAt && (
+                  <>
+                    <dt>Started</dt>
+                    <dd>{new Date(viewed.startedAt).toLocaleString()}</dd>
+                  </>
+                )}
+                {viewed.endedAt && (
+                  <>
+                    <dt>Ended</dt>
+                    <dd>{new Date(viewed.endedAt).toLocaleString()}</dd>
+                  </>
+                )}
+              </dl>
+              {viewed.error && <p className={styles.reason}>{viewed.error}</p>}
+            </section>
+          )}
+          <TranscriptRecordingDetails
+            executionId={selectedAttempt ?? record.id}
+            opened={view === 'details'}
+          />
+          {viewingCurrent && children}
+        </section>
+      </div>
       {error && (
         <div role="alert">
           <p className="error-text">{error}</p>

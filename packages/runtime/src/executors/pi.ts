@@ -152,6 +152,39 @@ export const piAdapter: HarnessAdapter = {
         void rpc!.close().catch(() => {});
       };
       rpc.onMessage = (event) => {
+        if (
+          event.type === 'message_end' &&
+          event.message?.role === 'assistant'
+        ) {
+          const text = event.message.content
+            ?.filter((b: any) => b.type === 'text')
+            .map((b: any) => b.text)
+            .join('\n');
+          if (text)
+            input.onTranscript?.({
+              kind: 'assistant',
+              text,
+              key: event.message.id
+                ? `assistant:${event.message.id}`
+                : undefined,
+            });
+        }
+        if (event.type === 'tool_execution_start')
+          input.onTranscript?.({
+            kind: 'tool_call',
+            tool: event.toolName,
+            callId: event.toolCallId,
+            key: `call:${event.toolCallId}`,
+            text: transcriptText(event.args),
+          });
+        if (event.type === 'tool_execution_end')
+          input.onTranscript?.({
+            kind: 'tool_result',
+            tool: event.toolName,
+            callId: event.toolCallId,
+            key: `result:${event.toolCallId}`,
+            text: transcriptText(event.result?.content ?? event.result),
+          });
         if (event.type === 'agent_settled') finish(event);
         if (event.type === 'extension_error')
           fail(new Error('Pi extension failed during execution'));
@@ -232,6 +265,10 @@ export const piAdapter: HarnessAdapter = {
       });
       if (prompt?.disposition !== 'started')
         throw new HarnessResultError('Pi did not start the assignment prompt');
+      input.onMessageChannel?.(async (message) => {
+        if (input.signal.aborted) throw new Error('Pi execution ended');
+        await rpc!.request('steer', { message }, 10000);
+      });
       const ended = await Promise.race([completed, rpc.ended()]);
       if (input.signal.aborted)
         throw input.signal.reason ?? new Error('Execution stopped');
@@ -275,6 +312,7 @@ export const piAdapter: HarnessAdapter = {
         );
       throw error;
     } finally {
+      input.onMessageChannel?.(undefined);
       input.signal.removeEventListener('abort', abort);
       try {
         await rpc?.close();
@@ -361,3 +399,4 @@ function addUsage(totals: Map<string, ModelUsage>, message: any) {
     };
   totals.set(key, value);
 }
+import { transcriptText } from './transcriptEvents.js';

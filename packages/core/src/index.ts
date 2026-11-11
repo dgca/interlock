@@ -13,6 +13,7 @@ export {
 export type { RunAttention, RunAttentionReason } from './runAttention.js';
 export * from './workResources.js';
 export * from './executors.js';
+export * from './transcripts.js';
 import {
   executorPermissionModeSchema,
   executorModelSchema,

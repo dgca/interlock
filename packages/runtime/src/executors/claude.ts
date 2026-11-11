@@ -1,4 +1,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk/core';
+import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { MessageInput } from './messageInput.js';
+import { transcriptText } from './transcriptEvents.js';
 import { jsonSchema, type ModelUsage } from '@interlock/core';
 import {
   HarnessResultError,
@@ -79,6 +82,7 @@ export const claudeAdapter: HarnessAdapter = {
     }
   },
   async run(input: HarnessRun) {
+    const messages = new MessageInput<SDKUserMessage>();
     let taskStarted = false;
     let modelRefused = false;
     let capturedSessionId: string | undefined = input.sessionId;
@@ -90,7 +94,18 @@ export const claudeAdapter: HarnessAdapter = {
     let stream: ReturnType<typeof query> | undefined;
     try {
       stream = query({
-        prompt: assignmentPrompt(input.work),
+        prompt: (async function* () {
+          yield {
+            type: 'user' as const,
+            message: {
+              role: 'user' as const,
+              content: assignmentPrompt(input.work),
+            },
+            parent_tool_use_id: null,
+            session_id: input.sessionId ?? '',
+          };
+          yield* messages;
+        })(),
         options: {
           spawnClaudeCodeProcess: (options) => {
             owned = spawnManagedProcess(options.command, options.args, {
@@ -225,15 +240,53 @@ export const claudeAdapter: HarnessAdapter = {
             );
           capturedSessionId = message.session_id;
           input.onSession(message.session_id, message.model);
+          input.onMessageChannel?.((text) =>
+            messages.send({
+              type: 'user',
+              message: { role: 'user', content: text },
+              parent_tool_use_id: null,
+              session_id: message.session_id,
+              client_composed: true,
+              priority: 'next',
+              origin: { kind: 'human' },
+            }),
+          );
+        }
+        if (message.type === 'user') {
+          for (const block of typeof message.message.content === 'string'
+            ? []
+            : message.message.content) {
+            if (block.type === 'tool_result')
+              input.onTranscript?.({
+                kind: 'tool_result',
+                callId: block.tool_use_id,
+                key: `result:${block.tool_use_id}`,
+                text: transcriptText(block.content),
+              });
+          }
         }
         if (message.type === 'assistant') {
           if (message.error === 'model_not_found') modelRefused = true;
           else if (!message.error) taskStarted = true;
-          for (const block of message.message.content)
+          for (const [index, block] of message.message.content.entries()) {
+            if (block.type === 'text')
+              input.onTranscript?.({
+                kind: 'assistant',
+                text: block.text,
+                key: `assistant:${message.uuid}:${index}`,
+              });
             if (block.type === 'tool_use') {
+              input.onTranscript?.({
+                kind: 'tool_call',
+                tool: block.name,
+                callId: block.id,
+                key: `call:${block.id}`,
+                text: transcriptText(block.input),
+              });
               taskStarted = true;
               input.onProgress(`Using ${block.name}`);
             }
+          }
         }
         if (message.type !== 'result') continue;
         if (message.subtype !== 'success' && modelRefused && !taskStarted)
@@ -303,6 +356,8 @@ export const claudeAdapter: HarnessAdapter = {
         );
       throw error;
     } finally {
+      input.onMessageChannel?.(undefined);
+      messages.close();
       input.signal.removeEventListener('abort', abort);
       stream?.close();
       await owned?.close();

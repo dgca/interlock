@@ -74,6 +74,24 @@ export function historyInventory(db: DatabaseSync, ids: Set<string>) {
     }
     collections[collection] = count;
   }
+  for (const [collection, table] of [
+    ['transcriptEntries', 'transcript_entries'],
+    ['transcriptReceipts', 'transcript_receipts'],
+  ]) {
+    let count = 0;
+    for (const row of db
+      .prepare(
+        `SELECT t.* FROM ${table} t JOIN transcript_executions e ON e.execution_id = t.execution_id
+      WHERE e.run_id IN (SELECT value FROM json_each(?)) ORDER BY t.execution_id, t.rowid`,
+      )
+      .iterate(encoded)) {
+      const value = JSON.stringify(row);
+      digest.update(value);
+      documentBytes += Buffer.byteLength(String(row.value));
+      count++;
+    }
+    collections[collection] = count;
+  }
   return { collections, documentBytes, digest: digest.digest('hex') };
 }
 

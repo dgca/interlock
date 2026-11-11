@@ -9,8 +9,14 @@ import {
 import { ManagedExecutionPanel } from '../executors/ManagedExecutionPanel';
 
 import { Link } from 'react-router';
-import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
-import { Bot, Copy } from 'lucide-react';
+import {
+  useState,
+  useEffect,
+  useRef,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
+import { Copy } from 'lucide-react';
 
 import { api, errorMessage } from '../../lib/api';
 import type { WorkRequest } from '@interlock/core';
@@ -21,10 +27,12 @@ export function WorkPanel({
   onRefresh,
   draft,
   onDraftChange,
+  details,
 }: {
   work: Omit<WorkRequest, 'token'>;
   onRefresh: () => void;
   draft?: string;
+  details?: ReactNode;
   onDraftChange: (value?: string) => void;
 }) {
   const stored = useSyncExternalStore(manualClaims.subscribe, () =>
@@ -86,12 +94,41 @@ export function WorkPanel({
       setBusy(false);
     }
   };
+  const assignmentDetails = (
+    <details>
+      <summary>Prompt and context</summary>
+      {work.executor && (
+        <Button onClick={copyAssignment}>
+          <Copy />
+          {copied ? 'Assignment copied' : 'Copy assignment'}
+        </Button>
+      )}
+      {work.executionInstructions && (
+        <p className="assignment-prompt">{work.executionInstructions}</p>
+      )}
+      <p className="assignment-prompt">{work.prompt}</p>
+      {!!work.savedPrompts?.length && (
+        <ul>
+          {work.savedPrompts.map((prompt) => (
+            <li key={prompt.id}>
+              {prompt.name} · revision {prompt.revision}
+            </li>
+          ))}
+        </ul>
+      )}
+      <JsonEditor label="Context policy" value={work.context} rows={6} />
+      <JsonEditor label="Assignment input" value={work.input} rows={6} />
+      <JsonEditor
+        label="Expected output schema"
+        value={work.outputSchema}
+        rows={6}
+      />
+    </details>
+  );
   return (
-    <section className={`work-panel ${styles.workPanel}`}>
-      <div className="section-heading">
-        <Bot size={17} />
-        <h3>Agent assignment</h3>
-      </div>
+    <section
+      className={`work-panel ${styles.workPanel} ${hasManagedExecution ? styles.managed : styles.connected}`}
+    >
       {!hasManagedExecution && (
         <p className="hint">
           {work.status === 'available'
@@ -123,7 +160,10 @@ export function WorkPanel({
         </p>
       )}
       {hasManagedExecution && (
-        <ManagedExecutionPanel work={work} onRefresh={onRefresh} />
+        <ManagedExecutionPanel work={work} onRefresh={onRefresh}>
+          {assignmentDetails}
+          {details}
+        </ManagedExecutionPanel>
       )}
       {work.resourceBlocked && (
         <ul>
@@ -278,35 +318,7 @@ export function WorkPanel({
             </Button>
           )}
       </div>
-      <details>
-        <summary>Prompt and context</summary>
-        {work.executor && (
-          <Button onClick={copyAssignment}>
-            <Copy />
-            {copied ? 'Assignment copied' : 'Copy assignment'}
-          </Button>
-        )}
-        {work.executionInstructions && (
-          <p className="assignment-prompt">{work.executionInstructions}</p>
-        )}
-        <p className="assignment-prompt">{work.prompt}</p>
-        {!!work.savedPrompts?.length && (
-          <ul>
-            {work.savedPrompts.map((prompt) => (
-              <li key={prompt.id}>
-                {prompt.name} · revision {prompt.revision}
-              </li>
-            ))}
-          </ul>
-        )}
-        <JsonEditor label="Context policy" value={work.context} rows={6} />
-        <JsonEditor label="Assignment input" value={work.input} rows={6} />
-        <JsonEditor
-          label="Expected output schema"
-          value={work.outputSchema}
-          rows={6}
-        />
-      </details>
+      {!hasManagedExecution && assignmentDetails}
       {work.context.continuityGroup && (
         <p className="hint">
           Continuity group: {work.context.continuityGroup}.{' '}

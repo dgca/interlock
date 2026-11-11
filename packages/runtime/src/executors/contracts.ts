@@ -8,6 +8,7 @@ import type {
   HarnessModel,
   WorkRequest,
   ErrorClass,
+  TranscriptEvent,
 } from '@interlock/core';
 
 export interface HarnessRequest {
@@ -26,6 +27,10 @@ export interface HarnessRun {
   signal: AbortSignal;
   onSession: (id: string, model?: string) => void;
   onProgress: (message: string) => void;
+  onTranscript?: (event: TranscriptEvent) => void;
+  onMessageChannel?: (
+    send: ((message: string) => Promise<void>) | undefined,
+  ) => void;
   request: (request: HarnessRequest) => Promise<ExecutorAnswer>;
 }
 export interface HarnessResult {

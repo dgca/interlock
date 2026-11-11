@@ -288,6 +288,21 @@ export const executorResponseSchema = z
   })
   .strict();
 export const executorOperationSchema = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('transcript'),
+      ...transcriptQueryBaseSchema.shape,
+    })
+    .strict(),
+  z
+    .object({ action: z.literal('message'), ...executorMessageSchema.shape })
+    .strict(),
+  z
+    .object({
+      action: z.literal('receipt'),
+      ...messageReceiptQuerySchema.shape,
+    })
+    .strict(),
   z.object({ action: z.literal('settings') }).strict(),
   executorSettingsUpdateSchema.extend({ action: z.literal('save_settings') }),
   executorModelsQuerySchema.extend({ action: z.literal('models') }),
@@ -348,6 +363,8 @@ export const managedWorkSummarySchema = z.object({
 });
 /** Local execution provenance. Never contains a claim token or credentials. */
 export interface ManagedExecution {
+  transcriptCapture?: 'conversation' | 'partial';
+  transcriptError?: string;
   id: string;
   workId: string;
   runId: string;
@@ -390,3 +407,8 @@ export interface ManagedWorkSummary {
   resumeCommand?: string;
   deepLink?: string;
 }
+import {
+  executorMessageSchema,
+  transcriptQueryBaseSchema,
+  messageReceiptQuerySchema,
+} from './transcripts.js';

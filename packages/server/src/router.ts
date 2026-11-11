@@ -3,6 +3,8 @@ import {
   stallRequestSchema,
   doctorOptionsSchema,
   reportFilterSchema,
+  transcriptQuerySchema,
+  messageReceiptQuerySchema,
 } from '@interlock/core';
 import {
   scheduleMutationSchema,
@@ -250,6 +252,12 @@ export const appRouter = t.router({
       .mutation(({ ctx, input }) => ctx.engine.modelAliases.mutate(input)),
   }),
   executors: t.router({
+    transcript: p
+      .input(transcriptQuerySchema)
+      .query(({ ctx, input }) => ctx.engine.executors.transcript(input)),
+    receipt: p
+      .input(messageReceiptQuerySchema)
+      .query(({ ctx, input }) => ctx.engine.executors.messageReceipt(input)),
     settings: p.query(({ ctx }) => ctx.engine.executors.settings()),
     models: p
       .input(executorModelsQuerySchema)

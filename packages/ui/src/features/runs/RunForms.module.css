@@ -39,3 +39,43 @@
     padding: 16px;
   }
 }
+
+.managed {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.managed > :global(.actions):empty {
+  display: none;
+}
+
+.connected > :global(.hint):first-child {
+  padding: 16px;
+  margin: 0 0 16px;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+.connected > details {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+.connected > details > summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+.connected > details[open] > summary {
+  margin-bottom: 16px;
+}
+.connected > details > :last-child {
+  margin-bottom: 0;
+}
+.connected > details > summary:focus-visible {
+  outline: 2px solid var(--field-focus);
+  outline-offset: 4px;
+}

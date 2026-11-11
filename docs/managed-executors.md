@@ -46,7 +46,45 @@ The badge beside **Runs** counts runs waiting for a human response, replacement 
 
 Open the run inspector and choose **Review request** to answer a pending permission or question. When several steps need a response, the review menu lists them by assignment and item. The selected assignment appears before step data and technical details. Its status distinguishes waiting for your response from an agent working. **Allow once** or **Deny** applies to that exact active request. Native Codex additional sandbox-grant requests, session-wide file grants, secret-input requests and MCP elicitations are declined in this release. File approvals require captured paths and patches; incomplete approval details are declined. Questions allow custom answers only when the native request supports them. Human answers must come from the user, not another agent's guess.
 
-Progress records contain bounded tool/status updates, not full conversations. Native output and error text can contain task data; use non-secret task inputs. Interlock records reported usage where available. Missing measurements stay unknown. Pi aggregates response usage for each assignment, including continued sessions. Resumed cumulative counters from other harnesses are differenced when a baseline is known; uncertain resumed history is not charged again. Provider cost estimates are not account billing.
+Progress records contain bounded tool/status updates. New managed executions also capture visible conversation content within the [transcript limits](#transcripts-and-operator-messages). Native output and error text can contain task data; use non-secret task inputs. Interlock records reported usage where available. Missing measurements stay unknown. Pi aggregates response usage for each assignment, including continued sessions. Resumed cumulative counters from other harnesses are differenced when a baseline is known; uncertain resumed history is not charged again. Provider cost estimates are not account billing.
+
+## Transcripts and operator messages
+
+Select a managed Agent step in the run inspector. The **Conversation / Details** segmented control switches views. **Conversation** opens its recent messages and tool activity, with guidance input below the scrollable history. The persistent footer controls navigate to the oldest retained content, older or newer entries, or the latest messages. Navigation stays visible while the conversation scrolls. The header's attempt selector reads earlier attempts without offering to message or stop them. **Details** contains session information, capture statistics, retention limits, prompt/context, and step data. Pending approvals, questions, and recovery controls remain visible above either view.
+
+Codex, Claude Code, and Pi capture visible assistant text, tool calls, and tool results. Custom commands and launchers expose partial progress capture. Historical attempts have no reconstructed conversation. Binary content and private reasoning are excluded. Unknown capture or unsupported message delivery is shown explicitly.
+
+Transcript safeguards are always active, independently of optional run-history retention:
+
+| Limit                                                  | Value                                          |
+| ------------------------------------------------------ | ---------------------------------------------- |
+| Serialized entry                                       | 32 KiB, with truncation markers                |
+| Per execution                                          | 2,000 entries and 10 MiB                       |
+| Library transcript data and reserved delivery receipts | 256 MiB                                        |
+| Age                                                    | 14 days after execution ends                   |
+| Read page                                              | 50 entries by default, at most 100 and 256 KiB |
+
+Old entries give way to recent content. At library capacity, ended transcripts are pruned before active content. Active delivery receipts remain protected against duplicate sends. A minute sweep expires ended content in bounded batches even without new runs. Reaching a capture limit does not stop the Agent. Entries larger than 1 MiB before redaction are omitted rather than partially scanned. Truncation, expiry, pruning, and capture failures appear beside the reader.
+
+The budget measures retained serialized data with reserved metadata, not the entire SQLite file. Indexes, free allocated pages, backups, and native harness logs are separate. Deleted pages are reused. Interlock limits retained journal size and skips transcript writes when a reader pins more than 16 MiB of WAL data that a passive checkpoint cannot clear. A durable gap marker survives resumed capture and restart; omissions during journal pressure are coalesced, so the displayed omission count is a lower bound. This safeguard does not cap unrelated workflow writes or an external process's disk use. No automatic full-database compaction runs. [History cleanup](history-cleanup.md) removes transcript entries and receipts with their managed execution records.
+
+Known run-captured Secret values and active claim/ticket credentials are masked before transcript persistence. Unsafe redaction omits content. This cannot identify every credential independently obtained by a native tool. Transcript recording does not give Agents implicit access to variables, change permissions, or approve pending tool requests.
+
+For a supported active session, enter guidance in **Message agent**, then choose **Send message**. Codex steers the expected active turn. Claude Code consumes live input after current tool calls finish. Pi queues steering in the existing run. Custom launchers use their captured `messageCommand` or `messageUrl`. A direct custom command without a message channel cannot receive guidance. No fallback starts another turn or session.
+
+Messages accept 1 through 4,000 characters, with at most 100 unique requests per execution. A receipt records the local operator label, source, time, and outcome. Request IDs and operator labels containing known protected values are rejected before persistence or dispatch. Choose safe metadata rather than retrying the rejected values. These labels provide attribution in the local single-user service, not authentication. **Accepted** means the harness accepted input, not that the Agent followed it. A delivery timeout, transport error, or restart may leave **Unknown**. Check delivery status instead of resending. The inspector preserves submitted identity through a lost response and retains an acknowledged outcome if refresh fails.
+
+CLI examples use the existing executor command:
+
+```sh
+interlock executors '{"action":"transcript","executionId":"EXECUTION_ID","limit":50}'
+interlock executors '{"action":"message","executionId":"EXECUTION_ID","requestId":"guidance-1","message":"Use the vendored dependency."}'
+interlock executors '{"action":"receipt","executionId":"EXECUTION_ID","requestId":"guidance-1"}'
+```
+
+Use a returned `older` value as `before`, or `newer` as `after`. Omit both for the latest page. Gaps remain explicit if a cursor's content was pruned. MCP `manage_executors` accepts the same objects inside `request`. Shared API callers use `executors.transcript`, `executors.receipt`, and `executors.manage`. Unknown execution IDs reject. These reads do not advance runs or renew claims.
+
+Reuse a message's request ID with identical content and operator label to retrieve its existing receipt without another dispatch. Different content under that ID rejects. `pending` and `unknown` never authorize automatic resend. A missing receipt includes whether receipts for the ended attempt were pruned. Ended, interrupted, expired, cancelled, or replaced claims cannot receive a new message. Pending delivery also blocks history deletion until it settles.
 
 ## Custom harnesses
 

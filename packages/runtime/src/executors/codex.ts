@@ -11,6 +11,7 @@ import {
   type HarnessRun,
 } from './contracts.js';
 import { detectExecutable, JsonLinesProcess } from './process.js';
+import { transcriptText } from './transcriptEvents.js';
 
 export const codexAdapter: HarnessAdapter = {
   id: 'codex',
@@ -114,6 +115,54 @@ export const codexAdapter: HarnessAdapter = {
             },
           });
         return;
+      }
+      if (
+        message.method === 'item/started' ||
+        message.method === 'item/completed'
+      ) {
+        const item = params.item;
+        if (
+          item?.type === 'agentMessage' &&
+          message.method === 'item/completed'
+        )
+          input.onTranscript?.({
+            kind: 'assistant',
+            text: item.text ?? '',
+            key: `assistant:${item.id}`,
+          });
+        const tool = [
+          'commandExecution',
+          'mcpToolCall',
+          'dynamicToolCall',
+          'fileChange',
+          'webSearch',
+        ].includes(item?.type);
+        if (tool) {
+          input.onTranscript?.({
+            kind: 'tool_call',
+            tool: item.tool ?? item.type,
+            callId: item.id,
+            key: `call:${item.id}`,
+            text: transcriptText(
+              item.command ?? item.arguments ?? item.changes ?? item.action,
+            ),
+          });
+          if (message.method === 'item/completed')
+            input.onTranscript?.({
+              kind: 'tool_result',
+              tool: item.tool ?? item.type,
+              callId: item.id,
+              key: `result:${item.id}`,
+              text: transcriptText(
+                item.aggregatedOutput ??
+                  item.result ??
+                  item.contentItems ?? {
+                    status: item.status,
+                    exitCode: item.exitCode,
+                  },
+              ),
+            });
+        }
       }
       if (['item/started', 'item/completed'].includes(message.method))
         taskStarted = true;
@@ -311,6 +360,19 @@ export const codexAdapter: HarnessAdapter = {
         outputSchema: resultEnvelope(input.work),
       });
       turnId = turn.turn.id;
+      input.onMessageChannel?.(async (message) => {
+        if (!threadId || !turnId || input.signal.aborted)
+          throw new Error('Codex turn is not active');
+        await rpc.request(
+          'turn/steer',
+          {
+            threadId,
+            expectedTurnId: turnId,
+            input: [{ type: 'text', text: message, text_elements: [] }],
+          },
+          10000,
+        );
+      });
       const finished = await Promise.race([completed, rpc.ended()]);
       if (input.signal.aborted) throw new Error('Execution stopped');
       if (finished.id !== turnId)
@@ -346,6 +408,7 @@ export const codexAdapter: HarnessAdapter = {
         );
       throw error;
     } finally {
+      input.onMessageChannel?.(undefined);
       input.signal.removeEventListener('abort', abort);
       await rpc.close();
     }
