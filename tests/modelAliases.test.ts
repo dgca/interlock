@@ -1,6 +1,9 @@
-import { afterEach, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { afterEach, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { codexAdapter } from '../packages/runtime/src/executors/codex';
+import { piAdapter } from '../packages/runtime/src/executors/pi';
 import { tmpdir } from 'node:os';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
@@ -553,4 +556,345 @@ it('keeps an empty captured alias from becoming a literal native-model request d
   expect(engine.modelAliases.expandCandidates([], 'native-model')).toEqual([
     { model: 'native-model' },
   ]);
+});
+
+it('keeps legacy alias-first routing while an explicit harness ignores an inherited preset', () => {
+  const { engine } = setup();
+  engine.executors.saveProfile({
+    id: 'legacy-codex',
+    name: 'Legacy Codex',
+    harness: 'codex',
+    enabled: true,
+    expectedRevision: 0,
+  });
+  engine.modelAliases.mutate({
+    action: 'create',
+    name: 'Review default',
+    candidates: [
+      { profileId: 'legacy-codex', model: 'review-model', effort: 'high' },
+    ],
+  });
+  const definition = blankDefinition();
+  definition.executor = 'legacy-codex';
+  definition.agentModel = 'Review default';
+  definition.agentEffort = 'high';
+  const node = definition.nodes.find((item) => item.kind === 'agent')!;
+  node.executor = 'claude-code';
+  const assigned = (d: WorkflowDefinition) =>
+    engine.store.work(
+      'available',
+      engine.start(publish(engine, d), {}).run.id,
+    )[0];
+
+  expect(assigned(definition)).toMatchObject({
+    executor: 'legacy-codex',
+    executorModel: 'review-model',
+    executorEffort: 'high',
+  });
+  node.executorMode = 'harness';
+  const direct = assigned(definition);
+  expect(direct.executor).toBe('claude-code');
+  expect(direct).not.toHaveProperty('executorModel');
+  expect(direct).not.toHaveProperty('executorEffort');
+  expect(direct).not.toHaveProperty('modelAliasSelection');
+
+  node.executor = 'legacy-codex';
+  definition.agentModel = 'workflow-model';
+  expect(assigned(definition)).toMatchObject({
+    executor: 'legacy-codex',
+    executorModel: 'workflow-model',
+    executorEffort: 'high',
+    executorModelSource: 'workflow',
+  });
+  node.model = 'Review default';
+  node.effort = null;
+  expect(assigned(definition)).toMatchObject({
+    executor: 'legacy-codex',
+    executorModel: 'Review default',
+    executorEffort: null,
+    executorModelSource: 'node',
+    executorEffortSource: 'node',
+  });
+});
+
+it('uses the first enabled preset choice that can enforce workflow and preset permissions', () => {
+  const { engine } = setup();
+  for (const [id, harness, enabled] of [
+    ['claude-code', 'claude-code', false],
+    ['integration', 'custom', true],
+    ['codex', 'codex', true],
+    ['pi', 'pi', true],
+  ] as const)
+    engine.executors.saveProfile({
+      id,
+      name: id,
+      harness,
+      enabled,
+      expectedRevision: 0,
+      ...(harness === 'custom' ? { turnCommand: 'echo unused' } : {}),
+    });
+  const candidates = [
+    { profileId: 'claude-code', model: 'primary' },
+    { profileId: 'integration', model: 'unsafe-fallback' },
+    { profileId: 'codex', model: 'first-eligible', effort: 'high' },
+    { profileId: 'pi', model: 'second-eligible' },
+  ];
+  const preset = engine.modelAliases.mutate({
+    action: 'create',
+    name: 'Deep review',
+    permissions: 'standard',
+    candidates,
+  });
+  const definition = aliasWorkflow(preset.id);
+  definition.agentPermissions = 'read-only';
+  const node = definition.nodes.find((item) => item.kind === 'agent')!;
+  node.executorMode = 'preset';
+  node.effort = null;
+  const workflow = publish(engine, definition);
+  const { run } = engine.start(workflow, {});
+  const assignment = engine.store.work('available', run.id)[0];
+  expect(assignment).toMatchObject({
+    executor: 'codex',
+    executorModel: 'first-eligible',
+    executorEffort: null,
+    executorPermissions: 'read-only',
+    executorPermissionsSource: 'workflow',
+    modelAliasSelection: { aliasId: preset.id, candidateIndex: 2, revision: 1 },
+  });
+  engine.modelAliases.mutate({
+    action: 'update',
+    id: preset.id,
+    expectedRevision: 1,
+    permissions: null,
+    candidates: [
+      { profileId: 'integration', model: 'cannot-enforce-workflow' },
+    ],
+  });
+  expect(() => engine.start(workflow, {})).toThrow(/no eligible harness/i);
+  expect(engine.store.work('available', run.id)[0]).toEqual(assignment);
+  expect(engine.run(run.id).modelAliasCaptures?.[0]).toMatchObject({
+    permissions: 'standard',
+    candidates,
+    revision: 1,
+  });
+});
+
+it.each([
+  { mode: 'direct', transport: 'http', turnUrl: 'http://localhost/turn' },
+  { mode: 'launcher', transport: 'http', launchUrl: 'http://localhost/launch' },
+  { mode: 'direct', transport: 'subprocess', command: 'echo turn' },
+  { mode: 'launcher', transport: 'subprocess', command: 'echo launch' },
+] as const)(
+  'skips an incomplete $mode $transport integration before choosing a preset fallback',
+  async ({ mode, transport, ...invocation }) => {
+    const { engine } = setup();
+    const profile = {
+      id: 'integration',
+      name: 'Integration',
+      harness: 'custom',
+      enabled: true,
+      mode,
+      transport,
+    } as const;
+    engine.executors.saveProfile({ ...profile, expectedRevision: 0 });
+    engine.executors.saveProfile({
+      id: 'codex',
+      name: 'Codex',
+      harness: 'codex',
+      enabled: true,
+      expectedRevision: 0,
+    });
+    const preset = engine.modelAliases.mutate({
+      action: 'create',
+      name: 'Review',
+      candidates: [
+        { profileId: profile.id, model: 'primary' },
+        { profileId: 'codex', model: 'fallback' },
+      ],
+    });
+    const definition = aliasWorkflow(preset.id);
+    definition.nodes.find((node) => node.kind === 'agent')!.executorMode =
+      'preset';
+    const workflow = publish(engine, definition);
+    const listed = await engine.executors.listProfiles();
+    expect(
+      listed.find((item) => item.id === profile.id)?.detection.status,
+    ).toBe('unavailable');
+    const first = engine.start(workflow, {}).run;
+    expect(engine.store.work('available', first.id)[0]).toMatchObject({
+      executor: 'codex',
+      modelAliasSelection: { candidateIndex: 1 },
+    });
+
+    engine.executors.saveProfile({
+      ...profile,
+      ...invocation,
+      expectedRevision: 1,
+    });
+    const next = engine.start(workflow, {}).run;
+    expect(engine.store.work('available', next.id)[0]).toMatchObject({
+      executor: profile.id,
+      modelAliasSelection: { candidateIndex: 0 },
+    });
+  },
+);
+
+it('ignores a deleted workflow preset when an explicit harness replaces it', () => {
+  const { engine } = setup();
+  const preset = engine.modelAliases.mutate({
+    action: 'create',
+    name: 'Old preset',
+    candidates: [{ profileId: 'codex', model: 'old-model' }],
+  });
+  const definition = blankDefinition();
+  definition.executor = 'codex';
+  definition.agentModel = preset.id;
+  definition.agentEffort = 'high';
+  const node = definition.nodes.find((item) => item.kind === 'agent')!;
+  node.executorMode = 'harness';
+  node.executor = 'codex';
+  const workflow = publish(engine, definition);
+  engine.modelAliases.mutate({
+    action: 'delete',
+    id: preset.id,
+    expectedRevision: 1,
+  });
+  const run = engine.start(workflow, {}).run;
+  const work = engine.store.work('available', run.id)[0];
+  expect(work.executor).toBe('codex');
+  expect(work).not.toHaveProperty('executorModel');
+  expect(work).not.toHaveProperty('executorEffort');
+});
+
+it.each([false, true])(
+  'checks executable versions in priority order before offering a preset (warm=%s)',
+  async (warm) => {
+    const { engine, dir } = setup();
+    const broken = join(dir, 'broken-harness');
+    writeFileSync(broken, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    engine.executors.start([codexAdapter, piAdapter]);
+    engine.executors.saveProfile({
+      id: 'codex',
+      harness: 'codex',
+      name: 'Broken Codex',
+      enabled: true,
+      expectedRevision: 0,
+      command: broken,
+    });
+    engine.executors.saveProfile({
+      id: 'pi',
+      harness: 'pi',
+      name: 'Pi',
+      enabled: true,
+      expectedRevision: 0,
+      command: fileURLToPath(
+        new URL('./fixtures/pi-harness.mjs', import.meta.url),
+      ),
+    });
+    const preset = engine.modelAliases.mutate({
+      action: 'create',
+      name: 'Check versions',
+      permissions: 'read-only',
+      candidates: [
+        { profileId: 'codex', model: 'broken' },
+        { profileId: 'pi', model: 'fixture/model' },
+      ],
+    });
+    const definition = aliasWorkflow(preset.id);
+    definition.nodes.find((item) => item.kind === 'agent')!.executorMode =
+      'preset';
+    if (warm) await engine.executors.listProfiles();
+    const run = engine.start(publish(engine, definition), {}).run;
+    if (!warm) expect(engine.store.work(undefined, run.id)).toHaveLength(0);
+    await vi.waitFor(() => {
+      expect(engine.store.work(undefined, run.id)[0]).toMatchObject({
+        executor: 'pi',
+        executorPermissions: 'read-only',
+        modelAliasSelection: { candidateIndex: 1 },
+      });
+    });
+    expect(
+      engine.run(run.id).executions.filter((step) => step.kind === 'agent'),
+    ).toHaveLength(1);
+    await engine.executors.stop();
+  },
+);
+
+it('allows connected-only work when the unused workflow preset was deleted', () => {
+  const { engine } = setup();
+  const preset = engine.modelAliases.mutate({
+    action: 'create',
+    name: 'Unused preset',
+    candidates: [{ profileId: 'codex', model: 'old-model' }],
+  });
+  const definition = blankDefinition();
+  definition.agentModel = preset.id;
+  definition.nodes.find((node) => node.kind === 'agent')!.executor = null;
+  const workflow = publish(engine, definition);
+  engine.modelAliases.mutate({
+    action: 'delete',
+    id: preset.id,
+    expectedRevision: 1,
+  });
+  const run = engine.start(workflow, {}).run;
+  expect(engine.store.work('available', run.id)[0]).not.toHaveProperty(
+    'executor',
+  );
+});
+
+it('uses preset eligibility for a deliberately configured workflow default but honors an explicit node harness', () => {
+  const { engine } = setup();
+  engine.executors.saveProfile({
+    id: 'integration',
+    name: 'Integration',
+    harness: 'custom',
+    enabled: true,
+    expectedRevision: 0,
+  });
+  const preset = engine.modelAliases.mutate({
+    action: 'create',
+    name: 'Workflow review',
+    candidates: [
+      { profileId: 'claude-code', model: 'primary' },
+      { profileId: 'integration', model: 'cannot-enforce' },
+      { profileId: 'codex', model: 'eligible-fallback' },
+    ],
+  });
+  const definition = blankDefinition();
+  definition.agentModel = preset.id;
+  definition.agentModelMode = 'preset';
+  definition.agentPermissions = 'read-only';
+  const workflow = publish(engine, definition);
+  expect(() => engine.start(workflow, {})).toThrow(/no eligible harness/i);
+  engine.executors.saveProfile({
+    id: 'codex',
+    name: 'Codex',
+    harness: 'codex',
+    enabled: true,
+    expectedRevision: 0,
+  });
+  const run = engine.start(workflow, {}).run;
+  expect(engine.store.work('available', run.id)[0]).toMatchObject({
+    executor: 'codex',
+    executorModel: 'eligible-fallback',
+    executorPermissions: 'read-only',
+    executorPermissionsSource: 'workflow',
+  });
+
+  const node = definition.nodes.find((item) => item.kind === 'agent')!;
+  node.executor = 'pi';
+  const explicit = engine.start(publish(engine, definition), {}).run;
+  const work = engine.store.work('available', explicit.id)[0];
+  expect(work.executor).toBe('pi');
+  expect(work).not.toHaveProperty('modelAliasSelection');
+  expect(work).not.toHaveProperty('executorModel');
+
+  definition.agentModelMode = 'literal';
+  definition.agentModel = preset.id;
+  const literal = engine.start(publish(engine, definition), {}).run;
+  expect(engine.store.work('available', literal.id)[0]).toMatchObject({
+    executor: 'pi',
+    executorModel: preset.id,
+  });
+  expect(literal.modelAliasCaptures).toEqual([]);
 });

@@ -1,6 +1,5 @@
 import { spawn, execFile } from 'node:child_process';
-import { access } from 'node:fs/promises';
-import { constants } from 'node:fs';
+import { accessSync, constants, statSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -88,21 +87,23 @@ export function spawnManagedProcess(
   };
 }
 
-export async function detectExecutable(name: string, override?: string) {
+export function findExecutable(name: string, override?: string) {
   const candidates = override
     ? [override]
     : (process.env.PATH ?? '')
         .split(delimiter)
         .filter(Boolean)
         .map((p) => join(p, name));
-  let command: string | undefined;
   for (const p of candidates) {
     try {
-      await access(p, constants.X_OK);
-      command = p;
-      break;
+      accessSync(p, constants.X_OK);
+      if (statSync(p).isFile()) return p;
     } catch {}
   }
+}
+
+export async function detectExecutable(name: string, override?: string) {
+  const command = findExecutable(name, override);
   if (!command)
     return {
       status: 'missing' as const,

@@ -13,7 +13,7 @@ import {
 } from '../../design-system';
 
 import { StallPolicyEditor } from '../executors/StallSettings';
-import { ExecutorSelect } from '../executors/ExecutorSelect';
+import { NodeExecutorSelect } from '../executors/NodeExecutorSelect';
 import { ResourceBindingsEditor } from './ResourceBindingsEditor';
 import { useRef, useState } from 'react';
 import {
@@ -315,18 +315,33 @@ export function NodeInspector({
               />
             </NodeSection>
             <NodeSection name="execution">
-              <ExecutorSelect
-                value={node.executor}
-                workflowPermissions={definition?.agentPermissions}
-                workflowModel={definition?.agentModel}
-                workflowEffort={definition?.agentEffort}
-                nodeModel={node.model}
-                nodeEffort={node.effort}
-                onNodeModelChange={(model) => patch({ model })}
-                onNodeEffortChange={(effort) => patch({ effort })}
-                inherit={definition?.executor ?? ''}
+              <NodeExecutorSelect
+                node={node}
+                definition={definition}
                 enabled={active === 'execution'}
-                onChange={(executor) => patch({ executor })}
+                onChange={patch}
+                connectedSettings={
+                  <NativeSelect
+                    mb="md"
+                    label="Model tier"
+                    description="Advisory preference for the connected agent. Its harness chooses the actual model."
+                    value={node.context.tier ?? ''}
+                    data={[
+                      { value: '', label: 'No preference' },
+                      { value: 'max', label: 'Max' },
+                      { value: 'balanced', label: 'Balanced' },
+                      { value: 'fast', label: 'Fast' },
+                    ]}
+                    onChange={(event) => {
+                      const { tier: _tier, ...context } = node.context;
+                      patch({
+                        context: event.currentTarget.value
+                          ? { ...context, tier: event.currentTarget.value }
+                          : context,
+                      });
+                    }}
+                  />
+                }
               />
               <Radio.Group
                 mb="md"
@@ -362,31 +377,6 @@ export function NodeInspector({
                   })
                 }
               />
-
-              {!(node.executor === null
-                ? undefined
-                : (node.executor ?? definition?.executor)) && (
-                <NativeSelect
-                  mb="md"
-                  label="Model tier"
-                  description="Advisory preference for the connected agent. Its harness chooses the actual model."
-                  value={node.context.tier ?? ''}
-                  data={[
-                    { value: '', label: 'No preference' },
-                    { value: 'max', label: 'Max' },
-                    { value: 'balanced', label: 'Balanced' },
-                    { value: 'fast', label: 'Fast' },
-                  ]}
-                  onChange={(event) => {
-                    const { tier: _tier, ...context } = node.context;
-                    patch({
-                      context: event.currentTarget.value
-                        ? { ...context, tier: event.currentTarget.value }
-                        : context,
-                    });
-                  }}
-                />
-              )}
 
               <Textarea
                 mb="md"

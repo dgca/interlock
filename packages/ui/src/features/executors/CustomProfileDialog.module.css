@@ -1,56 +1,78 @@
 .dialogContent {
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
+  display: grid;
+  gap: 16px;
   border: 0;
   padding: 0;
   margin: 0;
   min-width: 0;
 }
 
-.sectionCard {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
-}
-
-.sectionTitle {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-bottom: 2px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .gridTwo {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 12px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 520px) {
   .gridTwo {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 .fieldLabel {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
 }
 
 .fieldHelper {
+  margin: 0 0 8px;
   font-size: 12px;
   color: var(--muted);
-  margin-top: 2px;
 }
 
 .monoInput input {
   font-family: var(--mantine-font-family-monospace, monospace);
+}
+
+.disclosure {
+  border-top: 1px solid var(--border);
+}
+
+.disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  width: fit-content;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.disclosure > summary:focus-visible {
+  outline: 2px solid var(--mantine-color-blue-4);
+  outline-offset: 2px;
+}
+
+.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+.disclosureBody {
+  display: grid;
+  gap: 14px;
+  padding: 4px 0 16px;
+}
+
+.error {
+  margin-bottom: 12px;
 }
 
 /* Key Value Table */
@@ -64,6 +86,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.keyValueHeader > button:only-child {
+  margin-inline-start: auto;
 }
 
 .keyValueTable {
@@ -94,62 +120,6 @@
 
 .valueInput input {
   font-family: var(--mantine-font-family-monospace, monospace);
-}
-
-/* Token Chips */
-.tokenChips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-top: 4px;
-}
-
-.tokenChipsLabel {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.tokenChip {
-  font-family: var(--mono);
-}
-
-/* Collapsible Lifecycle Hooks */
-.hooksContainer {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.hookCard {
-  border-top: 1px solid var(--border);
-}
-
-.hookHeader {
-  width: 100%;
-  text-align: left;
-}
-.hookHeader :global(.mantine-Button-label) {
-  flex: 1;
-  justify-content: space-between;
-}
-
-.hookTitleGroup {
-  min-width: 0;
-  white-space: normal;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.hookBody {
-  padding: 12px;
-  border-top: 1px solid var(--border);
-
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 /* Roots List */

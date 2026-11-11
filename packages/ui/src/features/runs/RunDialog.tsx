@@ -1,3 +1,4 @@
+import { agentAliasReference } from '@interlock/core';
 import {
   NativeSelect,
   Textarea,
@@ -88,8 +89,7 @@ export function RunDialog({
       node.kind === 'agent' &&
       (node.executor === null ||
         (!(node.executor ?? definition.executor) &&
-          !node.model &&
-          !definition.agentModel)),
+          !agentAliasReference(node, definition))),
   );
   let parsed: Json = null;
   try {

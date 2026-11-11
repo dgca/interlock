@@ -469,7 +469,7 @@ export function SettingsDialog({
                     <Textarea
                       mb="md"
                       label="Description"
-                      rows={4}
+                      rows={2}
                       value={settings.description}
                       onChange={(e) =>
                         setSettings((s) => ({
@@ -483,12 +483,13 @@ export function SettingsDialog({
                       value={settings.definition.executor}
                       workflowPermissions={settings.definition.agentPermissions}
                       workflowModel={settings.definition.agentModel}
+                      workflowModelMode={settings.definition.agentModelMode}
                       workflowEffort={settings.definition.agentEffort}
                       onEffortChange={(agentEffort) =>
                         patchDefinition({ agentEffort })
                       }
-                      onModelChange={(agentModel) =>
-                        patchDefinition({ agentModel })
+                      onModelChange={(agentModel, agentModelMode) =>
+                        patchDefinition({ agentModel, agentModelMode })
                       }
                       onPermissionsChange={(agentPermissions) =>
                         patchDefinition({ agentPermissions })

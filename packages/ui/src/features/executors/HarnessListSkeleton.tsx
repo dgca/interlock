@@ -16,9 +16,9 @@ import { useLocation } from 'react-router';
 import { aiSettingsTab, aiSettingsTabs } from './aiSettingsNavigation';
 
 export const harnessColumns: readonly ListTableColumn[] = [
-  { label: 'Configuration', width: 'minmax(0, 1fr)' },
-  { label: 'Installation', width: '140px', compactWidth: '110px' },
-  { label: 'Status', width: '130px', compactWidth: '115px' },
+  { label: 'Harness', width: 'minmax(0, 1fr)' },
+  { label: 'Connection', width: '140px', compactWidth: '110px' },
+  { label: 'Managed execution', width: '155px', compactWidth: '115px' },
   { label: '', width: '145px', compactWidth: '130px' },
 ];
 export function HarnessRowsSkeleton() {
@@ -43,7 +43,7 @@ export function HarnessRowsSkeleton() {
 export function HarnessLibrarySkeleton() {
   const tab = aiSettingsTab(useLocation());
   return (
-    <section className={workspacePage.page}>
+    <section className={`${workspacePage.page} ${styles.aiPage}`}>
       <PageHeader title="AI Settings" />
       <PageTabsSkeleton items={aiSettingsTabs} value={tab} showCounts={false} />
       <div className={workspacePage.content}>

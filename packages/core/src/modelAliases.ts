@@ -3,8 +3,11 @@ import {
   executorModelSchema,
   executorEffortSchema,
   executorReferenceSchema,
+  executorPermissionModeSchema,
+  type ExecutorPermissionMode,
+  type ExecutorProfile,
 } from './executors.js';
-import type { WorkflowDefinition } from './index.js';
+import type { WorkflowDefinition, WorkflowNode } from './index.js';
 
 export const modelAliasCandidateSchema = z
   .object({
@@ -28,8 +31,8 @@ export const modelAliasNameSchema = z
   .min(1)
   .max(120)
   .regex(
-    /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/,
-    'Use an alias name starting with an alphanumeric character, up to 120 characters.',
+    /^[a-zA-Z0-9][a-zA-Z0-9_. -]*$/,
+    'Use a preset name starting with an alphanumeric character, up to 120 characters.',
   );
 
 export interface SavedModelAlias {
@@ -37,6 +40,7 @@ export interface SavedModelAlias {
   name: string;
   description: string;
   candidates: ModelAliasCandidate[];
+  permissions?: ExecutorPermissionMode;
   revision: number;
   createdAt: string;
   updatedAt: string;
@@ -48,6 +52,7 @@ export interface ModelAliasCapture {
   name: string;
   revision: number;
   candidates: ModelAliasCandidate[];
+  permissions?: ExecutorPermissionMode;
 }
 
 export const modelAliasSelectionSchema = z
@@ -108,6 +113,11 @@ export const modelAliasMutationSchema = z.discriminatedUnion('action', [
       name: modelAliasNameSchema,
       description: z.string().max(2000).default(''),
       candidates: z.array(modelAliasCandidateSchema).min(1).max(32),
+      permissions: executorPermissionModeSchema
+        .optional()
+        .describe(
+          'Omit to use the selected harness default or workflow override.',
+        ),
     })
     .strict(),
   z
@@ -118,6 +128,12 @@ export const modelAliasMutationSchema = z.discriminatedUnion('action', [
       name: modelAliasNameSchema.optional(),
       description: z.string().max(2000).optional(),
       candidates: z.array(modelAliasCandidateSchema).min(1).max(32).optional(),
+      permissions: executorPermissionModeSchema
+        .nullable()
+        .optional()
+        .describe(
+          'Omit to leave unchanged; null restores permission inheritance.',
+        ),
     })
     .strict(),
   z
@@ -134,11 +150,100 @@ export type ModelAliasMutation = z.input<typeof modelAliasMutationSchema>;
 
 export function modelReferences(definition: WorkflowDefinition): string[] {
   const refs = new Set<string>();
-  if (definition.agentModel) refs.add(definition.agentModel);
+  if (definition.agentModel && definition.agentModelMode !== 'literal')
+    refs.add(definition.agentModel);
   for (const node of definition.nodes) {
     if (node.kind === 'agent') {
-      if (node.model) refs.add(node.model);
+      if (node.model && node.executorMode !== 'harness') refs.add(node.model);
     }
   }
   return [...refs];
+}
+
+type AgentNode = Extract<WorkflowNode, { kind: 'agent' }>;
+
+export function usesDirectHarness(
+  node: AgentNode,
+  workflow?: WorkflowDefinition,
+) {
+  return (
+    node.executorMode === 'harness' ||
+    (!!node.executor && !node.model && workflow?.agentModelMode === 'preset')
+  );
+}
+
+export function agentAliasReference(
+  node: AgentNode,
+  workflow: WorkflowDefinition,
+) {
+  if (node.executor === null || usesDirectHarness(node, workflow)) return;
+  return (
+    node.model ??
+    (workflow.agentModelMode === 'literal' ? undefined : workflow.agentModel)
+  );
+}
+
+export function selectsPreset(node: AgentNode, workflow: WorkflowDefinition) {
+  return (
+    node.executorMode === 'preset' ||
+    (workflow.agentModelMode === 'preset' &&
+      node.executor === undefined &&
+      !node.model)
+  );
+}
+
+const permissionRank = { 'read-only': 0, standard: 1, 'full-access': 2 };
+
+export function presetPermissions(
+  preset?: ExecutorPermissionMode,
+  workflow?: ExecutorPermissionMode,
+): ExecutorPermissionMode | undefined {
+  if (!preset || !workflow) return preset ?? workflow;
+  return permissionRank[preset] < permissionRank[workflow] ? preset : workflow;
+}
+
+/** Custom integrations receive permission requests but do not enforce them. */
+export function supportsPresetPermissions(
+  profile: Pick<ExecutorProfile, 'harness'>,
+  permissions?: ExecutorPermissionMode,
+) {
+  return (
+    profile.harness !== 'custom' ||
+    !permissions ||
+    permissions === 'full-access'
+  );
+}
+
+export function* eligiblePresetChoices<
+  T extends ModelAliasCandidate,
+  P extends Pick<ExecutorProfile, 'harness'>,
+>(
+  candidates: readonly T[],
+  workflowExecutor: string | undefined,
+  profileFor: (id: string) => P | undefined,
+  permissions?: ExecutorPermissionMode,
+) {
+  for (const candidate of candidates) {
+    const executor = candidate.profileId ?? workflowExecutor;
+    const profile = executor ? profileFor(executor) : undefined;
+    if (executor && profile && supportsPresetPermissions(profile, permissions))
+      yield { candidate, executor, profile };
+  }
+}
+
+export function firstEligiblePresetChoice<
+  T extends ModelAliasCandidate,
+  P extends Pick<ExecutorProfile, 'harness'>,
+>(...args: Parameters<typeof eligiblePresetChoices<T, P>>) {
+  return eligiblePresetChoices(...args).next().value;
+}
+
+export function inheritsWorkflowHarnessSettings(
+  executor: string,
+  workflowExecutor: string | undefined,
+  workflowHasPreset: boolean,
+) {
+  return (
+    !workflowHasPreset && (!workflowExecutor || executor === workflowExecutor)
+  );
 }

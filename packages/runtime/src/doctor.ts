@@ -8,6 +8,8 @@ import {
   type DoctorReport,
   variableReferences,
   modelReferences,
+  agentAliasReference,
+  selectsPreset,
   promptIds,
   sameWorkflowContent,
   type ResourceReservation,
@@ -646,20 +648,33 @@ export async function runDoctor(
           for (const mRef of modelRefs) {
             const alias = engine.modelAliases.get(mRef);
             const requirement = engine.modelAliases.requirement(mRef);
-            if (!alias && requirement) {
+            if (!engine.modelAliases.usesReference(version.definition, mRef))
+              continue;
+            const agents = version.definition.nodes
+              .filter((node) => node.kind === 'agent')
+              .filter(
+                (node) =>
+                  agentAliasReference(node, version.definition) === mRef,
+              );
+            if (
+              !alias &&
+              (requirement ||
+                agents.some((node) => selectsPreset(node, version.definition)))
+            ) {
+              const aliasName = requirement?.name ?? mRef;
               workflowIssues++;
               checks.push({
                 category: 'workflows',
                 name: `Missing model alias in workflow: ${workflow.name}`,
                 status: 'fail',
-                message: `Published workflow "${workflow.name}" requires missing local alias "${requirement.name}"`,
+                message: `Published workflow "${workflow.name}" requires missing local alias "${aliasName}"`,
                 details: {
                   workflowId: workflow.id,
                   version: workflow.latestVersion,
                   reference: mRef,
-                  aliasName: requirement.name,
+                  aliasName,
                 },
-                remediation: `Configure local alias "${requirement.name}" before starting a new run.`,
+                remediation: `Configure local alias "${aliasName}" before starting a new run.`,
               });
             } else if (alias && alias.candidates.length === 0) {
               workflowIssues++;
@@ -675,36 +690,30 @@ export async function runDoctor(
                 },
                 remediation: `Add candidate models to alias "${alias.name}".`,
               });
-            } else if (
-              alias &&
-              version.definition.nodes.some(
-                (node) =>
-                  node.kind === 'agent' &&
-                  node.executor !== null &&
-                  (node.model ?? version.definition.agentModel) === mRef,
-              ) &&
-              !alias.candidates.some(
-                (candidate) =>
-                  !candidate.profileId ||
-                  engine.store.get<{ enabled: boolean }>(
-                    'executorProfiles',
-                    candidate.profileId,
-                  )?.enabled,
-              )
-            ) {
+            } else if (alias) {
+              const problem = agents
+                .map((node) =>
+                  engine.modelAliases.eligibilityProblem(
+                    version.definition,
+                    node,
+                    alias,
+                  ),
+                )
+                .find(Boolean);
+              if (!problem) continue;
               workflowIssues++;
               checks.push({
                 category: 'workflows',
                 name: `Unavailable model alias profiles in workflow: ${workflow.name}`,
                 status: 'fail',
-                message: `Published workflow "${workflow.name}" references model alias "${alias.name}" with no enabled candidate executor profile`,
+                message: problem,
                 details: {
                   workflowId: workflow.id,
                   version: workflow.latestVersion,
                   aliasId: alias.id,
                   aliasName: alias.name,
                 },
-                remediation: `Enable or configure a candidate executor profile for alias "${alias.name}".`,
+                remediation: `Check the harnesses and permissions for "${alias.name}".`,
               });
             }
           }

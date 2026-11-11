@@ -10,11 +10,16 @@ import {
   type HarnessAdapter,
   type HarnessRun,
 } from './contracts.js';
-import { detectExecutable, JsonLinesProcess } from './process.js';
+import {
+  detectExecutable,
+  findExecutable,
+  JsonLinesProcess,
+} from './process.js';
 import { transcriptText } from './transcriptEvents.js';
 
 export const codexAdapter: HarnessAdapter = {
   id: 'codex',
+  available: (override) => !!findExecutable('codex', override),
   detect: (override) => detectExecutable('codex', override),
   async models(input) {
     const rpc = new JsonLinesProcess(

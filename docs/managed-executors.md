@@ -4,11 +4,11 @@ Interlock can launch installed Claude Code, Codex, and Pi harnesses, as well as 
 
 ## Configure a harness
 
-Open **AI Settings → Harnesses** in the sidebar and choose **Configure** on a configuration, or **Add configuration** to create one. Interlock checks for `claude`, `codex`, and `pi` on the server's PATH and reads their version. **Detected** means an executable answered the version check, not that authentication or model access works. Checks make no model calls. Install and authenticate the harness using its supported native setup before starting work. Interlock does not collect credentials, install harnesses, or promise that every subscription supports unattended third-party execution. See [Claude Agent SDK authentication](https://platform.claude.com/docs/en/agent-sdk/overview), [Codex authentication](https://developers.openai.com/codex/auth/), and [Pi setup](https://pi.dev/).
+Open **AI Settings → Harnesses**. Interlock checks for `claude`, `codex`, and `pi` on the server's PATH and reads their versions. **Detected** means the version check passed. It does not verify authentication or model access. Install and authenticate the harness using its native setup. See [Claude Agent SDK authentication](https://platform.claude.com/docs/en/agent-sdk/overview), [Codex authentication](https://developers.openai.com/codex/auth/), and [Pi setup](https://pi.dev/).
 
-Default configurations start disabled. Configure the working directory, optional model and default permissions, then enable the profile. An omitted directory uses the server's working directory. Executable and directory overrides must be absolute paths. Harness profiles and server settings can also declare `allowedRoots` (an array of absolute directory paths) to constrain dynamic and configured working directories. When `allowedRoots` are defined, working directories must resolve to an existing directory contained inside one of the declared roots; paths resolving outside `allowedRoots` or missing directories leave Agent assignments unclaimed with an explicit `cwd_blocked` blocker reason rather than falling back to default directories. In continuity groups, the resolved directory is pinned on initial session launch so subsequent assignments cannot shift the session directory. Native harness configuration supplies installed tools, MCP connections and skills. Interlock does not install or load them through harness settings. Advanced API/MCP profiles can retain tools/skills declarations for existing requirement matching; these are exact-name assertions, not verified inventories or instructions to invoke a skill. Unmet requirements leave assignments visibly blocked. Multiple configurations can use the same harness.
+Each built-in harness and custom integration has one row. Choose **Edit defaults** to set its model, thinking effort, and permissions. Use **Advanced settings** for the executable path, working directory, and per-harness assignment limit. An omitted directory uses the server's working directory. Executable and directory overrides must be absolute paths. Use **Add integration** to configure a custom harness.
 
-Harness rows show detected configurations first, then configurations that were not detected, with each group sorted alphabetically by configuration name. Enabling or disabling a configuration preserves its position. Rows summarize their saved model and permission defaults. **Configure** groups the editable fields into execution defaults and **Advanced settings**. **Configuration ID** is the stable reference workflows and MCP use; renaming the configuration does not change it. **Refresh models** below the model input reloads available choices. The detected native version appears with the executable path. Refreshing installation details preserves an open form’s edits; **Cancel** or **Cancel editing** discards them. Failed saves retain edits and offer **Reload configuration** to replace them with the saved values.
+Built-in harness IDs are `claude-code`, `codex`, and `pi`. Existing named configuration IDs still resolve in workflows and presets. The API and MCP can still inspect and update them. Local profiles and server settings can declare `allowedRoots`. An invalid or out-of-bounds directory leaves the assignment unclaimed with a `cwd_blocked` reason. A continuity group pins the directory when its session starts. Advanced profiles can declare tool and skill names for requirement matching. Interlock does not install or verify those capabilities.
 
 In **Workflow settings**, choose a **Default Agent executor** and **Agent permissions**, then save and publish. **Use harness default** inherits each selected profile’s default. An explicit **Read only**, **Standard** or **Full access** choice overrides the default for all managed Agents in this workflow, including node-specific executor selections. Connected agents retain their own permissions. The effective mode and its source appear beside the executor selection and in execution details. Agent **Execution → Executor** can inherit that default, choose another profile, or require a connected agent. In JSON, workflow `executor` is a profile ID. Agent `executor` overrides it; `null` selects connected-agent execution; omission inherits the workflow default. Workflow `agentPermissions` stores the optional override as `read-only`, `standard` or `full-access`; omission inherits the harness default. The published assignment captures the override, and later edits do not change existing attempts. Existing definitions without these fields keep their behavior. Missing, disabled or incompatible profiles leave work unclaimed with a reason. Executor references and workflow permission overrides travel in exports; local profile paths, defaults and native sessions do not.
 
@@ -22,7 +22,11 @@ Harness **Default model** offers **Use CLI default**, models reported by the con
 
 The picker reads Claude Code's SDK `supportedModels()`, Codex's app-server `model/list`, and Pi's RPC `get_available_models`, rather than a generic provider catalog. Lists can vary with the installed version, account and project configuration, and do not guarantee a later request will succeed. Catalogs return at most 100 models and cache for five minutes; failed reads cache for 30 seconds. Discovery is bounded to 15 seconds plus process cleanup and version detection. Failures preserve the saved model; refresh or enter a custom ID. No fallback model is substituted by Interlock.
 
-Workflow **Agent model** offers **Use harness default** or an explicit model ID, stored as optional `agentModel`. Agent **Execution → Model** offers **Use workflow default** or a node-specific `model`. Model precedence is node, workflow, selected harness configuration, then native CLI default. These settings apply only to managed execution. For workflows using multiple harnesses, choose a default ID they all accept, override individual nodes, or inherit each harness’s model. Connected agents retain their own model. Batch items inherit their owning workflow; invoked workflows use their own setting. Publish to apply changes to new runs. Published assignments capture the selected override and source as `executorModel`/`executorModelSource`; retries and continuing sessions retain the resolved profile/model. Effective model and source appear in settings and execution details. The workflow override travels in exports; model catalogs and local profile defaults do not. Connected Agent nodes show the advisory **Model tier** control. Managed nodes show concrete **Model** and **Thinking effort** controls instead. Switching executors preserves hidden values without applying managed settings to connected agents. Existing advisory tiers are retained and never translated into native models or efforts.
+In an Agent node, **Execution → Executor** groups harnesses and Agent presets below **Workflow default** and **Connected agent**. The menu offers **Workflow default** when it can resolve to a managed harness. It omits disabled or unavailable harnesses and presets without an eligible choice. If a saved selection becomes unavailable, the editor keeps it visible until you choose a replacement.
+
+Select a harness to edit **Model** and **Thinking effort**. Node overrides win. Concrete workflow defaults apply when the workflow has no harness of its own or uses the same harness. A direct selection replaces an inherited preset. Remaining settings come from the selected harness, then its native defaults. Connected agents retain their own models and effort and can use the advisory **Model tier**. Batch items inherit their owning workflow; invoked workflows use their own settings. Publish to apply changes to new runs.
+
+In JSON, a direct choice uses `executorMode: "harness"` and the local profile ID in `executor`. Its `model` is a literal model ID. Omit the mode to preserve existing alias-first routing in saved definitions. Work records retain the resolved override and source for model and effort. Managed retries and continuing sessions keep their captured settings.
 
 ### Thinking effort
 
@@ -329,45 +333,20 @@ A renewal or progress callback cancels pending escalation. Completion, a hold or
 
 Active execution deadline revocation also interrupts managed supervision. Retryable work is held with recovery attention, and exhausted work retains recovery attention when stop confirmation is still needed. A configured launcher stop operation is requested, but its response alone does not clear uncertain ownership. Confirm the session and subprocesses stopped through `reconcile`. Reconciliation waits for an in-flight stop operation to settle, releases exact-attempt reservations and permits a fresh ticket only for work that can still run. It does not reset failure or claim budgets. Late nudge failures and stale status responses cannot revive the revoked attempt.
 
-## Model aliases
+<a id="model-aliases"></a>
 
-Open **AI Settings → Model aliases** to create, edit, or delete an alias. Give it
-a name, choose a concrete model and optional harness for its primary choice,
-and add or reorder alternatives. A choice can inherit the workflow's harness.
-Thinking effort can inherit defaults, use the harness's native setting, or use
-a level supported by the selected model. Candidate effort settings take
-precedence over workflow or node effort overrides. Choice order selects the
-first eligible configuration; it does not retry failed model requests.
+## Agent presets
 
-Workflow and Agent model pickers group **Model aliases** separately from harness
-models. Alias selections use stable IDs, so renaming an alias preserves those
-selections. Existing definitions that reference its name may need updating after
-a rename. Editing affects future captures; active runs keep their captured
-configuration. Deleting an alias blocks new runs referencing its known identity
-until that requirement is configured again. Reopen or reload a saved alias after
-a revision conflict before reconciling unsaved edits.
+Open **AI Settings → Agent presets** and choose **New preset**. Name the preset and set the primary harness, model, and thinking effort. Add and reorder fallbacks if the primary choice may be unavailable. Then select the preset under an Agent node's **Executor**, or under **Agent model** in Workflow settings for nodes that inherit the default.
 
-Workflows and Agent nodes can reference logical model aliases (e.g. `builder`, `reviewer`, `evaluator`) instead of hardcoded model IDs. Aliases map to an ordered list of candidate targets:
+Interlock uses the first enabled, available choice that can enforce the requested permissions. A fallback is an alternative at assignment creation. It does not retry a failed request or skip a busy harness. The default permission setting uses the chosen harness's permissions unless the workflow supplies a mode. If both workflow and preset set a mode, the more restrictive one applies. A custom integration needs a command or URL for its configured mode and transport. It receives permission requests but does not enforce them through Interlock, so it is ineligible when the preset or workflow requires **Read only** or **Standard**.
 
-```json
-{
-  "name": "reviewer",
-  "description": "Code and architecture review alias",
-  "candidates": [
-    {
-      "model": "claude-3-7-sonnet",
-      "effort": "high",
-      "profileId": "claude-code"
-    },
-    { "model": "gpt-4o", "effort": "medium" }
-  ]
-}
-```
+Existing model aliases appear as presets. Their saved identities, candidate order, and workflow references stay intact. A legacy choice without a harness can still inherit a workflow harness. Nodes configured in earlier versions keep their execution behavior when you open and apply settings without choosing another executor.
 
-- **Referencing aliases**: Use an alias anywhere a model ID is accepted, including workflow `agentModel` and Agent node `model`.
-- **Candidate fallback**: Candidates are evaluated in declared order. The first candidate whose executor profile is available and enabled (or unconstrained) is selected.
-- **Missing aliases**: Deleted alias names and IDs and imported requirements remain known. A missing alias rejects startup before claims, receipts, or managed launch. Configure the required name and start again. Alias candidates with only unavailable explicit profiles reject managed startup; a valid fallback candidate remains usable.
-- **Run-start pinning**: Runs capture resolved alias definitions and revisions at start time in `modelAliasCaptures` (alongside `variableCaptures`). Editing or deleting an alias mid-run never mutates active runs; continued runs and batch items inherit the pinned captures. New runs also capture the absence of an alias, so creating an alias later cannot reinterpret a literal model ID.
-- **Report attribution**: Assignments retain the selected captured alias revision and candidate; claim receipts preserve it for performance reports. Reported usage keeps its supplied model/provider. Legacy/native assignments and run-level overhead remain unassigned. See [report attribution](usage-reporting.md#metrics-and-limits).
-- **Portable bundles**: Bundles export alias requirements (`modelAliases: [{ name: "reviewer" }]`) without local candidate overrides or private profile IDs (format version 6). Authored alias IDs additionally carry `reference` in format 10, binding that reference to a locally configured alias with the exported name. Local candidates and profile IDs never transfer.
-- **Management tool**: Manage aliases with the `manage_model_aliases` tool (`create`, `update`, `delete`, `list`, `inspect`). Updates and deletion require `expectedRevision`.
+To author a preset selection in JSON, set `executorMode: "preset"` and put the preset ID in `model`. Omit `executor`. Set workflow `agentModelMode: "preset"` with the preset ID in `agentModel` for inheriting nodes. Use `agentModelMode: "literal"` for a concrete workflow model ID. Definitions with no mode retain their legacy routing and accept preset names and IDs. An explicit node effort override wins for preset mode; otherwise use candidate effort, applicable workflow effort, and harness effort in that order. Null asks for the native default.
+
+- Manage presets through the existing `manage_model_aliases` MCP tool and model alias API. Choices remain `{ model, effort?, profileId? }`. The optional preset `permissions` field applies to all choices. Set it to null on update to restore inheritance. Updates and deletions require `expectedRevision`.
+- Runs capture the preset revision, choices, and permission override at startup. Editing or deleting a preset does not change those captures. A missing requirement used by an Agent or a preset with no configured candidate blocks a new start. Interlock checks candidate installations before creating work and fails the node if none pass. An unused workflow preset does not block explicitly configured nodes.
+- Selections in Executor use stable IDs. Renaming a preset keeps those selections working. Update existing references by name after a rename.
+- Bundles keep named requirements and stable references in `modelAliases`. They exclude local candidates, permission overrides, and profile details. The destination must configure the corresponding local preset.
+- Claim receipts retain the captured preset revision and chosen candidate for [report attribution](usage-reporting.md#metrics-and-limits).

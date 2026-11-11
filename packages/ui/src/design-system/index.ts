@@ -12,6 +12,7 @@ export {
   Code,
   Collapse,
   Combobox,
+  defaultOptionsFilter,
   CopyButton,
   Divider,
   Group,

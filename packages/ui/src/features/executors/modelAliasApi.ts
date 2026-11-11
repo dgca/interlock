@@ -17,14 +17,25 @@ export async function readModelAlias(id: string) {
   return result;
 }
 
-/** A model reference can be either a literal model or a saved alias identity. */
-export async function resolveModelAlias(reference: string) {
-  if (reference.length > 120) return null;
+/** Inspect without treating a known missing preset as a literal model. */
+export async function inspectModelReference(reference: string): Promise<{
+  alias?: Awaited<ReturnType<typeof readModelAlias>>;
+  missing?: boolean;
+}> {
+  if (reference.length > 120) return {};
   try {
-    return await readModelAlias(reference);
+    return { alias: await readModelAlias(reference) };
   } catch (error) {
-    if (error instanceof Error && error.message.includes('does not exist'))
-      return null;
+    if (error instanceof Error && error.message.endsWith('does not exist.'))
+      return {
+        missing: error.message.endsWith(
+          'is a known requirement but does not exist.',
+        ),
+      };
     throw error;
   }
+}
+
+export async function resolveModelAlias(reference: string) {
+  return (await inspectModelReference(reference)).alias ?? null;
 }

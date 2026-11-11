@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   LoadingSkeleton,
   Button,
   Combobox,
@@ -27,12 +28,14 @@ export function ModelPicker({
   onCatalog,
   loadCapabilities = false,
   allowAliases = false,
+  referenceMode,
   inheritedValue,
   onAlias,
+  inlineRefresh = false,
 }: {
   label: string;
   value?: string;
-  onChange: (model: string | undefined) => void;
+  onChange: (model: string | undefined, mode?: 'literal' | 'preset') => void;
   profileId?: string;
   paths?: { command?: string; cwd?: string };
   defaultLabel: string;
@@ -40,7 +43,9 @@ export function ModelPicker({
   onCatalog?: (catalog: ExecutorModels | undefined) => void;
   loadCapabilities?: boolean;
   allowAliases?: boolean;
+  referenceMode?: 'literal' | 'preset';
   inheritedValue?: string;
+  inlineRefresh?: boolean;
   onAlias?: (alias: SavedModelAlias | null | undefined) => void;
 }) {
   const [search, setSearch] = useState('');
@@ -56,7 +61,7 @@ export function ModelPicker({
     setAlias(undefined);
     onAlias?.(undefined);
     setReferenceError('');
-    if (!allowAliases || !reference) {
+    if (!allowAliases || !reference || referenceMode === 'literal') {
       setAlias(null);
       onAlias?.(null);
       return;
@@ -75,7 +80,7 @@ export function ModelPicker({
     return () => {
       current = false;
     };
-  }, [allowAliases, reference, aliasReload, onAlias]);
+  }, [allowAliases, reference, referenceMode, aliasReload, onAlias]);
   const id = useId();
   const [catalog, setCatalog] = useState<ExecutorModels>();
   const [loading, setLoading] = useState(false);
@@ -190,7 +195,9 @@ export function ModelPicker({
     `${m.name} ${m.id}`.toLowerCase().includes(term.toLowerCase()),
   );
   return (
-    <div>
+    <div
+      style={inlineRefresh ? { position: 'relative', minWidth: 0 } : undefined}
+    >
       <Input.Label htmlFor={id} id={`${id}-label`}>
         {label}
       </Input.Label>
@@ -198,7 +205,12 @@ export function ModelPicker({
         store={combobox}
         onOptionSubmit={(option) => {
           if (disabled) return;
-          onChange(option === '__default' ? undefined : option.slice(6));
+          if (option === '__default') onChange(undefined);
+          else
+            onChange(
+              option.slice(6),
+              option.startsWith('alias:') ? 'preset' : 'literal',
+            );
           combobox.closeDropdown();
         }}
       >
@@ -223,7 +235,7 @@ export function ModelPicker({
             }}
           >
             {value && alias
-              ? `${alias.name} · model alias`
+              ? `${alias.name} · agent preset`
               : (selected?.name ?? value ?? defaultLabel)}
           </InputBase>
         </Combobox.Target>
@@ -258,7 +270,7 @@ export function ModelPicker({
                 </Combobox.Option>
               )}
             {allowAliases && (
-              <Combobox.Group label="Model aliases">
+              <Combobox.Group label="Agent presets">
                 {aliasChoices.map((item) => (
                   <Combobox.Option key={item.id} value={`alias:${item.id}`}>
                     <Text size="sm">{item.name}</Text>
@@ -298,7 +310,7 @@ export function ModelPicker({
                 </Combobox.Option>
               )}
             {allowAliases && !aliases && !aliasError && (
-              <Combobox.Empty>Loading model aliases…</Combobox.Empty>
+              <Combobox.Empty>Loading agent presets…</Combobox.Empty>
             )}
             {aliases?.truncated && (
               <Combobox.Empty>
@@ -318,7 +330,23 @@ export function ModelPicker({
           </Combobox.Options>
         </Combobox.Dropdown>
       </Combobox>
-      {profileId && (
+      {inlineRefresh && profileId && (
+        <ActionIcon
+          type="button"
+          size={24}
+          pos="absolute"
+          top={-2}
+          right={0}
+          aria-label="Refresh models"
+          title="Refresh models"
+          loading={loading}
+          disabled={disabled || loading}
+          onClick={() => void load(true)}
+        >
+          <RefreshCw size={14} aria-hidden="true" />
+        </ActionIcon>
+      )}
+      {!inlineRefresh && profileId && (
         <Button
           type="button"
           variant="ghost"
@@ -333,14 +361,14 @@ export function ModelPicker({
       )}
       {allowAliases && (aliasError || referenceError) && (
         <Text size="xs" c="red" role="alert">
-          Model aliases could not be loaded. {aliasError || referenceError}{' '}
+          Agent presets could not be loaded. {aliasError || referenceError}{' '}
           <Button variant="ghost" onClick={() => setAliasReload((n) => n + 1)}>
             Retry aliases
           </Button>
         </Text>
       )}
       {(catalog?.status === 'unavailable' ||
-        !profileId ||
+        (!inlineRefresh && !profileId) ||
         catalog?.truncated) && (
         <Text
           size="xs"

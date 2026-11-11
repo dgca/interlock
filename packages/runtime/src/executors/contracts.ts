@@ -49,6 +49,7 @@ export interface HarnessAdapter {
     cwd: string;
     signal: AbortSignal;
   }) => Promise<{ models: HarnessModel[]; truncated?: boolean }>;
+  available?: (override?: string) => boolean;
   detect: (override?: string) => Promise<{
     command?: string;
     version?: string;

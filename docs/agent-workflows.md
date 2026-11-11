@@ -85,6 +85,8 @@ Work summaries also include `workflowId`, optional `parentRunId`, optional `pare
 
 Work summaries omit prompts, inputs, output schemas, and execution instructions. `claim_work` returns the complete assignment. Use `fields: "full"` to inspect complete assignments before claiming. CLI callers can use `interlock work RUN_ID --summary`. The shared API exposes `work.summaries` and `work.list`.
 
+For managed Agent nodes, use `executorMode: "harness"` with an enabled local profile ID in `executor`. An optional `model` is literal. To select an Agent preset, use `executorMode: "preset"` and its ID from `manage_model_aliases` in `model`; omit `executor`. Set workflow `agentModelMode: "preset"` to use its `agentModel` as a preset reference for inheriting nodes, or `literal` for a concrete model ID. For a focused workflow edit, set both fields with `update_settings`. Unsetting `agentModel` also clears its mode. Leave the mode omitted on existing settings to preserve legacy alias routing. See [managed execution](managed-executors.md#model-aliases).
+
 ## Manage an existing run's version
 
 By default a run stays on its starting version. `start_run.versionPolicy: "latest-compatible"` opts into compatibility checks before each new execution. Use `manage_run_version` with `request.action: "read"` for the current version, policy revision, blocker, and bounded change history. Use `"policy"` with `expectedRevision` to change that run's policy. Policy updates do not replace available or claimed assignments.

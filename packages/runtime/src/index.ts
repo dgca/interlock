@@ -1,6 +1,14 @@
 import { EventTriggers } from './eventTriggers.js';
 import { RunVersions } from './runVersions.js';
-import { modelReferences } from '@interlock/core';
+import {
+  modelReferences,
+  agentAliasReference,
+  selectsPreset,
+  usesDirectHarness,
+  eligiblePresetChoices,
+  inheritsWorkflowHarnessSettings,
+  presetPermissions,
+} from '@interlock/core';
 import { runDoctor } from './doctor.js';
 import { generateWorkflowReport } from './report.js';
 import type {
@@ -288,7 +296,11 @@ export class Engine {
     );
     this.prompts = new Prompts(store);
     this.variables = new Variables(store);
-    this.modelAliases = new ModelAliases(store);
+    this.modelAliases = new ModelAliases(store, (id) =>
+      this.executors.configuredPresetProfile(
+        this.executors.profiles().find((profile) => profile.id === id),
+      ),
+    );
     this.assignmentSizes = new AssignmentSizes(store, this.prompts, (work) =>
       this.describeWork(work),
     );
@@ -306,21 +318,30 @@ export class Engine {
       prompts: (definition, pins) => this.prompts.capture(definition, pins),
       validateCaptures: (run, definition) => {
         this.variables.capture(definition, run.variableCaptures ?? []);
+        const explicitPresets = new Set(
+          definition.nodes.flatMap((node) => {
+            if (node.kind !== 'agent' || !selectsPreset(node, definition))
+              return [];
+            const ref = agentAliasReference(node, definition);
+            return ref ? [ref] : [];
+          }),
+        );
         for (const ref of modelReferences(definition)) {
-          const inherited = run.modelAliasCaptures?.some(
-            (capture) =>
-              capture.aliasId === ref ||
-              capture.reference?.toLowerCase() === ref.toLowerCase() ||
-              capture.name.toLowerCase() === ref.toLowerCase(),
+          const inherited = this.modelAliases.capturedAlias(
+            run.modelAliasCaptures ?? [],
+            ref,
           );
+          if (inherited) continue;
           const originalLiteral =
             run.modelAliasCaptures !== undefined &&
             modelReferences(this.definition(run)).includes(ref) &&
-            !inherited;
+            run.ignoredWorkflowModelAlias !== ref;
           if (
-            !inherited &&
-            !originalLiteral &&
-            this.modelAliases.requirement(ref)
+            explicitPresets.has(ref) ||
+            (!originalLiteral &&
+              this.modelAliases.requirement(ref) &&
+              (run.ignoredWorkflowModelAlias !== ref ||
+                this.modelAliases.usesReference(definition, ref)))
           )
             throw new InterlockError(
               `Model alias capture ${ref} is missing. Start a new run to capture it.`,
@@ -550,6 +571,7 @@ export class Engine {
       },
       this.usage,
       this.trials,
+      this.modelAliases,
     );
     for (const id of this.trials.recover()) this.cancelTree(id);
     // Deterministic ownership survives a lost process outcome. Background supervisors
@@ -1508,25 +1530,35 @@ export class Engine {
           }
         : {}),
       ...(() => {
+        const parent =
+          continuedFrom ??
+          (sameWorkflowChild && parentRunId
+            ? this.run(parentRunId)
+            : undefined);
         const captures = this.options.substituteOperation
           ? []
-          : continuedFrom
-            ? this.modelAliases.capture(
-                definition,
-                continuedFrom.modelAliasCaptures ?? [],
-              )
-            : sameWorkflowChild && parentRunId
-              ? this.modelAliases.capture(
-                  definition,
-                  this.run(parentRunId).modelAliasCaptures ?? [],
-                )
-              : comparison
-                ? this.modelAliases.capture(
-                    definition,
-                    this.testbench.modelAliasesFor(comparison),
-                  )
-                : this.modelAliases.capture(definition);
-        return { modelAliasCaptures: captures };
+          : this.modelAliases.capture(
+              definition,
+              parent
+                ? (parent.modelAliasCaptures ?? [])
+                : comparison
+                  ? this.testbench.modelAliasesFor(comparison)
+                  : undefined,
+            );
+        const ref = definition.agentModel;
+        const ignored =
+          ref &&
+          (parent
+            ? parent.ignoredWorkflowModelAlias === ref
+            : !this.options.substituteOperation &&
+              !this.modelAliases.usesReference(definition, ref) &&
+              !this.modelAliases.capturedAlias(captures, ref) &&
+              !this.modelAliases.get(ref) &&
+              !!this.modelAliases.requirement(ref));
+        return {
+          modelAliasCaptures: captures,
+          ...(ignored ? { ignoredWorkflowModelAlias: ref } : {}),
+        };
       })(),
     };
     if (
@@ -2317,73 +2349,18 @@ export class Engine {
             cwdBlocked = undefined;
           }
         }
-        const targetModelOrAlias =
-          node.model ?? this.definition(run).agentModel;
-        const candidates = targetModelOrAlias
-          ? this.modelAliases.expandCandidates(
-              run.modelAliasCaptures,
-              targetModelOrAlias,
-            )
-          : [];
-        const profiles = this.executors.profiles();
-        const resolvedAliasCandidate =
-          candidates.find(
-            (candidate) =>
-              !candidate.profileId ||
-              profiles.some(
-                (profile) =>
-                  profile.id === candidate.profileId && profile.enabled,
-              ),
-          ) ?? candidates[0];
-        const selectedModel =
-          resolvedAliasCandidate?.model ?? targetModelOrAlias;
-        const selectedModelSource = node.model
-          ? ('node' as const)
-          : ('workflow' as const);
-        const effectiveExecutor =
-          node.executor === null
-            ? undefined
-            : (resolvedAliasCandidate?.profileId ??
-              node.executor ??
-              this.definition(run).executor);
-        const effectiveEffort =
-          resolvedAliasCandidate?.effort !== undefined
-            ? resolvedAliasCandidate.effort
-            : node.effort !== undefined
-              ? node.effort
-              : this.definition(run).agentEffort;
-        const modelAliasSelection = resolvedAliasCandidate?.modelAliasSelection;
+        const executorSettings = this.agentExecutorSettings(
+          run,
+          definition,
+          node,
+        );
+        if (!executorSettings) {
+          // The async version check will resume this same node execution.
+          if (starting) this.save(run);
+          return false;
+        }
         const work: WorkRequest = {
-          ...(node.executor !== null && modelAliasSelection
-            ? { modelAliasSelection }
-            : {}),
-          ...(node.executor !== null && selectedModel
-            ? {
-                executorModel: selectedModel,
-                executorModelSource: selectedModelSource,
-              }
-            : {}),
-          ...(effectiveExecutor
-            ? {
-                executor: effectiveExecutor,
-                ...(effectiveEffort !== undefined
-                  ? {
-                      executorEffort: effectiveEffort,
-                      executorEffortSource:
-                        node.effort !== undefined ||
-                        resolvedAliasCandidate?.effort !== undefined
-                          ? ('node' as const)
-                          : ('workflow' as const),
-                    }
-                  : {}),
-                ...(this.definition(run).agentPermissions
-                  ? {
-                      executorPermissions:
-                        this.definition(run).agentPermissions,
-                    }
-                  : {}),
-              }
-            : {}),
+          ...executorSettings,
           ...(resources ? { resources } : {}),
           ...(resolvedCwd ? { resolvedCwd } : {}),
           ...(cwdBlocked ? { cwdBlocked } : {}),
@@ -2992,6 +2969,181 @@ export class Engine {
     this.save(run);
     return true;
   }
+  private agentExecutorSettings(
+    run: Run,
+    definition: WorkflowDefinition,
+    node: Extract<WorkflowDefinition['nodes'][number], { kind: 'agent' }>,
+  ): Partial<WorkRequest> | undefined {
+    if (node.executor === null) return {};
+    const captures = run.modelAliasCaptures;
+    const legacy = node.executorMode === undefined;
+    const direct = usesDirectHarness(node, definition);
+    const target = node.model ?? definition.agentModel;
+    const aliasRef = agentAliasReference(node, definition);
+    const alias = aliasRef
+      ? captures
+        ? this.modelAliases.capturedAlias(captures, aliasRef)
+        : this.modelAliases.get(aliasRef)
+      : undefined;
+    const workflowRef = definition.agentModel;
+    const workflowHasPreset =
+      definition.agentModelMode === 'preset' ||
+      (definition.agentModelMode !== 'literal' &&
+        !!workflowRef &&
+        (run.ignoredWorkflowModelAlias === workflowRef ||
+          !!(captures
+            ? this.modelAliases.capturedAlias(captures, workflowRef)
+            : this.modelAliases.get(workflowRef))));
+    const preset =
+      !this.options.substituteOperation &&
+      (selectsPreset(node, definition) ||
+        (captures !== undefined && alias?.permissions !== undefined));
+    const profiles = this.executors.profiles();
+    let executor = node.executor ?? definition.executor;
+    let model = target;
+    let effort =
+      node.effort !== undefined ? node.effort : definition.agentEffort;
+    let effortSource: WorkRequest['executorEffortSource'] =
+      node.effort === undefined ? 'workflow' : 'node';
+    let permissions = definition.agentPermissions;
+    let permissionSource: WorkRequest['executorPermissionsSource'] = direct
+      ? permissions
+        ? 'workflow'
+        : 'harness'
+      : undefined;
+    let selection: WorkRequest['modelAliasSelection'];
+
+    if (direct && node.executor) {
+      if (
+        !inheritsWorkflowHarnessSettings(
+          node.executor,
+          definition.executor,
+          workflowHasPreset,
+        )
+      ) {
+        model = node.model;
+        effort = node.effort;
+      }
+    } else if (aliasRef) {
+      const candidates = this.modelAliases.expandCandidates(captures, aliasRef);
+      if (preset) {
+        const override = presetPermissions(
+          alias?.permissions,
+          definition.agentPermissions,
+        );
+        const binding = node.context.continuityGroup
+          ? this.contextGroups.describe(run.id, node.context.continuityGroup)
+              .session
+          : undefined;
+        const choices = alias && [
+          ...eligiblePresetChoices(
+            candidates,
+            executor,
+            (id) =>
+              !binding || binding.executorId === id
+                ? this.executors.configuredPresetProfile(
+                    profiles.find((profile) => profile.id === id),
+                  )
+                : undefined,
+            override,
+          ),
+        ];
+        // Probe in parallel but never select a fallback before its predecessors resolve.
+        const readiness =
+          choices &&
+          choices.map((choice) =>
+            this.executors.presetProfileReady(choice.profile),
+          );
+        const first =
+          readiness && readiness.findIndex((ready) => ready !== false);
+        if (
+          typeof first === 'number' &&
+          first >= 0 &&
+          readiness &&
+          readiness[first] === undefined
+        )
+          return undefined;
+        const choice =
+          choices && typeof first === 'number' && first >= 0
+            ? choices[first]
+            : undefined;
+        if (!choice)
+          throw new InterlockError(
+            `Agent preset "${aliasRef}" has no eligible harness for ${node.label}.`,
+          );
+        executor = choice.executor;
+        model = choice.candidate.model;
+        selection = choice.candidate.modelAliasSelection;
+        permissions = override ?? choice.profile.permissions;
+        permissionSource = !override
+          ? 'harness'
+          : override === definition.agentPermissions
+            ? 'workflow'
+            : 'preset';
+        if (node.effort === undefined) {
+          const inheritEffort =
+            node.model === undefined ||
+            inheritsWorkflowHarnessSettings(
+              choice.executor,
+              definition.executor,
+              workflowHasPreset,
+            );
+          effort =
+            choice.candidate.effort !== undefined
+              ? choice.candidate.effort
+              : inheritEffort
+                ? definition.agentEffort
+                : undefined;
+          effortSource =
+            choice.candidate.effort !== undefined && node.model
+              ? 'node'
+              : 'workflow';
+        }
+      } else if (legacy) {
+        // Existing definitions keep alias-first routing, including the stored fallback
+        // to the first candidate when a profile is disabled after run start.
+        const candidate =
+          candidates.find(
+            (candidate) =>
+              !candidate.profileId ||
+              profiles.some(
+                (profile) =>
+                  profile.id === candidate.profileId && profile.enabled,
+              ),
+          ) ?? candidates[0];
+        executor = candidate?.profileId ?? executor;
+        model = candidate?.model ?? model;
+        selection = candidate?.modelAliasSelection;
+        if (candidate?.effort !== undefined) {
+          effort = candidate.effort;
+          effortSource = 'node';
+        }
+      }
+    }
+
+    return {
+      ...(selection ? { modelAliasSelection: selection } : {}),
+      ...(model
+        ? {
+            executorModel: model,
+            executorModelSource: node.model ? 'node' : 'workflow',
+          }
+        : {}),
+      ...(executor
+        ? {
+            executor,
+            ...(effort !== undefined
+              ? { executorEffort: effort, executorEffortSource: effortSource }
+              : {}),
+            ...(permissions ? { executorPermissions: permissions } : {}),
+            ...(permissionSource
+              ? { executorPermissionsSource: permissionSource }
+              : {}),
+          }
+        : {}),
+    };
+  }
+
   pump() {
     if (this.stopped) return;
     this.store.transaction(() => {

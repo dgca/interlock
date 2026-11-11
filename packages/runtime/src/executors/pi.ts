@@ -17,7 +17,11 @@ import {
   type HarnessAdapter,
   type HarnessRun,
 } from './contracts.js';
-import { detectExecutable, JsonLinesProcess } from './process.js';
+import {
+  detectExecutable,
+  findExecutable,
+  JsonLinesProcess,
+} from './process.js';
 
 /** Loaded explicitly by Pi; no package imports or checkout-relative assets. */
 export function piPermissions(
@@ -45,6 +49,7 @@ const modelId = (model: any) => `${model.provider}/${model.id}`;
 
 export const piAdapter: HarnessAdapter = {
   id: 'pi',
+  available: (override) => !!findExecutable('pi', override),
   detect: (override) => detectExecutable('pi', override),
   async models(input) {
     const rpc = new JsonLinesProcess(

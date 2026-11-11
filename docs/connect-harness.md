@@ -117,7 +117,7 @@ The development stdio fallback uses absolute paths to the current Node installat
 
 ## Automatic execution
 
-To have Interlock launch installed Claude Code, Codex, or Pi itself, configure a local profile in **AI Settings → Harnesses**, enable it, then select its reference in the workflow or Agent Execution settings. This is separate from connecting your existing chat through MCP. Recognized early model refusals wait for a human replacement through `manage_executors` action `retry_model`; they do not automatically select another model. See [managed Agent execution](managed-executors.md).
+To have Interlock launch installed Claude Code, Codex, or Pi itself, set its defaults in **AI Settings → Harnesses**, enable it, then select the harness or an Agent preset in **Execution → Executor**. This is separate from connecting your existing chat through MCP. Recognized early model refusals wait for a human replacement through `manage_executors` action `retry_model`; they do not automatically select another model. See [managed Agent execution](managed-executors.md).
 
 ## Complete a run
 
@@ -300,7 +300,7 @@ The optional [improvement starter](workflow-improvement.md) uses a separate expe
 
 Use `list_workflows` with `source:"starters"` for bounded names, purposes, requirements and known existing copies. It creates nothing and returns no definitions. Import a choice with `import_workflows`, supplying `starterId` and a stable `requestId`. New copies are published without running; existing known copies are returned unchanged. `copy:true` deliberately adds another copy. Reuse the same key after an uncertain response; conflicting reuse or deleted results reject. Bundle replacement flags apply only to portable bundles. See [starter workflows](starter-workflows.md).
 
-Managed model/effort defaults resolve from Agent `model`/`effort`, workflow `agentModel`/`agentEffort`, then local profile defaults. Omission inherits; effort null explicitly uses native defaults. Discover supported effort levels with `manage_executors` action `models`. Unsupported explicit effort leaves work unclaimed. Connected-agent claims retain advisory tiers and native model settings; managed overrides do not control them. See [managed model selection](managed-executors.md#choose-a-model).
+Direct managed selections resolve model and effort from the Agent override, applicable workflow defaults, then the local harness. Omission inherits; effort null explicitly uses native defaults. Discover supported effort levels with `manage_executors` action `models`. Unsupported explicit effort leaves work unclaimed. Connected-agent claims retain advisory tiers and native model settings; managed overrides do not control them. See [managed model selection](managed-executors.md#choose-a-model).
 
 ## Reference workflow variables
 

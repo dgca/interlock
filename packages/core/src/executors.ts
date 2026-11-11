@@ -371,7 +371,7 @@ export interface ManagedExecution {
   attempt: number;
   state: ExecutorState;
   profile: ExecutorProfile;
-  permissionSource?: 'workflow' | 'harness';
+  permissionSource?: 'workflow' | 'harness' | 'preset';
   modelSource?: z.infer<typeof executorSettingSourceSchema>;
   effortSource?: z.infer<typeof executorSettingSourceSchema>;
   command: string;

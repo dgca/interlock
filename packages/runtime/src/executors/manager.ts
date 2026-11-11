@@ -51,6 +51,7 @@ type ManagedAssignment = Pick<
   | 'executorModelSource'
   | 'executorEffort'
   | 'executorPermissions'
+  | 'executorPermissionsSource'
 > & {
   context: Pick<WorkRequest['context'], 'continuityGroup' | 'tools' | 'skills'>;
   trialEnvironment?: { id: string };
@@ -69,6 +70,7 @@ import {
 } from './contracts.js';
 import {
   buildTokenMap,
+  customInvocation,
   interpolateTokens,
   executeCustomCommand,
 } from './custom.js';
@@ -116,7 +118,7 @@ interface Session {
   id: string;
   runId: string;
   profile: ExecutorProfile;
-  permissionSource?: 'workflow' | 'harness';
+  permissionSource?: ManagedExecution['permissionSource'];
   modelSource?: ManagedExecution['modelSource'];
   effortSource?: ManagedExecution['effortSource'];
   command: string;
@@ -160,6 +162,11 @@ export class ExecutorManager {
     string,
     { at: number; result: Awaited<ReturnType<HarnessAdapter['detect']>> }
   >();
+  private detectionRequests = new Map<
+    string,
+    ReturnType<HarnessAdapter['detect']>
+  >();
+  private presetChecks = new Set<string>();
   private claimTickets = new Map<
     string,
     {
@@ -244,6 +251,34 @@ export class ExecutorManager {
       ...defaults.filter((d) => !stored.some((p) => p.id === d.id)),
       ...stored,
     ];
+  }
+  configuredPresetProfile(profile: ExecutorProfile | undefined) {
+    if (
+      !profile?.enabled ||
+      (profile.harness === 'custom' && !customInvocation(profile))
+    )
+      return;
+    if (!this.running) return profile;
+    const adapter = this.adapters.get(profile.harness);
+    return adapter && adapter.available?.(profile.command) !== false
+      ? profile
+      : undefined;
+  }
+  /** Undefined means the version check is still pending. */
+  presetProfileReady(profile: ExecutorProfile): boolean | undefined {
+    if (!this.running) return true;
+    const key = this.detectionKey(profile);
+    const checked = this.currentDetection(key);
+    if (checked) return checked.status === 'detected';
+    if (!this.presetChecks.has(key)) {
+      this.presetChecks.add(key);
+      void this.detect(profile)
+        .then(() => {
+          this.presetChecks.delete(key);
+          this.engine.pump();
+        })
+        .catch(() => {});
+    }
   }
   settings() {
     const stored = this.engine.store.get<{
@@ -354,7 +389,16 @@ export class ExecutorManager {
     return Promise.all(
       this.profiles().map(async (profile) => ({
         ...profile,
-        detection: await this.detect(profile, refresh),
+        detection:
+          profile.harness === 'custom' && !customInvocation(profile)
+            ? {
+                status: 'unavailable' as const,
+                message:
+                  profile.transport === 'http'
+                    ? 'Set the integration URL.'
+                    : 'Set the integration command.',
+              }
+            : await this.detect(profile, refresh),
       })),
     );
   }
@@ -486,20 +530,44 @@ export class ExecutorManager {
       this.modelRequests.delete(key);
     }
   }
-  private async detect(profile: ExecutorProfile, refresh = false) {
-    const key = `${profile.id}:${profile.revision}:${profile.command ?? ''}`;
+  private detectionKey(profile: ExecutorProfile) {
+    return `${profile.id}:${profile.revision}:${profile.command ?? ''}`;
+  }
+  private currentDetection(key: string) {
     const cached = this.detections.get(key);
-    if (!refresh && cached && Date.now() - cached.at < 30000)
-      return cached.result;
+    return cached && Date.now() - cached.at < 30000 ? cached.result : undefined;
+  }
+  private async detect(
+    profile: ExecutorProfile,
+    refresh = false,
+  ): ReturnType<HarnessAdapter['detect']> {
+    const key = this.detectionKey(profile);
+    const cached = this.currentDetection(key);
+    if (!refresh && cached) return cached;
+    const pending = this.detectionRequests.get(key);
+    if (pending) return pending;
     const adapter = this.adapters.get(profile.harness);
-    const result = adapter
-      ? await adapter.detect(profile.command)
-      : {
-          status: 'unavailable' as const,
-          message: 'Harness execution is not attached to this server',
-        };
-    this.detections.set(key, { at: Date.now(), result });
-    return result;
+    const probe = Promise.resolve()
+      .then(() =>
+        adapter
+          ? adapter.detect(profile.command)
+          : {
+              status: 'unavailable' as const,
+              message: 'Harness execution is not attached to this server',
+            },
+      )
+      .catch((error: unknown) => ({
+        status: 'unavailable' as const,
+        message:
+          error instanceof Error ? error.message : 'Harness check failed',
+      }))
+      .then((result) => {
+        this.detections.set(key, { at: Date.now(), result });
+        return result;
+      })
+      .finally(() => this.detectionRequests.delete(key));
+    this.detectionRequests.set(key, probe);
+    return probe;
   }
   start(adapters: HarnessAdapter[]) {
     if (this.running) return;
@@ -703,6 +771,12 @@ export class ExecutorManager {
     };
   }
   private continuityProblem(work: ManagedAssignment, session: Session) {
+    if (
+      work.executorPermissionsSource !== undefined &&
+      work.executorPermissions !== undefined &&
+      work.executorPermissions !== session.profile.permissions
+    )
+      return 'This continuity group already uses different permissions. Use the same permissions or a separate continuity group.';
     if (
       work.executorModel !== undefined &&
       (session.requestedModel !== undefined ||
@@ -1189,7 +1263,14 @@ export class ExecutorManager {
           try {
             this.pendingLaunches.set(offered.id, configured.id);
             try {
-              await this.launchCustom(offered, configured, cwd, logicalSession);
+              await this.launchCustom(
+                offered,
+                offered.executorPermissionsSource !== undefined
+                  ? this.assignmentProfile(offered, configured)
+                  : configured,
+                cwd,
+                logicalSession,
+              );
             } finally {
               this.pendingLaunches.delete(offered.id);
             }
@@ -1255,6 +1336,7 @@ export class ExecutorManager {
         const permissionSource =
           priorSession?.permissionSource ??
           previous?.permissionSource ??
+          offered.executorPermissionsSource ??
           (offered.executorPermissions
             ? ('workflow' as const)
             : ('harness' as const));
@@ -1546,7 +1628,7 @@ export class ExecutorManager {
       attempt: work.attempt,
       state: 'starting',
       profile,
-      permissionSource: 'harness',
+      permissionSource: work.executorPermissionsSource ?? 'harness',
       command: profile.launchCommand || profile.command || 'launch',
       cwd,
       sessionId: logicalSession,
@@ -1567,13 +1649,14 @@ export class ExecutorManager {
     let remoteResumeCommand: string | undefined;
     let remoteDeepLink: string | undefined;
 
+    const invocation = customInvocation(profile, 'launcher');
     if (profile.transport === 'http') {
-      if (!profile.launchUrl) {
+      if (!invocation) {
         throw new Error(
           `Custom profile "${profile.id}" in launcher HTTP mode requires launchUrl`,
         );
       }
-      const url = interpolateTokens(profile.launchUrl, tokenMap);
+      const url = interpolateTokens(invocation, tokenMap);
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         Accept: 'application/json',
@@ -1599,14 +1682,13 @@ export class ExecutorManager {
       remoteResumeCommand = (data as any)?.resumeCommand;
       remoteDeepLink = (data as any)?.deepLink;
     } else {
-      const cmd = profile.launchCommand || profile.command;
-      if (!cmd) {
+      if (!invocation) {
         throw new Error(
           `Custom profile "${profile.id}" in launcher subprocess mode requires launchCommand`,
         );
       }
       const output = await this.runCustomCommand({
-        command: cmd,
+        command: invocation,
         cwd,
         env: profile.env,
         tokens: tokenMap,

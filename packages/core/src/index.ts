@@ -396,14 +396,11 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     executor: executorReferenceSchema
       .nullable()
       .optional()
-      .describe(
-        'Local executor profile override. Omit to inherit the workflow default; null keeps connected-agent execution.',
-      ),
+      .describe('Profile ID. Omit to inherit; null selects a connected agent.'),
+    executorMode: z.enum(['harness', 'preset']).optional(),
     model: executorModelSchema
       .optional()
-      .describe(
-        'Managed model override; omission inherits workflow/harness defaults. Connected agents ignore it.',
-      ),
+      .describe('Model ID or preset reference. Omit to inherit.'),
     effort: executorEffortSchema
       .nullable()
       .optional()
@@ -609,6 +606,7 @@ export const definitionSchema = z.object({
     .describe(
       'Managed model ID. Node model overrides it; omission inherits harness defaults. Connected agents choose their own model. Refusals require a replacement; no automatic substitution.',
     ),
+  agentModelMode: z.enum(['literal', 'preset']).optional(),
   agentEffort: executorEffortSchema
     .nullable()
     .optional()
@@ -622,9 +620,7 @@ export const definitionSchema = z.object({
     ),
   executor: executorReferenceSchema
     .optional()
-    .describe(
-      'Default local executor profile for Agent nodes. Omission preserves connected-agent execution. Configuration and credentials stay local.',
-    ),
+    .describe('Default local profile ID for Agent nodes.'),
   continueOnMissingResult: continueOnMissingResultSchema.optional(),
   transientRetry: transientRetrySchema.optional(),
   sessionNameTemplate: z
@@ -818,6 +814,7 @@ export interface Run {
   promptSnapshots?: import('./prompts.js').PromptSnapshot[];
   variableCaptures?: import('./variables.js').VariableCapture[];
   modelAliasCaptures?: import('./modelAliases.js').ModelAliasCapture[];
+  ignoredWorkflowModelAlias?: string;
 }
 export type RunSummary = Pick<
   Run,
@@ -865,6 +862,7 @@ export interface WorkRequest {
   idleNudge?: { attempt: number; activityAt: string; at: string };
   executor?: string;
   executorPermissions?: import('./executors.js').ExecutorPermissionMode;
+  executorPermissionsSource?: import('./executors.js').ManagedExecution['permissionSource'];
   modelAliasSelection?: import('./modelAliases.js').ModelAliasSelection;
   executorModel?: string;
   executorModelSource?: 'node' | 'workflow';
@@ -1115,6 +1113,11 @@ export function hasTimeoutRoute(node: WorkflowNode): boolean {
 export function validateDefinition(input: unknown): WorkflowDefinition {
   const d = definitionSchema.parse(input);
   validateVariableReferences(d);
+  if (d.agentModelMode && !d.agentModel)
+    throw new InterlockError(
+      'Select an Agent model or preset before setting agentModelMode',
+    );
+
   for (const node of d.nodes)
     if (
       node.kind === 'agent' &&
@@ -1136,6 +1139,17 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
     if (node.kind === 'exit' && node.continueAsNew && node.batchId)
       throw new InterlockError('Continue as new is unavailable inside a Batch');
     if (node.kind !== 'agent') continue;
+    if (node.executorMode === 'harness' && !node.executor)
+      throw new InterlockError(
+        `${node.label}: select an executor for harness mode`,
+      );
+    if (
+      node.executorMode === 'preset' &&
+      (!node.model || node.executor !== undefined)
+    )
+      throw new InterlockError(
+        `${node.label}: preset mode requires a model alias and no executor override`,
+      );
     const problems = resultRuleProblems(
       node.resultRules,
       node.inputSchema,

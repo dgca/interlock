@@ -1020,3 +1020,24 @@ it.each([
     Object.keys(settings),
   );
 });
+
+it('edits the workflow model mode and clears it with the model', () => {
+  const original = { ...blankDefinition(), agentModel: 'Deep review' };
+  const selected = applyWorkflowEdits(original, [
+    { op: 'update_settings', set: { agentModelMode: 'preset' } },
+  ]);
+  if (!selected.definition) throw Error(JSON.stringify(selected.diagnostics));
+  expect(selected.definition).toMatchObject({
+    agentModel: 'Deep review',
+    agentModelMode: 'preset',
+  });
+  expect(draftChanges(original, selected.definition).settings).toEqual([
+    'agentModelMode',
+  ]);
+  const cleared = applyWorkflowEdits(selected.definition, [
+    { op: 'update_settings', unset: ['agentModel'] },
+  ]);
+  expect(cleared.definition).toBeDefined();
+  expect(cleared.definition).not.toHaveProperty('agentModel');
+  expect(cleared.definition).not.toHaveProperty('agentModelMode');
+});
