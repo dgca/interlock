@@ -187,6 +187,8 @@ Script, Fetch and waited Workflow nodes can also opt into [failure routing](fail
 
 Use a `wait` node for a durable pause, or set `unclaimedTimeoutMs` on an Agent and connect both its `default` and `timeout` routes. Both create and update tools describe the same timer fields on their definition parameters. See [timer configuration](timers.md) for bounds, defaults, and examples.
 
+For a person, configure `kind: "input"` with `humanInput` and its `answer` contract. Discover individual requests through `workflow_requests` and use the returned target for reads and answers. See [Answer a workflow request](agent-workflows.md#answer-a-workflow-request).
+
 Use `kind: "input"` when a workflow waits for JSON from an external caller. Its output contract validates the answer. The integration submits and explicitly accepts a revision through `external_input`. See [Wait for an external answer](external-input.md).
 
 Read `get_workflow` before editing. Pass the entire updated definition as `draft` with the current `draftRevision`. Removing `unclaimedTimeoutMs` in JSON does not remove edges automatically; remove its `timeout` edge too. Incomplete routes can be saved, but they block publication. Publish a new version to apply changes to future runs; existing runs keep their original configuration and deadlines.

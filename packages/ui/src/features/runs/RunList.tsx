@@ -32,6 +32,7 @@ import { errorMessage } from '../../lib/api';
 import { RunListBoard, type BoardPreview } from './RunListBoard';
 import { RunTags } from './RunTags';
 import { RunTagFilter, AppliedRunTagFilters } from './RunTagFilter';
+import { runDisplayTitle, type RequestTarget } from '@interlock/core';
 
 const pageSize = 100;
 
@@ -40,6 +41,7 @@ export function RunList({
   offset,
   onOffsetChange,
   onOpen,
+  onRequest,
   tab,
   onTabChange,
   workflowId,
@@ -58,6 +60,7 @@ export function RunList({
   tab: RunTab;
   onTabChange: (tab: RunTab) => void;
   onOpen: (id: string, executionId?: string) => void;
+  onRequest?: (target: RequestTarget) => void;
   workflowId?: string;
   act?: Action;
   workflows: { id: string; name: string }[];
@@ -231,6 +234,7 @@ export function RunList({
           page={page}
           preview={preview}
           onOpen={onOpen}
+          onRequest={onRequest}
           onTabChange={showListTab}
           retry={() => {
             void attention.refetch();
@@ -250,13 +254,17 @@ export function RunList({
                 key={r.id}
                 onClick={() => {
                   const entry = r.attention;
-                  if (entry)
+                  if (r.request && onRequest) onRequest(r.request);
+                  else if (entry)
                     onOpen(entry.target.runId, entry.target.executionId);
                   else onOpen(r.id);
                 }}
               >
                 <span className={classes.identity}>
-                  <strong>{r.workflowName}</strong>
+                  <strong>{runDisplayTitle(r)}</strong>
+                  {(r.title || r.externalTask?.title) && (
+                    <small>{r.workflowName}</small>
+                  )}
                   <small>
                     v{r.version} · {r.id.slice(0, 8)}
                   </small>

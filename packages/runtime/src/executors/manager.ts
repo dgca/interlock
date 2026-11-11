@@ -2853,6 +2853,7 @@ export class ExecutorManager {
     const request: ExecutorRequest = {
       ...input,
       id: randomUUID(),
+      createdAt: new Date().toISOString(),
       state: 'pending',
     };
     job.record.requests.push(request);
@@ -3053,6 +3054,7 @@ export class ExecutorManager {
       attemptsCollection,
       executionId,
     );
+    if (record?.reconciledAt) return { applied: false };
     const endedAttention =
       record?.state === 'needs_human' &&
       !!record.endedAt &&
@@ -3082,6 +3084,7 @@ export class ExecutorManager {
         actor: 'managed-executor-reconciliation',
       });
     record.state = 'failed';
+    record.reconciledAt = new Date().toISOString();
     this.write(record);
     const launcher = this.launchedWork.get(work.id);
     if (launcher) {

@@ -65,6 +65,9 @@ export class Continuation {
       waiting: snapshot.run.waiting,
       actor: snapshot.run.actor,
       ...(snapshot.run.tags !== undefined ? { tags: snapshot.run.tags } : {}),
+      ...(snapshot.run.title !== undefined
+        ? { title: snapshot.run.title }
+        : {}),
       ...(snapshot.run.startRequestId !== undefined
         ? { startRequestId: snapshot.run.startRequestId }
         : {}),
@@ -280,6 +283,7 @@ export class Continuation {
                   waitingSince: execution.startedAt,
                   revision: execution.externalInput?.revision ?? 0,
                   submittedAt: execution.externalInput?.submittedAt,
+                  ...(execution.humanInput ? { humanRequest: true } : {}),
                 },
               }
             : {}),
@@ -527,9 +531,15 @@ export class Continuation {
                     ? 'wait_for_worker'
                     : work.some((w) => w.status === 'held')
                       ? 'inspect_hold'
-                      : ['completed', 'cancelled'].includes(requested.status)
-                        ? 'inspect_result'
-                        : 'wait_for_change',
+                      : blockers.some(
+                            (blocker) =>
+                              blocker.lifecycleRunId === id &&
+                              blocker.externalInput?.humanRequest,
+                          )
+                        ? 'inspect_requests'
+                        : ['completed', 'cancelled'].includes(requested.status)
+                          ? 'inspect_result'
+                          : 'wait_for_change',
     };
   }
 

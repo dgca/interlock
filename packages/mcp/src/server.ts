@@ -19,6 +19,7 @@ import { TRPCClientError } from '@interlock/client';
 import {
   simulationToolSchema,
   externalInputRequestSchema,
+  workflowRequestSchema,
   workHoldRequestSchema,
   contextGroupQuerySchema,
   contextHandoffSchema,
@@ -91,7 +92,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
       instructions:
         'report_usage is optional and never renews claims or restores result-submission rights. Report measured cumulative figures only; leave unavailable usage unknown. get_run_usage returns bounded totals and attribution. ' +
         'For workflow node rules and examples, see the [workflow authoring guide](https://github.com/dgca/interlock/blob/main/docs/agent-workflows.md#discover-schemas-and-assignments). ' +
-        'Run projections share stage, waiting:{kind,detail,since} and actor:agent|person|engine. Stage uses the deepest active waited child; detached trees are independent. Person means every active branch needs intervention. Automated external-input callers use agent. Poll lastCheck output is JSON text capped at 512 characters with truncated; since is a persisted wait-start time. Pause holds gate boundaries and new claims without interrupting in-flight work; manage_pause lists applicable holds and releases one exact ID. Queued starts expose admission_queue without assignments. ' +
+        'Run projections share stage, waiting:{kind,detail,since} and actor:agent|person|engine. Stage uses the deepest active waited child; detached trees are independent. Person means every active branch needs intervention. Automated external-input callers use agent. Poll lastCheck output is JSON text capped at 512 characters with truncated; since is a persisted wait-start time. Pause holds gate boundaries and new claims without interrupting in-flight work; manage_pause lists applicable holds and releases one exact ID. Queued starts expose admission_queue without assignments. Use workflow_requests for individual attention across branches. ' +
         'Successful tools return structuredContent alongside JSON text. Object results return directly; arrays wrap as {items}, scalar/null as {value}. JSON text retains original shape. Discover workflows with compact list_workflows summaries, then get_workflow for one full draft, or includeDraft:true for the legacy full list. ' +
         'Preview obsolete-version cleanup with preview_version_deletion, save an export backup, show affected history and blockers, and obtain human agreement before delete_workflow_versions. Ordinary imports skip deleted versions; explicit restoreDeletedVersions accepts original definitions only with ownership and dependency validation. Retained version numbers may have gaps. Missing historical definitions do not remove run records. ' +
         'Use preview_workflow_ownership then set_workflow_owner for identity-preserving adoption, reparenting or release. Only the proposed owner may reference a child in drafts and retained versions; use explicit cleanup for obsolete foreign callers. Generic updates and forced imports cannot change ownership. ' +
@@ -348,7 +349,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'manage_executors',
-    'Manage local automatic Agents: Claude Code/Codex/Pi or custom direct/launcher harnesses. Subprocess command tokens use shell environment expansion; double-quote values passed as arguments. settings reads concurrency/allowedRoots; save_settings needs expectedRevision. Profile concurrency:number|null, omitted/null uncapped. Shared/profile caps include pending tickets; skip saturated profiles. list detects harnesses and flags missing integration commands/URLs; models needs profileId. save needs expectedRevision, initially 0. Profiles hold local executable/workdir/allowedRoots/model defaults, disabled initially. Workflow executor selects profile; Agent executor:null opts out. inspect: compact attempt/history/logs/human requests. transcript: executionId, before or after sequence, limit default50/max100, response max256KiB. Capture is capped at32KiB/entry, 2000 entries/10MiB per execution and256MiB library; 14-day ended-at expiry; gaps are explicit. message: active executionId, unique requestId, message1..4000 characters, optional operator; IDs/labels containing known protected values reject before dispatch. Same ID/content recovers receipt without resending; conflicts reject. receipt: executionId/requestId inspects pending/accepted/failed/unknown; unknown delivery never auto-resends. Accepted means harness accepted input. Unsupported channels reject. respond: exact IDs/decisions. retry_model: model+needs_model executionId. stop interrupts. reconcile requires confirmStopped:true for interrupted attempts or ended needs_human with no pending requests. Jobs/stops must settle; active human requests reject. Deadline retries stay held until reconciliation; spent tickets cannot reclaim. Terminal attempts may need resource cleanup.',
+    'Manage local automatic Agents: Claude Code/Codex/Pi or custom direct/launcher harnesses. Subprocess command tokens use shell environment expansion; double-quote values passed as arguments. settings reads concurrency/allowedRoots; save_settings needs expectedRevision. Profile concurrency:number|null, omitted/null uncapped. Shared/profile caps include pending tickets; skip saturated profiles. list detects harnesses and flags missing integration commands/URLs; models needs profileId. save needs expectedRevision, initially 0. Profiles hold local executable/workdir/allowedRoots/model defaults, disabled initially. Workflow executor selects profile; Agent executor:null opts out. inspect: compact attempt/history/logs/human requests. transcript: executionId, before or after sequence, limit default50/max100, response max256KiB. Capture is capped at32KiB/entry, 2000 entries/10MiB per execution and256MiB library; 14-day ended-at expiry; gaps are explicit. message: active executionId, unique requestId, message1..4000 characters, optional operator; IDs/labels containing known protected values reject before dispatch. Same ID/content recovers receipt without resending; conflicts reject. receipt: executionId/requestId inspects pending/accepted/failed/unknown; unknown delivery never auto-resends. Accepted means harness accepted input. Unsupported channels reject. Use workflow_requests to find individual requests. respond: exact managed execution ID and request ID. retry_model: model+needs_model executionId. stop interrupts. reconcile requires confirmStopped:true for interrupted attempts or ended needs_human with no pending requests. Jobs/stops must settle; active human requests reject. Deadline retries stay held until reconciliation; spent tickets cannot reclaim. Terminal attempts may need resource cleanup.',
     { request: executorOperationSchema },
     ({ request }) =>
       client.executors.manage(
@@ -386,8 +387,21 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     (input) => client.runs.usage(input),
   );
   tool(
+    'workflow_requests',
+    'Find individual Human input, managed-agent, recovery, and stall requests, including runs without boards. list filters by boardId or runId and returns oldest first, exact total and nextOffset (25 default, 100 max). get takes the exact returned target and loads captured context, state and answer. For Human input, answer uses a stable submissionId and current expectedRevision, initially 0. Repeat identical arguments after uncertain delivery. A saved answer under a pause or hold stays open; release an acceptance hold through external_input using holding.runId/revision, then accept the saved revision. Use get.actions to select the operation. For managed requests use manage_executors with managedExecutionId and requestId when needed. For resource or Script recovery use manage_work_resources or manage_script with the exact returned target. Inspect stalls in the run.',
+    { request: workflowRequestSchema },
+    ({ request }) => {
+      if (request.action === 'list') {
+        const { action: _action, ...query } = request;
+        return client.requests.list(query);
+      }
+      if (request.action === 'get') return client.requests.get(request.target);
+      return client.requests.answer({ request, source: 'mcp' });
+    },
+  );
+  tool(
     'external_input',
-    'Inspect/submit/accept pending External input, or hold/release acceptance for a run and attached descendants. Briefing input blockers identify runId/executionId even when paused. Status without executionId reads holds; includeValue with executionId reads pending JSON. Submit stable requestId, optional expectedRevision initially 0; identical retries recover receipts. Accept the exact current revision. Run input holds and library/workflow pauses block acceptance; status returns 20 applicable pauses plus pauseCount, manage_pause reads more. Submissions can replace values; release never accepts. Detached runs have independent holds.',
+    'Inspect, submit, or accept integration-owned External input. Use workflow_requests to answer Human input. Hold/release applies to both kinds across the run and attached descendants. Briefing input blockers identify runId/executionId even when paused. Status without executionId reads holds; includeValue with executionId reads pending JSON. Submit stable requestId, optional expectedRevision initially 0; identical retries recover receipts. Accept the exact current revision. Run input holds and library/workflow pauses block acceptance; status returns 20 applicable pauses plus pauseCount, manage_pause reads more. Submissions can replace values; release never accepts. Detached runs have independent holds.',
     { request: externalInputRequestSchema },
     ({ request }) =>
       request.action === 'status'
@@ -396,7 +410,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'get_run_briefing',
-    'Read bounded stage/waiting/actor,tags,lifecycle/independent progress,work/blockers,failures,deadlines/result refs. parallels counts named branch runs per group execution; descendants identify parallelBranch and parentExecutionId. Lists20/max100,total/truncated; no payloads/tokens. Queued admission has no work. Follow pause/hold/budget/resource/cwd recovery. Quiescence includes resource-free revoked Agents; reconcile exact stopped attempts via manage_work_resources. Resource blockers name executions/owners; queueing excludes timeouts. Input blockers identify execution/revision. Poll lastCheck caps512 chars; poll_check/poll_timeout deadlines. manage_stalls and manage_run_version read details. Empty work is not completion.',
+    'Read bounded stage/waiting/actor,tags,lifecycle/independent progress,work/blockers,failures,deadlines/result refs. parallels counts named branch runs per group execution; descendants identify parallelBranch and parentExecutionId. Lists20/max100,total/truncated; no payloads/tokens. Queued admission has no work. Follow pause/hold/budget/resource/cwd recovery. Quiescence includes resource-free revoked Agents; reconcile exact stopped attempts via manage_work_resources. Resource blockers name executions/owners; queueing excludes timeouts. Input blockers identify execution/revision. humanRequest:true points to workflow_requests. Poll lastCheck caps512 chars; poll_check/poll_timeout deadlines. manage_stalls and manage_run_version read details. Empty work is not completion.',
     briefingQuerySchema.shape,
     (input) => client.runs.briefing(input),
   );
@@ -638,7 +652,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'start_run',
-    'Start a retained published version, latest if omitted. Missing required aliases or presets without eligible harnesses can block a start; repair the configuration and start again. requestId recovers the original run read-only; keep creation arguments identical. Tags inherit through children/chains. Capacity/after gates may return queued without assignments; dependencies require success, priority descends/FIFO ties. Summary supplies runId/cursor/next work; ok means accepted, not completed. Continue via briefing/waits/claims. full returns inspection; detached work may outlive parents.',
+    'Start a retained published version, latest if omitted. Missing required aliases or presets without eligible harnesses can block a start; repair the configuration and start again. requestId recovers the original run read-only; keep creation arguments identical. Title is optional and survives continuation. Tags inherit through children/chains. Capacity/after gates may return queued without assignments; dependencies require success, priority descends/FIFO ties. Summary supplies runId/cursor/next work; ok means accepted, not completed. Continue via briefing/waits/claims. full returns inspection; detached work may outlive parents.',
     {
       detail: mcpMutationDetailSchema,
       limit: continuationLimitSchema,

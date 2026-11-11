@@ -266,6 +266,12 @@ Successors inherit the predecessor's current version, version policy, and prompt
 
 The engine yields after one rollover per chain per pump and reads only active run documents for execution. This avoids deserializing completed execution histories every tick, while SQLite scans and retained usage/budget aggregation still grow with archive size. See [continue as new](continue-as-new.md) for bounds and operations.
 
+## Workflow Boards
+
+Board membership is workflow metadata outside the draft and published definitions. Bound nodes retain a column ID. The runtime records that ID when a step starts. Storage selects the last matching entry in persisted event order across the root lifecycle, including waited descendants and continue-as-new members. Detached runs start separate lifecycles for board placement. The existing active-stage projection remains available in run summaries.
+
+Human input uses the External input wait with a per-visit capture of the question, context, evidence, and answer contract. The shared response transaction checks the visit and revision, validates the answer, and records the receipt. It accepts the answer in that transaction when no pause or hold applies. A held answer requires a separate acceptance after release. Only the request targeted by the answer resolves.
+
 ## External input
 
 An External input node waits on its execution ID. The runtime validates submissions against the node's output contract and retains a pending value and request receipts in run-owned records. Explicit acceptance persists the accepted revision, completed execution, and next workflow position in one transaction. The engine pumps downstream work after that transaction commits.

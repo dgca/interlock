@@ -36,6 +36,7 @@ function leaseDeadline(value: unknown): number {
 let testbenchDiscovery: unknown;
 let scheduleDiscovery: unknown;
 let resourceDiscovery: unknown;
+let requestDiscovery: unknown;
 
 it.each(['stdio', 'http'])(
   'completes a workflow through MCP %s and the shared HTTP and SQLite interfaces',
@@ -2432,6 +2433,94 @@ it.each(['stdio', 'http'])(
       expect(JSON.stringify(completedApproval.output)).toBe(
         JSON.stringify(approvalValue),
       );
+      const requestTool = tools.find(
+        (tool) => tool.name === 'workflow_requests',
+      )!;
+      expect(requestTool).toBeDefined();
+      if (requestDiscovery) expect(requestTool).toEqual(requestDiscovery);
+      requestDiscovery = requestTool;
+      const humanDefinition = blankDefinition();
+      humanDefinition.nodes[1] = nodeSchema.parse({
+        id: 'agent',
+        kind: 'input',
+        label: 'Plan review',
+        humanInput: {
+          question: 'Can implementation proceed?',
+          evidence: { title: 'Plan', contentPath: 'plan' },
+          answer: {
+            kind: 'choice',
+            choices: [{ label: 'Approve', value: 'approve' }],
+          },
+        },
+      });
+      const humanDraft = { name: 'Human review', definition: humanDefinition };
+      assertContract(
+        tools.find((tool) => tool.name === 'create_workflow')!.inputSchema,
+        jsonSchema.parse(humanDraft),
+        'Human input definition',
+      );
+      const humanWorkflow = await call('create_workflow', humanDraft);
+      await call('publish_workflow', { id: humanWorkflow.id });
+      const humanRun = await call('start_run', {
+        workflowId: humanWorkflow.id,
+        title: 'Review transport contract',
+        input: { plan: 'Captured migration' },
+      });
+      expect(humanRun).toMatchObject({
+        title: 'Review transport contract',
+        next: 'inspect_requests',
+        nextCall: {
+          tool: 'workflow_requests',
+          arguments: { request: { action: 'list', runId: humanRun.runId } },
+        },
+      });
+      const list = await call('workflow_requests', {
+        request: { action: 'list', runId: humanRun.runId, limit: 1 },
+      });
+      expect(list).toMatchObject({
+        total: 1,
+        nextOffset: null,
+        items: [{ label: 'Plan review' }],
+      });
+      expect(JSON.stringify(list)).not.toContain('Captured migration');
+      const target = list.items[0].target;
+      const detail = await call('workflow_requests', {
+        request: { action: 'get', target },
+      });
+      expect(detail).toMatchObject({
+        evidence: { content: 'Captured migration' },
+        state: 'open',
+        actions: ['answer'],
+      });
+      const response = {
+        action: 'answer',
+        target,
+        submissionId: 'transport-answer',
+        expectedRevision: 0,
+        value: { choice: 'approve' },
+      };
+      expect(() =>
+        assertContract(
+          requestTool.inputSchema,
+          { request: response },
+          'workflow requests',
+        ),
+      ).not.toThrow();
+      const accepted = await call('workflow_requests', { request: response });
+      expect(accepted).toHaveProperty('acceptedAt');
+      expect(await call('workflow_requests', { request: response })).toEqual(
+        accepted,
+      );
+      expect(await api.requests.get.query(target)).toMatchObject({
+        state: 'accepted',
+        source: 'mcp',
+        actions: [],
+      });
+      expect(
+        await call('workflow_requests', {
+          request: { action: 'list', runId: humanRun.runId },
+        }),
+      ).toMatchObject({ total: 0 });
       const boundDefinition = blankDefinition();
       boundDefinition.nodes.splice(
         2,

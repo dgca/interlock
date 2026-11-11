@@ -89,6 +89,10 @@ export * from './resultValidation.js';
 export * from './resultRules.js';
 export * from './workHolds.js';
 export * from './externalInput.js';
+export * from './workflowBoards.js';
+export * from './humanInput.js';
+export * from './requests.js';
+import { humanInputSchema } from './humanInput.js';
 import { resultRulesSchema, resultRuleProblems } from './resultRules.js';
 export * from './assignmentSize.js';
 export * from './contextContinuity.js';
@@ -329,17 +333,9 @@ export const routingSchema = z.object({
   default: z.string().optional(),
 });
 export const resourceBindingsSchema = z.array(valueBindingSchema).max(8);
-const nodeBase = {
+const nodeData = {
   runStallMs: stallFields.runStallMs,
-  id: z.string().min(1),
-  label: z.string().min(1),
-  stage: z.string().trim().min(1).max(200).optional(),
-  batchId: z.string().min(1).optional(),
-  parallelId: z.string().min(1).optional(),
-  parallelBranchId: z.string().min(1).optional(),
   position: z.object({ x: z.number(), y: z.number() }).default({ x: 0, y: 0 }),
-  inputSchema: contractSchema.default({}),
-  outputSchema: contractSchema.default({}),
   inputBindings: valueBindingsSchema
     .optional()
     .describe(
@@ -356,6 +352,20 @@ const nodeBase = {
       'Match the validated raw result before outputBindings on Agent, Script, Fetch or waited Workflow. First match wins; missing path or no match without default fails. Failure/timeout remain separate.',
     ),
 };
+// Inline simple fields in discovered node variants. Repeated long JSON
+// pointers are larger than these field schemas.
+const nodeBase = () => ({
+  ...nodeData,
+  id: z.string().min(1),
+  label: z.string().min(1),
+  stage: z.string().trim().min(1).max(200).optional(),
+  boardColumnId: z.string().min(1).max(80).optional(),
+  batchId: z.string().min(1).optional(),
+  parallelId: z.string().min(1).optional(),
+  parallelBranchId: z.string().min(1).optional(),
+  inputSchema: z.record(z.unknown()).default({}),
+  outputSchema: z.record(z.unknown()).default({}),
+});
 export const MAX_SCRIPT_TIMEOUT_MS = 3_600_000;
 export const DEFAULT_BATCH_MAX_ITEMS = 200;
 export const MAX_BATCH_ITEMS = 10_000;
@@ -367,9 +377,9 @@ const onFailureSchema = z
   );
 
 const nodeShapeSchema = z.discriminatedUnion('kind', [
-  z.object({ ...nodeBase, kind: z.literal('entry') }),
+  z.object({ ...nodeBase(), kind: z.literal('entry') }),
   z.object({
-    ...nodeBase,
+    ...nodeBase(),
     kind: z.literal('exit'),
     continueAsNew: continueAsNewSchema
       .optional()
@@ -378,7 +388,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
       ),
   }),
   z.object({
-    ...nodeBase,
+    ...nodeBase(),
     kind: z.literal('agent'),
     unclaimedStallMs: stallFields.unclaimedStallMs,
     claimedIdleStallMs: stallFields.claimedIdleStallMs,
@@ -452,7 +462,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     transientRetry: transientRetrySchema.optional(),
   }),
   z.object({
-    ...nodeBase,
+    ...nodeBase(),
     kind: z.literal('script'),
     resources: resourceBindingsSchema.optional(),
     cwd: cwdBindingSchema
@@ -479,7 +489,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
       .default(60_000),
   }),
   z.object({
-    ...nodeBase,
+    ...nodeBase(),
     kind: z.literal('fetch'),
     resources: resourceBindingsSchema.optional(),
     onFailure: onFailureSchema,
@@ -495,12 +505,13 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     ...fetchRequestFields,
   }),
   z.object({
-    ...nodeBase,
+    ...nodeBase(),
     kind: z.literal('input'),
     humanWaitStallMs: stallFields.humanWaitStallMs,
+    humanInput: humanInputSchema.optional(),
   }),
   z.object({
-    ...nodeBase,
+    ...nodeBase(),
     kind: z.literal('wait'),
     resources: resourceBindingsSchema.optional(),
     timing: z
@@ -527,20 +538,20 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
       .default({ kind: 'duration', ms: 60_000 }),
   }),
   z.object({
-    ...nodeBase,
+    ...nodeBase(),
     kind: z.literal('condition'),
     path: z.string(),
     equals: jsonSchema,
   }),
   z.object({
-    ...nodeBase,
+    ...nodeBase(),
     kind: z.literal('switch'),
     path: z.string(),
     cases: z.array(z.object({ port: z.string(), equals: jsonSchema })),
     default: z.string().optional(),
   }),
   z.object({
-    ...nodeBase,
+    ...nodeBase(),
     kind: z.literal('workflow'),
     onFailure: onFailureSchema.describe(
       'Waited calls only. route requires failed and all success edges. Sends {input,error:{nodeId,executionId,kind:workflow,category:child|output,message,child:{runId,workflowId,version,executionId}},output} for child or output-contract failure. Input/dispatch, cancellation and persistence stay terminal. No automatic retry.',
@@ -550,7 +561,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     version: z.number().int().positive().nullable(),
   }),
   z.object({
-    ...nodeBase,
+    ...nodeBase(),
     kind: z.literal('batch'),
     itemsPath: z.string().default(''),
     concurrency: z.number().int().min(1).max(50).default(5),
@@ -559,7 +570,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     failurePolicy: z.enum(['all', 'collect']).default('all'),
   }),
   z.object({
-    ...nodeBase,
+    ...nodeBase(),
     kind: z.literal('parallel'),
     branches: z
       .array(
@@ -679,6 +690,7 @@ export type WorkflowEdge = WorkflowDefinition['edges'][number];
 export type ContextPolicy = z.infer<typeof contextPolicySchema>;
 export interface Workflow {
   id: string;
+  boardId?: string;
   ownerWorkflowId?: string | null;
   name: string;
   description: string;
@@ -749,6 +761,7 @@ export interface NodeExecution {
   request?: FetchRequest;
   background?: import('./backgroundScripts.js').BackgroundScript;
   externalInput?: import('./externalInput.js').ExternalInputMetadata;
+  humanInput?: import('./humanInput.js').HumanInputCapture;
   resumeAt?: string;
   /** Polling Wait: when the next check runs, the deadline, and the latest check. */
   nextCheckAt?: string;
@@ -780,6 +793,7 @@ export interface Run {
   };
   admission?: import('./runStarts.js').RunAdmission;
   startRequestId?: string;
+  title?: string;
   externalTask?: import('./runStarts.js').ExternalTask;
   tags?: import('./runTags.js').RunTags;
   chain?: import('./runChains.js').RunChainLink;
@@ -831,6 +845,7 @@ export type RunSummary = Pick<
   | 'parallelBranch'
   | 'comparison'
   | 'startRequestId'
+  | 'title'
   | 'externalTask'
   | 'tags'
 > & {
@@ -937,6 +952,7 @@ export interface RunEvent {
   type: string;
   message: string;
   at: string;
+  boardColumnId?: string;
   stage?: string | null;
   waiting?: import('./runProjection.js').RunWaiting | null;
   actor?: import('./runProjection.js').RunProjection['actor'];
@@ -1180,6 +1196,14 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
   for (const node of d.nodes) {
     if (node.kind === 'parallel') compileOwnPropertyContract(node.inputSchema);
     else ajv.compile(node.inputSchema);
+    if (
+      node.kind === 'input' &&
+      node.humanInput &&
+      Object.keys(node.outputSchema).length
+    )
+      throw new InterlockError(
+        `${node.label}: Human input uses its answer contract as the output contract`,
+      );
     if (node.kind === 'input' || node.kind === 'parallel')
       compileOwnPropertyContract(node.outputSchema);
     else ajv.compile(node.outputSchema);

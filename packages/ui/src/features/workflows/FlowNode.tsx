@@ -31,6 +31,7 @@ import {
   hasFailureRoute,
   hasTimeoutRoute,
   STARTED_RUN_SCHEMA,
+  humanAnswerContract,
   type WorkflowNode,
 } from '@interlock/core';
 import styles from './WorkflowEditor.module.css';
@@ -201,23 +202,26 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
       : n.kind === 'batch' && !n.itemsPath
         ? { type: 'array' }
         : n.inputSchema;
-  const outputSchema = n.outputBindings
-    ? { type: 'object' }
-    : n.kind === 'workflow' && n.mode === 'detached'
-      ? STARTED_RUN_SCHEMA
-      : n.outputSchema.type
-        ? n.outputSchema
-        : n.kind === 'entry' || n.kind === 'exit'
-          ? boundary
-          : n.kind === 'batch'
-            ? { type: 'array' }
-            : n.kind === 'fetch' || n.kind === 'parallel'
-              ? { type: 'object' }
-              : n.kind === 'condition' ||
-                  n.kind === 'switch' ||
-                  n.kind === 'wait'
-                ? inputSchema
-                : n.outputSchema;
+  const outputSchema =
+    n.kind === 'input' && n.humanInput
+      ? humanAnswerContract(n.humanInput.answer)
+      : n.outputBindings
+        ? { type: 'object' }
+        : n.kind === 'workflow' && n.mode === 'detached'
+          ? STARTED_RUN_SCHEMA
+          : n.outputSchema.type
+            ? n.outputSchema
+            : n.kind === 'entry' || n.kind === 'exit'
+              ? boundary
+              : n.kind === 'batch'
+                ? { type: 'array' }
+                : n.kind === 'fetch' || n.kind === 'parallel'
+                  ? { type: 'object' }
+                  : n.kind === 'condition' ||
+                      n.kind === 'switch' ||
+                      n.kind === 'wait'
+                    ? inputSchema
+                    : n.outputSchema;
   const contracts = `${contractLabel(inputSchema)} → ${contractLabel(outputSchema)}`;
   const detail =
     n.kind === 'wait'
@@ -471,7 +475,11 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
           <Icon size={16} />
         </span>
         <span>
-          {n.kind === 'agent' ? 'Agent assignment' : nodeKindLabel(n.kind)}
+          {n.kind === 'agent'
+            ? 'Agent assignment'
+            : n.kind === 'input' && n.humanInput
+              ? 'Human input'
+              : nodeKindLabel(n.kind)}
         </span>
         {data.status && (
           <i title={data.status} className={styles[data.status]} />

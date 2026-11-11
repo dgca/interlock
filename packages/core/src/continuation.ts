@@ -3,7 +3,7 @@ import {
   executorPermissionModeSchema,
   managedWorkSummarySchema,
 } from './executors.js';
-import { externalTaskSchema } from './runStarts.js';
+import { externalTaskSchema, runTitleSchema } from './runStarts.js';
 import { runTagsSchema } from './runTags.js';
 import {
   continuitySchema,
@@ -172,6 +172,7 @@ export const mutationSummarySchema = z.object({
   ok: z.literal(true),
   startRequestId: z.string().optional(),
   externalTask: externalTaskSchema.optional(),
+  title: runTitleSchema.optional(),
   tags: runTagsSchema.optional(),
   runId: z
     .string()
@@ -199,6 +200,7 @@ export const mutationSummarySchema = z.object({
     'inspect_hold',
     'inspect_resources',
     'inspect_executor',
+    'inspect_requests',
     'wait_for_worker',
     'wait_for_change',
     'inspect_failure',
@@ -289,6 +291,12 @@ export const submissionSummarySchema = mutationSummarySchema.extend({
 export const nextCallSchema = z
   .discriminatedUnion('tool', [
     z.object({
+      tool: z.literal('workflow_requests'),
+      arguments: z.object({
+        request: z.object({ action: z.literal('list'), runId: z.string() }),
+      }),
+    }),
+    z.object({
       tool: z.literal('manage_executors'),
       arguments: z.object({
         request: z.object({ action: z.literal('inspect'), workId: z.string() }),
@@ -318,6 +326,12 @@ export function withNextCall<T extends z.infer<typeof mutationSummarySchema>>(
   const id = summary.runId;
   let nextCall: z.infer<typeof nextCallSchema> = null;
   switch (summary.next) {
+    case 'inspect_requests':
+      nextCall = {
+        tool: 'workflow_requests',
+        arguments: { request: { action: 'list', runId: id } },
+      };
+      break;
     case 'inspect_executor':
       nextCall = {
         tool: 'manage_executors',

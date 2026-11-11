@@ -30,6 +30,9 @@ import { PauseHolds } from './pauseHolds.js';
 import { BackgroundScripts, UncertainScript } from './backgroundScripts.js';
 import { scriptOperationSchema, type ScriptOperation } from '@interlock/core';
 import { runAttention } from './runAttention.js';
+import { Requests } from './requests.js';
+import { WorkflowBoards } from './workflowBoards.js';
+import { captureHumanInput } from './humanInput.js';
 import { projectRun } from './runProjection.js';
 import { WorkResources } from './workResources.js';
 import { ExecutorManager } from './executors/manager.js';
@@ -220,6 +223,8 @@ export class Engine {
   readonly pauses: PauseHolds;
   readonly holds: WorkHolds;
   readonly externalInputs: ExternalInputs;
+  readonly requests: Requests;
+  readonly boards: WorkflowBoards;
   private readonly resources: WorkResources;
   readonly contextGroups: ContextContinuityGroups;
   private readonly starts: RunStarts;
@@ -269,9 +274,10 @@ export class Engine {
     this.externalInputs = new ExternalInputs(store, {
       run: (id) => this.run(id),
       node: (run, execution) => {
-        const node = this.definition(run).nodes.find(
-          (node) => node.id === execution.nodeId,
-        );
+        const node = this.definition({
+          ...run,
+          version: execution.version ?? run.version,
+        }).nodes.find((node) => node.id === execution.nodeId);
         if (node?.kind !== 'input')
           throw new InterlockError('External-input node definition not found');
         return node;
@@ -282,7 +288,18 @@ export class Engine {
       event: (run, type, message) => this.event(run, type, message),
       pump: () => this.pump(),
       assertUnpaused: (run) => this.pauses.assert(run),
+      paused: (run) => this.pauses.applicable(run.workflowId).length > 0,
     });
+    this.requests = new Requests(store, this.externalInputs, (id) =>
+      this.projectRun(id),
+    );
+    this.boards = new WorkflowBoards(
+      store,
+      this.requests,
+      (id) => this.projectRun(id),
+      () => this.nowMs(),
+      () => this.notify(),
+    );
     this.holds = new WorkHolds(
       store,
       (work, outcome) => this.usage.ended(work, outcome),
@@ -392,6 +409,9 @@ export class Engine {
           input,
           version: workflow.latestVersion,
           requestId: `schedule:${trigger.id}:${slot}`,
+          ...(trigger.runTitle !== undefined
+            ? { title: trigger.runTitle }
+            : {}),
           ...(trigger.tags !== undefined ? { tags: trigger.tags } : {}),
         };
         const result = this.starts.resolve(q, () => ({
@@ -427,6 +447,9 @@ export class Engine {
             version: workflow.latestVersion,
             input: payload as unknown as Json,
             requestId: `event:${trigger.id}:${eventId}`,
+            ...(trigger.runTitle !== undefined
+              ? { title: trigger.runTitle }
+              : {}),
             ...(trigger.tags !== undefined ? { tags: trigger.tags } : {}),
           };
           const result = this.starts.resolve(q, () => ({
@@ -643,7 +666,10 @@ export class Engine {
       this.listeners.delete(listener);
     };
   }
-  private event(run: Run, type: string, text: string) {
+  private notify() {
+    queueMicrotask(() => this.listeners.forEach((listener) => listener()));
+  }
+  private event(run: Run, type: string, text: string, boardColumnId?: string) {
     if (type === 'external_input.held' || type === 'external_input.released')
       this.stalls.hold(
         `input:${run.id}`,
@@ -655,12 +681,13 @@ export class Engine {
       runId: run.id,
       type,
       message: text,
+      ...(boardColumnId ? { boardColumnId } : {}),
       at: now(),
       ...this.projectRun(run.id, run),
     };
     this.store.put('events', event);
     this.triggers?.events.capture(run, event);
-    queueMicrotask(() => this.listeners.forEach((listener) => listener()));
+    this.notify();
   }
   private save(run: Run) {
     run.updatedAt = now();
@@ -1471,6 +1498,9 @@ export class Engine {
       ...(continuedFrom?.externalTask
         ? { externalTask: continuedFrom.externalTask }
         : {}),
+      ...((continuedFrom?.title ?? startOptions?.title)
+        ? { title: continuedFrom?.title ?? startOptions?.title }
+        : {}),
       id: randomUUID(),
       workflowId,
       workflowName: parallelBranch
@@ -1701,8 +1731,8 @@ export class Engine {
     }
     return result.id;
   }
-  runAttention() {
-    return runAttention(this.store);
+  runAttention(requests = this.requests.current()) {
+    return runAttention(requests);
   }
   private projectionState(id: string) {
     const state = this.store.continuation(id);
@@ -2223,7 +2253,7 @@ export class Engine {
         )
           throw new InterlockError('Execution cannot cross Parallel branches');
         this.chargeStep(run, node, definition.maxSteps);
-        this.event(run, 'node.started', node.label);
+        this.event(run, 'node.started', node.label, node.boardColumnId);
         if (node.inputBindings) {
           execution.originalInput = run.value;
           execution.input = resolveBindingFields(
@@ -2262,6 +2292,11 @@ export class Engine {
     try {
       if (node.kind === 'input') {
         if (execution.status === 'waiting') return false;
+        if (node.humanInput)
+          execution.humanInput = captureHumanInput(
+            node.humanInput,
+            execution.input,
+          );
         execution.status = 'waiting';
         execution.externalInput = { revision: 0 };
         run.status = 'waiting';
@@ -2269,7 +2304,7 @@ export class Engine {
         this.event(
           run,
           'node.waiting',
-          `${node.label}: waiting for external input`,
+          `${node.label}: waiting for ${node.humanInput ? 'human' : 'external'} input`,
         );
         return true;
       }

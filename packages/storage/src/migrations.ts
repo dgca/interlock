@@ -334,6 +334,22 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 18,
+    up(db) {
+      db.exec(`
+        CREATE INDEX human_input_waiting ON documents(id)
+          WHERE collection = 'runs' AND json_extract(value, '$.status') = 'waiting'
+            AND json_extract(value, '$.executions[#-1].status') = 'waiting'
+            AND json_type(value, '$.executions[#-1].humanInput') = 'object';
+        CREATE INDEX board_stage_entries ON documents(
+          json_extract(value, '$.boardColumnId'), json_extract(value, '$.runId')
+        ) WHERE collection = 'events' AND json_type(value, '$.boardColumnId') = 'text';
+        CREATE INDEX uncertain_background_steps ON documents(id)
+          WHERE collection = 'runs' AND json_extract(value, '$.executions[#-1].background.state') = 'uncertain';
+      `);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

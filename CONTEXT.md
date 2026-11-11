@@ -20,7 +20,11 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Node**: A step in a workflow. A node can invoke another workflow.
 
-**Stage**: An optional author-chosen label on a node. A run's stage is the deepest active label in its waited run tree.
+**Stage**: An optional node label or explicit board column binding. The run summary projects the deepest active stage label. A board card keeps the last matching column entered by the run, its waited descendants, or its continue-as-new chain.
+
+**Workflow board**: A named view of runs from assigned workflows with ordered stage columns. Each workflow can belong to one board.
+
+**Human input**: An External input step configured for a person, with a captured question, optional evidence, and one answer contract.
 
 **Waiting reason**: One structured explanation of what a run currently awaits, with its persisted start time and bounded detail.
 

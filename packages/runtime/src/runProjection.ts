@@ -191,13 +191,15 @@ export function projectRun(
     else if (current?.kind === 'input') {
       const held = store.externalInputHold(runId);
       wait(
-        held ? 'hold' : 'input_node',
-        held ? 'person' : 'agent',
+        held ? 'hold' : current.humanInput ? 'human_request' : 'input_node',
+        held || current.humanInput ? 'person' : 'agent',
         held
           ? 'External input acceptance on hold'
           : current.externalInput?.submittedAt
             ? 'Waiting for external input acceptance'
-            : 'Waiting for external input',
+            : current.humanInput
+              ? 'Waiting for a human answer'
+              : 'Waiting for external input',
         held?.heldAt ?? at,
       );
     } else if (current?.kind === 'wait') {

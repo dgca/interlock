@@ -19,9 +19,11 @@ export type ExecutionMetadata = Omit<
   | 'request'
   | 'retryChildRunIds'
   | 'check'
+  | 'humanInput'
 > & {
   runId: string;
   hasOutput: boolean;
+  humanInput?: boolean;
   /** Runtime-only overlay; never inferred from a persisted polling deadline. */
   pollCheckRunning?: boolean;
   check?: Omit<NonNullable<NodeExecution['check']>, 'output'>;
@@ -99,8 +101,9 @@ export function continuationState(db: DatabaseSync, id: string) {
     db
       .prepare(
         `${tree}
-    SELECT json_set(json_remove(e.value, '$.input', '$.output', '$.result', '$.originalInput', '$.request', '$.retryChildRunIds', '$.check.output'),
+    SELECT json_set(json_remove(e.value, '$.input', '$.output', '$.result', '$.originalInput', '$.request', '$.retryChildRunIds', '$.check.output', '$.humanInput'),
       '$.runId', d.id, '$.hasOutput', json_type(e.value, '$.output') IS NOT NULL,
+      '$.humanInput', json_type(e.value, '$.humanInput') IS NOT NULL,
       '$.checkSummary', CASE WHEN json_type(e.value, '$.check.output') IS NOT NULL THEN json_object(
         'output', substr(e.value -> '$.check.output', 1, 512),
         'truncated', length(e.value -> '$.check.output') > 512) END) AS value

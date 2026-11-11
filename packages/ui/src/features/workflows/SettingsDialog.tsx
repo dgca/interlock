@@ -3,6 +3,8 @@ import {
   TextInput,
   Textarea,
   NativeSelect,
+  Select,
+  Text,
   Input,
   SegmentedControl,
   Switch,
@@ -14,7 +16,7 @@ import {
 import { StallPolicyEditor } from '../executors/StallSettings';
 import { ExecutorSelect } from '../executors/ExecutorSelect';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, Plus, Trash2 } from 'lucide-react';
 import {
   nodeSchema,
@@ -62,6 +64,7 @@ export function SettingsDialog({
   prompts = [],
   onClose,
   onApply,
+  onBoardSaved,
   onDelete,
   onCreateChild,
   onOpenWorkflow,
@@ -86,10 +89,32 @@ export function SettingsDialog({
   prompts?: import('@interlock/core').SavedPrompt[];
   onClose: () => void;
   onApply: (settings: Settings) => void;
+  onBoardSaved?: (workflow: Workflow) => void;
   onDelete?: () => void;
 }) {
   const [settings, setSettings] = useState(() =>
     structuredClone({ name, description, definition }),
+  );
+  const workflow = workflows.find((item) => item.id === workflowId);
+  const [originalBoardId] = useState(workflow?.boardId ?? null);
+  const [boardId, setBoardId] = useState(originalBoardId);
+  const [boards, setBoards] =
+    useState<Awaited<ReturnType<typeof api.boards.list.query>>>();
+  useEffect(() => {
+    if (!workflowId) return;
+    let active = true;
+    void api.boards.list
+      .query()
+      .then((items) => {
+        if (active) setBoards(items);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [workflowId]);
+  const assignedBoard = boards?.find(
+    (board) => board.id === (node || creating ? workflow?.boardId : boardId),
   );
   const parallelGroup =
     parentParallel &&
@@ -122,15 +147,26 @@ export function SettingsDialog({
   const [targetMode, setTargetMode] = useState('existing');
   const [creatingChild, setCreatingChild] = useState(false);
   const variants = useRef<Record<string, WorkflowNode>>({});
+  const nodeType =
+    nodeDraft?.kind === 'input' && nodeDraft.humanInput
+      ? 'human'
+      : nodeDraft?.kind;
   const chooseType = (kind: string) => {
     if (!kind) return;
-    if (nodeDraft) variants.current[nodeDraft.kind] = nodeDraft;
+    if (nodeDraft && nodeType) variants.current[nodeType] = nodeDraft;
     const reference = workflowTargets(workflows, workflowId)[0];
     setNodeDraft(
       variants.current[kind] ??
         nodeSchema.parse({
           id: newNodeId,
-          kind,
+          kind: kind === 'human' ? 'input' : kind,
+          humanInput:
+            kind === 'human'
+              ? {
+                  question: 'What should happen next?',
+                  answer: { kind: 'text' },
+                }
+              : undefined,
           batchId: parentBatchId,
           ...parentParallel,
           label:
@@ -140,7 +176,9 @@ export function SettingsDialog({
                 ? 'Batch'
                 : kind === 'parallel'
                   ? 'Parallel'
-                  : `New ${kind}`,
+                  : kind === 'human'
+                    ? 'Human input'
+                    : `New ${kind}`,
           branches:
             kind === 'parallel'
               ? [
@@ -310,6 +348,15 @@ export function SettingsDialog({
         } else onApply(next);
       } else {
         if (!settings.name.trim()) throw new Error('Give the workflow a name.');
+        if (workflowId && boardId !== originalBoardId) {
+          setCreatingChild(true);
+          const saved = await api.boards.assign.mutate({
+            workflowId,
+            boardId,
+            expectedBoardId: originalBoardId,
+          });
+          onBoardSaved?.(saved);
+        }
         onApply(settings);
       }
     } catch (e) {
@@ -366,7 +413,7 @@ export function SettingsDialog({
                   <div className={styles.typeChooser}>
                     <NativeSelect
                       label="Node type"
-                      value={nodeDraft?.kind ?? ''}
+                      value={nodeType ?? ''}
                       onChange={(e) => chooseType(e.target.value)}
                     >
                       <option value="agent">Agent</option>
@@ -374,6 +421,7 @@ export function SettingsDialog({
                       <option value="fetch">Fetch</option>
                       <option value="wait">Wait</option>
                       <option value="input">External input</option>
+                      <option value="human">Human input</option>
                       <option value="switch">Branch</option>
                       <option value="workflow">Workflow</option>
                       {!parentParallel && <option value="batch">Batch</option>}
@@ -382,7 +430,11 @@ export function SettingsDialog({
                       )}
                     </NativeSelect>
                     {nodeDraft && (
-                      <p className="hint">{nodeDescriptions[nodeDraft.kind]}</p>
+                      <p className="hint">
+                        {nodeType === 'human'
+                          ? 'Ask for an answer that the workflow can use in later steps.'
+                          : nodeDescriptions[nodeDraft.kind]}
+                      </p>
                     )}
                   </div>
                 )}
@@ -428,6 +480,12 @@ export function SettingsDialog({
                     node={nodeDraft}
                     creating={creating}
                     workflowId={workflowId}
+                    board={assignedBoard}
+                    previousBoard={boards?.find((board) =>
+                      board.columns.some(
+                        (column) => column.id === nodeDraft.boardColumnId,
+                      ),
+                    )}
                     hideWorkflowTarget={
                       creating &&
                       targetMode === 'child' &&
@@ -478,6 +536,39 @@ export function SettingsDialog({
                         }))
                       }
                     />
+                    {workflowId && (
+                      <>
+                        <Select
+                          mb="md"
+                          label="Board"
+                          placeholder="No board"
+                          clearable
+                          searchable
+                          value={boardId}
+                          onChange={setBoardId}
+                          disabled={!boards}
+                          data={
+                            boards?.map((board) => ({
+                              value: board.id,
+                              label: board.name,
+                            })) ?? []
+                          }
+                        />
+                        {originalBoardId &&
+                          boardId &&
+                          boardId !== originalBoardId && (
+                            <Text size="sm" mb="md">
+                              {settings.name} will move from{' '}
+                              {
+                                boards?.find(
+                                  (board) => board.id === originalBoardId,
+                                )?.name
+                              }
+                              .
+                            </Text>
+                          )}
+                      </>
+                    )}
 
                     <ExecutorSelect
                       value={settings.definition.executor}

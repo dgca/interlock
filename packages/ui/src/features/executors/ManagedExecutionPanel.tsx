@@ -263,7 +263,7 @@ function Execution({
           </p>
         )}
         {pending.map((request) => (
-          <Request
+          <ManagedRequestControls
             key={request.id}
             request={request}
             busy={!!busy}
@@ -685,16 +685,18 @@ function Execution({
   );
 }
 
-function Request({
+export function ManagedRequestControls({
   request,
   busy,
   sending,
   onAnswer,
+  focused = false,
 }: {
   request: ExecutorRequest;
   busy: boolean;
   sending: boolean;
   onAnswer: (answer: ExecutorAnswer) => Promise<void>;
+  focused?: boolean;
 }) {
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [other, setOther] = useState<Record<string, string>>({});
@@ -710,24 +712,28 @@ function Request({
   );
   return (
     <section
-      className={styles.request}
-      aria-labelledby={`request-${request.id}`}
+      className={focused ? undefined : styles.request}
+      aria-labelledby={focused ? undefined : `request-${request.id}`}
       aria-busy={sending}
     >
-      <div className={styles.noticeTitle}>
-        {request.kind === 'permission' ? (
-          <ShieldCheck size={19} aria-hidden="true" />
-        ) : (
-          <MessageSquare size={19} aria-hidden="true" />
-        )}
-        <h3 id={`request-${request.id}`}>{request.title}</h3>
-      </div>
-      <p className={styles.explanation}>
-        {request.kind === 'permission'
-          ? 'Review the exact action below. Allow once applies only to this request; future actions may need another approval.'
-          : 'The agent is waiting for your answer before continuing.'}
-      </p>
-      {request.detail && (
+      {!focused && (
+        <div className={styles.noticeTitle}>
+          {request.kind === 'permission' ? (
+            <ShieldCheck size={19} aria-hidden="true" />
+          ) : (
+            <MessageSquare size={19} aria-hidden="true" />
+          )}
+          <h3 id={`request-${request.id}`}>{request.title}</h3>
+        </div>
+      )}
+      {!focused && (
+        <p className={styles.explanation}>
+          {request.kind === 'permission'
+            ? 'Review the exact action below. Allow once applies only to this request; future actions may need another approval.'
+            : 'The agent is waiting for your answer before continuing.'}
+        </p>
+      )}
+      {!focused && request.detail && (
         <pre tabIndex={0} aria-label="Requested action">
           {request.detail}
         </pre>

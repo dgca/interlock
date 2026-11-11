@@ -67,6 +67,15 @@ vi.mock('../packages/ui/src/lib/api', async () => {
         summaries: { query: queries.summaries },
         attention: { query: queries.attention },
       },
+      requests: {
+        list: {
+          query: async () => ({
+            items: [],
+            total: (await queries.attention()).length,
+            nextOffset: null,
+          }),
+        },
+      },
       prompts: { list: { query: () => Promise.resolve([]) } },
     }),
     errorMessage: (error: Error) => error.message,

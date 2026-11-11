@@ -1,6 +1,6 @@
 import type { RunMode } from '../features/runs/runListConfig';
 import type { RunTab } from '../features/runs/runAttention';
-import { runTagsSchema } from '@interlock/core';
+import { runTagsSchema, type RequestTarget } from '@interlock/core';
 function runListSearch(
   tab: RunTab,
   offset: number,
@@ -34,6 +34,12 @@ export function runOffset(value: string | null) {
 
 // Resource URLs use stable IDs, independent of names or future folder membership.
 export const paths = {
+  boards: '/boards',
+  boardNew: '/boards/new',
+  board: (id: string) => `/boards/${encodeURIComponent(id)}`,
+  boardSettings: (id: string) => `/boards/${encodeURIComponent(id)}/settings`,
+  request: (target: RequestTarget) =>
+    `/runs/request?${new URLSearchParams({ request: JSON.stringify(target) })}`,
   automations: '/automations',
   automationNew: '/automations/new',
   automation: (id: string) => `/automations/${encodeURIComponent(id)}`,

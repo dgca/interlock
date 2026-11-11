@@ -63,6 +63,26 @@ const RunInspector = lazy(() =>
     default: m.RunInspector,
   })),
 );
+const BoardLibrary = lazy(() =>
+  import('../features/boards/Boards').then((m) => ({
+    default: m.BoardLibrary,
+  })),
+);
+const WorkflowBoard = lazy(() =>
+  import('../features/boards/Boards').then((m) => ({
+    default: m.WorkflowBoardRoute,
+  })),
+);
+const BoardSettings = lazy(() =>
+  import('../features/boards/BoardSettings').then((m) => ({
+    default: m.BoardSettingsRoute,
+  })),
+);
+const RequestRoute = lazy(() =>
+  import('../features/boards/RequestView').then((m) => ({
+    default: m.GlobalRequestRoute,
+  })),
+);
 const Harnesses = lazy(() =>
   import('../features/executors/Harnesses').then((m) => ({
     default: m.Harnesses,
@@ -300,6 +320,7 @@ function WorkflowRoute() {
   const { workflowId } = useParams();
   const context = useOutletContext<AppContext>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { search, setSearch, page } = useRunPage();
   const workflow = context.workflows.find((w) => w.id === workflowId);
   if (!context.loaded) return <Loading subject="workflow" />;
@@ -365,6 +386,11 @@ function WorkflowRoute() {
               act={context.act}
               workflows={context.workflows}
               workflowId={workflow.id}
+              onRequest={(target) =>
+                void navigate(paths.request(target), {
+                  state: { returnTo: location.pathname + location.search },
+                })
+              }
               onOpen={(id, executionId) =>
                 void navigate(
                   paths.run(
@@ -389,6 +415,7 @@ function WorkflowRoute() {
 function RunsRoute() {
   const { tick, act, workflows } = useOutletContext<AppContext>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { page } = useRunPage();
   return (
     <Suspense fallback={<RunListSkeleton />}>
@@ -397,6 +424,11 @@ function RunsRoute() {
         tick={tick}
         act={act}
         workflows={workflows}
+        onRequest={(target) =>
+          void navigate(paths.request(target), {
+            state: { returnTo: location.pathname + location.search },
+          })
+        }
         onOpen={(id, executionId) =>
           void navigate(
             paths.run(
@@ -554,7 +586,47 @@ export const routes: RouteObject[] = [
       { path: 'workflows/:workflowId', Component: WorkflowRoute },
       { path: 'workflows/:workflowId/report', Component: ReportRoute },
       { path: 'runs', Component: RunsRoute },
+      {
+        path: 'runs/request',
+        element: (
+          <Suspense fallback={<RouteLoading />}>
+            <RequestRoute />
+          </Suspense>
+        ),
+      },
       { path: 'runs/:runId', Component: RunRoute },
+      {
+        path: 'boards',
+        element: (
+          <Suspense fallback={<RouteLoading />}>
+            <BoardLibrary />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'boards/new',
+        element: (
+          <Suspense fallback={<RouteLoading />}>
+            <BoardSettings />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'boards/:boardId',
+        element: (
+          <Suspense fallback={<RouteLoading />}>
+            <WorkflowBoard />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'boards/:boardId/settings',
+        element: (
+          <Suspense fallback={<RouteLoading />}>
+            <BoardSettings />
+          </Suspense>
+        ),
+      },
       { path: '*', Component: NotFound },
     ],
   },

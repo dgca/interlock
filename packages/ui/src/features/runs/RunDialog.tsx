@@ -2,6 +2,7 @@ import { agentAliasReference } from '@interlock/core';
 import {
   NativeSelect,
   Textarea,
+  TextInput,
   Modal,
   ModalBody,
   ModalFooter,
@@ -55,6 +56,7 @@ export function RunDialog({
   const fieldsRef = useRef<HTMLDivElement>(null);
   const tagsDetailsRef = useRef<HTMLDetailsElement>(null);
   const [raw, setRaw] = useState(false);
+  const [title, setTitle] = useState('');
   const [tags, setTags] = useState<TagRow[]>([]);
   const [tagsError, setTagsError] = useState('');
   const [versionPolicy, setVersionPolicy] =
@@ -106,6 +108,14 @@ export function RunDialog({
       <ModalBody>
         {versions.length > 0 ? (
           <>
+            <TextInput
+              label="Run title"
+              mb="md"
+              maxLength={200}
+              value={title}
+              description="If blank, Runs and Boards use the linked task title or workflow name."
+              onChange={(event) => setTitle(event.currentTarget.value)}
+            />
             {hasConnectedAgents && (
               <p className="hint">
                 Connected Agent steps wait for an agent to claim their
@@ -239,6 +249,7 @@ export function RunDialog({
             try {
               const result = await api.runs.start.mutate({
                 workflowId: workflow.id,
+                title: title.trim() || undefined,
                 version,
                 versionPolicy,
                 input: JSON.parse(input),

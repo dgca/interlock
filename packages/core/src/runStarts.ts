@@ -42,6 +42,21 @@ export const externalTaskSchema = externalTaskIdentitySchema
     'Non-secret correlation only; does not authorize work or update an external board.',
   );
 export type ExternalTask = z.infer<typeof externalTaskSchema>;
+export const runTitleSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .describe(
+    'Optional run title displayed in Runs and Boards, ahead of the external task title and workflow name.',
+  );
+export function runDisplayTitle(run: {
+  title?: string;
+  externalTask?: ExternalTask;
+  workflowName: string;
+}) {
+  return run.title ?? run.externalTask?.title ?? run.workflowName;
+}
 export const startDependencySchema = z.union([
   z.object({ requestId: startRequestIdSchema }).strict(),
   z.object({ externalTask: externalTaskIdentitySchema }).strict(),
@@ -68,6 +83,7 @@ export const runStartOptionsSchema = z
         'Library-wide ordinary-start key. Identical retries recover the original run without advancing it; conflicting reuse or deleted history rejects. Use a new key for a new attempt.',
       ),
     externalTask: externalTaskSchema.optional(),
+    title: runTitleSchema.optional(),
     tags: runTagsSchema.optional(),
     priority: z
       .number()

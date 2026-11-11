@@ -16,12 +16,16 @@ import { PauseBanner } from '../pauses/PauseControls';
 
 import {
   nodeKindLabel,
+  runDisplayTitle,
   type NodeExecution,
   type Run,
   type RunStatus,
 } from '@interlock/core';
 import type { Action } from '../../lib/useActionFeedback';
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router';
+import { paths } from '../../routes/paths';
+import { ExternalTaskLink } from '../../components/ExternalTaskLink';
 import { needsManagedAttention } from '../executors/managedStatus';
 import {
   ArrowLeft,
@@ -541,7 +545,7 @@ export function RunInspector({
       className={`${styles.page} ${!definition ? styles.withoutDefinition : ''} ${run.comparison ? styles.comparison : ''}`}
     >
       <PageHeader
-        title={run.workflowName}
+        title={runDisplayTitle(run)}
         onBack={() =>
           !returnLabel && parallelParent
             ? onOpen(parallelParent, run.parentExecutionId)
@@ -553,7 +557,11 @@ export function RunInspector({
         }
         subtitle={
           <div className={styles.metadata}>
+            {(run.title || run.externalTask?.title) && (
+              <span>{run.workflowName}</span>
+            )}
             <span>Version {run.version}</span>
+            <ExternalTaskLink task={run.externalTask} />
             <StatusBadge
               status={
                 run.status === 'queued'
@@ -981,7 +989,32 @@ export function RunInspector({
                   : 'This step has not started.'}
               </p>
             )}
-            {waitingForInput && owner && (
+            {execution?.humanInput && owner && (
+              <section className={styles.statePanel} aria-label="Human input">
+                <p>{execution.humanInput.question}</p>
+                <Button
+                  component={Link}
+                  to={paths.request({
+                    kind: 'human',
+                    runId: owner.id,
+                    executionId: execution.id,
+                  })}
+                  state={{
+                    returnTo: paths.run(
+                      run.id,
+                      undefined,
+                      'attention',
+                      execution.id,
+                    ),
+                  }}
+                >
+                  {execution.externalInput?.acceptedAt
+                    ? 'View answer and evidence'
+                    : 'View request'}
+                </Button>
+              </section>
+            )}
+            {waitingForInput && owner && !execution.humanInput && (
               <section
                 className={styles.statePanel}
                 aria-label="External input status"

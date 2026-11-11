@@ -24,17 +24,21 @@ import {
 import { BranchEditor } from './BranchEditor';
 import { ParallelBranchesEditor } from './ParallelBranchesEditor';
 import { NodeResultEditor } from './NodeResultEditor';
+import { StageInput } from './StageInput';
+import { HumanInputEditor } from './HumanInputEditor';
 
 import {
   DEFAULT_BATCH_MAX_ITEMS,
   MAX_BATCH_ITEMS,
   MAX_SCRIPT_TIMEOUT_MS,
   nodeInputHint,
+  humanAnswerContract,
   isPollWait,
   stallFields,
   type StallPolicy,
   type WorkflowDefinition,
   type Workflow,
+  type WorkflowBoard,
   type WorkflowNode,
   type FetchNode,
   type PollCheck,
@@ -120,7 +124,11 @@ export function NodeInspector({
   onBoundaryChange,
   section,
   onSectionChange,
+  board,
+  previousBoard,
 }: {
+  board?: WorkflowBoard;
+  previousBoard?: WorkflowBoard;
   section?: NodeSectionName;
   onSectionChange?: (section: NodeSectionName) => void;
   node: WorkflowNode;
@@ -156,7 +164,8 @@ export function NodeInspector({
       switch: 'Branches',
       workflow: 'Workflow',
       wait: 'Wait',
-      input: 'External input',
+      input:
+        node.kind === 'input' && node.humanInput ? 'Request' : 'External input',
       batch: 'Batch',
       parallel: 'Parallel',
       entry: 'Entry',
@@ -192,17 +201,11 @@ export function NodeInspector({
             value={node.label}
             onChange={(e) => patch({ label: e.target.value })}
           />
-          <TextInput
-            mb="md"
-            label="Stage"
-            description="Optional label used in run summaries."
-            maxLength={200}
-            value={node.stage ?? ''}
-            onChange={(e) =>
-              patch({
-                stage: e.target.value.trim() ? e.target.value : undefined,
-              })
-            }
+          <StageInput
+            node={node}
+            board={board}
+            previousBoard={previousBoard}
+            onChange={(stage, boardColumnId) => patch({ stage, boardColumnId })}
           />
         </NodeSection>
         {node.kind === 'fetch' && (
@@ -217,10 +220,18 @@ export function NodeInspector({
         )}
         {node.kind === 'input' && (
           <NodeSection name="work">
-            <p className="hint">
-              The run pauses here. After a caller accepts a submission, its
-              value passes to the next step.
-            </p>
+            {node.humanInput ? (
+              <HumanInputEditor
+                value={node.humanInput}
+                input={inputShape}
+                onChange={(humanInput) => patch({ humanInput })}
+              />
+            ) : (
+              <p className="hint">
+                The run pauses here. After a caller accepts a submission, its
+                value passes to the next step.
+              </p>
+            )}
           </NodeSection>
         )}
         {node.kind === 'wait' && (
@@ -926,12 +937,20 @@ export function NodeInspector({
               />
             </NodeSection>
             <NodeSection name="result">
-              <NodeResultEditor
-                key={node.kind}
-                node={node}
-                definition={definition}
-                onChange={onChange}
-              />
+              {node.kind === 'input' && node.humanInput ? (
+                <ContractEditor
+                  label="Answer output"
+                  value={humanAnswerContract(node.humanInput.answer)}
+                  readOnly
+                />
+              ) : (
+                <NodeResultEditor
+                  key={node.kind}
+                  node={node}
+                  definition={definition}
+                  onChange={onChange}
+                />
+              )}
             </NodeSection>
           </>
         )}

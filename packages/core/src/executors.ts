@@ -262,6 +262,7 @@ export interface ExecutorQuestion {
 }
 export interface ExecutorRequest {
   id: string;
+  createdAt?: string;
   kind: 'permission' | 'question';
   title: string;
   detail: string;
@@ -382,6 +383,7 @@ export interface ManagedExecution {
   deepLink?: string;
   startedAt: string;
   endedAt?: string;
+  reconciledAt?: string;
   error?: string;
   modelRecovery?: {
     sessionKey: string;
