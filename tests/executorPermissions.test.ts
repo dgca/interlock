@@ -6,12 +6,14 @@ import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
+  blankDefinition,
   executorProfileSchema,
   nodeSchema,
   type WorkflowNode,
   type ExecutorPermissionMode,
 } from '@interlock/core';
 import { ExecutorSelect } from '../packages/ui/src/features/executors/ExecutorSelect';
+import { NodeExecutorSelect } from '../packages/ui/src/features/executors/NodeExecutorSelect';
 import { NodeInspector } from '../packages/ui/src/features/workflows/NodeInspector';
 import { ExecutionSettings } from '../packages/ui/src/features/executors/ExecutionSettings';
 import { Harnesses as HarnessesPage } from '../packages/ui/src/features/executors/Harnesses';
@@ -563,27 +565,44 @@ it('shows the inherited mode and lets the workflow override or restore it', asyn
   expect(container.textContent).toContain('Full access · inherited from Codex');
 });
 it('shows effective workflow permissions for a node-specific executor without another override', async () => {
+  const definition = {
+    ...blankDefinition(),
+    executor: 'codex',
+    agentPermissions: 'standard',
+  } as const;
   await act(async () =>
     root.render(
       h(
         DesignSystemProvider,
         {},
-        h(ExecutorSelect, {
-          value: 'claude-code',
-          inherit: 'codex',
-          workflowPermissions: 'standard',
+        h(NodeExecutorSelect, {
+          node: { ...firstAgent(definition), executor: 'claude-code' },
+          definition,
+          enabled: true,
           onChange: () => {},
+          connectedSettings: null,
         }),
       ),
     ),
   );
-  expect(container.textContent).toContain('Standard · workflow override');
+  expect(container.textContent).toMatch(
+    /Standard\s+permissions · workflow override/,
+  );
   expect(container.querySelectorAll('select')).toHaveLength(1);
 });
 
+function firstAgent(definition = blankDefinition()) {
+  return definition.nodes.find((node) => node.kind === 'agent')!;
+}
+
 it('offers model-specific effort with node inheritance, native reset and incompatible model feedback', async () => {
   rpc.profiles.mockResolvedValue([
-    { ...harnessProfile(), model: 'native-model', effort: 'high' },
+    {
+      ...harnessProfile(),
+      enabled: true,
+      model: 'native-model',
+      effort: 'high',
+    },
   ]);
   rpc.models.mockResolvedValue({
     status: 'ready',
@@ -598,29 +617,29 @@ it('offers model-specific effort with node inheritance, native reset and incompa
     ],
   });
   const changes: unknown[] = [];
+  const definition = {
+    ...blankDefinition(),
+    executor: 'codex',
+    agentModel: 'native-model',
+    agentModelMode: 'literal',
+    agentEffort: 'high',
+  } as const;
   function NodeModel() {
-    const [model, setModel] = useState<string>();
-    const [effort, setEffort] = useState<string | null>();
-    return h(ExecutorSelect, {
-      value: undefined,
-      inherit: 'codex',
-      onChange: () => {},
-      workflowModel: 'native-model',
-      workflowEffort: 'high',
-      nodeModel: model,
-      nodeEffort: effort,
-      onNodeModelChange: setModel,
-      onNodeEffortChange: (v) => {
-        changes.push(v);
-        setEffort(v);
+    const [node, setNode] = useState(() => firstAgent(definition));
+    return h(NodeExecutorSelect, {
+      node,
+      definition,
+      enabled: true,
+      onChange: (patch) => {
+        if (Object.hasOwn(patch, 'effort')) changes.push(patch.effort);
+        setNode((current) => ({ ...current, ...patch }));
       },
+      connectedSettings: null,
     });
   }
   await act(async () => root.render(h(DesignSystemProvider, {}, h(NodeModel))));
   expect(rpc.models).toHaveBeenCalled();
-  expect(container.textContent).toContain(
-    'native-model · inherited from workflow',
-  );
+  expect(container.textContent).toContain('Inherited model: Native Model');
   const effortSelect = () =>
     [...container.querySelectorAll('select')].find((s) =>
       [...s.options].some((o) => o.textContent === 'Use native default'),
@@ -666,19 +685,23 @@ it('offers model-specific effort with node inheritance, native reset and incompa
 });
 
 it('hides managed model controls for connected nodes and removes manual capability fields from harness settings', async () => {
+  const definition = { ...blankDefinition(), executor: 'codex' };
   await act(async () =>
     root.render(
       h(
         DesignSystemProvider,
         {},
-        h(ExecutorSelect, {
-          value: null,
-          inherit: 'codex',
+        h(NodeExecutorSelect, {
+          node: {
+            ...firstAgent(definition),
+            executor: null,
+            model: 'saved',
+            effort: 'high',
+          },
+          definition,
+          enabled: true,
           onChange: () => {},
-          nodeModel: 'saved',
-          nodeEffort: 'high',
-          onNodeModelChange: () => {},
-          onNodeEffortChange: () => {},
+          connectedSettings: null,
         }),
       ),
     ),

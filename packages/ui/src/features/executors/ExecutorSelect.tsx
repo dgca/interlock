@@ -19,7 +19,6 @@ import {
 export function ExecutorSelect({
   value,
   onChange,
-  inherit,
   enabled = true,
   workflowPermissions,
   onPermissionsChange,
@@ -28,14 +27,9 @@ export function ExecutorSelect({
   onModelChange,
   workflowEffort,
   onEffortChange,
-  nodeModel,
-  nodeEffort,
-  onNodeModelChange,
-  onNodeEffortChange,
 }: {
   value: string | null | undefined;
   onChange: (value: string | null | undefined) => void;
-  inherit?: string;
   enabled?: boolean;
   workflowPermissions?: ExecutorPermissionMode;
   onPermissionsChange?: (mode: ExecutorPermissionMode | undefined) => void;
@@ -47,10 +41,6 @@ export function ExecutorSelect({
   workflowModelMode?: 'literal' | 'preset';
   workflowEffort?: string | null;
   onEffortChange?: (value: string | null | undefined) => void;
-  nodeModel?: string;
-  nodeEffort?: string | null;
-  onNodeModelChange?: (value: string | undefined) => void;
-  onNodeEffortChange?: (value: string | null | undefined) => void;
 }) {
   const workflowSettings = !!(onPermissionsChange || onModelChange);
   const profilesQuery = useQuery({
@@ -67,8 +57,7 @@ export function ExecutorSelect({
   const concurrencyError = settingsQuery.error
     ? 'Shared assignment limit could not be loaded.'
     : '';
-  const selected = value === undefined ? inherit : value;
-  const profile = profiles?.find((p) => p.id === selected);
+  const profile = profiles?.find((p) => p.id === value);
   const effective = workflowPermissions ?? profile?.permissions;
   return (
     <Stack gap="sm" mb="md">
@@ -78,33 +67,17 @@ export function ExecutorSelect({
       >
         <div>
           <NativeSelect
-            label={
-              inherit !== undefined ? 'Executor' : 'Default Agent executor'
-            }
-            value={
-              value ??
-              (inherit !== undefined && value === undefined
-                ? '__inherit'
-                : '__manual')
-            }
+            label="Default Agent executor"
+            value={value ?? '__manual'}
             onChange={(e) =>
               onChange(
-                e.currentTarget.value === '__inherit'
-                  ? undefined
-                  : e.currentTarget.value === '__manual'
-                    ? null
-                    : e.currentTarget.value,
+                e.currentTarget.value === '__manual'
+                  ? null
+                  : e.currentTarget.value,
               )
             }
           >
-            {inherit !== undefined && (
-              <option value="__inherit">
-                Workflow default · {inherit || 'No default harness'}
-              </option>
-            )}
-            <option value="__manual">
-              {workflowSettings ? 'No default harness' : 'Connected agent'}
-            </option>
+            <option value="__manual">No default harness</option>
             {profiles
               ?.filter(
                 (p) =>
@@ -124,11 +97,7 @@ export function ExecutorSelect({
           <p className="hint">
             {value
               ? 'An Agent preset can select a different harness.'
-              : inherit !== undefined && value === undefined
-                ? 'Uses the workflow’s harness and model defaults. An agent preset can select a different harness.'
-                : workflowSettings
-                  ? 'An agent preset can select a harness. Otherwise, a connected agent picks up the assignment.'
-                  : 'An agent connected through MCP picks up the assignment.'}{' '}
+              : 'An agent preset can select a harness. Otherwise, a connected agent picks up the assignment.'}{' '}
             <a
               href={`${paths.harnesses}#harnesses`}
               target="_blank"
@@ -138,85 +107,61 @@ export function ExecutorSelect({
             </a>
           </p>
         </div>
-        {(selected || onPermissionsChange) && (
+        {onPermissionsChange && (
           <div>
-            {onPermissionsChange && (
-              <NativeSelect
-                label="Agent permissions"
-                value={workflowPermissions ?? '__default'}
-                onChange={(e) =>
-                  onPermissionsChange(
-                    e.currentTarget.value === '__default'
-                      ? undefined
-                      : (e.currentTarget.value as ExecutorPermissionMode),
-                  )
-                }
-                data={[
-                  { value: '__default', label: 'Use harness default' },
-                  ...permissionOptions,
-                ]}
-              />
-            )}
-            {(selected || onPermissionsChange) && (
-              <p className="hint">
-                {effective ? (
-                  <>
-                    {permissionLabels[effective]} ·{' '}
-                    {workflowPermissions
-                      ? 'workflow override'
-                      : `inherited from ${profile?.name ?? selected}`}
-                    . {permissionDescriptions[effective]}
-                  </>
-                ) : (
-                  'Each managed Agent uses its selected harness’s default permissions.'
-                )}
-                {onPermissionsChange &&
-                  !selected &&
-                  ' Connected agents keep their own permissions.'}
-              </p>
-            )}
+            <NativeSelect
+              label="Agent permissions"
+              value={workflowPermissions ?? '__default'}
+              onChange={(e) =>
+                onPermissionsChange(
+                  e.currentTarget.value === '__default'
+                    ? undefined
+                    : (e.currentTarget.value as ExecutorPermissionMode),
+                )
+              }
+              data={[
+                { value: '__default', label: 'Use harness default' },
+                ...permissionOptions,
+              ]}
+            />
+            <p className="hint">
+              {effective ? (
+                <>
+                  {permissionLabels[effective]} ·{' '}
+                  {workflowPermissions
+                    ? 'workflow override'
+                    : `inherited from ${profile?.name ?? value}`}
+                  . {permissionDescriptions[effective]}
+                </>
+              ) : (
+                'Each managed Agent uses its selected harness’s default permissions.'
+              )}
+              {!value && ' Connected agents keep their own permissions.'}
+            </p>
           </div>
         )}
       </SimpleGrid>
-      {(onModelChange || (value !== null && onNodeModelChange)) && (
+      {onModelChange && (
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
           <ModelSettings
             allowAliases
             compact
             referenceMode={workflowModelMode}
             modelHint={
-              onNodeModelChange
-                ? nodeModel
-                  ? `${nodeModel} · node override.`
-                  : workflowModel
-                    ? `${workflowModel} · inherited from workflow.`
-                    : undefined
-                : !workflowModel && profile
-                  ? `${profile.model ?? 'CLI default'} · inherited from ${harnessLabel(profile)}.`
-                  : undefined
+              !workflowModel && profile
+                ? `${profile.model ?? 'CLI default'} · inherited from ${harnessLabel(profile)}.`
+                : undefined
             }
-            label={onNodeModelChange ? 'Model' : 'Agent model'}
-            defaultLabel={
-              onNodeModelChange ? 'Use workflow default' : 'Use harness default'
-            }
-            effortDefaultLabel={
-              onNodeModelChange ? 'Use workflow default' : 'Use harness default'
-            }
+            label="Agent model"
+            defaultLabel="Use harness default"
+            effortDefaultLabel="Use harness default"
             profileId={profile?.id}
-            model={onNodeModelChange ? nodeModel : workflowModel}
-            effort={onNodeModelChange ? nodeEffort : workflowEffort}
-            inheritedModel={
-              onNodeModelChange
-                ? (workflowModel ?? profile?.model)
-                : profile?.model
-            }
-            inheritedEffort={
-              onNodeModelChange && workflowEffort !== undefined
-                ? workflowEffort
-                : profile?.effort
-            }
-            onModelChange={onNodeModelChange ?? onModelChange!}
-            onEffortChange={onNodeEffortChange ?? onEffortChange ?? (() => {})}
+            model={workflowModel}
+            effort={workflowEffort}
+            inheritedModel={profile?.model}
+            inheritedEffort={profile?.effort}
+            onModelChange={onModelChange}
+            onEffortChange={onEffortChange ?? (() => {})}
           />
         </SimpleGrid>
       )}

@@ -631,6 +631,7 @@ it('uses the first enabled preset choice that can enforce workflow and preset pe
       harness,
       enabled,
       expectedRevision: 0,
+      ...(harness === 'custom' ? { turnCommand: 'echo unused' } : {}),
     });
   const candidates = [
     { profileId: 'claude-code', model: 'primary' },
@@ -677,6 +678,66 @@ it('uses the first enabled preset choice that can enforce workflow and preset pe
     revision: 1,
   });
 });
+
+it.each([
+  { mode: 'direct', transport: 'http', turnUrl: 'http://localhost/turn' },
+  { mode: 'launcher', transport: 'http', launchUrl: 'http://localhost/launch' },
+  { mode: 'direct', transport: 'subprocess', command: 'echo turn' },
+  { mode: 'launcher', transport: 'subprocess', command: 'echo launch' },
+] as const)(
+  'skips an incomplete $mode $transport integration before choosing a preset fallback',
+  async ({ mode, transport, ...invocation }) => {
+    const { engine } = setup();
+    const profile = {
+      id: 'integration',
+      name: 'Integration',
+      harness: 'custom',
+      enabled: true,
+      mode,
+      transport,
+    } as const;
+    engine.executors.saveProfile({ ...profile, expectedRevision: 0 });
+    engine.executors.saveProfile({
+      id: 'codex',
+      name: 'Codex',
+      harness: 'codex',
+      enabled: true,
+      expectedRevision: 0,
+    });
+    const preset = engine.modelAliases.mutate({
+      action: 'create',
+      name: 'Review',
+      candidates: [
+        { profileId: profile.id, model: 'primary' },
+        { profileId: 'codex', model: 'fallback' },
+      ],
+    });
+    const definition = aliasWorkflow(preset.id);
+    definition.nodes.find((node) => node.kind === 'agent')!.executorMode =
+      'preset';
+    const workflow = publish(engine, definition);
+    const listed = await engine.executors.listProfiles();
+    expect(
+      listed.find((item) => item.id === profile.id)?.detection.status,
+    ).toBe('unavailable');
+    const first = engine.start(workflow, {}).run;
+    expect(engine.store.work('available', first.id)[0]).toMatchObject({
+      executor: 'codex',
+      modelAliasSelection: { candidateIndex: 1 },
+    });
+
+    engine.executors.saveProfile({
+      ...profile,
+      ...invocation,
+      expectedRevision: 1,
+    });
+    const next = engine.start(workflow, {}).run;
+    expect(engine.store.work('available', next.id)[0]).toMatchObject({
+      executor: profile.id,
+      modelAliasSelection: { candidateIndex: 0 },
+    });
+  },
+);
 
 it('ignores a deleted workflow preset when an explicit harness replaces it', () => {
   const { engine } = setup();

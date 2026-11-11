@@ -1,7 +1,19 @@
 import { spawnManagedProcess } from './process.js';
 import type { HarnessAdapter, HarnessRun, HarnessResult } from './contracts.js';
 import { HarnessResultError, HarnessCleanupError } from './contracts.js';
-import type { Json, ModelUsage } from '@interlock/core';
+import type { ExecutorProfile, Json, ModelUsage } from '@interlock/core';
+
+export function customInvocation(
+  profile: ExecutorProfile,
+  mode = profile.mode ?? 'direct',
+) {
+  if (profile.transport === 'http')
+    return mode === 'launcher' ? profile.launchUrl : profile.turnUrl;
+  return (
+    (mode === 'launcher' ? profile.launchCommand : profile.turnCommand) ||
+    profile.command
+  );
+}
 
 export function interpolateTokens(
   template: string,
@@ -259,14 +271,15 @@ export const customAdapter: HarnessAdapter = {
     };
 
     let envelope: CustomTurnEnvelope;
+    const invocation = customInvocation(profile, 'direct');
     if (profile.transport === 'http') {
-      if (!profile.turnUrl) {
+      if (!invocation) {
         throw new Error(
           `Custom profile "${profile.id}" in HTTP direct turn mode requires turnUrl`,
         );
       }
       envelope = await executeHttpTurn({
-        url: profile.turnUrl,
+        url: invocation,
         headers: profile.headers,
         payload: contextPayload,
         tokens,
@@ -274,14 +287,13 @@ export const customAdapter: HarnessAdapter = {
         timeoutSeconds: profile.timeoutSeconds,
       });
     } else {
-      const command = profile.turnCommand || profile.command;
-      if (!command) {
+      if (!invocation) {
         throw new Error(
           `Custom profile "${profile.id}" in subprocess direct turn mode requires turnCommand`,
         );
       }
       envelope = await executeSubprocessTurn({
-        command,
+        command: invocation,
         cwd,
         env: profile.env,
         payload: contextPayload,

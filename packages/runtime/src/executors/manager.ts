@@ -70,6 +70,7 @@ import {
 } from './contracts.js';
 import {
   buildTokenMap,
+  customInvocation,
   interpolateTokens,
   executeCustomCommand,
 } from './custom.js';
@@ -252,7 +253,11 @@ export class ExecutorManager {
     ];
   }
   configuredPresetProfile(profile: ExecutorProfile | undefined) {
-    if (!profile?.enabled) return;
+    if (
+      !profile?.enabled ||
+      (profile.harness === 'custom' && !customInvocation(profile))
+    )
+      return;
     if (!this.running) return profile;
     const adapter = this.adapters.get(profile.harness);
     return adapter && adapter.available?.(profile.command) !== false
@@ -384,7 +389,16 @@ export class ExecutorManager {
     return Promise.all(
       this.profiles().map(async (profile) => ({
         ...profile,
-        detection: await this.detect(profile, refresh),
+        detection:
+          profile.harness === 'custom' && !customInvocation(profile)
+            ? {
+                status: 'unavailable' as const,
+                message:
+                  profile.transport === 'http'
+                    ? 'Set the integration URL.'
+                    : 'Set the integration command.',
+              }
+            : await this.detect(profile, refresh),
       })),
     );
   }
@@ -1635,13 +1649,14 @@ export class ExecutorManager {
     let remoteResumeCommand: string | undefined;
     let remoteDeepLink: string | undefined;
 
+    const invocation = customInvocation(profile, 'launcher');
     if (profile.transport === 'http') {
-      if (!profile.launchUrl) {
+      if (!invocation) {
         throw new Error(
           `Custom profile "${profile.id}" in launcher HTTP mode requires launchUrl`,
         );
       }
-      const url = interpolateTokens(profile.launchUrl, tokenMap);
+      const url = interpolateTokens(invocation, tokenMap);
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         Accept: 'application/json',
@@ -1667,14 +1682,13 @@ export class ExecutorManager {
       remoteResumeCommand = (data as any)?.resumeCommand;
       remoteDeepLink = (data as any)?.deepLink;
     } else {
-      const cmd = profile.launchCommand || profile.command;
-      if (!cmd) {
+      if (!invocation) {
         throw new Error(
           `Custom profile "${profile.id}" in launcher subprocess mode requires launchCommand`,
         );
       }
       const output = await this.runCustomCommand({
-        command: cmd,
+        command: invocation,
         cwd,
         env: profile.env,
         tokens: tokenMap,
