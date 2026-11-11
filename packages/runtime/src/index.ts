@@ -2,6 +2,9 @@ import { EventTriggers } from './eventTriggers.js';
 import { RunVersions } from './runVersions.js';
 import {
   modelReferences,
+  agentAliasReference,
+  selectsPreset,
+  usesDirectHarness,
   eligiblePresetChoices,
   inheritsWorkflowHarnessSettings,
   presetPermissions,
@@ -316,13 +319,12 @@ export class Engine {
       validateCaptures: (run, definition) => {
         this.variables.capture(definition, run.variableCaptures ?? []);
         const explicitPresets = new Set(
-          definition.nodes.flatMap((node) =>
-            node.kind === 'agent' &&
-            node.executorMode === 'preset' &&
-            node.model
-              ? [node.model]
-              : [],
-          ),
+          definition.nodes.flatMap((node) => {
+            if (node.kind !== 'agent' || !selectsPreset(node, definition))
+              return [];
+            const ref = agentAliasReference(node, definition);
+            return ref ? [ref] : [];
+          }),
         );
         for (const ref of modelReferences(definition)) {
           const inherited = this.modelAliases.capturedAlias(
@@ -2975,24 +2977,26 @@ export class Engine {
     if (node.executor === null) return {};
     const captures = run.modelAliasCaptures;
     const legacy = node.executorMode === undefined;
-    const direct = node.executorMode === 'harness';
+    const direct = usesDirectHarness(node, definition);
     const target = node.model ?? definition.agentModel;
-    const alias =
-      !direct && target
-        ? captures
-          ? this.modelAliases.capturedAlias(captures, target)
-          : this.modelAliases.get(target)
-        : undefined;
+    const aliasRef = agentAliasReference(node, definition);
+    const alias = aliasRef
+      ? captures
+        ? this.modelAliases.capturedAlias(captures, aliasRef)
+        : this.modelAliases.get(aliasRef)
+      : undefined;
     const workflowRef = definition.agentModel;
     const workflowHasPreset =
-      !!workflowRef &&
-      (run.ignoredWorkflowModelAlias === workflowRef ||
-        !!(captures
-          ? this.modelAliases.capturedAlias(captures, workflowRef)
-          : this.modelAliases.get(workflowRef)));
+      definition.agentModelMode === 'preset' ||
+      (definition.agentModelMode !== 'literal' &&
+        !!workflowRef &&
+        (run.ignoredWorkflowModelAlias === workflowRef ||
+          !!(captures
+            ? this.modelAliases.capturedAlias(captures, workflowRef)
+            : this.modelAliases.get(workflowRef))));
     const preset =
       !this.options.substituteOperation &&
-      (node.executorMode === 'preset' ||
+      (selectsPreset(node, definition) ||
         (captures !== undefined && alias?.permissions !== undefined));
     const profiles = this.executors.profiles();
     let executor = node.executor ?? definition.executor;
@@ -3020,8 +3024,8 @@ export class Engine {
         model = node.model;
         effort = node.effort;
       }
-    } else if (target) {
-      const candidates = this.modelAliases.expandCandidates(captures, target);
+    } else if (aliasRef) {
+      const candidates = this.modelAliases.expandCandidates(captures, aliasRef);
       if (preset) {
         const override = presetPermissions(
           alias?.permissions,
@@ -3065,7 +3069,7 @@ export class Engine {
             : undefined;
         if (!choice)
           throw new InterlockError(
-            `Agent preset "${target}" has no eligible harness for ${node.label}.`,
+            `Agent preset "${aliasRef}" has no eligible harness for ${node.label}.`,
           );
         executor = choice.executor;
         model = choice.candidate.model;

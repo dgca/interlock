@@ -5,6 +5,8 @@ import {
   modelAliasMutationSchema,
   modelAliasReadSchema,
   modelReferences,
+  agentAliasReference,
+  selectsPreset,
   firstEligiblePresetChoice,
   presetPermissions,
   type ExecutorProfile,
@@ -36,13 +38,9 @@ export class ModelAliases {
     if (ref !== definition.agentModel) return true;
     const agents = definition.nodes.filter((node) => node.kind === 'agent');
     if (!agents.some((node) => node.executor !== null)) return false;
-    if (!agents.some((node) => node.executorMode)) return true;
-    return agents.some(
-      (node) =>
-        node.executor !== null &&
-        node.executorMode !== 'harness' &&
-        (node.model ?? definition.agentModel) === ref,
-    );
+    if (!definition.agentModelMode && !agents.some((node) => node.executorMode))
+      return true;
+    return agents.some((node) => agentAliasReference(node, definition) === ref);
   }
 
   get(idOrName: string): SavedModelAlias | undefined {
@@ -278,7 +276,7 @@ export class ModelAliases {
     if (inheritedCaptures === undefined)
       for (const node of definition.nodes) {
         if (node.kind !== 'agent') continue;
-        const model = node.model ?? definition.agentModel;
+        const model = agentAliasReference(node, definition);
         const alias = model ? this.capturedAlias(captures, model) : undefined;
         const problem = this.eligibilityProblem(definition, node, alias);
         if (problem) throw new InterlockError(problem);
@@ -291,11 +289,13 @@ export class ModelAliases {
     node: Extract<WorkflowDefinition['nodes'][number], { kind: 'agent' }>,
     alias?: Pick<SavedModelAlias, 'candidates' | 'permissions'>,
   ) {
-    if (node.executor === null || node.executorMode === 'harness') return;
-    if (node.executorMode === 'preset' && !alias)
-      return `Agent preset "${node.model}" is missing for "${node.label}". Configure the preset before starting a new run.`;
+    const reference = agentAliasReference(node, definition);
+    if (!reference) return;
+    const preset = selectsPreset(node, definition);
+    if (preset && !alias)
+      return `Agent preset "${reference}" is missing for "${node.label}". Configure the preset before starting a new run.`;
     if (!alias) return;
-    if (node.executorMode === 'preset' || alias.permissions) {
+    if (preset || alias.permissions) {
       if (
         !firstEligiblePresetChoice(
           alias.candidates,

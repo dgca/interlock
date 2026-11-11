@@ -22,6 +22,7 @@ export function ModelSettings({
   canResetEffort = true,
   modelHint,
   allowAliases = false,
+  referenceMode,
   alwaysShowEffort = false,
   showInheritedModel = false,
   effortLabel = 'Thinking effort',
@@ -33,7 +34,10 @@ export function ModelSettings({
   effort?: string | null;
   inheritedModel?: string;
   inheritedEffort?: string | null;
-  onModelChange: (value: string | undefined) => void;
+  onModelChange: (
+    value: string | undefined,
+    mode?: 'literal' | 'preset',
+  ) => void;
   onEffortChange: (value: string | null | undefined) => void;
   profileId?: string;
   paths?: { command?: string; cwd?: string };
@@ -41,6 +45,7 @@ export function ModelSettings({
   canResetEffort?: boolean;
   modelHint?: string;
   allowAliases?: boolean;
+  referenceMode?: 'literal' | 'preset';
   alwaysShowEffort?: boolean;
   showInheritedModel?: boolean;
   effortLabel?: string;
@@ -76,6 +81,7 @@ export function ModelSettings({
         onCatalog={setCatalog}
         loadCapabilities={!!effectiveModel}
         allowAliases={allowAliases}
+        referenceMode={referenceMode}
         inheritedValue={inheritedModel}
         onAlias={setAlias}
       />

@@ -7,7 +7,7 @@ import {
   type ExecutorPermissionMode,
   type ExecutorProfile,
 } from './executors.js';
-import type { WorkflowDefinition } from './index.js';
+import type { WorkflowDefinition, WorkflowNode } from './index.js';
 
 export const modelAliasCandidateSchema = z
   .object({
@@ -150,13 +150,46 @@ export type ModelAliasMutation = z.input<typeof modelAliasMutationSchema>;
 
 export function modelReferences(definition: WorkflowDefinition): string[] {
   const refs = new Set<string>();
-  if (definition.agentModel) refs.add(definition.agentModel);
+  if (definition.agentModel && definition.agentModelMode !== 'literal')
+    refs.add(definition.agentModel);
   for (const node of definition.nodes) {
     if (node.kind === 'agent') {
       if (node.model && node.executorMode !== 'harness') refs.add(node.model);
     }
   }
   return [...refs];
+}
+
+type AgentNode = Extract<WorkflowNode, { kind: 'agent' }>;
+
+export function usesDirectHarness(
+  node: AgentNode,
+  workflow?: WorkflowDefinition,
+) {
+  return (
+    node.executorMode === 'harness' ||
+    (!!node.executor && !node.model && workflow?.agentModelMode === 'preset')
+  );
+}
+
+export function agentAliasReference(
+  node: AgentNode,
+  workflow: WorkflowDefinition,
+) {
+  if (node.executor === null || usesDirectHarness(node, workflow)) return;
+  return (
+    node.model ??
+    (workflow.agentModelMode === 'literal' ? undefined : workflow.agentModel)
+  );
+}
+
+export function selectsPreset(node: AgentNode, workflow: WorkflowDefinition) {
+  return (
+    node.executorMode === 'preset' ||
+    (workflow.agentModelMode === 'preset' &&
+      node.executor === undefined &&
+      !node.model)
+  );
 }
 
 const permissionRank = { 'read-only': 0, standard: 1, 'full-access': 2 };

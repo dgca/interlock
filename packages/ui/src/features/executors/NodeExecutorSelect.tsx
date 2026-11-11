@@ -3,6 +3,7 @@ import {
   firstEligiblePresetChoice,
   inheritsWorkflowHarnessSettings,
   presetPermissions,
+  usesDirectHarness,
   type SavedModelAlias,
   type WorkflowDefinition,
 } from '@interlock/core';
@@ -60,10 +61,16 @@ export function NodeExecutorSelect({
     node.executorMode === 'harness' || node.executor === null
       ? undefined
       : node.model;
+  const workflowAliasReference =
+    definition?.agentModelMode === 'literal' ? undefined : workflowModel;
   const workflowAliasQuery = useQuery({
-    queryKey: [...trpc.modelAliases.pathKey(), 'reference', workflowModel],
-    queryFn: () => inspectModelReference(workflowModel!),
-    enabled: enabled && !!workflowModel,
+    queryKey: [
+      ...trpc.modelAliases.pathKey(),
+      'reference',
+      workflowAliasReference,
+    ],
+    queryFn: () => inspectModelReference(workflowAliasReference!),
+    enabled: enabled && !!workflowAliasReference,
   });
   const nodeAliasQuery = useQuery({
     queryKey: [...trpc.modelAliases.pathKey(), 'reference', nodeReference],
@@ -80,7 +87,10 @@ export function NodeExecutorSelect({
   };
   const workflowAlias = workflowAliasQuery.data?.alias;
   const nodeAlias = nodeAliasQuery.data?.alias;
-  const workflowMissing = workflowAliasQuery.data?.missing;
+  const strictWorkflowPreset = definition?.agentModelMode === 'preset';
+  const workflowMissing =
+    workflowAliasQuery.data?.missing ||
+    (strictWorkflowPreset && workflowAliasQuery.isSuccess && !workflowAlias);
   const nodeMissing = nodeAliasQuery.data?.missing;
   const workflowUsesPreset = !!workflowAlias || !!workflowMissing;
   const workflowExecutor = definition?.executor;
@@ -92,22 +102,27 @@ export function NodeExecutorSelect({
       availableProfile,
       presetPermissions(preset.permissions, workflowPermissions),
     );
+  const legacyCandidate = (preset: SavedModelAlias) =>
+    preset.candidates.find(
+      (item) => !item.profileId || configuredProfile(item.profileId)?.enabled,
+    ) ?? preset.candidates[0];
   const legacyChoiceFor = (
     preset: SavedModelAlias,
     executor = workflowExecutor,
   ) => {
     if (preset.permissions) return choiceFor(preset, executor);
-    // Legacy aliases can pick an unbound candidate even without a harness.
-    const candidate = preset.candidates.find(
-      (item) => !item.profileId || configuredProfile(item.profileId)?.enabled,
-    );
+    const candidate = legacyCandidate(preset);
     const id = candidate?.profileId ?? executor;
     const profile = availableProfile(id);
     return candidate && id && profile
       ? { candidate, executor: id, profile }
       : undefined;
   };
-  const workflowChoice = workflowAlias && legacyChoiceFor(workflowAlias);
+  const workflowChoice =
+    workflowAlias &&
+    (strictWorkflowPreset
+      ? choiceFor(workflowAlias)
+      : legacyChoiceFor(workflowAlias));
   const defaultProfile = workflowUsesPreset
     ? workflowChoice?.profile
     : availableProfile(workflowExecutor);
@@ -115,7 +130,7 @@ export function NodeExecutorSelect({
     enabled &&
     (profilesQuery.isPending ||
       presetsQuery.isPending ||
-      (!!workflowModel && workflowAliasQuery.isPending) ||
+      (!!workflowAliasReference && workflowAliasQuery.isPending) ||
       (!!nodeReference && nodeAliasQuery.isPending));
   const error =
     profilesQuery.isError ||
@@ -140,7 +155,9 @@ export function NodeExecutorSelect({
     .sort((a, b) => a.label.localeCompare(b.label));
 
   const effectiveLegacyAlias =
-    node.executorMode === undefined && node.executor !== null
+    !usesDirectHarness(node, definition) &&
+    node.executorMode === undefined &&
+    node.executor !== null
       ? (nodeAlias ?? (!node.model ? workflowAlias : undefined))
       : undefined;
   const savedPreset =
@@ -150,6 +167,13 @@ export function NodeExecutorSelect({
       ? choiceFor(savedPreset)
       : legacyChoiceFor(savedPreset, node.executor ?? workflowExecutor)
     : undefined;
+  const connectedThroughLegacyAlias =
+    effectiveLegacyAlias &&
+    !node.executor &&
+    !workflowExecutor &&
+    !effectiveLegacyAlias.permissions &&
+    (!strictWorkflowPreset || !!node.model) &&
+    !legacyCandidate(effectiveLegacyAlias)?.profileId;
   const legacyCombination = !!effectiveLegacyAlias && !!node.executor;
   const savedHarness = configuredProfile(node.executor);
   const selectedHarness = availableProfile(node.executor);
@@ -163,9 +187,15 @@ export function NodeExecutorSelect({
   let value = connected;
   let savedLabel: string | undefined;
   let unavailable = false;
-  if (node.executor === null) {
+  if (node.executor === null || connectedThroughLegacyAlias) {
     value = connected;
-  } else if (nodeMissing || (legacy && !node.model && workflowMissing)) {
+  } else if (
+    nodeMissing ||
+    (legacy &&
+      !node.model &&
+      workflowMissing &&
+      !usesDirectHarness(node, definition))
+  ) {
     value = 'saved';
     savedLabel = node.model ?? 'Workflow default';
     unavailable = true;
@@ -233,7 +263,7 @@ export function NodeExecutorSelect({
   const showModels = !savedPreset && !!selectedProfile;
   const inheritSettings =
     selectedProfile &&
-    (legacy ||
+    ((legacy && !usesDirectHarness(node, definition)) ||
       inheritsWorkflowHarnessSettings(
         selectedProfile.id,
         workflowExecutor,
@@ -369,6 +399,7 @@ export function NodeExecutorSelect({
                   ) ?? effectiveChoice.profile.permissions
                 ]
               }
+              {effectiveChoice.profile.harness === 'custom' ? ' requested' : ''}
             </Text>
           )}
           {!effectivePreset && selectedProfile && (

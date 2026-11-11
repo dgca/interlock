@@ -780,3 +780,60 @@ it('allows connected-only work when the unused workflow preset was deleted', () 
     'executor',
   );
 });
+
+it('uses preset eligibility for a deliberately configured workflow default but honors an explicit node harness', () => {
+  const { engine } = setup();
+  engine.executors.saveProfile({
+    id: 'integration',
+    name: 'Integration',
+    harness: 'custom',
+    enabled: true,
+    expectedRevision: 0,
+  });
+  const preset = engine.modelAliases.mutate({
+    action: 'create',
+    name: 'Workflow review',
+    candidates: [
+      { profileId: 'claude-code', model: 'primary' },
+      { profileId: 'integration', model: 'cannot-enforce' },
+      { profileId: 'codex', model: 'eligible-fallback' },
+    ],
+  });
+  const definition = blankDefinition();
+  definition.agentModel = preset.id;
+  definition.agentModelMode = 'preset';
+  definition.agentPermissions = 'read-only';
+  const workflow = publish(engine, definition);
+  expect(() => engine.start(workflow, {})).toThrow(/no eligible harness/i);
+  engine.executors.saveProfile({
+    id: 'codex',
+    name: 'Codex',
+    harness: 'codex',
+    enabled: true,
+    expectedRevision: 0,
+  });
+  const run = engine.start(workflow, {}).run;
+  expect(engine.store.work('available', run.id)[0]).toMatchObject({
+    executor: 'codex',
+    executorModel: 'eligible-fallback',
+    executorPermissions: 'read-only',
+    executorPermissionsSource: 'workflow',
+  });
+
+  const node = definition.nodes.find((item) => item.kind === 'agent')!;
+  node.executor = 'pi';
+  const explicit = engine.start(publish(engine, definition), {}).run;
+  const work = engine.store.work('available', explicit.id)[0];
+  expect(work.executor).toBe('pi');
+  expect(work).not.toHaveProperty('modelAliasSelection');
+  expect(work).not.toHaveProperty('executorModel');
+
+  definition.agentModelMode = 'literal';
+  definition.agentModel = preset.id;
+  const literal = engine.start(publish(engine, definition), {}).run;
+  expect(engine.store.work('available', literal.id)[0]).toMatchObject({
+    executor: 'pi',
+    executorModel: preset.id,
+  });
+  expect(literal.modelAliasCaptures).toEqual([]);
+});

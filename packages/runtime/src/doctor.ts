@@ -8,6 +8,8 @@ import {
   type DoctorReport,
   variableReferences,
   modelReferences,
+  agentAliasReference,
+  selectsPreset,
   promptIds,
   sameWorkflowContent,
   type ResourceReservation,
@@ -652,14 +654,12 @@ export async function runDoctor(
               .filter((node) => node.kind === 'agent')
               .filter(
                 (node) =>
-                  node.executor !== null &&
-                  node.executorMode !== 'harness' &&
-                  (node.model ?? version.definition.agentModel) === mRef,
+                  agentAliasReference(node, version.definition) === mRef,
               );
             if (
               !alias &&
               (requirement ||
-                agents.some((node) => node.executorMode === 'preset'))
+                agents.some((node) => selectsPreset(node, version.definition)))
             ) {
               const aliasName = requirement?.name ?? mRef;
               workflowIssues++;

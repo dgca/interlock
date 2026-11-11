@@ -24,6 +24,7 @@ export function ExecutorSelect({
   workflowPermissions,
   onPermissionsChange,
   workflowModel,
+  workflowModelMode,
   onModelChange,
   workflowEffort,
   onEffortChange,
@@ -39,7 +40,11 @@ export function ExecutorSelect({
   workflowPermissions?: ExecutorPermissionMode;
   onPermissionsChange?: (mode: ExecutorPermissionMode | undefined) => void;
   workflowModel?: string;
-  onModelChange?: (model: string | undefined) => void;
+  onModelChange?: (
+    model: string | undefined,
+    mode?: 'literal' | 'preset',
+  ) => void;
+  workflowModelMode?: 'literal' | 'preset';
   workflowEffort?: string | null;
   onEffortChange?: (value: string | null | undefined) => void;
   nodeModel?: string;
@@ -110,11 +115,11 @@ export function ExecutorSelect({
       </NativeSelect>
       <p className="hint">
         {value
-          ? 'Default harness for managed work. A agent preset can select a different harness.'
+          ? 'Default harness for managed work. A preset can select a different harness for nodes that inherit it.'
           : inherit !== undefined && value === undefined
-            ? 'Uses the workflow’s harness and model defaults. A agent preset can select a different harness.'
+            ? 'Uses the workflow’s harness and model defaults. An agent preset can select a different harness.'
             : workflowSettings
-              ? 'A agent preset can select a harness. Otherwise, a connected agent picks up the assignment.'
+              ? 'An agent preset can select a harness. Otherwise, a connected agent picks up the assignment.'
               : 'An agent connected through MCP picks up the assignment.'}{' '}
         <a
           href={`${paths.harnesses}#harnesses`}
@@ -184,6 +189,7 @@ export function ExecutorSelect({
         <div style={{ marginTop: 20 }}>
           <ModelSettings
             allowAliases
+            referenceMode={workflowModelMode}
             modelHint={`${nodeModel && onNodeModelChange ? `${nodeModel} · node override.` : workflowModel ? `${workflowModel} · ${onNodeModelChange ? 'inherited from workflow' : 'workflow override'}.` : profile ? `${profile.model ?? 'CLI default'} · inherited from ${profile.name}.` : 'Each managed Agent uses its selected harness’s default model.'}${onModelChange ? ' Agent nodes can override the model and thinking effort. Connected agents keep their own settings.' : ''}`}
             label={onNodeModelChange ? 'Model' : 'Agent model'}
             defaultLabel={

@@ -27,12 +27,13 @@ export function ModelPicker({
   onCatalog,
   loadCapabilities = false,
   allowAliases = false,
+  referenceMode,
   inheritedValue,
   onAlias,
 }: {
   label: string;
   value?: string;
-  onChange: (model: string | undefined) => void;
+  onChange: (model: string | undefined, mode?: 'literal' | 'preset') => void;
   profileId?: string;
   paths?: { command?: string; cwd?: string };
   defaultLabel: string;
@@ -40,6 +41,7 @@ export function ModelPicker({
   onCatalog?: (catalog: ExecutorModels | undefined) => void;
   loadCapabilities?: boolean;
   allowAliases?: boolean;
+  referenceMode?: 'literal' | 'preset';
   inheritedValue?: string;
   onAlias?: (alias: SavedModelAlias | null | undefined) => void;
 }) {
@@ -56,7 +58,7 @@ export function ModelPicker({
     setAlias(undefined);
     onAlias?.(undefined);
     setReferenceError('');
-    if (!allowAliases || !reference) {
+    if (!allowAliases || !reference || referenceMode === 'literal') {
       setAlias(null);
       onAlias?.(null);
       return;
@@ -75,7 +77,7 @@ export function ModelPicker({
     return () => {
       current = false;
     };
-  }, [allowAliases, reference, aliasReload, onAlias]);
+  }, [allowAliases, reference, referenceMode, aliasReload, onAlias]);
   const id = useId();
   const [catalog, setCatalog] = useState<ExecutorModels>();
   const [loading, setLoading] = useState(false);
@@ -198,7 +200,12 @@ export function ModelPicker({
         store={combobox}
         onOptionSubmit={(option) => {
           if (disabled) return;
-          onChange(option === '__default' ? undefined : option.slice(6));
+          if (option === '__default') onChange(undefined);
+          else
+            onChange(
+              option.slice(6),
+              option.startsWith('alias:') ? 'preset' : 'literal',
+            );
           combobox.closeDropdown();
         }}
       >
