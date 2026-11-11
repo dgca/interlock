@@ -1,4 +1,4 @@
-import { Select, Stack, Text } from '../../design-system';
+import { defaultOptionsFilter, Select, Stack, Text } from '../../design-system';
 import {
   firstEligiblePresetChoice,
   inheritsWorkflowHarnessSettings,
@@ -299,6 +299,15 @@ export function NodeExecutorSelect({
           nodeAliasQuery.isError
         }
         searchable
+        filter={({ options, search, limit }) =>
+          defaultOptionsFilter({
+            options: options.filter(
+              (option) => 'group' in option || option.value !== 'saved',
+            ),
+            search,
+            limit,
+          }) as typeof options
+        }
         allowDeselect={false}
         nothingFoundMessage="No matching executors"
         error={

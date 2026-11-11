@@ -416,7 +416,7 @@ it('selects a long literal model ID without sending it as an alias search', asyn
     ...document.querySelectorAll<HTMLElement>('[role="option"]'),
   ].find((option) => option.textContent === `Use custom model: ${literal}`)!;
   await click(option);
-  expect(changed).toHaveBeenCalledWith(literal);
+  expect(changed).toHaveBeenCalledWith(literal, 'literal');
   expect(container.textContent).not.toContain('could not be loaded');
 });
 
