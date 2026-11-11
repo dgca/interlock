@@ -181,7 +181,7 @@ export function supportsPresetPermissions(
   );
 }
 
-export function firstEligiblePresetChoice<
+export function* eligiblePresetChoices<
   T extends ModelAliasCandidate,
   P extends Pick<ExecutorProfile, 'harness'>,
 >(
@@ -194,8 +194,15 @@ export function firstEligiblePresetChoice<
     const executor = candidate.profileId ?? workflowExecutor;
     const profile = executor ? profileFor(executor) : undefined;
     if (executor && profile && supportsPresetPermissions(profile, permissions))
-      return { candidate, executor, profile };
+      yield { candidate, executor, profile };
   }
+}
+
+export function firstEligiblePresetChoice<
+  T extends ModelAliasCandidate,
+  P extends Pick<ExecutorProfile, 'harness'>,
+>(...args: Parameters<typeof eligiblePresetChoices<T, P>>) {
+  return eligiblePresetChoices(...args).next().value;
 }
 
 export function inheritsWorkflowHarnessSettings(

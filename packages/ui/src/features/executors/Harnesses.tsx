@@ -454,9 +454,11 @@ function ProfileRow({
               disabled={busy}
               inputWrapperOrder={['label', 'input', 'description', 'error']}
               description={
-                draft.harness === 'pi' && draft.permissions === 'standard'
-                  ? 'Allow read tools; ask before commands, file changes, and other tools.'
-                  : permissionDescriptions[draft.permissions]
+                draft.harness === 'custom'
+                  ? 'Interlock sends this mode to the integration. The integration is responsible for enforcing it.'
+                  : draft.harness === 'pi' && draft.permissions === 'standard'
+                    ? 'Allow read tools; ask before commands, file changes, and other tools.'
+                    : permissionDescriptions[draft.permissions]
               }
               value={draft.permissions}
               onChange={(e) =>
@@ -469,7 +471,7 @@ function ProfileRow({
               data={permissionOptions}
             />
           </div>
-          {draft.permissions === 'read-only' && (
+          {draft.harness !== 'custom' && draft.permissions === 'read-only' && (
             <p className={styles.note}>
               Read-only restrictions do not sandbox project startup hooks.
             </p>

@@ -32,7 +32,7 @@ import {
 import type { Store } from '@interlock/storage';
 import { fingerprint } from './versionIdentity.js';
 import { Variables } from './variables.js';
-import { ModelAliases } from './modelAliases.js';
+import type { ModelAliases } from './modelAliases.js';
 import { modelReferences, type ModelAliasCapture } from '@interlock/core';
 import { variableReferences, type VariableCapture } from '@interlock/core';
 import {
@@ -75,6 +75,7 @@ export class Testbench {
     },
     usage: Usage,
     private trials: TrialEnvironments,
+    private aliases: ModelAliases,
   ) {
     this.metrics = new ComparisonMetrics(store, usage);
   }
@@ -355,7 +356,6 @@ export class Testbench {
     } catch (error) {
       blockers.push(textError(error));
     }
-    const aliases = new ModelAliases(this.store);
     const aliasPool = new Map<string, ModelAliasCapture>();
     for (const pin of captured.pins) {
       try {
@@ -363,7 +363,7 @@ export class Testbench {
           pin.workflowId,
           pin.version,
         )!.definition;
-        for (const alias of aliases.capture(definition))
+        for (const alias of this.aliases.capture(definition))
           aliasPool.set(alias.reference ?? alias.aliasId, alias);
       } catch (error) {
         blockers.push(textError(error));

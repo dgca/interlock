@@ -23,6 +23,7 @@ export function ModelSettings({
   modelHint,
   allowAliases = false,
   alwaysShowEffort = false,
+  showInheritedModel = false,
   effortLabel = 'Thinking effort',
 }: {
   label: string;
@@ -41,6 +42,7 @@ export function ModelSettings({
   modelHint?: string;
   allowAliases?: boolean;
   alwaysShowEffort?: boolean;
+  showInheritedModel?: boolean;
   effortLabel?: string;
 }) {
   const [catalog, setCatalog] = useState<ExecutorModels>();
@@ -83,7 +85,12 @@ export function ModelSettings({
           candidates can choose their own harness and thinking effort.
         </p>
       ) : (
-        modelHint && <p className="hint">{modelHint}</p>
+        (modelHint || (showInheritedModel && !model && inheritedModel)) && (
+          <p className="hint">
+            {modelHint ??
+              `Inherited model: ${catalog?.models.find((item) => item.id === inheritedModel)?.name ?? inheritedModel}`}
+          </p>
+        )
       )}
       {(!alias || effort !== undefined) &&
         (alwaysShowEffort ||

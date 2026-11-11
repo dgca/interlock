@@ -14,7 +14,7 @@ import {
   isPrimaryHarness,
 } from './harnessProfiles';
 import { ModelSettings } from './ModelSettings';
-import { readModelAliases, resolveModelAlias } from './modelAliasApi';
+import { readModelAliases, inspectModelReference } from './modelAliasApi';
 import { permissionLabels } from './permissions';
 
 type Agent = Extract<WorkflowDefinition['nodes'][number], { kind: 'agent' }>;
@@ -62,12 +62,12 @@ export function NodeExecutorSelect({
       : node.model;
   const workflowAliasQuery = useQuery({
     queryKey: [...trpc.modelAliases.pathKey(), 'reference', workflowModel],
-    queryFn: () => resolveModelAlias(workflowModel!),
+    queryFn: () => inspectModelReference(workflowModel!),
     enabled: enabled && !!workflowModel,
   });
   const nodeAliasQuery = useQuery({
     queryKey: [...trpc.modelAliases.pathKey(), 'reference', nodeReference],
-    queryFn: () => resolveModelAlias(nodeReference!),
+    queryFn: () => inspectModelReference(nodeReference!),
     enabled: enabled && !!nodeReference,
   });
   const profiles = profilesQuery.data ?? [];
@@ -78,8 +78,11 @@ export function NodeExecutorSelect({
     const profile = configuredProfile(id);
     return profile && isAvailableHarness(profile) ? profile : undefined;
   };
-  const workflowAlias = workflowAliasQuery.data;
-  const nodeAlias = nodeAliasQuery.data;
+  const workflowAlias = workflowAliasQuery.data?.alias;
+  const nodeAlias = nodeAliasQuery.data?.alias;
+  const workflowMissing = workflowAliasQuery.data?.missing;
+  const nodeMissing = nodeAliasQuery.data?.missing;
+  const workflowUsesPreset = !!workflowAlias || !!workflowMissing;
   const workflowExecutor = definition?.executor;
   const workflowPermissions = definition?.agentPermissions;
   const choiceFor = (preset: SavedModelAlias, executor = workflowExecutor) =>
@@ -105,7 +108,7 @@ export function NodeExecutorSelect({
       : undefined;
   };
   const workflowChoice = workflowAlias && legacyChoiceFor(workflowAlias);
-  const defaultProfile = workflowAlias
+  const defaultProfile = workflowUsesPreset
     ? workflowChoice?.profile
     : availableProfile(workflowExecutor);
   const loading =
@@ -150,12 +153,22 @@ export function NodeExecutorSelect({
   const legacyCombination = !!effectiveLegacyAlias && !!node.executor;
   const savedHarness = configuredProfile(node.executor);
   const selectedHarness = availableProfile(node.executor);
-  const hasConfiguredDefault = !!(workflowExecutor || workflowAlias);
+  const hasConfiguredDefault = !!workflowExecutor || workflowUsesPreset;
+  const legacy = node.executorMode === undefined;
+  const nodeMasksWorkflowPreset =
+    legacy && !!node.model && !nodeAlias && !nodeMissing && workflowUsesPreset;
+  const activeDefaultProfile = nodeMasksWorkflowPreset
+    ? availableProfile(workflowExecutor)
+    : defaultProfile;
   let value = connected;
   let savedLabel: string | undefined;
   let unavailable = false;
   if (node.executor === null) {
     value = connected;
+  } else if (nodeMissing || (legacy && !node.model && workflowMissing)) {
+    value = 'saved';
+    savedLabel = node.model ?? 'Workflow default';
+    unavailable = true;
   } else if (legacyCombination) {
     value = 'saved';
     savedLabel = `${savedHarness ? harnessLabel(savedHarness) : node.executor} + ${effectiveLegacyAlias.name} (saved)`;
@@ -177,9 +190,14 @@ export function NodeExecutorSelect({
       savedLabel = savedHarness ? harnessLabel(savedHarness) : node.executor;
       unavailable = true;
     }
-  } else if (defaultProfile) {
-    value = workflowDefault;
-  } else if (hasConfiguredDefault) {
+  } else if (activeDefaultProfile) {
+    if (nodeMasksWorkflowPreset) {
+      value = 'saved';
+      savedLabel = `${harnessLabel(activeDefaultProfile)} (saved model override)`;
+    } else value = workflowDefault;
+  } else if (
+    nodeMasksWorkflowPreset ? !!workflowExecutor : hasConfiguredDefault
+  ) {
     value = 'saved';
     savedLabel = 'Workflow default';
     unavailable = true;
@@ -206,19 +224,24 @@ export function NodeExecutorSelect({
         ]
       : []),
   ];
-  const selectedProfile =
-    selectedHarness ?? (value === workflowDefault ? defaultProfile : undefined);
+  const selectedProfile = unavailable
+    ? undefined
+    : (selectedHarness ??
+      (value === workflowDefault || nodeMasksWorkflowPreset
+        ? activeDefaultProfile
+        : undefined));
   const showModels = !savedPreset && !!selectedProfile;
   const inheritSettings =
     selectedProfile &&
-    (value === workflowDefault ||
+    (legacy ||
       inheritsWorkflowHarnessSettings(
         selectedProfile.id,
         workflowExecutor,
-        !!workflowAlias,
+        workflowUsesPreset,
       ));
   const inheritedModel =
-    (inheritSettings ? workflowModel : undefined) ?? selectedProfile?.model;
+    (inheritSettings && !workflowUsesPreset ? workflowModel : undefined) ??
+    selectedProfile?.model;
   const inheritedEffort =
     inheritSettings && definition?.agentEffort !== undefined
       ? definition.agentEffort
@@ -231,6 +254,12 @@ export function NodeExecutorSelect({
     <Stack gap="sm" mb="md">
       <Select<string>
         label="Executor"
+        description={
+          !loading && value === workflowDefault && defaultProfile
+            ? `Uses ${harnessLabel(defaultProfile)}${workflowAlias ? ` via ${workflowAlias.name}` : ''}.`
+            : undefined
+        }
+        inputWrapperOrder={['label', 'input', 'description', 'error']}
         data={options}
         value={value}
         disabled={
@@ -286,7 +315,7 @@ export function NodeExecutorSelect({
               key={selectedProfile.id}
               label="Model"
               defaultLabel={
-                inheritSettings && workflowModel
+                inheritSettings && workflowModel && !workflowUsesPreset
                   ? 'Use workflow default'
                   : 'Use harness default'
               }
@@ -300,7 +329,23 @@ export function NodeExecutorSelect({
               effort={node.effort}
               inheritedModel={inheritedModel}
               inheritedEffort={inheritedEffort}
-              onModelChange={(model) => onChange({ model })}
+              onModelChange={(model) => {
+                if (legacy && node.executor) {
+                  onChange({
+                    model,
+                    executorMode: 'harness',
+                    ...(node.effort === undefined &&
+                    !inheritsWorkflowHarnessSettings(
+                      node.executor,
+                      workflowExecutor,
+                      workflowUsesPreset,
+                    )
+                      ? { effort: definition?.agentEffort }
+                      : {}),
+                  });
+                } else onChange({ model });
+              }}
+              showInheritedModel
               onEffortChange={(effort) => onChange({ effort })}
               alwaysShowEffort
             />
@@ -333,8 +378,10 @@ export function NodeExecutorSelect({
                   workflowPermissions ?? selectedProfile.permissions
                 ]
               }{' '}
-              permissions ·{' '}
-              {workflowPermissions ? 'workflow override' : 'harness default'}
+              {selectedProfile.harness === 'custom'
+                ? ' requested'
+                : ' permissions'}{' '}
+              · {workflowPermissions ? 'workflow override' : 'harness default'}
             </Text>
           )}
           {value === connected && (

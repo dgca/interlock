@@ -1,6 +1,9 @@
-import { afterEach, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { afterEach, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { codexAdapter } from '../packages/runtime/src/executors/codex';
+import { piAdapter } from '../packages/runtime/src/executors/pi';
 import { tmpdir } from 'node:os';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
@@ -674,3 +677,84 @@ it('uses the first enabled preset choice that can enforce workflow and preset pe
     revision: 1,
   });
 });
+
+it('ignores a deleted workflow preset when an explicit harness replaces it', () => {
+  const { engine } = setup();
+  const preset = engine.modelAliases.mutate({
+    action: 'create',
+    name: 'Old preset',
+    candidates: [{ profileId: 'codex', model: 'old-model' }],
+  });
+  const definition = blankDefinition();
+  definition.executor = 'codex';
+  definition.agentModel = preset.id;
+  definition.agentEffort = 'high';
+  const node = definition.nodes.find((item) => item.kind === 'agent')!;
+  node.executorMode = 'harness';
+  node.executor = 'codex';
+  const workflow = publish(engine, definition);
+  engine.modelAliases.mutate({
+    action: 'delete',
+    id: preset.id,
+    expectedRevision: 1,
+  });
+  const run = engine.start(workflow, {}).run;
+  const work = engine.store.work('available', run.id)[0];
+  expect(work.executor).toBe('codex');
+  expect(work).not.toHaveProperty('executorModel');
+  expect(work).not.toHaveProperty('executorEffort');
+});
+
+it.each([false, true])(
+  'checks executable versions in priority order before offering a preset (warm=%s)',
+  async (warm) => {
+    const { engine, dir } = setup();
+    const broken = join(dir, 'broken-harness');
+    writeFileSync(broken, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    engine.executors.start([codexAdapter, piAdapter]);
+    engine.executors.saveProfile({
+      id: 'codex',
+      harness: 'codex',
+      name: 'Broken Codex',
+      enabled: true,
+      expectedRevision: 0,
+      command: broken,
+    });
+    engine.executors.saveProfile({
+      id: 'pi',
+      harness: 'pi',
+      name: 'Pi',
+      enabled: true,
+      expectedRevision: 0,
+      command: fileURLToPath(
+        new URL('./fixtures/pi-harness.mjs', import.meta.url),
+      ),
+    });
+    const preset = engine.modelAliases.mutate({
+      action: 'create',
+      name: 'Check versions',
+      permissions: 'read-only',
+      candidates: [
+        { profileId: 'codex', model: 'broken' },
+        { profileId: 'pi', model: 'fixture/model' },
+      ],
+    });
+    const definition = aliasWorkflow(preset.id);
+    definition.nodes.find((item) => item.kind === 'agent')!.executorMode =
+      'preset';
+    if (warm) await engine.executors.listProfiles();
+    const run = engine.start(publish(engine, definition), {}).run;
+    if (!warm) expect(engine.store.work(undefined, run.id)).toHaveLength(0);
+    await vi.waitFor(() => {
+      expect(engine.store.work(undefined, run.id)[0]).toMatchObject({
+        executor: 'pi',
+        executorPermissions: 'read-only',
+        modelAliasSelection: { candidateIndex: 1 },
+      });
+    });
+    expect(
+      engine.run(run.id).executions.filter((step) => step.kind === 'agent'),
+    ).toHaveLength(1);
+    await engine.executors.stop();
+  },
+);

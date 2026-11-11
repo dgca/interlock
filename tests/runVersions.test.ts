@@ -1153,3 +1153,32 @@ it('checks the full nested Batch ancestry even when the next node and immediate 
   });
   expect(e.run(root.id).version).toBe(1);
 });
+
+it('does not move a run from a literal model to an uncaptured explicit preset', () => {
+  const e = setup();
+  const d = definition();
+  const next = d.nodes.find(
+    (node) => node.kind === 'agent' && node.id === 'next',
+  )!;
+  next.model = 'Deep review';
+  const id = publish(e, d);
+  const run = e.start(id, {}).run;
+  e.modelAliases.mutate({
+    action: 'create',
+    name: 'Deep review',
+    candidates: [{ profileId: 'codex', model: 'review-model' }],
+  });
+  newer(e, id, (draft) => {
+    const target = draft.nodes.find(
+      (node) => node.kind === 'agent' && node.id === 'next',
+    )!;
+    target.executorMode = 'preset';
+  });
+  boundary(e, run.id);
+  expect(e.runVersions.preview({ runId: run.id, version: 2 })).toMatchObject({
+    canApply: false,
+    blockers: expect.arrayContaining([
+      expect.stringMatching(/capture Deep review is missing/i),
+    ]),
+  });
+});

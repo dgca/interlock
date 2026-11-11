@@ -22,7 +22,27 @@ import {
 const stamp = () => new Date().toISOString();
 
 export class ModelAliases {
-  constructor(private store: Store) {}
+  constructor(
+    private store: Store,
+    private configuredPresetProfile = (id: string) => {
+      const profile = store.get<ExecutorProfile>('executorProfiles', id);
+      return profile?.enabled ? profile : undefined;
+    },
+  ) {}
+
+  // Legacy workflow references remain required. An unused workflow default
+  // cannot prevent newer explicit executor selections from running.
+  usesReference(definition: WorkflowDefinition, ref: string) {
+    if (ref !== definition.agentModel) return true;
+    const agents = definition.nodes.filter((node) => node.kind === 'agent');
+    if (!agents.some((node) => node.executorMode)) return true;
+    return agents.some(
+      (node) =>
+        node.executor !== null &&
+        node.executorMode !== 'harness' &&
+        (node.model ?? definition.agentModel) === ref,
+    );
+  }
 
   get(idOrName: string): SavedModelAlias | undefined {
     const byId = this.store.get<SavedModelAlias>('modelAliases', idOrName);
@@ -115,7 +135,11 @@ export class ModelAliases {
     }
     const alias = this.get(q.id);
     if (!alias) {
-      throw new InterlockError(`Model alias "${q.id}" does not exist.`);
+      throw new InterlockError(
+        this.requirement(q.id)
+          ? `Model alias "${q.id}" is a known requirement but does not exist.`
+          : `Model alias "${q.id}" does not exist.`,
+      );
     }
     return alias;
   }
@@ -213,10 +237,6 @@ export class ModelAliases {
   capture(
     definition: WorkflowDefinition,
     inheritedCaptures?: ModelAliasCapture[],
-    availableProfile = (id: string) => {
-      const profile = this.store.get<ExecutorProfile>('executorProfiles', id);
-      return profile?.enabled ? profile : undefined;
-    },
   ): ModelAliasCapture[] {
     const refs = modelReferences(definition);
     const captures: ModelAliasCapture[] = [];
@@ -238,7 +258,7 @@ export class ModelAliases {
       if (inheritedCaptures !== undefined) continue;
       const alias = this.get(ref);
       const requirement = this.requirement(ref);
-      if (!alias && requirement)
+      if (!alias && requirement && this.usesReference(definition, ref))
         throw new InterlockError(
           `Model alias "${ref}" is missing. Configure local alias "${requirement.name}" before starting a new run.`,
         );
@@ -256,45 +276,45 @@ export class ModelAliases {
     }
     if (inheritedCaptures === undefined)
       for (const node of definition.nodes) {
-        if (node.kind !== 'agent' || node.executor === null) continue;
-        if (node.executorMode === 'harness') continue;
+        if (node.kind !== 'agent') continue;
         const model = node.model ?? definition.agentModel;
         const alias = model ? this.capturedAlias(captures, model) : undefined;
-        if (node.executorMode === 'preset' || alias?.permissions) {
-          const permissions = presetPermissions(
-            alias?.permissions,
-            definition.agentPermissions,
-          );
-          if (
-            !alias ||
-            !firstEligiblePresetChoice(
-              alias.candidates,
-              node.executor ?? definition.executor,
-              availableProfile,
-              permissions,
-            )
-          )
-            throw new InterlockError(
-              `Agent preset for "${node.label}" has no eligible harness. Check its choices and permissions before starting a new run.`,
-            );
-          continue;
-        }
-        if (
-          alias &&
-          !alias.candidates.some(
-            (candidate) =>
-              !candidate.profileId ||
-              this.store.get<{ enabled: boolean }>(
-                'executorProfiles',
-                candidate.profileId,
-              )?.enabled,
-          )
-        )
-          throw new InterlockError(
-            `Model alias candidates for "${node.label}" have no enabled executor profile. Configure an available candidate before starting a new run.`,
-          );
+        const problem = this.eligibilityProblem(definition, node, alias);
+        if (problem) throw new InterlockError(problem);
       }
     return captures;
+  }
+
+  eligibilityProblem(
+    definition: WorkflowDefinition,
+    node: Extract<WorkflowDefinition['nodes'][number], { kind: 'agent' }>,
+    alias?: Pick<SavedModelAlias, 'candidates' | 'permissions'>,
+  ) {
+    if (node.executor === null || node.executorMode === 'harness') return;
+    if (node.executorMode === 'preset' && !alias)
+      return `Agent preset "${node.model}" is missing for "${node.label}". Configure the preset before starting a new run.`;
+    if (!alias) return;
+    if (node.executorMode === 'preset' || alias.permissions) {
+      if (
+        !firstEligiblePresetChoice(
+          alias.candidates,
+          node.executor ?? definition.executor,
+          this.configuredPresetProfile,
+          presetPermissions(alias.permissions, definition.agentPermissions),
+        )
+      )
+        return `Agent preset for "${node.label}" has no eligible harness. Check its choices and permissions before starting a new run.`;
+    } else if (
+      !alias.candidates.some(
+        (candidate) =>
+          !candidate.profileId ||
+          this.store.get<{ enabled: boolean }>(
+            'executorProfiles',
+            candidate.profileId,
+          )?.enabled,
+      )
+    )
+      return `Model alias candidates for "${node.label}" have no enabled executor profile. Configure an available candidate before starting a new run.`;
   }
 
   capturedAlias(captures: ModelAliasCapture[], reference: string) {

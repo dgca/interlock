@@ -824,6 +824,7 @@ export interface Run {
   promptSnapshots?: import('./prompts.js').PromptSnapshot[];
   variableCaptures?: import('./variables.js').VariableCapture[];
   modelAliasCaptures?: import('./modelAliases.js').ModelAliasCapture[];
+  ignoredWorkflowModelAlias?: string;
 }
 export type RunSummary = Pick<
   Run,

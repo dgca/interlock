@@ -298,6 +298,14 @@ export function AgentPresets({
   );
 }
 
+function draftChoices(alias: SavedModelAlias | null) {
+  return (alias?.candidates ?? [{ model: '' }]).map((candidate) => ({
+    key: crypto.randomUUID(),
+    legacyUnbound: !!alias && !candidate.profileId,
+    ...candidate,
+  }));
+}
+
 function PresetEditor({
   alias,
   profiles,
@@ -318,12 +326,7 @@ function PresetEditor({
   const [name, setName] = useState(alias?.name ?? '');
   const [description, setDescription] = useState(alias?.description ?? '');
   const [permissions, setPermissions] = useState(alias?.permissions);
-  const [candidates, setCandidates] = useState(() =>
-    (alias?.candidates ?? [{ model: '' }]).map((candidate) => ({
-      key: crypto.randomUUID(),
-      ...candidate,
-    })),
-  );
+  const [candidates, setCandidates] = useState(() => draftChoices(alias));
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const [error, setError] = useState('');
@@ -333,7 +336,9 @@ function PresetEditor({
     name,
     description,
     permissions,
-    candidates: candidates.map(({ key: _key, ...candidate }) => candidate),
+    candidates: candidates.map(
+      ({ key: _key, legacyUnbound: _legacyUnbound, ...candidate }) => candidate,
+    ),
   };
   const initial = {
     name: alias?.name ?? '',
@@ -349,12 +354,7 @@ function PresetEditor({
       setName(alias?.name ?? '');
       setDescription(alias?.description ?? '');
       setPermissions(alias?.permissions);
-      setCandidates(
-        (alias?.candidates ?? [{ model: '' }]).map((candidate) => ({
-          key: crypto.randomUUID(),
-          ...candidate,
-        })),
-      );
+      setCandidates(draftChoices(alias));
       setError('');
     }
   }, [alias]);
@@ -410,9 +410,7 @@ function PresetEditor({
         }
         if (
           candidates.some(
-            (candidate, index) =>
-              !candidate.profileId &&
-              (!alias || index >= alias.candidates.length),
+            (candidate) => !candidate.profileId && !candidate.legacyUnbound,
           )
         ) {
           setError('Choose a harness for each new choice.');
@@ -556,7 +554,8 @@ function PresetEditor({
                             alias && !candidate.profileId
                               ? 'Use workflow harness'
                               : 'Choose a harness',
-                          disabled: !!candidate.profileId,
+                          disabled:
+                            !candidate.legacyUnbound && !!candidate.profileId,
                         },
                         ...(profiles ?? [])
                           .filter(
@@ -619,7 +618,7 @@ function PresetEditor({
           onClick={() =>
             setCandidates((list) => [
               ...list,
-              { key: crypto.randomUUID(), model: '' },
+              { key: crypto.randomUUID(), model: '', legacyUnbound: false },
             ])
           }
         >

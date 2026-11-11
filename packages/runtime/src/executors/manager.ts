@@ -161,6 +161,11 @@ export class ExecutorManager {
     string,
     { at: number; result: Awaited<ReturnType<HarnessAdapter['detect']>> }
   >();
+  private detectionRequests = new Map<
+    string,
+    ReturnType<HarnessAdapter['detect']>
+  >();
+  private presetChecks = new Set<string>();
   private claimTickets = new Map<
     string,
     {
@@ -246,19 +251,29 @@ export class ExecutorManager {
       ...stored,
     ];
   }
-  availableProfile(profile: ExecutorProfile | undefined) {
+  configuredPresetProfile(profile: ExecutorProfile | undefined) {
     if (!profile?.enabled) return;
     if (!this.running) return profile;
     const adapter = this.adapters.get(profile.harness);
-    if (!adapter || adapter.available?.(profile.command) === false) return;
-    const checked = this.detections.get(this.detectionKey(profile));
-    if (
-      checked &&
-      Date.now() - checked.at < 30000 &&
-      checked.result.status !== 'detected'
-    )
-      return;
-    return profile;
+    return adapter && adapter.available?.(profile.command) !== false
+      ? profile
+      : undefined;
+  }
+  /** Undefined means the version check is still pending. */
+  presetProfileReady(profile: ExecutorProfile): boolean | undefined {
+    if (!this.running) return true;
+    const key = this.detectionKey(profile);
+    const checked = this.currentDetection(key);
+    if (checked) return checked.status === 'detected';
+    if (!this.presetChecks.has(key)) {
+      this.presetChecks.add(key);
+      void this.detect(profile)
+        .then(() => {
+          this.presetChecks.delete(key);
+          this.engine.pump();
+        })
+        .catch(() => {});
+    }
   }
   settings() {
     const stored = this.engine.store.get<{
@@ -504,20 +519,41 @@ export class ExecutorManager {
   private detectionKey(profile: ExecutorProfile) {
     return `${profile.id}:${profile.revision}:${profile.command ?? ''}`;
   }
-  private async detect(profile: ExecutorProfile, refresh = false) {
-    const key = this.detectionKey(profile);
+  private currentDetection(key: string) {
     const cached = this.detections.get(key);
-    if (!refresh && cached && Date.now() - cached.at < 30000)
-      return cached.result;
+    return cached && Date.now() - cached.at < 30000 ? cached.result : undefined;
+  }
+  private async detect(
+    profile: ExecutorProfile,
+    refresh = false,
+  ): ReturnType<HarnessAdapter['detect']> {
+    const key = this.detectionKey(profile);
+    const cached = this.currentDetection(key);
+    if (!refresh && cached) return cached;
+    const pending = this.detectionRequests.get(key);
+    if (pending) return pending;
     const adapter = this.adapters.get(profile.harness);
-    const result = adapter
-      ? await adapter.detect(profile.command)
-      : {
-          status: 'unavailable' as const,
-          message: 'Harness execution is not attached to this server',
-        };
-    this.detections.set(key, { at: Date.now(), result });
-    return result;
+    const probe = Promise.resolve()
+      .then(() =>
+        adapter
+          ? adapter.detect(profile.command)
+          : {
+              status: 'unavailable' as const,
+              message: 'Harness execution is not attached to this server',
+            },
+      )
+      .catch((error: unknown) => ({
+        status: 'unavailable' as const,
+        message:
+          error instanceof Error ? error.message : 'Harness check failed',
+      }))
+      .then((result) => {
+        this.detections.set(key, { at: Date.now(), result });
+        return result;
+      })
+      .finally(() => this.detectionRequests.delete(key));
+    this.detectionRequests.set(key, probe);
+    return probe;
   }
   start(adapters: HarnessAdapter[]) {
     if (this.running) return;
