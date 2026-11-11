@@ -25,7 +25,7 @@ export function ModelSettings({
   referenceMode,
   alwaysShowEffort = false,
   showInheritedModel = false,
-  effortLabel = 'Thinking effort',
+  compact = false,
 }: {
   label: string;
   defaultLabel: string;
@@ -48,7 +48,7 @@ export function ModelSettings({
   referenceMode?: 'literal' | 'preset';
   alwaysShowEffort?: boolean;
   showInheritedModel?: boolean;
-  effortLabel?: string;
+  compact?: boolean;
 }) {
   const [catalog, setCatalog] = useState<ExecutorModels>();
   const [alias, setAlias] = useState<SavedModelAlias | null>();
@@ -69,9 +69,10 @@ export function ModelSettings({
         : '__inherit'
       : effort;
   return (
-    <div>
+    <div style={compact ? { display: 'contents' } : undefined}>
       <ModelPicker
         label={label}
+        inlineRefresh={compact}
         defaultLabel={defaultLabel}
         value={model}
         onChange={onModelChange}
@@ -104,8 +105,8 @@ export function ModelSettings({
           effort !== undefined ||
           inheritedEffort !== undefined) && (
           <NativeSelect
-            mt="md"
-            label={effortLabel}
+            mt={compact ? undefined : 'md'}
+            label="Thinking effort"
             inputWrapperOrder={['label', 'input', 'description', 'error']}
             disabled={disabled}
             value={current}
@@ -149,21 +150,23 @@ export function ModelSettings({
                 : undefined
             }
             description={
-              alias
-                ? 'Preset candidate effort settings take precedence over this override.'
-                : !effectiveModel
-                  ? 'Choose a model to discover its supported effort levels.'
-                  : !profileId
-                    ? 'Select a harness to discover supported effort levels.'
-                    : !catalog
-                      ? 'Checking supported effort levels…'
-                      : catalog.status === 'unavailable'
-                        ? 'Effort choices could not be loaded. Refresh models to try again.'
-                        : !levels?.length
-                          ? 'No effort choices reported for this model. Native defaults remain available.'
-                          : effectiveEffort
-                            ? `Effective effort: ${effectiveEffort}${effort === undefined ? ' · inherited' : ''}.`
-                            : 'Uses the native harness’s effort setting.'
+              compact
+                ? undefined
+                : alias
+                  ? 'Preset candidate effort settings take precedence over this override.'
+                  : !effectiveModel
+                    ? 'Choose a model to discover its supported effort levels.'
+                    : !profileId
+                      ? 'Select a harness to discover supported effort levels.'
+                      : !catalog
+                        ? 'Checking supported effort levels…'
+                        : catalog.status === 'unavailable'
+                          ? 'Effort choices could not be loaded. Refresh models to try again.'
+                          : !levels?.length
+                            ? 'No effort choices reported for this model. Native defaults remain available.'
+                            : effectiveEffort
+                              ? `Effective effort: ${effectiveEffort}${effort === undefined ? ' · inherited' : ''}.`
+                              : 'Uses the native harness’s effort setting.'
             }
           />
         )}

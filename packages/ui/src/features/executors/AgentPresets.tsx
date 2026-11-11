@@ -11,7 +11,7 @@ import {
   EmptyState,
 } from '../../design-system';
 
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ArrowDown, ArrowUp, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import {
@@ -448,15 +448,21 @@ function PresetEditor({
           />
           <Textarea
             label="Description"
+            placeholder="Optional"
+            rows={2}
             maxLength={2000}
             value={description}
             disabled={busy}
-            rows={2}
             onChange={(event) => setDescription(event.currentTarget.value)}
           />
           <NativeSelect
             label="Permissions"
-            description="Each choice uses its harness permissions unless the workflow or this preset sets a mode. If both do, the more restrictive mode applies."
+            description={
+              permissions
+                ? 'The stricter workflow or preset mode applies.'
+                : 'The workflow can override the harness default.'
+            }
+            inputWrapperOrder={['label', 'input', 'description', 'error']}
             value={permissions ?? ''}
             disabled={busy}
             onChange={(event) =>
@@ -480,136 +486,124 @@ function PresetEditor({
         <div className={styles.candidateIntro}>
           <h3>Primary and fallbacks</h3>
           <p>
-            Interlock uses the first available choice that supports the
-            requested permissions. Fallbacks do not retry a failed assignment.
+            Interlock uses the first available choice that supports the required
+            permissions.
           </p>
         </div>
         {candidates.map((candidate, index) => {
           const profile = profiles?.find(
             (profile) => profile.id === candidate.profileId,
           );
+          const title = index === 0 ? 'Primary choice' : `Fallback ${index}`;
+          const titleId = `choice-${candidate.key}`;
           return (
-            <Fragment key={candidate.key}>
-              {index > 0 && (
-                <div className={styles.candidateDivider} aria-hidden="true" />
-              )}
-              <fieldset
-                key={candidate.key}
-                className={styles.candidate}
-                disabled={busy}
-              >
-                <legend>
-                  {index === 0 ? 'Primary choice' : `Fallback ${index}`}
-                </legend>
-                <div className={styles.candidateActions}>
-                  <ActionIcon
-                    variant="subtle"
-                    aria-label={`Move choice ${index + 1} up`}
-                    disabled={busy || index === 0}
-                    onClick={() => move(index, -1)}
-                  >
-                    <ArrowUp size={16} />
-                  </ActionIcon>
-                  <ActionIcon
-                    variant="subtle"
-                    aria-label={`Move choice ${index + 1} down`}
-                    disabled={busy || index === candidates.length - 1}
-                    onClick={() => move(index, 1)}
-                  >
-                    <ArrowDown size={16} />
-                  </ActionIcon>
-                  <ActionIcon
-                    variant="subtle"
-                    color="red"
-                    aria-label={`Remove choice ${index + 1}`}
-                    disabled={busy || candidates.length === 1}
-                    onClick={() =>
-                      setCandidates((list) =>
-                        list.filter((item) => item.key !== candidate.key),
-                      )
-                    }
-                  >
-                    <Trash2 size={16} />
-                  </ActionIcon>
-                </div>
-                <div className={styles.fields}>
-                  <div>
-                    <NativeSelect
-                      label={
-                        index === 0
-                          ? 'Harness'
-                          : `Harness for fallback ${index}`
+            <section
+              key={candidate.key}
+              className={styles.candidate}
+              aria-labelledby={titleId}
+            >
+              <div className={styles.candidateHeader}>
+                <h4 id={titleId}>{title}</h4>
+                {candidates.length > 1 && (
+                  <div className={styles.candidateActions}>
+                    <ActionIcon
+                      size={30}
+                      variant="subtle"
+                      aria-label={`Move choice ${index + 1} up`}
+                      disabled={busy || index === 0}
+                      onClick={() => move(index, -1)}
+                    >
+                      <ArrowUp size={16} />
+                    </ActionIcon>
+                    <ActionIcon
+                      size={30}
+                      variant="subtle"
+                      aria-label={`Move choice ${index + 1} down`}
+                      disabled={busy || index === candidates.length - 1}
+                      onClick={() => move(index, 1)}
+                    >
+                      <ArrowDown size={16} />
+                    </ActionIcon>
+                    <ActionIcon
+                      size={30}
+                      variant="subtle"
+                      aria-label={`Remove choice ${index + 1}`}
+                      disabled={busy}
+                      onClick={() =>
+                        setCandidates((list) =>
+                          list.filter((item) => item.key !== candidate.key),
+                        )
                       }
-                      value={candidate.profileId ?? ''}
-                      disabled={busy || !profiles}
-                      onChange={(event) =>
-                        update(candidate.key, {
-                          profileId: event.currentTarget.value || undefined,
-                        })
-                      }
-                      data={[
-                        {
-                          value: '',
-                          label:
-                            alias && !candidate.profileId
-                              ? 'Use workflow harness'
-                              : 'Choose a harness',
-                          disabled:
-                            !candidate.legacyUnbound && !!candidate.profileId,
-                        },
-                        ...(profiles ?? [])
-                          .filter(
-                            (profile) =>
-                              isPrimaryHarness(profile) ||
-                              profile.id === candidate.profileId,
-                          )
-                          .map((profile) => ({
-                            value: profile.id,
-                            label: `${harnessLabel(profile)}${!supportsPresetPermissions(profile, permissions) ? ' · cannot enforce permissions' : profile.enabled ? '' : ' · disabled'}`,
-                            disabled:
-                              profile.id !== candidate.profileId &&
-                              !supportsPresetPermissions(profile, permissions),
-                          })),
-                        ...(candidate.profileId && !profile
-                          ? [
-                              {
-                                value: candidate.profileId,
-                                label: `${candidate.profileId} · missing`,
-                              },
-                            ]
-                          : []),
-                      ]}
-                    />
-                    {!profiles && (
-                      <p className={styles.intro}>Loading harnesses…</p>
-                    )}
+                    >
+                      <Trash2 size={16} />
+                    </ActionIcon>
                   </div>
-                  <ModelSettings
-                    label={
-                      index === 0 ? 'Model' : `Model for fallback ${index}`
+                )}
+              </div>
+              <div className={styles.fields}>
+                <div>
+                  <NativeSelect
+                    label="Harness"
+                    value={candidate.profileId ?? ''}
+                    disabled={busy || !profiles}
+                    onChange={(event) =>
+                      update(candidate.key, {
+                        profileId: event.currentTarget.value || undefined,
+                      })
                     }
-                    effortLabel={
-                      index === 0
-                        ? 'Thinking effort'
-                        : `Thinking effort for fallback ${index}`
-                    }
-                    alwaysShowEffort
-                    defaultLabel="Choose a model"
-                    effortDefaultLabel="Inherit workflow or harness effort"
-                    profileId={profile?.id}
-                    model={candidate.model || undefined}
-                    effort={candidate.effort}
-                    onModelChange={(model) =>
-                      update(candidate.key, { model: model ?? '' })
-                    }
-                    onEffortChange={(effort) =>
-                      update(candidate.key, { effort })
-                    }
-                    disabled={busy}
+                    data={[
+                      {
+                        value: '',
+                        label: candidate.legacyUnbound
+                          ? 'Use workflow harness'
+                          : 'Choose a harness',
+                        disabled:
+                          !candidate.legacyUnbound && !!candidate.profileId,
+                      },
+                      ...(profiles ?? [])
+                        .filter(
+                          (profile) =>
+                            isPrimaryHarness(profile) ||
+                            profile.id === candidate.profileId,
+                        )
+                        .map((profile) => ({
+                          value: profile.id,
+                          label: `${harnessLabel(profile)}${!supportsPresetPermissions(profile, permissions) ? ' · cannot enforce permissions' : profile.enabled ? '' : ' · disabled'}`,
+                          disabled:
+                            profile.id !== candidate.profileId &&
+                            !supportsPresetPermissions(profile, permissions),
+                        })),
+                      ...(candidate.profileId && !profile
+                        ? [
+                            {
+                              value: candidate.profileId,
+                              label: `${candidate.profileId} · missing`,
+                            },
+                          ]
+                        : []),
+                    ]}
                   />
+                  {!profiles && (
+                    <p className={styles.intro}>Loading harnesses…</p>
+                  )}
                 </div>
-              </fieldset>
-            </Fragment>
+                <ModelSettings
+                  label="Model"
+                  compact
+                  alwaysShowEffort
+                  defaultLabel="Choose a model"
+                  effortDefaultLabel="Inherit effort"
+                  profileId={profile?.id}
+                  model={candidate.model || undefined}
+                  effort={candidate.effort}
+                  onModelChange={(model) =>
+                    update(candidate.key, { model: model ?? '' })
+                  }
+                  onEffortChange={(effort) => update(candidate.key, { effort })}
+                  disabled={busy}
+                />
+              </div>
+            </section>
           );
         })}
         <Button
@@ -636,7 +630,7 @@ function PresetEditor({
         aside={
           alias && (
             <Button
-              variant="danger"
+              variant="ghost"
               aria-label="Delete preset"
               disabled={busy}
               onClick={() => setConfirmation('delete')}

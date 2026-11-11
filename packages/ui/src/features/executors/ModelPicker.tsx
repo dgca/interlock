@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   LoadingSkeleton,
   Button,
   Combobox,
@@ -30,6 +31,7 @@ export function ModelPicker({
   referenceMode,
   inheritedValue,
   onAlias,
+  inlineRefresh = false,
 }: {
   label: string;
   value?: string;
@@ -43,6 +45,7 @@ export function ModelPicker({
   allowAliases?: boolean;
   referenceMode?: 'literal' | 'preset';
   inheritedValue?: string;
+  inlineRefresh?: boolean;
   onAlias?: (alias: SavedModelAlias | null | undefined) => void;
 }) {
   const [search, setSearch] = useState('');
@@ -192,7 +195,9 @@ export function ModelPicker({
     `${m.name} ${m.id}`.toLowerCase().includes(term.toLowerCase()),
   );
   return (
-    <div>
+    <div
+      style={inlineRefresh ? { position: 'relative', minWidth: 0 } : undefined}
+    >
       <Input.Label htmlFor={id} id={`${id}-label`}>
         {label}
       </Input.Label>
@@ -325,7 +330,23 @@ export function ModelPicker({
           </Combobox.Options>
         </Combobox.Dropdown>
       </Combobox>
-      {profileId && (
+      {inlineRefresh && profileId && (
+        <ActionIcon
+          type="button"
+          size={24}
+          pos="absolute"
+          top={-2}
+          right={0}
+          aria-label="Refresh models"
+          title="Refresh models"
+          loading={loading}
+          disabled={disabled || loading}
+          onClick={() => void load(true)}
+        >
+          <RefreshCw size={14} aria-hidden="true" />
+        </ActionIcon>
+      )}
+      {!inlineRefresh && profileId && (
         <Button
           type="button"
           variant="ghost"
@@ -347,7 +368,7 @@ export function ModelPicker({
         </Text>
       )}
       {(catalog?.status === 'unavailable' ||
-        !profileId ||
+        (!inlineRefresh && !profileId) ||
         catalog?.truncated) && (
         <Text
           size="xs"
