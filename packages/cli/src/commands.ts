@@ -4,6 +4,7 @@ import { createClient, TRPCClientError } from '@interlock/client';
 import { parseArgs } from 'node:util';
 import {
   externalInputRequestSchema,
+  boardImportSetupSchema,
   withNextCall,
   testSuiteSaveSchema,
   testSuiteReadSchema,
@@ -246,16 +247,23 @@ export async function runCommand(argv: string[]) {
         options: {
           copy: { type: 'boolean' },
           'request-id': { type: 'string' },
+          'board-setup': { type: 'string' },
         },
       });
       if (positionals.length !== 1)
         throw new Error(
-          'Usage: import-starter <starter-id> [--copy] [--request-id key]',
+          'Usage: import-starter <starter-id> [--copy] [--request-id key] [--board-setup json|@file]',
         );
+      const boardSetup =
+        values['board-setup'] === undefined
+          ? undefined
+          : boardImportSetupSchema.parse(await parse(values['board-setup']));
       return client.workflows.importStarter.mutate({
         starterId: positionals[0],
         copy: values.copy,
-        requestId: values['request-id'] ?? randomUUID(),
+        requestId:
+          values['request-id'] ?? boardSetup?.requestId ?? randomUUID(),
+        boardSetup,
       });
     }
     case 'import': {
@@ -268,6 +276,7 @@ export async function runCommand(argv: string[]) {
             revisions: { type: 'string' },
             'restore-deleted-versions': { type: 'boolean' },
             'variable-bindings': { type: 'string' },
+            'board-setup': { type: 'string' },
             'dry-run': { type: 'boolean' },
             publish: { type: 'boolean' },
             cascade: { type: 'boolean' },
@@ -283,6 +292,10 @@ export async function runCommand(argv: string[]) {
           draftRevisions: values.revisions
             ? await parse(values.revisions)
             : undefined,
+          boardSetup:
+            values['board-setup'] === undefined
+              ? undefined
+              : await parse(values['board-setup']),
           dryRun: values['dry-run'],
           publish: values.publish,
           cascade: values.cascade,
@@ -638,9 +651,9 @@ export async function runCommand(argv: string[]) {
           'archive <id>',
           'restore <id>',
           'delete <id> --yes',
-          'import <json|@file> [--force | --revisions JSON] [--restore-deleted-versions] [--variable-bindings json|@file] [--dry-run] [--publish] [--cascade] (format 4 requires explicit local variable bindings/provisioning; force changes drafts only; restoration requires original definitions; dry-run previews semantic diff; publish/cascade publishes atomically)',
-          'starters (list bundled choices and existing copies)',
-          'import-starter <starter-id> [--copy] [--request-id key] (explicit published copy; never starts a run)',
+          'import <json|@file> [--force | --revisions JSON] [--restore-deleted-versions] [--variable-bindings json|@file] [--board-setup json|@file] [--dry-run] [--publish] [--cascade] (bind or provision required variables; force changes drafts only; restoration requires original definitions; dry-run previews semantic diffs and board suggestions; publish/cascade publishes atomically)',
+          'starters (list bundled choices, existing copies and optional board setup)',
+          'import-starter <starter-id> [--copy] [--request-id key] [--board-setup json|@file] (publishes a new copy without starting a run; board setup requires a new copy)',
           'export <id>',
           'publish <id> [--cascade]',
           'work-resources <json|@file> (inspect by workId or runId+executionId; release exact uncertain attempt after stop confirmation)',

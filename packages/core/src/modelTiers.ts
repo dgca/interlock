@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const modelTierSchema = z
   .enum(['max', 'balanced', 'fast'])
   .describe(
-    'Advisory capability preference for current or fresh context. The executor maps tiers to models; required continuity and isolation take precedence. Omit for executor default.',
+    'Advisory executor model tier for current or fresh context. Required continuity/isolation takes precedence. Omit for executor default.',
   );
 
 export const modelSelectionSchema = z

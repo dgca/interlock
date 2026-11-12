@@ -42,6 +42,15 @@ INTERLOCK_URL=http://127.0.0.1:4400 interlock workflows
 
 Standalone workflow imports create drafts. Starter imports create published copies. Neither starts work automatically.
 
+To inspect a portable bundle's board suggestions, run `interlock import @workflow.json --dry-run`. Use `interlock starters` for starter suggestions. When you have chosen the destination board setup, pass it as JSON or a file with `--board-setup`.
+
+```sh
+interlock import @workflow.json --board-setup @setup.json
+interlock import-starter sdlc --board-setup @setup.json
+```
+
+Keep the setup's `requestId` and arguments when retrying. For starter imports, the CLI uses that key if you omit `--request-id`. Use `--copy` to apply board setup when the starter already has a local copy. See [board setup choices](agent-workflows.md#choose-board-setup-on-import).
+
 ## Start and inspect runs
 
 JSON arguments accept inline values or `@filename`. Match the workflow's input contract:

@@ -8,6 +8,7 @@ import {
   variableReadSchema,
   variableMutationSchema,
   variableImportBindingsSchema,
+  boardImportSetupSchema,
   modelAliasReadSchema,
   modelAliasMutationSchema,
 } from '@interlock/core';
@@ -429,7 +430,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'list_workflows',
-    'Discover workflows as compact summaries by default: id, name, description, ownerWorkflowId, archived, latestVersion, draftRevision, createdAt, updatedAt, and draftMatchesLatest. Summaries omit draft nodes, prompts, and contracts. Use get_workflow for one full draft, or includeDraft:true for the legacy full list. draftRevision counts content changes; layout-only changes leave it unchanged; latestVersion is the highest published number, not the count of retained definitions. draftMatchesLatest compares content with the latest published definition, ignoring node positions; null when unpublished. Omit ownerWorkflowId for all workflows, use null for the library, or a parent ID for its children.',
+    'List compact workflow summaries. Use source:starters for bundled choices and board setup, get_workflow for one draft, or includeDraft:true for full records. ownerWorkflowId:null lists library workflows, a parent ID lists its children, and omission lists all. draftRevision ignores layout-only edits; draftMatchesLatest is null before publication. latestVersion is a publication counter; retained versions can have gaps.',
     {
       source: z.enum(['library', 'starters']).default('library'),
       includeDraft: z.boolean().default(false),
@@ -470,13 +471,13 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'export_workflow',
-    'Export stable IDs/drafts/version numbers, owners/children/transitive dependencies. Current saved positions are embedded in draft nodes; published definitions remain unchanged. Format 10:authored alias IDs bound by local name; Format 9:exact pinned prompt snapshots; Format 8:event triggers/source dependencies; Format 6:model-alias requirements; Format 5:schedules; Format 4:variable requirements; Format 3:deleted-version hashes; Format 2:saved prompts; otherwise1. Triggers disabled; prompts retain ID/revision/content; only required pinned history travels. No values/keys/model candidates/trigger state, runs/captures/start receipts, local testbench/evaluation, archive flags or board membership. Deleted definitions absent; back up before cleanup to restore. Missing referenced drafts reject. Includes scripts/config.',
+    'Export IDs, drafts, versions and dependencies. Includes saved draft layout, exact published definitions, prompts and required pins. Format 4 carries variable requirements; Format 6 carries model alias requirements. Later formats add disabled event triggers, exact prompt snapshots, authored alias IDs and Format 11 board suggestions. No local board assignments, credentials, variable values, model candidates, trigger state, runs, captures, receipts, testbench or archive flags. Deleted definitions absent. Missing dependencies reject.',
     { id: z.string() },
     (input) => client.workflows.export(input),
   );
   tool(
     'import_workflows',
-    'Starter: starterId from list_workflows source:starters, stable requestId; copy:true duplicates. Copies publish without running. Otherwise atomic upsert formats1..10. dryRun previews published semantic diffs without mutation; publish atomically publishes imports, cascade includes callers. Triggers disabled/revisioned even with force; reset automatic pause/failures. Events reset logs/pending, retain receipts; others keep history. Schedules reset slot/anchor/lag. Trigger workflow/kind immutable. Format additions: export_workflow. variableBindings: same-kind local ID or unset provisioning. No values/keys. Version gaps allowed; identical content unchanged. Draft position-only differences update saved layout without advancing draftRevision; published comparisons remain exact. Skip deleted versions unless restoreDeletedVersions:true restores originals with ownership/dependency checks. Format3 cannot delete local versions. Replace drafts via draftRevisions by workflow ID or force:true. Force cannot overwrite versions/shared prompts, change ownership or authorize restoration. Ownership moves use ownership tools. Prompt bundles require references; divergent current or pinned content and unavailable pins reject even with force. Historical snapshots do not rebind current prompts. Conflicts roll back all. Import preserves runs, archive flags and local board membership. New workflows start unassigned.',
+    'Starter: starterId from list_workflows source:starters and stable requestId. copy:true adds another published copy. Bundle: atomic import formats1..11. dryRun previews semantic diffs and boardSetup with suggestions and destination boards. Use those IDs and current membership to create a suggested board, or supply destination revision and stageColumns to use an existing board. Omit boardSetup to preserve membership and mappings. Starter setup requires a new copy and the same requestId on both arguments. Retries reuse keys and arguments. variableBindings binds same-kind IDs or provisions unset variables. Included triggers import disabled with new revisions and clear automatic pause/failures; workflow/kind stay fixed. Events reset logs/pending, keep receipts. Schedules reset slot/anchor/lag, keep history. publish/cascade publishes atomically. draftRevisions or force replace drafts; force cannot replace versions/shared prompts, move ownership or restore deleted versions. restoreDeletedVersions:true requires original definitions and valid dependencies; deletion hashes never remove local versions. Divergent or unavailable prompt pins reject. Layout-only drafts preserve draftRevision. Conflicts roll back; runs and archive flags persist.',
     {
       starterId: z.string().min(1).max(64).optional(),
       requestId: z
@@ -489,6 +490,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
       bundle: workflowBundleSchema.optional(),
       force: z.boolean().optional(),
       variableBindings: variableImportBindingsSchema.optional(),
+      boardSetup: boardImportSetupSchema.optional(),
       draftRevisions: z.record(z.number().int().positive()).optional(),
       restoreDeletedVersions: z.boolean().optional(),
       dryRun: z.boolean().optional(),
@@ -515,6 +517,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
           starterId: input.starterId,
           requestId: input.requestId,
           copy: input.copy,
+          boardSetup: input.boardSetup,
         });
       }
       if (
@@ -531,6 +534,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
         draftRevisions: input.draftRevisions,
         restoreDeletedVersions: input.restoreDeletedVersions,
         variableBindings: input.variableBindings,
+        boardSetup: input.boardSetup,
         dryRun: input.dryRun,
         publish: input.publish,
         cascade: input.cascade,

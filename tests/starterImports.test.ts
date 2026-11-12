@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
-import { blankDefinition, definitionSchema } from '@interlock/core';
+import {
+  blankDefinition,
+  definitionSchema,
+  type BoardImportSetup,
+} from '@interlock/core';
 import { importStarter, listStarters } from '../packages/server/src/starters';
 import sdlc from '../workflows/sdlc.json';
 import { appRouter } from '../packages/server/src/router';
@@ -115,6 +119,103 @@ it('recognizes renamed legacy drafts and retained originals without changing the
   expect(add(e)).toMatchObject({ created: false });
   expect(e.workflow(w.id)).toEqual(before);
 });
+it('recognizes pre-stage SDLC copies and sets up a board only for a new copy', () => {
+  const e = setup();
+  const staged = definitionSchema.parse(sdlc.definition);
+  const unstaged = {
+    ...staged,
+    nodes: staged.nodes.map(({ stage, stageId, ...node }) => node),
+  };
+  const old = e.create('Previously imported SDLC', '', unstaged);
+  e.publish(old.id);
+  const retained = e.store.getVersion(old.id, 1);
+  const preview = listStarters(e)[0];
+  expect(preview.existing?.id).toBe(old.id);
+  expect(preview.boardSetup?.suggestions[0]).toMatchObject({
+    id: 'sdlc-board',
+    workflows: [{ workflowId: 'sdlc', currentBoardId: null }],
+    columns: [
+      { name: 'Planning' },
+      { name: 'Implementation' },
+      { name: 'Review' },
+      { name: 'Delivery' },
+    ],
+  });
+  const requestId = 'create-starter-board';
+  const boardSetup: BoardImportSetup = {
+    requestId,
+    choices: [
+      {
+        suggestionId: 'sdlc-board',
+        action: 'create',
+        expectedBoards: { sdlc: null },
+      },
+    ],
+  };
+  const request = { starterId: 'sdlc', requestId, boardSetup };
+  expect(() => importStarter(e, request)).toThrow(/another copy/);
+  expect(e.store.workflows()).toHaveLength(1);
+  expect(e.boards.list()).toHaveLength(0);
+  expect(add(e).workflow.id).toBe(old.id);
+
+  const copied = importStarter(e, { ...request, copy: true });
+  expect(copied.workflow.id).not.toBe(old.id);
+  expect(importStarter(e, { ...request, copy: true })).toEqual(copied);
+  const [board] = e.boards.list();
+  expect(e.boards.list()).toHaveLength(1);
+  expect(board.workflowIds).toEqual([copied.workflow.id]);
+  expect(e.store.getVersion(copied.workflow.id, 1)?.definition).toEqual(staged);
+  expect(e.store.getVersion(old.id, 1)).toEqual(retained);
+  expect(e.workflow(old.id).boardId).toBeUndefined();
+  const run = e.start(copied.workflow.id, {
+    request: 'Disposable board fixture',
+  }).run;
+  expect(
+    e.boards.read({ id: board.id, status: 'all', offset: 0, limit: 20 })
+      .columns[0],
+  ).toMatchObject({
+    name: 'Planning',
+    cards: [{ runId: run.id }],
+  });
+});
+
+it('rolls back starter publication when its destination board revision is stale', () => {
+  const e = setup();
+  const board = e.boards.save({
+    name: 'Destination',
+    columns: [{ name: 'Plan work' }],
+    workflowIds: [],
+  });
+  const requestId = 'reuse-starter-board';
+  const request = {
+    starterId: 'sdlc',
+    requestId,
+    boardSetup: {
+      requestId,
+      choices: [
+        {
+          suggestionId: 'sdlc-board',
+          action: 'existing' as const,
+          boardId: board.id,
+          expectedRevision: board.revision + 1,
+          expectedBoards: { sdlc: null },
+          stageColumns: { sdlc: { planning: board.columns[0].id } },
+        },
+      ],
+    },
+  };
+  expect(() => importStarter(e, request)).toThrow(/Board settings changed/);
+  expect(e.store.workflows()).toHaveLength(0);
+  expect(e.store.list('starterImports')).toHaveLength(0);
+  request.boardSetup.choices[0].expectedRevision = board.revision;
+  const added = importStarter(e, request);
+  expect(e.boards.list()).toHaveLength(1);
+  expect(e.workflow(added.workflow.id).boardStageColumns).toMatchObject({
+    planning: board.columns[0].id,
+    delivery: null,
+  });
+});
+
 it('keeps recognition after user edits and archives an explicitly imported copy', () => {
   const e = setup(),
     a = add(e),

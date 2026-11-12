@@ -3,16 +3,36 @@ import {
   InterlockError,
   type WorkflowDefinition,
   type Workflow,
+  type BoardImportSetup,
+  type BoardImportResult,
+  type BoardSuggestion,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import { fingerprint } from '../../runtime/src/versionIdentity.js';
+import {
+  applyBoardImport,
+  previewBoardImport,
+} from '../../runtime/src/boardImport.js';
 import sdlc from '../../../workflows/sdlc.json';
 import evaluate from '../../../workflows/evaluate.json';
 
+const sdlcColumns = [
+  { id: 'planning', name: 'Planning' },
+  { id: 'implementation', name: 'Implementation' },
+  { id: 'review', name: 'Review' },
+  { id: 'delivery', name: 'Delivery' },
+];
+const sdlcBoard: BoardSuggestion = {
+  id: 'sdlc-board',
+  name: 'Software development',
+  columns: sdlcColumns,
+  stages: sdlcColumns.map((column) => ({ ...column, columnId: column.id })),
+};
 const catalog = [
   {
     id: 'sdlc',
     template: sdlc,
+    boardSuggestion: sdlcBoard,
     summary: 'Plan, implement, and review a software change.',
     requirements:
       'Needs a coding agent with repository access and a fresh final reviewer.',
@@ -20,6 +40,7 @@ const catalog = [
   {
     id: 'evaluate-comparison',
     template: evaluate,
+    boardSuggestion: undefined,
     summary: 'Evaluate retained comparison results against a fixed rubric.',
     requirements:
       'Needs a completed workflow comparison. Review mode requires a fresh reviewer.',
@@ -34,6 +55,7 @@ interface Receipt {
   requestHash: string;
   workflowId: string;
   created: boolean;
+  boardSetup?: BoardImportResult;
 }
 function contentHash(definition: WorkflowDefinition) {
   const order = (a: { id: string }, b: { id: string }) =>
@@ -50,6 +72,7 @@ function existing(
   engine: Engine,
   starterId: string,
   definition: WorkflowDefinition,
+  hasPortableStages = false,
 ) {
   const workflows = engine.store.workflows();
   const known = new Set(
@@ -60,7 +83,14 @@ function existing(
   );
   const tracked = workflows.find((w) => known.has(w.id));
   if (tracked) return tracked;
-  const hash = contentHash(definition);
+  const hashes = new Set([contentHash(definition)]);
+  if (hasPortableStages)
+    hashes.add(
+      contentHash({
+        ...definition,
+        nodes: definition.nodes.map(({ stageId, stage, ...node }) => node),
+      }),
+    );
   const retained = engine.store.listVersions();
   return workflows.find((w) =>
     [
@@ -69,7 +99,7 @@ function existing(
     ].some((d) => {
       // Historical definitions may use node kinds the current schema no longer supports.
       const parsed = definitionSchema.safeParse(d);
-      return parsed.success && contentHash(parsed.data) === hash;
+      return parsed.success && hashes.has(contentHash(parsed.data));
     }),
   );
 }
@@ -79,27 +109,103 @@ const reference = (w: Workflow) => ({
   archived: w.archived,
   latestVersion: w.latestVersion,
 });
+function starterBoardPreview(
+  engine: Engine,
+  workflow: {
+    id: string;
+    name: string;
+    draft: WorkflowDefinition;
+    boardSuggestion: BoardSuggestion;
+  },
+  includeBoardCatalog = true,
+) {
+  const preview = previewBoardImport(
+    engine.store,
+    {
+      format: 'interlock-workflows',
+      formatVersion: 11,
+      rootId: workflow.id,
+      workflows: [
+        {
+          ...workflow,
+          description: '',
+          ownerWorkflowId: null,
+          draftRevision: 1,
+          versions: [],
+        },
+      ],
+    },
+    includeBoardCatalog,
+  );
+  // The catalog ID identifies a template. Board setup always applies to a new copy.
+  for (const suggestion of preview.suggestions)
+    for (const member of suggestion.workflows) member.currentBoardId = null;
+  return preview;
+}
+
+function setupForCopy(
+  setup: BoardImportSetup,
+  starterId: string,
+  workflowId: string,
+): BoardImportSetup {
+  const replaceId = <T>(record: Record<string, T>) =>
+    Object.fromEntries(
+      Object.entries(record).map(([key, value]) => [
+        key === starterId ? workflowId : key,
+        value,
+      ]),
+    );
+  return {
+    requestId: setup.requestId,
+    choices: setup.choices.map((choice) => ({
+      ...choice,
+      expectedBoards: replaceId(choice.expectedBoards),
+      ...(choice.action === 'existing'
+        ? { stageColumns: replaceId(choice.stageColumns) }
+        : {}),
+    })),
+  };
+}
+
 export function listStarters(engine: Engine) {
   return catalog.map((s) => {
     const definition = definitionSchema.parse(s.template.definition),
-      copy = existing(engine, s.id, definition);
+      copy = existing(engine, s.id, definition, !!s.boardSuggestion);
+    const boardSetup =
+      s.boardSuggestion &&
+      starterBoardPreview(engine, {
+        id: s.id,
+        name: s.template.name,
+        draft: definition,
+        boardSuggestion: s.boardSuggestion,
+      });
     return {
       id: s.id,
       name: s.template.name,
       description: s.summary,
       requirements: s.requirements,
       nodeCount: definition.nodes.length,
+      ...(boardSetup ? { boardSetup } : {}),
       ...(copy ? { existing: reference(copy) } : {}),
     };
   });
 }
 export function importStarter(
   engine: Engine,
-  q: { starterId: string; requestId: string; copy?: boolean },
+  q: {
+    starterId: string;
+    requestId: string;
+    copy?: boolean;
+    boardSetup?: BoardImportSetup;
+  },
 ) {
   if (!q.requestId || q.requestId.length > 120 || !/\S/.test(q.requestId))
     throw new InterlockError(
       'Use a nonblank request key of at most 120 characters',
+    );
+  if (q.boardSetup && q.boardSetup.requestId !== q.requestId)
+    throw new InterlockError(
+      'Use the same requestId for the starter and board setup.',
     );
   const starter = catalog.find((s) => s.id === q.starterId);
   if (!starter) throw new InterlockError('Starter not found');
@@ -108,6 +214,7 @@ export function importStarter(
       requestHash = fingerprint({
         starterId: q.starterId,
         copy: q.copy ?? false,
+        boardSetup: q.boardSetup,
       });
     const prior = engine.store.get<Receipt>('starterImports', id);
     if (prior) {
@@ -123,10 +230,22 @@ export function importStarter(
         throw new InterlockError(
           'The imported workflow was deleted. Inspect the library before intentionally adding a new copy.',
         );
-      return { workflow: reference(workflow), created: prior.created };
+      return {
+        workflow: reference(workflow),
+        created: prior.created,
+        ...(prior.boardSetup ? { boardSetup: prior.boardSetup } : {}),
+      };
     }
     const definition = definitionSchema.parse(starter.template.definition);
-    const found = q.copy ? undefined : existing(engine, starter.id, definition);
+    const found = q.copy
+      ? undefined
+      : existing(engine, starter.id, definition, !!starter.boardSuggestion);
+    if (q.boardSetup && !starter.boardSuggestion)
+      throw new InterlockError('This starter has no suggested board.');
+    if (q.boardSetup && found)
+      throw new InterlockError(
+        'Choose another copy to set up a board for this starter.',
+      );
     const workflow =
       found ??
       engine.create(
@@ -134,7 +253,29 @@ export function importStarter(
         starter.template.description,
         definition,
       );
-    if (!found) engine.publish(workflow.id);
+    let boardSetup: BoardImportResult | undefined;
+    if (!found) {
+      const boardSuggestion = starter.boardSuggestion;
+      if (boardSuggestion) {
+        engine.store.put<Workflow>('workflows', {
+          ...workflow,
+          boardSuggestion,
+        });
+        if (q.boardSetup) {
+          const preview = starterBoardPreview(
+            engine,
+            { ...workflow, boardSuggestion },
+            false,
+          );
+          boardSetup = applyBoardImport(
+            engine.store,
+            preview.suggestions,
+            setupForCopy(q.boardSetup, starter.id, workflow.id),
+          );
+        }
+      }
+      engine.publish(workflow.id);
+    }
     engine.store.put<Copy>('starterCopies', {
       id: workflow.id,
       starterId: starter.id,
@@ -144,10 +285,12 @@ export function importStarter(
       requestHash,
       workflowId: workflow.id,
       created: !found,
+      ...(boardSetup ? { boardSetup } : {}),
     });
     return {
       workflow: reference(engine.workflow(workflow.id)),
       created: !found,
+      ...(boardSetup ? { boardSetup } : {}),
     };
   });
 }

@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { InterlockError } from '@interlock/core';
-import type { VariableImportBindings } from '@interlock/core';
+import type { BoardImportSetup, VariableImportBindings } from '@interlock/core';
+import type { Store } from '@interlock/storage';
 import type { Engine } from '@interlock/runtime';
+import { boardImportCatalog } from '../../runtime/src/boardImport.js';
 import {
   inspectImportDocument,
   importSelection,
@@ -198,7 +200,7 @@ export class GithubImporter {
     }
     return data;
   }
-  async discover(url: string, signal?: AbortSignal) {
+  async discover(url: string, signal?: AbortSignal, destinationStore?: Store) {
     let parsed: URL;
     try {
       parsed = new URL(url);
@@ -286,7 +288,8 @@ export class GithubImporter {
           throw new InterlockError(
             'Not a workflow export. Use a legacy definition or portable bundle.',
           );
-        const inspected = inspectImportDocument(data);
+        const inspected = inspectImportDocument(data, destinationStore, false);
+        const board = inspected.boardSetup;
         items.push({
           file: file.name,
           valid: true as const,
@@ -295,6 +298,10 @@ export class GithubImporter {
           workflows: inspected.workflows,
           prompts: inspected.prompts,
           variables: inspected.variables,
+          boardSetup: board && {
+            suggestions: board.suggestions,
+            unresolved: board.unresolved,
+          },
           error: '',
         });
       } catch (error) {
@@ -308,11 +315,17 @@ export class GithubImporter {
           workflows: [],
           prompts: [],
           variables: [],
+          boardSetup: undefined,
           error: importErrorMessage(error),
         });
       }
     }
-    return { source, items };
+    const boards =
+      destinationStore &&
+      items.some((item) => item.boardSetup?.suggestions.length)
+        ? boardImportCatalog(destinationStore)
+        : undefined;
+    return { source, items, ...(boards ? { boards } : {}) };
   }
   async import(
     engine: Engine,
@@ -320,6 +333,7 @@ export class GithubImporter {
     names: string[],
     signal?: AbortSignal,
     variableBindings?: VariableImportBindings,
+    boardSetup?: BoardImportSetup,
   ) {
     try {
       const source = githubSourceSchema.parse(sourceData);
@@ -346,7 +360,7 @@ export class GithubImporter {
         data.push(document);
       }
       active.throwIfAborted();
-      return importSelection(engine, data, variableBindings);
+      return importSelection(engine, data, variableBindings, boardSetup);
     } catch (error) {
       throw new InterlockError(
         `Nothing imported: ${importErrorMessage(error)}`,

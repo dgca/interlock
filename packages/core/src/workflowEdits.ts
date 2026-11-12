@@ -47,7 +47,7 @@ export const workflowEditsSchema = z
   .array(z.lazy(() => authoringJsonSchema))
   .max(100)
   .describe(
-    'Ordered list, at most 100 edits. Each edit has op: add_node with node; update_node with id, set and optional unset; remove_node with id; add_edge with edge; update_edge with id, set and optional unset; remove_edge with id; or update_settings with set and optional unset. Updates replace named fields shallowly. IDs and node kinds cannot change. Settings include cwd, pinPromptsAtPublish, unclaimedStallMs, claimedIdleStallMs, humanWaitStallMs, runStallMs, idleRecovery, inputSchema, outputSchema, maxSteps, maxActiveRuns, excludeStages, executor, agentPermissions, agentModel, agentModelMode, agentEffort, continueOnMissingResult, transientRetry, sessionNameTemplate. Omitted managed overrides inherit. Null effort uses native defaults. executor is a local profile reference. agentPermissions overrides managed Agent defaults with read-only, standard or full-access; unset inherits each harness default. Unknown fields reject the indexed operation. Node/edge objects use the workflow definition format. Added scripts default to JavaScript; existing omitted language retains Bash.',
+    'Up to 100 ordered edits. add_node takes node; add_edge takes edge; remove_node and remove_edge take id. update_node and update_edge take id, set and optional unset; update_settings takes set and optional unset. Updates replace fields shallowly. IDs and node kinds are fixed. Use workflow definition fields such as cwd, pinPromptsAtPublish and agentModel. Unknown fields reject. Added Scripts default to JavaScript; older omitted language retains Bash.',
   );
 function parseStrict<S extends z.ZodTypeAny>(
   schema: S,

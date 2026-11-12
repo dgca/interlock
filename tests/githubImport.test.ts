@@ -97,6 +97,102 @@ it('discovers and imports the shared SDLC starter without replacing an existing 
   }
 });
 
+it('previews pinned board suggestions and imports a selected set with one retry receipt', async () => {
+  const from = new Engine(new Store(':memory:'), process.cwd());
+  const to = new Engine(new Store(':memory:'), process.cwd());
+  try {
+    const definition = blankDefinition();
+    definition.nodes[1].stageId = 'build';
+    definition.nodes[1].stage = 'Build';
+    const workflow = from.create('Build', '', definition);
+    const board = from.boards.save({
+      name: 'Source board',
+      columns: [{ name: 'Build' }],
+      workflowIds: [workflow.id],
+    });
+    const authored = from.workflow(workflow.id);
+    from.store.put('workflows', {
+      ...authored,
+      boardStageColumns: { build: board.columns[0].id },
+    });
+    from.publish(workflow.id);
+    const bundle = exportWorkflows(from.store, workflow.id);
+    expect(bundle.formatVersion).toBe(11);
+    const importer = new GithubImporter(
+      fixture({ 'bundle.json': bundle, 'legacy.json': legacy }),
+    );
+    const localBoard = to.boards.save({
+      name: 'Existing board',
+      columns: [{ name: 'Working' }],
+      workflowIds: [],
+    });
+    const preview = await importer.discover(url, undefined, to.store);
+    expect(preview.boards).toEqual([
+      {
+        id: localBoard.id,
+        name: localBoard.name,
+        revision: localBoard.revision,
+        columns: localBoard.columns,
+      },
+    ]);
+    expect(preview.items[0].boardSetup?.suggestions).toMatchObject([
+      {
+        id: board.id,
+        name: board.name,
+        workflows: [{ workflowId: workflow.id, currentBoardId: null }],
+      },
+    ]);
+    expect(preview.items[0].boardSetup).not.toHaveProperty('boards');
+    expect(to.store.workflows()).toEqual([]);
+    const choice = {
+      action: 'create' as const,
+      suggestionId: board.id,
+      expectedBoards: { [workflow.id]: null },
+    };
+    const files = ['bundle.json', 'legacy.json'];
+    await expect(
+      importer.import(to, preview.source, files, undefined, undefined, {
+        requestId: 'selection-setup',
+        choices: [{ ...choice, expectedBoards: { [workflow.id]: board.id } }],
+      }),
+    ).rejects.toThrow(/Nothing imported.*board changed/);
+    expect(to.store.workflows()).toEqual([]);
+    expect(to.boards.list().map(({ id }) => id)).toEqual([localBoard.id]);
+    const setup = { requestId: 'selection-setup', choices: [choice] };
+    const result = await importer.import(
+      to,
+      preview.source,
+      files,
+      undefined,
+      undefined,
+      setup,
+    );
+    expect(
+      await importer.import(
+        to,
+        preview.source,
+        files,
+        undefined,
+        undefined,
+        setup,
+      ),
+    ).toEqual(result);
+    expect(result.rootIds).toHaveLength(2);
+    expect(to.store.workflows()).toHaveLength(2);
+    expect(to.boards.list()).toHaveLength(2);
+    expect(
+      to.boards.list().find(({ id }) => id !== localBoard.id)?.workflowIds,
+    ).toEqual([workflow.id]);
+    expect(to.store.getVersion(workflow.id, 1)?.definition).toEqual(definition);
+    expect(to.store.runs()).toEqual([]);
+  } finally {
+    for (const engine of [from, to]) {
+      engine.stop();
+      engine.store.close();
+    }
+  }
+});
+
 it('resolves slash branches, freezes commit and excludes nested, symlink, unrelated and invalid files', async () => {
   const fetcher = fixture({
     'good.json': legacy,
