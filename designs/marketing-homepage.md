@@ -1,6 +1,6 @@
 # Marketing homepage design
 
-The current editable source is `interlock-design-directions.pen`, under **Interlock / Marketing homepage** (`fkMcK`). Access the encrypted Pen file through Pencil MCP only. Earlier marketing explorations, including their mobile composition and shared narrative component, have been removed.
+The current editable source is `interlock.pen`, under **Interlock / Marketing homepage** (`fkMcK`). Access the encrypted Pen file through Pencil MCP only. Earlier marketing explorations, including their mobile composition and shared narrative component, have been removed.
 
 ## Artifact map
 

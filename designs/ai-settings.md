@@ -1,6 +1,6 @@
 # AI Settings layout
 
-This desktop reference is in [the Pen file](../interlock-design-directions.pen), under `Interlock / AI settings` (`Q9js48`). The user approved its three task tabs and focused alias editor for implementation on 2026-11-09. It extends the Grid design system. Static specimens remain separate from runtime verification.
+This desktop reference is in [the Pen file](../interlock.pen), under `Interlock / AI settings` (`Q9js48`). The user approved its three task tabs and focused alias editor for implementation on 2026-11-09. It extends the Grid design system. Static specimens remain separate from runtime verification.
 
 ## Views
 
