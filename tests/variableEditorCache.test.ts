@@ -405,9 +405,11 @@ it('checks the original variable after a portable save response is lost during a
   const other = { ...original, id: 'other', name: 'other_variable' };
   let target = original;
   let stored = { ...original, referenceId: 'v' };
-  read.mockImplementation(async ({ id }) =>
-    id === 'portable' ? target : stored,
-  );
+  read.mockImplementation(async ({ id }) => {
+    if (id !== 'portable') return stored;
+    if (target.id === other.id) throw new Error('Portable details unavailable');
+    return target;
+  });
   manage.mockImplementation(async ({ name }) => {
     stored = { ...stored, name, revision: 2 };
     target = other;
@@ -421,6 +423,14 @@ it('checks the original variable after a portable save response is lost during a
   expect(container.textContent).toContain(
     'could not confirm whether the variable was saved',
   );
+  const portableKey = trpc.variables.read.queryKey({
+    action: 'inspect',
+    id: 'portable',
+    offset: 0,
+  });
+  await act(async () => {
+    client.setQueryData(portableKey, other);
+  });
   read.mockClear();
   await click('Load latest');
   await click('Discard changes');
@@ -439,50 +449,70 @@ it('checks the original variable after a portable save response is lost during a
       }),
     ),
   ).toEqual(stored);
+  expect(client.getQueryData(portableKey)).toEqual(other);
   expect(field('Name').value).toBe('other_variable');
   expect(onEditorGuard).toHaveBeenLastCalledWith(undefined);
   expect(manage).toHaveBeenCalledTimes(1);
 });
 
-it('reopens a portable Variable on the acknowledged revision when its read fails', async () => {
-  const original = { ...savedVariable(), referenceId: 'portable' };
-  let offline = false;
-  read.mockImplementation(async () => {
-    if (offline) throw new Error('Portable details unavailable');
-    return original;
-  });
-  manage.mockImplementation(async ({ name }) => {
-    offline = true;
-    const { referenceId, dependencies, bindings, storage, ...metadata } =
-      original;
-    return { ...metadata, name, revision: 2 };
-  });
+it.each(['acknowledged', 'recovered'])(
+  'reopens a portable Variable on the %s revision when its read fails',
+  async (outcome) => {
+    const original = { ...savedVariable(), referenceId: 'portable' };
+    let stored = { ...original, referenceId: 'v' };
+    let offline = false;
+    read.mockImplementation(async ({ id }) => {
+      if (id !== 'portable') return stored;
+      if (offline) throw new Error('Portable details unavailable');
+      return original;
+    });
+    manage.mockImplementation(async ({ name }) => {
+      stored = { ...stored, name, revision: 2 };
+      offline = true;
+      if (outcome === 'recovered') throw new Error('Save response lost');
+      const { referenceId, dependencies, bindings, storage, ...metadata } =
+        stored;
+      return metadata;
+    });
 
-  await show(true, 'portable');
-  const portableKey = trpc.variables.read.queryKey({
-    action: 'inspect',
-    id: 'portable',
-    offset: 0,
-  });
-  let releaseOlder!: (metadata: typeof original) => void;
-  read.mockImplementationOnce(
-    () => new Promise((resolve) => (releaseOlder = resolve)),
-  );
-  await act(async () => {
-    void client.refetchQueries({ queryKey: portableKey, exact: true });
-  });
-  await changeName('acknowledged_name');
-  await submit();
-  await act(async () => releaseOlder(original));
-  expect(field('Name').value).toBe('acknowledged_name');
-  await show(false);
-  await show(true, 'portable');
+    await show(true, 'portable');
+    const key = (offset: number) =>
+      trpc.variables.read.queryKey({
+        action: 'inspect',
+        id: 'portable',
+        offset,
+      });
+    const page = { ...original.dependencies, offset: 25, total: 27 };
+    let releaseOlder!: (metadata: typeof original) => void;
+    read.mockImplementationOnce(
+      () => new Promise((resolve) => (releaseOlder = resolve)),
+    );
+    await act(async () => {
+      client.setQueryData<typeof original>(key(25), {
+        ...original,
+        dependencies: page,
+      });
+      void client.refetchQueries({ queryKey: key(0), exact: true });
+    });
+    await changeName('acknowledged_name');
+    await submit();
+    if (outcome === 'recovered') {
+      await click('Load latest');
+      await click('Discard changes');
+    }
+    await act(async () => releaseOlder(original));
+    expect(field('Name').value).toBe('acknowledged_name');
+    await show(false);
+    await show(true, 'portable');
 
-  expect(field('Name').value).toBe('acknowledged_name');
-  expect(container.textContent).toContain('Portable details unavailable');
-  expect(client.getQueryData(portableKey)).toMatchObject({
-    id: 'v',
-    referenceId: 'portable',
-    revision: 2,
-  });
-});
+    expect(field('Name').value).toBe('acknowledged_name');
+    expect(container.textContent).toContain('Portable details unavailable');
+    for (const offset of [0, 25])
+      expect(client.getQueryData(key(offset))).toMatchObject({
+        id: 'v',
+        referenceId: 'portable',
+        revision: 2,
+        dependencies: offset ? page : original.dependencies,
+      });
+  },
+);

@@ -58,6 +58,10 @@ import { VariablePicker } from './VariablePicker';
 
 type Read = Awaited<ReturnType<typeof api.variables.read.query>>;
 type Inspection = Extract<Read, { dependencies: unknown }>;
+type VariableReceipt = Extract<
+  Awaited<ReturnType<typeof api.variables.manage.mutate>>,
+  { name: string }
+>;
 type ConfigValue = Extract<Read, { value: string }>;
 class ConfigValueChangedError extends Error {
   constructor() {
@@ -454,6 +458,34 @@ function VariableEditor({ id }: { id: string }) {
     }
     setError('');
   };
+  const acknowledgeMetadata = (
+    inspectionId: string,
+    receipt: VariableReceipt,
+  ) => {
+    const matchesSaved = (current: Read | undefined): current is Inspection =>
+      Boolean(
+        current &&
+        'dependencies' in current &&
+        current.id === receipt.id &&
+        current.revision <= receipt.revision,
+      );
+    const filter = trpc.variables.read.queryFilter({
+      action: 'inspect',
+      id: inspectionId,
+    });
+    // A portable reference can change targets while the write is pending.
+    void queryClient.cancelQueries({
+      ...filter,
+      predicate: ({ queryKey }) =>
+        inspectionId === receipt.id ||
+        matchesSaved(queryClient.getQueryData(queryKey)),
+    });
+    queryClient.setQueriesData<Read>(filter, (current) =>
+      matchesSaved(current)
+        ? { ...current, ...receipt, referenceId: current.referenceId }
+        : undefined,
+    );
+  };
   const loadLatest = async () => {
     if (!saved || latestRequest.current) return;
     const request = new AbortController();
@@ -492,6 +524,11 @@ function VariableEditor({ id }: { id: string }) {
         );
         return;
       }
+      if (id !== latest.id) {
+        const { referenceId, dependencies, bindings, storage, ...metadata } =
+          latest;
+        acknowledgeMetadata(id, metadata);
+      }
       clear();
       applyInspection(latest, nextConfig);
     } catch (error) {
@@ -514,10 +551,7 @@ function VariableEditor({ id }: { id: string }) {
     }
     if (!beginSave()) return;
     setError('');
-    let result: Extract<
-      Awaited<ReturnType<typeof api.variables.manage.mutate>>,
-      { name: string }
-    >;
+    let result: VariableReceipt;
     try {
       const receipt = await api.variables.manage.mutate(
         creating
@@ -582,33 +616,8 @@ function VariableEditor({ id }: { id: string }) {
             });
         }
       }
-      const matchesSaved = (current: Read | undefined): current is Inspection =>
-        Boolean(
-          current &&
-          'dependencies' in current &&
-          current.id === result.id &&
-          current.revision <= result.revision,
-        );
-      const inspectionIds =
-        !creating && id !== result.id ? [result.id, id] : [result.id];
-      for (const inspectionId of inspectionIds) {
-        const filter = trpc.variables.read.queryFilter({
-          action: 'inspect',
-          id: inspectionId,
-        });
-        // A portable reference can change targets while the write is pending.
-        void queryClient.cancelQueries({
-          ...filter,
-          predicate: ({ queryKey }) =>
-            inspectionId === result.id ||
-            matchesSaved(queryClient.getQueryData(queryKey)),
-        });
-        queryClient.setQueriesData<Read>(filter, (current) =>
-          matchesSaved(current)
-            ? { ...current, ...result, referenceId: current.referenceId }
-            : undefined,
-        );
-      }
+      acknowledgeMetadata(result.id, result);
+      if (!creating && id !== result.id) acknowledgeMetadata(id, result);
       if (result.kind === 'config' && result.valueRevision !== null) {
         const savedValue = creating
           ? value
