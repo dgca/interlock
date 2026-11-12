@@ -107,7 +107,7 @@ it('keeps results tied to their search through loading, failure, and retry', asy
   expect(input.value).toBe('new');
   rpc.read.mockResolvedValueOnce(listing(['new_variable']));
   const retry = [...container.querySelectorAll('button')].find(
-    (el) => el.textContent === 'Retry loading',
+    (el) => el.textContent === 'Retry variables',
   )!;
   await act(async () => retry.click());
   await act(async () => vi.advanceTimersByTimeAsync(150));
@@ -138,6 +138,8 @@ it('restores cached variables immediately on return and retains them on a backgr
   expect(container.textContent).not.toContain('Loading variables');
   await act(async () => reject(new Error('Background refresh unavailable')));
   expect(container.textContent).toContain('original_variable');
-  expect(container.textContent).toContain('Variables may be out of date');
+  expect(container.textContent).toContain(
+    'Could not refresh variables. Showing the last loaded data.',
+  );
   expect(container.textContent).toContain('Background refresh unavailable');
 });

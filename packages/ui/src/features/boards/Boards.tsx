@@ -8,24 +8,17 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router';
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Columns3,
-  Plus,
-  Search,
-  Settings2,
-} from 'lucide-react';
+import { ArrowUpRight, Columns3, Plus, Search, Settings2 } from 'lucide-react';
 import {
   boardStatusSchema,
   runDisplayTitle,
   type BoardStatus,
 } from '@interlock/core';
 import {
-  ActionError,
   Anchor,
   Badge,
   Button,
+  EmptyState,
   Group,
   Loader,
   PageHeader,
@@ -37,13 +30,18 @@ import {
 } from '../../design-system';
 import { ExternalTaskLink } from '../../components/ExternalTaskLink';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
+import {
+  WorkspaceReadWarning,
+  workspaceRead,
+} from '../../components/WorkspaceReads';
 import type { AppContext } from '../../App';
 import { paths, runOffset } from '../../routes/paths';
 import { requestActionLabel } from '../runs/runAttention';
-import { errorMessage, type api } from '../../lib/api';
+import type { api } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
 import { runProjectionLabels } from '../runs/runProjectionText';
 import { parseRequestTarget, RequestView } from './RequestView';
+import { BoardRowsSkeleton, BoardColumnsSkeleton } from './BoardSkeleton';
 import classes from './Boards.module.css';
 
 type BoardData = Awaited<ReturnType<typeof api.boards.get.query>>;
@@ -65,13 +63,16 @@ const scrollPositions = new Map<string, number>();
 
 export function BoardLibrary() {
   const [search, setSearch] = useState('');
+  const searchInput = useRef<HTMLInputElement>(null);
+  const term = search.trim().toLocaleLowerCase();
   const boards = useQuery(trpc.boards.list.queryOptions());
+  const boardsRead = workspaceRead('boards', boards, searchInput);
   const { workflows } = useOutletContext<AppContext>();
   const byId = new Map(
     workflows.map((workflow) => [workflow.id, workflow.name]),
   );
   const visible = boards.data?.filter((board) =>
-    board.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+    board.name.toLocaleLowerCase().includes(term),
   );
   return (
     <div className={workspacePage.page}>
@@ -79,6 +80,7 @@ export function BoardLibrary() {
         title="Boards"
         controls={
           <TextInput
+            ref={searchInput}
             aria-label="Search boards"
             placeholder="Search boards"
             className={classes.librarySearch}
@@ -93,49 +95,73 @@ export function BoardLibrary() {
           </Button>
         }
       />
-      <div className={classes.content}>
-        {boards.error && <ActionError message={errorMessage(boards.error)} />}
-        {boards.isPending && <Loader aria-label="Loading boards" />}
+      <div className={workspacePage.content}>
+        <WorkspaceReadWarning reads={[boardsRead]} inline showDetails />
+        {!boardsRead.ready && !boardsRead.error && <BoardRowsSkeleton />}
         {visible?.length === 0 && (
-          <Text c="dimmed">
-            {search ? 'No boards match your search.' : 'No boards yet.'}
-          </Text>
+          <EmptyState title={term ? 'No matching boards' : 'No boards yet'}>
+            {term ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setSearch('');
+                  searchInput.current?.focus();
+                }}
+              >
+                Clear search
+              </Button>
+            ) : (
+              <Button component={Link} to={paths.boardNew} variant="secondary">
+                Create a board
+              </Button>
+            )}
+          </EmptyState>
         )}
         {!!visible?.length && (
           <ul className={classes.library} role="list">
-            {visible.map((board) => (
-              <li className={classes.libraryRow} key={board.id}>
-                <div className={classes.libraryIcon} aria-hidden="true">
-                  <Columns3 size={18} />
-                </div>
-                <div className={classes.libraryDetails}>
-                  <h2>{board.name}</h2>
-                  <Text size="sm" c="dimmed">
-                    {workflowNames.format(
-                      board.workflowIds
-                        .map((id) => byId.get(id))
-                        .filter((name) => name !== undefined),
-                    ) || 'No workflows assigned'}
-                  </Text>
-                </div>
-                <div className={classes.libraryActions}>
+            {visible.map((board) => {
+              const names = board.workflowIds.flatMap(
+                (id) => byId.get(id) ?? [],
+              );
+              const count = board.workflowIds.length;
+              return (
+                <li className={classes.libraryRow} key={board.id}>
+                  <div className={classes.libraryIcon} aria-hidden="true">
+                    <Columns3 size={18} />
+                  </div>
+                  <div className={classes.libraryDetails}>
+                    <h2>
+                      <Anchor
+                        component={Link}
+                        to={paths.board(board.id)}
+                        underline="hover"
+                      >
+                        {board.name}
+                      </Anchor>
+                    </h2>
+                    <Text size="sm" c="dimmed">
+                      {!count
+                        ? 'No workflows assigned'
+                        : names.length === count
+                          ? workflowNames.format(names)
+                          : `${count} assigned ${count === 1 ? 'workflow' : 'workflows'}`}
+                    </Text>
+                  </div>
                   {board.attentionCount > 0 && (
-                    <Badge variant="light" color="yellow" radius="sm" size="lg">
+                    <Badge
+                      className={classes.libraryAttention}
+                      variant="light"
+                      color="yellow"
+                      radius="sm"
+                      size="lg"
+                    >
                       {board.attentionCount}{' '}
                       {board.attentionCount === 1 ? 'request' : 'requests'}
                     </Badge>
                   )}
-                  <Button
-                    component={Link}
-                    to={paths.board(board.id)}
-                    variant="secondary"
-                    aria-label={`Open board: ${board.name}`}
-                  >
-                    <ArrowRight size={16} aria-hidden="true" /> Open board
-                  </Button>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -161,6 +187,9 @@ function WorkflowBoard({ id }: { id: string }) {
   const query = useQuery(
     trpc.boards.get.queryOptions({ ...filters, limit: pageSize }),
   );
+  const statusFilter = useRef<HTMLInputElement>(null);
+  const workflowFilter = useRef<HTMLInputElement>(null);
+  const boardRead = workspaceRead('board', query, statusFilter);
   const scroll = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   const previous = useRef(Boolean(target));
@@ -181,19 +210,32 @@ function WorkflowBoard({ id }: { id: string }) {
     }
     previous.current = Boolean(target);
   }, [Boolean(target), Boolean(query.data), scrollKey]);
-  const change = (key: string, value?: string, replace = false) =>
+  const change = (
+    updates: Record<string, string | undefined>,
+    replace = false,
+  ) =>
     setSearch(
       (current) => {
         const next = new URLSearchParams(current);
-        if (key === 'status' || key === 'workflow')
+        if (
+          Object.hasOwn(updates, 'status') ||
+          Object.hasOwn(updates, 'workflow')
+        )
           for (const param of [...next.keys()])
             if (param.startsWith('page:')) next.delete(param);
-        if (value) next.set(key, value);
-        else next.delete(key);
+        for (const [key, value] of Object.entries(updates)) {
+          if (value) next.set(key, value);
+          else next.delete(key);
+        }
         return next;
       },
-      { replace, preventScrollReset: true },
+      { replace, preventScrollReset: true, state: location.state },
     );
+  const filtered = status !== 'all' || Boolean(workflowId);
+  const clearFilters = () => {
+    void change({ status: undefined, workflow: undefined });
+    (workflowId ? workflowFilter : statusFilter).current?.focus();
+  };
 
   return (
     <>
@@ -209,12 +251,13 @@ function WorkflowBoard({ id }: { id: string }) {
           controls={
             <>
               <Select
+                ref={workflowFilter}
                 aria-label="Workflow"
                 w={180}
                 allowDeselect={false}
                 value={workflowId ?? ''}
                 onChange={(value) =>
-                  void change('workflow', value || undefined)
+                  void change({ workflow: value || undefined })
                 }
                 data={[
                   { value: '', label: 'All workflows' },
@@ -227,6 +270,7 @@ function WorkflowBoard({ id }: { id: string }) {
                 ]}
               />
               <Select
+                ref={statusFilter}
                 aria-label="Status"
                 w={214}
                 maxDropdownHeight={298}
@@ -239,10 +283,9 @@ function WorkflowBoard({ id }: { id: string }) {
                 allowDeselect={false}
                 value={status}
                 onChange={(value) =>
-                  void change(
-                    'status',
-                    value && value !== 'all' ? value : undefined,
-                  )
+                  void change({
+                    status: value && value !== 'all' ? value : undefined,
+                  })
                 }
                 data={Object.entries(statusLabels).map(([value, label]) => ({
                   value,
@@ -251,9 +294,9 @@ function WorkflowBoard({ id }: { id: string }) {
                 renderOption={({ option }) => (
                   <Group justify="space-between" w="100%">
                     <span>{option.label}</span>
-                    {option.value === 'attention' && (
+                    {option.value === 'attention' && query.data && (
                       <Badge color="yellow" variant="light" size="sm">
-                        {query.data?.attentionCount ?? 0}
+                        {query.data.attentionCount}
                       </Badge>
                     )}
                   </Group>
@@ -267,34 +310,24 @@ function WorkflowBoard({ id }: { id: string }) {
             </Button>
           }
         />
-        {query.error && (
+        {boardRead.error && (
           <div className={classes.content}>
-            <ActionError message={errorMessage(query.error)} />
-            <Button
-              variant="secondary"
-              onClick={() => void query.refetch({ cancelRefetch: false })}
-            >
-              Retry board
-            </Button>
+            <WorkspaceReadWarning reads={[boardRead]} inline showDetails />
           </div>
         )}
-        {query.isPending && (
-          <div className={classes.content}>
-            <Loader aria-label="Loading board" />
-          </div>
-        )}
+        {!boardRead.ready && !boardRead.error && <BoardColumnsSkeleton />}
         {query.data && (
           <>
             {query.data.columns.every((column) => column.total === 0) && (
               <Group className={classes.empty} gap="md">
                 <Text size="sm" c="dimmed">
-                  {status === 'all' && !workflowId
-                    ? 'No runs on this board.'
-                    : 'No runs match these filters.'}
+                  {filtered
+                    ? 'No runs match these filters.'
+                    : 'No runs on this board.'}
                 </Text>
-                {status !== 'all' && (
-                  <Button variant="ghost" onClick={() => void change('status')}>
-                    Clear status filter
+                {filtered && (
+                  <Button variant="secondary" onClick={clearFilters}>
+                    Clear filters
                   </Button>
                 )}
               </Group>
@@ -321,7 +354,10 @@ function WorkflowBoard({ id }: { id: string }) {
                     filters={filters}
                     search={search}
                     onMore={(depth) =>
-                      void change(`page:${column.id}`, String(depth), true)
+                      void change(
+                        { [`page:${column.id}`]: String(depth) },
+                        true,
+                      )
                     }
                     rememberOpener={(element) => {
                       opener.current = element;
@@ -337,7 +373,7 @@ function WorkflowBoard({ id }: { id: string }) {
         <RequestView
           target={target}
           backLabel={`Back to ${boardName}`}
-          onBack={() => void change('request', undefined, true)}
+          onBack={() => void change({ request: undefined }, true)}
           requestHref={(next) => {
             const query = new URLSearchParams(search);
             query.set('request', JSON.stringify(next));
@@ -420,15 +456,14 @@ function StageColumn({
         )}
         {extraPages.map((page, index) =>
           page.error ? (
-            <Stack gap="xs" key={index}>
-              <ActionError message={errorMessage(page.error)} />
-              <Button
-                variant="secondary"
-                onClick={() => void page.refetch({ cancelRefetch: false })}
-              >
-                Retry page {index + 2} in {column.name}
-              </Button>
-            </Stack>
+            <WorkspaceReadWarning
+              key={index}
+              reads={[
+                workspaceRead(`page ${index + 2} in ${column.name}`, page),
+              ]}
+              inline
+              showDetails
+            />
           ) : (
             !page.data && (
               <Loader key={index} size="xs" aria-label="Loading more cards" />

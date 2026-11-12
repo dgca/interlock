@@ -364,9 +364,9 @@ it.each(['update', 'delete'] as const)(
       ).toBeTruthy();
     else expect(container.textContent).toContain('Preset reviewer deleted.');
     expect(container.textContent).toContain(
-      'Could not refresh presets. Catalog unavailable',
+      'Could not refresh agent presets. Showing the last loaded data. Catalog unavailable',
     );
-    await click(button('Retry loading presets'));
+    await click(button('Retry agent presets'));
     expect(rpc.mutate).toHaveBeenCalledTimes(1);
   },
 );
@@ -390,7 +390,7 @@ it('keeps the first saved preset actionable while the catalog cannot refresh', a
   await click(button('Create preset'));
   expect(container.textContent).toContain('Preset first reviewer saved.');
   expect(container.textContent).toContain(
-    'Could not refresh presets. Catalog unavailable',
+    'Could not refresh agent presets. Showing the last loaded data. Catalog unavailable',
   );
   expect(container.textContent).not.toContain('No agent presets yet');
   expect(
@@ -403,7 +403,7 @@ it('keeps the first saved preset actionable while the catalog cannot refresh', a
   expect(rpc.read).toHaveBeenCalledTimes(reads);
   await click(button('Cancel'));
   expect(button('Open saved preset')).toBeTruthy();
-  await click(button('Retry loading presets'));
+  await click(button('Retry agent presets'));
   expect(
     container.querySelector('[aria-label="Edit preset first reviewer"]'),
   ).toBeTruthy();
@@ -458,7 +458,7 @@ it('pages bounded results and recovers from a list failure', async () => {
   }));
   rpc.read.mockRejectedValueOnce(new Error('Temporarily unavailable'));
   await renderSection();
-  await click(button('Retry loading presets'));
+  await click(button('Retry agent presets'));
   expect(container.textContent).toContain('role-0');
   expect(container.textContent).not.toContain('role-11');
   await click(button('Next'));

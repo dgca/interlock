@@ -1,7 +1,7 @@
 import {
-  Alert,
   Anchor,
   Button,
+  EmptyState,
   Loader,
   Select,
   TextInput,
@@ -9,9 +9,13 @@ import {
   workspacePage,
 } from '../../design-system';
 
-import { WorkspaceReads } from '../../components/WorkspaceReads';
+import {
+  WorkspaceReads,
+  WorkspaceReadWarning,
+  workspaceRead,
+} from '../../components/WorkspaceReads';
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
 import {
   Link,
@@ -28,12 +32,10 @@ import {
   Search,
   Timer,
   Workflow as WorkflowIcon,
-  Zap,
 } from 'lucide-react';
 import type { AppContext } from '../../App';
 import { PageTabs } from '../../components/PageLayout/PageLayout';
 import { automationDraftKey, paths } from '../../routes/paths';
-import { errorMessage } from '../../lib/api';
 import { AutomationEditor } from './AutomationEditor';
 import { AutomationDetail } from './AutomationDetail';
 import {
@@ -152,13 +154,16 @@ function AutomationList() {
   const { workflows, tick } = useOutletContext<AppContext>();
   const [search, setSearch] = useSearchParams();
   const query = listQuery(search);
+  const searchInput = useRef<HTMLInputElement>(null);
   const result = useQuery(
     trpc.triggers.list.queryOptions({ ...query, limit: 20 }),
   );
   useRefreshOnTick(tick, result.refetch, true, result.isFetching);
   const page = result.data;
-  const error = result.error ? errorMessage(result.error) : '';
-  const loading = result.isFetching;
+  const read = workspaceRead('automations', result, searchInput);
+  const filtered = Boolean(
+    query.search || query.workflowId || query.status !== 'all',
+  );
   useEffect(() => {
     if (page && page.total > 0 && query.offset >= page.total) {
       setSearch(
@@ -210,6 +215,7 @@ function AutomationList() {
               onChange={(value) => change('workflow', value || undefined)}
             />
             <TextInput
+              ref={searchInput}
               className={classes.toolbarSearch}
               aria-label="Search automations"
               placeholder="Search automations"
@@ -227,25 +233,10 @@ function AutomationList() {
         }
       />
       <PageTabs label="Automation views" items={items} value={query.status} />
-      <div className={workspacePage.content} aria-busy={loading}>
-        {error && (
-          <Alert
-            color="red"
-            mb="md"
-            title={
-              page
-                ? 'Automations may be out of date'
-                : 'Could not load automations'
-            }
-          >
-            {error}
-            <Button variant="ghost" onClick={() => void result.refetch()}>
-              Retry loading
-            </Button>
-          </Alert>
-        )}
+      <div className={workspacePage.content}>
+        <WorkspaceReadWarning reads={[read]} inline showDetails />
         {!page ? (
-          !error && <AutomationRowsSkeleton />
+          !read.error && <AutomationRowsSkeleton />
         ) : page.items.length ? (
           <>
             <ListTable {...automationTable} label="Automations">
@@ -345,22 +336,32 @@ function AutomationList() {
             </div>
           </>
         ) : (
-          <div className={classes.empty}>
-            <Zap size={28} />
-            <h2>
-              {query.search || query.status !== 'all' || query.workflowId
-                ? 'No matching automations'
-                : 'No automations yet'}
-            </h2>
-            <p>
-              {query.search || query.status !== 'all' || query.workflowId
-                ? 'Change your filters or create an automation.'
-                : 'Start a workflow on a schedule or when an Interlock event occurs.'}
-            </p>
-            <Button variant="primary" component={Link} to={newHref}>
-              New automation
-            </Button>
-          </div>
+          <EmptyState
+            title={filtered ? 'No matching automations' : 'No automations yet'}
+            description={
+              filtered
+                ? undefined
+                : 'Start a workflow on a schedule or when an Interlock event occurs.'
+            }
+          >
+            {filtered ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  void setSearch(new URLSearchParams());
+                  searchInput.current?.focus();
+                }}
+              >
+                {query.workflowId || query.status !== 'all'
+                  ? 'Clear filters'
+                  : 'Clear search'}
+              </Button>
+            ) : (
+              <Button variant="secondary" component={Link} to={newHref}>
+                New automation
+              </Button>
+            )}
+          </EmptyState>
         )}
       </div>
     </section>

@@ -79,25 +79,7 @@
   font-size: 12px;
   color: var(--muted);
 }
-.empty {
-  min-height: 340px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  color: var(--muted);
-  text-align: center;
-}
-.empty h2 {
-  margin: 0;
-  font-size: 18px;
-  color: var(--text);
-}
-.empty p {
-  margin: 0;
-  font-size: 14px;
-}
+
 .choices {
   max-width: 760px;
   background: var(--surface);

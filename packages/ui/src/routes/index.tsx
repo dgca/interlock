@@ -26,6 +26,7 @@ import { trpc, useQuery } from '../lib/query';
 import { RouteSkeleton } from './RouteSkeleton';
 
 import { RunListSkeleton } from '../features/runs/RunListSkeleton';
+import { BoardLibrarySkeleton } from '../features/boards/BoardSkeleton';
 import { PromptEditorSkeleton } from '../features/prompts/PromptSkeleton';
 import {
   VariableEditorSkeleton,
@@ -195,6 +196,7 @@ function PromptsRoute() {
     <WorkspaceReads
       reads={[promptsRead]}
       subject="prompts"
+      title="Prompts"
       loading={<RouteSkeleton subject="prompts" />}
     >
       <Suspense fallback={<RouteSkeleton subject="prompts" />}>
@@ -658,7 +660,7 @@ export const routes: RouteObject[] = [
       {
         path: 'boards',
         element: (
-          <Suspense fallback={<RouteLoading />}>
+          <Suspense fallback={<BoardLibrarySkeleton />}>
             <BoardLibrary />
           </Suspense>
         ),

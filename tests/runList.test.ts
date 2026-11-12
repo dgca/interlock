@@ -149,6 +149,55 @@ it('defaults lazy and data loading to List and switches to Overview when selecte
   }
 });
 
+it('retries only the failed Overview preview', async () => {
+  let failed = true;
+  query.mockImplementation(async ({ tab }) => {
+    if (tab === 'attention' && failed) throw new Error('Attention read failed');
+    return {
+      items: [],
+      counts: { active: 0, attention: 0, history: 0 },
+      total: 0,
+      offset: 0,
+      nextOffset: null,
+    };
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () =>
+      root.render(
+        h(
+          DesignSystemProvider,
+          { env: 'test' },
+          h(RoutedRunList, {
+            tick: 0,
+            offset: 0,
+            onOffsetChange: vi.fn(),
+            workflows: [],
+            tab: 'active',
+            onTabChange: vi.fn(),
+            mode: 'overview',
+          }),
+        ),
+      ),
+    );
+    expect(container.textContent).toContain('Attention read failed');
+    expect(container.textContent).toContain('No completed runs yet.');
+    const retry = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Retry attention preview',
+    )!;
+    failed = false;
+    query.mockClear();
+    await act(async () => retry.click());
+    expect(query.mock.calls.map(([input]) => input.tab)).toEqual(['attention']);
+    expect(container.textContent).toContain('No runs need your attention.');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
 it('scopes empty board messages to exact tag filters and clears them through the existing reset action', async () => {
   query.mockImplementation(async ({ tab, tags, offset }) => {
     const items =
@@ -1194,7 +1243,9 @@ it('reuses the exact cached Runs page on remount while refreshing, retaining it 
     expect(container.textContent).not.toContain('Loading runs…');
     await act(async () => reject(new Error('Refresh unavailable')));
     expect(container.textContent).toContain('Cached workflow');
-    expect(container.textContent).toContain('Runs may be out of date');
+    expect(container.textContent).toContain(
+      'Could not refresh runs. Showing the last loaded data.',
+    );
     await act(async () => root.render(view(true, 'another-workflow')));
     expect(container.textContent).not.toContain('Cached workflow');
     expect(container.textContent).toContain('Loading runs…');

@@ -5,6 +5,7 @@ import {
   Switch,
   TextInput,
   Button,
+  EmptyState,
   ActionError,
   PageHeader,
   workspacePage,
@@ -28,6 +29,10 @@ import { api, errorMessage } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
+import {
+  WorkspaceReadWarning,
+  workspaceRead,
+} from '../../components/WorkspaceReads';
 import { HarnessRowsSkeleton, harnessTable } from './HarnessListSkeleton';
 import styles from './Harnesses.module.css';
 import { permissionOptions, permissionDescriptions } from './permissions';
@@ -85,10 +90,17 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   const request = useRef(0);
   const profilesQuery = useQuery(trpc.executors.profiles.queryOptions());
   const profiles = profilesQuery.data;
+  const harnesses = profiles?.filter(isPrimaryHarness).sort(
+    (a, b) =>
+      Number(b.detection.status === 'detected') -
+        Number(a.detection.status === 'detected') ||
+      harnessLabel(a).localeCompare(harnessLabel(b), undefined, {
+        sensitivity: 'base',
+      }) ||
+      a.id.localeCompare(b.id),
+  );
   const [checkError, setCheckError] = useState('');
-  const error =
-    checkError ||
-    (profilesQuery.error ? errorMessage(profilesQuery.error) : '');
+  const read = workspaceRead('harnesses', profilesQuery);
   const [checking, setChecking] = useState(false);
 
   const refresh = async (check = false) => {
@@ -98,8 +110,8 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     try {
       if (check)
         await api.executors.manage.mutate({ action: 'list', refresh: true });
-      const result = await profilesQuery.refetch({ throwOnError: true });
-      return result.data;
+      const result = await profilesQuery.refetch();
+      return result.isSuccess ? result.data : undefined;
     } catch (e) {
       if (request.current === current) setCheckError(errorMessage(e));
     } finally {
@@ -135,15 +147,11 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
         value={activeTab}
       />
       <div className={`${workspacePage.content} ${styles.aiContent}`}>
-        {error && (
-          <div className={styles.errorRow}>
-            <p role="alert" className={styles.error}>
-              {error}
-            </p>
-            <Button variant="ghost" onClick={() => void refresh()}>
-              Retry loading harnesses
-            </Button>
-          </div>
+        <WorkspaceReadWarning reads={[read]} inline showDetails />
+        {checkError && (
+          <ActionError
+            message={`Could not check installations. ${checkError}`}
+          />
         )}
         {activeTab === 'harnesses' && (
           <section
@@ -177,33 +185,28 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
               </div>
             </div>
             {!profiles ? (
-              !error && <HarnessRowsSkeleton />
-            ) : (
+              !read.error && <HarnessRowsSkeleton />
+            ) : harnesses?.length ? (
               <ListTable {...harnessTable} label="Harnesses">
-                {profiles
-                  .filter(isPrimaryHarness)
-                  .sort(
-                    (a, b) =>
-                      Number(b.detection.status === 'detected') -
-                        Number(a.detection.status === 'detected') ||
-                      harnessLabel(a).localeCompare(
-                        harnessLabel(b),
-                        undefined,
-                        {
-                          sensitivity: 'base',
-                        },
-                      ) ||
-                      a.id.localeCompare(b.id),
-                  )
-                  .map((p) => (
-                    <ProfileRow
-                      key={p.id}
-                      profile={p}
-                      refresh={() => refresh()}
-                      onDirty={trackDirty}
-                    />
-                  ))}
+                {harnesses.map((p) => (
+                  <ProfileRow
+                    key={p.id}
+                    profile={p}
+                    refresh={() => refresh()}
+                    onDirty={trackDirty}
+                  />
+                ))}
               </ListTable>
+            ) : (
+              <EmptyState title="No harnesses yet">
+                <Button
+                  component={Link}
+                  to={paths.integrationNew}
+                  variant="secondary"
+                >
+                  Add integration
+                </Button>
+              </EmptyState>
             )}
             <div className={styles.bottom}>
               <p>

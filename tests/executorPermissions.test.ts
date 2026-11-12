@@ -531,7 +531,7 @@ it('offers recovery instead of an endless loading skeleton after a failed harnes
     container.querySelector('[aria-label="Loading harnesses"]'),
   ).toBeNull();
   rpc.profiles.mockResolvedValue([harnessProfile()]);
-  await act(async () => button('Retry loading harnesses').click());
+  await act(async () => button('Retry harnesses').click());
   expect(button('Edit defaults')).toBeDefined();
 });
 function Controls() {

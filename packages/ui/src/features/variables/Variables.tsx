@@ -52,6 +52,10 @@ import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
+import {
+  WorkspaceReadWarning,
+  workspaceRead,
+} from '../../components/WorkspaceReads';
 
 import { VariableRowsSkeleton, variableTable } from './VariableListSkeleton';
 import styles from './Variables.module.css';
@@ -105,6 +109,10 @@ export function VariableLibrary() {
   const result = useQuery({
     ...trpc.variables.read.queryOptions({ action: 'list', search, offset }),
     enabled: search === debouncedSearch,
+    select: (page) => {
+      if (!('items' in page)) throw new Error('Could not read variables.');
+      return page;
+    },
   });
   useRefreshOnTick(
     tick,
@@ -112,9 +120,9 @@ export function VariableLibrary() {
     search === debouncedSearch,
     result.isFetching,
   );
-  const data = result.data && 'items' in result.data ? result.data : undefined;
-  const error = result.error ? errorMessage(result.error) : '';
-  const loading = !data && !error;
+  const data = result.data;
+  const read = workspaceRead('variables', result, searchInput);
+  const loading = !read.ready && !read.error;
   const updateSearch = (value: string) => {
     setSearch(value);
     setOffset(0);
@@ -157,20 +165,7 @@ export function VariableLibrary() {
         }
       />
       <div className={workspacePage.content}>
-        {error && (
-          <Alert
-            color="red"
-            mb="md"
-            title={
-              data ? 'Variables may be out of date' : 'Could not load variables'
-            }
-          >
-            {error}
-            <Button variant="ghost" onClick={() => void result.refetch()}>
-              Retry loading
-            </Button>
-          </Alert>
-        )}
+        <WorkspaceReadWarning reads={[read]} inline showDetails />
         {loading ? (
           <VariableRowsSkeleton />
         ) : data?.items.length ? (

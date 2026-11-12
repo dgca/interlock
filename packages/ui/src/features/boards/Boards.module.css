@@ -6,7 +6,6 @@
   width: 232px;
 }
 .library {
-  container-type: inline-size;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -37,22 +36,18 @@
   font-weight: 600;
   line-height: 1.3;
 }
-.libraryActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px 16px;
+.libraryDetails h2 a {
+  font: inherit;
 }
-@container (max-width: 520px) {
+@media (max-width: 600px) {
   .libraryRow {
     grid-template-columns: auto minmax(0, 1fr);
     gap: 12px;
     padding-inline: 0;
   }
-  .libraryActions {
+  .libraryAttention {
     grid-column: 2;
-    justify-content: flex-start;
+    justify-self: start;
   }
 }
 .cards {
@@ -108,6 +103,9 @@
   overflow: auto;
   scrollbar-color: var(--border) var(--workspace);
   padding: 16px var(--workspace-padding) 24px;
+}
+.boardSkeleton {
+  overflow: hidden;
 }
 .scroller:focus-visible {
   outline: 2px solid var(--field-focus);

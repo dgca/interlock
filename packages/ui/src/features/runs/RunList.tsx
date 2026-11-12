@@ -1,7 +1,7 @@
 import {
-  Alert,
   Anchor,
   Button,
+  EmptyState,
   Group,
   Menu,
   SegmentedControl,
@@ -14,6 +14,10 @@ import {
 } from '../../design-system';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
+import {
+  WorkspaceReadWarning,
+  workspaceRead,
+} from '../../components/WorkspaceReads';
 import { runTable, runViews, type RunMode } from './runListConfig';
 import { AutomationAlerts } from '../automations/AutomationAlerts';
 
@@ -34,9 +38,8 @@ import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
 import { RetentionSettingsDialog } from './RetentionSettings';
 import type { Action } from '../../lib/useActionFeedback';
-import { ChevronDown, Activity } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { ComparisonContext } from './ComparisonContext';
-import { errorMessage } from '../../lib/api';
 import { RunListBoard, type BoardPreview } from './RunListBoard';
 import { RunTags } from './RunTags';
 import { RunTagFilter, AppliedRunTagFilters } from './RunTagFilter';
@@ -158,13 +161,14 @@ export function RunList({
     completed.isFetching,
   );
   const page = runs.data;
-  const error = runs.error ? errorMessage(runs.error) : '';
+  const read = workspaceRead('runs', runs);
   const counts = page?.counts;
+  const filtered = Object.keys(selectedTags ?? {}).length > 0;
   const preview: BoardPreview = {
     attention: attention.data,
     completed: completed.data,
-    attentionError: attention.error ? errorMessage(attention.error) : undefined,
-    completedError: completed.error ? errorMessage(completed.error) : undefined,
+    attentionRead: workspaceRead('attention preview', attention),
+    completedRead: workspaceRead('completed preview', completed),
   };
   const historyActions = act ? (
     <Menu
@@ -226,20 +230,9 @@ export function RunList({
           workflowId={workflowId}
         />
       )}
-      {error && (
-        <Alert
-          color="red"
-          mb="md"
-          title={page ? 'Runs may be out of date' : 'Could not load runs'}
-        >
-          {error}
-          <Button variant="ghost" onClick={() => void runs.refetch()}>
-            Retry
-          </Button>
-        </Alert>
-      )}
+      <WorkspaceReadWarning reads={[read]} inline showDetails />
       {!page ? (
-        !error &&
+        !read.error &&
         (selectedMode === 'overview' ? (
           <RunBoardSkeleton />
         ) : (
@@ -252,13 +245,7 @@ export function RunList({
           runHref={runHref}
           returnTo={returnTo}
           onTabChange={showListTab}
-          retry={() => {
-            void attention.refetch();
-            void completed.refetch();
-          }}
-          onClearFilters={
-            Object.keys(selectedTags ?? {}).length ? clearFilters : undefined
-          }
+          onClearFilters={filtered ? clearFilters : undefined}
         />
       ) : page.items.length ? (
         <ListTable {...runTable} label="Runs">
@@ -347,29 +334,34 @@ export function RunList({
       ) : offset > 0 ? (
         <Text role="status">No runs on this page.</Text>
       ) : tab === 'attention' && page.scheduleAttentionCount > 0 ? null : (
-        <div className={classes.empty}>
-          <Activity size={28} />
-          <h2>
-            {Object.keys(selectedTags ?? {}).length
+        <EmptyState
+          title={
+            filtered
               ? 'No runs match these tags.'
               : tab === 'active'
                 ? 'No active runs.'
                 : tab === 'attention'
                   ? 'No runs need your attention.'
-                  : 'No history yet.'}
-          </h2>
-          <p>
-            {Object.keys(selectedTags ?? {}).length
-              ? 'Change or clear the tag filters to see other runs.'
+                  : 'No history yet.'
+          }
+          description={
+            filtered
+              ? undefined
               : tab === 'active'
                 ? workflowId
                   ? 'Choose Run above to start a published version of this workflow.'
                   : 'Open a published workflow and choose Run to start.'
                 : tab === 'attention'
                   ? 'Approval requests, questions, and recovery checks appear here.'
-                  : 'Completed, failed, and cancelled runs appear here.'}
-          </p>
-        </div>
+                  : 'Completed, failed, and cancelled runs appear here.'
+          }
+        >
+          {filtered && (
+            <Button variant="secondary" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          )}
+        </EmptyState>
       )}
       {selectedMode === 'list' &&
         (offset > 0 || (counts?.[tab] ?? 0) > pageSize) && (
