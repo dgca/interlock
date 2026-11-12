@@ -29,6 +29,7 @@ import {
 } from '../../design-system';
 import { ExternalTaskLink } from '../../components/ExternalTaskLink';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
+import stretched from '../../components/StretchedLink.module.css';
 import {
   WorkspaceReadWarning,
   workspaceRead,
@@ -524,11 +525,11 @@ function BoardCard({
   const requestSearch = card.request ? new URLSearchParams(search) : undefined;
   requestSearch?.set('request', JSON.stringify(card.request));
   return (
-    <li className={classes.card}>
+    <li className={`${classes.card} ${stretched.container}`}>
       <h3>
-        <Anchor component={Link} to={runLink} underline="hover">
+        <Link className={stretched.link} to={runLink}>
           {title}
-        </Anchor>
+        </Link>
       </h3>
       {(card.title || card.externalTask?.title) && (
         <Text c="dimmed" size="sm">
@@ -549,6 +550,7 @@ function BoardCard({
           <Anchor
             component={Link}
             to={{ search: `?${requestSearch}` }}
+            className={stretched.action}
             preventScrollReset
             onClick={(event) => {
               if (
@@ -567,7 +569,11 @@ function BoardCard({
             <ArrowUpRight size={14} aria-hidden="true" />
           </Anchor>
         )}
-        <ExternalTaskLink task={card.externalTask} withArrow />
+        <ExternalTaskLink
+          task={card.externalTask}
+          withArrow
+          className={stretched.action}
+        />
       </Group>
     </li>
   );

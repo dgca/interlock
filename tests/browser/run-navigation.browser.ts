@@ -36,6 +36,7 @@ function seedBoard(
   app: Awaited<ReturnType<typeof openBrowserApp>>,
   count: number,
   columnName = 'Review',
+  taskUrl?: string,
 ) {
   const board = app.engine.boards.save({
     name: 'Fixture board',
@@ -68,6 +69,9 @@ function seedBoard(
     app.engine.startSummary(workflow.id, {}, undefined, 1, undefined, {
       title: `Fixture run ${index + 1}`,
       tags,
+      externalTask: taskUrl
+        ? { system: 'tracker', id: String(index + 1), url: taskUrl }
+        : undefined,
     });
   }
   return { board, workflow };
@@ -83,6 +87,102 @@ async function reviewRequestAgain(page: Page) {
     .click();
   return address(page);
 }
+
+it.each([1440, 390])(
+  'opens runs from their full row or card and preserves separate links at %dpx',
+  async (width) => {
+    const app = await openBrowserApp();
+    const context = await browser.newContext({
+      viewport: { width, height: 900 },
+    });
+    const page = await context.newPage();
+    page.setDefaultTimeout(5000);
+    try {
+      const taskUrl = app.url + '/fixture-external-task';
+      await context.route(taskUrl, (route) =>
+        route.fulfill({ body: 'Tracker task' }),
+      );
+      const { board } = seedBoard(app, 1, 'Review', taskUrl);
+      const sources = [
+        { path: paths.runs('attention'), item: 'tr' },
+        { path: paths.runs('active', 0, undefined, 'overview'), item: 'li' },
+        { path: paths.board(board.id), item: 'li' },
+      ];
+      const title = page.getByRole('link', {
+        name: 'Fixture run 1',
+        exact: true,
+      });
+      for (const { path, item } of sources) {
+        await page.goto(app.url + path);
+        const row = page.locator(item).filter({ has: title });
+        const status = row.getByText('waiting', { exact: true });
+        await status.scrollIntoViewIfNeeded();
+        const point = await status.evaluate((element) => {
+          const { x, y, width, height } = element.getBoundingClientRect();
+          return { x: x + width / 2, y: y + height / 2 };
+        });
+        const target = await title.getAttribute('href');
+        expect(
+          await page.evaluate(
+            ({ x, y }) =>
+              document
+                .elementFromPoint(x, y)
+                ?.closest('a')
+                ?.getAttribute('href'),
+            point,
+          ),
+        ).toBe(target);
+
+        if (width === 1440) {
+          const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+          await page.keyboard.down(modifier);
+          try {
+            const [tab] = await Promise.all([
+              context.waitForEvent('page'),
+              page.mouse.click(point.x, point.y),
+            ]);
+            await tab.waitForURL(app.url + target);
+            await tab.close();
+          } finally {
+            await page.keyboard.up(modifier);
+          }
+          expect(address(page)).toBe(path);
+        }
+
+        await page.mouse.click(point.x, point.y);
+        await expect.poll(() => address(page)).toBe(target);
+        await page.goBack();
+        await expect.poll(() => address(page)).toBe(path);
+
+        await title.press('Enter');
+        await expect.poll(() => address(page)).toBe(target);
+        await page.goBack();
+
+        const review = row.getByRole('link', {
+          name: 'Review request',
+          exact: true,
+        });
+        if (path === paths.board(board.id)) {
+          const [external] = await Promise.all([
+            context.waitForEvent('page'),
+            row.getByRole('link', { name: 'tracker 1', exact: true }).click(),
+          ]);
+          await external.getByText('Tracker task', { exact: true }).waitFor();
+          expect(external.url()).toBe(taskUrl);
+          expect(address(page)).toBe(path);
+          await external.close();
+        }
+        await review.click();
+        await expect
+          .poll(() => new URL(page.url()).searchParams.has('request'))
+          .toBe(true);
+      }
+    } finally {
+      await context.close();
+      await app.close();
+    }
+  },
+);
 
 it.each([1440, 900, 390])(
   'opens exact run and request destinations and returns to their source at %dpx',

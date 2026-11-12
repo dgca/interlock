@@ -14,6 +14,7 @@ import {
 } from '../../design-system';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
+import stretched from '../../components/StretchedLink.module.css';
 import {
   WorkspaceReadWarning,
   workspaceRead,
@@ -254,16 +255,15 @@ export function RunList({
             const review = runReviewLink(r, runHref, returnTo);
             const status = runDisplayStatus(r);
             return (
-              <ListTableRow className="run-row" key={r.id}>
+              <ListTableRow
+                className={`run-row ${classes.runRow} ${stretched.container}`}
+                key={r.id}
+              >
                 <span className={classes.identity}>
                   <strong>
-                    <Anchor
-                      component={Link}
-                      to={runHref(r.id)}
-                      underline="hover"
-                    >
+                    <Link className={stretched.link} to={runHref(r.id)}>
                       {runDisplayTitle(r)}
-                    </Anchor>
+                    </Link>
                   </strong>
                   {(r.title || r.externalTask?.title) && (
                     <small>{r.workflowName}</small>
@@ -305,7 +305,12 @@ export function RunList({
                       </small>
                     )}
                   {review && (
-                    <Anchor component={Link} to={review.href} size="sm">
+                    <Anchor
+                      component={Link}
+                      to={review.href}
+                      size="sm"
+                      className={stretched.action}
+                    >
                       {review.label}
                     </Anchor>
                   )}
