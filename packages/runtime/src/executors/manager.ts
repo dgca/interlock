@@ -1192,31 +1192,35 @@ export class ExecutorManager {
     this.engine.store.touchRun(record.runId);
     return receipt;
   }
+  private managedOffer(id: string) {
+    const work = this.engine.store.get<WorkRequest>('work', id);
+    if (
+      work?.status !== 'available' ||
+      !work.executor ||
+      work.pauseBlocked ||
+      work.budgetBlocked ||
+      work.resourceBlocked ||
+      work.cwdBlocked
+    )
+      return;
+    const workflowId = this.engine.store.runWorkflowId(work.runId);
+    if (
+      workflowId !== undefined &&
+      !this.engine.pauses.applicable(workflowId).length
+    )
+      return work as WorkRequest & { executor: string };
+  }
   private async scan() {
     if (this.scanning || this.stopped) return;
     this.scanning = true;
     try {
       this.checkJobs();
-      // Observing ready work must not pump the engine and notify our own subscription.
-      for (const captured of this.engine.available(undefined, {
-        advance: false,
-      })) {
+      for (const id of this.engine.store.availableManagedWorkIds()) {
         if (this.atCapacity() || this.stopped) break;
-        const offered = this.engine
-          .available(undefined, { advance: false })
-          .find((work) => work.id === captured.id);
+        // Recheck admission after an earlier launch may have awaited its adapter.
+        const offered = this.managedOffer(id);
         if (!offered) continue;
-        // A preceding launcher may have awaited its response since discovery.
-        // Recheck pause admission before dispatching another captured assignment.
         if (
-          this.engine.pauses.applicable(
-            this.engine.run(offered.runId).workflowId,
-          ).length
-        )
-          continue;
-        if (
-          !offered.executor ||
-          offered.cwdBlocked ||
           this.jobs.has(offered.id) ||
           ['interrupted', 'needs_model'].includes(
             this.latest(offered.id)?.state ?? '',
@@ -1373,18 +1377,21 @@ export class ExecutorManager {
         const currentProfile = this.profiles().find(
           (p) => p.id === configured.id,
         );
+        const currentOffer = this.managedOffer(id);
         if (
           this.stopped ||
           detection.status !== 'detected' ||
           !detection.command ||
           !currentProfile?.enabled ||
-          currentProfile.revision !== configured.revision
+          currentProfile.revision !== configured.revision ||
+          currentOffer?.attempt !== offered.attempt ||
+          currentOffer.executor !== configured.id
         )
           continue;
         const candidateCwd =
-          offered.trialEnvironment?.workspace ??
+          currentOffer.trialEnvironment?.workspace ??
           priorSession?.cwd ??
-          offered.resolvedCwd ??
+          currentOffer.resolvedCwd ??
           previous?.cwd ??
           profile.cwd ??
           this.defaultCwd;
@@ -1398,11 +1405,11 @@ export class ExecutorManager {
             rootsToCheck.length ? rootsToCheck : undefined,
           );
         } catch (err) {
-          offered.cwdBlocked = {
+          currentOffer.cwdBlocked = {
             reason: `Managed executor "${profile.id}": ${err instanceof Error ? err.message : String(err)}`,
             path: candidateCwd,
           };
-          this.engine.store.put('work', offered);
+          this.engine.store.put('work', currentOffer);
           continue;
         }
         // Settings can change while native executable detection is pending.

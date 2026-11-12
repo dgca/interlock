@@ -19,7 +19,13 @@ import {
   type WorkflowCatalogQuery,
 } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
-import { continuationState } from './continuation.js';
+import { continuationState, type ExecutionMetadata } from './continuation.js';
+import {
+  currentProjection,
+  type CurrentRun,
+  type CurrentWork,
+} from './currentState.js';
+export type { ProjectionState } from './currentState.js';
 import { runSummaries } from './runSummaries.js';
 import { workflowCatalog, promptCatalog } from './catalogs.js';
 import { boardRuns, referencedBoardColumns } from './workflowBoards.js';
@@ -113,6 +119,42 @@ export class Store {
   }
   continuation(id: string) {
     return continuationState(this.db, id);
+  }
+  currentProjection(ids: readonly string[]) {
+    return currentProjection(this.db, ids);
+  }
+  currentRun(id: string): CurrentRun | undefined {
+    const row = this.db
+      .prepare('SELECT value FROM run_metadata WHERE id = ?')
+      .get(id);
+    return row && JSON.parse(row.value as string);
+  }
+  activeRunState(): {
+    run: CurrentRun;
+    execution: ExecutionMetadata | undefined;
+  }[] {
+    return this.db
+      .prepare(
+        "SELECT value, execution FROM run_metadata INDEXED BY run_metadata_status WHERE status IN ('queued', 'running', 'waiting') ORDER BY position",
+      )
+      .all()
+      .map((row) => ({
+        run: JSON.parse(row.value as string),
+        execution:
+          row.execution === null
+            ? undefined
+            : JSON.parse(row.execution as string),
+      }));
+  }
+  dueAgentExecutions(at: string): Set<string> {
+    return new Set(
+      this.db
+        .prepare(
+          "SELECT execution_id FROM work_metadata WHERE status = 'available' AND available_until <= ?",
+        )
+        .all(at)
+        .map((row) => row.execution_id as string),
+    );
   }
   attentionWork() {
     return attentionWork(this.db);
@@ -264,7 +306,7 @@ export class Store {
     return this.db
       .prepare(
         `
-      SELECT d.value FROM active_background_runs b JOIN documents d
+      SELECT d.value FROM active_background_runs b CROSS JOIN documents d
         ON d.collection = 'runs' AND d.id = b.run_id
       WHERE json_extract(d.value, '$.status') IN ('completed', 'failed', 'cancelled')
     `,
@@ -521,7 +563,7 @@ export class Store {
       .map((row) => JSON.parse(row.value as string));
   }
   /** Ancestors include detached parents; callers decide which policies govern. */
-  runAncestors(ids: Set<string>): Run[] {
+  runAncestors(ids: Set<string>): CurrentRun[] {
     if (!ids.size) return [];
     return this.db
       .prepare(
@@ -529,16 +571,15 @@ export class Store {
       WITH RECURSIVE lineage(id) AS (
         SELECT value FROM json_each(?)
         UNION
-        SELECT json_extract(d.value, '$.parentRunId') FROM documents d
-        JOIN lineage ON d.id = lineage.id WHERE d.collection = 'runs'
-        AND json_extract(d.value, '$.parentRunId') IS NOT NULL
-      ) SELECT d.value FROM lineage CROSS JOIN documents d ON d.collection = 'runs' AND d.id = lineage.id
+        SELECT d.parent_id FROM lineage CROSS JOIN run_metadata d ON d.id = lineage.id
+        WHERE d.parent_id IS NOT NULL
+      ) SELECT d.value FROM lineage CROSS JOIN run_metadata d ON d.id = lineage.id
     `,
       )
       .all(JSON.stringify([...ids]))
       .map((row) => JSON.parse(row.value as string));
   }
-  chainRuns(roots: Set<string>): Run[] {
+  chainRuns(roots: Set<string>): CurrentRun[] {
     if (!roots.size) return [];
     return this.db
       .prepare(
@@ -612,14 +653,12 @@ export class Store {
   runAncestry(id: string, cache = new Map<string, RunAncestry>()): RunAncestry {
     const cached = cache.get(id);
     if (cached) return cached;
-    // Select identity only: execution history is not needed to route work.
     const row = this.db
       .prepare(
         `
-      SELECT json_extract(value, '$.workflowId') AS workflowId,
-             json_extract(value, '$.parentRunId') AS parentRunId,
-             json_extract(value, '$.parentMode') AS parentMode
-      FROM documents WHERE collection = 'runs' AND id = ?
+      SELECT workflow_id AS workflowId, parent_id AS parentRunId,
+        json_extract(value, '$.parentMode') AS parentMode
+      FROM run_metadata WHERE id = ?
     `,
       )
       .get(id);
@@ -642,8 +681,8 @@ export class Store {
     return ancestry;
   }
   findRuns(query: RunQuery) {
-    const filters = ["collection = 'runs'"];
-    const parameters: string[] = [];
+    const filters = ['1'];
+    const parameters: (string | number)[] = [];
     for (const [key, value] of Object.entries(query.tags ?? {})) {
       filters.push(
         'id IN (SELECT run_id FROM run_tags WHERE tag_key = ? AND tag_value = ?)',
@@ -651,34 +690,37 @@ export class Store {
       parameters.push(key, value);
     }
     if (query.requestId !== undefined) {
-      filters.push("json_extract(value, '$.startRequestId') = ?");
+      filters.push('request_id = ?');
       parameters.push(query.requestId);
     }
     if (query.externalTask) {
-      filters.push(
-        "json_extract(value, '$.externalTask.system') = ? AND json_extract(value, '$.externalTask.id') = ?",
-      );
+      filters.push('task_system = ? AND task_id = ?');
       parameters.push(query.externalTask.system, query.externalTask.id);
     }
     if (query.workflowId !== undefined) {
-      filters.push("json_extract(value, '$.workflowId') = ?");
+      filters.push('workflow_id = ?');
       parameters.push(query.workflowId);
     }
     if (query.chainRootRunId !== undefined) {
-      filters.push("json_extract(value, '$.chain.rootRunId') = ?");
+      filters.push('chain_root_id = ?');
       parameters.push(query.chainRootRunId);
     }
     if (query.status !== undefined) {
-      filters.push("json_extract(value, '$.status') = ?");
+      filters.push('status = ?');
       parameters.push(query.status);
     }
-    if (query.rootOnly)
-      filters.push("json_extract(value, '$.parentRunId') IS NULL");
+    if (query.rootOnly) filters.push('parent_id IS NULL');
+    const bounded = !query.inputMatch && query.limit !== undefined;
+    if (bounded) parameters.push(query.limit);
     const rows = this.db
       .prepare(
-        `SELECT value FROM documents WHERE ${filters.join(' AND ')} ORDER BY json_extract(value, '$.createdAt') DESC, rowid DESC`,
+        `SELECT id, value FROM run_metadata WHERE ${filters.join(' AND ')}
+      ORDER BY created_at DESC, position DESC ${bounded ? 'LIMIT ?' : ''}`,
       )
       .iterate(...parameters);
+    const inputFor = this.db.prepare(
+      "SELECT value -> '$.input' AS input FROM documents WHERE collection = 'runs' AND id = ?",
+    );
     const ancestry = new Map<string, RunAncestry>();
     const result: (Pick<
       Run,
@@ -702,12 +744,16 @@ export class Store {
     > &
       RunAncestry)[] = [];
     for (const row of rows) {
-      const run: Run = JSON.parse(row.value as string);
+      const run: CurrentRun = JSON.parse(row.value as string);
+      const rawInput = inputFor.get(row.id as string)?.input;
+      const input = (
+        typeof rawInput === 'string' ? JSON.parse(rawInput) : undefined
+      ) as Run['input'];
       if (query.inputMatch) {
         try {
           if (
             !isDeepStrictEqual(
-              readPath(run.input, query.inputMatch.path),
+              readPath(input, query.inputMatch.path),
               query.inputMatch.equals,
             )
           )
@@ -725,7 +771,6 @@ export class Store {
         createdAt,
         updatedAt,
         cursor,
-        input,
         parentRunId,
         batchNodeId,
         parallelBranch,
@@ -757,15 +802,53 @@ export class Store {
     }
     return result;
   }
-  workStatus(id: string): WorkRequest['status'] | undefined {
+  runWorkflowId(id: string): string | undefined {
+    return this.db
+      .prepare('SELECT workflow_id FROM run_metadata WHERE id = ?')
+      .get(id)?.workflow_id as string | undefined;
+  }
+  activeAdmissionRunIds(workflowId: string): string[] {
+    return this.db
+      .prepare(
+        `SELECT id FROM run_metadata WHERE workflow_id = ?
+      AND status IN ('running', 'waiting')
+      AND json_extract(value, '$.batchNodeId') IS NULL
+      AND json_extract(value, '$.parallelBranch') IS NULL`,
+      )
+      .all(workflowId)
+      .map((row) => row.id as string);
+  }
+  availableManagedWorkIds(): string[] {
+    return this.db
+      .prepare(
+        "SELECT id FROM work_metadata WHERE status = 'available' AND executor IS NOT NULL ORDER BY position",
+      )
+      .all()
+      .map((row) => row.id as string);
+  }
+  workForExecution(
+    runId: string,
+    executionId: string,
+  ): CurrentWork | undefined {
     const row = this.db
       .prepare(
-        "SELECT json_extract(value, '$.status') AS status FROM documents WHERE collection = 'work' AND id = ?",
+        'SELECT value FROM work_metadata WHERE run_id = ? AND execution_id = ? ORDER BY position LIMIT 1',
       )
-      .get(id);
-    return (
-      (row?.status as WorkRequest['status'] | null | undefined) ?? undefined
-    );
+      .get(runId, executionId);
+    return row && JSON.parse(row.value as string);
+  }
+  workState(status: 'available' | 'claimed'): CurrentWork[] {
+    return this.db
+      .prepare(
+        'SELECT value FROM work_metadata WHERE status = ? ORDER BY position',
+      )
+      .all(status)
+      .map((row) => JSON.parse(row.value as string));
+  }
+  workStatus(id: string): WorkRequest['status'] | undefined {
+    return this.db
+      .prepare('SELECT status FROM work_metadata WHERE id = ?')
+      .get(id)?.status as WorkRequest['status'] | undefined;
   }
   work(status?: WorkRequest['status'], runId?: string): WorkRequest[] {
     if (status !== undefined || runId !== undefined)
@@ -786,10 +869,15 @@ export class Store {
   resourceAdmissionWork(): WorkRequest[] {
     return this.db
       .prepare(
-        `SELECT value FROM documents WHERE collection = 'work'
-      AND (json_extract(value, '$.status') = 'available' OR json_type(value, '$.resourceBlocked') IS NOT NULL) = 1
-      ORDER BY rowid
-    `,
+        `WITH candidates AS MATERIALIZED (
+          SELECT id, position FROM work_metadata
+          WHERE status = 'available' AND json_array_length(value, '$.resources') > 0
+          UNION ALL
+          SELECT id, position FROM work_metadata
+          WHERE json_type(value, '$.resourceBlocked') IS NOT NULL
+            AND (status IS NOT 'available' OR coalesce(json_array_length(value, '$.resources'), 0) = 0)
+        ) SELECT d.value FROM candidates CROSS JOIN documents d ON d.collection = 'work' AND d.id = candidates.id
+        ORDER BY candidates.position`,
       )
       .all()
       .map((row) => JSON.parse(row.value as string));

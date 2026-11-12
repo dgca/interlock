@@ -8,6 +8,7 @@ import {
   type PauseList,
   type PauseHold,
   type Run,
+  type WorkRequest,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 
@@ -90,12 +91,13 @@ export class PauseHolds {
     );
   }
   refresh() {
-    for (const work of this.store.work('available')) {
-      const run = this.store.get<Run>('runs', work.runId);
-      if (!run) continue;
-      const holds = this.applicable(run.workflowId);
+    for (const state of this.store.workState('available')) {
+      const workflowId = this.store.runWorkflowId(state.runId);
+      if (workflowId === undefined) continue;
+      const holds = this.applicable(workflowId);
+      if (Boolean(holds.length) === Boolean(state.pauseBlocked)) continue;
+      const work = this.store.get<WorkRequest>('work', state.id)!;
       if (holds.length) {
-        if (work.pauseBlocked) continue;
         work.pauseBlocked = {
           since: holds[0].createdAt,
           remainingMs:
@@ -107,11 +109,10 @@ export class PauseHolds {
         };
         work.availableUntil = undefined;
       } else {
-        if (!work.pauseBlocked) continue;
         if (
           !work.budgetBlocked &&
           !work.resourceBlocked &&
-          work.pauseBlocked.remainingMs !== undefined
+          work.pauseBlocked?.remainingMs !== undefined
         )
           work.availableUntil = new Date(
             Date.now() + work.pauseBlocked.remainingMs,

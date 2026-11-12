@@ -4,7 +4,7 @@ import {
   type UncertainClaim,
 } from './quiescence.js';
 import { resourceCollection, resourceOwner } from './workResources.js';
-import { projectRun } from './runProjection.js';
+import { createRunProjector } from './runProjection.js';
 import type { ResourceReservation } from '@interlock/core';
 import { randomUUID } from 'node:crypto';
 import { fingerprint } from './versionIdentity.js';
@@ -220,6 +220,7 @@ export class Continuation {
           at: (w.leaseUntil ?? w.availableUntil)!,
         })),
     ].sort((a, b) => a.at.localeCompare(b.at));
+    const project = createRunProjector(this.store, state);
     const blockers = state.runs
       .filter((run) =>
         ['queued', 'running', 'waiting', 'failed'].includes(run.status),
@@ -232,7 +233,7 @@ export class Continuation {
             ? 'admission_queue'
             : run.status === 'failed'
               ? 'failure'
-              : projectRun(this.store, run.id, state).waiting?.kind === 'pause'
+              : project(run.id).waiting?.kind === 'pause'
                 ? 'pause'
                 : assignment?.status === 'held'
                   ? 'external_hold'
@@ -325,7 +326,7 @@ export class Continuation {
         });
     const summaries = state.runs.map((run) => ({
       ...run,
-      ...projectRun(this.store, run.id, state),
+      ...project(run.id),
       definitionAvailable: Boolean(
         this.store.getVersion(run.workflowId, run.version),
       ),

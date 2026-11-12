@@ -7,7 +7,7 @@ import type {
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import { fingerprint } from './versionIdentity.js';
-import { projectRun } from './runProjection.js';
+import { createRunProjector } from './runProjection.js';
 
 const isGroupedChild = (run: Pick<Run, 'batchNodeId' | 'parallelBranch'>) =>
   Boolean(run.batchNodeId || run.parallelBranch);
@@ -40,7 +40,6 @@ export class RunAdmission {
 
   promote(onPromoted: (run: Run) => void): boolean {
     let changed = false;
-    const active = this.store.activeRuns();
     const queue = this.store.queuedRuns();
     const positions = new Map<string, number>();
     for (const run of queue) {
@@ -118,15 +117,18 @@ export class RunAdmission {
       )?.definition;
       if (!definition) blockers.push('Published definition is unavailable');
       if (definition?.maxActiveRuns) {
-        const count = active.filter(
-          (candidate) =>
-            candidate.workflowId === run.workflowId &&
-            !isGroupedChild(candidate) &&
-            ['running', 'waiting'].includes(candidate.status) &&
-            !(definition.excludeStages ?? []).includes(
-              projectRun(this.store, candidate.id).stage ?? '',
-            ),
-        ).length;
+        const activeIds = this.store.activeAdmissionRunIds(run.workflowId);
+        const excluded = definition.excludeStages;
+        let count = activeIds.length;
+        if (excluded?.length && count) {
+          const project = createRunProjector(
+            this.store,
+            this.store.currentProjection(activeIds),
+          );
+          count = activeIds.filter(
+            (id) => !excluded.includes(project(id).stage ?? ''),
+          ).length;
+        }
         if (count >= definition.maxActiveRuns)
           blockers.push(
             `Workflow capacity ${count}/${definition.maxActiveRuns}`,
@@ -135,8 +137,6 @@ export class RunAdmission {
       admission.blockers = blockers;
       if (!blockers.length) {
         run.status = 'running';
-        const counted = active.find((candidate) => candidate.id === run.id);
-        if (counted) counted.status = 'running';
         admission.admittedAt = new Date().toISOString();
         run.updatedAt = admission.admittedAt;
         this.store.put('runs', run);

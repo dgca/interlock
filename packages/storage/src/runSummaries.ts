@@ -1,11 +1,10 @@
 import type { RunSummary, RunSummaryQuery } from '@interlock/core';
 import type { DatabaseSync } from 'node:sqlite';
 
-const active =
-  "json_extract(r.value, '$.status') IN ('queued', 'running', 'waiting')";
+const active = "r.status IN ('queued', 'running', 'waiting')";
 const attention = 'r.id IN (SELECT value FROM attention_ids)';
 const tabFilter = { active, attention, history: `NOT (${active})` };
-const currentStep = "json_extract(r.value, '$.executions[#-1].kind')";
+const currentStep = "json_extract(r.execution, '$.kind')";
 
 type SummaryRow = {
   [Key in keyof RunSummary]-?: Key extends
@@ -21,7 +20,7 @@ export function runSummaries(
   query: RunSummaryQuery,
   attentionIds: string[],
 ) {
-  const filters = ["r.collection = 'runs'"];
+  const filters = ['1'];
   const parameters = [JSON.stringify(attentionIds)];
   for (const [key, value] of Object.entries(query.tags ?? {})) {
     filters.push(
@@ -30,25 +29,23 @@ export function runSummaries(
     parameters.push(key, value);
   }
   if (query.workflowId !== undefined) {
-    filters.push("json_extract(r.value, '$.workflowId') = ?");
+    filters.push('r.workflow_id = ?');
     parameters.push(query.workflowId);
   }
   if (query.status !== undefined) {
-    filters.push("json_extract(r.value, '$.status') = ?");
+    filters.push('r.status = ?');
     parameters.push(query.status);
   }
   if (query.tab)
     filters.push(
       query.workflowId === undefined
-        ? "(json_extract(r.value, '$.parentRunId') IS NULL OR json_extract(r.value, '$.parentMode') = 'detached')"
+        ? "(r.parent_id IS NULL OR json_extract(r.value, '$.parentMode') = 'detached')"
         : "json_extract(r.value, '$.batchNodeId') IS NULL AND json_extract(r.value, '$.parallelBranch') IS NULL",
     );
   const scope = filters.join(' AND ');
   const withAttention =
     'WITH attention_ids AS (SELECT value FROM json_each(?))';
-  // Keep counts and page selection on indexed expressions. Reading value at
-  // this stage would parse large execution payloads outside the selected page.
-  const indexedRuns = 'documents r INDEXED BY runs_summary_filters';
+  const indexedRuns = 'run_metadata r';
   const counts = db
     .prepare(
       `
@@ -64,21 +61,21 @@ export function runSummaries(
     .prepare(
       `
     ${withAttention}, page AS MATERIALIZED (
-      SELECT r.rowid AS position, json_extract(r.value, '$.createdAt') AS createdAt
+      SELECT r.id, r.position, r.created_at AS createdAt
       FROM ${indexedRuns} WHERE ${scope}
         ${query.tab ? `AND ${tabFilter[query.tab]}` : ''}
       ORDER BY createdAt DESC, position DESC
       LIMIT ? OFFSET ?
     )
     SELECT r.id,
-      json_extract(r.value, '$.workflowId') AS workflowId,
+      r.workflow_id AS workflowId,
       json_extract(r.value, '$.workflowName') AS workflowName,
       json_extract(r.value, '$.title') AS title,
       json_extract(r.value, '$.version') AS version,
-      json_extract(r.value, '$.status') AS status,
-      json_extract(r.value, '$.createdAt') AS createdAt,
+      r.status AS status,
+      r.created_at AS createdAt,
       json_extract(r.value, '$.updatedAt') AS updatedAt,
-      json_extract(r.value, '$.parentRunId') AS parentRunId,
+      r.parent_id AS parentRunId,
       json_extract(r.value, '$.parentMode') AS parentMode,
       json_extract(r.value, '$.parentExecutionId') AS parentExecutionId,
       json_extract(r.value, '$.parallelBranch') AS parallelBranch,
@@ -86,37 +83,35 @@ export function runSummaries(
       json_extract(r.value, '$.externalTask') AS externalTask,
       json_extract(r.value, '$.tags') AS tags,
       json_extract(r.value, '$.startRequestId') AS startRequestId,
-      coalesce(json_array_length(r.value, '$.executions'), 0) AS executionCount,
+      r.execution_count AS executionCount,
       CASE WHEN json_extract(r.value, '$.parentMode') = 'detached' THEN
-        (SELECT json_extract(parent.value, '$.workflowName') FROM documents parent
-         WHERE parent.collection = 'runs' AND parent.id = json_extract(r.value, '$.parentRunId'))
+        (SELECT json_extract(parent.value, '$.workflowName') FROM run_metadata parent WHERE parent.id = r.parent_id)
       END AS parentWorkflowName,
-      CASE WHEN json_extract(r.value, '$.status') = 'waiting' THEN
+      CASE WHEN r.status = 'waiting' THEN
         CASE ${currentStep}
           WHEN 'input' THEN
-            CASE WHEN json_extract(r.value, '$.executions[#-1].externalInput.submittedAt') IS NULL
+            CASE WHEN json_extract(r.execution, '$.externalInput.submittedAt') IS NULL
               THEN 'external_input' ELSE 'external_review' END
           WHEN 'wait' THEN 'timer'
           WHEN 'workflow' THEN 'child'
           WHEN 'batch' THEN 'child'
           WHEN 'parallel' THEN 'child'
           WHEN 'agent' THEN (
-            SELECT CASE json_extract(w.value, '$.status')
+            SELECT CASE w.status
               WHEN 'held' THEN 'held'
               WHEN 'claimed' THEN 'claimed'
               WHEN 'available' THEN
-                CASE WHEN json_extract(w.value, '$.executor') IS NULL THEN 'agent' ELSE 'managed' END
+                CASE WHEN w.executor IS NULL THEN 'agent' ELSE 'managed' END
             END
-            FROM documents w
-            WHERE w.collection = 'work'
-              AND json_extract(w.value, '$.runId') = r.id
-              AND json_extract(w.value, '$.executionId') = json_extract(r.value, '$.executions[#-1].id')
-              AND json_extract(w.value, '$.status') IN ('held', 'claimed', 'available')
-            LIMIT 1
+            FROM work_metadata w
+            WHERE w.run_id = r.id
+              AND w.execution_id = json_extract(r.execution, '$.id')
+              AND w.status IN ('held', 'claimed', 'available')
+            ORDER BY w.position LIMIT 1
           )
         END
       END AS waitReason
-    FROM page CROSS JOIN documents r ON r.rowid = page.position
+    FROM page CROSS JOIN run_metadata r ON r.id = page.id
     ORDER BY page.createdAt DESC, page.position DESC
   `,
     )
