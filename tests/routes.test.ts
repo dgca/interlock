@@ -154,6 +154,7 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
       ),
       h('button', { onClick: onDeleted }, 'Confirm deletion'),
       section === 'runs' ? runsView : null,
+      section === 'children' ? 'Child workflows content' : null,
       h('button', { onClick: () => onDirty(true) }, 'Edit draft'),
       h('button', { onClick: () => onDirty(false) }, 'Save draft'),
       h('button', { onClick: onBack }, 'Back to library'),
@@ -568,6 +569,37 @@ it('opens the workflow library without prompts, but waits and retries for prompt
   expect(queries.automationCount).toHaveBeenCalledTimes(1);
 });
 
+it.each([
+  ['runs', 'pending'],
+  ['children', 'failed'],
+])(
+  'opens a direct workflow %s tab while prompts are %s',
+  async (section, status) => {
+    if (status === 'pending')
+      queries.prompts.mockReturnValue(new Promise(() => {}));
+    else
+      queries.prompts.mockRejectedValue(
+        new Error('Prompt library unavailable'),
+      );
+    await mount(`/workflows/w1?view=${section}`);
+    expect(container.textContent).toContain('Editor w1');
+    expect(container.textContent).not.toContain('Prompt library unavailable');
+    if (section === 'runs')
+      expect(queries.summaries).toHaveBeenCalledWith(
+        expect.objectContaining({ workflowId: 'w1' }),
+      );
+    else expect(container.textContent).toContain('Child workflows content');
+
+    await click('Workflow editor');
+    expect(container.textContent).not.toContain('Editor w1');
+    expect(container.textContent).toContain(
+      status === 'pending'
+        ? 'Loading workflow…'
+        : 'Could not load workflow. Prompt library unavailable',
+    );
+  },
+);
+
 it.each(['/prompts', '/prompts/prompt-id'])(
   'opens %s without workflows or a healthy automation attention count',
   async (path) => {
@@ -673,7 +705,7 @@ it('marks a cached combined total stale and retries only the failing attention s
   );
   expect(runsLink?.textContent).toBe('Runs~5');
   expect(runsLink?.getAttribute('aria-label')).toBe(
-    'Runs, last known attention count 5, may be out of date',
+    'Runs, attention count 5, includes stale data',
   );
   expect(container.textContent).toContain('Local engine connected');
   expect(container.textContent).toContain('Open workflow');

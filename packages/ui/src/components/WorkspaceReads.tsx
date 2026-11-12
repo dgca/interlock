@@ -16,6 +16,53 @@ export type WorkspaceRead = {
   retry: () => void;
 };
 
+function RetryReads({
+  reads,
+  children,
+}: {
+  reads: WorkspaceRead[];
+  children: ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      loading={reads.every((read) => read.fetching)}
+      onClick={() => {
+        for (const read of reads) if (!read.fetching) read.retry();
+      }}
+    >
+      {children}
+    </Button>
+  );
+}
+
+export function WorkspaceReadWarning({
+  reads,
+  inline = false,
+}: {
+  reads: WorkspaceRead[];
+  inline?: boolean;
+}) {
+  const failed = reads.filter((read) => read.error);
+  if (!failed.length) return null;
+  const resources = failed.map((read) => read.resource).join(' and ');
+  return (
+    <Group
+      className={inline ? undefined : 'engine-warning'}
+      justify="space-between"
+      gap="xs"
+    >
+      <Text size="sm" role="status">
+        {failed.every((read) => read.ready)
+          ? `Could not refresh ${resources}. Showing the last loaded data.`
+          : `Could not load ${resources}.`}
+      </Text>
+      <RetryReads reads={failed}>Retry {resources}</RetryReads>
+    </Group>
+  );
+}
+
 export function WorkspaceReads({
   reads,
   subject,
@@ -30,25 +77,15 @@ export function WorkspaceReads({
   children: ReactNode;
 }) {
   const waiting = reads.filter((read) => !read.ready);
-  const failed = (waiting.length ? waiting : reads).filter(
-    (read) => read.error,
-  );
-  const retrying = failed.every((read) => read.fetching);
-  const retry = () => {
-    for (const read of failed) if (!read.fetching) read.retry();
-  };
-  const resources = failed.map((read) => read.resource).join(' and ');
-
   if (waiting.length) {
+    const failed = waiting.filter((read) => read.error);
     if (!failed.length) return loading;
     const failure = (
       <>
         <ActionError
           message={`Could not load ${subject}. ${failed.map((read) => read.error).join(' ')}`}
         />
-        <Button variant="secondary" loading={retrying} onClick={retry}>
-          Retry
-        </Button>
+        <RetryReads reads={failed}>Retry</RetryReads>
       </>
     );
     return title ? (
@@ -63,16 +100,7 @@ export function WorkspaceReads({
 
   return (
     <>
-      {failed.length > 0 && (
-        <Group className="engine-warning" justify="space-between" gap="xs">
-          <Text size="sm" role="status">
-            Could not refresh {resources}. Showing the last loaded data.
-          </Text>
-          <Button variant="secondary" loading={retrying} onClick={retry}>
-            Retry {resources}
-          </Button>
-        </Group>
-      )}
+      <WorkspaceReadWarning reads={reads} />
       {children}
     </>
   );

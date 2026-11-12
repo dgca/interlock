@@ -60,7 +60,7 @@ export function Sidebar({
   const runLabel = failed
     ? attentionCount === undefined
       ? 'Runs, attention count unavailable'
-      : `Runs, last known attention count ${attentionCount}, may be out of date`
+      : `Runs, attention count ${attentionCount}, includes stale data`
     : attentionCount === undefined
       ? 'Runs, loading attention count'
       : attentionCount

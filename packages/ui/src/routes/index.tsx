@@ -328,6 +328,13 @@ function WorkflowRoute() {
         )}
       </WorkspaceReads>
     );
+  const view = search.get('view');
+  const section =
+    view === 'runs'
+      ? 'runs'
+      : view === 'children' && !workflow.ownerWorkflowId
+        ? 'children'
+        : 'editor';
   const editor = (
     <Suspense fallback={<RouteSkeleton subject="workflow" />}>
       <WorkflowEditor
@@ -356,13 +363,7 @@ function WorkflowRoute() {
               : paths.workflows,
           );
         }}
-        section={
-          search.get('view') === 'runs'
-            ? 'runs'
-            : search.get('view') === 'children' && !workflow.ownerWorkflowId
-              ? 'children'
-              : 'editor'
-        }
+        section={section}
         onSectionChange={(section) => {
           setSearch((previous) => {
             const next = new URLSearchParams(previous);
@@ -405,7 +406,11 @@ function WorkflowRoute() {
   );
   return (
     <WorkspaceReads
-      reads={[context.workflowsRead, context.promptsRead]}
+      reads={
+        section === 'editor'
+          ? [context.workflowsRead, context.promptsRead]
+          : [context.workflowsRead]
+      }
       subject="workflow"
       loading={<RouteSkeleton subject="workflow" />}
     >

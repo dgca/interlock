@@ -139,16 +139,6 @@ export function App() {
   }, [blocker]);
   const [tick, setTick] = useState(0);
   const [runDialog, setRunDialog] = useState<Workflow>();
-  const refresh = useCallback(async () => {
-    await refreshQueries(queryClient);
-    const workspaceError = [
-      trpc.workflows.list.queryKey(),
-      trpc.prompts.list.queryKey(),
-    ]
-      .map((key) => queryClient.getQueryState(key)?.error)
-      .find(Boolean);
-    if (workspaceError) throw workspaceError;
-  }, [queryClient]);
   useEffect(() => {
     let mounted = true;
     let streamHealthy = false;
@@ -158,25 +148,26 @@ export function App() {
       void queryClient.refetchQueries(trpc.connection.queryFilter(), {
         cancelRefetch: false,
       });
+    const updateRefreshHealth = (failed: boolean) => {
+      if (!mounted) return;
+      if (failed) checkConnection();
+      if (refreshFailed !== failed) {
+        refreshFailed = failed;
+        resetPolling();
+      }
+    };
     const update = () => {
       if (document.visibilityState === 'hidden') return;
       if (queryClient.getQueryState(trpc.connection.queryKey())?.error)
         checkConnection();
-      void refresh().then(
-        () => {
-          if (mounted && refreshFailed) {
-            refreshFailed = false;
-            resetPolling();
-          }
-        },
-        () => {
-          if (!mounted) return;
-          checkConnection();
-          if (!refreshFailed) {
-            refreshFailed = true;
-            resetPolling();
-          }
-        },
+      void refreshQueries(queryClient).then(
+        () =>
+          updateRefreshHealth(
+            [trpc.workflows.list.queryKey(), trpc.prompts.list.queryKey()].some(
+              (key) => queryClient.getQueryState(key)?.error,
+            ),
+          ),
+        () => updateRefreshHealth(true),
       );
       setTick((t) => t + 1);
     };
@@ -224,9 +215,9 @@ export function App() {
       clearInterval(interval);
       clearTimeout(pending);
     };
-  }, [queryClient, refresh]);
+  }, [queryClient]);
   const { act, feedback, dismiss, success } = useActionFeedback(async () => {
-    await refresh();
+    await refreshQueries(queryClient);
     setTick((t) => t + 1);
   });
   const openRun = (id: string) => {
