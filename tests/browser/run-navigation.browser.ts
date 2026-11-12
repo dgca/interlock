@@ -35,10 +35,11 @@ const branches = ['Plan', 'Rollout'];
 function seedBoard(
   app: Awaited<ReturnType<typeof openBrowserApp>>,
   count: number,
+  columnName = 'Review',
 ) {
   const board = app.engine.boards.save({
     name: 'Fixture board',
-    columns: [{ name: 'Review' }],
+    columns: [{ name: columnName }],
     workflowIds: [],
   });
   const definition = parallelDefinition({ keys: branches });
@@ -93,14 +94,31 @@ it.each([1440, 900, 390])(
     const page = await context.newPage();
     page.setDefaultTimeout(5000);
     try {
-      const { board, workflow } = seedBoard(app, 31);
+      const columnName =
+        'Review and approve changes before the scheduled release';
+      const { board, workflow } = seedBoard(app, 31, columnName);
 
       await page.goto(
         `${app.url}${paths.board(board.id)}?workflow=${workflow.id}&status=attention`,
       );
       const columns = page.getByRole('region', { name: 'Board columns' });
       const titles = columns.getByRole('link', { name: /^Fixture run / });
-      await page.getByRole('button', { name: 'Load more in Review' }).click();
+      const column = columns.getByRole('region', { name: columnName });
+      const loadMore = column.getByRole('button', {
+        name: `Load more in ${columnName}`,
+      });
+      expect(await loadMore.textContent()).toBe('Load more');
+      expect(
+        await loadMore.evaluate((button) => {
+          const control = button.getBoundingClientRect();
+          const column = button.closest('section')!.getBoundingClientRect();
+          return Math.min(
+            control.left - column.left,
+            column.right - control.right,
+          );
+        }),
+      ).toBeGreaterThanOrEqual(4);
+      await loadMore.click();
       await expect.poll(() => titles.count()).toBe(31);
       const sourceBoard = address(page);
       const title = titles.last();

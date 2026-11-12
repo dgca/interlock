@@ -21,7 +21,7 @@ export const harnessTable: ListTableLayout = {
     { label: 'Harness' },
     { label: 'Connection', width: '140px', compactWidth: '86px' },
     { label: 'Managed execution', width: '155px', compactWidth: '109px' },
-    { label: 'Actions', width: '145px', compactWidth: '131px' },
+    { label: 'Actions', fitContent: true },
   ],
 };
 export function HarnessRowsSkeleton() {

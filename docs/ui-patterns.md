@@ -11,9 +11,13 @@ Interlock imports visual controls from `packages/ui/src/design-system/index.ts`.
 
 Structural areas use solid fills. Form containers use a solid fill with soft elevation. Buttons, segmented controls, workflow and run cards, and graph nodes use the shared gradients and shadows. Standard buttons, single-line inputs, selects, search fields, and segmented tracks are 40px high. Attached tabs are 44px. Graph navigation controls deliberately use flat 32px buttons. Structural dividers are 1px `#333333` rules that reach the edges of their containing panels.
 
+Use the shared `Button` with `variant="ghost"` for low-emphasis actions. Ghost buttons and subtle `ActionIcon` controls use the neutral `--surface-hover` fill on hover. On ghost buttons, `color="red"` applies the error color to the text and icon. Allow action groups to wrap in narrow containers. Leave room for the focus outline between a button and the edge of its container.
+
 ## Page layout
 
 Keep generic page presentation in the design system. Its PageLayout module owns page headers, toolbar and controlled-tab building blocks, and `PageTabsSkeleton`. The application PageLayout module adapts tabs to URL navigation. `ListTable` and `ListTableSkeleton` share column widths and spacing. Tables use native column and row headers. Put the named primary link or button in a cell and keep secondary controls separate. When columns need more room, scroll the table within the workspace. The scroll area joins the tab order when it overflows. Use semantic lists for independent cards, including the cards within each Board or Runs Overview column.
+
+Set `fitContent: true` on `ListTable` action columns so the full button and its focus outline fit inside the cell padding. Check hover and keyboard focus at regular and compact widths.
 
 Page headers use one shared responsive composition. Titles and optional subtitles or statuses sit on the left. Search, filters, and view controls sit on the right, followed by actions with the primary action last. The title row shares `--page-header-height`, an 88px minimum, with the sidebar brand container. When the combined controls and actions cannot fit beside the title, the whole group moves into a full-width second row below the title divider. Related control groups can wrap further at narrow widths without shrinking standard controls. Use available container width, including embedded panels, rather than page-specific viewport thresholds. Keep the logo at 32px.
 

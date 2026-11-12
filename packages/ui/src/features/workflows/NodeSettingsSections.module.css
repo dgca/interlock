@@ -61,7 +61,7 @@
     white-space: nowrap;
     flex-shrink: 0;
     flex: 1 0 auto;
-    padding: 10px 7px;
+    padding: 10px 8px;
   }
   .navigationItem svg {
     display: none;

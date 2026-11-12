@@ -1,5 +1,5 @@
 import { blankDefinition, scheduleConfigSchema } from '@interlock/core';
-import { chromium, type Browser, type Page } from 'playwright';
+import { chromium, type Browser, type Locator, type Page } from 'playwright';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { openBrowserApp } from './app';
 
@@ -38,6 +38,25 @@ async function checkTable(page: Page, name: string, headings: string[]) {
     ),
   ).toBe(true);
   return table;
+}
+
+async function checkRowAction(action: Locator) {
+  await action.hover();
+  const { background, spaceBefore, spaceAfter } = await action.evaluate(
+    (button) => {
+      const control = button.getBoundingClientRect();
+      const cell = button.closest('td')!.getBoundingClientRect();
+      return {
+        background: getComputedStyle(button).backgroundColor,
+        spaceBefore: control.left - cell.left,
+        spaceAfter: cell.right - control.right,
+      };
+    },
+  );
+  expect.soft(background).toBe('rgb(41, 41, 41)');
+  // The 2px focus outline has a 2px offset.
+  expect.soft(spaceBefore).toBeGreaterThanOrEqual(4);
+  expect.soft(spaceAfter).toBeGreaterThanOrEqual(4);
 }
 
 it.each([1440, 900, 390])(
@@ -86,6 +105,7 @@ it.each([1440, 900, 390])(
           mode: 'direct',
           transport: 'http',
           turnUrl: 'http://127.0.0.1:1/fixture',
+          headers: { 'X-Example': 'fixture' },
           expectedRevision: 0,
         },
       });
@@ -152,12 +172,11 @@ it.each([1440, 900, 390])(
         'Fallbacks',
         'Actions',
       ]);
-      await presets
-        .getByRole('cell')
-        .getByRole('button', {
+      await checkRowAction(
+        presets.getByRole('cell').getByRole('button', {
           name: 'Edit preset Fixture preset',
-        })
-        .waitFor();
+        }),
+      );
 
       await page.goto(`${app.url}/settings/ai?tab=harnesses`);
       const harnesses = await checkTable(page, 'Harnesses', [
@@ -169,6 +188,11 @@ it.each([1440, 900, 390])(
       const defaults = harnesses.getByRole('button', {
         name: 'Edit defaults for Fixture integration',
       });
+      await checkRowAction(
+        harnesses.getByRole('button', {
+          name: 'Edit defaults for Claude Code',
+        }),
+      );
       await defaults.focus();
       await page.keyboard.press('Enter');
       const editor = harnesses.getByRole('form', {
@@ -179,12 +203,38 @@ it.each([1440, 900, 390])(
       const box = (await editor.boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
+      await checkRowAction(
+        harnesses.getByRole('button', {
+          name: 'Close defaults for Fixture integration',
+        }),
+      );
       await cancel.click();
       expect(
         await defaults.evaluate(
           (element) => element === document.activeElement,
         ),
       ).toBe(true);
+
+      await page.goto(
+        `${app.url}/settings/ai/integrations/fixture-integration`,
+      );
+      await page.getByText('HTTP headers', { exact: true }).click();
+      const removeHeader = page.getByRole('button', { name: 'Remove item' });
+      await removeHeader.hover();
+      expect(
+        await removeHeader.evaluate((button) => {
+          const style = getComputedStyle(button);
+          return {
+            background: style.backgroundColor,
+            color: style.color,
+            padding: style.paddingInline,
+          };
+        }),
+      ).toEqual({
+        background: 'rgb(41, 41, 41)',
+        color: 'rgb(241, 168, 168)',
+        padding: '16px',
+      });
 
       await page.goto(`${app.url}/workflows`);
       const workflowLink = page.getByRole('link', {

@@ -89,6 +89,17 @@ export const theme = createTheme({
     }),
     Button: Button.extend({
       defaultProps: { size: 'sm' },
+      vars: (_theme, { color, variant }) => ({
+        root:
+          variant === 'subtle'
+            ? {
+                '--button-hover': 'var(--surface-hover)',
+                ...(color === 'red' && {
+                  '--button-color': 'var(--error-copy)',
+                }),
+              }
+            : {},
+      }),
       classNames: (_theme, props) => ({
         root: [
           classes.button,
@@ -101,6 +112,12 @@ export const theme = createTheme({
     }),
     ActionIcon: ActionIcon.extend({
       defaultProps: { size: 40, variant: 'subtle' },
+      vars: (_theme, { variant }) => ({
+        root: {
+          '--ai-hover':
+            variant === 'subtle' ? 'var(--surface-hover)' : undefined,
+        },
+      }),
       classNames: (_theme, props) => ({
         root: [
           classes.actionIcon,

@@ -480,10 +480,11 @@ function StageColumn({
         {pages * pageSize < column.total && (
           <Button
             variant="ghost"
+            aria-label={`Load more in ${column.name}`}
             disabled={!ready || depth < visiblePages}
             onClick={() => onMore(pages + 1)}
           >
-            Load more in {column.name}
+            Load more
           </Button>
         )}
       </Stack>

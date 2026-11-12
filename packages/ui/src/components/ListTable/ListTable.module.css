@@ -74,3 +74,11 @@
     padding-inline-end: 12px;
   }
 }
+
+.table:has(> colgroup > .fitContentColumn) {
+  table-layout: auto;
+}
+.table col.fitContentColumn {
+  /* Auto table layout expands this column to fit its content and cell padding. */
+  width: 1px;
+}
