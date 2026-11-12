@@ -14,6 +14,8 @@ Open **Automations** in the sidebar to see triggers across workflows. Search by 
 
 Creation opens the saved automation. There is no separate review step. Enablement requires a published, unarchived target workflow. Failed immediate enablement creates no automation and keeps your form values.
 
+If Interlock cannot confirm creation, check **Automations** for the saved automation before starting another draft.
+
 Schedules offer intervals and five-field cron with an IANA timezone. Preview shows upcoming times. Choose whether overlapping runs skip the occurrence, queue one run, or overlap. New UI schedules skip missed occurrences, including while Interlock is closed. Existing missed-fire policies remain unchanged when edited. See [schedule behavior](schedules.md).
 
 Schedule inputs use exact contract property keys even when the form displays a friendly title. A field titled Repository with key `repository` saves `{ "repository": "dgca/interlock" }`. Numbers and booleans retain their JSON types. Complex fields use JSON entry. Existing schedule metadata bindings remain intact. Top-level bound fields are read-only; nested bindings leave their containing JSON editable. Schedule metadata replaces only the bound paths at runtime, preserving literal sibling values.
@@ -25,6 +27,8 @@ Set **Run title** to give each run started by the automation a title in Boards a
 ## Inspect and change
 
 **Activity** shows scheduled occurrences or deliveries and their admission outcomes. Started or queued does not mean a run completed successfully. Open the linked run for its result. **Settings** shows saved configuration. **Edit** changes a schedule or workflow-handler event, preserving advanced settings not exposed by the form.
+
+If another client saves first, choose **Load latest** and confirm before replacing your edits. To leave the editor, select **Back to automation** and confirm that you want to discard your draft.
 
 Use the **Enabled** switch in the detail header to change the saved setting. Turning it off opens a confirmation; cancelling or a rejected save preserves the previous setting. Disabling stops future starts and preserves active and queued runs. The switch is unavailable while saving. An enabled automation can still be automatically paused. Its pause warning offers **Resume automation**, which clears its automatic pause and failure count. Named library or workflow pause holds remain in force. Choose **Delete** in the detail header to remove the automation and its visible activity history while preserving existing runs and durable start/event receipts.
 

@@ -4,6 +4,7 @@ import {
   InterlockError,
   variableMutationSchema,
   variableReadSchema,
+  variableRevisionConflict,
   variableReferences,
   type SavedVariable,
   type VariableCapture,
@@ -203,9 +204,7 @@ export class Variables {
   }
   private revision(old: SavedVariable, expected: number) {
     if (old.revision !== expected)
-      throw new InterlockError(
-        'Variable changed elsewhere. Reload before saving. Your edits have not been saved.',
-      );
+      throw new InterlockError(variableRevisionConflict);
   }
   private saveValue(v: SavedVariable, value: string) {
     if (v.kind === 'secret' && !value.length)

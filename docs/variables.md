@@ -81,8 +81,9 @@ removes current protected revisions while keeping historical capture metadata.
 Backups may retain encrypted data. A retry requiring a deleted value fails rather
 than substituting a new value.
 
-For a stale edit, preserve your local changes and reload the current revision
-before trying again. The failed save does not overwrite another editor's changes.
+If another client saves first, your draft and any entered Secret replacement stay
+in the editor. Choose **Load latest** and confirm to replace the draft with the
+current saved revision. If the read fails, your draft stays available.
 
 ## Import workflows that require variables
 

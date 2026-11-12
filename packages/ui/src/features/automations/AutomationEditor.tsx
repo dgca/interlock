@@ -17,7 +17,7 @@ import {
 } from '../../design-system';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { TRPCClientError } from '@interlock/client';
 import {
   Link,
   useNavigate,
@@ -31,6 +31,7 @@ import {
   scheduleConfigSchema,
   scheduleInput,
   triggerConfig,
+  triggerRevisionConflict,
   type Json,
   type WorkflowVersion,
 } from '@interlock/core';
@@ -38,7 +39,8 @@ import type { AppContext } from '../../App';
 
 import { SchemaInput } from '../../components/SchemaInput/SchemaInput';
 
-import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
+import { useDraftDismissal } from '../../lib/useDraftDismissal';
+import { useEditorDraft } from '../../lib/useEditorDraft';
 import { api, errorMessage } from '../../lib/api';
 import { trpc, useQueryClient } from '../../lib/query';
 import { paths } from '../../routes/paths';
@@ -111,8 +113,7 @@ export function AutomationEditor({
   id?: string;
   kind?: 'schedule' | 'event';
 }) {
-  const { workflows, onScheduleDirty, onSchedulePending } =
-    useOutletContext<AppContext>();
+  const { workflows } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search] = useSearchParams();
@@ -126,8 +127,10 @@ export function AutomationEditor({
   const [revision, setRevision] = useState<number>();
   const [baseline, setBaseline] = useState('');
   const [loading, setLoading] = useState(!!id);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [readError, setReadError] = useState('');
+  const [readAttempt, setReadAttempt] = useState(0);
+  const [unconfirmedCreation, setUnconfirmedCreation] = useState(false);
   const [issues, setIssues] = useState<Record<string, string>>({});
   const [inputValid, setInputValid] = useState(true);
   const [version, setVersion] = useState<WorkflowVersion>();
@@ -136,7 +139,6 @@ export function AutomationEditor({
   const [reload, setReload] = useState(0);
   const [upcoming, setUpcoming] = useState<string[]>([]);
   const [previewError, setPreviewError] = useState('');
-  const inFlight = useRef(false);
   const previousWorkflow = useRef('');
   const formId = useId();
   const timingDrafts = useRef({
@@ -147,29 +149,27 @@ export function AutomationEditor({
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
   });
-  const initialNewState = useRef(
-    JSON.stringify({
-      config: initialConfig(kind),
-      workflowId: search.get('workflow') ?? '',
-      enableOnCreate: false,
-    }),
-  );
+  const initialNewState = useRef({
+    config: initialConfig(kind),
+    workflowId: search.get('workflow') ?? '',
+    enableOnCreate: false,
+  });
   const workflow = workflows.find((w) => w.id === workflowId);
   const current = JSON.stringify({ config, workflowId, enableOnCreate });
   const dirty =
     !inputValid ||
     (id
       ? !!baseline && current !== baseline
-      : current !== initialNewState.current);
-  useBeforeUnloadWarning(dirty || busy);
-  useEffect(() => {
-    onScheduleDirty(dirty);
-    return () => onScheduleDirty(false);
-  }, [dirty, onScheduleDirty]);
-  useEffect(() => {
-    onSchedulePending(busy);
-    return () => onSchedulePending(false);
-  }, [busy, onSchedulePending]);
+      : current !== JSON.stringify(initialNewState.current));
+  const { busy: saving, beginSave, finishSave } = useEditorDraft(dirty);
+  const busy = saving || loading;
+  const conflict = Boolean(id && error === triggerRevisionConflict);
+  const reloadSettings = () => {
+    setLoading(true);
+    setReadError('');
+    setReadAttempt((n) => n + 1);
+  };
+  const recovery = useDraftDismissal(dirty, busy, reloadSettings);
   useEffect(() => {
     if (!id) return;
     let active = true;
@@ -177,13 +177,32 @@ export function AutomationEditor({
     void api.triggers.inspect
       .query({ id })
       .then(
-        ({ trigger }) => {
+        (inspection) => {
           if (!active) return;
-
+          const { trigger } = inspection;
+          const key = trpc.triggers.inspect.queryKey({
+            id,
+            offset: 0,
+            limit: 20,
+          });
+          const cached = queryClient.getQueryData(key);
+          if (
+            (revision !== undefined && trigger.revision <= revision) ||
+            trigger.revision < (cached?.trigger.revision ?? 0)
+          ) {
+            setReadError(
+              'Could not read the latest automation settings. Try again.',
+            );
+            return;
+          }
+          void queryClient.cancelQueries({ queryKey: key, exact: true });
+          queryClient.setQueryData(key, inspection);
           const next = triggerConfig(trigger) as AutomationConfig;
           setConfig(next);
           setWorkflowId(trigger.workflowId);
           setRevision(trigger.revision);
+          setInputValid(true);
+          setIssues({});
           setBaseline(
             JSON.stringify({
               config: next,
@@ -194,7 +213,7 @@ export function AutomationEditor({
           setError('');
         },
         (e) => {
-          if (active) setError(errorMessage(e));
+          if (active) setReadError(errorMessage(e));
         },
       )
       .finally(() => {
@@ -203,7 +222,7 @@ export function AutomationEditor({
     return () => {
       active = false;
     };
-  }, [id, reload]);
+  }, [id, readAttempt]);
   useEffect(() => {
     setVersion(undefined);
     setContractError('');
@@ -220,12 +239,19 @@ export function AutomationEditor({
           if (!active) return;
           const latest = [...versions].sort((a, b) => b.version - a.version)[0];
           setVersion(latest);
-          if (!id && previousWorkflow.current !== workflowId && latest)
-            setConfig((c) =>
-              c.kind === 'schedule'
-                ? { ...c, input: defaultInput(latest.definition.inputSchema) }
-                : c,
-            );
+          if (!id && previousWorkflow.current !== workflowId && latest) {
+            const input = defaultInput(latest.definition.inputSchema);
+            const initial = initialNewState.current;
+            if (
+              initial.workflowId === workflowId &&
+              initial.config.kind === 'schedule'
+            )
+              initialNewState.current = {
+                ...initial,
+                config: { ...initial.config, input },
+              };
+            setConfig((c) => (c.kind === 'schedule' ? { ...c, input } : c));
+          }
           previousWorkflow.current = workflowId;
         },
         (e) => {
@@ -264,12 +290,18 @@ export function AutomationEditor({
   const patch = (changes: Partial<AutomationConfig>) => {
     setConfig((current) => ({ ...current, ...changes }) as AutomationConfig);
     setIssues({});
-    setError('');
+    if (!conflict && !unconfirmedCreation) setError('');
   };
   const back = id ? itemHref(id, search) : returnHref(search);
   const schema = version?.definition.inputSchema ?? workflow?.draft.inputSchema;
   const save = async () => {
-    if (inFlight.current) return;
+    if (
+      busy ||
+      conflict ||
+      unconfirmedCreation ||
+      (id && (!baseline || !dirty))
+    )
+      return;
     setError('');
     setIssues({});
     const parsed =
@@ -324,8 +356,7 @@ export function AutomationEditor({
       setError(errorMessage(e));
       return;
     }
-    inFlight.current = true;
-    setBusy(true);
+    if (!beginSave()) return;
     try {
       const result = await api.triggers.manage.mutate(
         id
@@ -345,32 +376,38 @@ export function AutomationEditor({
       if (!result.trigger)
         throw new Error('The saved automation was not returned.');
       const saved = result.trigger;
-      await queryClient.cancelQueries(trpc.triggers.inspect.pathFilter());
-      queryClient.setQueriesData<Inspection>(
-        trpc.triggers.inspect.pathFilter(),
-        (previous) =>
-          previous?.trigger.id === saved.id &&
-          previous.trigger.revision <= saved.revision
-            ? ({
-                ...previous,
-                trigger: { ...previous.trigger, ...saved },
-              } as Inspection)
-            : previous,
+      const filter = trpc.triggers.inspect.queryFilter({ id: saved.id });
+      void queryClient.cancelQueries(filter);
+      queryClient.setQueriesData<Inspection>(filter, (previous) =>
+        previous?.trigger.id === saved.id &&
+        previous.trigger.revision <= saved.revision
+          ? ({
+              ...previous,
+              trigger: { ...previous.trigger, ...saved },
+            } as Inspection)
+          : previous,
       );
       void queryClient.invalidateQueries(trpc.triggers.pathFilter(), {
         cancelRefetch: false,
       });
-      flushSync(() => {
-        setBaseline(current);
-        onScheduleDirty(false);
-        onSchedulePending(false);
-      });
-      void navigate(itemHref(result.trigger.id, search), { replace: !id });
+      if (finishSave(true))
+        void navigate(itemHref(saved.id, search), {
+          replace: !id,
+          state: { savedAutomation: { id: saved.id, name: saved.name } },
+        });
     } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      inFlight.current = false;
-      setBusy(false);
+      if (!finishSave(false)) return;
+      if (
+        !id &&
+        !(e instanceof TRPCClientError && e.data?.code === 'BAD_REQUEST')
+      ) {
+        setUnconfirmedCreation(true);
+        setError(
+          'Interlock could not confirm whether the automation was created. Check Automations before creating it again.',
+        );
+      } else {
+        setError(errorMessage(e));
+      }
     }
   };
   const label = id ? 'Save changes' : 'Create';
@@ -404,7 +441,7 @@ export function AutomationEditor({
               ? 'New Interlock event'
               : 'New schedule'
         }
-        status={dirty ? 'Unsaved changes' : id ? 'Saved' : 'Not saved'}
+        status={dirty ? 'Unsaved changes' : baseline ? 'Saved' : undefined}
         onBack={() => void navigate(back)}
         backLabel={id ? 'Back to automation' : 'Back to automations'}
         busy={busy}
@@ -413,30 +450,40 @@ export function AutomationEditor({
             <Button
               variant="secondary"
               disabled={busy}
-              onClick={() => void navigate(back)}
+              loading={conflict && loading}
+              onClick={conflict ? recovery.dismiss : () => void navigate(back)}
             >
-              Cancel
+              {conflict
+                ? 'Load latest'
+                : id && dirty
+                  ? 'Discard changes'
+                  : 'Cancel'}
             </Button>
             <Button
               variant="primary"
               form={formId}
               type="submit"
-              loading={busy}
-              disabled={loading || (!!id && (!baseline || !dirty))}
+              loading={saving}
+              disabled={
+                busy ||
+                conflict ||
+                unconfirmedCreation ||
+                (!!id && (!baseline || !dirty))
+              }
             >
-              {busy ? (id ? 'Saving…' : 'Creating…') : label}
+              {label}
             </Button>
           </>
         }
       />
       <div className={classes.editor}>
         <div className={classes.formWorkspace}>
-          {loading ? (
+          {loading && !baseline ? (
             <FormPlaceholder />
           ) : id && !baseline ? (
             <Alert color="red" title="Could not load automation">
-              {error}
-              <Button variant="ghost" onClick={() => setReload((n) => n + 1)}>
+              {readError}
+              <Button variant="ghost" onClick={reloadSettings}>
                 Retry loading
               </Button>
             </Alert>
@@ -792,23 +839,23 @@ export function AutomationEditor({
                     />
                   </div>
                 )}
-                <ActionError message={error} />
-                {id && error && (
+                <ActionError
+                  message={
+                    conflict
+                      ? 'This automation changed elsewhere. Your edits are still here.'
+                      : error
+                  }
+                />
+                {conflict && <ActionError message={readError} />}
+                {unconfirmedCreation && (
                   <Button
-                    variant="ghost"
-                    onClick={() => {
-                      if (
-                        !dirty ||
-                        window.confirm(
-                          'Discard edits and reload saved settings?',
-                        )
-                      ) {
-                        setInputValid(true);
-                        setReload((n) => n + 1);
-                      }
-                    }}
+                    component={Link}
+                    to={paths.automations}
+                    target="_blank"
+                    rel="noreferrer"
+                    variant="secondary"
                   >
-                    Reload saved settings
+                    Check Automations in a new tab
                   </Button>
                 )}
               </fieldset>
@@ -855,6 +902,7 @@ export function AutomationEditor({
           )}
         </aside>
       </div>
+      {recovery.confirmation}
     </section>
   );
 }

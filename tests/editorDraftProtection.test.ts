@@ -2,8 +2,10 @@
 import { TRPCClientError } from '@interlock/client';
 import { transferableAbortController } from 'node:util';
 import {
+  blankDefinition,
   boardSettingsRevisionConflict,
   promptRevisionConflict,
+  variableRevisionConflict,
   type SaveBoard,
   type WorkflowBoard,
 } from '@interlock/core';
@@ -19,6 +21,7 @@ import { UiTestProvider } from './uiTestProvider';
 const rpc = vi.hoisted(() => ({
   saveBoard: vi.fn(),
   boardSettings: vi.fn(),
+  readBoard: vi.fn(),
   createPrompt: vi.fn(),
   getPrompt: vi.fn(),
   updatePrompt: vi.fn(),
@@ -26,6 +29,11 @@ const rpc = vi.hoisted(() => ({
   listWorkflows: vi.fn(),
   saveIntegration: vi.fn(),
   profiles: vi.fn(),
+  workflowVersions: vi.fn(),
+  saveAutomation: vi.fn(),
+  inspectAutomation: vi.fn(),
+  readVariable: vi.fn(),
+  saveVariable: vi.fn(),
 }));
 vi.mock('../packages/ui/src/lib/api', async () => {
   const { mockRpcClient } = await import('./mockRpcClient');
@@ -35,11 +43,14 @@ vi.mock('../packages/ui/src/lib/api', async () => {
     api: mockRpcClient({
       boards: {
         settings: { query: rpc.boardSettings },
-        get: { query: async () => ({ board, columns: [], attentionCount: 0 }) },
+        get: { query: rpc.readBoard },
         list: { query: empty },
         save: { mutate: rpc.saveBoard },
       },
-      workflows: { list: { query: rpc.listWorkflows } },
+      workflows: {
+        list: { query: rpc.listWorkflows },
+        versions: { query: rpc.workflowVersions },
+      },
       prompts: {
         list: { query: rpc.listPrompts },
         get: { query: rpc.getPrompt },
@@ -47,7 +58,16 @@ vi.mock('../packages/ui/src/lib/api', async () => {
         update: { mutate: rpc.updatePrompt },
       },
       requests: { list: { query: emptyPage } },
-      triggers: { attention: { query: emptyPage } },
+      triggers: {
+        attention: { query: emptyPage },
+        inspect: { query: rpc.inspectAutomation },
+        preview: { query: async () => ({ upcoming: [] }) },
+        manage: { mutate: rpc.saveAutomation },
+      },
+      variables: {
+        read: { query: rpc.readVariable },
+        manage: { mutate: rpc.saveVariable },
+      },
       executors: {
         profiles: { query: rpc.profiles },
         manage: { mutate: rpc.saveIntegration },
@@ -92,6 +112,27 @@ const prompt = {
   createdAt: '2026-11-11T00:00:00Z',
   updatedAt: '2026-11-11T00:00:00Z',
 };
+const variable = {
+  id: 'variable',
+  name: 'credential',
+  description: '',
+  kind: 'secret',
+  availability: 'ready',
+  enabled: true,
+  revision: 1,
+  valueRevision: 1,
+};
+const inspectVariable = (value = variable) => ({
+  ...value,
+  storage: {},
+  dependencies: {
+    items: [],
+    total: 0,
+    activeRunCount: 0,
+    runningComparisonCount: 0,
+  },
+  bindings: { items: [], total: 0 },
+});
 
 let root: Root;
 let container: HTMLDivElement;
@@ -108,18 +149,22 @@ beforeAll(async () => {
   await Promise.all([
     import('../packages/ui/src/features/boards/BoardSettings'),
     import('../packages/ui/src/features/boards/Boards'),
+    import('../packages/ui/src/features/automations/Automations'),
     import('../packages/ui/src/features/executors/Harnesses'),
     import('../packages/ui/src/features/prompts/Prompts'),
+    import('../packages/ui/src/features/variables/Variables'),
   ]);
 });
 
 beforeEach(() => {
   vi.resetAllMocks();
   rpc.boardSettings.mockResolvedValue(board);
+  rpc.readBoard.mockResolvedValue({ board, columns: [], attentionCount: 0 });
   rpc.listPrompts.mockResolvedValue([]);
   rpc.getPrompt.mockResolvedValue({ ...prompt, usage: [] });
   rpc.listWorkflows.mockResolvedValue([]);
   rpc.profiles.mockResolvedValue([profile]);
+  rpc.readVariable.mockResolvedValue(inspectVariable());
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.stubGlobal(
     'ResizeObserver',
@@ -270,7 +315,7 @@ it('guards Board column edits and holds navigation during a retryable save', asy
   await ready(() => field('Board name'));
   expect(warnsBeforeUnload()).toBe(false);
   await fill('Column 1 name', 'Changed stage');
-  await click('Cancel');
+  await click('Back to board');
   expect(discardDialog()).toBeDefined();
   await click('Keep editing');
   expect(field('Column 1 name').value).toBe('Changed stage');
@@ -283,7 +328,8 @@ it('guards Board column edits and holds navigation during a retryable save', asy
   rpc.saveBoard.mockReturnValueOnce(failedSave.promise);
   await submitTwice(field('Board name'));
   expect(rpc.saveBoard).toHaveBeenCalledTimes(1);
-  expect(button('Cancel').disabled).toBe(true);
+  expect(button('Back to board').disabled).toBe(true);
+  expect(button('Discard changes').disabled).toBe(true);
   expect(warnsBeforeUnload()).toBe(true);
   await back();
   await act(async () =>
@@ -302,6 +348,7 @@ it('guards Board column edits and holds navigation during a retryable save', asy
   const refresh = deferred<[]>();
   rpc.saveBoard.mockReturnValueOnce(retry.promise);
   rpc.listWorkflows.mockReturnValueOnce(refresh.promise);
+  rpc.readBoard.mockRejectedValue(new Error('Board read unavailable'));
   await click('Save changes');
   await back();
   expect(router.state.location.pathname).toBe('/boards/board/settings');
@@ -309,6 +356,11 @@ it('guards Board column edits and holds navigation during a retryable save', asy
     retry.resolve({ ...board, name: 'Local board', revision: 4 }),
   );
   expect(router.state.location.pathname).toBe('/boards/board');
+  await ready(() => button('Retry board'));
+  expect(document.querySelector('h1')?.textContent).toBe('Local board');
+  expect(document.querySelector('header [role="status"]')?.textContent).toBe(
+    'Saved',
+  );
   await ready(() => expect(warnsBeforeUnload()).toBe(false));
   expect(rpc.listWorkflows).toHaveBeenCalledTimes(2);
   const settingsRead = deferred<typeof board>();
@@ -339,6 +391,132 @@ it('leaves a clean new Board freely and abandons its draft only after confirmati
   expect(router.state.location.pathname).toBe('/boards');
   await act(async () => router.navigate('/boards/new'));
   expect(field('Board name').value).toBe('');
+});
+
+it('keeps an unacknowledged Board creation draft available without submitting it twice', async () => {
+  rpc.saveBoard.mockRejectedValueOnce(new TRPCClientError('Failed to fetch'));
+  await render(paths.boardNew);
+  await fill('Board name', 'Possibly created board');
+  await click('Create board');
+  await submitTwice(field('Board name'));
+  expect(rpc.saveBoard).toHaveBeenCalledTimes(1);
+  expect(field('Board name').value).toBe('Possibly created board');
+  expect(document.body.textContent).toContain(
+    'could not confirm whether the board was created',
+  );
+  expect(document.querySelector('a[target="_blank"]')?.textContent).toContain(
+    'Check Boards',
+  );
+});
+
+it('guards changes to the new automation draft and retains the acknowledged identity after a failed detail read', async () => {
+  const draft = blankDefinition();
+  rpc.listWorkflows.mockResolvedValue([
+    { id: 'workflow', name: 'Target', draft, latestVersion: 1 },
+  ]);
+  rpc.workflowVersions.mockResolvedValue([{ version: 1, definition: draft }]);
+  rpc.inspectAutomation.mockRejectedValue(
+    new Error('Automation read unavailable'),
+  );
+  const current = '/automations/new?type=schedule&workflow=workflow';
+  const next = '/automations/new?type=event&workflow=workflow';
+  await render(current);
+  await ready(() => field('Name'));
+  await fill('Name', 'New schedule draft');
+  await act(async () => router.navigate(`${current}&from=status%3Ddisabled`));
+  expect(discardDialog()).toBeUndefined();
+  await act(async () => router.navigate(next));
+  expect(discardDialog()).toBeDefined();
+  await click('Keep editing');
+  expect(field('Name').value).toBe('New schedule draft');
+
+  const saved = {
+    applied: true,
+    trigger: { id: 'created', name: 'New schedule draft', revision: 1 },
+  };
+  const pending = deferred<typeof saved>();
+  rpc.saveAutomation.mockReturnValueOnce(pending.promise);
+  await submitTwice(field('Name'));
+  expect(rpc.saveAutomation).toHaveBeenCalledTimes(1);
+  expect(rpc.saveAutomation.mock.calls[0][0]).toMatchObject({
+    enabled: false,
+    workflowId: 'workflow',
+  });
+  await act(async () => router.navigate(next));
+  expect(discardDialog()).toBeUndefined();
+  expect(router.state.location.pathname + router.state.location.search).toBe(
+    `${current}&from=status%3Ddisabled`,
+  );
+  await act(async () => pending.resolve(saved));
+  await ready(() =>
+    expect(document.body.textContent).toContain('Could not refresh automation'),
+  );
+  expect(router.state.location.pathname + router.state.location.search).toBe(
+    '/automations/created?from=status%3Ddisabled',
+  );
+  expect(document.querySelector('h1')?.textContent).toBe('New schedule draft');
+  expect(document.querySelector('header [role="status"]')?.textContent).toBe(
+    'Saved',
+  );
+});
+
+it('retains an entered Secret through a conflict and clears it before refreshing an acknowledged save', async () => {
+  await render(paths.variable(variable.id));
+  await ready(() => button('Replace value'));
+  await click('Replace value');
+  await fill('New secret value', 'first-synthetic-secret');
+  rpc.saveVariable.mockRejectedValueOnce(new Error(variableRevisionConflict));
+  await click('Save changes');
+  expect(field('New secret value').value).toBe('first-synthetic-secret');
+  await click('Load latest');
+  await click('Keep editing');
+  expect(field('New secret value').value).toBe('first-synthetic-secret');
+  rpc.readVariable.mockRejectedValueOnce(new Error('Recovery unavailable'));
+  await click('Load latest');
+  await click('Discard changes', discardDialog());
+  expect(field('New secret value').value).toBe('first-synthetic-secret');
+  expect(document.body.textContent).toContain('Recovery unavailable');
+  const latest = { ...variable, revision: 2, description: 'Saved elsewhere' };
+  rpc.readVariable.mockResolvedValue(inspectVariable(latest));
+  await click('Load latest');
+  await click('Discard changes', discardDialog());
+  expect(field('Description').value).toBe('Saved elsewhere');
+  expect(warnsBeforeUnload()).toBe(false);
+
+  await click('Replace value');
+  await fill('New secret value', 'replacement-synthetic-secret');
+  const pending = deferred<typeof variable>();
+  rpc.saveVariable.mockReturnValueOnce(pending.promise);
+  await submitTwice(field('Name'));
+  expect(rpc.saveVariable).toHaveBeenCalledTimes(2);
+  expect(rpc.saveVariable.mock.calls[1][0]).toMatchObject({
+    action: 'update',
+    expectedRevision: 2,
+    value: 'replacement-synthetic-secret',
+  });
+  await back();
+  expect(discardDialog()).toBeUndefined();
+  expect(router.state.location.pathname).toBe(paths.variable(variable.id));
+  rpc.readVariable.mockRejectedValue(new Error('Refresh unavailable'));
+  await act(async () =>
+    pending.resolve({ ...latest, revision: 3, valueRevision: 2 }),
+  );
+  await ready(() => button('Retry variable details'));
+  expect(warnsBeforeUnload()).toBe(false);
+  expect(document.body.textContent).not.toContain(
+    'replacement-synthetic-secret',
+  );
+  expect(
+    JSON.stringify(
+      queryClient.getQueriesData(trpc.variables.read.pathFilter()),
+    ),
+  ).not.toContain('replacement-synthetic-secret');
+  expect(
+    rpc.readVariable.mock.calls.every(
+      ([input]) => input.action !== 'config_value',
+    ),
+  ).toBe(true);
+  expect(document.activeElement).toBe(button('Replace value'));
 });
 
 it('keeps a Board conflict draft through background refresh and failed recovery, then saves the latest revision', async () => {

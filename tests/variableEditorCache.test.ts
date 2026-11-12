@@ -18,12 +18,12 @@ vi.mock('../packages/ui/src/lib/api', async () => {
   };
 });
 let root: Root, container: HTMLDivElement, tick: number;
-const onDirty = vi.fn();
+const onEditorGuard = vi.fn();
 function Context() {
   return h(Outlet, {
     context: {
       tick,
-      onDirty,
+      onEditorGuard,
       act: async (fn: () => Promise<unknown>) => {
         await fn();
       },
@@ -66,7 +66,7 @@ function field(name: string) {
 }
 beforeEach(() => {
   tick = 0;
-  onDirty.mockReset();
+  onEditorGuard.mockReset();
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -147,7 +147,7 @@ it.each(['secret', 'config'] as const)(
     tick += 1;
     await show();
     expect(field('Name').value).toBe('local_edit');
-    expect(onDirty).toHaveBeenLastCalledWith(true);
+    expect(onEditorGuard).toHaveBeenLastCalledWith('dirty');
     expect(read).toHaveBeenCalledTimes(count);
     await show(false);
     read.mockImplementationOnce(() => new Promise(() => {}));

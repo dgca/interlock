@@ -14,7 +14,7 @@ import {
 
 import { WorkflowPauseButton, PauseBanner } from '../pauses/PauseControls';
 import type { Action } from '../../lib/useActionFeedback';
-import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
+import { useEditorDraft } from '../../lib/useEditorDraft';
 import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
 import {
@@ -458,24 +458,34 @@ export function WorkflowEditor({
   useEffect(() => {
     if (remoteChanged && !dirty && !editing && !pending) loadLatest();
   }, [remoteChanged, dirty, editing, pending, workflow, remoteSnapshot]);
+  // The child workflow actions retain their existing draft navigation.
+  const { beginSave, finishSave } = useEditorDraft(
+    false,
+    dirty || layout.saving || Boolean(layout.error),
+  );
   const perform = (action: 'save' | 'publish', fn: () => Promise<Workflow>) => {
-    if (actionInFlight.current) return;
+    if (actionInFlight.current || !beginSave()) return;
     actionInFlight.current = true;
     setPending(action);
-    void act(fn, (w) =>
-      action === 'publish'
-        ? `Published “${w.name}” as v${w.latestVersion}.`
-        : 'Workflow draft saved.',
-    ).finally(() => {
-      actionInFlight.current = false;
-      setPending(undefined);
-    });
+    void act(
+      async () => {
+        try {
+          return await fn();
+        } finally {
+          actionInFlight.current = false;
+          if (finishSave(false)) setPending(undefined);
+        }
+      },
+      (w) =>
+        action === 'publish'
+          ? `Published “${w.name}” as v${w.latestVersion}.`
+          : 'Workflow draft saved.',
+    );
   };
   useEffect(() => {
     onDirty(dirty);
     return () => onDirty(false);
   }, [dirty, onDirty]);
-  useBeforeUnloadWarning(dirty || layout.saving || Boolean(layout.error));
   const historyBlocked = Boolean(
     editing ||
     deleting ||

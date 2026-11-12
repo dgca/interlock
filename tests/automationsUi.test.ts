@@ -3,11 +3,13 @@ import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
+import { TRPCClientError } from '@interlock/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   blankDefinition,
   scheduleConfigSchema,
   eventConfigSchema,
+  triggerRevisionConflict,
   SCHEDULE_LAG_THRESHOLD_MS,
   type Workflow,
 } from '@interlock/core';
@@ -113,8 +115,6 @@ function Layout() {
         },
         workflows: [workflow],
         tick,
-        onScheduleDirty: vi.fn(),
-        onSchedulePending: vi.fn(),
       },
     }),
   );
@@ -243,6 +243,9 @@ it('saves exact input keys and typed values, defaults disabled, and opens ordina
 });
 it('keeps the Create label when enabling and prevents duplicate pending submissions', async () => {
   await render();
+  expect(
+    window.dispatchEvent(new Event('beforeunload', { cancelable: true })),
+  ).toBe(true);
   await fill(field('Name'), 'Morning review');
   expect(button('Create')).toBeTruthy();
   await act(async () => field('Enable when created').click());
@@ -267,8 +270,13 @@ it('keeps the Create label when enabling and prevents duplicate pending submissi
   );
 });
 it('retains edits and activation after failed immediate enablement', async () => {
+  const message = 'Publish this workflow before enabling its trigger';
   rpc.manage.mockRejectedValueOnce(
-    new Error('Publish this workflow before enabling its trigger'),
+    new TRPCClientError(message, {
+      result: {
+        error: { code: -32600, message, data: { code: 'BAD_REQUEST' } },
+      },
+    }),
   );
   await render();
   await fill(field('Name'), 'Keep this name');
@@ -277,8 +285,25 @@ it('retains edits and activation after failed immediate enablement', async () =>
   expect(field('Name').value).toBe('Keep this name');
   expect(field('Enable when created').checked).toBe(true);
   expect(document.body.textContent).toContain('Publish this workflow');
+  expect(button('Create').disabled).toBe(false);
   expect(document.querySelector('[data-location]')?.textContent).toContain(
     '/automations/new',
+  );
+});
+
+it('keeps an unacknowledged automation creation draft available and offers a catalog check', async () => {
+  rpc.manage.mockRejectedValueOnce(new TRPCClientError('Failed to fetch'));
+  await render();
+  await fill(field('Name'), 'Keep this automation');
+  await submit();
+  await submit();
+  expect(rpc.manage).toHaveBeenCalledTimes(1);
+  expect(field('Name').value).toBe('Keep this automation');
+  expect(document.body.textContent).toContain(
+    'could not confirm whether the automation was created',
+  );
+  expect(document.querySelector('a[target="_blank"]')?.textContent).toContain(
+    'Check Automations',
   );
 });
 it('does not submit stale JSON when a complex input is invalid', async () => {
@@ -349,9 +374,7 @@ it('preserves advanced configuration and rejects revision conflicts without disc
     bindings: { triggerId: 'options.triggerId' },
   };
   rpc.inspect.mockResolvedValue(inspection(saved as any));
-  rpc.manage.mockRejectedValueOnce(
-    new Error('Trigger revision conflict; retain edits and reload'),
-  );
+  rpc.manage.mockRejectedValueOnce(new Error(triggerRevisionConflict));
   await render('/automations/t/edit');
   await fill(field('Name'), 'Local edit');
   await submit();
@@ -370,7 +393,18 @@ it('preserves advanced configuration and rejects revision conflicts without disc
     }),
   );
   expect(field('Name').value).toBe('Local edit');
-  expect(document.body.textContent).toContain('Trigger revision conflict');
+  expect(document.body.textContent).toContain(
+    'This automation changed elsewhere',
+  );
+  await act(async () => button('Load latest').click());
+  await act(async () => button('Keep editing').click());
+  expect(field('Name').value).toBe('Local edit');
+  rpc.inspect.mockResolvedValue(
+    inspection({ ...saved, revision: 5, name: 'Remote edit' } as any),
+  );
+  await act(async () => button('Load latest').click());
+  await act(async () => button('Discard changes').click());
+  expect(field('Name').value).toBe('Remote edit');
 });
 it('shows load failure with retry rather than an editable blank configuration', async () => {
   rpc.inspect.mockRejectedValueOnce(new Error('Connection lost'));

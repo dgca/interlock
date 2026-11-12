@@ -33,7 +33,7 @@ Runs tables share the Automations row spacing, title-case headings, typography, 
 
 AI Settings has three URL-backed tabs: Harnesses, Agent presets, and Execution settings. Collections and policy forms use a 1040px content column and keep actions beside their headings. Harnesses shows one row per built-in harness or custom integration. **Edit defaults** expands the fields inside the row, with its own save action. **Add integration** opens a form for choosing the execution mode, transport, and command or URL. HTTP headers, launcher hooks, and advanced settings expand in place.
 
-Board settings, Prompt editors, and custom integration forms confirm before leaving with unsaved edits. Keep editing returns to the same draft. A pending save blocks in-app navigation, and the browser warns before leaving or reloading a dirty or saving form. A failed save keeps the inputs available for retry.
+Board, Prompt, Automation, Variable, and custom integration editors confirm before leaving with unsaved edits. Keep editing returns to the same draft. A pending save blocks in-app navigation, and the browser warns before leaving or reloading a dirty or saving form. A failed save keeps the inputs available for retry.
 
 Prompts use the same route editor for creation and editing. The header groups Back, Cancel or Discard changes, and the primary Create prompt or Save changes action. Saved prompts show Delete before Save changes. A revision conflict offers Load latest and confirms before replacing unsaved edits. Creation retries the original request when its outcome is unknown. After creation the saved prompt is immediately available, and workflow references load independently.
 
@@ -97,6 +97,8 @@ Use this lifecycle for persistent resource editors, including creation dialogs. 
 | Unknown write outcome | Preserve input and report uncertainty. Reconcile saved state before offering a retry that could duplicate the operation.                                                                                                    |
 
 Share lifecycle behavior across editors while keeping validation and persistence specific to the resource. **Apply changes** stages changes into a parent draft; **Save** persists them. Preserve that distinction in labels and dirty state. A child editor's Apply must not imply that the parent draft was saved.
+
+Workflow **Save draft** and **Publish version** block navigation while a write is pending. Draft text remains editable where the editor allows it, including in Raw. Draft persistence and publication keep their separate validation steps.
 
 Dialogs restore focus on dismissal when the trigger remains available. Global notifications sit below dialogs. A failed workspace refresh marks cached data as possibly out of date and offers a retry.
 

@@ -15,7 +15,7 @@ import {
 } from '../../design-system';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useNavigate, useOutletContext } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 
 import { ArrowRight, Plus, Save, Search, Trash2 } from 'lucide-react';
 import {
@@ -27,9 +27,8 @@ import {
   type SavedPrompt,
 } from '@interlock/core';
 
-import type { AppContext } from '../../App';
-import { DiscardChangesDialog } from '../../components/DiscardChangesDialog';
 import type { Action } from '../../lib/useActionFeedback';
+import { useDraftDismissal } from '../../lib/useDraftDismissal';
 import { useEditorDraft } from '../../lib/useEditorDraft';
 import { api, errorMessage } from '../../lib/api';
 import { trpc, useQueryClient } from '../../lib/query';
@@ -187,8 +186,6 @@ export function PromptEditor({
 }) {
   const navigate = useNavigate();
   const client = useQueryClient();
-  const { editorNavigationBlocked } =
-    useOutletContext<AppContext | null>() ?? {};
   const formId = useId();
   const [baseline, setBaseline] = useState(prompt);
   const [draft, setDraft] = useState(() =>
@@ -199,7 +196,6 @@ export function PromptEditor({
   const [saveError, setSaveError] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-  const [confirmLoad, setConfirmLoad] = useState(false);
   const [loadingLatest, setLoadingLatest] = useState(false);
   const [loadError, setLoadError] = useState('');
   const latestRequest = useRef<AbortController>(null);
@@ -315,7 +311,6 @@ export function PromptEditor({
     if (!baseline || latestRequest.current) return;
     const request = new AbortController();
     latestRequest.current = request;
-    setConfirmLoad(false);
     setLoadingLatest(true);
     setLoadError('');
     try {
@@ -364,11 +359,11 @@ export function PromptEditor({
     }
   };
 
+  const recovery = useDraftDismissal(dirty, busy, () => void loadLatest());
   const discard = () => {
     if (!baseline) return openLibrary();
     if (conflict) {
-      if (dirty) setConfirmLoad(true);
-      else void loadLatest();
+      recovery.dismiss();
       return;
     }
     setSaveError('');
@@ -568,12 +563,7 @@ export function PromptEditor({
           </form>
         </div>
       </div>
-      {confirmLoad && !editorNavigationBlocked && (
-        <DiscardChangesDialog
-          onKeepEditing={() => setConfirmLoad(false)}
-          onDiscard={() => void loadLatest()}
-        />
-      )}
+      {recovery.confirmation}
       {baseline && deleting && (
         <Modal
           busy={saving}

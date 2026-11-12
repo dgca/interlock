@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import {
   Link,
   useNavigate,
+  useLocation,
   useOutletContext,
   useParams,
   useSearchParams,
@@ -148,6 +149,8 @@ export function WorkflowBoardRoute() {
 function WorkflowBoard({ id }: { id: string }) {
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const acknowledged = location.state?.savedBoard;
   const { workflows } = useOutletContext<AppContext>();
   const status = boardStatusSchema.catch('all').parse(search.get('status'));
   const workflowId = search.get('workflow') || undefined;
@@ -160,7 +163,12 @@ function WorkflowBoard({ id }: { id: string }) {
   const opener = useRef<HTMLElement | null>(null);
   const previous = useRef(Boolean(target));
   const scrollKey = `${id}:${status}:${workflowId ?? ''}`;
-  const boardName = query.data?.board.name ?? 'Board';
+  const showAcknowledgement =
+    acknowledged?.id === id &&
+    (!query.data || query.data.board.revision < acknowledged.revision);
+  const boardName = showAcknowledgement
+    ? acknowledged.name
+    : (query.data?.board.name ?? 'Board');
   useLayoutEffect(() => {
     if (!target && query.data && scroll.current) {
       scroll.current.scrollLeft = scrollPositions.get(scrollKey) ?? 0;
@@ -190,6 +198,7 @@ function WorkflowBoard({ id }: { id: string }) {
       >
         <PageHeader
           title={boardName}
+          status={showAcknowledgement ? 'Saved' : undefined}
           onBack={() => void navigate(paths.boards)}
           backLabel="Back to boards"
           controls={
@@ -256,6 +265,12 @@ function WorkflowBoard({ id }: { id: string }) {
         {query.error && (
           <div className={classes.content}>
             <ActionError message={errorMessage(query.error)} />
+            <Button
+              variant="secondary"
+              onClick={() => void query.refetch({ cancelRefetch: false })}
+            >
+              Retry board
+            </Button>
           </div>
         )}
         {query.isPending && (
