@@ -5,7 +5,8 @@ Interlock is a local workflow engine and editor. The public npm package is `@typ
 ## Read for the task
 
 - For domain terms or workflow behavior, read [CONTEXT.md](CONTEXT.md) and [execution semantics](docs/architecture.md).
-- For UI work, read the UI components section of [architecture](docs/architecture.md). Reuse the Mantine theme and existing contract editors.
+- For UI work, read the UI components section of [architecture](docs/architecture.md) and [UI interaction patterns](docs/ui-patterns.md). Reuse the Mantine theme and existing contract editors.
+- For run inspection, history, or collection-query changes, follow [read query review](docs/architecture.md#read-query-review).
 - For MCP configuration or agent execution, read [Connect a harness](docs/connect-harness.md).
 - For feature scope, read [current limits](docs/v1.md). Distinguish implemented behavior from planned capabilities.
 - For a releasable change, version bump, or publication, follow [Release Interlock](docs/releases.md).
@@ -26,6 +27,8 @@ While Interlock is on `0.x`, use `patch` changesets for all non-breaking changes
 
 ## Keep UI purposeful
 
+Before changing a repeated interaction, compare the matching screens and identify the shared implementation. Reuse its behavior as well as its appearance. Put common fixes in the shared implementation; keep domain-specific differences explicit.
+
 Every UI element should provide useful information or help the user decide or act. Use existing titles and navigation for context instead of repeating them in subtitles or labels. Omit generic filler copy added to make a layout feel complete. Keep guidance that explains a non-obvious behavior, consequence, or next step, and place it where needed. Build visual hierarchy with spacing, typography, and grouping rather than extra copy.
 
 ## Keep documentation and MCP definitions current
@@ -37,6 +40,8 @@ Review the full affected MCP workflow, including existing tools that interact wi
 Treat MCP context as a limited resource. Keep server instructions focused on cross-tool behavior and tool descriptions focused on selection and correct use. Prefer bounded summaries and on-demand detail for large responses. Remove redundant guidance while preserving contract and lifecycle rules that agents need to act correctly. Justify added tools, discovery text, and response volume in the PR's MCP impact section.
 
 Verify documented commands and examples against their implementations. When MCP definitions change, check what clients discover over both HTTP and stdio with the transport tests. State which docs and MCP flows were checked and any remaining gaps; describe a review as comprehensive only when the entire MCP tool set was audited.
+
+Keep `.tasks/` artifacts local and ignored. At task completion, move lasting decisions into their owning docs and retire superseded proposals. Preserve original experiment evidence and active-run artifacts before removing files.
 
 Keep changeset summaries focused on user-visible changes since the latest published release, omitting intermediate designs that never shipped.
 

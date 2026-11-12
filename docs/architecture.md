@@ -29,6 +29,14 @@ Server startup does not install workflows. The bundled catalog in `packages/serv
 
 GitHub folder discovery runs in the server using bounded public API requests for metadata and commit-pinned raw GitHub file downloads. Core parses existing import documents. Runtime validates each export in an isolated in-memory store and imports the selected set through one storage transaction. Discovery pins a branch to a commit; import re-fetches only selected direct files at that commit and checks current conflicts. Typed transport failures stop discovery; invalid files produce individual diagnostics without hiding valid choices. Confirmed import rejections carry a `Nothing imported:` prefix. A lost response without that confirmation leaves the mutation result uncertain, so the UI advises inspecting the library before retrying. This path has no force or revision replacement options. The existing bundle import API retains its explicit replacement controls.
 
+## Read query review
+
+For new or changed inspection, history, and collection reads, trace retrieval through runtime into storage. Identify the selected scope, payload size, and work performed before response limits apply. A page-size limit does not bound a query that first loads and parses unrelated history.
+
+Use indexed metadata to select relevant records before loading payloads. Keep aggregates within their requested scope and preserve existing ordering, totals, ancestry, and response contracts. When a query must inspect a whole scope, state that cost explicitly.
+
+Add regression coverage with substantial unrelated retained history. Prefer assertions about records retrieved or payloads parsed over wall-clock test thresholds. Use separate benchmarks to measure latency. Reuse existing storage queries where their semantics match.
+
 ## Run version boundaries
 
 Core owns version policy, preview/apply, and bounded history contracts. Runtime checks opt-in upgrades before creating a node execution, resolves the proposed node's input with the same binding rules as execution, and requires retained prompt, variable, and model-alias captures. A missing node, incompatible input, or changed Batch or chain scope leaves the run on its old version with an inspection blocker. Existing active executions, including available Agent work and active Batch dispatch, finish using their original definitions and routes.

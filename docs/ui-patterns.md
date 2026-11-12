@@ -80,7 +80,21 @@ The recovery panel explains where to inspect the session and what confirmation d
 
 ## Saving and connection feedback
 
-Workflow, automation, prompt, variable, and AI Settings edits use the workspace leave guard. Inline form errors preserve input and stay beside the action. Dialogs restore focus on dismissal when the trigger remains available. Global notifications sit below dialogs. A failed workspace refresh marks cached data as possibly out of date and offers a retry.
+Use this lifecycle for persistent resource editors, including creation dialogs. These are implementation requirements; verify each editor rather than assuming that shared styling provides the behavior. Temporary filter popovers retain their documented dismiss-to-discard behavior.
+
+| State                 | Required behavior                                                                                                                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Clean                 | Allow dismissal without a discard confirmation.                                                                                                                                                                             |
+| Dirty                 | Protect edits on Escape, Close, Cancel, route or tab changes that unmount the editor, and browser Back. Register with the workspace leave guard and browser-unload warning. Explicit discard clears the draft deliberately. |
+| Saving                | Prevent repeated submission and in-app dismissal while the write is unresolved. Warn on browser unload. Preserve any edits accepted during the pending save. Completion must not redirect a user who has left the editor.   |
+| Rejected              | Retain input and show the error beside the action. Allow correction and resubmission.                                                                                                                                       |
+| Revision conflict     | Retain local edits and offer an explicit load-latest action. Confirm before replacing dirty input; keep the server's revision check.                                                                                        |
+| Acknowledged          | Retain the saved outcome even if the subsequent refresh fails. Retry the read without repeating the write.                                                                                                                  |
+| Unknown write outcome | Preserve input and report uncertainty. Reconcile saved state before offering a retry that could duplicate the operation.                                                                                                    |
+
+Share lifecycle behavior across editors while keeping validation and persistence specific to the resource. **Apply changes** stages changes into a parent draft; **Save** persists them. Preserve that distinction in labels and dirty state. A child editor's Apply must not imply that the parent draft was saved.
+
+Dialogs restore focus on dismissal when the trigger remains available. Global notifications sit below dialogs. A failed workspace refresh marks cached data as possibly out of date and offers a retry.
 
 ## Modal layout
 
@@ -95,6 +109,8 @@ Use the shared `Modal`, `ModalBody`, and `ModalFooter` from the design-system ba
 
 ## Loading views
 
+Gate each page on its required data. A failed sidebar counter must not block an otherwise usable editor or appear as a confirmed zero. Keep background refreshes from replacing unsaved input. When changing refresh logic, test an event arriving during a pending read so the final view includes that change.
+
 Use static skeletons shaped like the content being loaded. Keep the loading announcement available to assistive technology and hide the decorative placeholders from it. Preserve the action label when a write is in progress.
 
 Single-workflow loading keeps the shared title-row and attached-tab geometry, with a centered spinner in the remaining canvas area. Omit fake graph nodes and canvas-toolbar placeholders. Initial data loading and the lazy editor use the same loading view, with one accessible loading announcement and no interactive placeholder controls.
@@ -104,6 +120,8 @@ The Automations and Runs views keep their shared headers in place during route a
 Workflow pause controls use a direct **Pause workflow** and **Resume workflow** toggle, with shared pending state and a fresh status check before writing. Each acknowledged change stays visible while status refresh is pending or unavailable. **Retry pause status** repeats only the read. Library holds remain visible blockers with CLI/MCP recovery guidance.
 
 ## Review before shipping
+
+Compare changed interactions with matching screens, including their action placement, labels, and recovery behavior. Record which screens were checked and explain intentional differences in the PR. For editor changes, exercise the applicable states in [Saving and connection feedback](#saving-and-connection-feedback), including navigation during a pending write and a conflicting edit from another client.
 
 For a changed interaction, inspect the rendered path at desktop, intermediate, and phone widths. Check keyboard navigation, visible focus, long content, and meaningful status announcements. Exercise loading, pending submission, success, rejection, failure, and recovery where they apply. Use temporary workflow data and simulated adapters for repeatable UI checks. Keep native harness validation separate and identify which harnesses were actually exercised.
 
