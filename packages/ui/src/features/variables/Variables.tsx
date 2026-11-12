@@ -461,7 +461,7 @@ function VariableEditor({ id }: { id: string }) {
     setLoadingLatest(true);
     setRecoveryError('');
     try {
-      const input = { action: 'inspect' as const, id, offset };
+      const input = { action: 'inspect' as const, id: saved.id, offset };
       const latest = await api.variables.read.query(input, {
         signal: request.signal,
       });
@@ -582,18 +582,33 @@ function VariableEditor({ id }: { id: string }) {
             });
         }
       }
-      const filter = trpc.variables.read.queryFilter({
-        action: 'inspect',
-        id: result.id,
-      });
-      void queryClient.cancelQueries(filter);
-      queryClient.setQueriesData<Read>(filter, (current) =>
-        current &&
-        'dependencies' in current &&
-        current.revision <= result.revision
-          ? { ...current, ...result }
-          : current,
-      );
+      const matchesSaved = (current: Read | undefined): current is Inspection =>
+        Boolean(
+          current &&
+          'dependencies' in current &&
+          current.id === result.id &&
+          current.revision <= result.revision,
+        );
+      const inspectionIds =
+        !creating && id !== result.id ? [result.id, id] : [result.id];
+      for (const inspectionId of inspectionIds) {
+        const filter = trpc.variables.read.queryFilter({
+          action: 'inspect',
+          id: inspectionId,
+        });
+        // A portable reference can change targets while the write is pending.
+        void queryClient.cancelQueries({
+          ...filter,
+          predicate: ({ queryKey }) =>
+            inspectionId === result.id ||
+            matchesSaved(queryClient.getQueryData(queryKey)),
+        });
+        queryClient.setQueriesData<Read>(filter, (current) =>
+          matchesSaved(current)
+            ? { ...current, ...result, referenceId: current.referenceId }
+            : undefined,
+        );
+      }
       if (result.kind === 'config' && result.valueRevision !== null) {
         const savedValue = creating
           ? value

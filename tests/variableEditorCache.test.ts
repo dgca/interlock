@@ -71,6 +71,30 @@ function field(name: string) {
   )!;
   return document.getElementById(label.htmlFor) as HTMLInputElement;
 }
+function changeName(name: string) {
+  return act(async () => {
+    const input = field('Name');
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!.call(input, name);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+function submit() {
+  return act(async () =>
+    container
+      .querySelector('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+  );
+}
+function click(name: string) {
+  const button = [...document.querySelectorAll('button')].find(
+    (button) => button.textContent === name,
+  );
+  expect(button, name).toBeDefined();
+  return act(async () => button!.click());
+}
 beforeEach(() => {
   onEditorGuard.mockReset();
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -108,7 +132,7 @@ function savedVariable(kind: 'secret' | 'config' = 'secret', references = 0) {
     enabled: true,
     revision: 1,
     valueRevision: 1,
-    availability: 'ready',
+    availability: 'ready' as const,
     createdAt: '2026-11-09T12:00:00Z',
     updatedAt: '2026-11-09T12:00:00Z',
     dependencies: {
@@ -121,7 +145,7 @@ function savedVariable(kind: 'secret' | 'config' = 'secret', references = 0) {
       runningComparisonCount: 0,
     },
     bindings: { items: [], total: 0, truncated: false },
-    storage: {},
+    storage: { vaultId: null, keyFile: null },
   };
 }
 
@@ -145,13 +169,7 @@ it.each(['secret', 'config'] as const)(
       ).toEqual([{ action: 'config_value', id: 'v' }]);
     }
     const count = read.mock.calls.length;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        'value',
-      )!.set!.call(field('Name'), 'local_edit');
-      field('Name').dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    await changeName('local_edit');
     await act(async () => refreshQueries(client));
     expect(field('Name').value).toBe('local_edit');
     expect(onEditorGuard).toHaveBeenLastCalledWith('dirty');
@@ -218,13 +236,7 @@ it.each([0, 1])(
     });
     await act(async () => new Promise(requestAnimationFrame));
     expect(document.activeElement).toBe(remove);
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        'value',
-      )!.set!.call(field('Name'), 'local_edit');
-      field('Name').dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    await changeName('local_edit');
     expect(remove.disabled).toBe(true);
     await act(async () => remove.click());
     expect(document.querySelector('[role=dialog]')).toBeNull();
@@ -260,18 +272,8 @@ it('keeps already-disabled variables read-only about their status while metadata
   expect(container.textContent).not.toContain('Disable use');
   expect(container.textContent).not.toContain('Danger zone');
   expect(manage).not.toHaveBeenCalled();
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      'value',
-    )!.set!.call(field('Name'), 'renamed_variable');
-    field('Name').dispatchEvent(new Event('input', { bubbles: true }));
-  });
-  await act(async () =>
-    container
-      .querySelector('form')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
-  );
+  await changeName('renamed_variable');
+  await submit();
   expect(manage).toHaveBeenCalledWith({
     action: 'update',
     id: 'v',
@@ -357,39 +359,22 @@ it('rejects a Config value from a newer revision until the metadata catches up',
 });
 
 it('keeps a portable Variable draft tied to its saved variable across a rebind', async () => {
-  const original = {
-    ...savedVariable('config'),
-    referenceId: 'portable',
-  };
+  const original = { ...savedVariable('config'), referenceId: 'portable' };
   let target = original;
   read.mockImplementation(async ({ action, id }) =>
     action === 'inspect'
       ? target
       : { id, value: `Config for ${id}`, valueRevision: 1 },
   );
-  manage.mockImplementation(async ({ name }) => ({
-    ...original,
-    name,
-    revision: 2,
-  }));
+  let acknowledge!: (metadata: typeof original) => void;
+  manage.mockImplementation(
+    () => new Promise((resolve) => (acknowledge = resolve)),
+  );
 
   await show(true, 'portable');
   expect(field('Config value').value).toBe('Config for v');
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      'value',
-    )!.set!.call(field('Name'), 'local_edit');
-    field('Name').dispatchEvent(new Event('input', { bubbles: true }));
-  });
-  target = { ...original, id: 'other', name: 'other_variable' };
-  await act(async () => refreshQueries(client));
-  expect(field('Name').value).toBe('local_edit');
-  await act(async () =>
-    container
-      .querySelector('form')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
-  );
+  await changeName('local_edit');
+  await submit();
   expect(manage).toHaveBeenCalledWith(
     expect.objectContaining({
       id: 'v',
@@ -397,7 +382,107 @@ it('keeps a portable Variable draft tied to its saved variable across a rebind',
       name: 'local_edit',
     }),
   );
-  await act(async () => refreshQueries(client));
+  target = { ...original, id: 'other', name: 'other_variable' };
+  const portableKey = trpc.variables.read.queryKey({
+    action: 'inspect',
+    id: 'portable',
+    offset: 0,
+  });
+  await act(async () => {
+    client.setQueryData(portableKey, target);
+  });
+  expect(field('Name').value).toBe('local_edit');
+  await act(async () =>
+    acknowledge({ ...original, name: 'local_edit', revision: 2 }),
+  );
+  expect(client.getQueryData(portableKey)).toEqual(target);
   expect(field('Name').value).toBe('other_variable');
   expect(field('Config value').value).toBe('Config for other');
+});
+
+it('checks the original variable after a portable save response is lost during a rebind', async () => {
+  const original = { ...savedVariable(), referenceId: 'portable' };
+  const other = { ...original, id: 'other', name: 'other_variable' };
+  let target = original;
+  let stored = { ...original, referenceId: 'v' };
+  read.mockImplementation(async ({ id }) =>
+    id === 'portable' ? target : stored,
+  );
+  manage.mockImplementation(async ({ name }) => {
+    stored = { ...stored, name, revision: 2 };
+    target = other;
+    throw new Error('Save response lost');
+  });
+
+  await show(true, 'portable');
+  await changeName('saved_under_original');
+  await submit();
+  expect(field('Name').value).toBe('saved_under_original');
+  expect(container.textContent).toContain(
+    'could not confirm whether the variable was saved',
+  );
+  read.mockClear();
+  await click('Load latest');
+  await click('Discard changes');
+
+  expect(read.mock.calls[0][0]).toEqual({
+    action: 'inspect',
+    id: 'v',
+    offset: 0,
+  });
+  expect(
+    client.getQueryData(
+      trpc.variables.read.queryKey({
+        action: 'inspect',
+        id: 'v',
+        offset: 0,
+      }),
+    ),
+  ).toEqual(stored);
+  expect(field('Name').value).toBe('other_variable');
+  expect(onEditorGuard).toHaveBeenLastCalledWith(undefined);
+  expect(manage).toHaveBeenCalledTimes(1);
+});
+
+it('reopens a portable Variable on the acknowledged revision when its read fails', async () => {
+  const original = { ...savedVariable(), referenceId: 'portable' };
+  let offline = false;
+  read.mockImplementation(async () => {
+    if (offline) throw new Error('Portable details unavailable');
+    return original;
+  });
+  manage.mockImplementation(async ({ name }) => {
+    offline = true;
+    const { referenceId, dependencies, bindings, storage, ...metadata } =
+      original;
+    return { ...metadata, name, revision: 2 };
+  });
+
+  await show(true, 'portable');
+  const portableKey = trpc.variables.read.queryKey({
+    action: 'inspect',
+    id: 'portable',
+    offset: 0,
+  });
+  let releaseOlder!: (metadata: typeof original) => void;
+  read.mockImplementationOnce(
+    () => new Promise((resolve) => (releaseOlder = resolve)),
+  );
+  await act(async () => {
+    void client.refetchQueries({ queryKey: portableKey, exact: true });
+  });
+  await changeName('acknowledged_name');
+  await submit();
+  await act(async () => releaseOlder(original));
+  expect(field('Name').value).toBe('acknowledged_name');
+  await show(false);
+  await show(true, 'portable');
+
+  expect(field('Name').value).toBe('acknowledged_name');
+  expect(container.textContent).toContain('Portable details unavailable');
+  expect(client.getQueryData(portableKey)).toMatchObject({
+    id: 'v',
+    referenceId: 'portable',
+    revision: 2,
+  });
 });
