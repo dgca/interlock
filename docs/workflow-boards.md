@@ -20,7 +20,7 @@ The **Boards** page lists each board's assigned workflows and shows a badge when
 
 Filter the board by workflow or **Status**. **Needs attention** counts unresolved requests in the selected workflow scope. A card can match this filter while another branch progresses. Use **Runs → Needs attention** to find requests across the library and review automation alerts.
 
-Open an attention card to review its oldest unresolved request. Use the request selector to switch between requests from the same run. Read the question and any captured evidence before answering. Use **Open run** to inspect the exact step in the run inspector.
+Select a run title to open its inspector. Use the separate review action to open the oldest unresolved request, then **Switch request** to open another request from that run. Read the question and any captured evidence before answering. In the request view, **Open run** selects the exact step. Returning to the board restores its filters and loaded column pages.
 
 A response applies to one request. Review the receipt for acceptance and any remaining requests. If another interface answers first, the request keeps the accepted decision visible and preserves your unsent text for copying. If an acceptance hold blocks the answer, select **Release acceptance hold**. Then select **Accept saved answer**. For a library or workflow pause, use **Open run** to inspect and release the applicable pause.
 

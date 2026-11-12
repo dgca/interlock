@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, createElement as h, useState } from 'react';
+import { act, createElement as h, useState, type ComponentProps } from 'react';
 import { createRoot } from 'react-dom/client';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -7,6 +7,10 @@ import type { RunSummary } from '@interlock/core';
 import { RunList } from '../packages/ui/src/features/runs/RunList';
 import { RunListSkeleton } from '../packages/ui/src/features/runs/RunListSkeleton';
 import { MemoryRouter } from 'react-router';
+
+function RoutedRunList(props: ComponentProps<typeof RunList>) {
+  return h(MemoryRouter, {}, h(RunList, props));
+}
 
 const query = vi.hoisted(() => vi.fn());
 const retentionSettings = vi.hoisted(() => vi.fn());
@@ -100,14 +104,13 @@ it('defaults lazy and data loading to List and switches to Overview when selecte
         h(
           DesignSystemProvider,
           { env: 'test' },
-          h(RunList, {
+          h(RoutedRunList, {
             tick: 0,
             offset: 0,
             onOffsetChange: vi.fn(),
             workflows: [],
             tab: 'active',
             onTabChange: vi.fn(),
-            onOpen: vi.fn(),
           }),
         ),
       ),
@@ -175,14 +178,13 @@ it('scopes empty board messages to exact tag filters and clears them through the
     const [tags, setTags] = useState<Record<string, string> | undefined>({
       priority: 'High',
     });
-    return h(RunList, {
+    return h(RoutedRunList, {
       tick: 0,
       offset: 0,
       onOffsetChange: vi.fn(),
       workflows: [],
       tab: 'active',
       onTabChange: vi.fn(),
-      onOpen: vi.fn(),
       tags,
       onTagsChange: setTags,
     });
@@ -269,7 +271,6 @@ it('renders active and history pages and opens the selected run', async () => {
     nextOffset: null,
     total: 3,
   }));
-  const open = vi.fn();
   function Harness() {
     const [tab, setTab] = useState<'active' | 'attention' | 'history'>(
       'active',
@@ -277,12 +278,11 @@ it('renders active and history pages and opens the selected run', async () => {
     return h(
       DesignSystemProvider,
       {},
-      h(RunList, {
+      h(RoutedRunList, {
         tick: 0,
         offset: 0,
         onOffsetChange: vi.fn(),
         workflows: [],
-        onOpen: open,
         tab,
         onTabChange: setTab,
       }),
@@ -325,12 +325,12 @@ it('renders active and history pages and opens the selected run', async () => {
     expect(panel().textContent).not.toContain('running workflow');
     for (const status of ['completed', 'failed', 'cancelled'])
       expect(panel().textContent).toContain(status + ' workflow');
-    await act(async () =>
-      [...panel().querySelectorAll('button')]
-        .find((button) => button.textContent?.includes('failed workflow'))!
-        .click(),
+    const failed = [...panel().querySelectorAll('a')].find(
+      (link) => link.textContent === 'failed workflow',
     );
-    expect(open).toHaveBeenCalledWith('failed');
+    expect(failed?.getAttribute('href')).toBe(
+      '/runs/failed?mode=list&tab=history',
+    );
   } finally {
     await act(async () => root.unmount());
     container.remove();
@@ -371,14 +371,13 @@ it('requests the selected workflow and opens its invocation', async () => {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
-  const open = vi.fn();
   try {
     await act(async () =>
       root.render(
         h(
           DesignSystemProvider,
           { env: 'test' },
-          h(RunList, {
+          h(RoutedRunList, {
             tick: 0,
             offset: 0,
             onOffsetChange: vi.fn(),
@@ -386,22 +385,20 @@ it('requests the selected workflow and opens its invocation', async () => {
             workflowId: 'selected',
             tab: 'history',
             onTabChange: vi.fn(),
-            onOpen: open,
           }),
         ),
       ),
     );
-    const rows = [
-      ...container.querySelectorAll<HTMLButtonElement>('button.run-row'),
-    ];
+    const rows = [...container.querySelectorAll<HTMLElement>('.run-row')];
     expect(rows).toHaveLength(2);
     expect(container.textContent).toContain('Selected root');
     expect(container.textContent).toContain('Selected invocation');
     expect(query).toHaveBeenLastCalledWith(
       expect.objectContaining({ workflowId: 'selected', tab: 'history' }),
     );
-    await act(async () => rows[1].click());
-    expect(open).toHaveBeenCalledWith('invocation');
+    expect(rows[1].querySelector('a')?.getAttribute('href')).toBe(
+      '/runs/invocation?mode=list&workflow=selected&tab=history',
+    );
   } finally {
     await act(async () => root.unmount());
     container.remove();
@@ -446,31 +443,35 @@ it('29f3cb6-attention-row: preserves stage and actor with specific attention and
   });
   const container = document.createElement('div');
   document.body.append(container);
-  const root = createRoot(container),
-    open = vi.fn();
+  const root = createRoot(container);
   const render = (tick = 0) =>
     root.render(
       h(
         DesignSystemProvider,
         { env: 'test' },
-        h(RunList, {
+        h(RoutedRunList, {
           tick,
           offset: 0,
           onOffsetChange: vi.fn(),
           workflows: [],
           tab: 'attention',
           onTabChange: vi.fn(),
-          onOpen: open,
         }),
       ),
     );
   try {
     await act(async () => render());
-    let row = container.querySelector<HTMLButtonElement>('button.run-row')!;
+    let row = container.querySelector<HTMLElement>('.run-row')!;
     expect(row.textContent).toContain('Build · Approval requested · Person');
     expect(row.textContent!.match(/Approval requested/g)).toHaveLength(1);
-    await act(async () => row.click());
-    expect(open).toHaveBeenCalledWith('child', 'request');
+    const links = [...row.querySelectorAll('a')];
+    expect(links[0].getAttribute('href')).toBe(
+      '/runs/attention?mode=list&tab=attention',
+    );
+    expect(links[1].textContent).toBe('Review request');
+    expect(links[1].getAttribute('href')).toBe(
+      '/runs/child?mode=list&tab=attention&execution=request',
+    );
     query.mockResolvedValue({
       items: [
         {
@@ -485,7 +486,7 @@ it('29f3cb6-attention-row: preserves stage and actor with specific attention and
       total: 1,
     });
     await act(async () => render(1));
-    row = container.querySelector<HTMLButtonElement>('button.run-row')!;
+    row = container.querySelector<HTMLElement>('.run-row')!;
     expect(row.textContent).toContain('Build · Waiting for an agent · Agent');
     expect(row.textContent).toContain('Approval requested');
   } finally {
@@ -545,14 +546,13 @@ it('applies all exact tag pairs before paging and clears the filter', async () =
     return h(
       DesignSystemProvider,
       { env: 'test' },
-      h(RunList, {
+      h(RoutedRunList, {
         tick: 0,
         offset,
         onOffsetChange: setOffset,
         workflows: [],
         tab: 'history',
         onTabChange: vi.fn(),
-        onOpen: vi.fn(),
       }),
     );
   }
@@ -594,7 +594,7 @@ it('applies all exact tag pairs before paging and clears the filter', async () =
       }),
     );
     expect(
-      [...container.querySelectorAll('button.run-row strong')].map(
+      [...container.querySelectorAll('.run-row strong')].map(
         (name) => name.textContent,
       ),
     ).toEqual(['Match']);
@@ -602,7 +602,7 @@ it('applies all exact tag pairs before paging and clears the filter', async () =
     expect(query).toHaveBeenLastCalledWith(
       expect.objectContaining({ tags: undefined, offset: 0 }),
     );
-    expect(container.querySelectorAll('button.run-row')).toHaveLength(2);
+    expect(container.querySelectorAll('.run-row')).toHaveLength(2);
   } finally {
     await act(async () => root.unmount());
     container.remove();
@@ -673,7 +673,6 @@ it('uses an independent bounded active preview and adds recovery and completed r
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container),
-    open = vi.fn(),
     changePage = vi.fn(),
     changeTab = vi.fn();
   try {
@@ -682,7 +681,7 @@ it('uses an independent bounded active preview and adds recovery and completed r
         h(
           DesignSystemProvider,
           { env: 'test' },
-          h(RunList, {
+          h(RoutedRunList, {
             tick: 0,
             offset: 100,
             onOffsetChange: changePage,
@@ -691,7 +690,6 @@ it('uses an independent bounded active preview and adds recovery and completed r
             tags: { repository: 'org/repo' },
             tab: 'active',
             onTabChange: changeTab,
-            onOpen: open,
           }),
         ),
       ),
@@ -716,21 +714,23 @@ it('uses an independent bounded active preview and adds recovery and completed r
         tags: { repository: 'org/repo' },
       }),
     );
-    const cards = [
-      ...container.querySelectorAll<HTMLButtonElement>('button.run-row'),
-    ];
+    const cards = [...container.querySelectorAll<HTMLElement>('.run-row')];
     expect(cards).toHaveLength(4);
     expect(
       cards.filter((card) => card.textContent?.includes('approval')),
     ).toHaveLength(1);
     expect(container.textContent).toContain('Active review');
     expect(container.textContent).toContain('Finished review');
-    await act(async () =>
-      cards
-        .find((card) => card.textContent?.includes('Review recovery'))!
-        .click(),
-    );
-    expect(open).toHaveBeenCalledWith('recovery-child', 'stopped');
+    const recoveryCard = cards.find((card) =>
+      card.textContent?.includes('Review recovery'),
+    )!;
+    const [title, review] = [...recoveryCard.querySelectorAll('a')];
+    expect(new URL(title.href).pathname).toBe('/runs/recovery');
+    const target = new URL(review.href);
+    expect(target.pathname).toBe('/runs/recovery-child');
+    expect(target.searchParams.get('execution')).toBe('stopped');
+    expect(target.searchParams.get('mode')).toBe('overview');
+    expect(target.searchParams.get('offset')).toBe('100');
     await act(async () =>
       [...container.querySelectorAll('button')]
         .find((button) => button.textContent === 'View all active')!
@@ -790,7 +790,7 @@ it('does not let an old workflow preview replace the current board', async () =>
       h(
         DesignSystemProvider,
         { env: 'test' },
-        h(RunList, {
+        h(RoutedRunList, {
           tick: 0,
           offset: 0,
           onOffsetChange: vi.fn(),
@@ -798,7 +798,6 @@ it('does not let an old workflow preview replace the current board', async () =>
           workflowId,
           tab: 'active',
           onTabChange: vi.fn(),
-          onOpen: vi.fn(),
         }),
       ),
     );
@@ -862,14 +861,13 @@ it('coalesces refreshes while a board preview is loading and accepts the in-flig
       h(
         DesignSystemProvider,
         { env: 'test' },
-        h(RunList, {
+        h(RoutedRunList, {
           tick,
           offset: 0,
           onOffsetChange: vi.fn(),
           workflows: [],
           tab: 'active',
           onTabChange: vi.fn(),
-          onOpen: vi.fn(),
         }),
       ),
     );
@@ -949,7 +947,7 @@ it('keeps automation attention visible in Overview even when exact tags match no
         h(
           DesignSystemProvider,
           { env: 'test' },
-          h(RunList, {
+          h(RoutedRunList, {
             tick: 0,
             offset: 100,
             onOffsetChange: vi.fn(),
@@ -958,7 +956,6 @@ it('keeps automation attention visible in Overview even when exact tags match no
             mode: 'overview',
             tags: { repo: 'missing' },
             onTabChange: changeTab,
-            onOpen: vi.fn(),
           }),
         ),
       ),
@@ -988,7 +985,7 @@ it('keeps automation attention visible in Overview even when exact tags match no
   }
 });
 
-it('offers one History menu across List tabs and Overview in global and workflow scopes, and hides it without act', async () => {
+it('offers one History settings menu across List tabs and Overview in global and workflow scopes, and hides it without act', async () => {
   query.mockImplementation(() => new Promise(() => {}));
   const container = document.createElement('div');
   document.body.append(container);
@@ -1006,7 +1003,7 @@ it('offers one History menu across List tabs and Overview in global and workflow
             h(
               DesignSystemProvider,
               { env: 'test' },
-              h(RunList, {
+              h(RoutedRunList, {
                 tick: 0,
                 offset: 0,
                 onOffsetChange: vi.fn(),
@@ -1016,7 +1013,6 @@ it('offers one History menu across List tabs and Overview in global and workflow
                 workflowId,
                 act: vi.fn(),
                 onTabChange: vi.fn(),
-                onOpen: vi.fn(),
               }),
             ),
           ),
@@ -1025,7 +1021,7 @@ it('offers one History menu across List tabs and Overview in global and workflow
           ...container.querySelectorAll<HTMLButtonElement>('button'),
         ].filter((button) => button.getAttribute('aria-haspopup') === 'menu');
         expect(triggers).toHaveLength(1);
-        expect(triggers[0].textContent).toBe('History');
+        expect(triggers[0].textContent).toBe('History settings');
         await act(async () => triggers[0].click());
         expect(
           [...document.querySelectorAll('[role="menuitem"]')].map(
@@ -1046,7 +1042,7 @@ it('offers one History menu across List tabs and Overview in global and workflow
         h(
           DesignSystemProvider,
           { env: 'test' },
-          h(RunList, {
+          h(RoutedRunList, {
             tick: 0,
             offset: 0,
             onOffsetChange: vi.fn(),
@@ -1054,7 +1050,6 @@ it('offers one History menu across List tabs and Overview in global and workflow
             tab: 'history',
             mode: 'overview',
             onTabChange: vi.fn(),
-            onOpen: vi.fn(),
           }),
         ),
       ),
@@ -1067,7 +1062,7 @@ it('offers one History menu across List tabs and Overview in global and workflow
 });
 
 it.each(['Retention settings', 'Clean up history'])(
-  'opens %s from a focused menu item and returns focus to History after closing',
+  'opens %s from a focused menu item and returns focus to History settings after closing',
   async (label) => {
     query.mockImplementation(() => new Promise(() => {}));
     retentionSettings.mockResolvedValue({
@@ -1086,7 +1081,7 @@ it.each(['Retention settings', 'Clean up history'])(
           h(
             DesignSystemProvider,
             { env: 'test' },
-            h(RunList, {
+            h(RoutedRunList, {
               tick: 0,
               offset: 0,
               onOffsetChange: vi.fn(),
@@ -1096,7 +1091,6 @@ it.each(['Retention settings', 'Clean up history'])(
               workflowId: 'selected',
               act: vi.fn(),
               onTabChange: vi.fn(),
-              onOpen: vi.fn(),
             }),
           ),
         ),
@@ -1173,7 +1167,7 @@ it('reuses the exact cached Runs page on remount while refreshing, retaining it 
       DesignSystemProvider,
       { env: 'test' },
       visible
-        ? h(RunList, {
+        ? h(RoutedRunList, {
             tick: 0,
             offset: 0,
             tab: 'active',
@@ -1181,7 +1175,6 @@ it('reuses the exact cached Runs page on remount while refreshing, retaining it 
             workflows: [],
             onOffsetChange: vi.fn(),
             onTabChange: vi.fn(),
-            onOpen: vi.fn(),
           })
         : h('div'),
     );

@@ -427,7 +427,7 @@ it('restores run history and nested run links, including browser Back', async ()
     container.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
   ).toContain('History');
   await act(async () =>
-    container.querySelector<HTMLButtonElement>('button.run-row')!.click(),
+    container.querySelector<HTMLAnchorElement>('.run-row a')!.click(),
   );
   expect(window.location.pathname).toBe('/runs/r1');
   await click('Child run');
@@ -792,7 +792,7 @@ it('restores workflow run history and returns from nested inspection to the scop
     container.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
   ).toContain('History');
   await act(async () =>
-    container.querySelector<HTMLButtonElement>('button.run-row')!.click(),
+    container.querySelector<HTMLAnchorElement>('.run-row a')!.click(),
   );
   expect(window.location.pathname).toBe('/runs/r1');
   expect(new URLSearchParams(window.location.search).get('workflow')).toBe(
@@ -854,9 +854,12 @@ it('shows global human attention, deep-links to its assignment, and preserves th
   expect(
     container.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
   ).toBe('Needs attention 1');
-  const row = container.querySelector('button.run-row') as HTMLButtonElement;
+  const row = container.querySelector('.run-row')!;
   expect(row.textContent).toContain('Recovery needed');
-  await act(async () => row.click());
+  const [title, review] = [...row.querySelectorAll('a')];
+  expect(new URL(title.href).pathname).toBe('/runs/r1');
+  expect(review.textContent).toBe('Review recovery');
+  await act(async () => review.click());
   expect(window.location.pathname).toBe('/runs/child');
   expect(new URLSearchParams(window.location.search).get('execution')).toBe(
     'child-execution',
@@ -910,7 +913,7 @@ it('loads history only on the Runs view and restores the page after inspection',
   );
   expect(container.textContent).toContain('101 to 101 of 101');
   await act(async () =>
-    container.querySelector<HTMLButtonElement>('button.run-row')!.click(),
+    container.querySelector<HTMLAnchorElement>('.run-row a')!.click(),
   );
   await click('Back to runs');
   expect(window.location.search).toBe('?tab=history&offset=100');
@@ -1163,7 +1166,7 @@ it('preserves scoped Overview and exact tags through inspector links and return 
     }),
   );
   await act(async () =>
-    container.querySelector<HTMLButtonElement>('button.run-row')!.click(),
+    container.querySelector<HTMLAnchorElement>('.run-row a')!.click(),
   );
   expect(window.location.pathname).toBe('/runs/r1');
   expect(new URLSearchParams(window.location.search).get('mode')).toBe(
@@ -1186,7 +1189,7 @@ it('preserves scoped Overview and exact tags through inspector links and return 
 it('returns to the original List tab even when an inspected run has a different status', async () => {
   await mount('/runs?tab=history');
   await act(async () =>
-    container.querySelector<HTMLButtonElement>('button.run-row')!.click(),
+    container.querySelector<HTMLAnchorElement>('.run-row a')!.click(),
   );
   await click('Child run');
   await click('Back to runs');
@@ -1213,7 +1216,7 @@ it('reports a background workspace query failure even when refresh was initiated
 
 it('returns to cached Runs immediately while its revisit request is pending', async () => {
   await mount('/runs?tab=history');
-  expect(container.querySelector('button.run-row')).not.toBeNull();
+  expect(container.querySelector('.run-row')).not.toBeNull();
   await act(async () => router.navigate('/workflows'));
   let finish!: (value: unknown) => void;
   const nextPage = {
@@ -1230,10 +1233,10 @@ it('returns to cached Runs immediately while its revisit request is pending', as
       }),
   );
   await act(async () => router.navigate('/runs?tab=history'));
-  expect(container.querySelector('button.run-row')).not.toBeNull();
+  expect(container.querySelector('.run-row')).not.toBeNull();
   expect(container.textContent).not.toContain('Loading runs…');
   await act(async () => finish(nextPage));
-  expect(container.querySelector('button.run-row')).toBeNull();
+  expect(container.querySelector('.run-row')).toBeNull();
 });
 
 it.each([

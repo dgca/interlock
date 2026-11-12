@@ -113,7 +113,7 @@ async function render(tick = 0, id = 'root-run') {
     root.render(
       h(
         DesignSystemProvider,
-        {},
+        { env: 'test' },
         h(RunInspector, {
           id,
           tick,
@@ -335,7 +335,12 @@ it('shows comparison context and navigates to the counterpart without changing n
   expect(container.textContent).toContain('Uncertain request');
   expect(container.textContent).toContain('Baseline');
   expect(container.textContent).toContain('Repeat 2');
-  await click('Candidate run');
+  await click('Run actions');
+  const candidate = [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+  ].find((item) => item.textContent === 'Candidate run');
+  expect(candidate).toBeDefined();
+  await act(async () => candidate!.click());
   expect(onOpen).toHaveBeenCalledWith('candidate-run');
   detail.run.comparison.comparisonId = '87654321-second';
   await render(1);

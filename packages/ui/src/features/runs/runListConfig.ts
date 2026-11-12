@@ -30,5 +30,4 @@ export const runColumns: ListTableColumn[] = [
     compactWidth: 'minmax(140px, 1fr)',
   },
   { label: 'Steps', width: '64px', compactWidth: '45px' },
-  { label: '', width: '16px' },
 ];

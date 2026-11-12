@@ -196,7 +196,9 @@ export function runProgress(
     if (node.kind === 'wait' && state === 'waiting' && !node.batchId)
       label = 'Waiting for timer';
     if (node.kind === 'input' && state === 'waiting' && !node.batchId)
-      label = 'Waiting for external input';
+      label = node.humanInput
+        ? 'Human input needed'
+        : 'Waiting for external input';
     if (
       node.kind === 'agent' &&
       state === 'completed' &&

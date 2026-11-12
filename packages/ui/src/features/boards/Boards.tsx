@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import {
   Link,
   useNavigate,
@@ -37,7 +38,8 @@ import {
 import { ExternalTaskLink } from '../../components/ExternalTaskLink';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
 import type { AppContext } from '../../App';
-import { paths } from '../../routes/paths';
+import { paths, runOffset } from '../../routes/paths';
+import { requestActionLabel } from '../runs/runAttention';
 import { errorMessage, type api } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
 import { runProjectionLabels } from '../runs/runProjectionText';
@@ -183,6 +185,9 @@ function WorkflowBoard({ id }: { id: string }) {
     setSearch(
       (current) => {
         const next = new URLSearchParams(current);
+        if (key === 'status' || key === 'workflow')
+          for (const param of [...next.keys()])
+            if (param.startsWith('page:')) next.delete(param);
         if (value) next.set(key, value);
         else next.delete(key);
         return next;
@@ -315,6 +320,9 @@ function WorkflowBoard({ id }: { id: string }) {
                     column={column}
                     filters={filters}
                     search={search}
+                    onMore={(depth) =>
+                      void change(`page:${column.id}`, String(depth), true)
+                    }
                     rememberOpener={(element) => {
                       opener.current = element;
                     }}
@@ -330,9 +338,11 @@ function WorkflowBoard({ id }: { id: string }) {
           target={target}
           backLabel={`Back to ${boardName}`}
           onBack={() => void change('request', undefined, true)}
-          onSelect={(next) =>
-            void change('request', JSON.stringify(next), true)
-          }
+          requestHref={(next) => {
+            const query = new URLSearchParams(search);
+            query.set('request', JSON.stringify(next));
+            return `${paths.board(id)}?${query}`;
+          }}
         />
       )}
     </>
@@ -343,20 +353,45 @@ function StageColumn({
   column,
   filters,
   search,
+  onMore,
   rememberOpener,
 }: {
   column: ColumnData;
   filters: { id: string; status: BoardStatus; workflowId?: string };
   search: URLSearchParams;
+  onMore: (depth: number) => void;
   rememberOpener: (element: HTMLAnchorElement) => void;
 }) {
-  const [pages, setPages] = useState(1);
-  const visiblePages = Math.min(pages, Math.ceil(column.total / pageSize));
+  const pages = Math.max(1, runOffset(search.get(`page:${column.id}`)));
+  const visiblePages = Math.min(
+    pages,
+    Math.max(1, Math.ceil(column.total / pageSize)),
+  );
+  const [mountedDepth, setMountedDepth] = useState(2);
+  const depth = Math.min(visiblePages, mountedDepth);
+  const extraPages = useQueries({
+    queries: Array.from({ length: depth - 1 }, (_, page) =>
+      trpc.boards.get.queryOptions({
+        ...filters,
+        column: column.id,
+        offset: (page + 1) * pageSize,
+        limit: pageSize,
+      }),
+    ),
+  });
+  const ready = extraPages.every((page) => page.isSuccess && !page.isFetching);
+  useEffect(() => {
+    // Restore the requested depth one bounded read at a time.
+    if (mountedDepth > Math.max(2, visiblePages))
+      setMountedDepth(Math.max(2, visiblePages));
+    else if (ready && depth < visiblePages) setMountedDepth(depth + 1);
+  }, [depth, mountedDepth, ready, visiblePages]);
   const card = (item: Card) => (
     <BoardCard
       key={item.id}
       card={item}
       search={search}
+      boardId={filters.id}
       rememberOpener={rememberOpener}
     />
   );
@@ -370,19 +405,31 @@ function StageColumn({
       </Group>
       <Stack gap="xs">
         {column.cards.map(card)}
-        {Array.from({ length: Math.max(0, visiblePages - 1) }, (_, page) => (
-          <MoreCards
-            key={page}
-            filters={filters}
-            column={column.id}
-            offset={(page + 1) * pageSize}
-            card={card}
-          />
+        {extraPages.map((page, index) => (
+          <Fragment key={index}>
+            {page.data?.columns
+              .find((item) => item.id === column.id)
+              ?.cards.map(card)}
+            {page.error ? (
+              <Stack gap="xs">
+                <ActionError message={errorMessage(page.error)} />
+                <Button
+                  variant="secondary"
+                  onClick={() => void page.refetch({ cancelRefetch: false })}
+                >
+                  Retry page {index + 2} in {column.name}
+                </Button>
+              </Stack>
+            ) : (
+              !page.data && <Loader size="xs" aria-label="Loading more cards" />
+            )}
+          </Fragment>
         ))}
         {pages * pageSize < column.total && (
           <Button
             variant="ghost"
-            onClick={() => setPages((count) => count + 1)}
+            disabled={!ready || depth < visiblePages}
+            onClick={() => onMore(pages + 1)}
           >
             Load more in {column.name}
           </Button>
@@ -391,37 +438,16 @@ function StageColumn({
     </section>
   );
 }
-function MoreCards({
-  filters,
-  column,
-  offset,
-  card,
-}: {
-  filters: { id: string; status: BoardStatus; workflowId?: string };
-  column: string;
-  offset: number;
-  card: (item: Card) => React.ReactNode;
-}) {
-  const query = useQuery(
-    trpc.boards.get.queryOptions({
-      ...filters,
-      column,
-      offset,
-      limit: pageSize,
-    }),
-  );
-  if (query.error) return <ActionError message={errorMessage(query.error)} />;
-  if (!query.data) return <Loader size="xs" aria-label="Loading more cards" />;
-  return query.data.columns.find((item) => item.id === column)?.cards.map(card);
-}
 
 function BoardCard({
   card,
   search,
+  boardId,
   rememberOpener,
 }: {
   card: Card;
   search: URLSearchParams;
+  boardId: string;
   rememberOpener: (element: HTMLAnchorElement) => void;
 }) {
   const title = runDisplayTitle(card);
@@ -435,13 +461,17 @@ function BoardCard({
     card.waiting?.detail.message ||
     runProjectionLabels(card).waiting ||
     (!terminal ? card.activity : undefined);
-  const state = { returnLabel: 'Back to board' };
-  const runLink = paths.run(card.runId);
+  const boardUrl = paths.board(boardId) + (search.size ? `?${search}` : '');
+  const runLink = paths.run(card.runId, { returnTo: boardUrl });
   const requestSearch = card.request ? new URLSearchParams(search) : undefined;
   requestSearch?.set('request', JSON.stringify(card.request));
   return (
     <article className={classes.card}>
-      <h3>{title}</h3>
+      <h3>
+        <Anchor component={Link} to={runLink} underline="hover">
+          {title}
+        </Anchor>
+      </h3>
       {(card.title || card.externalTask?.title) && (
         <Text c="dimmed" size="sm">
           {card.workflowName}
@@ -457,30 +487,25 @@ function BoardCard({
       </Group>
       {reason && <p className={classes.reason}>{reason}</p>}
       <Group mt={6} gap="sm" justify="space-between">
-        <Anchor
-          className={classes.cardAction}
-          component={Link}
-          to={requestSearch ? { search: `?${requestSearch}` } : runLink}
-          state={requestSearch ? undefined : state}
-          preventScrollReset={Boolean(requestSearch)}
-          onClick={
-            requestSearch
-              ? (event) => rememberOpener(event.currentTarget)
-              : undefined
-          }
-          size="sm"
-          underline="hover"
-        >
-          {requestSearch
-            ? 'Review request'
-            : card.status === 'failed'
-              ? 'Inspect failure'
-              : 'Open run'}
-          <ArrowUpRight size={14} aria-hidden="true" />
-        </Anchor>
-        {card.request && card.status === 'failed' && (
-          <Anchor component={Link} to={runLink} state={state} size="sm">
-            Inspect failure
+        {card.request && requestSearch && (
+          <Anchor
+            component={Link}
+            to={{ search: `?${requestSearch}` }}
+            preventScrollReset
+            onClick={(event) => {
+              if (
+                event.button === 0 &&
+                !event.metaKey &&
+                !event.ctrlKey &&
+                !event.shiftKey &&
+                !event.altKey
+              )
+                rememberOpener(event.currentTarget);
+            }}
+            size="sm"
+            underline="hover"
+          >
+            {requestActionLabel(card.request.kind)}
             <ArrowUpRight size={14} aria-hidden="true" />
           </Anchor>
         )}

@@ -29,12 +29,14 @@ export function RunVersionDialog({
   active,
   onClose,
   onChanged,
+  returnFocusTo,
 }: {
   runId: string;
   workflowId: string;
   active: boolean;
   onClose: () => void;
   onChanged: () => void;
+  returnFocusTo?: () => HTMLElement | null;
 }) {
   const [data, setData] = useState<VersionState>();
   const [versions, setVersions] = useState<number[]>([]);
@@ -85,7 +87,13 @@ export function RunVersionDialog({
   };
   const newer = versions.filter((entry) => entry > (data?.version ?? 0));
   return (
-    <Modal title="Run version" onClose={onClose} busy={busy} size={600}>
+    <Modal
+      title="Run version"
+      onClose={onClose}
+      busy={busy}
+      size={600}
+      returnFocusTo={returnFocusTo}
+    >
       <ModalBody>
         <Stack gap="lg">
           {data ? (

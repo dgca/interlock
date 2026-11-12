@@ -88,7 +88,6 @@ it('UI236-R1 retains attention offset across unrelated run ticks and clamps afte
               onOffsetChange: vi.fn(),
               tab: 'attention',
               onTabChange: vi.fn(),
-              onOpen: vi.fn(),
               workflows: [],
             }),
           ),

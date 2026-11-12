@@ -25,7 +25,6 @@ import {
   Plus,
 } from 'lucide-react';
 import {
-  nodeKindLabel,
   outgoingPorts,
   parallelBranchPort,
   hasFailureRoute,
@@ -34,6 +33,7 @@ import {
   humanAnswerContract,
   type WorkflowNode,
 } from '@interlock/core';
+import { nodeTypeLabel } from './nodePresentation';
 import styles from './WorkflowEditor.module.css';
 import { formatDuration } from './DurationInput';
 import { conditionColors } from './conditionColors';
@@ -477,9 +477,10 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
         <span>
           {n.kind === 'agent'
             ? 'Agent assignment'
-            : n.kind === 'input' && n.humanInput
-              ? 'Human input'
-              : nodeKindLabel(n.kind)}
+            : nodeTypeLabel(
+                n.kind,
+                n.kind === 'input' && Boolean(n.humanInput),
+              )}
         </span>
         {data.status && (
           <i title={data.status} className={styles[data.status]} />

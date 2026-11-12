@@ -112,18 +112,10 @@
   color: var(--text);
   font: inherit;
   text-align: left;
-  cursor: pointer;
   overflow: hidden;
 }
 .runCard:hover:not([data-loading]) {
   border-color: var(--border-strong);
-}
-.runCard[data-loading] {
-  cursor: default;
-}
-.runCard:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 .runCard[data-attention] {
   border-color: var(--border-strong);
@@ -136,7 +128,8 @@
   padding: 18px;
   min-width: 0;
 }
-.cardTitle {
+.cardTitle,
+.cardTitle a {
   font-size: 19px;
   font-weight: 500;
   line-height: 1.4;

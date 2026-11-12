@@ -5,7 +5,11 @@ import { DesignSystemProvider } from '../packages/ui/src/design-system';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { blankDefinition, type Workflow } from '@interlock/core';
 import { RunDialog } from '../packages/ui/src/features/runs/RunDialog';
-import { paths, runTagFilter } from '../packages/ui/src/routes/paths';
+import {
+  runReturnLocation,
+  paths,
+  runTagFilter,
+} from '../packages/ui/src/routes/paths';
 
 const start = vi.hoisted(() => vi.fn());
 vi.mock('../packages/ui/src/lib/api', () => ({
@@ -172,7 +176,13 @@ it('preserves exact tag filters through list and inspector URLs', () => {
   for (const path of [
     paths.runs('history', 100, tags),
     paths.workflowRuns('workflow', 'history', 100, tags),
-    paths.run('run', 'workflow', 'history', 'step', 100, tags),
+    paths.run('run', {
+      workflowId: 'workflow',
+      tab: 'history',
+      executionId: 'step',
+      offset: 100,
+      tags,
+    }),
   ]) {
     expect(
       runTagFilter(new URL(path, 'http://localhost').searchParams.get('tags')),
@@ -180,4 +190,21 @@ it('preserves exact tag filters through list and inspector URLs', () => {
   }
   expect(runTagFilter('{')).toBeUndefined();
   expect(runTagFilter('{"repo":42}')).toBeUndefined();
+});
+
+it('accepts only internal run, Board, and workflow Runs return locations', () => {
+  const scope = '/workflows/w1?view=runs&tab=history&offset=100';
+  expect(runReturnLocation(scope)?.path).toBe(scope);
+  expect(
+    runReturnLocation('/boards/b1?status=attention&page%3Areview=2')?.label,
+  ).toBe('Back to board');
+  for (const url of [
+    'https://example.com/runs',
+    '//example.com/runs',
+    '/\\example.com/runs',
+    '/boards/new',
+    '/workflows/w1',
+    '/settings/ai',
+  ])
+    expect(runReturnLocation(url)).toBeUndefined();
 });
