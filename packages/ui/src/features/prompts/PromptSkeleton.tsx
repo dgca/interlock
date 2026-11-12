@@ -53,10 +53,17 @@ export function PromptLibrarySkeleton() {
   );
 }
 
-export function PromptEditorSkeleton() {
+export function PromptEditorSkeleton({
+  creating = false,
+}: {
+  creating?: boolean;
+}) {
   return (
     <section className={workspacePage.page} aria-busy="true">
-      <PageHeader title="Prompt" actions={<Placeholder h={40} w={70} />} />
+      <PageHeader
+        title={creating ? 'New prompt' : 'Prompt'}
+        actions={<Placeholder h={40} w={100} />}
+      />
       <div className={workspacePage.content}>
         <div className={workspacePage.formContent}>
           <LoadingSkeleton

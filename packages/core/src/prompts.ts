@@ -2,6 +2,9 @@ import { z } from 'zod';
 import type { WorkflowDefinition } from './index.js';
 import { startRequestIdSchema } from './runStarts.js';
 
+export const promptRevisionConflict =
+  'Prompt changed elsewhere. Reload before saving. Your edits have not been saved.';
+
 export const promptContentSchema = z.object({
   name: z
     .string()

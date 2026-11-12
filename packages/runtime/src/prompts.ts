@@ -5,6 +5,7 @@ import {
   InterlockError,
   promptContentSchema,
   promptCreateSchema,
+  promptRevisionConflict,
   promptIds,
   snapshotPrompt,
   promptReadSchema,
@@ -110,9 +111,7 @@ export class Prompts {
     return this.store.transaction(() => {
       const old = this.get(id);
       if (revision !== old.revision)
-        throw new InterlockError(
-          'Prompt changed elsewhere. Reload before saving. Your edits have not been saved.',
-        );
+        throw new InterlockError(promptRevisionConflict);
       const content = promptContentSchema.parse(input);
       if (
         isDeepStrictEqual(content, {

@@ -21,9 +21,12 @@ import { flushSync } from 'react-dom';
 import { lazy, Suspense } from 'react';
 
 import { WorkspaceReads } from '../components/WorkspaceReads';
+import { errorMessage } from '../lib/api';
+import { trpc, useQuery } from '../lib/query';
 import { RouteSkeleton } from './RouteSkeleton';
 
 import { RunListSkeleton } from '../features/runs/RunListSkeleton';
+import { PromptEditorSkeleton } from '../features/prompts/PromptSkeleton';
 import {
   VariableEditorSkeleton,
   VariableLibrarySkeleton,
@@ -173,7 +176,7 @@ function ReportRoute() {
 }
 
 function PromptsRoute() {
-  const { prompts, promptsRead, act } = useOutletContext<AppContext>();
+  const { prompts, promptsRead } = useOutletContext<AppContext>();
   return (
     <WorkspaceReads
       reads={[promptsRead]}
@@ -181,37 +184,60 @@ function PromptsRoute() {
       loading={<RouteSkeleton subject="prompts" />}
     >
       <Suspense fallback={<RouteSkeleton subject="prompts" />}>
-        <PromptLibrary prompts={prompts} act={act} />
+        <PromptLibrary prompts={prompts} />
       </Suspense>
     </WorkspaceReads>
   );
 }
 
-function PromptRoute() {
-  const { promptId } = useParams();
-  const { prompts, promptsRead, act, onDirty, tick } =
-    useOutletContext<AppContext>();
-  const prompt = prompts.find((p) => p.id === promptId);
+function NewPromptRoute() {
+  const { act } = useOutletContext<AppContext>();
   return (
-    <WorkspaceReads
-      reads={[promptsRead]}
-      subject="prompt"
-      loading={<RouteSkeleton subject="prompt" />}
-    >
-      {prompt ? (
-        <Suspense fallback={<RouteSkeleton subject="prompt" />}>
-          <PromptEditor
-            key={prompt.id}
-            prompt={prompt}
-            act={act}
-            onDirty={onDirty}
-            tick={tick}
-          />
-        </Suspense>
-      ) : (
-        <NotFound title="Prompt not found" />
-      )}
-    </WorkspaceReads>
+    <Suspense fallback={<PromptEditorSkeleton creating />}>
+      <PromptEditor act={act} />
+    </Suspense>
+  );
+}
+
+function PromptRoute() {
+  const { promptId } = useParams<{ promptId: string }>();
+  const { act } = useOutletContext<AppContext>();
+  const read = useQuery(trpc.prompts.get.queryOptions({ id: promptId! }));
+  const retry = () => void read.refetch({ cancelRefetch: false });
+  const prompt = read.data;
+  if (!prompt) {
+    const error = read.error ? errorMessage(read.error) : '';
+    if (error === `Saved prompt ${promptId} does not exist`)
+      return <NotFound title="Prompt not found" />;
+    return (
+      <WorkspaceReads
+        reads={[
+          {
+            resource: 'prompts',
+            ready: false,
+            error,
+            fetching: read.isFetching,
+            retry,
+          },
+        ]}
+        subject="prompt"
+        loading={<RouteSkeleton subject="prompt" />}
+      >
+        {null}
+      </WorkspaceReads>
+    );
+  }
+  return (
+    <Suspense fallback={<RouteSkeleton subject="prompt" />}>
+      <PromptEditor
+        key={prompt.id}
+        prompt={prompt}
+        usage={read.dataUpdatedAt ? prompt.usage : undefined}
+        readError={Boolean(read.error)}
+        retryRead={retry}
+        act={act}
+      />
+    </Suspense>
   );
 }
 
@@ -576,6 +602,7 @@ export const routes: RouteObject[] = [
         ),
       },
       { path: 'prompts', Component: PromptsRoute },
+      { path: 'prompts/-/new', Component: NewPromptRoute },
       { path: 'variables', Component: VariablesRoute },
       { path: 'variables/:variableId', Component: VariableItemRoute },
       { path: 'report', Component: ReportRoute },

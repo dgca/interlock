@@ -30,6 +30,7 @@ const queries = vi.hoisted(() => ({
   automationCount: vi.fn(),
   automationInspect: vi.fn(),
   prompts: vi.fn(),
+  prompt: vi.fn(),
   connection: vi.fn(),
   doctor: vi.fn(),
 }));
@@ -83,7 +84,7 @@ vi.mock('../packages/ui/src/lib/api', async () => {
       requests: { list: { query: queries.requestCount } },
       prompts: {
         list: { query: queries.prompts },
-        get: { query: async () => ({ usage: [] }) },
+        get: { query: queries.prompt },
       },
     }),
     errorMessage: (error: Error) => error.message,
@@ -257,6 +258,7 @@ beforeEach(() => {
     nextOffset: null,
   });
   queries.prompts.mockReset().mockResolvedValue([]);
+  queries.prompt.mockReset();
   queries.connection
     .mockReset()
     .mockResolvedValue({ engineUrl: 'http://127.0.0.1:4310' });
@@ -622,17 +624,18 @@ it.each(['/prompts', '/prompts/prompt-id'])(
     queries.automationCount.mockRejectedValue(
       new Error('Automation count failed'),
     );
-    queries.prompts.mockResolvedValue([
-      {
-        id: 'prompt-id',
-        name: 'Saved review prompt',
-        description: '',
-        content: 'Review the proposed change.',
-        revision: 1,
-        createdAt: '2026-11-11T00:00:00Z',
-        updatedAt: '2026-11-11T00:00:00Z',
-      },
-    ]);
+    const prompt = {
+      id: 'prompt-id',
+      name: 'Saved review prompt',
+      description: '',
+      content: 'Review the proposed change.',
+      revision: 1,
+      createdAt: '2026-11-11T00:00:00Z',
+      updatedAt: '2026-11-11T00:00:00Z',
+    };
+    if (path === '/prompts') queries.prompts.mockResolvedValue([prompt]);
+    else queries.prompts.mockRejectedValue(new Error('Prompts unavailable'));
+    queries.prompt.mockResolvedValue({ ...prompt, usage: [] });
     await mount(path);
     await vi.waitFor(async () => {
       await act(async () => {});
@@ -647,6 +650,20 @@ it.each(['/prompts', '/prompts/prompt-id'])(
     ).not.toBeNull();
   },
 );
+
+it('distinguishes a missing prompt from a failed prompt read', async () => {
+  queries.prompt.mockRejectedValueOnce(new Error('Prompt read unavailable'));
+  queries.prompt.mockRejectedValueOnce(
+    new Error('Saved prompt missing does not exist'),
+  );
+  await mount('/prompts/missing');
+  await vi.waitFor(async () => {
+    await act(async () => {});
+    expect(container.textContent).toContain('Could not load prompt.');
+  });
+  await click('Retry');
+  expect(container.textContent).toContain('Prompt not found');
+});
 
 it.each([
   ['/automations', 'input[aria-label="Filter by workflow"]'],

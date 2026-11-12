@@ -367,6 +367,13 @@ pnpm test:package
 
 The build includes TypeScript checks. Tests cover workflow contracts, runtime behavior, and MCP over HTTP and stdio. The package test installs a local tarball into a temporary prefix and checks global and npx startup, the CLI, UI, both MCP transports, JavaScript execution, and claims across a restart. It does not publish anything.
 
+After building, run the browser journeys against an isolated SQLite store:
+
+```sh
+pnpm exec playwright install --only-shell chromium
+pnpm test:browser
+```
+
 ## Project documentation
 
 Browse the [documentation site](https://dgca.github.io/interlock/docs/) or start with [Installation](docs/installation.md). The site publishes a small set of introductory guides. Detailed technical references remain in the repository.
