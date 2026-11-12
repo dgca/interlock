@@ -653,11 +653,37 @@ it('shows queued and unstaged runs, paginates active cards, and caps recent term
     }),
     'Immediate',
   );
-  for (let i = 0; i < 23; i++) engine.start(complete.id, null);
+  const completedRun = engine.start(complete.id, null).run;
+  for (let i = 1; i < 23; i++) engine.start(complete.id, null);
   assign(engine, complete.id, board.id);
+  const failedAt = new Date(time + 60_000).toISOString();
+  engine.store.transaction(() => {
+    for (let index = 0; index < 21; index++) {
+      const id = `failed-${index}`;
+      engine.store.put('runs', {
+        ...completedRun,
+        id,
+        status: 'failed',
+        updatedAt: failedAt,
+      });
+      engine.store.put('events', {
+        id: `event-${id}`,
+        runId: id,
+        boardColumnId: board.columns[0].id,
+        type: 'node.failed',
+        at: failedAt,
+      });
+    }
+  });
+  const mixed = read(engine, board.id).columns.find(
+    (column) => column.id === board.columns[0].id,
+  )!;
+  expect(mixed.total).toBe(20);
+  expect(mixed.cards.every((card) => card.status === 'failed')).toBe(true);
   const recent = read(engine, board.id, { status: 'completed' }).columns.find(
     (column) => column.id === board.columns[0].id,
   )!;
+  expect(recent.total).toBe(20);
   expect(recent.cards).toHaveLength(20);
   time = Date.now() + 86_400_001;
   expect(
@@ -673,7 +699,124 @@ it('shows queued and unstaged runs, paginates active cards, and caps recent term
       { tab: 'history', workflowId: complete.id, offset: 0, limit: 100 },
       [],
     ).total,
-  ).toBe(23);
+  ).toBe(44);
+});
+
+it('retrieves and projects only the requested Board cards while counting the whole filtered scope', () => {
+  const time = Date.parse('2026-11-11T17:00:00Z');
+  const engine = open(':memory:', () => time);
+  const board = createBoard(engine);
+  const [build, reviewColumn] = board.columns;
+  const definition = blankDefinition();
+  definition.nodes[1].boardColumnId = build.id;
+  const workflow = publish(engine, definition, 'Build');
+  const attentionWorkflow = publish(engine, review(reviewColumn.id), 'Review');
+  const unrelated = publish(engine, blankDefinition(), 'Unrelated');
+  assign(engine, workflow.id, board.id);
+  assign(engine, attentionWorkflow.id, board.id);
+  const template = engine.start(workflow.id, null).run;
+  const attention = engine.start(attentionWorkflow.id, {
+    plan: 'Ready for review',
+    revision: '1',
+  }).run;
+  const activeIds = Array.from(
+    { length: 10 },
+    (_, index) => `waiting-${index}`,
+  );
+  engine.store.transaction(() => {
+    for (const id of activeIds) {
+      engine.store.put('runs', { ...template, id });
+      engine.store.put('events', {
+        id: `event-${id}`,
+        runId: id,
+        boardColumnId: build.id,
+        type: 'node.started',
+        at: template.updatedAt,
+      });
+    }
+    const fallbackAt = new Date(time).toISOString();
+    engine.store.put('runs', {
+      ...template,
+      id: 'terminal-without-event',
+      status: 'completed',
+      updatedAt: fallbackAt,
+    });
+    engine.store.put('events', {
+      id: 'fallback-stage',
+      runId: 'terminal-without-event',
+      type: 'node.started',
+      boardColumnId: build.id,
+      at: fallbackAt,
+    });
+    for (let index = 0; index < 600; index++) {
+      const id = `retained-${index}`;
+      const old = new Date(time - 3 * 86_400_000).toISOString();
+      engine.store.put('runs', {
+        ...template,
+        id,
+        status: 'completed',
+        workflowId: index < 150 ? workflow.id : unrelated.id,
+        updatedAt: template.updatedAt,
+      });
+      for (let visit = 0; visit < 4; visit++)
+        engine.store.put('events', {
+          id: `event-${id}-${visit}`,
+          runId: id,
+          type:
+            visit === 3 || (index === 0 && visit === 1)
+              ? 'run.completed'
+              : 'node.started',
+          ...(visit === 2 ? { boardColumnId: build.id } : {}),
+          // The last persisted terminal event determines recency even if an older row has a later time.
+          at: index === 0 && visit === 1 ? fallbackAt : old,
+        });
+    }
+  });
+
+  const retrieved = vi.spyOn(engine.store, 'boardRuns');
+  const projected = vi.spyOn(engine, 'projectRun');
+  const page = read(engine, board.id, {
+    status: 'waiting',
+    column: build.id,
+    offset: 2,
+    limit: 3,
+  });
+  const selected = [template.id, ...activeIds].sort().slice(2, 5);
+  expect(page.attentionCount).toBe(1);
+  expect(page.columns).toEqual([
+    expect.objectContaining({
+      id: build.id,
+      total: 11,
+      cards: selected.map((id) => expect.objectContaining({ id })),
+    }),
+    expect.objectContaining({ id: reviewColumn.id, total: 1, cards: [] }),
+  ]);
+  expect(retrieved.mock.results[0]?.value).toMatchObject({
+    cards: selected.map((id) =>
+      expect.objectContaining({ run: expect.objectContaining({ id }) }),
+    ),
+  });
+  expect(projected.mock.calls.map(([id]) => id)).toEqual(selected);
+  expect(projected).not.toHaveBeenCalledWith(attention.id);
+
+  const terminal = read(engine, board.id, {
+    status: 'completed',
+    workflowId: workflow.id,
+  });
+  expect(terminal.attentionCount).toBe(0);
+  expect(terminal.columns).toEqual([
+    expect.objectContaining({
+      id: build.id,
+      total: 1,
+      cards: [
+        expect.objectContaining({
+          id: 'terminal-without-event',
+          changedAt: new Date(time).toISOString(),
+        }),
+      ],
+    }),
+    expect.objectContaining({ id: reviewColumn.id, total: 0, cards: [] }),
+  ]);
 });
 
 it('retains terminal recovery in the board beyond the recency window until the exact attempt is confirmed stopped', () => {

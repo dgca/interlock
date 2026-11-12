@@ -42,6 +42,7 @@ import type {
   Workflow,
   WorkflowVersion,
   WorkflowBoard,
+  BoardQuery,
   RunEvent,
   SavedPrompt,
   DeletedWorkflowVersion,
@@ -477,11 +478,19 @@ export class Store {
   }
   boardRuns(
     board: WorkflowBoard,
-    attentionIds: string[],
+    query: BoardQuery,
+    attentionCounts: Readonly<Record<string, number>>,
     since: string,
-    workflowId?: string,
+    terminalLimit: number,
   ) {
-    return boardRuns(this.db, board, attentionIds, since, workflowId);
+    return boardRuns(
+      this.db,
+      board,
+      query,
+      attentionCounts,
+      since,
+      terminalLimit,
+    );
   }
   runsForReport(filter: ReportFilter): Run[] {
     return runsForReport(this.db, filter);

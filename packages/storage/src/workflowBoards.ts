@@ -1,4 +1,4 @@
-import type { BoardRun, WorkflowBoard } from '@interlock/core';
+import type { BoardQuery, BoardRun, WorkflowBoard } from '@interlock/core';
 import type { DatabaseSync } from 'node:sqlite';
 
 export function referencedBoardColumns(db: DatabaseSync, ids: string[]) {
@@ -24,88 +24,167 @@ export function referencedBoardColumns(db: DatabaseSync, ids: string[]) {
   return rows.map((row) => row.id as string);
 }
 
-/** Read placement from the ordered entry events across each attached lifecycle. */
+/** Page Board metadata before retrieving the selected runs' card fields. */
 export function boardRuns(
   db: DatabaseSync,
   board: WorkflowBoard,
-  attentionIds: string[],
+  query: BoardQuery,
+  attentionCounts: Readonly<Record<string, number>>,
   since: string,
-  workflowId?: string,
-): BoardRun[] {
-  const rows = db
+  terminalLimit: number,
+) {
+  const { workflowId, status, column, offset, limit } = query;
+  const statusFilter =
+    status === 'all'
+      ? ''
+      : status === 'attention'
+        ? 'WHERE requestCount > 0'
+        : 'WHERE status = ?';
+  // Unary + removes column affinity from join inputs so SQLite can seek the JSON expression indexes.
+  const row = db
     .prepare(
       `
     WITH RECURSIVE
+      attention AS MATERIALIZED (
+        SELECT key AS id, value AS requestCount FROM json_each(?)
+      ),
       roots AS MATERIALIZED (
-        SELECT r.id, r.value, json_extract(r.value, '$.workflowId') AS workflowId,
-          coalesce(json_extract(c.value, '$.latestRunId'), r.id) AS runId
-        FROM documents r
-        JOIN documents w ON w.collection = 'workflows'
-          AND w.id = json_extract(r.value, '$.workflowId')
+        SELECT r.id, w.id AS workflowId,
+          coalesce(json_extract(c.value, '$.latestRunId'), r.id) AS runId,
+          coalesce(a.requestCount, 0) AS requestCount
+        FROM documents w
+        CROSS JOIN documents r INDEXED BY runs_workflow_created
         LEFT JOIN documents c ON c.collection = 'runChains' AND c.id = r.id
-        WHERE r.collection = 'runs' AND json_extract(w.value, '$.boardId') = ?
-          AND (json_extract(r.value, '$.parentRunId') IS NULL OR json_extract(r.value, '$.parentMode') = 'detached')
-          AND (json_extract(r.value, '$.chain.previousRunId') IS NULL)
+        LEFT JOIN attention a ON a.id = r.id
+        WHERE w.collection = 'workflows' AND json_extract(w.value, '$.boardId') = ?
           ${workflowId === undefined ? '' : 'AND w.id = ?'}
+          AND r.collection = 'runs' AND json_extract(r.value, '$.workflowId') = +w.id
+          AND (json_extract(r.value, '$.parentRunId') IS NULL OR json_extract(r.value, '$.parentMode') = 'detached')
+          AND json_extract(r.value, '$.chain.previousRunId') IS NULL
       ),
       latest AS MATERIALIZED (
         SELECT roots.*, json_extract(t.value, '$.status') AS status,
-          substr(json_extract(t.value, '$.error'), 1, 240) AS error,
-          substr(json_extract(t.value, '$.executions[#-1].label'), 1, 160) AS activity,
-          coalesce(CASE WHEN json_extract(t.value, '$.status') IN ('completed','cancelled','failed')
-            THEN (SELECT json_extract(e.value, '$.at') FROM documents e
-              WHERE e.collection = 'events' AND json_extract(e.value, '$.runId') = t.id
-                AND json_extract(e.value, '$.type') IN ('run.completed','run.cancelled','node.failed')
-              ORDER BY e.rowid DESC LIMIT 1)
-            END, json_extract(t.value, '$.updatedAt')) AS changedAt
-        FROM roots JOIN documents t ON t.collection = 'runs' AND t.id = roots.runId
+          json_extract(t.value, '$.updatedAt') AS updatedAt
+        FROM roots CROSS JOIN documents t ON t.collection = 'runs' AND t.id = roots.runId
+      ),
+      dated AS MATERIALIZED (
+        SELECT latest.*, coalesce(
+          CASE WHEN status IN ('completed','cancelled','failed') THEN (
+            SELECT json_extract(e.value, '$.at')
+            FROM documents e INDEXED BY documents_run
+            WHERE e.collection = 'events' AND json_extract(e.value, '$.runId') = latest.runId
+              AND json_extract(e.value, '$.type') IN ('run.completed','run.cancelled','node.failed')
+            ORDER BY e.rowid DESC LIMIT 1
+          ) END, updatedAt
+        ) AS changedAt
+        FROM latest ${statusFilter}
       ),
       visible AS MATERIALIZED (
-        SELECT * FROM latest WHERE status IN ('queued','running','waiting')
-          OR changedAt >= ? OR id IN (SELECT value FROM json_each(?))
+        SELECT id, runId, workflowId, status, changedAt, requestCount FROM dated
+        WHERE status IN ('queued','running','waiting') OR changedAt >= ? OR requestCount > 0
       ),
       members(root, id) AS (
         SELECT id, id FROM visible
         UNION ALL
-        SELECT v.id, r.id FROM visible v JOIN documents r ON r.collection = 'runs'
-          AND json_extract(r.value, '$.chain.rootRunId') = v.id AND r.id <> v.id
+        SELECT v.id, r.id FROM visible v CROSS JOIN documents r INDEXED BY runs_chain
+        WHERE r.collection = 'runs' AND json_extract(r.value, '$.chain.rootRunId') = +v.id
+          AND r.id <> v.id
         UNION ALL
-        SELECT m.root, r.id FROM members m JOIN documents r ON r.collection = 'runs'
-          AND json_extract(r.value, '$.parentRunId') = m.id
+        SELECT m.root, r.id FROM members m CROSS JOIN documents r INDEXED BY runs_parent
+        WHERE r.collection = 'runs' AND json_extract(r.value, '$.parentRunId') = +m.id
           AND json_extract(r.value, '$.parentMode') IS NOT 'detached'
       ),
+      boardColumns AS MATERIALIZED (
+        SELECT value AS id FROM json_each(?)
+      ),
       placements AS (
-        SELECT m.root, json_extract(e.value, '$.boardColumnId') AS columnId,
-          row_number() OVER (PARTITION BY m.root ORDER BY e.rowid DESC) AS ordinal
-        FROM members m JOIN documents e ON e.collection = 'events'
-          AND json_extract(e.value, '$.runId') = m.id
-        WHERE json_type(e.value, '$.boardColumnId') = 'text'
-          AND json_extract(e.value, '$.boardColumnId') IN (SELECT value FROM json_each(?))
+        SELECT m.root, max(e.rowid) AS entry
+        FROM members m CROSS JOIN boardColumns col
+        CROSS JOIN documents e INDEXED BY board_stage_entries
+        WHERE e.collection = 'events' AND json_type(e.value, '$.boardColumnId') = 'text'
+          AND json_extract(e.value, '$.boardColumnId') = +col.id
+          AND json_extract(e.value, '$.runId') = +m.id
+        GROUP BY m.root
+      ),
+      placed AS MATERIALIZED (
+        SELECT v.*, json_extract(e.value, '$.boardColumnId') AS columnId,
+          CASE WHEN v.status = 'queued' THEN 'queued'
+            ELSE coalesce(json_extract(e.value, '$.boardColumnId'), 'unstaged')
+          END AS pageColumn,
+          CASE WHEN v.requestCount > 0 THEN 0
+            WHEN v.status IN ('completed','cancelled','failed') THEN 2
+            ELSE 1
+          END AS priority
+        FROM visible v LEFT JOIN placements p ON p.root = v.id
+        LEFT JOIN documents e ON e.rowid = p.entry
+      ),
+      ranked AS (
+        SELECT placed.*, row_number() OVER cardOrder AS ordinal,
+          count(*) FILTER (WHERE priority = 2) OVER cardOrder AS terminalOrdinal
+        FROM placed
+        WINDOW cardOrder AS (
+          PARTITION BY pageColumn ORDER BY priority, changedAt DESC, id
+          ROWS UNBOUNDED PRECEDING
+        )
+      ),
+      capped AS MATERIALIZED (
+        SELECT * FROM ranked WHERE terminalOrdinal <= ?
+      ),
+      totals AS (
+        SELECT pageColumn, count(*) AS total FROM capped GROUP BY pageColumn
+      ),
+      board_page AS MATERIALIZED (
+        SELECT * FROM capped WHERE ordinal > ? AND ordinal <= ?
+          ${column === undefined ? '' : 'AND pageColumn = ?'}
       )
-    SELECT v.id, v.runId, v.workflowId, v.status, v.error, v.activity, v.changedAt, p.columnId,
-      json_extract(v.value, '$.workflowName') AS workflowName,
-      json_extract(v.value, '$.title') AS title,
-      json_extract(v.value, '$.externalTask') AS externalTask
-    FROM visible v LEFT JOIN placements p ON p.root = v.id AND p.ordinal = 1
-    ORDER BY v.changedAt DESC, v.id
+    SELECT
+      (SELECT coalesce(sum(requestCount), 0) FROM latest) AS attentionCount,
+      (SELECT json_group_array(json_array(pageColumn, total)) FROM totals) AS totals,
+      (SELECT json_group_array(json_object(
+        'column', page.pageColumn,
+        'run', json_object(
+          'id', page.id,
+          'runId', page.runId,
+          'workflowId', page.workflowId,
+          'status', page.status,
+          'changedAt', page.changedAt,
+          'columnId', page.columnId,
+          'workflowName', json_extract(r.value, '$.workflowName'),
+          'title', json_extract(r.value, '$.title'),
+          'externalTask', json_extract(r.value, '$.externalTask'),
+          'error', substr(json_extract(t.value, '$.error'), 1, 240),
+          'activity', substr(json_extract(t.value, '$.executions[#-1].label'), 1, 160)
+        )
+      ) ORDER BY page.pageColumn, page.ordinal)
+      FROM board_page page
+      CROSS JOIN documents r ON r.collection = 'runs' AND r.id = page.id
+      CROSS JOIN documents t ON t.collection = 'runs' AND t.id = page.runId) AS cards
   `,
     )
-    .all(
+    .get(
+      JSON.stringify(attentionCounts),
       board.id,
       ...(workflowId === undefined ? [] : [workflowId]),
+      ...(status === 'all' || status === 'attention' ? [] : [status]),
       since,
-      JSON.stringify(attentionIds),
       JSON.stringify(board.columns.map((column) => column.id)),
-    );
-  return rows.map(
-    ({ externalTask, ...row }) =>
-      ({
-        ...Object.fromEntries(
-          Object.entries(row).filter(([, value]) => value !== null),
-        ),
-        ...(externalTask
-          ? { externalTask: JSON.parse(String(externalTask)) }
-          : {}),
-      }) as BoardRun,
-  );
+      terminalLimit,
+      offset,
+      offset + limit,
+      ...(column === undefined ? [] : [column]),
+    )!;
+  const cards = JSON.parse(row.cards as string) as {
+    column: string;
+    run: BoardRun;
+  }[];
+  return {
+    attentionCount: Number(row.attentionCount),
+    totals: new Map<string, number>(JSON.parse(row.totals as string)),
+    cards: cards.map(({ column, run }) => ({
+      column,
+      run: Object.fromEntries(
+        Object.entries(run).filter(([, value]) => value !== null),
+      ) as BoardRun,
+    })),
+  };
 }
